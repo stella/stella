@@ -21,6 +21,8 @@ import {
 } from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/schemas";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   ACCOUNT_ACCESS,
@@ -268,6 +270,10 @@ export const createReviewParties = ({
 
     if (body.mode === "cached") {
       return Result.ok(notDetectedAnswer(entityVersionId));
+    }
+
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
     }
 
     yield* requireTanStackAIAvailableForTask({

@@ -88,7 +88,7 @@ const seed = [
     kind: "statute",
     id: toSafeId<"searchHistoryEntry">("history-statute"),
     documentId: "statute-1",
-    title: "Act",
+    title: `Zákon č. 172/2026 Sb. · ${"kterým se mění zákon ".repeat(40)}`,
     path: "/law/cz/statutes/statute-1",
     documentIdentity: { kind: "statute", number: "172", year: "2026" },
   },
@@ -205,6 +205,16 @@ test("server recent rows render known court chips, unknown decision icons and st
   expect(identity?.textContent).toContain("172/26");
   expect(identity?.textContent).toContain("172/2026");
   expect(statute.querySelector("svg")).toBeNull();
+  const statuteTitle = screen.getByText(/Zákon č. 172\/2026 Sb\./u);
+  for (
+    let element: HTMLElement | null = statuteTitle;
+    element !== null && element !== statute;
+    element = element.parentElement
+  ) {
+    expect(element.className).not.toMatch(
+      /truncate|line-clamp|overflow-hidden/u,
+    );
+  }
 });
 
 test("server recents filter, reopen queries and delete their server entry id", async () => {

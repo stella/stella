@@ -118,11 +118,16 @@ test("numeric zoom transitions to fit-width and refits when the editor viewport 
       throw new Error("Published editor layout or scroll root is unavailable");
     }
 
+    // Fit-width reads the border box (`offsetWidth`) less its scrollbar edge,
+    // so the viewport reports both widths, as a browser does; equal widths
+    // mean no classic scrollbar.
     let viewportWidth = 920;
-    Object.defineProperty(scrollRoot, "clientWidth", {
+    const viewportBox = {
       configurable: true,
       get: () => viewportWidth,
-    });
+    };
+    Object.defineProperty(scrollRoot, "clientWidth", viewportBox);
+    Object.defineProperty(scrollRoot, "offsetWidth", viewportBox);
 
     await act(async () => {
       mounted.rerender(<Harness initialZoom="fit-width" />);

@@ -1,8 +1,0 @@
-[
-  {
-    "file": "apps/api/src/lib/public-law-read-db.ts",
-    "from": "8cd7517024c8b2fa6124cb97c69c43970c9dcb254b872ddcb786278600319dcb",
-    "to": "e8fb5b2d77b3523037afa9c71ed27a0cf28f3abfd974e13881d9edab13e066c6",
-    "reason": "Run the existing public-law read transaction as the reader role on the shared database; transaction ownership and count are unchanged."
-  }
-]

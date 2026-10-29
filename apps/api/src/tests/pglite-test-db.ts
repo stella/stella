@@ -28,19 +28,23 @@ import {
   installPgliteAgentSkillRevisionTrigger,
   installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawCountryShape,
+  installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
+  installPgliteChatStoredContentEgress,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteDecisionAliases,
   installPgliteDecisionCitationStats,
+  installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFlowTransitions,
+  installPgliteInvoiceObjects,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteListVerificationBudgets,
@@ -248,6 +252,7 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "updated_at",
   "observation_order",
   "checkpoint_observation_order",
+  "removal_checkpoint",
   "ingestion_lease_token",
   "ingestion_lease_expires_at",
   "ingestion_lease_purpose",
@@ -405,7 +410,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   // Redaction erases the doctrine evidence quoted from the citing decision.
   `
-    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion
+    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews", "case_law_citation_reviews" TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
@@ -439,12 +444,16 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT MAINTAIN ON TABLE "case_law_sources" TO stella_ingestion
   `,
+  `
+    GRANT SELECT ("removal_checkpoint") ON TABLE "case_law_sources" TO stella_ingestion
+  `,
   // Ingestion-owned case-law tables the migrations grant one by one, as they
   // were added. `pglite-role-grants.test.ts` holds this list and the
   // migrations to agreement, so the next such table cannot be forgotten here.
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "case_law_reconciliation_items",
+      "case_law_removal_reconciliation_items",
       "case_law_search_backfill_failures",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
@@ -464,6 +473,19 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT SELECT, INSERT ON TABLE "case_law_corpus_jurisdictions"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, DELETE ON TABLE
+      "case_law_browse_facet_counts",
+      "case_law_coverage_summaries",
+      "case_law_sitemap_shard_counts",
+      "case_law_sitemap_shards",
+      "case_law_source_arrivals"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_sitemap_country_generations"
     TO stella_ingestion
   `,
   // Provision extraction state: request code reads it and ingestion updates
@@ -800,6 +822,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
+  await installPgliteInvoiceObjects(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
@@ -808,6 +831,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
+  await installPgliteDecisionDocketFilingYear(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
@@ -816,6 +840,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawCountryShape(db);
+  await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPglitePdfSigningTokenScopes(db);
@@ -839,6 +864,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
 

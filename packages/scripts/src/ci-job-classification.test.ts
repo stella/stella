@@ -1965,8 +1965,21 @@ test("the CLI emits a sensitive annotation and machine output until review is up
     expect(readFileSync(outputPath, "utf-8")).toBe(
       "privileged_classification_change=true\n",
     );
+    // The job now writes the repository, so the reviewer records it as
+    // publication; keeping it ordinary at the new digest is refused.
     writeDecision(root, key, {
       ...decision,
+      reviewedDigest: changedJob.digest,
+    });
+    const keptOrdinary = check();
+    expect(keptOrdinary.exitCode).toBe(1);
+    expect(new TextDecoder().decode(keptOrdinary.stderr)).toContain(
+      "must be classified priority",
+    );
+    writeFileSync(outputPath, "");
+    writeDecision(root, key, {
+      kind: CLASSIFICATIONS[2],
+      qualifier: "Reviewed publication",
       reviewedDigest: changedJob.digest,
     });
     const reviewed = check();
@@ -1976,7 +1989,7 @@ test("the CLI emits a sensitive annotation and machine output until review is up
     );
     expect(new TextDecoder().decode(reviewed.stderr)).toBe("");
     expect(readFileSync(outputPath, "utf-8")).toBe(
-      "privileged_classification_change=true\nprivileged_classification_change=true\n",
+      "privileged_classification_change=true\n",
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

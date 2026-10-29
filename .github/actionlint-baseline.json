@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "count": 1,
+    "filepath": ".github/workflows/release-mobile-ios.yml",
+    "kind": "shellcheck",
+    "message": "shellcheck reported issue in this script: SC2046:warning:15:3: Quote this to prevent word splitting"
+  }
+]

@@ -6,6 +6,7 @@ import { entities } from "@/api/db/schema";
 import { readOverviewAgenda } from "@/api/handlers/workspaces/read-overview-agenda.query";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 type ReadOverviewHandlerProps = {
   safeDb: SafeDb;
@@ -26,7 +27,7 @@ export const readOverviewHandler = async ({
           .select({
             entityCount: sql<number>`count(*)::int`,
             documentCount: sql<number>`count(*) filter (where ${entities.kind} = 'document')::int`,
-            taskCount: sql<number>`count(*) filter (where ${entities.kind} = 'task')::int`,
+            taskCount: sql<number>`count(*) filter (where ${workTask(entities)})::int`,
           })
           .from(entities)
           .where(eq(entities.workspaceId, workspaceId))

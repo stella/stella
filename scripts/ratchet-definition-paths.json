@@ -5,6 +5,7 @@
   "apps/api/src/lib/db/status-tables.gen.ts",
   "apps/api/src/lib/errors/graded-handler-codes.ts",
   "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+  "packages/api-contract/src/internal-ui-transport.ts",
   "packages/api-contract/src/mcp.ts",
   "packages/scripts/src/generated-artifact-format.ts",
   "packages/scripts/src/syntax-tree.ts",

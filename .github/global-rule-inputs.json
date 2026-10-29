@@ -18,6 +18,7 @@
     "oxlint.config.ts",
     "oxlint.design.config.ts",
     "oxlint.result-boundary.config.ts",
+    "oxlint.tailwind.config.ts",
     "packages/scripts/src/prepared-generated-sources.test.ts",
     "packages/scripts/src/query-cache-types.ts",
     "packages/scripts/src/result-consumption.ts",
@@ -75,7 +76,6 @@
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-workspace-versions.ts",
-    "scripts/check-main-merge-hold.test.sh",
     "scripts/check-marketing-content.ts",
     "scripts/check-marketing-recordings.test.ts",
     "scripts/check-marketing-recordings.ts",
@@ -181,6 +181,7 @@
     "scripts/docker-source-closure.test.ts",
     "scripts/document-identity-guard.test.ts",
     "scripts/document-identity-guard.ts",
+    "scripts/draft-release-reads.test.ts",
     "scripts/e2e-geometry-shards.test.ts",
     "scripts/e2e-shard-budget.test.ts",
     "scripts/e2e-spec-shards.test.ts",
@@ -243,6 +244,7 @@
     "scripts/release-channel.test.sh",
     "scripts/release-pull-requests.sh",
     "scripts/release-pull-requests.test.sh",
+    "scripts/release-rc-selection.test.ts",
     "scripts/release-version-dispatch.test.ts",
     "scripts/report-dependency-malware-failure.test.ts",
     "scripts/resolve-promoted-release.test.ts",
@@ -287,5 +289,14 @@
     "scripts/workflow-run-trust.test.ts",
     "scripts/workflow-skipped-needs.test.ts"
   ],
-  "changeScoped": []
+  "changeScoped": [
+    {
+      "path": "scripts/check-publish-reproducibility.sh",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/generate-npm-release-jobs.ts",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
+    }
+  ]
 }

@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 
+import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   DECISION_SECTION_TYPES,
@@ -236,7 +237,9 @@ const headingFields = {
   level: v.picklist([1, 2, 3, 4, 5, 6]),
   text: boundedString(readerTextBytes.heading),
 };
-export const provisionPreviewSuccessResponseSchema = v.object({
+const provisionPreviewResponseEntries = {
+  url: nullableBoundedString(readerTextBytes.documentUrl),
+  country: boundedString(readerTextBytes.country),
   documentId: resourceIdSchema("legislationDocument"),
   language: boundedString(readerTextBytes.language),
   anchorId: boundedString(readerTextBytes.anchor),
@@ -259,7 +262,13 @@ export const provisionPreviewSuccessResponseSchema = v.object({
     ),
     v.maxLength(PREVIEW_BLOCK_MAX),
   ),
-});
+} satisfies Record<
+  keyof typeof provisionPreviewOutput.entries,
+  v.GenericSchema
+>;
+export const provisionPreviewSuccessResponseSchema = v.object(
+  provisionPreviewResponseEntries,
+);
 
 type Version = v.InferOutput<typeof statuteVersionSchema>;
 type VersionRow = Omit<Version, "amendedBy"> & {
@@ -347,34 +356,43 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
   text: truncateTextBytes(row.text, readerTextBytes.provisionText),
 });
 
-export const projectProvisionPreview = (preview: ProvisionPreview) => ({
-  documentId: preview.documentId,
-  language: truncateTextBytes(preview.language, readerTextBytes.language),
-  anchorId: truncateTextBytes(preview.anchorId, readerTextBytes.anchor),
-  citedAnchorId: nullableText(preview.citedAnchorId, readerTextBytes.anchor),
-  headings: preview.headings.slice(0, PREVIEW_HEADING_MAX).map((heading) => ({
-    level: heading.level,
-    anchorId: truncateTextBytes(heading.anchorId, readerTextBytes.anchor),
-    text: truncateTextBytes(heading.text, readerTextBytes.heading),
-  })),
-  heading:
-    preview.heading === null
-      ? null
-      : {
-          level: preview.heading.level,
-          id: truncateTextBytes(preview.heading.id, readerTextBytes.blockId),
-          anchorId: truncateTextBytes(
-            preview.heading.anchorId,
-            readerTextBytes.anchor,
-          ),
-          text: truncateTextBytes(
-            preview.heading.text,
-            readerTextBytes.heading,
-          ),
-        },
-  blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => ({
-    id: truncateTextBytes(block.id, readerTextBytes.blockId),
-    anchorId: truncateTextBytes(block.anchorId, readerTextBytes.anchor),
-    text: truncateTextBytes(block.text, readerTextBytes.previewText),
-  })),
-});
+type PreviewTransport = v.InferOutput<
+  typeof provisionPreviewSuccessResponseSchema
+>;
+type PreviewProjectionInput = ProvisionPreview &
+  Omit<PreviewTransport, keyof ProvisionPreview>;
+
+export const projectProvisionPreview = (preview: PreviewProjectionInput) =>
+  ({
+    url: nullableText(preview.url, readerTextBytes.documentUrl),
+    country: truncateTextBytes(preview.country, readerTextBytes.country),
+    documentId: preview.documentId,
+    language: truncateTextBytes(preview.language, readerTextBytes.language),
+    anchorId: truncateTextBytes(preview.anchorId, readerTextBytes.anchor),
+    citedAnchorId: nullableText(preview.citedAnchorId, readerTextBytes.anchor),
+    headings: preview.headings.slice(0, PREVIEW_HEADING_MAX).map((heading) => ({
+      level: heading.level,
+      anchorId: truncateTextBytes(heading.anchorId, readerTextBytes.anchor),
+      text: truncateTextBytes(heading.text, readerTextBytes.heading),
+    })),
+    heading:
+      preview.heading === null
+        ? null
+        : {
+            level: preview.heading.level,
+            id: truncateTextBytes(preview.heading.id, readerTextBytes.blockId),
+            anchorId: truncateTextBytes(
+              preview.heading.anchorId,
+              readerTextBytes.anchor,
+            ),
+            text: truncateTextBytes(
+              preview.heading.text,
+              readerTextBytes.heading,
+            ),
+          },
+    blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => ({
+      id: truncateTextBytes(block.id, readerTextBytes.blockId),
+      anchorId: truncateTextBytes(block.anchorId, readerTextBytes.anchor),
+      text: truncateTextBytes(block.text, readerTextBytes.previewText),
+    })),
+  }) satisfies PreviewTransport & v.InferInput<typeof provisionPreviewOutput>;
