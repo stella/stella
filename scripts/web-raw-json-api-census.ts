@@ -3,7 +3,14 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import type { Expression, Node } from "../packages/scripts/src/syntax-tree";
+import type {
+  BindingPattern,
+  BindingRestElement,
+  Expression,
+  FormalParameterRest,
+  Node,
+  TSParameterProperty,
+} from "../packages/scripts/src/syntax-tree";
 import { staticPropertyName, walk } from "../packages/scripts/src/syntax-tree";
 import { parseSyntax } from "./parse-memo";
 
@@ -59,6 +66,37 @@ const resolvesToJsonStringify = (
   (expression?.type === "Identifier" &&
     isJsonStringify(resolveLexicalBinding(expression.name, ancestors)));
 
+const bindingNames = (
+  binding:
+    | BindingPattern
+    | BindingRestElement
+    | FormalParameterRest
+    | TSParameterProperty,
+): string[] => {
+  if (binding.type === "TSParameterProperty") {
+    return bindingNames(binding.parameter);
+  }
+  if (binding.type === "Identifier") {
+    return [binding.name];
+  }
+  if (binding.type === "AssignmentPattern") {
+    return bindingNames(binding.left);
+  }
+  if (binding.type === "RestElement") {
+    return bindingNames(binding.argument);
+  }
+  if (binding.type === "ArrayPattern") {
+    return binding.elements.flatMap((element) =>
+      element === null ? [] : bindingNames(element),
+    );
+  }
+  return binding.properties.flatMap((property) =>
+    bindingNames(
+      property.type === "RestElement" ? property.argument : property.value,
+    ),
+  );
+};
+
 const resolveLexicalBinding = (
   name: string,
   ancestors: readonly Node[],
@@ -68,10 +106,7 @@ const resolveLexicalBinding = (
       (scope.type === "FunctionDeclaration" ||
         scope.type === "FunctionExpression" ||
         scope.type === "ArrowFunctionExpression") &&
-      scope.params.some(
-        (parameter) =>
-          parameter.type === "Identifier" && parameter.name === name,
-      )
+      scope.params.some((parameter) => bindingNames(parameter).includes(name))
     ) {
       return undefined;
     }
@@ -119,12 +154,21 @@ export const censusRawJsonApiCalls = async (
           node.callee.name !== "fetchWithTimeout") ||
         node.arguments[0]?.type !== "CallExpression" ||
         node.arguments[0].callee.type !== "Identifier" ||
-        node.arguments[0].callee.name !== "apiUrl" ||
-        node.arguments[1]?.type !== "ObjectExpression"
+        node.arguments[0].callee.name !== "apiUrl"
       ) {
         return;
       }
-      const body = node.arguments[1].properties.find(
+      const optionsArgument = node.arguments[1];
+      let options: Expression | undefined;
+      if (optionsArgument?.type === "ObjectExpression") {
+        options = optionsArgument;
+      } else if (optionsArgument?.type === "Identifier") {
+        options = resolveLexicalBinding(optionsArgument.name, ancestors);
+      }
+      if (options?.type !== "ObjectExpression") {
+        return;
+      }
+      const body = options.properties.find(
         (property) =>
           property.type === "Property" &&
           staticPropertyName(property) === "body",
