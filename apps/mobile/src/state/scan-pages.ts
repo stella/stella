@@ -69,22 +69,17 @@ export const rotatePage = (
 ): readonly ReviewPage[] =>
   pages.map((page) =>
     page.key === key
-      ? { ...page, rotation: nextRotation(page.rotation) }
+      ? { ...page, rotation: NEXT_ROTATION[page.rotation] }
       : page,
   );
 
-function nextRotation(rotation: Rotation): Rotation {
-  switch (rotation) {
-    case 0:
-      return 90;
-    case 90:
-      return 180;
-    case 180:
-      return 270;
-    case 270:
-      return 0;
-  }
-}
+/** A quarter turn clockwise from each rotation. */
+const NEXT_ROTATION: Readonly<Record<Rotation, Rotation>> = {
+  0: 90,
+  90: 180,
+  180: 270,
+  270: 0,
+};
 
 /** The pages without `key`. */
 export const removePage = (
