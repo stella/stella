@@ -23,6 +23,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { WebReaderPresentationProvider } =
   await import("@/components/legal-reader/web-reader-presentation");
 const { ReaderAnswerCard } = await import("./reader-answer-card");
+// Load the real lazy renderer before assertions use its parsed Markdown.
+await import("@/components/ai-elements/message-response");
 const { CopyActionButton } = await import("@/components/copy-action-button");
 const { resolveReaderAnswerCitation } =
   await import("./reader-answer-citation.logic");
