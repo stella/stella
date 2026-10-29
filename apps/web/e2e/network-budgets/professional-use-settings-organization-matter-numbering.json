@@ -1,5 +1,5 @@
 {
-  "route": "/admin/matter-numbering",
+  "route": "/settings/organization/matter-numbering",
   "reason": "Load professional-use acceptance before protected route data is requested. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 6,
