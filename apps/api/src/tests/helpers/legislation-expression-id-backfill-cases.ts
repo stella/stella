@@ -16,6 +16,7 @@ import {
   schedulerJobRuns,
   schedulerJobs,
 } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -77,7 +78,7 @@ export const registerExpressionBackfillCases = ({
       ...runtime,
       step: async (work) =>
         await runtime.step(async (context) => {
-          await context.tx.execute(sql`SET LOCAL statement_timeout = '100ms'`);
+          await setSharedStatementTimeout(context.tx, 100);
           return await work(context);
         }),
     };
