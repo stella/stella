@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
@@ -484,6 +485,38 @@ export const lockSearchHistoryOwner = async (
   }
   return state;
 };
+
+type SearchHistoryReadIdentity = Pick<
+  SearchHistoryEntryRow,
+  | "organizationId"
+  | "userId"
+  | "kind"
+  | "country"
+  | "baseLookupKey"
+  | "lookupKey"
+>;
+
+type SearchHistoryReadIdentityOperand = {
+  [Key in keyof SearchHistoryReadIdentity]:
+    SearchHistoryReadIdentity[Key] | SQLWrapper;
+};
+
+type SearchHistoryReadIdentityOptions = {
+  entry: SearchHistoryReadIdentityOperand;
+  identity: SearchHistoryReadIdentityOperand;
+};
+
+/** Base and scoped representations share an identity only within the same country. */
+export const searchHistoryReadIdentityPredicate = ({
+  entry,
+  identity,
+}: SearchHistoryReadIdentityOptions) => sql`
+  ${entry.organizationId} = ${identity.organizationId}
+  AND ${entry.userId} = ${identity.userId}
+  AND ${entry.kind} = ${identity.kind}
+  AND ${entry.country} IS NOT DISTINCT FROM ${identity.country}
+  AND COALESCE(${entry.baseLookupKey}, ${entry.lookupKey}) = COALESCE(${identity.baseLookupKey}, ${identity.lookupKey})
+`;
 
 const COUNTRY_IDENTITY_DOMAIN = "search-history-country:v1";
 

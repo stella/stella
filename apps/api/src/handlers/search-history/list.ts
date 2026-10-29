@@ -23,6 +23,7 @@ import { brandPersistedSearchHistoryEntryId } from "@/api/lib/safe-id-boundaries
 import {
   searchHistoryCountrySchema,
   searchHistoryKindSchema,
+  searchHistoryReadIdentityPredicate,
   toSearchHistoryEntryResponse,
 } from "./entries";
 
@@ -120,13 +121,10 @@ const listSearchHistory = createSafeRootHandler(
           searchHistoryEntries,
           "history_identity_candidate",
         );
-        const sameIdentity = and(
-          eq(candidate.organizationId, searchHistoryEntries.organizationId),
-          eq(candidate.userId, searchHistoryEntries.userId),
-          eq(candidate.kind, searchHistoryEntries.kind),
-          sql`${candidate.country} IS NOT DISTINCT FROM ${searchHistoryEntries.country}`,
-          sql`COALESCE(${candidate.baseLookupKey}, ${candidate.lookupKey}) = COALESCE(${searchHistoryEntries.baseLookupKey}, ${searchHistoryEntries.lookupKey})`,
-        );
+        const sameIdentity = searchHistoryReadIdentityPredicate({
+          entry: candidate,
+          identity: searchHistoryEntries,
+        });
         const firstUse = tx
           .select({ value: min(candidate.firstUsedAt) })
           .from(candidate)

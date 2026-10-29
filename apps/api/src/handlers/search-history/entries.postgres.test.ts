@@ -345,6 +345,16 @@ if (!databaseUrl || !enabled) {
           baseLookupKey: row.lookupKey,
           lastUsedAt: new Date(row.lastUsedAt.getTime() + 1000),
         });
+        const otherCountryId = createSafeId<"searchHistoryEntry">();
+        await fixture.db.insert(searchHistoryEntries).values({
+          ...row,
+          id: otherCountryId,
+          country: "POL",
+          lookupKey: sha256Hex(
+            `search-history-country:v1\u0000POL\u0000${row.lookupKey}`,
+          ),
+          baseLookupKey: row.lookupKey,
+        });
         const normalized = (await readHistory(fixture, { country: "CZE" }))
           .items;
         expect(normalized).toHaveLength(1);
@@ -358,7 +368,19 @@ if (!databaseUrl || !enabled) {
             params: { entryId: visible.id },
           }),
         );
-        expect((await readHistory(fixture)).items).toHaveLength(0);
+        const remaining = (await readHistory(fixture)).items;
+        expect(remaining).toHaveLength(1);
+        expect(remaining.at(0)).toMatchObject({
+          id: otherCountryId,
+          country: "POL",
+        });
+        const barriers = await fixture.db
+          .select({ lookupKey: searchHistoryTombstones.lookupKey })
+          .from(searchHistoryTombstones)
+          .where(
+            eq(searchHistoryTombstones.organizationId, fixture.organizationId),
+          );
+        expect(barriers).toEqual([{ lookupKey: row.lookupKey }]);
       });
     });
 

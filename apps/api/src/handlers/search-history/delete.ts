@@ -19,6 +19,7 @@ import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import {
   holdSearchHistoryOwnerAccess,
   lockSearchHistoryOwner,
+  searchHistoryReadIdentityPredicate,
 } from "./entries";
 import {
   assertSearchHistoryScope,
@@ -85,26 +86,27 @@ const deleteSearchHistoryEntry = createSafeRootHandler(
             kind: searchHistoryEntries.kind,
             lookupKey: searchHistoryEntries.lookupKey,
             baseLookupKey: searchHistoryEntries.baseLookupKey,
+            country: searchHistoryEntries.country,
           });
         const row = rows.at(0);
         if (!row) {
           return null;
         }
         const deletedLookupKey = row.baseLookupKey ?? row.lookupKey;
-        // Base and scoped representations are one entry during the additive rollout.
-        await tx
-          .delete(searchHistoryEntries)
-          .where(
-            and(
-              eq(
-                searchHistoryEntries.organizationId,
-                session.activeOrganizationId,
-              ),
-              eq(searchHistoryEntries.userId, user.id),
-              eq(searchHistoryEntries.kind, row.kind),
-              sql`COALESCE(${searchHistoryEntries.baseLookupKey}, ${searchHistoryEntries.lookupKey}) = ${deletedLookupKey}`,
-            ),
-          );
+        // Delete every representation of the selected country's entry.
+        await tx.delete(searchHistoryEntries).where(
+          searchHistoryReadIdentityPredicate({
+            entry: searchHistoryEntries,
+            identity: {
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              kind: row.kind,
+              country: row.country,
+              baseLookupKey: row.baseLookupKey,
+              lookupKey: row.lookupKey,
+            },
+          }),
+        );
         await tx
           .insert(searchHistoryTombstones)
           .values({
