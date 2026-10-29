@@ -26,7 +26,7 @@ test.each(["array", "rows"] as const)(
         queries.push(compiled);
         const rows = compiled.sql.includes('FROM "organization"')
           ? [{ id: organizationId }]
-          : [{ id: workspaceId }];
+          : [{ id: workspaceId, status: "active" }];
         return shape === "array" ? rows : { rows };
       },
     });
@@ -39,6 +39,7 @@ test.each(["array", "rows"] as const)(
     expect(parents).toEqual({
       organizationIds: new Set([organizationId]),
       workspaceIds: new Set([workspaceId]),
+      workspaceStatuses: new Map([[workspaceId, "active"]]),
     });
     expect(queries).toHaveLength(2);
     const organizationQuery = queries.at(0);

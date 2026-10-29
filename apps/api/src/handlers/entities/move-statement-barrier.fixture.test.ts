@@ -19,7 +19,7 @@ describe("folder move race control", () => {
       tx: {
         execute: async (statement) => {
           lockedQueries.push(dialect.sqlToQuery(statement));
-          return [{ id: workspaceId }];
+          return [{ id: workspaceId, status: "active" }];
         },
       },
       organizationIds: [],
@@ -31,7 +31,9 @@ describe("folder move race control", () => {
     const locked = lockedQueries.at(0);
     expect(locked).toBeDefined();
 
-    expect(unlocked.sql).toContain('SELECT id FROM "workspaces"');
+    expect(unlocked.sql).toContain(
+      'SELECT id, "workspaces"."status" AS status FROM "workspaces"',
+    );
     expect(unlocked.sql).toContain('WHERE "workspaces"."id" IN ($1)');
     expect(unlocked.params).toEqual([workspaceId]);
     expect(locked?.params).toEqual(unlocked.params);

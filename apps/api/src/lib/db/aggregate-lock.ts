@@ -1245,6 +1245,10 @@ export const withAggregateParentBatch = async ({
   workspaceIds = [],
   mode,
 }: AggregateParentBatchOptions) => {
+  const workspaceStatuses = new Map<
+    SafeId<"workspace">,
+    (typeof workspaces.$inferSelect)["status"]
+  >();
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   for (const id of [...organizationIds, ...workspaceIds]) {
@@ -1286,7 +1290,7 @@ export const withAggregateParentBatch = async ({
     history.status = "acquiring";
     const rows = executedRows(
       await tx.execute(sql`
-    SELECT id FROM ${table}
+    SELECT id${aggregate === "workspace" ? sql`, ${workspaces.status} AS status` : sql``} FROM ${table}
     WHERE ${table.id} IN (${sql.join(
       ids.map((id) => sql`${id}`),
       sql`, `,
@@ -1294,7 +1298,19 @@ export const withAggregateParentBatch = async ({
     ORDER BY ${orderedId} COLLATE "C" ${sql.raw(`FOR ${mode.toUpperCase()}`)}
   `),
     );
-    const returnedIds = rows.map((row) => v.parse(parentRowSchema, row).id);
+    const returnedIds = rows.map((row) => {
+      const { id } = v.parse(parentRowSchema, row);
+      if (aggregate === "workspace") {
+        workspaceStatuses.set(
+          brandPersistedWorkspaceId(id),
+          v.parse(
+            v.object({ status: v.picklist(workspaces.status.enumValues) }),
+            row,
+          ).status,
+        );
+      }
+      return id;
+    });
     for (const id of returnedIds) {
       retainLock(
         history,
@@ -1309,6 +1325,7 @@ export const withAggregateParentBatch = async ({
   return {
     organizationIds: new Set(organizations.map(brandPersistedOrganizationId)),
     workspaceIds: new Set(matters.map(brandPersistedWorkspaceId)),
+    workspaceStatuses,
   };
 };
 type AggregateEntityBatchOptions = {

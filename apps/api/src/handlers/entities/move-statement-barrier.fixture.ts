@@ -6,6 +6,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 // The race control removes synchronization while keeping the parent's real
 // identity and visibility, which the aggregate owner validates after execution.
 export const unlockedWorkspaceParentRead = (workspaceId: SafeId<"workspace">) =>
-  sql`SELECT id FROM ${workspaces}
+  sql`SELECT id, ${workspaces.status} AS status FROM ${workspaces}
     WHERE ${workspaces.id} IN (${workspaceId})
     ORDER BY ${workspaces.id}::text COLLATE "C"`;

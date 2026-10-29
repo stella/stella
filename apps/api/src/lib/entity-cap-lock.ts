@@ -1,10 +1,8 @@
-import { eq } from "drizzle-orm";
-
 import type { Transaction } from "@/api/db/root";
-import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
 import type { RowLockMode } from "@/api/lib/db/aggregate-lock";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Canonical lock order for entity creation and hierarchy mutations (issue #1139,
@@ -105,13 +103,15 @@ export const lockWorkspaceForEntityCreate = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
 ) => {
-  await lockWorkspaceRows({ tx, workspaceIds: [workspaceId], mode: "update" });
-  const rows = await tx
-    .select({ status: workspaces.status })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1);
-  return rows.at(0)?.status;
+  const { workspaceStatuses } = await withAggregateParentBatch({
+    tx,
+    organizationIds: [],
+    workspaceIds: [workspaceId],
+    mode: "update",
+  });
+  return workspaceStatuses.get(
+    brandPersistedWorkspaceId(workspaceId.toLowerCase()),
+  );
 };
 
 /**

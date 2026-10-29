@@ -91,7 +91,7 @@ if (!databaseUrl || !enabled) {
       const db = openClient({
         logger: {
           logQuery: (query, params) => {
-            if (/SELECT id FROM/u.test(query)) {
+            if (/SELECT id(?:, .*? AS status)? FROM/u.test(query)) {
               statements.push({ query, params });
             }
           },

@@ -91,7 +91,7 @@ const recorder = (presence: "present" | "missing" = "present") => {
         return [];
       }
       return compiled.sql.includes('"workspaces"')
-        ? [{ id: workspaceId }]
+        ? [{ id: workspaceId, status: "active" }]
         : [{ id: organizationId }];
     },
   };
@@ -112,6 +112,7 @@ test.each(ROW_LOCK_MODES)(
     ).toEqual({
       organizationIds: new Set([organizationId]),
       workspaceIds: new Set([workspaceId]),
+      workspaceStatuses: new Map([[workspaceId, "active"]]),
     });
     expect(queries).toHaveLength(2);
     for (const query of queries) {
@@ -297,7 +298,7 @@ test("workspace UUIDs match their canonical lowercase rows", async () => {
   const tx = {
     execute: async (query: SQL) => {
       queries.push(new PgDialect().sqlToQuery(query));
-      return [{ id: canonical }];
+      return [{ id: canonical, status: "active" }];
     },
   };
   await withAggregateParentBatch({
