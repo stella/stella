@@ -24,7 +24,7 @@ import {
   QUERY_PERF_CONNECTION_SETTINGS,
 } from "./settings";
 
-type CapturedStatement = { text: string; params: readonly unknown[] };
+export type CapturedStatement = { text: string; params: readonly unknown[] };
 
 /** The statement's leading keyword, after comments and whitespace. */
 const leadingKeyword = (text: string) =>
@@ -41,7 +41,10 @@ const READ_KEYWORDS: ReadonlySet<string> = new Set([
 ]);
 
 /** A captured statement as a Drizzle query with the same bound parameters. */
-const asQuery = ({ text, params }: CapturedStatement): SQL => {
+export const capturedStatementQuery = ({
+  text,
+  params,
+}: CapturedStatement): SQL => {
   const parts = text.split(/\$(\d+)/u);
   const chunks = parts.map((part, index) => {
     if (index % 2 === 0) {
@@ -143,7 +146,10 @@ export const measureScheduledJobRun = async ({
     const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
     for (const statement of reads) {
       // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
-      const plan = await explainOwnerStatement(tx, asQuery(statement));
+      const plan = await explainOwnerStatement(
+        tx,
+        capturedStatementQuery(statement),
+      );
       measured.push({
         metrics: metricsFromPlan(plan),
         statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),

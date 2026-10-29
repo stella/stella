@@ -13,7 +13,7 @@ CREATE TABLE "hosted_customer_erasures" (
   CONSTRAINT "hosted_customer_erasures_attempts_nonnegative" CHECK (attempts >= 0)
 );
 --> statement-breakpoint
-CREATE INDEX "hosted_customer_erasures_due_idx" ON "hosted_customer_erasures" ("status", "next_attempt_at");
+CREATE INDEX "hosted_customer_erasures_due_idx" ON "hosted_customer_erasures" ("next_attempt_at") WHERE status IN ('pending', 'failed') AND attempts < 5;
 --> statement-breakpoint
 ALTER TABLE "hosted_customer_erasures" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint

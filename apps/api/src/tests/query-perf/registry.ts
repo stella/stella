@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -18,6 +19,7 @@ import {
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
 } from "./corpus-seed";
+import { measureHostedErasureHistory } from "./hosted-erasure-run";
 import type { seedQueryPerf } from "./seed";
 
 /** Tenant statements, measured as `stella` under row security per profile. */
@@ -59,10 +61,17 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
     expectedRows: number;
   }[];
 
-type ScheduledJobMeasurement = {
-  task: string;
-  scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
-};
+type ScheduledJobMeasurement =
+  | {
+      type: "corpus";
+      task: string;
+      scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
+    }
+  | {
+      type: "writing";
+      task: string;
+      measure: typeof measureHostedErasureHistory;
+    };
 
 /**
  * How each budgeted scheduled job is measured, keyed by the job's id: the
@@ -75,7 +84,13 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  "usage.eraseHostedCustomers.minute": {
+    type: "writing",
+    task: ERASE_HOSTED_CUSTOMERS_TASK,
+    measure: measureHostedErasureHistory,
+  },
   "caseLaw.reportFreshness.fiveMinute": {
+    type: "corpus",
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
     scenarios: Object.values(CASE_LAW_SCENARIOS),
@@ -123,6 +138,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.usage.eraseHostedCustomers": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",

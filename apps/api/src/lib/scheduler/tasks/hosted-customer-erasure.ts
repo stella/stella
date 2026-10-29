@@ -4,7 +4,9 @@ import { inArray, sql } from "drizzle-orm";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import {
+  HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
   HOSTED_CUSTOMER_ERASURE_STATUS,
+  hostedCustomerErasureRetryable,
   hostedCustomerErasures,
 } from "@/api/db/schema";
 import {
@@ -30,7 +32,6 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const ERASE_HOSTED_CUSTOMERS_TASK =
   "usage.eraseHostedCustomers" as const;
-export const HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 25;
 const PROVIDER_CONCURRENCY = 5;
 const CLAIM_LEASE_MS = 10 * 60 * 1000;
@@ -60,8 +61,7 @@ const claimDueErasures = async (
         .select({ id: hostedCustomerErasures.id })
         .from(hostedCustomerErasures)
         .where(
-          sql`${hostedCustomerErasures.status} IN (${HOSTED_CUSTOMER_ERASURE_STATUS.pending}, ${HOSTED_CUSTOMER_ERASURE_STATUS.failed})
-            AND ${hostedCustomerErasures.attempts} < ${HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS}
+          sql`${hostedCustomerErasureRetryable}
             AND ${hostedCustomerErasures.nextAttemptAt} <= now()`,
         )
         .$dynamic(),

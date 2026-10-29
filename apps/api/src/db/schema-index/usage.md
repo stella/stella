@@ -223,17 +223,17 @@ usage_provider_webhook_events.error_message  text         null              usag
 usage_provider_webhook_events.replay_audit   jsonb        null              usage.ts:1109  Ordered replay attempts survive redaction; ignored attempts remain eligible.
 ```
 
-## hosted_customer_erasures · `hostedCustomerErasures` · usage.ts:1154 · rls
+## hosted_customer_erasures · `hostedCustomerErasures` · usage.ts:1163 · rls
 
 Reference-free provider deletion intents which survive the organization cascade.
 
 ```text
-hosted_customer_erasures.id                     uuid         pk,default,not null  usage.ts:1157
-hosted_customer_erasures.external_customer_ref  text         unique,not null      usage.ts:1158
-hosted_customer_erasures.status                 text         default,not null     usage.ts:1159
-hosted_customer_erasures.attempts               integer      default,not null     usage.ts:1163
-hosted_customer_erasures.next_attempt_at        timestamptz  default,not null     usage.ts:1164
-hosted_customer_erasures.last_error_code        varchar      null                 usage.ts:1165
-hosted_customer_erasures.created_at             timestamptz  default,not null     usage.ts:1166
-hosted_customer_erasures.updated_at             timestamptz  default,not null     usage.ts:1167
+hosted_customer_erasures.id                     uuid         pk,default,not null  usage.ts:1166
+hosted_customer_erasures.external_customer_ref  text         unique,not null      usage.ts:1167
+hosted_customer_erasures.status                 text         default,not null     usage.ts:1168
+hosted_customer_erasures.attempts               integer      default,not null     usage.ts:1172
+hosted_customer_erasures.next_attempt_at        timestamptz  default,not null     usage.ts:1173
+hosted_customer_erasures.last_error_code        varchar      null                 usage.ts:1174
+hosted_customer_erasures.created_at             timestamptz  default,not null     usage.ts:1175
+hosted_customer_erasures.updated_at             timestamptz  default,not null     usage.ts:1176
 ```

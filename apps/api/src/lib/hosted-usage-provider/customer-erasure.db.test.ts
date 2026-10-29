@@ -11,6 +11,7 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
   HOSTED_CUSTOMER_ERASURE_STATUS,
   hostedCustomerErasures,
   usageEntitlements,
@@ -21,10 +22,7 @@ import { eraseHostedCustomer } from "@/api/lib/hosted-usage-provider/client";
 import type { observeFailure } from "@/api/lib/observability/observe-failure";
 import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
-import {
-  HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
-  runHostedCustomerErasures,
-} from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
+import { runHostedCustomerErasures } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { hasRenewingHostedSubscription } from "@/api/lib/usage/renewing-hosted-subscription";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

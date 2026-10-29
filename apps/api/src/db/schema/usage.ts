@@ -1150,6 +1150,15 @@ export const HOSTED_CUSTOMER_ERASURE_STATUSES = [
 const HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES =
   HOSTED_CUSTOMER_ERASURE_STATUSES.map((status) => sql.raw(`'${status}'`));
 
+export const HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS = 5;
+const HOSTED_CUSTOMER_ERASURE_RETRYABLE_SQL_VALUES = [
+  HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+  HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+].map((status) => sql.raw(`'${status}'`));
+
+/** Shared by the due index and its claim so terminal history is never scanned. */
+export const hostedCustomerErasureRetryable = sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_RETRYABLE_SQL_VALUES, sql`, `)}) AND attempts < ${sql.raw(String(HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS))}`;
+
 /** Reference-free provider deletion intents which survive the organization cascade. */
 export const hostedCustomerErasures = p.pgTable(
   "hosted_customer_erasures",
@@ -1169,7 +1178,8 @@ export const hostedCustomerErasures = p.pgTable(
   (table) => [
     p
       .index("hosted_customer_erasures_due_idx")
-      .on(table.status, table.nextAttemptAt),
+      .on(table.nextAttemptAt)
+      .where(hostedCustomerErasureRetryable),
     p.check(
       "hosted_customer_erasures_status_domain",
       sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES, sql`, `)})`,

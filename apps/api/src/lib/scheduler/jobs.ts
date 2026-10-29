@@ -657,6 +657,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: ERASE_HOSTED_CUSTOMERS_TASK,
+    reads: { budget: "scheduled.usage.eraseHostedCustomers" },
     enabled: env.HOSTED_USAGE_PROVIDER === "polar",
   },
   {

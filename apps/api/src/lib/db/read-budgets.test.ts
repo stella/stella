@@ -100,6 +100,7 @@ describe("read budget declarations", () => {
       scheduledJobMeasurementViolations(DECLARED_SCHEDULER_JOBS, {
         ...SCHEDULED_JOB_MEASUREMENTS,
         "inboundMail.receive.minutely": {
+          type: "corpus",
           task: "inboundMail.receive",
           scenarios: [],
         },

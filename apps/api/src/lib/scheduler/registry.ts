@@ -125,6 +125,7 @@ import {
 import {
   ERASE_HOSTED_CUSTOMERS_TASK,
   eraseHostedCustomers,
+  runHostedCustomerErasures,
 } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import {
   REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
@@ -315,6 +316,9 @@ const SCHEDULER_TASKS = {
 >;
 
 type SchedulerTaskRegistryOptions = {
+  hostedCustomerErasureDependencies?: Parameters<
+    typeof runHostedCustomerErasures
+  >[1];
   resetReviewOrganization?: SchedulerTask;
 };
 
@@ -360,7 +364,14 @@ export const createSchedulerTaskRegistry = (
             key: name,
             run: async () => {
               const task = typeof entry === "function" ? entry : entry.task;
-              const outcome = await task(context);
+              const outcome =
+                name === ERASE_HOSTED_CUSTOMERS_TASK &&
+                options.hostedCustomerErasureDependencies !== undefined
+                  ? await runHostedCustomerErasures(
+                      context,
+                      options.hostedCustomerErasureDependencies,
+                    )
+                  : await task(context);
               if (outcome === undefined) {
                 return undefined;
               }
