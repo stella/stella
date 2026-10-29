@@ -156,12 +156,6 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
     write({ root: seed, relative: "package.json", contents: "{}\n" });
     write({ root: seed, relative: "bun.lock", contents: '{"packages":{}}\n' });
     write({ root: seed, relative: ".gitignore", contents: "node_modules\n" });
-    // Keep the declaration input present through clone, reset and clean.
-    write({
-      root: seed,
-      relative: "apps/api/src/handlers/.gitkeep",
-      contents: "",
-    });
     write({ root: seed, relative: FIRST, contents: casts(2) });
     write({
       root: seed,
