@@ -1499,6 +1499,97 @@ const createHarness = ({
     ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final),
   ];
 
+  const queryBackfillCheckpoint = (
+    query: string,
+    params: readonly unknown[],
+  ) => {
+    if (query.startsWith("INSERT")) {
+      const serialized = params.at(2);
+      if (typeof serialized !== "string") {
+        throw new TypeError("Expected checkpoint JSON");
+      }
+      const batch: unknown = JSON.parse(serialized);
+      if (!backfillStates.has(params.at(0))) {
+        backfillStates.set(params.at(0), {
+          cursor: params.at(1),
+          batch,
+        });
+      }
+      return [];
+    }
+    if (query.startsWith("UPDATE")) {
+      const serialized = params.at(2);
+      if (typeof serialized !== "string") {
+        throw new TypeError("Expected checkpoint JSON");
+      }
+      const batch: unknown = JSON.parse(serialized);
+      backfillStates.set(params.at(0), { cursor: params.at(1), batch });
+      return [];
+    }
+    return [backfillStates.get(params.at(0))];
+  };
+
+  const queryIndexArtifacts = (params: readonly unknown[]) => {
+    const newPrefix = params.at(2);
+    const oldPrefix = params.at(3);
+    const index = managedIndexes.find(
+      ({ name }) =>
+        artifactPrefix(name, "_ccnew") === newPrefix &&
+        artifactPrefix(name, "_ccold") === oldPrefix,
+    );
+    if (!index) {
+      throw new TypeError("Expected managed index artifact prefixes");
+    }
+    return (remainingArtifacts.get(index.name) ?? []).map(({ isValid, name }) =>
+      indexRow(index, isValid, name),
+    );
+  };
+
+  const queryIndexState = (params: readonly unknown[]) => {
+    const indexName = params.at(1);
+    if (typeof indexName !== "string") {
+      throw new TypeError("Expected index name query parameter");
+    }
+    if (legacyIndexes.has(indexName)) {
+      return droppedLegacyIndexes.has(indexName)
+        ? []
+        : [
+            {
+              definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
+              isReady: true,
+              isUnique: false,
+              isValid: true,
+              name: indexName,
+            },
+          ];
+    }
+    const index = managedIndexes.find(({ name }) => name === indexName);
+    if (!index) {
+      throw new TypeError("Expected managed index name");
+    }
+    if (pendingIndexes.has(indexName)) {
+      return [];
+    }
+    const offset = indexOffsets.get(indexName) ?? 0;
+    const states = indexStates[indexName];
+    let state: IndexState =
+      indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
+    if (states) {
+      state = offset < states.length ? states.at(offset) : states.at(-1);
+    }
+    indexOffsets.set(indexName, offset + 1);
+    if (state === undefined) {
+      return [];
+    }
+    if (typeof state === "boolean") {
+      return [indexRow(index, state)];
+    }
+    if ("isReady" in state) {
+      return [{ ...indexRow(index, state.isValid), isReady: state.isReady }];
+    }
+    return [indexRow(index, state.isValid, index.name, state.definitionBody)];
+  };
+
   return {
     pool: {
       reserve: async () => ({
@@ -1591,30 +1682,7 @@ const createHarness = ({
             return [{ installed: false }];
           }
           if (query.includes("database_backfill_states")) {
-            if (query.startsWith("INSERT")) {
-              const serialized = params.at(2);
-              if (typeof serialized !== "string") {
-                throw new TypeError("Expected checkpoint JSON");
-              }
-              const batch: unknown = JSON.parse(serialized);
-              if (!backfillStates.has(params.at(0))) {
-                backfillStates.set(params.at(0), {
-                  cursor: params.at(1),
-                  batch,
-                });
-              }
-              return [];
-            }
-            if (query.startsWith("UPDATE")) {
-              const serialized = params.at(2);
-              if (typeof serialized !== "string") {
-                throw new TypeError("Expected checkpoint JSON");
-              }
-              const batch: unknown = JSON.parse(serialized);
-              backfillStates.set(params.at(0), { cursor: params.at(1), batch });
-              return [];
-            }
-            return [backfillStates.get(params.at(0))];
+            return queryBackfillCheckpoint(query, params);
           }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
@@ -1675,67 +1743,10 @@ const createHarness = ({
             return [];
           }
           if (query.includes("starts_with")) {
-            const newPrefix = params.at(2);
-            const oldPrefix = params.at(3);
-            const index = managedIndexes.find(
-              ({ name }) =>
-                artifactPrefix(name, "_ccnew") === newPrefix &&
-                artifactPrefix(name, "_ccold") === oldPrefix,
-            );
-            if (!index) {
-              throw new TypeError("Expected managed index artifact prefixes");
-            }
-            return (remainingArtifacts.get(index.name) ?? []).map(
-              ({ isValid, name }) => indexRow(index, isValid, name),
-            );
+            return queryIndexArtifacts(params);
           }
 
-          const indexName = params.at(1);
-          if (typeof indexName !== "string") {
-            throw new TypeError("Expected index name query parameter");
-          }
-          if (legacyIndexes.has(indexName)) {
-            return droppedLegacyIndexes.has(indexName)
-              ? []
-              : [
-                  {
-                    definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
-                    isReady: true,
-                    isUnique: false,
-                    isValid: true,
-                    name: indexName,
-                  },
-                ];
-          }
-          const index = managedIndexes.find(({ name }) => name === indexName);
-          if (!index) {
-            throw new TypeError("Expected managed index name");
-          }
-          if (pendingIndexes.has(indexName)) {
-            return [];
-          }
-          const offset = indexOffsets.get(indexName) ?? 0;
-          const states = indexStates[indexName];
-          let state: IndexState =
-            indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
-          if (states) {
-            state = offset < states.length ? states.at(offset) : states.at(-1);
-          }
-          indexOffsets.set(indexName, offset + 1);
-          if (state === undefined) {
-            return [];
-          }
-          if (typeof state === "boolean") {
-            return [indexRow(index, state)];
-          }
-          if ("isReady" in state) {
-            return [
-              { ...indexRow(index, state.isValid), isReady: state.isReady },
-            ];
-          }
-          return [
-            indexRow(index, state.isValid, index.name, state.definitionBody),
-          ];
+          return queryIndexState(params);
         },
         terminate: async () => undefined,
         release: () => {

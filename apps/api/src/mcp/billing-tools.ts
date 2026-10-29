@@ -1648,10 +1648,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   const invoiceList = page.items.map(
     ({ createdAtCursor: _createdAtCursor, paidAmount, ...invoice }) => ({
       ...invoice,
-      outstandingAmount: invoicePaymentAmounts({
+      ...invoicePaymentAmounts({
         totalAmount: invoice.totalAmount,
         paidAmount,
-      }).outstandingAmount,
+      }),
     }),
   );
 

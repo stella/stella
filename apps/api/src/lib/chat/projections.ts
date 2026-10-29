@@ -1262,7 +1262,7 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
-      // What is still owed; the detail branch also returns the paid sum.
+      paidAmount: v.number(),
       outstandingAmount: v.number(),
     }),
   ),

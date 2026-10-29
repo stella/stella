@@ -1,17 +1,14 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { operators } from "drizzle-orm";
-import type { BuildQueryResult } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { cents } from "@stll/money";
 
-import type { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import { BILLING_STATUS, invoices } from "@/api/db/schema";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
-import type { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
@@ -22,6 +19,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { invoiceDetailRowFixture } from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -145,12 +143,6 @@ describe("follow-up (b): read_document propertyId path", () => {
   });
 });
 
-type InvoiceDetailRow = BuildQueryResult<
-  typeof databaseRelations,
-  (typeof databaseRelations)["invoices"],
-  { with: typeof INVOICE_DETAIL_RELATIONS }
->;
-
 describe("follow-up (a): detail-mode workspace resolution from the fetched row", () => {
   test("list_time_entries by time_entry_id alone resolves the entry's entity ref", async () => {
     const refRegistry = createChatRefRegistry();
@@ -222,50 +214,13 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
               predicates.push(
                 dialect.sqlToQuery(predicate(invoices, operators)),
               );
-              return {
+              return invoiceDetailRowFixture({
                 id: toSafeId<"invoice">(INV_UUID),
-                organizationId: toSafeId<"organization">("org_1"),
-                clientId: null,
                 workspaceId: toSafeId<"workspace">(WS_UUID),
                 invoiceNumber: "INV-1",
-                documentType: "invoice",
-                originalInvoiceId: null,
                 reference: "REF-1",
-                status: "draft",
-                invoiceDate: "2026-01-01",
                 dueDate: "2026-02-01",
-                currency: "EUR",
                 totalAmount: cents(1000),
-                language: "en",
-                billingMode: "hourly",
-                flatFeeAmount: null,
-                finalizedAt: null,
-                sentAt: null,
-                vatExchangeRate: null,
-                vatExchangeRateSource: null,
-                vatExchangeRateDate: null,
-                vatExchangeRateReference: null,
-                vatExchangeRateTaxPoint: null,
-                // Totals written before invoice lines: the read derives them.
-                netAmount: null,
-                vatAmount: null,
-                notes: null,
-                taxableSupplyDate: null,
-                sellerProfileId: null,
-                buyerName: null,
-                buyerRegistrationId: null,
-                buyerTaxId: null,
-                buyerVatId: null,
-                buyerAddressLine1: null,
-                buyerAddressLine2: null,
-                buyerCity: null,
-                buyerPostalCode: null,
-                buyerCountry: null,
-                paidAt: null,
-                createdAt: new Date("2026-01-01T00:00:00.000Z"),
-                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-                lines: [],
-                payments: [],
                 timeEntries: [
                   {
                     id: toSafeId<"timeEntry">(TE_UUID),
@@ -290,8 +245,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                     },
                   },
                 ],
-                expenses: [],
-              } satisfies InvoiceDetailRow;
+              });
             },
           },
         },

@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseTimeZoneId, Temporal, todayFor } from "@stll/time";
 
-import { setDedicatedStatementTimeout } from "@/api/db/long-running-connection";
+import { setDedicatedStatementTimeout } from "@/api/db/dedicated-connection-timeouts";
 import type { OnlineRepair } from "@/api/db/online-migration-connection";
 import { INVOICE_PAYMENT_ORIGIN } from "@/api/db/schema";
 import { lockInvoiceRepairBatch } from "@/api/lib/db/aggregate-lock";
