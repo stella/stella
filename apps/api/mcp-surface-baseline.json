@@ -4,7 +4,7 @@
     "anonymized": 1016,
     "default": 1438,
     "documents": 963,
-    "law": 1295
+    "law": 1297
   },
   "tools": {
     "add_matter_member": {
@@ -368,6 +368,12 @@
       "advanced": {"title": 23, "description": 290, "inputSchema": 750, "outputSchema": 749, "annotations": 124, "payloadUtf8Bytes": 2083},
       "default": {"title": 23, "description": 290, "inputSchema": 750, "outputSchema": 749, "annotations": 124, "payloadUtf8Bytes": 2083},
       "documents": {"title": 23, "description": 290, "inputSchema": 750, "outputSchema": 749, "annotations": 124, "payloadUtf8Bytes": 2083}
+    },
+    "verify_quote": {
+      "advanced": {"title": 27, "description": 727, "inputSchema": 494, "outputSchema": 577, "annotations": 105, "payloadUtf8Bytes": 2032},
+      "anonymized": {"title": 27, "description": 727, "inputSchema": 494, "outputSchema": 577, "annotations": 105, "payloadUtf8Bytes": 2032},
+      "default": {"title": 27, "description": 727, "inputSchema": 494, "outputSchema": 577, "annotations": 105, "payloadUtf8Bytes": 2032},
+      "law": {"title": 27, "description": 727, "inputSchema": 494, "outputSchema": 577, "annotations": 105, "payloadUtf8Bytes": 2032}
     },
     "write_capability": {
       "advanced": {"title": 16, "description": 444, "inputSchema": 1075, "outputSchema": 380, "annotations": 116, "payloadUtf8Bytes": 2132},

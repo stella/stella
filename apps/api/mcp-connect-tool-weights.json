@@ -614,6 +614,14 @@
       "estimatedTokens": 417
     },
     {
+      "name": "verify_quote",
+      "nameChars": 12,
+      "descriptionChars": 727,
+      "inputSchemaChars": 494,
+      "totalChars": 1233,
+      "estimatedTokens": 453
+    },
+    {
       "name": "write_capability",
       "nameChars": 16,
       "descriptionChars": 444,
@@ -623,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 127363,
-    "estimatedTokens": 50488
+    "characters": 128596,
+    "estimatedTokens": 50941
   }
 }

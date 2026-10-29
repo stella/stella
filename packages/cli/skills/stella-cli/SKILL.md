@@ -105,6 +105,7 @@ requires (request it at `stella auth login --scopes`).
 | case-law | `stella case-law read` | read |  |
 | case-law | `stella case-law resolve` | law_read |  |
 | case-law | `stella case-law search` | search | paginated |
+| case-law | `stella case-law verify-quote` | read |  |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
 | clause | `stella clause save` | knowledge_write | destructive (needs `--yes` off a TTY) |
@@ -215,6 +216,9 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+- `stella case-law verify-quote`
+  - `--decision-id` — Decision ID from search_case_law or resolve_case_law_decision. (string)
+  - `--text` — Quote to check: at most 4000 characters, 128 total word/punctuation tokens and 16 nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved. (string)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`

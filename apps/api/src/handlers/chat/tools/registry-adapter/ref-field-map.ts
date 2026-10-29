@@ -298,6 +298,8 @@ export const READ_TOOL_REF_FIELD_MAP = {
   // Resolve returns source AST blocks; chat reads bounded text through its existing corpus readers.
   resolve_case_law_decision: { chatProjectable: false },
   resolve_law_citation: { chatProjectable: false },
+  // Every exact occurrence is returned; chat requires a separate bounded projection.
+  verify_quote: { chatProjectable: false },
   read_case_law_decision: {
     chatProjectable: true,
     inputRefs: [],

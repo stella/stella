@@ -78,6 +78,7 @@ const TOOL_COVERAGE = {
   resolve_law_citation: excluded(PUBLIC_CORPUS),
   case_law_coverage: excluded(PUBLIC_CORPUS),
   read_case_law_decision: excluded(PUBLIC_CORPUS),
+  verify_quote: excluded(PUBLIC_CORPUS),
   read_case_law_citations: excluded(PUBLIC_CORPUS),
   open_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),

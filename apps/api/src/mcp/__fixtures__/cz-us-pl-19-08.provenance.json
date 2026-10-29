@@ -1,0 +1,8 @@
+{
+  "sourceUrl": "https://nalus.usoud.cz/Search/GetText.aspx?sz=Pl-19-08_1",
+  "caseNumber": "Pl. \u00daS 19/08",
+  "retrievedAt": "2026-10-29",
+  "extraction": "Visible HTML data nodes, br/p/div/tr separated by line breaks; head/script/style omitted.",
+  "characters": 216033,
+  "sha256": "72a21a7f5847c91881f955c6f62ebd33754ef90bb089ac274516896eaee3d2f8"
+}

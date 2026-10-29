@@ -44,6 +44,7 @@ import type {
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
+import { VERIFY_QUOTE_TOOL_SET } from "@/api/mcp/verify-quote-tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizeMcpToolContext } from "@/api/mcp/write-tool-authority";
 
@@ -73,6 +74,7 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   case_law_coverage: STELLA_TOOL_HANDLERS.case_law_coverage,
   read_case_law_citations: STELLA_TOOL_HANDLERS.read_case_law_citations,
   read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,
+  verify_quote: VERIFY_QUOTE_TOOL_SET.handlers.verify_quote,
   read_contact: STELLA_TOOL_HANDLERS.read_contact,
   read_content_across_matters: STELLA_TOOL_HANDLERS.read_content_across_matters,
   search_case_law: STELLA_TOOL_HANDLERS.search_case_law,

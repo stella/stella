@@ -1821,6 +1821,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_provision_history",
       "resolve_case_law_decision",
       "resolve_law_citation",
+      "verify_quote",
       "list_templates",
       "preview_template_conditions",
       "list_documents",
@@ -1862,6 +1863,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_provision_history",
       "resolve_case_law_decision",
       "resolve_law_citation",
+      "verify_quote",
     ]);
   });
 

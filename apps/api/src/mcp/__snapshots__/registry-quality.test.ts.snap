@@ -1588,6 +1588,45 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
+    "name": "verify_quote",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check whether a quote occurs in one stored decision. Resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizing whitespace, quotation marks, dashes, soft/line-end hyphens and č. j. spacing; returns every occurrence in ordered ellipsis segments, with paragraph labels and links. Only exact is verified:true. Report fuzzy as an altered quote, never confirmed. Fuzzy returns a closest token-edit passage and similarity >= 0.75; not_found is lower. Differences run passage to quote: added/dropped tokens show alterations. Cannot_verify means unreadable text, never absence of a quote. Offsets are original UTF-16 units. No publisher fetch. Use read_case_law_decision for context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote to check: at most 4000 characters, 128 total word/punctuation tokens and 16 nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved."
+        }
+      }
+    }
+  },
+  {
     "name": "list_templates",
     "scope": "stella:templates",
     "access": "read",
@@ -8239,6 +8278,45 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "kind": "date",
             "bound": "start"
           }
+        }
+      }
+    }
+  },
+  {
+    "name": "verify_quote",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check whether a quote occurs in one stored decision. Resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizing whitespace, quotation marks, dashes, soft/line-end hyphens and č. j. spacing; returns every occurrence in ordered ellipsis segments, with paragraph labels and links. Only exact is verified:true. Report fuzzy as an altered quote, never confirmed. Fuzzy returns a closest token-edit passage and similarity >= 0.75; not_found is lower. Differences run passage to quote: added/dropped tokens show alterations. Cannot_verify means unreadable text, never absence of a quote. Offsets are original UTF-16 units. No publisher fetch. Use read_case_law_decision for context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote to check: at most 4000 characters, 128 total word/punctuation tokens and 16 nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved."
         }
       }
     }
@@ -15366,6 +15444,45 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "verify_quote",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check whether a quote occurs in one stored decision. Resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizing whitespace, quotation marks, dashes, soft/line-end hyphens and č. j. spacing; returns every occurrence in ordered ellipsis segments, with paragraph labels and links. Only exact is verified:true. Report fuzzy as an altered quote, never confirmed. Fuzzy returns a closest token-edit passage and similarity >= 0.75; not_found is lower. Differences run passage to quote: added/dropped tokens show alterations. Cannot_verify means unreadable text, never absence of a quote. Offsets are original UTF-16 units. No publisher fetch. Use read_case_law_decision for context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote to check: at most 4000 characters, 128 total word/punctuation tokens and 16 nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved."
+        }
+      }
+    }
+  },
+  {
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
     "access": "read",
@@ -17331,6 +17448,45 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             "kind": "date",
             "bound": "start"
           }
+        }
+      }
+    }
+  },
+  {
+    "name": "verify_quote",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check whether a quote occurs in one stored decision. Resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizing whitespace, quotation marks, dashes, soft/line-end hyphens and č. j. spacing; returns every occurrence in ordered ellipsis segments, with paragraph labels and links. Only exact is verified:true. Report fuzzy as an altered quote, never confirmed. Fuzzy returns a closest token-edit passage and similarity >= 0.75; not_found is lower. Differences run passage to quote: added/dropped tokens show alterations. Cannot_verify means unreadable text, never absence of a quote. Offsets are original UTF-16 units. No publisher fetch. Use read_case_law_decision for context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Decision ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote to check: at most 4000 characters, 128 total word/punctuation tokens and 16 nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved."
         }
       }
     }
