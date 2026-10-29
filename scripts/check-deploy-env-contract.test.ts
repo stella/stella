@@ -109,7 +109,7 @@ describe("deployment setting contract", () => {
   });
 
   for (const value of [{ ...fixture(), version: 2 }, { version: 1 }, null]) {
-    test(`invalid projection refuses: ${JSON.stringify(value)?.slice(0, 30)}`, async () => {
+    test(`invalid projection refuses: ${JSON.stringify(value).slice(0, 30)}`, async () => {
       expect((await run(value)).exitCode).toBe(1);
     });
   }

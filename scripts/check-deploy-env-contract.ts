@@ -69,7 +69,12 @@ const readProjection = async () => {
       message: "Deployment repository setting is unavailable",
     });
   }
-  const owner = repository.split("/").at(0);
+  const [owner] = repository.split("/");
+  if (owner === undefined) {
+    throw new DeployEnvReadError({
+      message: "Repository identity is unavailable",
+    });
+  }
   return await github([
     "api",
     `repos/${owner}/${deployRepository}/contents/scripts/lints/config-names.json?ref=main`,
