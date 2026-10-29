@@ -419,6 +419,13 @@ type AuditReadColumns = {
 };
 
 /** Apply the same feature policy before a query derives values from changes. */
+/**
+ * Whether the stored row recorded any changes, regardless of read policy.
+ * Lets a caller say changes were withheld without ever reading their content.
+ */
+export const auditStoredChangesPresentSql = () =>
+  sql<boolean>`${auditLogs.changes} is not null`;
+
 export const auditReadChangesSql = (
   context: AuditReadContext,
   columns: AuditReadColumns = auditLogs,

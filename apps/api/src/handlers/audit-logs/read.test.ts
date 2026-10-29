@@ -79,6 +79,7 @@ describe("queryAuditLogPage", () => {
                       resourceType: "retired_record_kind",
                       resourceId: "retired_record_test",
                       changes: null,
+                      hasStoredChanges: false,
                       changesStatus: "visible",
                     },
                     {
@@ -100,7 +101,10 @@ describe("queryAuditLogPage", () => {
                       action: "update",
                       resourceType: "retired_record_kind",
                       resourceId: "retired_record_with_changes_test",
-                      changes: { title: { old: "Old", new: "New" } },
+                      // The read projection hides changes for an unknown kind;
+                      // only the raw presence says some were recorded.
+                      changes: null,
+                      hasStoredChanges: true,
                     },
                   ],
                 }),

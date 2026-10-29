@@ -22,6 +22,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   auditReadChangesSql,
+  auditStoredChangesPresentSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -272,6 +273,9 @@ export const queryAuditLogPage = async function* ({
             principal: { organizationId, userId },
           }),
           metadata: auditLogs.metadata,
+          // The read projection hides changes it has no policy for, so an
+          // unknown kind needs the raw presence to say whether any were withheld.
+          hasStoredChanges: auditStoredChangesPresentSql(),
           createdAtCursor: auditLogCursor.cursorValue.as("created_at_cursor"),
         })
         .from(auditLogs)
@@ -372,10 +376,9 @@ export const queryAuditLogPage = async function* ({
               })
             : {
                 changes: null,
-                changesStatus:
-                  row.changes === null
-                    ? AUDIT_CHANGES_STATUS.visible
-                    : AUDIT_CHANGES_STATUS.unrecognizedResource,
+                changesStatus: row.hasStoredChanges
+                  ? AUDIT_CHANGES_STATUS.unrecognizedResource
+                  : AUDIT_CHANGES_STATUS.visible,
               }),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
