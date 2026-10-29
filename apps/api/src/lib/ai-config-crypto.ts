@@ -18,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
 export type OrgAIConfigReadFailure =
   | "missing-key"
@@ -36,11 +37,24 @@ export class OrgAIConfigReadError extends TaggedError("OrgAIConfigReadError")<{
   }
 }
 
-const unreadableConfig = (reason: OrgAIConfigReadFailure) =>
-  new OrgAIConfigReadError({
+export const unreadableOrgAIConfig = (
+  organizationId: SafeId<"organization">,
+  reason: OrgAIConfigReadFailure,
+): OrgAIConfigReadError => {
+  // This is deliberately independent from exception capture. The failure is
+  // anticipated (and capture policy suppresses it), but operators still need
+  // to distinguish a missing key from corrupt stored bytes.
+  logger.warn("organization_ai_config.read_failed", {
+    action: "decrypt",
+    organizationId,
+    reason,
+    source: "organization_ai_config",
+  });
+  return new OrgAIConfigReadError({
     message: "Decrypted organization AI configuration is unreadable",
     reason,
   });
+};
 
 const standardProviderSchema = v.picklist(
   TANSTACK_AI_PROVIDERS.filter((provider) => provider !== "anthropic"),
@@ -142,15 +156,15 @@ export const decryptAIConfig = async (
   iv: Buffer | null | undefined,
 ): Promise<OrgAIConfig> => {
   if (!ciphertext || !iv) {
-    throw unreadableConfig("incomplete-envelope");
+    throw unreadableOrgAIConfig(organizationId, "incomplete-envelope");
   }
 
   const decrypted = await Result.tryPromise({
     try: async () => await decryptContent(organizationId, ciphertext, iv),
     catch: (error: unknown) =>
       error instanceof ConfigurationError
-        ? unreadableConfig("missing-key")
-        : unreadableConfig("decryption-failed"),
+        ? unreadableOrgAIConfig(organizationId, "missing-key")
+        : unreadableOrgAIConfig(organizationId, "decryption-failed"),
   });
   if (decrypted.isErr()) {
     throw decrypted.error;
@@ -158,14 +172,14 @@ export const decryptAIConfig = async (
   const json = decrypted.value;
   const decoded = Result.try({
     try: (): unknown => JSON.parse(json),
-    catch: () => unreadableConfig("invalid-json"),
+    catch: () => unreadableOrgAIConfig(organizationId, "invalid-json"),
   });
   if (Result.isError(decoded)) {
     throw decoded.error;
   }
   const parsed = v.safeParse(orgAIConfigSchema, decoded.value);
   if (!parsed.success) {
-    throw unreadableConfig("invalid-schema");
+    throw unreadableOrgAIConfig(organizationId, "invalid-schema");
   }
   return normalizeOrgAIConfig(parsed.output);
 };

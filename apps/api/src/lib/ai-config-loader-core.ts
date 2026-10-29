@@ -1,10 +1,11 @@
 import { AI_UNAVAILABLE_REASON } from "@stll/api-contract/organization-ai-availability";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { OrgAIConfigReadError } from "@/api/lib/ai-config-crypto";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  OrgAIConfigReadError,
+  unreadableOrgAIConfig,
+} from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type OrgAIConfigRow = {
   aiConfigEncrypted: string | Buffer | null | undefined;
@@ -78,17 +79,7 @@ export const decryptOrgAIConfigRow = async ({
     const safeError =
       error instanceof OrgAIConfigReadError
         ? error
-        : new OrgAIConfigReadError({
-            message: "Decrypted organization AI configuration is unreadable",
-            reason: "decryption-failed",
-          });
-    captureError(
-      safeError,
-      handlerErrorContext("aiConfig.decrypt", {
-        organizationId,
-        source: "loadOrgAIConfig",
-      }),
-    );
+        : unreadableOrgAIConfig(organizationId, "decryption-failed");
     return { status: "corrupt", error: safeError };
   }
 };

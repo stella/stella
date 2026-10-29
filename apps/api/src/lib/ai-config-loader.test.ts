@@ -1,17 +1,43 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import {
+  decryptAIConfig,
+  type OrgAIConfigReadFailure,
+  unreadableOrgAIConfig,
+} from "@/api/lib/ai-config-crypto";
 import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-const ownErrorText = (error: object) =>
-  Reflect.ownKeys(error)
-    .map((key) => String(Reflect.getOwnPropertyDescriptor(error, key)?.value))
-    .join(" ");
+const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
+  if ((typeof value !== "object" && typeof value !== "function") || !value) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[cycle]";
+  }
+  seen.add(value);
+  return Reflect.ownKeys(value).map((key) => {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    return {
+      key: String(key),
+      configurable: descriptor?.configurable,
+      enumerable: descriptor?.enumerable,
+      writable:
+        descriptor && "writable" in descriptor
+          ? descriptor.writable
+          : undefined,
+      value:
+        descriptor && "value" in descriptor
+          ? descriptorGraph(descriptor.value, seen)
+          : "[accessor]",
+    };
+  });
+};
 
 beforeEach(() => {
   decryptAIConfigMock.mockClear();
@@ -116,9 +142,56 @@ describe("loadOrgAIConfig", () => {
       throw new Error("Expected decryption failure to be corrupt");
     }
     expect(result.error.reason).toBe("decryption-failed");
-    expect(ownErrorText(result.error)).not.toContain(marker);
+    expect(JSON.stringify(descriptorGraph(result.error))).not.toContain(marker);
     expect(Object.hasOwn(result.error, "cause")).toBe(false);
     expect(Object.hasOwn(result.error, "metadata")).toBe(false);
+  });
+
+  test("emits one bounded diagnostic for every classified failure", () => {
+    const logger = installRecordingLogger();
+    const reasons = [
+      "missing-key",
+      "decryption-failed",
+      "incomplete-envelope",
+      "invalid-json",
+      "invalid-schema",
+    ] as const satisfies readonly OrgAIConfigReadFailure[];
+
+    try {
+      for (const reason of reasons) {
+        const error = unreadableOrgAIConfig(organizationId, reason);
+        expect(descriptorGraph(error)).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              key: "message",
+              value: "Decrypted organization AI configuration is unreadable",
+            }),
+            expect.objectContaining({ key: "reason", value: reason }),
+          ]),
+        );
+        expect(Object.hasOwn(error, "cause")).toBe(false);
+      }
+
+      expect(logger.records).toHaveLength(reasons.length);
+      expect(
+        logger.records.map(({ message, attributes }) => ({
+          message,
+          attributes,
+        })),
+      ).toEqual(
+        reasons.map((reason) => ({
+          message: "organization_ai_config.read_failed",
+          attributes: {
+            action: "decrypt",
+            organizationId,
+            reason,
+            source: "organization_ai_config",
+          },
+        })),
+      );
+    } finally {
+      logger.restore();
+    }
   });
 });
 

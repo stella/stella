@@ -8,10 +8,8 @@ import {
   providerResponseRegion,
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
@@ -99,12 +97,6 @@ const readAIConfig = createSafeRootHandler(
       });
 
       if (decryptResult.isErr()) {
-        captureError(
-          decryptResult.error,
-          handlerErrorContext(
-            "organizationsettings.readAIConfig.decryptResult_error",
-          ),
-        );
         // Reporting the default here would present a stored-but-unreadable
         // config as an unconfigured org and invite re-entry of the key.
         return Result.err(storedAIConfigUnreadableError());
