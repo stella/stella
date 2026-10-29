@@ -1,0 +1,5 @@
+{
+  "metric": "require-query-limit-suppressions",
+  "delta": 1,
+  "reason": "The cited-by page groups a provision's link rows per decision in a subquery whose ORDER BY is what lets the per-group decision lookups above it stop at the page limit; a LIMIT on the groups themselves would drop candidates before the decision conditions judge them. The enclosing page query and the final query both apply limit + 1."
+}
