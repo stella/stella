@@ -127,6 +127,7 @@ import {
   tsvector,
   user,
   wsPolicies,
+  xid8,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -2684,6 +2685,43 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * The sitemap months a write touched, appended by triggers (migration
+ * `20261029140900_case_law_sitemap_changes`): the month a decision left and
+ * the month it entered. A month of `*` asks for a whole country, and a
+ * country of `*` for every country (a source's redistribution changed). The
+ * refresh recounts each logged month and deletes exactly the rows its count's
+ * own snapshot saw, so a row is consumed only by a count that includes its
+ * change. One row per month per transaction, so a bulk write logs each month
+ * once. A queue, not a watermark: ids order nothing.
+ */
+export const caseLawSitemapChanges = p.pgTable(
+  "case_law_sitemap_changes",
+  {
+    id: p
+      .bigint({ mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity({ name: "case_law_sitemap_changes_id_seq" }),
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    xact: xid8()
+      .notNull()
+      .default(sql`pg_current_xact_id()`),
+  },
+  (t) => [
+    p
+      .unique("case_law_sitemap_changes_month_xact_key")
+      .on(t.country, t.year, t.month, t.xact),
+    p.pgPolicy("case_law_sitemap_change_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
   ],
 );
 

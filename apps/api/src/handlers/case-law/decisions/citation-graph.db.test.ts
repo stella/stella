@@ -4,6 +4,9 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import {
   caseLawCitationDoctrineReviews,
   caseLawCitations,
@@ -1405,6 +1408,121 @@ test("citation reads carry withheld text dispositions", async () => {
           citationText: null,
           textWithheldReason: "source_licence",
           passage: null,
+        },
+      ],
+    },
+  });
+});
+
+test("citation passages retry when sections replace the AST version they accompany", async () => {
+  const citingId = createSafeId<"caseLawDecision">();
+  const citedId = createSafeId<"caseLawDecision">();
+  const edgeId = createSafeId<"caseLawCitation">();
+  const citationText = "21 Cdo 500/2019";
+  const oldText = `Old version cites ${citationText}.`;
+  const newText = `New version cites ${citationText}.`;
+  const astOf = (text: string, anchorId: string): DocumentAst => ({
+    version: 1,
+    source: { system: "test", documentId: anchorId, webUrl: "", printUrl: "" },
+    metadata: {
+      caseNumber: "race",
+      court: "Court",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: anchorId,
+        anchorId,
+        type: "paragraph",
+        inlines: [{ type: "text", text }],
+        plainText: text,
+      },
+    ],
+  });
+  const oldWarnings = [
+    { rule: "html-tag", count: 1, firstOffsets: [0] },
+  ] satisfies ExtractionWarnings;
+  const newWarnings = [
+    { rule: "html-tag", count: 2, firstOffsets: [8, 16] },
+  ] satisfies ExtractionWarnings;
+  const oldUpdatedAt = new Date("2026-10-01T00:00:00.000Z");
+  const newUpdatedAt = new Date("2026-10-02T00:00:00.000Z");
+  const newAst = astOf(newText, "new-anchor");
+  await db.insert(caseLawDecisions).values([
+    {
+      id: citingId,
+      caseNumber: "racing-citing-decision",
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+      documentAst: astOf(oldText, "old-anchor"),
+      sections: [{ index: 0, type: "unknown", title: null, text: oldText }],
+      contentHash: "a".repeat(64),
+      extractionWarnings: oldWarnings,
+      updatedAt: oldUpdatedAt,
+    },
+    {
+      id: citedId,
+      caseNumber: "cited-decision",
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+    },
+  ]);
+  await db.insert(caseLawCitations).values({
+    id: edgeId,
+    citingDecisionId: citingId,
+    citedDecisionId: citedId,
+    citationText,
+    sectionIndex: 0,
+  });
+
+  let transactions = 0;
+  const racingDb = Object.assign(
+    async <T>(
+      read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+    ): Promise<T> => {
+      transactions += 1;
+      const result = await caseLawDb(read);
+      if (transactions === 2) {
+        await db
+          .update(caseLawDecisions)
+          .set({
+            documentAst: newAst,
+            sections: [
+              { index: 0, type: "unknown", title: null, text: newText },
+            ],
+            contentHash: "b".repeat(64),
+            extractionWarnings: newWarnings,
+            updatedAt: newUpdatedAt,
+          })
+          .where(eq(caseLawDecisions.id, citingId));
+      }
+      return result;
+    },
+    caseLawDb,
+  );
+  const first = await readGatedDecisionCitations({
+    caseLawDb: racingDb,
+    cursor: undefined,
+    decisionId: citingId,
+    direction: "cites",
+    limit: 10,
+    surface: "search",
+  });
+  expect(first).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          extractionWarnings: newWarnings,
+          passage: { anchorId: "new-anchor", text: newText },
         },
       ],
     },
