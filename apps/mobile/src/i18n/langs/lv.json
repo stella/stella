@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Rādīt sarakstu",
     "hideList": "Paslēpt sarakstu"
+  },
+  "dictation": {
+    "title": "Diktēšana",
+    "unavailable": "Šajā versijā audio ierakstīšana nav pieejama.",
+    "record": "Ierakstīt",
+    "drafts": "Saglabātie ieraksti",
+    "open": "Atvērt",
+    "delete": "Dzēst",
+    "cancel": "Atcelt",
+    "deleteTitle": "Dzēst ierakstu?",
+    "deleteMessage": "Ieraksts un tā audio faili tiks neatgriezeniski dzēsti.",
+    "failed": "Neizdevās atjaunināt ierakstu. Saglabātais audio tiek paturēts.",
+    "noSignal": "Mikrofons nesūta audio.",
+    "recording": "Notiek ierakstīšana",
+    "finished": "Ierakstīšana pabeigta",
+    "marker": "Pievienot atzīmi",
+    "stop": "Apturēt",
+    "markers": "Atzīmes",
+    "export": "Eksportēt",
+    "saveToMatter": "Saglabāt lietā",
+    "audio": "Audio",
+    "cleaned": "Attīrīts audio",
+    "defaultName": "Diktēšana",
+    "actionFailed": "Neizdevās nosūtīt audio. Ieraksts tiek paturēts; mēģiniet vēlreiz.",
+    "keepDraft": "Paturēt ierakstu",
+    "completed": "Audio nosūtīts. Ieraksts paliek šajā ierīcē.",
+    "matterSelected": "Šim ierakstam ir atlasīta lieta.",
+    "recover": "Turpināt nepabeigto ierakstu",
+    "recoveryFailed": "Neizdevās pārbaudīt saglabātos ierakstus. Atveriet diktēšanu un mēģiniet vēlreiz.",
+    "dismiss": "Aizvērt",
+    "microphonePurpose": "stella izmanto mikrofonu jūsu sākto diktātu ierakstīšanai.",
+    "preparing": "Tiek sagatavots attīrīts audio…",
+    "cleaningFailed": "Neizdevās attīrīt audio. Sākotnējais ieraksts ir pieejams."
   }
 }

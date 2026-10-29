@@ -8,6 +8,7 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { Text } from "@/components/ui/text";
 import { useScan } from "@/components/use-scan";
+import { useDictationRecorder } from "@/features/dictation/identity";
 import { ChevronRightIcon } from "@/icons.gen";
 import { canScan } from "@/native/document-scanner";
 import { useAppColors, useUiColors } from "@/theme";
@@ -27,12 +28,13 @@ type MoreRow = {
  * Everything beyond the three tabs, as GitHub's app lists its sections: a
  * coloured tile, the name and a chevron, in grouped cards. Case law, your
  * timers and the settings open from here, and a device with the document
- * camera scans paper into a matter; voice input is on its way.
+ * camera scans paper into a matter; voice input records dictations.
  */
 const MoreScreen = () => {
   const t = useTranslations();
   const colors = useAppColors();
   const scan = useScan();
+  const dictationRecorder = useDictationRecorder();
 
   const groups: readonly (readonly MoreRow[])[] = [
     [
@@ -58,12 +60,16 @@ const MoreScreen = () => {
             } as const,
           ]
         : []),
-      {
-        glyph: "mic",
-        href: null,
-        label: t("more.voiceInput"),
-        tile: "Purple",
-      },
+      ...(dictationRecorder === null
+        ? []
+        : [
+            {
+              glyph: "mic",
+              href: "/dictation",
+              label: t("more.voiceInput"),
+              tile: "Purple",
+            } as const,
+          ]),
     ],
     [
       {

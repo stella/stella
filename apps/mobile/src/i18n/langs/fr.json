@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Afficher la liste",
     "hideList": "Masquer la liste"
+  },
+  "dictation": {
+    "title": "Dictée",
+    "unavailable": "L’enregistrement audio n’est pas disponible dans cette version.",
+    "record": "Enregistrer",
+    "drafts": "Enregistrements sauvegardés",
+    "open": "Ouvrir",
+    "delete": "Supprimer",
+    "cancel": "Annuler",
+    "deleteTitle": "Supprimer l’enregistrement ?",
+    "deleteMessage": "L’enregistrement et ses fichiers audio seront définitivement supprimés.",
+    "failed": "L’enregistrement n’a pas pu être actualisé. L’audio sauvegardé est conservé.",
+    "noSignal": "Le microphone ne transmet aucun son.",
+    "recording": "Enregistrement en cours",
+    "finished": "Enregistrement terminé",
+    "marker": "Ajouter un repère",
+    "stop": "Arrêter",
+    "markers": "Repères",
+    "export": "Exporter",
+    "saveToMatter": "Enregistrer dans le dossier",
+    "audio": "Audio",
+    "cleaned": "Audio nettoyé",
+    "defaultName": "Dictée",
+    "actionFailed": "L’audio n’a pas pu être envoyé. L’enregistrement est conservé ; réessayez.",
+    "keepDraft": "Conserver l’enregistrement",
+    "completed": "Audio envoyé. L’enregistrement reste sur cet appareil.",
+    "matterSelected": "Un dossier est sélectionné pour cet enregistrement.",
+    "recover": "Reprendre l’enregistrement inachevé",
+    "recoveryFailed": "Les enregistrements sauvegardés n’ont pas pu être vérifiés. Ouvrez la dictée pour réessayer.",
+    "dismiss": "Fermer",
+    "microphonePurpose": "stella utilise le microphone pour enregistrer les dictées que vous lancez.",
+    "preparing": "Préparation de l’audio nettoyé…",
+    "cleaningFailed": "Le nettoyage audio a échoué. L’enregistrement original est disponible."
   }
 }

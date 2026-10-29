@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Näita loendit",
     "hideList": "Peida loend"
+  },
+  "dictation": {
+    "title": "Dikteerimine",
+    "unavailable": "Heli salvestamine pole selles versioonis saadaval.",
+    "record": "Salvesta",
+    "drafts": "Salvestatud helifailid",
+    "open": "Ava",
+    "delete": "Kustuta",
+    "cancel": "Tühista",
+    "deleteTitle": "Kas kustutada salvestis?",
+    "deleteMessage": "Salvestis ja selle helifailid kustutatakse jäädavalt.",
+    "failed": "Salvestist ei saanud uuendada. Salvestatud heli säilib.",
+    "noSignal": "Mikrofon ei edasta heli.",
+    "recording": "Salvestamine",
+    "finished": "Salvestamine lõpetatud",
+    "marker": "Lisa märgis",
+    "stop": "Peata",
+    "markers": "Märgised",
+    "export": "Ekspordi",
+    "saveToMatter": "Salvesta toimikusse",
+    "audio": "Heli",
+    "cleaned": "Puhastatud heli",
+    "defaultName": "Dikteerimine",
+    "actionFailed": "Heli ei saanud saata. Salvestis säilib; proovi uuesti.",
+    "keepDraft": "Säilita salvestis",
+    "completed": "Heli saadetud. Salvestis jääb sellesse seadmesse.",
+    "matterSelected": "Selle salvestise jaoks on toimik valitud.",
+    "recover": "Jätka lõpetamata salvestist",
+    "recoveryFailed": "Salvestisi ei saanud kontrollida. Ava dikteerimine ja proovi uuesti.",
+    "dismiss": "Sulge",
+    "microphonePurpose": "stella kasutab mikrofoni sinu alustatud dikteerimiste salvestamiseks.",
+    "preparing": "Puhastatud heli ettevalmistamine…",
+    "cleaningFailed": "Heli puhastamine ebaõnnestus. Algne salvestis on saadaval."
   }
 }

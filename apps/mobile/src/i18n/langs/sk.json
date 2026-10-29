@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Zobraziť zoznam",
     "hideList": "Skryť zoznam"
+  },
+  "dictation": {
+    "title": "Diktát",
+    "unavailable": "V tomto zostavení nie je nahrávanie zvuku dostupné.",
+    "record": "Nahrávať",
+    "drafts": "Uložené nahrávky",
+    "open": "Otvoriť",
+    "delete": "Vymazať",
+    "cancel": "Zrušiť",
+    "deleteTitle": "Vymazať nahrávku?",
+    "deleteMessage": "Nahrávka a jej zvukové súbory sa natrvalo vymažú.",
+    "failed": "Nahrávku sa nepodarilo aktualizovať. Uložený zvuk zostáva zachovaný.",
+    "noSignal": "Mikrofón neposiela zvuk.",
+    "recording": "Nahrávanie",
+    "finished": "Nahrávanie dokončené",
+    "marker": "Pridať značku",
+    "stop": "Zastaviť",
+    "markers": "Značky",
+    "export": "Exportovať",
+    "saveToMatter": "Uložiť do prípadu",
+    "audio": "Zvuk",
+    "cleaned": "Vyčistený zvuk",
+    "defaultName": "Diktát",
+    "actionFailed": "Zvuk sa nepodarilo odoslať. Nahrávka zostáva zachovaná; skúste to znova.",
+    "keepDraft": "Ponechať nahrávku",
+    "completed": "Zvuk bol odoslaný. Nahrávka zostáva v tomto zariadení.",
+    "matterSelected": "Pre túto nahrávku je vybraný prípad.",
+    "recover": "Pokračovať v nedokončenej nahrávke",
+    "recoveryFailed": "Uložené nahrávky sa nepodarilo skontrolovať. Otvorte diktát a skúste to znova.",
+    "dismiss": "Zavrieť",
+    "microphonePurpose": "stella používa mikrofón na nahrávanie diktátov, ktoré spustíte.",
+    "preparing": "Pripravuje sa vyčistený zvuk…",
+    "cleaningFailed": "Zvuk sa nepodarilo vyčistiť. Pôvodná nahrávka je dostupná."
   }
 }

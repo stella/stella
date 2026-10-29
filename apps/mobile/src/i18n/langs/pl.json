@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Pokaż listę",
     "hideList": "Ukryj listę"
+  },
+  "dictation": {
+    "title": "Dyktowanie",
+    "unavailable": "Nagrywanie dźwięku jest niedostępne w tej wersji.",
+    "record": "Nagrywaj",
+    "drafts": "Zapisane nagrania",
+    "open": "Otwórz",
+    "delete": "Usuń",
+    "cancel": "Anuluj",
+    "deleteTitle": "Usunąć nagranie?",
+    "deleteMessage": "Nagranie i jego pliki dźwiękowe zostaną trwale usunięte.",
+    "failed": "Nie udało się zaktualizować nagrania. Zapisany dźwięk został zachowany.",
+    "noSignal": "Mikrofon nie przesyła dźwięku.",
+    "recording": "Nagrywanie",
+    "finished": "Nagrywanie zakończone",
+    "marker": "Dodaj znacznik",
+    "stop": "Zatrzymaj",
+    "markers": "Znaczniki",
+    "export": "Eksportuj",
+    "saveToMatter": "Zapisz w sprawie",
+    "audio": "Dźwięk",
+    "cleaned": "Oczyszczony dźwięk",
+    "defaultName": "Dyktowanie",
+    "actionFailed": "Nie udało się wysłać dźwięku. Nagranie zostało zachowane; spróbuj ponownie.",
+    "keepDraft": "Zachowaj nagranie",
+    "completed": "Dźwięk wysłany. Nagranie pozostaje na tym urządzeniu.",
+    "matterSelected": "Dla tego nagrania wybrano sprawę.",
+    "recover": "Kontynuuj niedokończone nagranie",
+    "recoveryFailed": "Nie udało się sprawdzić zapisanych nagrań. Otwórz dyktowanie i spróbuj ponownie.",
+    "dismiss": "Zamknij",
+    "microphonePurpose": "stella używa mikrofonu do nagrywania uruchamianego przez Ciebie dyktowania.",
+    "preparing": "Przygotowywanie oczyszczonego dźwięku…",
+    "cleaningFailed": "Nie udało się oczyścić dźwięku. Oryginalne nagranie jest dostępne."
   }
 }

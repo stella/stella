@@ -14,6 +14,9 @@ import { SelectionProvider, useSelection } from "@/components/selection";
 import { TimerActivitySync } from "@/components/timer-activity-sync";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { useSession } from "@/connection/session-provider";
+import { DraftRecovery } from "@/features/dictation/draft-recovery";
+import { useDictationRecorder } from "@/features/dictation/identity";
+import { DictationSessionBoundary } from "@/features/dictation/session-boundary";
 import { KeyCommands } from "@/native/key-commands";
 import type { KeyCommand } from "@/native/key-commands";
 import { LayoutMetricsProvider } from "@/native/layout-metrics";
@@ -21,6 +24,7 @@ import { useAppColors } from "@/theme";
 
 /** Signed out, only sign-in exists; signed in, only the app does. */
 export const ProtectedScreens = () => {
+  const dictationRecorder = useDictationRecorder();
   const segments: readonly string[] = useSegments();
   // A screen pushed over the tabs keeps the tab's search for the way back.
   const activeTab =
@@ -33,6 +37,8 @@ export const ProtectedScreens = () => {
             <SelectionProvider>
               <TimerActivitySync />
               <PushRegistration />
+              <DictationSessionBoundary />
+              <DraftRecovery recorder={dictationRecorder} />
               <Screens />
             </SelectionProvider>
           </ChangesProvider>
@@ -202,6 +208,10 @@ const Screens = () => {
               sheetAllowedDetents: [0.75, 1],
               sheetGrabberVisible: true,
             }}
+          />
+          <Stack.Screen
+            name="dictation"
+            options={{ ...pushedScreen, presentation: "modal" }}
           />
           <Stack.Screen name="timers/index" options={pushedScreen} />
           <Stack.Screen

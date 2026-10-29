@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Show the list",
     "hideList": "Hide the list"
+  },
+  "dictation": {
+    "title": "Dictation",
+    "unavailable": "Audio recording is unavailable in this build.",
+    "record": "Record",
+    "drafts": "Saved recordings",
+    "open": "Open",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "deleteTitle": "Delete recording?",
+    "deleteMessage": "The recording and its audio files will be permanently deleted.",
+    "failed": "The recording could not be updated. Your saved audio is kept.",
+    "noSignal": "The microphone is not sending audio.",
+    "recording": "Recording",
+    "finished": "Recording finished",
+    "marker": "Add marker",
+    "stop": "Stop",
+    "markers": "Markers",
+    "export": "Export",
+    "saveToMatter": "Save to matter",
+    "audio": "Audio",
+    "cleaned": "Cleaned audio",
+    "defaultName": "Dictation",
+    "actionFailed": "The audio could not be sent. Your recording is kept; try again.",
+    "keepDraft": "Keep recording",
+    "completed": "Audio sent. The recording remains on this device.",
+    "matterSelected": "A matter is selected for this recording.",
+    "recover": "Continue your unfinished recording",
+    "recoveryFailed": "Saved recordings could not be checked. Open dictation to try again.",
+    "dismiss": "Dismiss",
+    "microphonePurpose": "stella uses the microphone to record dictations you start.",
+    "preparing": "Preparing cleaned audio…",
+    "cleaningFailed": "Audio cleaning failed. The original recording is available."
   }
 }

@@ -273,6 +273,7 @@ const ThreadMessages = ({
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
+          matterId={matterId}
           onSend={turn.send}
           onStop={turn.stop}
         />

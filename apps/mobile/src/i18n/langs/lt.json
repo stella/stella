@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"
+  },
+  "dictation": {
+    "title": "Diktavimas",
+    "unavailable": "Šioje versijoje garso įrašymas nepasiekiamas.",
+    "record": "Įrašyti",
+    "drafts": "Išsaugoti įrašai",
+    "open": "Atidaryti",
+    "delete": "Ištrinti",
+    "cancel": "Atšaukti",
+    "deleteTitle": "Ištrinti įrašą?",
+    "deleteMessage": "Įrašas ir jo garso failai bus ištrinti visam laikui.",
+    "failed": "Nepavyko atnaujinti įrašo. Išsaugotas garsas lieka.",
+    "noSignal": "Mikrofonas nesiunčia garso.",
+    "recording": "Įrašoma",
+    "finished": "Įrašymas baigtas",
+    "marker": "Pridėti žymeklį",
+    "stop": "Sustabdyti",
+    "markers": "Žymekliai",
+    "export": "Eksportuoti",
+    "saveToMatter": "Išsaugoti byloje",
+    "audio": "Garsas",
+    "cleaned": "Išvalytas garsas",
+    "defaultName": "Diktavimas",
+    "actionFailed": "Nepavyko išsiųsti garso. Įrašas lieka; bandykite dar kartą.",
+    "keepDraft": "Palikti įrašą",
+    "completed": "Garsas išsiųstas. Įrašas lieka šiame įrenginyje.",
+    "matterSelected": "Šiam įrašui pasirinkta byla.",
+    "recover": "Tęsti nebaigtą įrašą",
+    "recoveryFailed": "Nepavyko patikrinti išsaugotų įrašų. Atidarykite diktavimą ir bandykite dar kartą.",
+    "dismiss": "Uždaryti",
+    "microphonePurpose": "stella naudoja mikrofoną jūsų pradėtam diktavimui įrašyti.",
+    "preparing": "Ruošiamas išvalytas garsas…",
+    "cleaningFailed": "Nepavyko išvalyti garso. Originalus įrašas pasiekiamas."
   }
 }

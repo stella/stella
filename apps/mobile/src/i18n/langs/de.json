@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Liste einblenden",
     "hideList": "Liste ausblenden"
+  },
+  "dictation": {
+    "title": "Diktat",
+    "unavailable": "Audioaufnahmen sind in dieser Version nicht verfügbar.",
+    "record": "Aufnehmen",
+    "drafts": "Gespeicherte Aufnahmen",
+    "open": "Öffnen",
+    "delete": "Löschen",
+    "cancel": "Abbrechen",
+    "deleteTitle": "Aufnahme löschen?",
+    "deleteMessage": "Die Aufnahme und ihre Audiodateien werden dauerhaft gelöscht.",
+    "failed": "Die Aufnahme konnte nicht aktualisiert werden. Gespeicherte Audiodaten bleiben erhalten.",
+    "noSignal": "Das Mikrofon liefert kein Audiosignal.",
+    "recording": "Aufnahme läuft",
+    "finished": "Aufnahme beendet",
+    "marker": "Markierung setzen",
+    "stop": "Stoppen",
+    "markers": "Markierungen",
+    "export": "Exportieren",
+    "saveToMatter": "Im Mandat speichern",
+    "audio": "Audio",
+    "cleaned": "Bereinigtes Audio",
+    "defaultName": "Diktat",
+    "actionFailed": "Audio konnte nicht gesendet werden. Die Aufnahme bleibt erhalten; versuchen Sie es erneut.",
+    "keepDraft": "Aufnahme behalten",
+    "completed": "Audio gesendet. Die Aufnahme bleibt auf diesem Gerät.",
+    "matterSelected": "Für diese Aufnahme ist ein Mandat ausgewählt.",
+    "recover": "Unvollständige Aufnahme fortsetzen",
+    "recoveryFailed": "Gespeicherte Aufnahmen konnten nicht geprüft werden. Öffnen Sie das Diktat und versuchen Sie es erneut.",
+    "dismiss": "Schließen",
+    "microphonePurpose": "stella verwendet das Mikrofon für Diktate, die Sie starten.",
+    "preparing": "Bereinigtes Audio wird vorbereitet…",
+    "cleaningFailed": "Audio konnte nicht bereinigt werden. Die Originalaufnahme ist verfügbar."
   }
 }

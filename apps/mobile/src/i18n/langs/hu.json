@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Lista megjelenítése",
     "hideList": "Lista elrejtése"
+  },
+  "dictation": {
+    "title": "Diktálás",
+    "unavailable": "A hangrögzítés ebben a verzióban nem érhető el.",
+    "record": "Felvétel",
+    "drafts": "Mentett felvételek",
+    "open": "Megnyitás",
+    "delete": "Törlés",
+    "cancel": "Mégse",
+    "deleteTitle": "Törli a felvételt?",
+    "deleteMessage": "A felvétel és a hangfájljai véglegesen törlődnek.",
+    "failed": "A felvételt nem sikerült frissíteni. A mentett hang megmaradt.",
+    "noSignal": "A mikrofon nem küld hangot.",
+    "recording": "Felvétel folyamatban",
+    "finished": "Felvétel befejezve",
+    "marker": "Jelölő hozzáadása",
+    "stop": "Leállítás",
+    "markers": "Jelölők",
+    "export": "Exportálás",
+    "saveToMatter": "Mentés az ügybe",
+    "audio": "Hang",
+    "cleaned": "Tisztított hang",
+    "defaultName": "Diktálás",
+    "actionFailed": "A hangot nem sikerült elküldeni. A felvétel megmaradt; próbálja újra.",
+    "keepDraft": "Felvétel megtartása",
+    "completed": "Hang elküldve. A felvétel megmarad ezen az eszközön.",
+    "matterSelected": "Ehhez a felvételhez ki van választva egy ügy.",
+    "recover": "Befejezetlen felvétel folytatása",
+    "recoveryFailed": "A mentett felvételeket nem sikerült ellenőrizni. Nyissa meg a diktálást, és próbálja újra.",
+    "dismiss": "Bezárás",
+    "microphonePurpose": "A stella a mikrofont az Ön által indított diktálások rögzítésére használja.",
+    "preparing": "Tisztított hang előkészítése…",
+    "cleaningFailed": "A hang tisztítása nem sikerült. Az eredeti felvétel elérhető."
   }
 }

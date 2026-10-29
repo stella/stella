@@ -34,6 +34,14 @@ Matches the build's privacy manifest (`privacyManifests` in `app.config.ts`).
 App Review's sign-in details and notes go into App Store Connect only, never
 into this repository.
 
+## Background audio
+
+The `audio` background mode keeps an explicitly started dictation recording
+when the person locks the screen or switches apps. Recording stops only when
+they pause or finish it, or the audio session is interrupted. Audio and level
+samples are kept on the device; sharing or saving to a matter requires an
+explicit action.
+
 ## Screenshots
 
 iPhone 6.9" (1320×2868) and iPad 13" (2064×2752), from the simulators

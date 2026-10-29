@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -10,7 +11,9 @@ import {
   COMPOSER_SEND_BUTTON_CLASS,
 } from "@stll/ui/composer-tokens";
 
+import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { TextInput } from "@/components/ui/text";
+import { useDictationRecorder } from "@/features/dictation/identity";
 import { ArrowUpIcon, PlusIcon, SquareIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
@@ -26,7 +29,9 @@ export const ChatComposer = ({
   canStop,
   onSend,
   onStop,
+  matterId,
 }: {
+  matterId?: string | undefined;
   busy: boolean;
   canStop: boolean;
   /** Sends the text; returns false when it was not taken, so it stays in the box. */
@@ -34,6 +39,9 @@ export const ChatComposer = ({
   onStop: () => void;
 }) => {
   const ui = useUiColors();
+  const router = useRouter();
+  const dictationRecorder = useDictationRecorder();
+  const more = useTranslations("more");
   const t = useTranslations("chat");
   const [draft, setDraft] = useState("");
   const message = draft.trim();
@@ -77,6 +85,21 @@ export const ChatComposer = ({
               variant="composer"
             />
           </View>
+          {dictationRecorder !== null ? (
+            <Pressable
+              accessibilityLabel={more("voiceInput")}
+              accessibilityRole="button"
+              className="min-h-11 min-w-11 items-center justify-center active:opacity-60"
+              onPress={() => {
+                router.push({
+                  pathname: "/dictation",
+                  params: matterId === undefined ? {} : { matterId },
+                });
+              }}
+            >
+              <LucideGlyphs name="mic" color={ui.foreground} size={18} />
+            </Pressable>
+          ) : null}
           {busy ? (
             <Pressable
               accessibilityLabel={t("stop")}

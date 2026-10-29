@@ -229,5 +229,38 @@
   "pane": {
     "showList": "Mostrar la lista",
     "hideList": "Ocultar la lista"
+  },
+  "dictation": {
+    "title": "Dictado",
+    "unavailable": "La grabación de audio no está disponible en esta versión.",
+    "record": "Grabar",
+    "drafts": "Grabaciones guardadas",
+    "open": "Abrir",
+    "delete": "Eliminar",
+    "cancel": "Cancelar",
+    "deleteTitle": "¿Eliminar la grabación?",
+    "deleteMessage": "La grabación y sus archivos de audio se eliminarán de forma permanente.",
+    "failed": "No se pudo actualizar la grabación. El audio guardado se conserva.",
+    "noSignal": "El micrófono no está enviando audio.",
+    "recording": "Grabando",
+    "finished": "Grabación finalizada",
+    "marker": "Añadir marcador",
+    "stop": "Detener",
+    "markers": "Marcadores",
+    "export": "Exportar",
+    "saveToMatter": "Guardar en el asunto",
+    "audio": "Audio",
+    "cleaned": "Audio depurado",
+    "defaultName": "Dictado",
+    "actionFailed": "No se pudo enviar el audio. La grabación se conserva; inténtalo de nuevo.",
+    "keepDraft": "Conservar grabación",
+    "completed": "Audio enviado. La grabación permanece en este dispositivo.",
+    "matterSelected": "Hay un asunto seleccionado para esta grabación.",
+    "recover": "Continuar la grabación pendiente",
+    "recoveryFailed": "No se pudieron comprobar las grabaciones guardadas. Abre el dictado para volver a intentarlo.",
+    "dismiss": "Cerrar",
+    "microphonePurpose": "stella utiliza el micrófono para grabar los dictados que inicias.",
+    "preparing": "Preparando audio depurado…",
+    "cleaningFailed": "No se pudo depurar el audio. La grabación original está disponible."
   }
 }

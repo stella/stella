@@ -6,8 +6,9 @@ import {
   withXcodeProject,
 } from "expo/config-plugins";
 import type { ConfigPlugin } from "expo/config-plugins";
-import { cpSync, existsSync, rmSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 // Evaluated by Node through Expo's config loader, which cannot follow a
 // workspace package's extensionless TypeScript imports; so this file imports
@@ -183,6 +184,32 @@ type AppConfigInputs = {
   variant: Variant;
 };
 
+const microphoneCatalogSchema = v.object({
+  dictation: v.object({ microphonePurpose: v.string() }),
+});
+
+const microphoneLocales = () => {
+  const directory = path.join(import.meta.dirname, "src/i18n/langs");
+  return Object.fromEntries(
+    readdirSync(directory)
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => {
+        const catalog = v.parse(
+          v.pipe(v.string(), v.parseJson(), microphoneCatalogSchema),
+          readFileSync(path.join(directory, file), "utf-8"),
+        );
+        return [
+          file.slice(0, -5),
+          {
+            ios: {
+              NSMicrophoneUsageDescription: catalog.dictation.microphonePurpose,
+            },
+          },
+        ];
+      }),
+  );
+};
+
 const appConfigBase = ({
   buildNumber,
   liveActivities,
@@ -193,6 +220,7 @@ const appConfigBase = ({
 }: AppConfigInputs): ExpoConfig => ({
   name: VARIANT_CONFIG[variant].name,
   slug: "stella",
+  locales: microphoneLocales(),
   version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
@@ -250,6 +278,9 @@ const appConfigBase = ({
       ],
     },
     infoPlist: {
+      NSMicrophoneUsageDescription:
+        "stella uses the microphone to record dictations you choose to save or share.",
+      UIBackgroundModes: ["audio"],
       // The document camera (modules/document-scanner) scans paper into a
       // matter's documents.
       NSCameraUsageDescription:
