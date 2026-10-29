@@ -19,6 +19,7 @@
   "scripts/generated-markdown-merge.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/generated-web-merge.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/gh-retry-processes.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
+  "scripts/install-packed-cli.test.ts": "Installs the packed CLI offline with npm in real subprocesses to exercise consumer dependency resolution.",
   "scripts/legal-atlas-image-scope.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/oxlint-safe-fixers.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/precommit-lint.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
