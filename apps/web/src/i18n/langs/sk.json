@@ -1282,7 +1282,8 @@
       "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)",
       "versionBasisInferredCompact": "Dátum rozhodnutia · odvodené",
       "versionBasisInferredExplanation": "Znenie je odvodené z dátumu rozhodnutia. Rozhodnutie neuvádza, ktoré znenie sa použije."
-    }
+    },
+    "withdrawnByPublisher": "Stiahnuté vydavateľom"
   },
   "catalogue": {
     "addCustom": "Pridať vlastné",

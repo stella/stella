@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -12,7 +21,14 @@ import {
   MOBILE_UPDATES_PATH,
 } from "@stll/api-contract/mobile-updates";
 
-import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+import {
+  appConfigFor,
+  BAR_GLYPHS_FOLDER,
+  copyBarGlyphs,
+  UPDATE_SIGNING_CERTIFICATE,
+} from "../app.config";
+import manifest from "../package.json" with { type: "json" };
+import { BAR_GLYPHS } from "./bar-glyphs.gen";
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -98,12 +114,63 @@ describe("the app's builds", () => {
       expect(
         mobileRedirectUri(variant).startsWith(`${String(config.scheme)}:`),
       ).toBe(true);
-      expect(config.extra).toEqual({ variant });
+      expect(config.extra).toEqual({
+        liveActivities: true,
+        pushNotifications: true,
+        variant,
+      });
       expect(config.ios?.bundleIdentifier).toBe(config.android?.package);
       expect(config.ios?.buildNumber).toBe("7");
       expect(config.android?.versionCode).toBe(7);
     },
   );
+
+  test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: { profileUuid: "profile", teamId: "TEAM" },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: false,
+      pushNotifications: false,
+      variant: "preview",
+    });
+    expect(
+      signed.plugins?.some(
+        (plugin) =>
+          (Array.isArray(plugin) ? plugin[0] : plugin) === "expo-widgets",
+      ),
+    ).toBe(false);
+  });
+
+  test("a release with the widgets profile carries the Live Activity extension", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        profileUuid: "profile",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: true,
+      pushNotifications: true,
+      variant: "preview",
+    });
+    expect(signed.plugins).toContainEqual([
+      "expo-widgets",
+      {
+        bundleIdentifier: "app.stll.mobile.preview.widgets",
+        groupIdentifier: "group.app.stll.mobile.preview",
+      },
+    ]);
+  });
 
   test("no two builds share a store identity, a scheme or a name", () => {
     for (const read of [
@@ -145,6 +212,36 @@ describe("the app's builds", () => {
   });
 });
 
+describe("the bar glyphs", () => {
+  test("prebuild puts every one in the app's asset catalog, replacing an earlier copy", () => {
+    const projectRoot = mkdtempSync(path.join(tmpdir(), "stella-bar-glyphs-"));
+    try {
+      const sourceRoot = path.join(projectRoot, "ios", "stella");
+      const catalog = path.join(sourceRoot, "Images.xcassets", "BarGlyphs");
+      mkdirSync(path.join(catalog, "lucide-dropped.imageset"), {
+        recursive: true,
+      });
+      writeFileSync(path.join(sourceRoot, "AppDelegate.swift"), "");
+      cpSync(
+        path.join(SOURCE_ROOT, "..", BAR_GLYPHS_FOLDER),
+        path.join(projectRoot, BAR_GLYPHS_FOLDER),
+        { recursive: true },
+      );
+
+      copyBarGlyphs(projectRoot);
+
+      expect(readdirSync(catalog).toSorted()).toEqual(
+        [
+          "Contents.json",
+          ...Object.values(BAR_GLYPHS).map((name) => `${name}.imageset`),
+        ].toSorted(),
+      );
+    } finally {
+      rmSync(projectRoot, { force: true, recursive: true });
+    }
+  });
+});
+
 /** Every module the app bundles: tests run under Bun, never on the phone. */
 const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
   .map(String)
@@ -179,6 +276,41 @@ describe("the app's dates", () => {
     expect(source.match(/relativeTime\(|RelativeTimeFormat/gu) ?? []).toEqual(
       [],
     );
+  });
+});
+
+describe("the app's dependencies", () => {
+  /** Test helpers run under Bun beside the tests and may use dev dependencies. */
+  const bundled = appModules.filter(
+    (name) => !name.split(path.sep).includes("test-support"),
+  );
+
+  /** `@scope/name/sub` and `name/sub` name the packages `@scope/name` and `name`. */
+  const packageOf = (specifier: string): string =>
+    specifier
+      .split("/")
+      .slice(0, specifier.startsWith("@") ? 2 : 1)
+      .join("/");
+
+  test("reads a scoped package's name from a subpath import", () => {
+    expect(packageOf("@stll/ui/matter-colors")).toBe("@stll/ui");
+    expect(packageOf("expo-router/stack")).toBe("expo-router");
+  });
+
+  // The release jobs install only `@stll/mobile...`, so a package that is
+  // linked at the workspace root but missing here type-checks and bundles
+  // locally, then fails the TestFlight archive.
+  test.each(bundled)("%s imports only packages the app depends on", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      importsOf(source)
+        .filter(
+          (specifier) =>
+            !specifier.startsWith(".") && !specifier.startsWith("@/"),
+        )
+        .map(packageOf)
+        .filter((pkg) => !Object.hasOwn(manifest.dependencies, pkg)),
+    ).toEqual([]);
   });
 });
 

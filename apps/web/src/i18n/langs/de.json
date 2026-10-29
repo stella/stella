@@ -1282,7 +1282,8 @@
       "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
       "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
       "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
-    }
+    },
+    "withdrawnByPublisher": "Vom Herausgeber zurückgezogen"
   },
   "catalogue": {
     "addCustom": "Eigenes hinzufügen",

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Account",
     "server": "Server",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account",
+    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours."
   },
   "header": {
     "search": "Search"
@@ -199,7 +201,8 @@
     "retry": "Try again",
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
-    "changeFailed": "The timer could not be changed. Try again."
+    "changeFailed": "The timer could not be changed. Try again.",
+    "more": "{count, plural, one {# more timer} other {# more timers}}"
   },
   "scan": {
     "title": "Scan a document",

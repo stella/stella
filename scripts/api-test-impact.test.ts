@@ -144,6 +144,7 @@ test("every full-suite rule widens a readable graph", () => {
       "scripts/test-scope.ts",
       "scripts/test-shards.ts",
       "scripts/ci-api-test-plan.ts",
+      "packages/scripts/src/test-shard-planning.ts",
     ]) {
       if (file.endsWith(".ts")) {
         write(file, "export const value = true;");
