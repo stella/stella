@@ -3,26 +3,81 @@ import type * as React from "react";
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 
-const Table = ({ className, ...props }: React.ComponentProps<"table">) => (
-  <div className="relative w-full overflow-x-auto" data-slot="table-container">
+/**
+ * How far cells pad their content from the column edges.
+ *
+ * `card` pads 16px, the inset of a card's header and body, so a table set
+ * directly inside a bordered card lines its columns up with the card's title.
+ */
+type TableInset = "default" | "card";
+
+/**
+ * Who scrolls a table wider or taller than its box. `self` wraps it in its own
+ * horizontal scroller. `parent` renders the bare table for a page that already
+ * scrolls it (a `ScrollArea`, a scrolling pane): a scroller of its own would
+ * become the reference box of a sticky header and stop it from sticking.
+ */
+type TableScroll = "self" | "parent";
+
+type TableProps = React.ComponentProps<"table"> & {
+  inset?: TableInset;
+  scroll?: TableScroll;
+};
+
+const Table = ({
+  className,
+  inset = "default",
+  scroll = "self",
+  ...props
+}: TableProps) => {
+  const table = (
     <table
       className={cn(
         "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
         className,
       )}
+      data-inset={inset}
       data-slot="table"
       {...props}
     />
-  </div>
-);
+  );
+  if (scroll === "parent") {
+    return table;
+  }
+  return (
+    <div
+      className="relative w-full overflow-x-auto"
+      data-slot="table-container"
+    >
+      {table}
+    </div>
+  );
+};
+
+type TableHeaderProps = React.ComponentProps<"thead"> & {
+  /**
+   * `muted` lays the header row on a muted band, separating it from the rows
+   * of a long list.
+   */
+  surface?: "plain" | "muted";
+  /**
+   * Keeps the header in view while the rows scroll under it, on a translucent
+   * muted band. The table must scroll with its parent (`scroll="parent"`).
+   */
+  sticky?: boolean;
+};
 
 const TableHeader = ({
   className,
+  surface = "plain",
+  sticky = false,
   ...props
-}: React.ComponentProps<"thead">) => (
+}: TableHeaderProps) => (
   <thead
     className={cn(
       "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
+      surface === "muted" && "bg-muted/50",
+      sticky && "bg-muted/80 sticky top-0 z-10 backdrop-blur",
       className,
     )}
     data-slot="table-header"
@@ -55,10 +110,21 @@ const TableFooter = ({
   />
 );
 
-const TableRow = ({ className, ...props }: React.ComponentProps<"tr">) => (
+/**
+ * `muted` greys out a row or a cell whose value no longer counts (a voided
+ * payment) or that only supports its neighbours (a secondary column).
+ */
+type TableTone = "default" | "muted";
+
+const TableRow = ({
+  className,
+  tone = "default",
+  ...props
+}: React.ComponentProps<"tr"> & { tone?: TableTone | undefined }) => (
   <tr
     className={cn(
       "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
+      tone === "muted" && "text-muted-foreground",
       className,
     )}
     data-slot="table-row"
@@ -66,10 +132,36 @@ const TableRow = ({ className, ...props }: React.ComponentProps<"tr">) => (
   />
 );
 
-const TableHead = ({ className, ...props }: React.ComponentProps<"th">) => (
+/**
+ * Where a column sets its content. `end` lines up figures and amounts;
+ * `start` is the default reading edge.
+ */
+type TableAlign = "start" | "center" | "end";
+
+const TABLE_ALIGN_CLASS = {
+  center: "text-center",
+  end: "text-end",
+  start: "text-start",
+} as const satisfies Record<TableAlign, string>;
+
+// The obsolete `align` attribute of th/td gives way to the alignment prop.
+type TableHeadProps = Omit<React.ComponentProps<"th">, "align"> & {
+  align?: TableAlign | undefined;
+  /** Heads a column of figures: tabular numerals, like its cells. */
+  numeric?: boolean | undefined;
+};
+
+const TableHead = ({
+  className,
+  align = "start",
+  numeric = false,
+  ...props
+}: TableHeadProps) => (
   <th
     className={cn(
-      "text-muted-foreground h-10 px-2.5 text-start align-middle leading-none font-medium whitespace-nowrap has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
+      "text-muted-foreground h-10 px-2.5 align-middle leading-none font-medium whitespace-nowrap in-data-[inset=card]:px-4 has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
+      TABLE_ALIGN_CLASS[align],
+      numeric && "tabular-nums",
       className,
     )}
     data-slot="table-head"
@@ -77,10 +169,43 @@ const TableHead = ({ className, ...props }: React.ComponentProps<"th">) => (
   />
 );
 
-const TableCell = ({ className, ...props }: React.ComponentProps<"td">) => (
+type TableCellProps = Omit<React.ComponentProps<"td">, "align"> & {
+  align?: TableAlign | undefined;
+  tone?: TableTone | undefined;
+  /** Figures set in tabular numerals, so digits line up down the column. */
+  numeric?: boolean | undefined;
+  /**
+   * Cuts text that overflows the cell with an ellipsis; the caller bounds the
+   * cell's width (`max-w-xs`).
+   */
+  truncate?: boolean;
+  /**
+   * The cell holds one control that fills it edge to edge and pads itself (a
+   * button that opens the row's record), so the cell adds no padding and the
+   * control's hover band reaches the cell's borders.
+   */
+  flush?: boolean;
+};
+
+const TableCell = ({
+  className,
+  align,
+  tone = "default",
+  numeric = false,
+  truncate = false,
+  flush = false,
+  ...props
+}: TableCellProps) => (
   <td
     className={cn(
-      "p-2.5 align-middle leading-none whitespace-nowrap in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)] has-[[role=checkbox]]:pe-0",
+      "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
+      flush
+        ? "p-0"
+        : "p-2.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
+      align !== undefined && TABLE_ALIGN_CLASS[align],
+      tone === "muted" && "text-muted-foreground",
+      numeric && "tabular-nums",
+      truncate && "truncate",
       className,
     )}
     data-slot="table-cell"
@@ -90,7 +215,7 @@ const TableCell = ({ className, ...props }: React.ComponentProps<"td">) => (
 
 type SortDirection = "asc" | "desc" | null;
 
-type SortableHeadProps = Omit<React.ComponentProps<"th">, "onClick"> & {
+type SortableHeadProps = Omit<TableHeadProps, "onClick"> & {
   sortDirection?: SortDirection;
   onSort: () => void;
   /** Rendered next to the sort button inside the same cell (e.g. filter icon). */
@@ -171,4 +296,14 @@ export {
   TableCaption,
   SortableHead,
 };
-export type { SortDirection };
+export type {
+  SortDirection,
+  TableAlign,
+  TableHeadProps,
+  TableCellProps,
+  TableHeaderProps,
+  TableInset,
+  TableProps,
+  TableScroll,
+  TableTone,
+};
