@@ -9,6 +9,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
   provisionLinkOutcomeEmitsHit,
+  provisionLinkReadOutcomeSql,
   readCaseLawProvisionScope,
 } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
@@ -344,7 +345,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
            sentence_text, span_start, span_end, confidence)
           SELECT gen_random_uuid(), ${adversarialDecision}, 'CZE', '2/1993 Sb.',
             2, 1993, 'Sb.', 'article', 36, n::text, 'a',
-            'cl_36-odst_' || lpad(n::text, 6, '0') || '-pism_a', DATE '2020-01-01',
+            'cl_36', DATE '2020-01-01',
             'non-matching letter inside the subtree', n, n + 1, 1
           FROM generate_series(1, ${probeBudget * 3 + 8}::int) n`);
         await db.execute(
@@ -377,33 +378,69 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
            work_collection, unit, section, subsection, letter, anchor, decision_date,
            sentence_text, span_start, span_end, confidence)
           VALUES (gen_random_uuid(), ${adversarialDecision}, 'CZE', '2/1993 Sb.',
-            2, 1993, 'Sb.', 'article', 36, '1', 'z', 'cl_36-zz_match',
+            2, 1993, 'Sb.', 'article', 36, '1', 'z', 'cl_36',
             DATE '2020-01-01', 'matching citation beyond the budget',
             ${probeBudget * 3 + 9}, ${probeBudget * 3 + 10}, 1)`);
         await db.execute(
           sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
         );
-        const continuationProbe = provisionDecisionPageQuery(tx, {
-          body: { country: "CZE", query: "", provision: GAPPED_PROVISION },
-          generation: GENERATION,
-          after: undefined,
-          orderBy: [desc(publishedCaseLawDecisions.id)],
-          limit: 1,
-          decisionIds: [adversarialDecision],
-        });
-        expect(await continuationProbe).toEqual([
-          expect.objectContaining({ id: adversarialDecision }),
-        ]);
-        const continuationPlan = explainRoot(
-          await db.execute(
-            sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${continuationProbe.getSQL()}`,
-          ),
-        );
-        for (const scan of citationScans(continuationPlan)) {
-          expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
-            probeBudget + 1,
+        let after: { anchor: string; spanStart: number } | undefined;
+        const outcomes = [];
+        do {
+          const continuationProbe = sql`SELECT ${provisionLinkReadOutcomeSql({
+            decisionId: sql`${adversarialDecision}`,
+            jurisdiction: "CZE",
+            provision: GAPPED_PROVISION,
+            ...(after === undefined ? {} : { after }),
+          })} AS outcome`;
+          const continuationPlan = explainRoot(
+            await db.execute(
+              sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${continuationProbe}`,
+            ),
           );
-        }
+          for (const scan of citationScans(continuationPlan)) {
+            expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
+              probeBudget + 1,
+            );
+            expect(String(scan["Index Name"])).toContain(
+              "case_law_provision_citations_decision",
+            );
+          }
+          expect(
+            nodesOf(continuationPlan).some(
+              (node) => node["Node Type"] === "Sort",
+            ),
+          ).toBe(false);
+          const outcome = (await db.execute(continuationProbe)).at(0)?.[
+            "outcome"
+          ];
+          if (!isRecord(outcome) || typeof outcome["type"] !== "string") {
+            panic("The membership probe returned an invalid outcome");
+          }
+          outcomes.push(outcome["type"]);
+          if (outcome["type"] === "incomplete") {
+            const position = outcome["after"];
+            if (
+              !isRecord(position) ||
+              typeof position["anchor"] !== "string" ||
+              typeof position["spanStart"] !== "number"
+            ) {
+              panic("The membership probe returned an invalid position");
+            }
+            after = {
+              anchor: position["anchor"],
+              spanStart: position["spanStart"],
+            };
+          } else {
+            after = undefined;
+          }
+        } while (after !== undefined);
+        expect(outcomes).toEqual([
+          "incomplete",
+          "incomplete",
+          "incomplete",
+          "match",
+        ]);
         await db.execute(sql`SET enable_bitmapscan = on`);
         await db.execute(sql`SET enable_seqscan = on`);
       } finally {

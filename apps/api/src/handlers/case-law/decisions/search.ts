@@ -141,6 +141,8 @@ import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
   provisionCitedSql,
+  provisionLinkOutcomeEmitsHit,
+  provisionLinkReadOutcomeSql,
   readCaseLawProvisionScope,
   readProvisionCitingSentences,
 } from "@/api/lib/case-law/provision-filter";
@@ -3307,6 +3309,11 @@ type ProvisionListOrder = {
   orderBy: SQL[];
   /** The cursor a page ending on `row` hands out. */
   cursorAfter: (row: ProvisionListRow) => string;
+  /** Resume this decision's physical membership probe before walking onward. */
+  probe?: {
+    decisionId: SafeId<"caseLawDecision">;
+    after: { anchor: string; spanStart: number };
+  };
 };
 
 type ProvisionListOrderOptions = {
@@ -3325,13 +3332,42 @@ const provisionListOrder = ({
   context,
   cursor,
 }: ProvisionListOrderOptions): ProvisionListOrder | null => {
+  const cursorParts = cursor && decodePaginationCursor(cursor);
+  const probe = (() => {
+    if (cursorParts?.length !== 5) {
+      return undefined;
+    }
+    const decisionId = cursorParts.at(2);
+    const anchor = cursorParts.at(3);
+    const spanStart = cursorParts.at(4);
+    return typeof decisionId === "string" &&
+      isUuid(decisionId) &&
+      typeof anchor === "string" &&
+      typeof spanStart === "number" &&
+      Number.isSafeInteger(spanStart)
+      ? {
+          decisionId: toSafeId<"caseLawDecision">(decisionId),
+          after: { anchor, spanStart },
+        }
+      : null;
+  })();
+  if (probe === null) {
+    return null;
+  }
+  const positionCursor =
+    cursorParts?.length === 5
+      ? Buffer.from(JSON.stringify(cursorParts.slice(0, 3))).toBase64({
+          alphabet: "base64url",
+          omitPadding: true,
+        })
+      : cursor;
   const id = publishedCaseLawDecisions.id;
   switch (sort) {
     case "relevance": {
       const position =
-        cursor === undefined
+        positionCursor === undefined
           ? undefined
-          : readProvisionAuthorityCursor(cursor, context);
+          : readProvisionAuthorityCursor(positionCursor, context);
       if (position === null) {
         return null;
       }
@@ -3342,13 +3378,14 @@ const provisionListOrder = ({
         orderBy: [desc(key), desc(id)],
         cursorAfter: (row) =>
           encodePaginationCursor([context, row.citationAuthority, row.id]),
+        ...(probe === undefined ? {} : { probe }),
       };
     }
     case "newest": {
       const position =
-        cursor === undefined
+        positionCursor === undefined
           ? undefined
-          : decodeDecisionDateCursor(cursor, context);
+          : decodeDecisionDateCursor(positionCursor, context);
       if (position === null) {
         return null;
       }
@@ -3363,6 +3400,7 @@ const provisionListOrder = ({
         orderBy: decisionDateRankOrderBySql("newest", { rank, id }),
         cursorAfter: (row) =>
           encodeDecisionDateCursor(context, decisionDatePositionOf(row)),
+        ...(probe === undefined ? {} : { probe }),
       };
     }
     default:
@@ -3427,16 +3465,43 @@ export const provisionDecisionCandidatesQuery = (
     after,
     orderBy,
     limit,
-  }: Omit<ProvisionDecisionPageQueryOptions, "decisionIds">,
+    probeAfter,
+    probeDecisionId,
+  }: Omit<ProvisionDecisionPageQueryOptions, "body" | "decisionIds"> & {
+    body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };
+    probeAfter?: { anchor: string; spanStart: number };
+    probeDecisionId?: SafeId<"caseLawDecision">;
+  },
 ) => {
   const { provision: _provision, ...candidateBody } = body;
-  return provisionDecisionPageQuery(tx, {
-    body: candidateBody,
-    generation,
-    after,
-    orderBy,
-    limit,
-  });
+  return tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+      provisionOutcome: provisionLinkReadOutcomeSql({
+        decisionId: sql`${publishedCaseLawDecisions.id}`,
+        jurisdiction: body.country,
+        provision: body.provision,
+        ...(probeAfter === undefined ? {} : { after: probeAfter }),
+      }),
+    })
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        ...caseLawSearchRowFilters(candidateBody, generation),
+        probeDecisionId === undefined
+          ? undefined
+          : eq(publishedCaseLawDecisions.id, probeDecisionId),
+        after,
+      ),
+    )
+    .orderBy(...orderBy)
+    .limit(limit);
 };
 
 /**
@@ -3504,8 +3569,8 @@ export const listCaseLawProvisionDecisions = async ({
     generation = target.value.serving.generation;
   }
   // The page, citing sentences and hydrated rows share one snapshot.
-  const { rows, sentences, byId, candidateRows } = await caseLawDb(
-    async (tx) => {
+  const { rows, sentences, byId, candidateRows, incompleteRow } =
+    await caseLawDb(async (tx) => {
       const provisionScope = await readCaseLawProvisionScope(tx, {
         ...scope,
         ...(dependencies.provisionIdSetMax === undefined
@@ -3519,23 +3584,44 @@ export const listCaseLawProvisionDecisions = async ({
           ? await provisionDecisionCandidatesQuery(tx, {
               body,
               generation,
-              after: order.after,
+              after: order.probe === undefined ? order.after : undefined,
               orderBy: order.orderBy,
-              limit: candidateBudget,
+              limit: order.probe === undefined ? candidateBudget : 1,
+              ...(order.probe === undefined
+                ? {}
+                : {
+                    probeAfter: order.probe.after,
+                    probeDecisionId: order.probe.decisionId,
+                  }),
             })
           : null;
       dependencies.reportExaminedCandidates?.(examinedRows?.length ?? 0);
-      const decisionIds =
-        examinedRows?.map(({ id }) => id) ??
-        (provisionScope.type === "decisions" ? provisionScope.decisionIds : []);
-      const page = await provisionDecisionPageQuery(tx, {
-        body,
-        generation,
-        after: order.after,
-        orderBy: order.orderBy,
-        limit: limit + 1,
-        decisionIds,
-      });
+      const firstIncomplete = examinedRows?.findIndex(
+        ({ provisionOutcome }) => provisionOutcome.type === "incomplete",
+      );
+      const firstIncompleteRow =
+        firstIncomplete === undefined || firstIncomplete === -1
+          ? undefined
+          : examinedRows?.at(firstIncomplete);
+      const page =
+        examinedRows === null
+          ? await provisionDecisionPageQuery(tx, {
+              body,
+              generation,
+              after: order.after,
+              orderBy: order.orderBy,
+              limit: limit + 1,
+              decisionIds:
+                provisionScope.type === "decisions"
+                  ? provisionScope.decisionIds
+                  : [],
+            })
+          : examinedRows
+              .slice(0, firstIncomplete === -1 ? undefined : firstIncomplete)
+              .filter(({ provisionOutcome }) =>
+                provisionLinkOutcomeEmitsHit(provisionOutcome),
+              )
+              .slice(0, limit + 1);
       const pageIds = page.slice(0, limit).map(({ id }) => id);
       const hydrated = await pageDecisionRowsQuery(tx, {
         body,
@@ -3544,12 +3630,12 @@ export const listCaseLawProvisionDecisions = async ({
       });
       return {
         candidateRows: examinedRows,
+        incompleteRow: firstIncompleteRow,
         rows: page,
         sentences: await readProvisionCitingSentences(tx, scope, pageIds),
         byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
       };
-    },
-  );
+    });
   const emitted = rows.slice(0, limit);
   const last = emitted.at(-1);
   const lastExamined = candidateRows?.at(-1);
@@ -3562,8 +3648,29 @@ export const listCaseLawProvisionDecisions = async ({
   ) {
     nextPosition = lastExamined;
   }
-  const nextCursor =
-    nextPosition === undefined ? null : order.cursorAfter(nextPosition);
+  const nextCursor = (() => {
+    if (incompleteRow?.provisionOutcome.type === "incomplete") {
+      const base = decodePaginationCursor(order.cursorAfter(incompleteRow));
+      return base === null
+        ? panic("Provision cursor encoder returned an invalid cursor")
+        : encodePaginationCursor([
+            ...base.flatMap((part) =>
+              typeof part === "string" ||
+              typeof part === "number" ||
+              typeof part === "boolean" ||
+              part === null
+                ? [part]
+                : [],
+            ),
+            incompleteRow.provisionOutcome.after.anchor,
+            incompleteRow.provisionOutcome.after.spanStart,
+          ]);
+    }
+    if (order.probe !== undefined && lastExamined !== undefined) {
+      return order.cursorAfter(lastExamined);
+    }
+    return nextPosition === undefined ? null : order.cursorAfter(nextPosition);
+  })();
   const pageRanked: RankedHit[] = emitted.map((row) => ({
     id: String(row.id),
     score: row.citationAuthority,

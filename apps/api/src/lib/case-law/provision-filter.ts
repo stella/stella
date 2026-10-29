@@ -266,13 +266,16 @@ export const provisionLinkOutcomeEmitsHit = (
 };
 
 /** The sole correlated citation-link reader: seek its exact range, then classify. */
-const provisionLinkReadOutcomeSql = ({
+export const provisionLinkReadOutcomeSql = ({
   decisionId,
+  after,
   ...scope
 }: ProvisionScopeOptions & {
   /** The decision id the predicate is correlated with. */
   decisionId: SQL;
-}): SQL<ProvisionLinkReadOutcome["type"]> => {
+  /** The last physical link examined by an earlier request. */
+  after?: { anchor: string; spanStart: number };
+}): SQL<ProvisionLinkReadOutcome> => {
   const link = caseLawProvisionCitations;
   const { jurisdiction, provision } = scope;
   const linkJurisdiction = linkJurisdictionOf(scope);
@@ -317,48 +320,40 @@ const provisionLinkReadOutcomeSql = ({
       : sql.join(hierarchyConditions, sql` AND `);
   const probeMax = LIMITS.caseLawProvisionLinkProbeMax;
 
-  return sql<ProvisionLinkReadOutcome["type"]>`(
-    WITH RECURSIVE provision_link_probe(type, after_anchor, after_span_start) AS (
-      SELECT 'incomplete'::text, NULL::text, NULL::integer
-      UNION ALL
-      SELECT classified.type, classified.after_anchor, classified.after_span_start
-      FROM provision_link_probe previous
-      CROSS JOIN LATERAL (
-        SELECT
-          CASE
-            WHEN bool_or(slice.matches) FILTER (WHERE slice.ordinal <= ${probeMax})
-              THEN 'match'
-            WHEN count(*) <= ${probeMax} THEN 'noMatch'
-            ELSE 'incomplete'
-          END AS type,
-          (array_agg(slice.anchor ORDER BY slice.ordinal)
-            FILTER (WHERE slice.ordinal <= ${probeMax}))[${probeMax}] AS after_anchor,
-          (array_agg(slice.span_start ORDER BY slice.ordinal)
-            FILTER (WHERE slice.ordinal <= ${probeMax}))[${probeMax}] AS after_span_start
-        FROM (
-          SELECT ranged.anchor, ranged.span_start,
-            ranged.matches,
-            row_number() OVER (
-              ORDER BY ranged.anchor COLLATE "C", ranged.span_start
-            ) AS ordinal
-          FROM (
-            SELECT ${link.anchor} AS anchor, ${link.spanStart} AS span_start,
-              (${hierarchyPredicate}) AS matches
-            FROM ${link}
-            WHERE ${sql.join(rangeConditions, sql` AND `)}
-              AND (previous.after_anchor IS NULL OR
-                (${link.anchor} COLLATE "C", ${link.spanStart}) >
-                (previous.after_anchor COLLATE "C", previous.after_span_start))
-            ORDER BY ${link.anchor} COLLATE "C", ${link.spanStart}
-            LIMIT ${probeMax + 1} OFFSET 0
-          ) ranged
-        ) slice
-      ) classified
-      WHERE previous.type = 'incomplete'
-    )
-    SELECT type FROM provision_link_probe
-    WHERE type <> 'incomplete'
-    LIMIT 1 OFFSET 0
+  const afterCondition =
+    after === undefined
+      ? sql``
+      : sql`AND (${link.anchor} COLLATE "C", ${link.spanStart}) >
+          (${after.anchor} COLLATE "C", ${after.spanStart})`;
+
+  return sql<ProvisionLinkReadOutcome>`(
+    SELECT CASE
+      WHEN TRUE = ANY((array_agg(
+        slice.matches ORDER BY slice.anchor COLLATE "C", slice.span_start
+      ))[1:${probeMax}])
+        THEN jsonb_build_object('type', 'match')
+      WHEN count(*) <= ${probeMax} THEN jsonb_build_object('type', 'noMatch')
+      ELSE jsonb_build_object(
+        'type', 'incomplete',
+        'after', jsonb_build_object(
+          'anchor', (array_agg(
+            slice.anchor ORDER BY slice.anchor COLLATE "C", slice.span_start
+          ))[${probeMax}],
+          'spanStart', (array_agg(
+            slice.span_start ORDER BY slice.anchor COLLATE "C", slice.span_start
+          ))[${probeMax}]
+        )
+      )
+    END
+    FROM (
+      SELECT ${link.anchor} AS anchor, ${link.spanStart} AS span_start,
+        (${hierarchyPredicate}) AS matches
+      FROM ${link}
+      WHERE ${sql.join(rangeConditions, sql` AND `)}
+        ${afterCondition}
+      ORDER BY ${link.anchor} COLLATE "C", ${link.spanStart}
+      LIMIT ${probeMax + 1} OFFSET 0
+    ) slice
   )`;
 };
 
@@ -367,7 +362,7 @@ export const provisionCitedSql = (
     /** The decision id the predicate is correlated with. */
     decisionId: SQL;
   },
-): SQL => sql`${provisionLinkReadOutcomeSql(options)} = 'match'`;
+): SQL => sql`${provisionLinkReadOutcomeSql(options)} ->> 'type' = 'match'`;
 
 /** A complete small set, or a scope that needs candidate-by-candidate probes. */
 export type CaseLawProvisionScope =

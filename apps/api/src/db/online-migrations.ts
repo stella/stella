@@ -222,6 +222,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_citations_decision_work_subtree_idx" ON public."case_law_provision_citations" (decision_id, jurisdiction, work_identifier, anchor COLLATE "C", span_start)',
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (decision_id, jurisdiction, work_identifier, anchor COLLATE "C", span_start)',
+    isUnique: false,
+    name: "case_law_provision_citations_decision_work_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "agent_skills_bound_workspace_idx" ON public."agent_skills" (bound_workspace_id) WHERE bound_workspace_id IS NOT NULL',
     definitionBody:
       "ON public.agent_skills USING btree (bound_workspace_id) WHERE (bound_workspace_id IS NOT NULL)",
