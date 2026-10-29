@@ -31,6 +31,7 @@ jobs:
     name: Post-release window
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    environment: release-app
     permissions:
       contents: write # record the verdict on the release
     env:
@@ -162,6 +163,12 @@ jobs:
             --summary "$GITHUB_STEP_SUMMARY"
           echo "verdict=$(jq -r '.verdict' "$RUNNER_TEMP/release-health.json")" >> "$GITHUB_OUTPUT"
 
+      - name: Record the verdict on the release
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$RUNNER_TEMP/release-health.json" --clobber
+
       - name: Mint private record token
         id: record-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -182,12 +189,6 @@ jobs:
             --release "$RELEASE_REF" \
             --store "$RECORD_STORE" \
             --record "$RUNNER_TEMP/private-release-health.json"
-
-      - name: Record the verdict on the release
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$RUNNER_TEMP/release-health.json" --clobber
 
       - name: Fail a release that is not healthy
         if: steps.evaluate.outputs.verdict != 'healthy'

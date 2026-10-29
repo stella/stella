@@ -80,7 +80,7 @@ describe("release health workflows", () => {
   });
 });
 
-test("private findings persist successfully before any public verdict upload", () => {
+test("the public verdict survives private token or persistence failures", () => {
   const { jobs } = workflow("release-health.yml");
   const window = job(jobs, "window");
   const steps = window["steps"];
@@ -99,8 +99,13 @@ test("private findings persist successfully before any public verdict upload", (
       typeof step["run"] === "string" &&
       step["run"].includes('release upload "$RELEASE_REF"'),
   );
-  expect(persistence).toBeGreaterThanOrEqual(0);
-  expect(upload).toBeGreaterThan(persistence);
+  const mint = steps.findIndex(
+    (step: unknown) => isRecord(step) && step["id"] === "record-token",
+  );
+  expect(window["environment"]).toBe("release-app");
+  expect(upload).toBeGreaterThanOrEqual(0);
+  expect(mint).toBeGreaterThan(upload);
+  expect(persistence).toBeGreaterThan(mint);
   const persist = steps.at(persistence);
   if (!isRecord(persist)) {
     throw new TypeError("private persistence step required");
