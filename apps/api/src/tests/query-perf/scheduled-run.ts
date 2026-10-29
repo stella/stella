@@ -10,6 +10,7 @@ import { databaseRelations } from "@/api/db/database-relations";
 import { setSharedQueryTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createDatabase } from "@/api/db/sql-client";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
+import { QUERY_PERF_WRITING_FUNCTIONS } from "@/api/lib/db/read-budgets";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
@@ -18,6 +19,7 @@ import {
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { isRecord } from "@/api/lib/type-guards";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -38,12 +40,77 @@ import {
   QUERY_PERF_CONNECTION_SETTINGS,
 } from "./settings";
 
-export type CapturedStatement = { text: string; params: readonly unknown[] };
+export type CapturedStatement = {
+  text: string;
+  params: readonly unknown[];
+  writtenRows?: number;
+};
 type MeasuredStatement = {
   actualRows: number;
+  kind: "read" | "write";
   metrics: QueryPerfMetrics;
   planViolations: PlanViolation[];
   statement: string;
+  writtenRows: number;
+};
+
+type PlanNode = Record<string, unknown>;
+
+const childPlans = (node: PlanNode): readonly PlanNode[] => {
+  const plans = node["Plans"];
+  return Array.isArray(plans)
+    ? plans.filter(
+        (plan): plan is PlanNode => typeof plan === "object" && plan !== null,
+      )
+    : [];
+};
+
+const modifyingNodes = (node: PlanNode): readonly PlanNode[] => [
+  ...(node["Node Type"] === "ModifyTable" ? [node] : []),
+  ...childPlans(node).flatMap(modifyingNodes),
+];
+
+const writtenRowsFromNode = (node: PlanNode) => {
+  const input = childPlans(node).at(0);
+  const rows = input?.["Actual Rows"];
+  const loops = input?.["Actual Loops"] ?? 1;
+  return typeof rows === "number" && typeof loops === "number"
+    ? rows * loops
+    : panic("Row-changing plan has no numeric input row count");
+};
+
+const calledFunctions = (statement: string) =>
+  [...statement.matchAll(/\b([a-z_][a-z0-9_]*)\s*\(/giu)].map(
+    (match) => match.at(1)?.toLowerCase() ?? "",
+  );
+
+/** One classifier owns direct writes and SELECT-callable writing routines. */
+export const classifyMeasuredStatement = ({
+  statement,
+  plan,
+  nestedPlans = [],
+  observedWrittenRows,
+}: {
+  statement: string;
+  plan: PlanNode;
+  nestedPlans?: readonly PlanNode[];
+  observedWrittenRows?: number;
+}) => {
+  const changes = [plan, ...nestedPlans].flatMap(modifyingNodes);
+  const callsKnownWriter = calledFunctions(statement).some((name) =>
+    QUERY_PERF_WRITING_FUNCTIONS.has(name),
+  );
+  const kind =
+    changes.length > 0 || callsKnownWriter
+      ? ("write" as const)
+      : ("read" as const);
+  return {
+    kind,
+    writtenRows:
+      changes.length === 0 && kind === "write"
+        ? (observedWrittenRows ?? 0)
+        : changes.reduce((total, node) => total + writtenRowsFromNode(node), 0),
+  };
 };
 
 /** The statement's leading keyword, after comments and whitespace. */
@@ -228,11 +295,27 @@ const captureConnection = (
       }
     },
     unsafe: async (query: string, params: readonly unknown[] = []) => {
-      captured.push({ text: query, params });
+      const capturedStatement: CapturedStatement = { text: query, params };
+      captured.push(capturedStatement);
       const result: unknown = await transactionClient.unsafe(
         mapTransactionControl(query),
         [...params],
       );
+      if (
+        calledFunctions(query).some((name) =>
+          QUERY_PERF_WRITING_FUNCTIONS.has(name),
+        ) &&
+        Array.isArray(result)
+      ) {
+        const rows: readonly unknown[] = result;
+        const row = rows.at(0);
+        if (isRecord(row)) {
+          const value = Object.values(row).at(0);
+          if (typeof value === "number") {
+            capturedStatement.writtenRows = value;
+          }
+        }
+      }
       return result;
     },
   };
@@ -268,8 +351,16 @@ export const measureScheduledStatementsInOrder = async ({
         const normalized = statement.text
           .replaceAll(/\s+/gu, " ")
           .slice(0, 160);
+        const classification = classifyMeasuredStatement({
+          statement: statement.text,
+          plan: plan.Plan,
+          ...(statement.writtenRows === undefined
+            ? {}
+            : { observedWrittenRows: statement.writtenRows }),
+        });
         measured.push({
           actualRows,
+          ...classification,
           metrics: metricsFromPlan(plan),
           planViolations: analyzePlan({
             document: plan,
@@ -420,8 +511,24 @@ export const measureScheduledJobRun = async ({
     readBudgetId,
     captured,
   });
+  const readMetrics = sumMetrics(
+    statements
+      .filter(({ kind }) => kind === "read")
+      .map(({ metrics }) => metrics),
+  );
+  const writeMetrics = sumMetrics(
+    statements
+      .filter(({ kind }) => kind === "write")
+      .map(({ metrics }) => metrics),
+  );
   return {
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    readMetrics,
+    writeMetrics,
+    writtenRows: statements.reduce(
+      (total, statement) => total + statement.writtenRows,
+      0,
+    ),
     planViolations: statements.flatMap(({ planViolations }) => planViolations),
     statements,
   };

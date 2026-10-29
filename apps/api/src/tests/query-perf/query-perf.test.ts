@@ -5,7 +5,7 @@ import { PgTable } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
@@ -35,6 +35,7 @@ import {
   measureOwnerStatement,
   measureQueryPerf,
   scaleViolations,
+  scheduledJobBudgetProblems,
   shapeViolations,
 } from "./measurement";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -170,10 +171,7 @@ test("every measurement execution guard applies even when pages fit or carry an 
     "statement.documents.searchHits",
     "statement.legislation.candidateRows",
   ] as const) {
-    for (const sharedBlocks of [
-      READ_BUDGETS[id].pages,
-      READ_BUDGETS[id].pages + 1,
-    ]) {
+    for (const sharedBlocks of [readBudgetPages(id), readBudgetPages(id) + 1]) {
       expect(
         budgetProblem(id, { sharedBlocks, executionTimeMs: 10_001 }),
       ).toContain("execution time");
@@ -182,26 +180,23 @@ test("every measurement execution guard applies even when pages fit or carry an 
 });
 
 test("over-budget markers require every measured surface to exceed its page budget", () => {
-  for (const id of [
-    "scheduled.caseLaw.backfillProvisionState",
-    "statement.legislation.candidateRows",
-  ] as const) {
+  for (const id of ["statement.legislation.candidateRows"] as const) {
     expect(
       budgetProblem(id, {
-        sharedBlocks: READ_BUDGETS[id].pages,
+        sharedBlocks: readBudgetPages(id),
         executionTimeMs: 10_000,
       }),
     ).toContain("remove its overBudget marker");
     expect(
       budgetProblem(id, {
-        sharedBlocks: READ_BUDGETS[id].pages + 1,
+        sharedBlocks: readBudgetPages(id) + 1,
         executionTimeMs: 10_000,
       }),
     ).toBeUndefined();
   }
   expect(
     budgetProblem("statement.documents.searchHits", {
-      sharedBlocks: READ_BUDGETS["statement.documents.searchHits"].pages,
+      sharedBlocks: readBudgetPages("statement.documents.searchHits"),
       executionTimeMs: 10_000,
     }),
   ).toBeUndefined();
@@ -488,7 +483,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           for (const violation of run.planViolations) {
             note(violation.message);
           }
-          return run.metrics;
+          return run;
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.
@@ -534,8 +529,13 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   return await runMetrics(jobId, measurement.task);
                 },
               );
-              pages.push(result.sharedBlocks);
-              note(budgetProblem(budgetId, result));
+              pages.push(result.readMetrics.sharedBlocks);
+              for (const problem of scheduledJobBudgetProblems(
+                budgetId,
+                result,
+              )) {
+                note(problem);
+              }
             }
             const size =
               pages.at(0) ?? panic("missing base backfill measurement");
@@ -554,7 +554,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               async () =>
                 await runMetrics(jobId, measurement.task, scenario.size),
             );
-            note(budgetProblem(budgetId, size));
+            for (const problem of scheduledJobBudgetProblems(budgetId, size)) {
+              note(problem);
+            }
             const twin = scenario.double;
             if (twin === undefined) {
               continue;
@@ -564,10 +566,15 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               `run ${jobId} on ${describeServed(twin)}`,
               async () => await runMetrics(jobId, measurement.task, twin),
             );
-            note(budgetProblem(budgetId, double));
+            for (const problem of scheduledJobBudgetProblems(
+              budgetId,
+              double,
+            )) {
+              note(problem);
+            }
             for (const violation of scaleViolations({
-              size: size.sharedBlocks,
-              double: double.sharedBlocks,
+              size: size.readMetrics.sharedBlocks,
+              double: double.readMetrics.sharedBlocks,
             })) {
               note(`${jobId} on ${label}: ${violation}`);
             }
@@ -602,7 +609,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           pages: unbounded,
         });
         note(
-          unbounded > READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages
+          unbounded > readBudgetPages("scheduled.caseLaw.reportFreshness")
             ? undefined
             : `the former unbounded freshness reads measured ${String(unbounded)} pages, inside the job's budget: the fixture is too small to refuse them`,
         );

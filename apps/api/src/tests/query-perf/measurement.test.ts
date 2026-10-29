@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
 
 import {
   budgetProblem,
@@ -8,16 +8,91 @@ import {
   median,
   metricsFromPlan,
   scaleViolations,
+  scheduledJobBudgetProblems,
   shapeViolations,
   summarize,
   sumMetrics,
 } from "./measurement";
 import { analyzePlan } from "./plan-analyzer";
 import { PLAN_EXCEPTIONS } from "./plan-exceptions";
+import { classifyMeasuredStatement } from "./scheduled-run";
 
 const plan = (Plan: Record<string, unknown>, executionTime = 1) => ({
   Plan,
   "Execution Time": executionTime,
+});
+
+const insertPlan = (rows: number) => ({
+  "Node Type": "ModifyTable",
+  Operation: "Insert",
+  "Actual Rows": 0,
+  Plans: [
+    { "Node Type": "Values Scan", "Actual Rows": rows, "Actual Loops": 1 },
+  ],
+});
+
+test("measured statements use one read/write classifier", () => {
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT 1",
+      plan: { "Node Type": "Result" },
+    }),
+  ).toEqual({ kind: "read", writtenRows: 0 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "INSERT INTO fixture SELECT * FROM source",
+      plan: insertPlan(7),
+    }),
+  ).toEqual({ kind: "write", writtenRows: 7 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT ensure_case_law_provision_extraction_state($1)",
+      plan: { "Node Type": "Result" },
+      nestedPlans: [insertPlan(50)],
+    }),
+  ).toEqual({ kind: "write", writtenRows: 50 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT lower($1)",
+      plan: { "Node Type": "Result" },
+    }),
+  ).toEqual({ kind: "read", writtenRows: 0 });
+});
+
+test("scheduled write budgets fail closed and enforce both write limits", () => {
+  const measured = (writtenRows: number, writePages: number) => ({
+    readMetrics: { sharedBlocks: 1, executionTimeMs: 1 },
+    writeMetrics: { sharedBlocks: writePages, executionTimeMs: 1 },
+    writtenRows,
+  });
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(1, 1),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(0, 0),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.backfillProvisionState: declares a write budget but measured no written rows",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(10, 301),
+    ).join("\n"),
+  ).toContain("30.1 write pages per row");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(10_000, 300_001),
+    ).join("\n"),
+  ).toContain("300001 write pages per run");
 });
 
 test("a sequential scan on a large table fails while a declared small table passes", () => {
@@ -246,7 +321,9 @@ test("the owner-named plan exception ledger only contains reviewed existing debt
 });
 
 test("an absolute budget accepts its own page count and rejects one page more", () => {
-  for (const { pages } of Object.values(READ_BUDGETS)) {
+  for (const budget of Object.values(READ_BUDGETS)) {
+    const pages =
+      budget.surface === "scheduled-job" ? budget.reads.pages : budget.pages;
     expect(
       budgetViolations({ sharedBlocks: pages, executionTimeMs: 1 }, pages),
     ).toEqual([]);
@@ -350,7 +427,7 @@ test("scheduled runs retain execution time and reject a slow statement within th
     ],
   ]) {
     const metrics = sumMetrics(statements);
-    expect(metrics.sharedBlocks).toBeLessThan(READ_BUDGETS[id].pages);
+    expect(metrics.sharedBlocks).toBeLessThan(readBudgetPages(id));
     expect(metrics.executionTimeMs).toBe(10_001);
     expect(budgetProblem(id, metrics)).toContain(
       "execution time hang guard exceeded",
