@@ -1,4 +1,4 @@
-export const DEPLOY_TASK = {
+const DEPLOY_TASK = {
   api: "api",
   documentProcessing: "document-processing",
   caseLawReplay: "case-law-replay",
