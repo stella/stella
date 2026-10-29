@@ -276,32 +276,33 @@ const provisionLinkReadOutcomeSql = ({
   const link = caseLawProvisionCitations;
   const { jurisdiction, provision } = scope;
   const linkJurisdiction = linkJurisdictionOf(scope);
-  const matchConditions: SQL[] = [
+  const rangeConditions: SQL[] = [
     sql`${link.decisionId} = ${decisionId}`,
     sql`${link.jurisdiction} = ${linkJurisdiction}`,
     sql`${link.workIdentifier} = ${provision.work}`,
-    provisionAnchorSubtreeSql(link.anchor, {
+    orderedProvisionAnchorSubtreeSql(link.anchor, {
       jurisdiction: linkJurisdiction,
       anchor: provision.anchor,
     }),
   ];
+  const hierarchyConditions: SQL[] = [];
   if (provision.subsection !== undefined) {
-    matchConditions.push(
+    hierarchyConditions.push(
       sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
     );
   }
   if (provision.letter !== undefined) {
-    matchConditions.push(
+    hierarchyConditions.push(
       sql`${link.letter} = ${canonicalPathValue(provision.letter)}`,
     );
   }
   if (provision.point !== undefined) {
-    matchConditions.push(
+    hierarchyConditions.push(
       sql`${link.point} = ${canonicalPathValue(provision.point)}`,
     );
   }
   if (provision.jurisdiction === "EU") {
-    matchConditions.push(sql`EXISTS (
+    hierarchyConditions.push(sql`EXISTS (
       SELECT 1 FROM ${publishedCaseLawDecisions}
       INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${publishedCaseLawDecisions.sourceId}
       WHERE ${publishedCaseLawDecisions.id} = ${link.decisionId}
@@ -310,11 +311,55 @@ const provisionLinkReadOutcomeSql = ({
     )`);
   }
 
-  return sql<ProvisionLinkReadOutcome["type"]>`CASE WHEN EXISTS (
-    SELECT 1 FROM ${link}
-    WHERE ${sql.join(matchConditions, sql` AND `)}
+  const hierarchyPredicate =
+    hierarchyConditions.length === 0
+      ? sql`TRUE`
+      : sql.join(hierarchyConditions, sql` AND `);
+  const probeMax = LIMITS.caseLawProvisionLinkProbeMax;
+
+  return sql<ProvisionLinkReadOutcome["type"]>`(
+    WITH RECURSIVE provision_link_probe(type, after_anchor, after_span_start) AS (
+      SELECT 'incomplete'::text, NULL::text, NULL::integer
+      UNION ALL
+      SELECT classified.type, classified.after_anchor, classified.after_span_start
+      FROM provision_link_probe previous
+      CROSS JOIN LATERAL (
+        SELECT
+          CASE
+            WHEN bool_or(slice.matches) FILTER (WHERE slice.ordinal <= ${probeMax})
+              THEN 'match'
+            WHEN count(*) <= ${probeMax} THEN 'noMatch'
+            ELSE 'incomplete'
+          END AS type,
+          (array_agg(slice.anchor ORDER BY slice.ordinal)
+            FILTER (WHERE slice.ordinal <= ${probeMax}))[${probeMax}] AS after_anchor,
+          (array_agg(slice.span_start ORDER BY slice.ordinal)
+            FILTER (WHERE slice.ordinal <= ${probeMax}))[${probeMax}] AS after_span_start
+        FROM (
+          SELECT ranged.anchor, ranged.span_start,
+            ranged.matches,
+            row_number() OVER (
+              ORDER BY ranged.anchor COLLATE "C", ranged.span_start
+            ) AS ordinal
+          FROM (
+            SELECT ${link.anchor} AS anchor, ${link.spanStart} AS span_start,
+              (${hierarchyPredicate}) AS matches
+            FROM ${link}
+            WHERE ${sql.join(rangeConditions, sql` AND `)}
+              AND (previous.after_anchor IS NULL OR
+                (${link.anchor} COLLATE "C", ${link.spanStart}) >
+                (previous.after_anchor COLLATE "C", previous.after_span_start))
+            ORDER BY ${link.anchor} COLLATE "C", ${link.spanStart}
+            LIMIT ${probeMax + 1} OFFSET 0
+          ) ranged
+        ) slice
+      ) classified
+      WHERE previous.type = 'incomplete'
+    )
+    SELECT type FROM provision_link_probe
+    WHERE type <> 'incomplete'
     LIMIT 1 OFFSET 0
-  ) THEN 'match' ELSE 'noMatch' END`;
+  )`;
 };
 
 export const provisionCitedSql = (

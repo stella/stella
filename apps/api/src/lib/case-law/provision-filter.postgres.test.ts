@@ -324,9 +324,9 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           expect(examined).toBeLessThanOrEqual(SCOPE_LIMIT + 1);
         }
 
-        // A decision can cite thousands of unrelated provisions. Membership
-        // seeks the requested subtree, so those links can neither manufacture
-        // a hit nor hide a real citation that follows them in text order.
+        // A skipped hierarchy level can leave many non-matching links inside
+        // the requested subtree. Each continuation must bound that physical
+        // range read, without losing a later match.
         await db.execute(sql`TRUNCATE ${schema}.case_law_provision_citations`);
         const adversarialDecision = (
           await db
@@ -340,19 +340,20 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         const probeBudget = LIMITS.caseLawProvisionLinkProbeMax;
         await db.execute(sql`INSERT INTO case_law_provision_citations
           (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
-           work_collection, unit, section, subsection, anchor, decision_date,
+           work_collection, unit, section, subsection, letter, anchor, decision_date,
            sentence_text, span_start, span_end, confidence)
           SELECT gen_random_uuid(), ${adversarialDecision}, 'CZE', '2/1993 Sb.',
-            2, 1993, 'Sb.', 'article', 100 + n, '1',
-            'cl_' || (100 + n) || '-odst_1', DATE '2020-01-01',
-            'unrelated citation before the match', n, n + 1, 1
-          FROM generate_series(1, ${probeBudget + 1}::int) n`);
+            2, 1993, 'Sb.', 'article', 36, n::text, 'a',
+            'cl_36-odst_' || lpad(n::text, 6, '0') || '-pism_a', DATE '2020-01-01',
+            'non-matching letter inside the subtree', n, n + 1, 1
+          FROM generate_series(1, ${probeBudget * 3 + 8}::int) n`);
         await db.execute(
           sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
         );
         await db.execute(sql`SET enable_seqscan = off`);
+        await db.execute(sql`SET enable_bitmapscan = off`);
         const noMatchProbe = provisionDecisionPageQuery(tx, {
-          body: { country: "CZE", query: "", provision: PROVISION },
+          body: { country: "CZE", query: "", provision: GAPPED_PROVISION },
           generation: GENERATION,
           after: undefined,
           orderBy: [desc(publishedCaseLawDecisions.id)],
@@ -360,20 +361,30 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           decisionIds: [adversarialDecision],
         });
         expect(await noMatchProbe).toEqual([]);
+        const noMatchPlan = explainRoot(
+          await db.execute(
+            sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${noMatchProbe.getSQL()}`,
+          ),
+        );
+        for (const scan of citationScans(noMatchPlan)) {
+          expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
+            probeBudget + 1,
+          );
+        }
 
         await db.execute(sql`INSERT INTO case_law_provision_citations
           (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
-           work_collection, unit, section, subsection, anchor, decision_date,
+           work_collection, unit, section, subsection, letter, anchor, decision_date,
            sentence_text, span_start, span_end, confidence)
           VALUES (gen_random_uuid(), ${adversarialDecision}, 'CZE', '2/1993 Sb.',
-            2, 1993, 'Sb.', 'article', 36, '1', 'cl_36-odst_1',
+            2, 1993, 'Sb.', 'article', 36, '1', 'z', 'cl_36-zz_match',
             DATE '2020-01-01', 'matching citation beyond the budget',
-            ${probeBudget + 2}, ${probeBudget + 3}, 1)`);
+            ${probeBudget * 3 + 9}, ${probeBudget * 3 + 10}, 1)`);
         await db.execute(
           sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
         );
         const continuationProbe = provisionDecisionPageQuery(tx, {
-          body: { country: "CZE", query: "", provision: PROVISION },
+          body: { country: "CZE", query: "", provision: GAPPED_PROVISION },
           generation: GENERATION,
           after: undefined,
           orderBy: [desc(publishedCaseLawDecisions.id)],
@@ -389,21 +400,15 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           ),
         );
         for (const scan of citationScans(continuationPlan)) {
-          const examined =
-            Number(scan["Actual Rows"]) +
-            Number(scan["Rows Removed by Filter"] ?? 0);
-          if (String(scan["Index Name"]).includes("decision_work_subtree")) {
-            expect(examined).toBeLessThanOrEqual(1);
-          }
+          expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
+            probeBudget + 1,
+          );
         }
-        expect(
-          citationScans(continuationPlan).some((scan) =>
-            String(scan["Index Name"]).includes("decision_work_subtree"),
-          ),
-        ).toBe(true);
+        await db.execute(sql`SET enable_bitmapscan = on`);
         await db.execute(sql`SET enable_seqscan = on`);
       } finally {
         await db.execute(sql`SET statement_timeout = 0`);
+        await db.execute(sql`SET enable_bitmapscan = on`);
         await db.execute(sql`SET enable_seqscan = on`);
         await db.execute(sql`SET search_path TO public`);
         await db.execute(

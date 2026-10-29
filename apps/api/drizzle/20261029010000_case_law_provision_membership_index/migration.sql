@@ -9,4 +9,4 @@ COMMIT;
 SET lock_timeout = 0;--> statement-breakpoint
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "case_law_provision_citations_decision_work_subtree_idx"
-  ON "case_law_provision_citations" ("decision_id", "jurisdiction", "work_identifier", "anchor" COLLATE "C");
+  ON "case_law_provision_citations" ("decision_id", "jurisdiction", "work_identifier", "anchor" COLLATE "C", "span_start");

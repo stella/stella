@@ -2326,6 +2326,7 @@ export const caseLawProvisionCitations = p.pgTable(
         t.jurisdiction,
         t.workIdentifier,
         sql`${t.anchor} COLLATE "C"`,
+        t.spanStart,
       ),
     p
       .index("case_law_provision_citations_eli_subtree_idx")
