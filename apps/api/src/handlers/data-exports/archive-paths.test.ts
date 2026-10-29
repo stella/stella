@@ -52,6 +52,12 @@ describe("export archive paths", () => {
 
   test.each([
     {
+      first: "ß.pdf",
+      second: "ẞ.pdf",
+      firstSuffix: "ß (2).pdf",
+      secondSuffix: "ẞ (2).pdf",
+    },
+    {
       first: "Σ.pdf",
       second: "ς.pdf",
       firstSuffix: "Σ (2).pdf",
@@ -121,6 +127,7 @@ describe("export archive paths", () => {
         ":",
         "\u0000",
         "ß",
+        "ẞ",
         "Σ",
         "σ",
         "ς",

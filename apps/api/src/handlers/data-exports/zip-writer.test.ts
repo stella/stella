@@ -173,6 +173,7 @@ describe("export ZIP writer", () => {
   });
 
   test.each([
+    { first: "ß.pdf", second: "ẞ.pdf" },
     { first: "Σ.pdf", second: "ς.pdf" },
     { first: "Smlouva č. 1.pdf", second: "Smlouva c\u030c. 1.pdf" },
     { first: "Ž.docx", second: "ž.docx" },
