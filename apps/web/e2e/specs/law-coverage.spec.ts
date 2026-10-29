@@ -8,8 +8,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import type * as v from "valibot";
 
+import type { envWebClientSchema } from "../../src/env-schema";
 import { expect, test } from "../helpers/test";
+
+const fixtureEnv = {
+  VITE_API_URL: "http://coverage.test",
+  VITE_DOCUMENTS_BUCKET: "documents",
+  VITE_DOCUMENTS_ENDPOINT: "https://objects.coverage.test",
+} satisfies v.InferInput<v.ObjectSchema<typeof envWebClientSchema, undefined>>;
 
 const cache = path.resolve(import.meta.dirname, "../../.cache");
 mkdirSync(cache, { recursive: true });
@@ -30,7 +38,10 @@ test.beforeAll(() => {
       "--target=browser",
       "--minify",
       "--external=@tanstack/react-start/server",
-      '--define=import.meta.env={"VITE_API_URL":"http://coverage.test","DEV":false}',
+      `--define=import.meta.env=${JSON.stringify({
+        ...fixtureEnv,
+        DEV: false,
+      })}`,
       '--define=process.env.NODE_ENV="production"',
       "--outfile",
       output,

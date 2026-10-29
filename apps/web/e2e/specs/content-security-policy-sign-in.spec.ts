@@ -33,7 +33,7 @@ for (const provider of PROVIDERS) {
         localPassword: false,
         reviewPasswordSignIn: false,
         bootstrap: false,
-        social: { google: true, microsoft: true },
+        social: { google: true, microsoft: true, apple: false },
       } satisfies AuthCapabilities;
       await route.fulfill({
         json: { ...capabilities, transactionalEmail: true },
