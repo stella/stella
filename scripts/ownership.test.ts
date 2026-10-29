@@ -795,6 +795,8 @@ describe("MCP OAuth channel literal ownership", () => {
     const source = [
       'const channel = new BroadcastChannel("mcp-oauth");',
       'const messageType = "stll.mcp-oauth";',
+      'const refresh = new BroadcastChannel("mcp-oauth-refresh");',
+      'const refreshType = "stll.mcp-oauth-refresh";',
     ].join("\n");
     const ruleOptionsForRoot = () => ({ entries: [door] });
 
@@ -809,6 +811,6 @@ describe("MCP OAuth channel literal ownership", () => {
         sourcePath: "apps/web/src/lib/unrelated-channel.ts",
         ruleOptionsForRoot,
       }),
-    ).toEqual([1, 2]);
+    ).toEqual([1, 2, 3, 4]);
   });
 });

@@ -6,6 +6,7 @@ import { MCP_OAUTH_REQUEST_STORAGE_KEY } from "@/lib/account/storage-keys";
 import { createRandomValue } from "@/lib/uuid";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+const NativeMessageEvent = globalThis.MessageEvent;
 GlobalRegistrator.register({ url: "http://localhost:3000/knowledge/tools" });
 const { render, fireEvent } = await import("@testing-library/react");
 const { openMcpOAuthWindow, subscribeToMcpOAuthOutcome } =
@@ -222,5 +223,100 @@ test("unmounted request callbacks expire while mounted connection observers refr
     view.unmount();
     unsubscribe();
     open.mockRestore();
+  }
+});
+
+test("connection refresh signals leave pending authorization outcomes untouched", async () => {
+  const { subscribeToMcpConnectionRefresh } =
+    await import("./mcp-oauth-channel");
+  const OriginalBroadcastChannel = globalThis.BroadcastChannel;
+  const peers = new Set<BroadcastChannel>();
+  class SynchronousBroadcastChannel extends OriginalBroadcastChannel {
+    constructor(name: string) {
+      super(name);
+      peers.add(this);
+    }
+    override postMessage(message: unknown): void {
+      for (const peer of peers) {
+        if (peer !== this && peer.name === this.name) {
+          peer.dispatchEvent(
+            new NativeMessageEvent("message", { data: message }),
+          );
+        }
+      }
+    }
+    override close(): void {
+      peers.delete(this);
+      super.close();
+    }
+  }
+  globalThis.BroadcastChannel = SynchronousBroadcastChannel;
+  const open = spyOn(window, "open").mockReturnValue(window);
+  let refreshes = 0;
+  let completions = 0;
+  const unsubscribe = subscribeToMcpConnectionRefresh(() => {
+    refreshes += 1;
+  });
+  const remote = new BroadcastChannel("mcp-oauth-refresh");
+  try {
+    openMcpOAuthWindow("https://example.test/authorize", () => {
+      completions += 1;
+    });
+    const nonce = requireBrowserStorage("session")
+      .unwrap()
+      .getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
+    const post = remote.postMessage.bind(remote);
+    post({ kind: "stll.mcp-oauth-refresh", status: "connected" });
+    expect(refreshes).toBe(0);
+    expect(completions).toBe(0);
+    post({ kind: "stll.mcp-oauth-refresh" });
+    expect(refreshes).toBe(1);
+    expect(completions).toBe(0);
+    emit(nonce);
+    expect(refreshes).toBe(2);
+    expect(completions).toBe(1);
+  } finally {
+    unsubscribe();
+    for (const peer of peers) {
+      peer.close();
+    }
+    open.mockRestore();
+    globalThis.BroadcastChannel = OriginalBroadcastChannel;
+  }
+});
+
+test("accepted completions refresh this tab when broadcast channels are unavailable", async () => {
+  const { subscribeToMcpConnectionRefresh } =
+    await import("./mcp-oauth-channel");
+  const descriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "BroadcastChannel",
+  );
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: undefined,
+    writable: true,
+  });
+  const open = spyOn(window, "open").mockReturnValue(window);
+  let refreshes = 0;
+  const unsubscribe = subscribeToMcpConnectionRefresh(() => {
+    refreshes += 1;
+  });
+  try {
+    openMcpOAuthWindow("https://example.test/authorize");
+    const nonce = requireBrowserStorage("session")
+      .unwrap()
+      .getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
+    emit(nonce);
+    emit(nonce);
+    expect(refreshes).toBe(1);
+  } finally {
+    unsubscribe();
+    open.mockRestore();
+    if (descriptor) {
+      Object.defineProperty(globalThis, "BroadcastChannel", descriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "BroadcastChannel");
+    }
   }
 });

@@ -14,8 +14,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
 import {
-  type McpOAuthOutcome,
-  subscribeToMcpOAuthOutcome,
+  subscribeToMcpConnectionRefresh,
   useMcpOAuthWindow,
 } from "@/lib/mcp-oauth-channel";
 
@@ -28,10 +27,7 @@ type McpReconnectButtonProps = {
 export const useMcpConnectionOAuthRefresh = (enabled = true) => {
   const queryClient = useQueryClient();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const onConnected = useLatestCallback((outcome: McpOAuthOutcome) => {
-    if (outcome.status !== "connected") {
-      return;
-    }
+  const onConnected = useLatestCallback(() => {
     detached(
       queryClient.invalidateQueries({
         queryKey: mcpConnectionsOptions(activeOrganizationId, userId).queryKey,
@@ -43,7 +39,7 @@ export const useMcpConnectionOAuthRefresh = (enabled = true) => {
     if (!enabled) {
       return undefined;
     }
-    return subscribeToMcpOAuthOutcome(onConnected);
+    return subscribeToMcpConnectionRefresh(onConnected);
   }, [enabled, onConnected]);
 };
 

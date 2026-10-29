@@ -14,6 +14,11 @@ import { createRandomValue } from "@/lib/uuid";
 
 const CHANNEL_NAME = "mcp-oauth";
 const MESSAGE_KIND = "stll.mcp-oauth";
+const REFRESH_CHANNEL_NAME = "mcp-oauth-refresh";
+const REFRESH_MESSAGE_KIND = "stll.mcp-oauth-refresh";
+const connectionRefreshSchema = v.strictObject({
+  kind: v.literal(REFRESH_MESSAGE_KIND),
+});
 const REQUEST_TTL_MS = 10 * 60 * 1000;
 const outcomeEvents = new EventTarget();
 const OUTCOME_EVENT = "accepted-outcome";
@@ -119,6 +124,15 @@ export const openMcpOAuthWindow = (
     outcomeEvents.dispatchEvent(
       new AcceptedMcpOAuthOutcomeEvent(receipt.outcome),
     );
+    if (
+      receipt.outcome.status === "connected" &&
+      typeof BroadcastChannel !== "undefined"
+    ) {
+      const refresh = new BroadcastChannel(REFRESH_CHANNEL_NAME);
+      const post = refresh.postMessage.bind(refresh);
+      post({ kind: REFRESH_MESSAGE_KIND });
+      refresh.close();
+    }
   });
   const expiry = window.setTimeout(unsubscribe, REQUEST_TTL_MS);
   // A new _blank window starts as same-origin about:blank. Navigation to
@@ -263,3 +277,26 @@ export function subscribeToMcpOAuthOutcome(
     outcomeEvents.removeEventListener(OUTCOME_EVENT, onOutcome);
   };
 }
+
+// Other tabs refetch authenticated connection data; a refresh notification
+// carries no authorization outcome and cannot complete a pending request.
+export const subscribeToMcpConnectionRefresh = (handler: () => void) => {
+  if (typeof BroadcastChannel === "undefined") {
+    return subscribeToMcpOAuthOutcome((outcome) => {
+      if (outcome.status === "connected") {
+        handler();
+      }
+    });
+  }
+  const refresh = new BroadcastChannel(REFRESH_CHANNEL_NAME);
+  const onMessage = (event: MessageEvent<unknown>) => {
+    if (v.safeParse(connectionRefreshSchema, event.data).success) {
+      handler();
+    }
+  };
+  refresh.addEventListener("message", onMessage);
+  return () => {
+    refresh.removeEventListener("message", onMessage);
+    refresh.close();
+  };
+};

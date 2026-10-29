@@ -8,10 +8,10 @@ export default {
     "apps/web/src/lib/mcp-oauth-channel.dom.test.tsx",
   ],
   summary:
-    "The channel owner creates a nonce per window, consumes each correlated outcome once, and notifies request callbacks before connection observers. Only the owner and its protocol tests name the raw channel or wire discriminator.",
+    "The channel owner creates a nonce per window, consumes each correlated outcome once, and notifies request callbacks before connection observers. A separate notification refreshes authenticated connection data across tabs. Only the owner and its protocol tests name the raw channel or wire discriminator.",
   enforcement: {
     kind: "literal-pattern",
-    pattern: "^(stll\\.)?mcp-oauth$",
+    pattern: "^(stll\\.)?mcp-oauth(-refresh)?$",
     allowed: [],
   },
 } as const satisfies OwnershipEntry;
