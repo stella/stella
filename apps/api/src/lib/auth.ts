@@ -693,6 +693,7 @@ export const OAUTH_PROVIDER_SESSION_PATHS = {
     "no-browser-session",
   "/admin/oauth2/update-client": "no-browser-session",
   "/oauth2/authorize": "browser-session",
+  "/oauth2/client/rotate-keys": "browser-session",
   "/oauth2/client/rotate-secret": "browser-session",
   "/oauth2/consent": "browser-session",
   "/oauth2/continue": "browser-session",
