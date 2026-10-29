@@ -19,6 +19,7 @@ import {
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
 } from "./corpus-seed";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
 import type { seedQueryPerf } from "./seed";
 
@@ -31,11 +32,14 @@ export const queryPerfRegistry = (
       budgetId: "statement.documents.searchHits",
       query: buildDocumentSearchQueries(seed.searchInput).hitsQuery,
       expectedRows: Math.min(seed.searchMatchCount, seed.searchInput.limit + 1),
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.documents.searchHits"],
     },
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     query: SQLWrapper;
     expectedRows: number;
+    ownerDeadlineMs: number | undefined;
   }[];
 
 /** Public corpus statements, measured on the corpus profile as its owner. */
@@ -54,11 +58,14 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
           },
         ),
       expectedRows: LEGISLATION_CANDIDATE_COUNT,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.legislation.candidateRows"],
     },
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
     expectedRows: number;
+    ownerDeadlineMs: number | undefined;
   }[];
 
 export type ScheduledJobScenario =

@@ -96,7 +96,8 @@ export const ListSourceForm = ({
       return unwrapApiResponse(
         await submit.run({
           operation: `list-source-create:${workspaceId}`,
-          send: listApi["item-sources"].post,
+          send: (creationPayload) =>
+            listApi["item-sources"].post(creationPayload),
           body: {
             listId: toSafeId<"legalList">(listId),
             itemEntityId: toSafeId<"entity">(itemEntityId),
@@ -104,8 +105,8 @@ export const ListSourceForm = ({
             sourceEntityVersionId: document.currentVersionId,
             locator:
               isPdf && page !== ""
-                ? { type: "pdf-page", pageNumber: Number(page) }
-                : { type: "document" },
+                ? { type: "pdf-page" as const, pageNumber: Number(page) }
+                : { type: "document" as const },
             quote: quote === "" ? null : quote,
           },
         }),

@@ -223,7 +223,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               { workspaceId },
             ]),
             body: { name: t("tasks.untitled") },
-            send: api.tasks({ workspaceId }).put,
+            send: (creationPayload) =>
+              api.tasks({ workspaceId }).put(creationPayload),
           },
         );
         const entityId = taskData?.entityId;

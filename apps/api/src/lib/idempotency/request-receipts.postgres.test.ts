@@ -4,7 +4,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -26,6 +26,8 @@ import {
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
+
+import { authorizeOrganizationReplay } from "./organization-replay-authorization";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const REQUEST_FAILURE_CODE = "request_unavailable";
@@ -225,6 +227,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           creates += 1;
           return Result.ok({ id: `resource-${creates}` });
         },
+        { authorize: async () => Result.ok(undefined) },
       );
       const invoke = async (
         key: string | null,
@@ -271,6 +274,65 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
         response: { code: "idempotency_in_progress" },
       });
       expect(creates).toBe(3);
+    });
+  });
+
+  test("organization-only replay follows current organization membership", async () => {
+    await withFixture(async ({ db, scopedDb, organizationId, userId }) => {
+      await db.insert(member).values({
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        userId,
+        role: "member",
+        createdAt: new Date(),
+      });
+      let calls = 0;
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          permissions: { contact: ["create"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "health_infra" },
+          idempotency: { type: "replay" },
+        },
+        async function* () {
+          calls += 1;
+          return Result.ok({ id: "created" });
+        },
+        { authorize: authorizeOrganizationReplay },
+      );
+      const invoke = async () =>
+        await endpoint.handler(
+          createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+            audit: NO_AUDIT,
+            scopedDb,
+            safeDb: safeDbFromScoped(scopedDb),
+            session: { activeOrganizationId: organizationId },
+            user: { id: userId },
+            request: new Request("https://example.test/test/create", {
+              method: "POST",
+              headers: { "Idempotency-Key": "organization-only" },
+            }),
+            route: "/test/create",
+            body: {},
+            params: {},
+            query: {},
+            set: { status: 200, headers: {} },
+          }),
+        );
+      expect(await invoke()).toEqual({ id: "created" });
+      const stored = await invoke();
+      expect(stored).toBeInstanceOf(Response);
+      if (!(stored instanceof Response)) {
+        panic("Expected stored organization response");
+      }
+      expect(await stored.json()).toEqual({ id: "created" });
+      await db.delete(member).where(eq(member.userId, userId));
+      expect(await invoke()).toMatchObject({
+        code: 403,
+        response: { message: "Organization membership required" },
+      });
+      expect(calls).toBe(1);
     });
   });
 
@@ -324,6 +386,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           }
           return Result.ok(contact);
         },
+        { authorize: async () => Result.ok(undefined) },
       );
       const invoke = async () =>
         await endpoint.handler(

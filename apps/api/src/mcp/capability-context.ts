@@ -134,7 +134,7 @@ export const capabilityHandlerContext = async ({
   capabilityId,
   context,
   input,
-  request,
+  request: rpcRequest,
   workspaceId,
 }: {
   capabilityId: string;
@@ -143,6 +143,14 @@ export const capabilityHandlerContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<CapabilityHandlerContext> => {
+  const headers = new Headers(rpcRequest.headers);
+  headers.delete("Idempotency-Key");
+  // The RPC body is already decoded; its transport key does not identify a capability call.
+  const request = new Request(rpcRequest.url, {
+    method: rpcRequest.method,
+    headers,
+    signal: rpcRequest.signal,
+  });
   const member = await mcpMemberCaller(context, request);
   if (
     workspaceId !== undefined &&

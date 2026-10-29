@@ -24,7 +24,6 @@ import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Assign an open inbox signal to an organization member, or clear the " +
     "assignment with null.",

@@ -66,7 +66,6 @@ const fromCommentsBodySchema = v.object({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   actionAdmission: {
     type: "handler",
     actionKind: "skills.propose-from-comments",

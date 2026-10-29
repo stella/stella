@@ -45,7 +45,6 @@ const createSkillBodySchema = v.object({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Author an agent skill from text: name, description, instruction body, " +
     "an optional slash command, and an optional invocation (`auto`, the " +

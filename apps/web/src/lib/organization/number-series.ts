@@ -3,7 +3,6 @@ import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -88,14 +87,9 @@ export type NumberSeriesCommand =
   | { type: "default"; id: string }
   | { type: "archive"; id: string };
 
-export const sendNumberSeriesCommand = async (
-  command: NumberSeriesCommand,
-  request: IdempotentRequest,
-) => {
+export const sendNumberSeriesCommand = async (command: NumberSeriesCommand) => {
   if (command.type === "create") {
-    return unwrapApiResponse(
-      await api["number-series"].post(command.values, request),
-    );
+    return unwrapApiResponse(await api["number-series"].post(command.values));
   }
   const series = api["number-series"]({
     numberSeriesId: toSafeId<"numberSeries">(command.id),

@@ -1,6 +1,5 @@
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 
 export const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
@@ -65,10 +64,7 @@ type CreateMemoryOptions =
       workspaceId: string;
     };
 
-export const createMemory = async (
-  options: CreateMemoryOptions,
-  request: IdempotentRequest,
-) => {
+export const createMemory = async (options: CreateMemoryOptions) => {
   const response = await api.memories.post(
     options.scope === "workspace"
       ? {
@@ -76,7 +72,6 @@ export const createMemory = async (
           workspaceId: toSafeId<"workspace">(options.workspaceId),
         }
       : options,
-    request,
   );
   return unwrapApiResponse(response);
 };

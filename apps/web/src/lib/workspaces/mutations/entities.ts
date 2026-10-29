@@ -43,25 +43,17 @@ export const useCreateEntities = () => {
   const analytics = useAnalytics();
 
   return useIdempotentMutation({
-    mutationFn: async (
-      { workspaceId, ...body }: CreateEntitiesVars,
-      request,
-    ) => {
+    mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put(
-          {
-            name: body.name,
-            ...(body.kind !== undefined && { kind: body.kind }),
-            ...(body.parentId !== undefined && {
-              parentId:
-                body.parentId === null
-                  ? null
-                  : toSafeId<"entity">(body.parentId),
-            }),
-          },
-          request,
-        );
+        .put({
+          name: body.name,
+          ...(body.kind !== undefined && { kind: body.kind }),
+          ...(body.parentId !== undefined && {
+            parentId:
+              body.parentId === null ? null : toSafeId<"entity">(body.parentId),
+          }),
+        });
 
       return unwrapApiResponse(response);
     },

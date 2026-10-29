@@ -94,7 +94,8 @@ const usePlaybookActions = (organizationId: string) => {
         await submit.run({
           operation: "playbook-from-starter",
           body: { starterId },
-          send: api.playbooks["from-starter"].post,
+          send: (creationPayload) =>
+            api.playbooks["from-starter"].post(creationPayload),
         }),
       ),
   };

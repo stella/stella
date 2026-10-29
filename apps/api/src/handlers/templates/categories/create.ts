@@ -11,7 +11,6 @@ import {
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Create a category in the organization's template category tree, " +
     "optionally under a parent category.",

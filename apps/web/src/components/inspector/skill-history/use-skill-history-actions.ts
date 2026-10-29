@@ -94,7 +94,7 @@ export const useSkillHistoryActions = ({
         rangeEnd: end,
         body,
       },
-      send: skill.comments.post,
+      send: (creationPayload) => skill.comments.post(creationPayload),
     });
     if (response.error) {
       report(response.error);
@@ -130,7 +130,7 @@ export const useSkillHistoryActions = ({
     const response = await submitIntent.run({
       operation: `skills.proposals:${skillId}`,
       body: {},
-      send: skill.proposals.post,
+      send: (creationPayload) => skill.proposals.post(creationPayload),
     });
     if (response.error) {
       report(response.error);

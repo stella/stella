@@ -154,6 +154,7 @@ describe("finite HTTP action admission", () => {
           calls += 1;
           return Result.ok({ call: calls });
         },
+        { authorize: async () => Result.ok(undefined) },
       );
       const requestContext = context();
 
@@ -780,4 +781,23 @@ describe("finite HTTP action admission", () => {
       "A handler dispatched a model without its configured admission",
     );
   });
+});
+
+type RootReplayDependencies = Parameters<
+  typeof createSafeRootHandler<typeof replayConfig, { id: string }>
+>[2];
+true satisfies Record<never, never> extends RootReplayDependencies
+  ? false
+  : true;
+true satisfies undefined extends RootReplayDependencies ? false : true;
+
+test("root replay requires an authorization callback at construction", () => {
+  expect(() =>
+    Reflect.apply(createSafeRootHandler, undefined, [
+      replayConfig,
+      async function* () {
+        return Result.ok({ id: "created" });
+      },
+    ]),
+  ).toThrow("Replay-enabled root handlers require pre-replay authorization");
 });

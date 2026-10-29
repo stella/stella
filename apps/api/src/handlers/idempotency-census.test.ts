@@ -6,10 +6,13 @@ import ts from "typescript6";
 import { collectIdempotentCreateRoutes } from "@stll/scripts/src/idempotent-create-routes";
 
 import { apiRoutes } from "@/api/api-routes";
+import { hasRootReplayAuthorization } from "@/api/lib/api-handlers";
 
 import { mountedCreateRouteCensus } from "../../scripts/idempotent-create-routes";
 
 const NON_REPLAY_REASONS = {
+  "authorization-in-handler":
+    "Authorization in handler; convert via pre-replay authorize.",
   "current-state":
     "The operation evaluates current resource state rather than replaying a retained response.",
   read: "The operation computes a current read result and retains no mutation response.",
@@ -562,7 +565,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "credential",
   },
   "POST /v1/memories": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/memories/firm": {
     type: "non-replay",
@@ -577,7 +581,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/number-series": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/number-series/:numberSeriesId/archive": {
     type: "non-replay",
@@ -604,7 +609,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/organization-settings/correspondence/allowed-senders": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":
     {
@@ -632,7 +638,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/playbooks": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/playbooks/:playbookId/approve": {
     type: "non-replay",
@@ -643,10 +650,12 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/playbooks/from-run": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/playbooks/from-starter": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/reader/annotations": {
     type: "replay",
@@ -664,7 +673,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "stream",
   },
   "POST /v1/saved-searches": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/saved-time-narratives": {
     type: "replay",
@@ -717,38 +727,48 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "credential",
   },
   "POST /v1/signals/:signalId/acceptances": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/signals/:signalId/assignments": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/signals/:signalId/dismissals": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/signals/:signalId/snoozes": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/signals/requests": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/:skillId/comments": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/:skillId/proposals": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/:skillId/proposals/:proposalId/review": {
     type: "non-replay",
     reason: "current-state",
   },
   "POST /v1/skills/:skillId/proposals/from-comments": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/:skillId/resources": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/:skillId/resources/rename": {
     type: "non-replay",
@@ -767,7 +787,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/skills/from-blueprint": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/generate-draft": {
     type: "non-replay",
@@ -942,13 +963,16 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "PUT /v1/clause-categories": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "PUT /v1/clauses": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "PUT /v1/clauses/:clauseId/variants": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "PUT /v1/clauses/import": {
     type: "non-replay",
@@ -997,7 +1021,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "lifecycle",
   },
   "PUT /v1/template-categories": {
-    type: "replay",
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "PUT /v1/template-recipes": {
     type: "replay",
@@ -1535,5 +1560,17 @@ test("every mounted root mutation has an explicit replay disposition", () => {
     expect(disposition?.type === "replay").toBe(
       definition.config["idempotency"] !== undefined,
     );
+  }
+});
+
+test("replay-enabled root routes have a pre-replay authorization callback", () => {
+  for (const { definition } of apiRoutes) {
+    if (
+      definition.access !== "member" ||
+      definition.config["idempotency"] === undefined
+    ) {
+      continue;
+    }
+    expect(hasRootReplayAuthorization(definition)).toBe(true);
   }
 });

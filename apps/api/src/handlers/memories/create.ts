@@ -16,7 +16,6 @@ import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 const config = {
   featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Save an assistant memory that future chats will read. scope user is " +
     "private to you and takes kind preference or instruction; scope " +

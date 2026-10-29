@@ -23,10 +23,10 @@ export const useCreateTask = () => {
   const t = useTranslations();
 
   return useIdempotentMutation({
-    mutationFn: async (workspaceId: string, request) => {
+    mutationFn: async (workspaceId: string) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name: t("tasks.untitled") }, request);
+        .put({ name: t("tasks.untitled") });
       return unwrapApiResponse(response);
     },
     onSuccess: async (data, workspaceId) => {

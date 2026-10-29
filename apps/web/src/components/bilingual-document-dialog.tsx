@@ -81,8 +81,8 @@ export const BilingualDocumentDialog = ({
       }).bilingual;
       const response = await submit.run({
         operation: `bilingual-create:${workspaceId}`,
-        send: async (body, request) => {
-          const reply = await client.post(body, request);
+        send: async (body) => {
+          const reply = await client.post(body);
           unwrapApiResponse(reply);
           return reply;
         },

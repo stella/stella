@@ -110,13 +110,10 @@ export const useCreateContact = () => {
 
   return useIdempotentMutation({
     mutationFn: async (vars: CreateContactVars, request) => {
-      const response = await api.contacts.put(
-        {
-          ...vars,
-          id: toSafeId<"contact">(request.headers["Idempotency-Key"]),
-        },
-        request,
-      );
+      const response = await api.contacts.put({
+        ...vars,
+        id: toSafeId<"contact">(request.headers["Idempotency-Key"]),
+      });
 
       return unwrapApiResponse(response);
     },

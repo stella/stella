@@ -152,7 +152,8 @@ export const SavedSearches = ({
               ...(time !== undefined && { time }),
             },
           },
-          send: api["saved-searches"].post,
+          send: (creationPayload) =>
+            api["saved-searches"].post(creationPayload),
         }),
       );
     },

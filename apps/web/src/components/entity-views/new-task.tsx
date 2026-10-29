@@ -82,9 +82,12 @@ export const NewEntityViewTask = ({
                       : [toSafeId<"user">(assigneeUserId)],
                 }),
           },
-          send: api.tasks({
-            workspaceId: toSafeId<"workspace">(selectedWorkspaceId),
-          }).put,
+          send: (body) =>
+            api
+              .tasks({
+                workspaceId: toSafeId<"workspace">(selectedWorkspaceId),
+              })
+              .put(body),
         }),
       ),
     );

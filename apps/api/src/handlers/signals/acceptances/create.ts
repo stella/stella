@@ -44,7 +44,6 @@ import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Accept an inbox signal by taking one of its suggestions. Task and " +
     "deadline suggestions are created here; for the others the client " +

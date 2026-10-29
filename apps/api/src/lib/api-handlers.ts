@@ -2189,6 +2189,11 @@ type RootHandlerConfig = HandlerConfig & {
   realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
 };
 
+const rootReplayAuthorizations = new WeakSet<object>();
+
+export const hasRootReplayAuthorization = (definition: object) =>
+  rootReplayAuthorizations.has(definition);
+
 export const createSafeRootHandler = <
   TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
@@ -2196,10 +2201,30 @@ export const createSafeRootHandler = <
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>,
+  ...dependencies: "idempotency" extends keyof TConfig
+    ? [
+        dependencies: HandlerAdmissionDependencies<
+          RootHandlerContext<TConfig>
+        > & {
+          authorize: NonNullable<
+            HandlerAdmissionDependencies<
+              RootHandlerContext<TConfig>
+            >["authorize"]
+          >;
+        },
+      ]
+    : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
-  const core = createSafeScopedHandler("member", config, handler, dependencies);
-  return { ...core, run: memberRun(config, core.handler) };
+  const admission = dependencies.at(0);
+  if (config.idempotency !== undefined && admission?.authorize === undefined) {
+    panic("Replay-enabled root handlers require pre-replay authorization");
+  }
+  const core = createSafeScopedHandler("member", config, handler, admission);
+  const definition = { ...core, run: memberRun(config, core.handler) };
+  if (config.idempotency !== undefined && admission?.authorize !== undefined) {
+    rootReplayAuthorizations.add(definition);
+  }
+  return definition;
 };
 
 export const createSafeHandler = <

@@ -18,22 +18,18 @@ afterEach(() => {
 });
 
 describe("memory API boundary", () => {
-  test("forwards the submit intent key on a memory create", async () => {
+  test("creates memories without response replay keys", async () => {
     const memoryId = "00000000-0000-0000-0000-000000000001";
-    const key = "00000000-0000-0000-0000-000000000002";
     const fetchMock = setFetch(async () => Response.json({ id: memoryId }));
-    const result = await createMemory(
-      {
-        content: "Use numbered paragraphs.",
-        kind: "preference",
-        scope: "user",
-      },
-      { headers: { "Idempotency-Key": key } },
-    );
+    const result = await createMemory({
+      content: "Use numbered paragraphs.",
+      kind: "preference",
+      scope: "user",
+    });
     expect(String(result.id)).toBe(memoryId);
     const [input, init] = fetchMock.mock.calls.at(0) ?? [];
     expect(requestUrl(input).pathname).toBe("/v1/memories");
-    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe(key);
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBeNull();
     expect(init?.body).toBe(
       JSON.stringify({
         content: "Use numbered paragraphs.",

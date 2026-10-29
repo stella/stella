@@ -12,7 +12,6 @@ const createVariantParamsSchema = v.object({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Add a variant, an alternative wording of a clause carrying its own " +
     "label, to one clause. Refused when the clause does not exist in this " +

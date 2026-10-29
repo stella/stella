@@ -183,7 +183,7 @@ const ClauseFormDialogBody = ({
 
       const response = await idempotentSubmit.run({
         operation: "clauses.create",
-        send: api.clauses.put,
+        send: (creationPayload) => api.clauses.put(creationPayload),
         body: {
           title: form.title.trim(),
           ...(description && { description }),

@@ -36,41 +36,35 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
 
   return useIdempotentMutation({
     idempotencyScope: workspaceId,
-    mutationFn: async (
-      {
-        name,
-        contentType,
-        toolType,
-        prompt,
-        dependencies,
-        options,
-        fallback,
-      }: CreatePropertyVars,
-      request,
-    ) => {
+    mutationFn: async ({
+      name,
+      contentType,
+      toolType,
+      prompt,
+      dependencies,
+      options,
+      fallback,
+    }: CreatePropertyVars) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put(
-          {
-            name,
-            contentType,
-            ...(toolType ? { toolType } : {}),
-            ...(prompt === undefined ? {} : { prompt }),
-            ...(dependencies && dependencies.length > 0
-              ? {
-                  dependencies: dependencies.map((dep) => ({
-                    dependsOnPropertyId: toSafeId<"property">(
-                      dep.dependsOnPropertyId,
-                    ),
-                    condition: dep.condition,
-                  })),
-                }
-              : {}),
-            ...(options && options.length > 0 ? { options } : {}),
-            ...(fallback !== undefined ? { fallback } : {}),
-          },
-          request,
-        );
+        .put({
+          name,
+          contentType,
+          ...(toolType ? { toolType } : {}),
+          ...(prompt === undefined ? {} : { prompt }),
+          ...(dependencies && dependencies.length > 0
+            ? {
+                dependencies: dependencies.map((dep) => ({
+                  dependsOnPropertyId: toSafeId<"property">(
+                    dep.dependsOnPropertyId,
+                  ),
+                  condition: dep.condition,
+                })),
+              }
+            : {}),
+          ...(options && options.length > 0 ? { options } : {}),
+          ...(fallback !== undefined ? { fallback } : {}),
+        });
 
       return unwrapApiResponse(response);
     },

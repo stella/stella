@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 const config = {
   contract: "patch",
@@ -73,6 +74,7 @@ const createLookupFormat = createSafeRootHandler(
     );
     return Result.ok(toResponse(row));
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createLookupFormat;

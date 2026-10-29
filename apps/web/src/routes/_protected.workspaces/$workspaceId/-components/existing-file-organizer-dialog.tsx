@@ -1586,9 +1586,15 @@ const ensureFolders = async ({
         currentParentId === null ? null : toSafeId<"entity">(currentParentId);
       const response = await submit.run({
         operation: `organizer-folder:${workspaceId}:${pathKey}`,
-        body: { kind: "folder", name: segment, parentId: parentSafeId },
-        send: api.entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .put,
+        body: {
+          kind: "folder",
+          name: segment,
+          parentId: parentSafeId,
+        } as const,
+        send: (body) =>
+          api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .put(body),
       });
 
       const newEntityId: string = unwrapApiResponse(response).entityId;

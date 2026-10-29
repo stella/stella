@@ -115,7 +115,8 @@ export const useCalendarCreateTask = ({
         ...(dueDate && { dueDate }),
         ...(startAt && { allDay: true, startAt }),
       },
-      send: api.tasks({ workspaceId }).put,
+      send: (creationPayload) =>
+        api.tasks({ workspaceId }).put(creationPayload),
     });
 
     const entityId = taskData?.entityId;

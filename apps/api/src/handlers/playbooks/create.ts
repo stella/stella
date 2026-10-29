@@ -8,7 +8,6 @@ import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-adm
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Create a playbook definition in the organization from a name, an " +
     "optional description, an optional document-type scope, and its " +

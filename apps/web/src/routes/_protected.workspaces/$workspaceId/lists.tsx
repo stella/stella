@@ -318,8 +318,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
         },
-        send: api.tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .put,
+        send: (body) =>
+          api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .put(body),
       });
       if (response.error) {
         throw toAPIError(response.error);

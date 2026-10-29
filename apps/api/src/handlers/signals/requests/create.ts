@@ -30,7 +30,6 @@ import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Post a manual request into the inbox: a piece of work for the legal " +
     "team, optionally scoped to a matter and assigned to a colleague.",

@@ -22,7 +22,6 @@ import {
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Dismiss an inbox signal with an optional reason; the reason is kept " +
     "for tuning the producer that emitted it.",

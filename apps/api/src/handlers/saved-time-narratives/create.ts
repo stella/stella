@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { LIMITS } from "@/api/lib/limits";
 
 import { toSavedTimeNarrativeItem } from "./schema";
@@ -91,6 +92,7 @@ const createSavedTimeNarrative = createSafeRootHandler(
     }
     return Result.ok(toSavedTimeNarrativeItem(created));
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createSavedTimeNarrative;

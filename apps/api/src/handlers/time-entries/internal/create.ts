@@ -16,6 +16,7 @@ import {
   lockInternalTimeEntryCapacity,
   prepareInternalTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 const createInternalTimeEntry = createSafeRootHandler(
   {
@@ -83,5 +84,6 @@ const createInternalTimeEntry = createSafeRootHandler(
     );
     return outcome;
   },
+  { authorize: authorizeOrganizationReplay },
 );
 export default createInternalTimeEntry;

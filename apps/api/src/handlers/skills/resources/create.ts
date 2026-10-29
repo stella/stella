@@ -35,7 +35,6 @@ const createSkillResourceBodySchema = v.object({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Add one text file to an agent skill at a path such as " +
     "references/checklist.md. A path already used in the skill is a 409, a skill at its file " +

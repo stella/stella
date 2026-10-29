@@ -17,7 +17,6 @@ import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
-import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -33,75 +32,58 @@ export type ClientSignalAcceptanceResult = {
   workspaceId: string;
 };
 
-const snoozeSignal = async (
-  { signalId, until }: SignalMutationArgs & { until: Date },
-  request: IdempotentRequest,
-) =>
+const snoozeSignal = async ({
+  signalId,
+  until,
+}: SignalMutationArgs & { until: Date }) =>
   Result.tryPromise(async () => {
     unwrapApiResponse(
-      await signalClient(signalId).snoozes.post(
-        { until: until.toISOString() },
-        request,
-      ),
+      await signalClient(signalId).snoozes.post({ until: until.toISOString() }),
     );
   });
 
-const dismissSignal = async (
-  { signalId, reason }: SignalMutationArgs & { reason: string | null },
-  request: IdempotentRequest,
-) =>
+const dismissSignal = async ({
+  signalId,
+  reason,
+}: SignalMutationArgs & { reason: string | null }) =>
+  Result.tryPromise(async () => {
+    unwrapApiResponse(await signalClient(signalId).dismissals.post({ reason }));
+  });
+
+const assignSignal = async ({
+  signalId,
+  assigneeUserId,
+}: SignalMutationArgs & { assigneeUserId: string | null }) =>
   Result.tryPromise(async () => {
     unwrapApiResponse(
-      await signalClient(signalId).dismissals.post({ reason }, request),
+      await signalClient(signalId).assignments.post({
+        assigneeUserId:
+          assigneeUserId === null ? null : toSafeId<"user">(assigneeUserId),
+      }),
     );
   });
 
-const assignSignal = async (
-  {
-    signalId,
-    assigneeUserId,
-  }: SignalMutationArgs & { assigneeUserId: string | null },
-  request: IdempotentRequest,
-) =>
-  Result.tryPromise(async () => {
-    unwrapApiResponse(
-      await signalClient(signalId).assignments.post(
-        {
-          assigneeUserId:
-            assigneeUserId === null ? null : toSafeId<"user">(assigneeUserId),
-        },
-        request,
-      ),
-    );
-  });
-
-const acceptSignal = async (
-  {
-    signalId,
-    suggestionKind,
-    result,
-  }: SignalMutationArgs & {
-    suggestionKind: SuggestionKind;
-    result?: ClientSignalAcceptanceResult;
-  },
-  request: IdempotentRequest,
-) =>
+const acceptSignal = async ({
+  signalId,
+  suggestionKind,
+  result,
+}: SignalMutationArgs & {
+  suggestionKind: SuggestionKind;
+  result?: ClientSignalAcceptanceResult;
+}) =>
   Result.tryPromise(async () => {
     const accepted = unwrapApiResponse(
-      await signalClient(signalId).acceptances.post(
-        {
-          suggestionKind,
-          ...(result
-            ? {
-                result: {
-                  type: result.type,
-                  workspaceId: toSafeId<"workspace">(result.workspaceId),
-                },
-              }
-            : {}),
-        },
-        request,
-      ),
+      await signalClient(signalId).acceptances.post({
+        suggestionKind,
+        ...(result
+          ? {
+              result: {
+                type: result.type,
+                workspaceId: toSafeId<"workspace">(result.workspaceId),
+              },
+            }
+          : {}),
+      }),
     );
     return accepted;
   });

@@ -41,20 +41,17 @@ export const useCreateWorkspace = () => {
   return useIdempotentMutation({
     mutationFn: async (vars: CreateWorkspaceVars, request) => {
       const id = request.headers["Idempotency-Key"];
-      const response = await api.workspaces.put(
-        {
-          id: toSafeId<"workspace">(id),
-          ...(vars.clientId !== undefined && {
-            clientId: toSafeId<"contact">(vars.clientId),
-            ...(vars.memberUserIds && vars.memberUserIds.length > 0
-              ? { memberUserIds: vars.memberUserIds }
-              : {}),
-          }),
-          name: vars.name,
-          filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
-        },
-        request,
-      );
+      const response = await api.workspaces.put({
+        id: toSafeId<"workspace">(id),
+        ...(vars.clientId !== undefined && {
+          clientId: toSafeId<"contact">(vars.clientId),
+          ...(vars.memberUserIds && vars.memberUserIds.length > 0
+            ? { memberUserIds: vars.memberUserIds }
+            : {}),
+        }),
+        name: vars.name,
+        filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
+      });
 
       if (response.error) {
         throw toAPIError(response.error);

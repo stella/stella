@@ -14,7 +14,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description: "Create a document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,

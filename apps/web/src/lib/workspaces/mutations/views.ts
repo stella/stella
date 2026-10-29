@@ -34,16 +34,13 @@ export const useCreateView = (workspaceId: string) => {
 
   return useIdempotentMutation({
     idempotencyScope: workspaceId,
-    mutationFn: async (body: CreateViewVars, request) => {
+    mutationFn: async (body: CreateViewVars) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put(
-          {
-            ...body,
-            id: toSafeId<"workspaceView">(body.id),
-          },
-          request,
-        );
+        .put({
+          ...body,
+          id: toSafeId<"workspaceView">(body.id),
+        });
       return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {

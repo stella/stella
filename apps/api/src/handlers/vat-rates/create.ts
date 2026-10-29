@@ -9,6 +9,7 @@ import {
   checkVatRateOverlap,
   lockVatRateOrganization,
 } from "@/api/lib/billing/vat-rates";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 const config = {
   contract: "patch",
@@ -57,4 +58,5 @@ export default createSafeRootHandler(
     );
     return result;
   },
+  { authorize: authorizeOrganizationReplay },
 );

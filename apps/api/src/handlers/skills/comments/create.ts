@@ -40,7 +40,6 @@ const createSkillCommentBodySchema = v.object({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Comment on a character range of one revision of an agent skill, or of a " +
     "proposal's body. Pass exactly one of revisionId and proposalId; a " +

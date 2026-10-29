@@ -720,6 +720,7 @@ type SkipLockedBatchOptions<Tx extends object, Row, T> = {
     transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
   };
   limit: number;
+  prepare?: (tx: Tx) => Promise<void>;
   select: (tx: Tx) => {
     toSQL: () => { sql: string };
     limit: (limit: number) => {
@@ -733,6 +734,7 @@ type SkipLockedBatchOptions<Tx extends object, Row, T> = {
 export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   database,
   limit,
+  prepare,
   select,
   run,
 }: SkipLockedBatchOptions<Tx, Row, T>): Promise<T> => {
@@ -741,6 +743,7 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   }
   return await withAggregateTransaction(database, async (tx) => {
     const history = lockHistory(tx);
+    await prepare?.(tx);
     const query = select(tx);
     const target = aggregateSelectTarget(query.toSQL().sql);
     if (target.joined || !target.filtered) {

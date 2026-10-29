@@ -18,6 +18,7 @@ import { createSha256, sha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 import { DAY_IN_MS } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
@@ -407,7 +408,7 @@ const REQUEST_RECEIPT_PENDING_MS = 2 * 60 * 1000;
 
 export const REQUEST_RECEIPT_RETENTION_BATCH_SIZE = 128;
 const REQUEST_RECEIPT_RETENTION_MS = DAY_IN_MS;
-const RETENTION_STATEMENT_BUDGET_MS = 5000;
+export const REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS = 5000;
 const RETENTION_LOCK_BUDGET_MS = 1000;
 
 type ReceiptRowLocation = Pick<typeof receipts.$inferSelect, "id"> & {
@@ -477,12 +478,26 @@ export const sweepExpiredRequestReceipts = async ({
   // requests cannot starve abandoned rows behind it. Each sweep handles one
   // principal's bounded set in one scoped delete; the scheduler bounds and
   // continues these rounds. Deletion locks again and rechecks eligibility.
+  const prepareRetention = async (tx: Pick<Transaction, "execute">) => {
+    await setSharedStatementTimeout(
+      tx,
+      Math.max(
+        1,
+        Math.min(
+          REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS,
+          deadline - elapsedMs(),
+        ),
+      ),
+    );
+    await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
+  };
   const readCandidates = async (
     state: typeof receipts.$inferSelect.state,
     before: Date,
   ) =>
     await withSkipLockedBatch({
       database: db,
+      prepare: prepareRetention,
       limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
       select: (tx) =>
         tx
@@ -535,6 +550,7 @@ export const sweepExpiredRequestReceipts = async ({
   );
   const rows = await withSkipLockedBatch({
     database: { transaction: scopedDb },
+    prepare: prepareRetention,
     limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
     select: (tx) =>
       tx
@@ -555,14 +571,6 @@ export const sweepExpiredRequestReceipts = async ({
       if (unlocked.length === 0) {
         return [];
       }
-      await setSharedStatementTimeout(
-        tx,
-        Math.max(
-          1,
-          Math.min(RETENTION_STATEMENT_BUDGET_MS, deadline - elapsedMs()),
-        ),
-      );
-      await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
       // audit: skip - Retention removes expired technical receipts under their tenant scope.
       return await tx
         .delete(receipts)

@@ -20,7 +20,6 @@ import { createSavedSearchBodySchema } from "./schema";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   permissions: { savedSearch: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },

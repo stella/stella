@@ -26,6 +26,8 @@ import {
   type QueryPerfMetrics,
   sumMetrics,
 } from "./measurement";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
+import { analyzePlan, type PlanViolation } from "./plan-analyzer";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -113,6 +115,10 @@ export const measureScheduledJobRun = async ({
   if (job.task !== taskName) {
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
+  const readBudgetId =
+    typeof job.reads === "object"
+      ? job.reads.budget
+      : panic(`${jobId} has no measured read budget`);
   const task =
     createSchedulerTaskRegistry(
       noopTask,
@@ -174,17 +180,31 @@ export const measureScheduledJobRun = async ({
   if (reads.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }
-  const statements: { metrics: QueryPerfMetrics; statement: string }[] = [];
+  const statements: {
+    metrics: QueryPerfMetrics;
+    planViolations: PlanViolation[];
+    statement: string;
+  }[] = [];
   const replay = await Result.tryPromise({
     try: async () =>
       await database.transaction(async (tx) => {
         await applyPlannerSettings(tx);
         for (const statement of reads) {
-          // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
+          // db-await-in-loop: analyze the captured statements in their original order.
           const plan = await explainOwnerStatement(tx, asQuery(statement));
+          const normalized = statement.text
+            .replaceAll(/\s+/gu, " ")
+            .slice(0, 160);
           statements.push({
             metrics: metricsFromPlan(plan),
-            statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
+            planViolations: analyzePlan({
+              document: plan,
+              owner: jobId,
+              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+              statement: normalized,
+              profileId: "corpus",
+            }),
+            statement: normalized,
           });
         }
         await assertPlannerSettings(tx, "owner");
@@ -197,6 +217,7 @@ export const measureScheduledJobRun = async ({
   }
   return {
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    planViolations: statements.flatMap(({ planViolations }) => planViolations),
     statements,
   };
 };

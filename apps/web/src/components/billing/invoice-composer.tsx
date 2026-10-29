@@ -460,16 +460,9 @@ export const useComposerSubmit = ({
               await submit.run({
                 operation: `invoices.${workspaceId}.create`,
                 body,
-                send: async (payload, replayRequest) =>
+                send: async (payload) =>
                   await invokeCapability("invoices.create", async (request) =>
-                    invoices.put(payload, {
-                      ...request,
-                      headers: {
-                        "Idempotency-Key":
-                          replayRequest.headers["Idempotency-Key"],
-                        ...request.headers,
-                      },
-                    }),
+                    invoices.put(payload, request),
                   ),
               }),
             );

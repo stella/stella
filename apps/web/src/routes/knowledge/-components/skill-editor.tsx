@@ -373,10 +373,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   const createResource = useIdempotentMutation({
     idempotencyScope: safeSkillId,
-    mutationFn: async (payload: { path: string; content: string }, request) => {
+    mutationFn: async (payload: { path: string; content: string }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
-        .resources.post({ ...payload }, request);
+        .resources.post({ ...payload });
       return unwrapApiResponse(response);
     },
     onSuccess: (data) => {

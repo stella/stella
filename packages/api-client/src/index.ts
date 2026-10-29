@@ -113,28 +113,96 @@ type HeadersOption<THeaders> = unknown extends THeaders
     ? { readonly headers?: THeaders & HeaderValues }
     : { readonly headers: THeaders & HeaderValues };
 
+type RequestFetchHeaders<THeaders> = THeaders extends {
+  readonly "Idempotency-Key"?: infer TReplayKey;
+}
+  ? string extends TReplayKey
+    ? HeadersInit
+    : Readonly<Record<string, string>> & {
+        readonly "Idempotency-Key"?: TReplayKey;
+      }
+  : HeadersInit;
+
+// Required route headers belong to options.headers; fetch overrides retain
+// the reserved replay-key prohibition without requiring those headers twice.
+type RequestFetchOptions<THeaders> = Omit<RequestInit, "headers"> & {
+  readonly headers?: RequestFetchHeaders<THeaders>;
+};
+
 /** Per-request options: the route's query and headers, and fetch settings. */
 export type RequestOptions<TRoute extends RouteShape> = QueryOption<
   TRoute["query"]
 > &
-  HeadersOption<TRoute["headers"]> & { readonly fetch?: RequestInit };
+  HeadersOption<TRoute["headers"]> & {
+    readonly fetch?: RequestFetchOptions<TRoute["headers"]>;
+  };
 
-type OptionsArgs<TRoute extends RouteShape> =
+type OptionsHeaders<TOptions> = TOptions extends {
+  readonly headers?: infer THeaders;
+}
+  ? NonNullable<THeaders>
+  : never;
+
+type OptionsFetch<TOptions> = TOptions extends {
+  readonly fetch?: infer TFetch;
+}
+  ? NonNullable<TFetch>
+  : never;
+
+// A union is unsafe if any branch can carry the reserved header. A string
+// index cannot prove absence; Headers and tuples are runtime-only inputs.
+type HasReplayHeader<THeaders> = THeaders extends Headers | readonly unknown[]
+  ? true
+  : "idempotency-key" extends Lowercase<keyof THeaders & string>
+    ? true
+    : false;
+
+type ReplayOptionsGuard<
+  TRoute extends RouteShape,
+  TOptions,
+> = TRoute["headers"] extends {
+  readonly "Idempotency-Key"?: infer TReplayKey;
+}
+  ? string extends TReplayKey
+    ? unknown
+    : true extends
+          | HasReplayHeader<OptionsHeaders<TOptions>>
+          | HasReplayHeader<OptionsHeaders<OptionsFetch<TOptions>>>
+      ? never
+      : unknown
+  : unknown;
+
+type CheckedRequestOptions<
+  TRoute extends RouteShape,
+  TOptions,
+> = RequestOptions<TRoute> &
+  TOptions &
+  ReplayOptionsGuard<TRoute, NoInfer<TOptions>>;
+
+type OptionsArgs<TRoute extends RouteShape, TOptions> =
   NoOptions extends RequestOptions<TRoute>
-    ? [options?: RequestOptions<TRoute>]
-    : [options: RequestOptions<TRoute>];
+    ? [options?: CheckedRequestOptions<TRoute, TOptions>]
+    : [options: CheckedRequestOptions<TRoute, TOptions>];
 
-type BodyArgs<TRoute extends RouteShape> =
+type BodyArgs<TRoute extends RouteShape, TOptions> =
   NoOptions extends RequestOptions<TRoute>
     ? undefined extends TRoute["body"]
-      ? [body?: TRoute["body"], options?: RequestOptions<TRoute>]
-      : [body: TRoute["body"], options?: RequestOptions<TRoute>]
-    : [body: TRoute["body"], options: RequestOptions<TRoute>];
+      ? [
+          body?: TRoute["body"],
+          options?: CheckedRequestOptions<TRoute, TOptions>,
+        ]
+      : [
+          body: TRoute["body"],
+          options?: CheckedRequestOptions<TRoute, TOptions>,
+        ]
+    : [body: TRoute["body"], options: CheckedRequestOptions<TRoute, TOptions>];
 
-type MethodCall<TName extends MethodName, TRoute extends RouteShape> = (
+type MethodCall<TName extends MethodName, TRoute extends RouteShape> = <
+  const TOptions,
+>(
   ...args: TName extends BodilessMethodName
-    ? OptionsArgs<TRoute>
-    : BodyArgs<TRoute>
+    ? OptionsArgs<TRoute, TOptions>
+    : BodyArgs<TRoute, TOptions>
 ) => Promise<ApiResult<TRoute["response"]>>;
 
 type ParamKey<TNode> = Extract<keyof TNode, `:${string}`>;

@@ -13,6 +13,7 @@ import {
   overlappingVatRatePeriods,
 } from "@/api/lib/billing/vat-rates";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -75,6 +76,7 @@ const applyVatRatePreset = createSafeRootHandler(
     );
     return Result.ok(result);
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 declareAggregateMutation(applyVatRatePreset, {

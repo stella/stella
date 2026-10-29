@@ -242,13 +242,10 @@ const TaskDetailPanelContent = ({
         return unwrapApiResponse(await endpoint.acknowledge.post({}, request));
       }
       return unwrapApiResponse(
-        await endpoint.transition.post(
-          {
-            action: action.action,
-            ...(action.reason ? { reason: action.reason } : {}),
-          },
-          request,
-        ),
+        await endpoint.transition.post({
+          action: action.action,
+          ...(action.reason ? { reason: action.reason } : {}),
+        }),
       );
     },
     onSuccess: async (_data, variables) => {
