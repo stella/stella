@@ -79,3 +79,78 @@ describe("release health workflows", () => {
     expect(alerts).toContain('".github/workflows/release-health.yml"');
   });
 });
+
+test("the public verdict survives private token or persistence failures", () => {
+  const { jobs } = workflow("release-health.yml");
+  const window = job(jobs, "window");
+  const steps = window["steps"];
+  if (!Array.isArray(steps)) {
+    throw new TypeError("window requires steps");
+  }
+  const persistence = steps.findIndex(
+    (step: unknown) =>
+      isRecord(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes("scripts/release-health.ts record"),
+  );
+  const upload = steps.findIndex(
+    (step: unknown) =>
+      isRecord(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes('release upload "$RELEASE_REF"'),
+  );
+  const mint = steps.findIndex(
+    (step: unknown) => isRecord(step) && step["id"] === "record-token",
+  );
+  expect(window["environment"]).toBe("release-app");
+  expect(upload).toBeGreaterThanOrEqual(0);
+  expect(mint).toBeGreaterThan(upload);
+  expect(persistence).toBeGreaterThan(mint);
+  const persist = steps.at(persistence);
+  if (!isRecord(persist)) {
+    throw new TypeError("private persistence step required");
+  }
+  expect(persist["continue-on-error"]).not.toBe(true);
+  expect(persist["if"]).toBeUndefined();
+  expect(runs(window)).toContain(
+    '--record "$RUNNER_TEMP/private-release-health.json"',
+  );
+  const publicUpload = steps.at(upload);
+  if (!isRecord(publicUpload)) {
+    throw new TypeError("public upload step required");
+  }
+  expect(publicUpload["if"]).toBeUndefined();
+  expect(publicUpload["run"]).not.toContain("private-release-health.json");
+});
+
+test("private record access follows the configured deployment repository", () => {
+  const { jobs } = workflow("release-health.yml");
+  const found = job(jobs, "window");
+  const steps = found["steps"];
+  if (!Array.isArray(steps)) {
+    throw new TypeError("window requires steps");
+  }
+  const token = steps.find(
+    (step: unknown) => isRecord(step) && step["id"] === "record-token",
+  );
+  if (!isRecord(token)) {
+    throw new TypeError("record token required");
+  }
+  expect(token["with"]).toHaveProperty(
+    "repositories",
+    `\${{ vars.STAGING_DEPLOY_REPOSITORY }}`,
+  );
+  const persist = steps.find(
+    (step: unknown) =>
+      isRecord(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes("scripts/release-health.ts record"),
+  );
+  if (!isRecord(persist)) {
+    throw new TypeError("record persistence required");
+  }
+  expect(persist["env"]).toHaveProperty(
+    "RECORD_STORE",
+    `\${{ github.repository_owner }}/\${{ vars.STAGING_DEPLOY_REPOSITORY }}`,
+  );
+});

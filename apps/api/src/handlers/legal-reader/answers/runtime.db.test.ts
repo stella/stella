@@ -36,6 +36,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -85,6 +86,8 @@ afterAll(releaseTestDb);
 afterEach(() => setSystemTime());
 
 const scope = (activeDatabase = database) => ({
+  readCopies: async () =>
+    new WithdrawnCopyProjection([], "Withdrawn by publisher"),
   organizationId,
   userId,
   recordAuditEvent: async () => undefined,

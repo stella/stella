@@ -1283,7 +1283,8 @@
       "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
       "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
       "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
-    }
+    },
+    "withdrawnByPublisher": "Avaldaja on tagasi võtnud"
   },
   "catalogue": {
     "addCustom": "Lisa kohandatud",
