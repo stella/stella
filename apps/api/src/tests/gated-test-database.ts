@@ -61,10 +61,22 @@ export type GatedTestDatabase = {
  */
 export const openGatedTestDatabase = (
   databaseUrl: string,
-  { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
+  {
+    max,
+    cleanupTimeoutMs,
+    searchPath,
+  }: { max?: number; cleanupTimeoutMs?: number; searchPath?: string } = {},
 ): GatedTestDatabase => {
   const client = instrumentSqlTransactionCounts(
-    runTransactionsInCallerContext(createSqlClient({ url: databaseUrl, max })),
+    runTransactionsInCallerContext(
+      createSqlClient({
+        url: databaseUrl,
+        max,
+        ...(searchPath === undefined
+          ? {}
+          : { connection: { search_path: searchPath } }),
+      }),
+    ),
   );
   const cleanupSteps: CleanupStep[] = [];
 

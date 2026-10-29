@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -14,6 +14,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import {
   invalidateCaseLawSitemapShardsTx,
   refreshCaseLawSitemapShards,
@@ -25,7 +26,10 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import {
+  copyIngestionTablePrivileges,
+  openGatedTestDatabase,
+} from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -35,24 +39,78 @@ const REFRESH_TIMEOUT_MS = 10_000;
 describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
   const databaseUrl =
     process.env["DATABASE_URL"] ?? panic("PostgreSQL URL required");
-  const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
+  const schema = `sitemap_removal_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+  const admin = openGatedTestDatabase(databaseUrl);
+  const { db } = openGatedTestDatabase(databaseUrl, {
+    searchPath: `${schema}, public`,
+  });
+  const competitor = openGatedTestDatabase(databaseUrl, {
+    searchPath: `${schema}, public`,
+  });
   const country = "XSR";
   const sourceId = createSafeId<"caseLawSource">();
   const decisionId = createSafeId<"caseLawDecision">();
-  cleanUp(async () => {
-    await db
-      .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.sourceId, sourceId));
-    await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
-    await db
-      .delete(caseLawSitemapShards)
-      .where(eq(caseLawSitemapShards.country, country));
-    await db
-      .delete(caseLawSitemapChanges)
-      .where(eq(caseLawSitemapChanges.country, country));
-    await db
-      .delete(caseLawSitemapCountryGenerations)
-      .where(eq(caseLawSitemapCountryGenerations.country, country));
+  admin.cleanUp(async () => {
+    await admin.db.execute(
+      sql`DROP SCHEMA IF EXISTS ${sql.identifier(schema)} CASCADE`,
+    );
+  });
+  beforeAll(async () => {
+    await admin.db.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
+    const tables = [
+      "case_law_sources",
+      "case_law_decisions",
+      "case_law_sitemap_country_generations",
+      "case_law_browse_facet_counts",
+      "case_law_coverage_summaries",
+      "case_law_sitemap_shard_counts",
+      "case_law_sitemap_shards",
+      "case_law_source_arrivals",
+    ];
+    await db.transaction(async (tx) => {
+      for (const table of tables) {
+        // db-await-in-loop: copy this fixture's finite set of migrated relations before installing their canonical triggers.
+        await tx.execute(
+          sql`CREATE TABLE ${sql.identifier(table)} (LIKE public.${sql.identifier(table)} INCLUDING ALL)`,
+        );
+      }
+      const migration = await Bun.file(
+        new URL(
+          "../../../drizzle/20261029140900_case_law_sitemap_changes/migration.sql",
+          import.meta.url,
+        ),
+      ).text();
+      // Redirect the canonical triggers' table references; publication predicates
+      // remain the migrated functions. No fixture trigger logic is duplicated.
+      for (const statement of migration
+        .replaceAll(
+          "public.case_law_sitemap_changes",
+          () => `${schema}.case_law_sitemap_changes`,
+        )
+        .replaceAll(
+          "public.case_law_decisions",
+          () => `${schema}.case_law_decisions`,
+        )
+        .replaceAll(
+          "pg_catalog, public, pg_temp",
+          () => `pg_catalog, ${schema}, public, pg_temp`,
+        )
+        .split("--> statement-breakpoint")) {
+        if (statement.trim().length === 0) {
+          continue;
+        }
+        // db-await-in-loop: install the committed migration in the isolated schema in statement order.
+        await tx.execute(sql.raw(statement));
+      }
+      await tx.execute(sql`CREATE VIEW case_law_published_decisions AS
+        SELECT * FROM case_law_decisions WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}`);
+    });
+    await copyIngestionTablePrivileges({
+      sourceDb: admin.db,
+      targetDb: db,
+      targetSchema: schema,
+      tableNames: tables,
+    });
   });
 
   test("generation inserts and updates keep a whole-country row beside a monthly change in the same transaction", async () => {
@@ -119,7 +177,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
     }
   });
 
-  // timeout: three bounded global-refresh waits allow other database suites to finish their batches before this country's fence is exercised.
+  // timeout: bounded refresh waits cover initial publication, a competing drain, and the post-removal rebuild, plus the concurrent removal fence.
   test(
     "a concurrent removal cannot be republished by a monthly count",
     async () => {
@@ -156,14 +214,14 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       ]);
       const refreshDb =
         asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db);
-      // Refresh runs are global and incremental; other suites can take a run's
-      // batch or defer a broad invalidation before this country's turn.
-      const refreshUntilCountryDrained = async () =>
+      // Broad invalidations can defer work to the next incremental run, even
+      // though this schema's change log belongs exclusively to this suite.
+      const refreshUntilCountryDrained = async (database = refreshDb) =>
         await waitForExternalState({
           description: `${country} sitemap change log is drained`,
           timeoutMs: REFRESH_TIMEOUT_MS,
           read: async () => {
-            await refreshCaseLawSitemapShards(refreshDb);
+            await refreshCaseLawSitemapShards(database);
             const pending = await db
               .select({ id: caseLawSitemapChanges.id })
               .from(caseLawSitemapChanges)
@@ -191,6 +249,28 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       await db
         .update(caseLawDecisions)
         .set({ updatedAt: new Date("2024-04-01T00:00:00Z") })
+        .where(eq(caseLawDecisions.id, decisionId));
+      // Reproduce a competing refresher consuming the first January change.
+      // Once it finishes, the isolated log lets this test own the next change
+      // through its count/removal interleaving instead of hoping it stays dirty.
+      await refreshUntilCountryDrained(
+        asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(
+          competitor.db,
+        ),
+      );
+      expect(
+        await db
+          .select({ lastModifiedAt: caseLawSitemapShards.lastModifiedAt })
+          .from(caseLawSitemapShards)
+          .where(eq(caseLawSitemapShards.country, country))
+          .orderBy(caseLawSitemapShards.month),
+      ).toEqual([
+        { lastModifiedAt: new Date("2024-04-01T00:00:00Z") },
+        { lastModifiedAt: publishedAt },
+      ]);
+      await db
+        .update(caseLawDecisions)
+        .set({ updatedAt: new Date("2024-05-01T00:00:00Z") })
         .where(eq(caseLawDecisions.id, decisionId));
       const counted = Promise.withResolvers<undefined>();
       const release = Promise.withResolvers<undefined>();
@@ -245,21 +325,15 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
           ),
       });
       const refreshing = Result.tryPromise(
-        async () =>
-          await waitForExternalState({
-            description: `${country} monthly count reaches the removal fence`,
-            timeoutMs: REFRESH_TIMEOUT_MS,
-            read: async () => {
-              await refreshCaseLawSitemapShards(interleaved);
-              return paused;
-            },
-          }),
+        async () => await refreshCaseLawSitemapShards(interleaved),
       );
       try {
         await Promise.race([
           counted.promise,
           refreshing.then(() =>
-            panic("Refresh finished before its monthly count"),
+            panic(
+              "The isolated January change was not counted; it was consumed or skipped before the removal fence",
+            ),
           ),
         ]);
         const removing = Result.tryPromise(
@@ -283,7 +357,10 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
               executedRows(
                 await db.execute(sql`SELECT
             EXISTS (SELECT 1 FROM case_law_sitemap_country_generations WHERE country = ${country} AND generation > 0) AS finished,
-            EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE 'LOCK TABLE case_law_browse_facet_counts%') AS waiting`),
+            EXISTS (SELECT 1 FROM pg_locks
+              WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                AND relation = ${`${schema}.case_law_browse_facet_counts`}::regclass
+                AND NOT granted) AS waiting`),
               ).at(0),
             );
             return state.finished || state.waiting;
