@@ -175,6 +175,9 @@ const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   // Account export ledger: request transactions create and transition rows;
   // only the table owner deletes them, during account erasure.
   "account_exports",
+  // Request transactions create and transition send history; its invoice FK
+  // cascade owns deletion, so the request role needs no DELETE privilege.
+  "invoice_sends",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 

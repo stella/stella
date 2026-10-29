@@ -4,10 +4,10 @@ import { invoiceCountryOf } from "@stll/invoicing";
 import type { InvoiceCountry } from "@stll/invoicing";
 
 import type { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
-import { buildInvoiceExportFile } from "@/api/handlers/invoices/export-file";
-import type { INVOICE_EXPORT_FORMATS } from "@/api/handlers/invoices/export-file";
-import { toExportRecords } from "@/api/handlers/invoices/export-records";
-import type { InvoiceDocument } from "@/api/handlers/invoices/pdf/document";
+import { buildInvoiceExportFile } from "@/api/lib/billing/invoice-export-file";
+import type { INVOICE_EXPORT_FORMATS } from "@/api/lib/billing/invoice-export-file";
+import { toExportRecords } from "@/api/lib/billing/invoice-export-records";
+import type { LoadedInvoiceDocument } from "@/api/lib/billing/invoice-pdf/document";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
@@ -27,7 +27,7 @@ const E_INVOICE_FORMAT = {
   EU: "ubl",
 } as const satisfies Record<InvoiceCountry, InvoiceExportFormat | null>;
 
-const eInvoiceFormatOf = (document: InvoiceDocument) =>
+const eInvoiceFormatOf = (document: LoadedInvoiceDocument) =>
   E_INVOICE_FORMAT[
     invoiceCountryOf(document.seller ?? { country: null, vatId: null })
   ];

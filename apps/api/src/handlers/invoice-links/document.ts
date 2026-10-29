@@ -23,7 +23,7 @@ import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access
 import {
   INVOICE_DOCUMENT_PROJECTION,
   INVOICE_SELLER_PROJECTION,
-} from "@/api/handlers/invoices/invoice-detail";
+} from "@/api/lib/billing/invoice-detail";
 import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
 import { readInvoiceLinkScope } from "@/api/lib/billing/invoice-links";
 import { invoicePaymentAmounts } from "@/api/lib/billing/invoice-payments";

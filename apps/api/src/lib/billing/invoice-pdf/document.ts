@@ -8,12 +8,12 @@ import {
   INVOICE_DOCUMENT_COLUMNS,
   INVOICE_DOCUMENT_RELATIONS,
   INVOICE_SELLER_COLUMNS,
-} from "@/api/handlers/invoices/invoice-detail";
-import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
-import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
-import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
-import type { TypstRenderOutcome } from "@/api/handlers/invoices/pdf/typst/session";
+} from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import type { RenderInvoicePdfOptions } from "@/api/lib/billing/invoice-pdf/render-helpers";
+import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
+import { openTypstSession } from "@/api/lib/billing/invoice-pdf/typst/session";
+import type { TypstRenderOutcome } from "@/api/lib/billing/invoice-pdf/typst/session";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -85,13 +85,13 @@ export const loadInvoiceDocument = async (
   };
 };
 
-export type InvoiceDocument = NonNullable<
+export type LoadedInvoiceDocument = NonNullable<
   Awaited<ReturnType<typeof loadInvoiceDocument>>
 >;
 
 /** Why a loaded invoice cannot be laid out, or null when it can. */
 export const invoiceDocumentError = (
-  loaded: InvoiceDocument,
+  loaded: LoadedInvoiceDocument,
 ): HandlerError | null => {
   if (loaded.invoice.sellerProfileId !== null && loaded.seller === null) {
     return new HandlerError({
@@ -115,7 +115,7 @@ export const invoiceDocumentError = (
 
 /** The render input for a loaded invoice, with its lines and totals. */
 export const invoiceDocumentRenderOptions = (
-  loaded: InvoiceDocument,
+  loaded: LoadedInvoiceDocument,
 ): RenderInvoicePdfOptions => {
   const amounts = readInvoiceDocumentLines(loaded.invoice);
   return {
@@ -150,7 +150,9 @@ export const invoiceDocumentRenderOptions = (
 };
 
 /** The PDF's file name: its number, or `draft` before it has one. */
-export const invoicePdfFileName = (invoice: InvoiceDocument["invoice"]) => {
+export const invoicePdfFileName = (
+  invoice: LoadedInvoiceDocument["invoice"],
+) => {
   const number =
     invoice.status === INVOICE_STATUS.DRAFT ? "draft" : invoice.invoiceNumber;
   return sanitizeFilenamePreservingExtension(
@@ -207,7 +209,7 @@ export type InvoicePdfRenderer = typeof renderInvoiceWithTypst;
 
 /** Lays a loaded invoice out as its PDF bytes. */
 export const renderInvoiceDocumentPdf = async (
-  loaded: InvoiceDocument,
+  loaded: LoadedInvoiceDocument,
   renderInvoice: InvoicePdfRenderer = renderInvoiceWithTypst,
 ): Promise<Result<Uint8Array, HandlerError>> => {
   const outcome = await Result.tryPromise({

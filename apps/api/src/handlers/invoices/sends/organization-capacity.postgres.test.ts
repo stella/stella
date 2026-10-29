@@ -10,7 +10,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { prepareInvoiceSend } from "@/api/handlers/invoices/sends/create";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -29,6 +29,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -103,30 +104,44 @@ const seedCapacity = async ({
       totalAmount: cents(1000),
     })),
   );
-  await db.insert(invoiceSends).values(
-    historyInvoiceIds.flatMap((invoiceId, invoiceIndex) =>
-      Array.from(
-        {
-          length: Math.min(
-            INVOICE_SENDS_PER_INVOICE_PER_DAY,
-            existingSendCount -
-              invoiceIndex * INVOICE_SENDS_PER_INVOICE_PER_DAY,
+  const safeDb = createMembershipSafeDb(markRlsDatabase(db), {
+    organizationId,
+    serverValidatedWorkspaceIds: Object.values(workspaceIds),
+    userId,
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
+  });
+  (
+    await safeDb(
+      async (tx) =>
+        await tx.insert(invoiceSends).values(
+          historyInvoiceIds.flatMap((invoiceId, invoiceIndex) =>
+            Array.from(
+              {
+                length: Math.min(
+                  INVOICE_SENDS_PER_INVOICE_PER_DAY,
+                  existingSendCount -
+                    invoiceIndex * INVOICE_SENDS_PER_INVOICE_PER_DAY,
+                ),
+              },
+              () => ({
+                id: createSafeId<"invoiceSend">(),
+                organizationId,
+                invoiceId,
+                recipients: ["client@example.test"],
+                language: "en" as const,
+                replyTo: `${userId}@example.test`,
+                tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
+                expiresAt: new Date(Date.now() + 86_400_000),
+                deliveryStatus: "delivered" as const,
+              }),
+            ),
           ),
-        },
-        () => ({
-          id: createSafeId<"invoiceSend">(),
-          organizationId,
-          invoiceId,
-          recipients: ["client@example.test"],
-          language: "en" as const,
-          replyTo: `${userId}@example.test`,
-          tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-          expiresAt: new Date(Date.now() + 86_400_000),
-          deliveryStatus: "delivered" as const,
-        }),
-      ),
-    ),
-  );
+        ),
+    )
+  ).unwrap();
 };
 
 if (!databaseUrl || !runPostgres) {
@@ -172,12 +187,15 @@ if (!databaseUrl || !runPostgres) {
           emailVerified: true,
         });
         const actor = (name: "a" | "b") => {
-          const safeDb = createSafeDb(
-            markRlsDatabase(actors[name]),
-            [workspaceIds[name]],
+          const safeDb = createMembershipSafeDb(markRlsDatabase(actors[name]), {
             organizationId,
+            serverValidatedWorkspaceIds: [workspaceIds[name]],
             userId,
-          );
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              organizationId,
+              userId,
+            }),
+          });
           return {
             steps: [
               {

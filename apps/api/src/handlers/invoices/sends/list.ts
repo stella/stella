@@ -64,9 +64,12 @@ const defaultRecipientsOf = (
   if (emails === null) {
     return [];
   }
-  const ordered = emails.toSorted(
-    (left, right) => Number(right.isPrimary) - Number(left.isPrimary),
-  );
+  const ordered = emails.toSorted((left, right) => {
+    if (left.isPrimary === right.isPrimary) {
+      return 0;
+    }
+    return left.isPrimary ? -1 : 1;
+  });
   return [
     ...new Set(
       ordered

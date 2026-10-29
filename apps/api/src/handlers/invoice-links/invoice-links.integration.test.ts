@@ -37,15 +37,7 @@ import { buildLinkedEInvoice } from "@/api/handlers/invoice-links/e-invoice";
 import { parseInvoiceLinkInvoiceRow } from "@/api/handlers/invoice-links/function-rows";
 import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { createViewInvoiceLink } from "@/api/handlers/invoice-links/view";
-import {
-  loadInvoiceExport,
-  toExportRecords,
-} from "@/api/handlers/invoices/export-records";
 import readInvoiceById from "@/api/handlers/invoices/get";
-import { INVOICE_DOCUMENT_PROJECTION } from "@/api/handlers/invoices/invoice-detail";
-import type { InvoicePdfRenderer } from "@/api/handlers/invoices/pdf/document";
-import { createInvoiceFormatters } from "@/api/handlers/invoices/pdf/render-helpers";
-import { qrSvg } from "@/api/handlers/invoices/pdf/typst/data";
 import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
 import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
 import listInvoiceSends from "@/api/handlers/invoices/sends/list";
@@ -55,16 +47,29 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { INVOICE_DOCUMENT_PROJECTION } from "@/api/lib/billing/invoice-detail";
+import {
+  loadInvoiceExport,
+  toExportRecords,
+} from "@/api/lib/billing/invoice-export-records";
+import { invoiceLinkResponsePolicy } from "@/api/lib/billing/invoice-link-response-policy";
 import {
   createInvoiceLinkToken,
   hashInvoiceLinkToken,
   resolveInvoiceLink,
 } from "@/api/lib/billing/invoice-links";
+import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
+import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-helpers";
+import { qrSvg } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  createInvoiceLinkTokenAdmission,
+  INVOICE_LINK_TOKEN_BUDGET,
+} from "@/api/lib/rate-limit/invoice-link-admission";
 import {
   InMemoryRateLimitContext,
   isRateLimitMiddleware,
@@ -76,6 +81,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -127,6 +136,7 @@ const tokenDb = (): TokenScopedDatabase => ({
 
 type LinkRouteOptions = {
   budget: ReturnType<typeof rateLimit>;
+  database?: TokenScopedDatabase;
   isAvailable?: () => boolean;
   renderInvoice?: InvoicePdfRenderer;
   buildEInvoice?: typeof buildLinkedEInvoice;
@@ -135,6 +145,7 @@ type LinkRouteOptions = {
 /** The production route table's shape, with test doubles for its seams. */
 const linkRoutes = ({
   budget,
+  database = tokenDb(),
   isAvailable = () => true,
   buildEInvoice = buildLinkedEInvoice,
   renderInvoice = async () =>
@@ -144,27 +155,36 @@ const linkRoutes = ({
       compileMs: 1,
       peakRssBytes: 1,
     }),
-}: LinkRouteOptions) =>
-  routes(
+}: LinkRouteOptions) => {
+  const admitToken = createInvoiceLinkTokenAdmission(
+    new InMemoryRateLimitContext(),
+  );
+  return routes(
     {
       "/view": {
         POST: createViewInvoiceLink({
-          db: tokenDb(),
+          db: database,
           isAvailable,
           buildEInvoice,
+          admitToken,
         }),
       },
       "/download": {
         POST: createDownloadInvoiceLinkFile({
-          db: tokenDb(),
+          db: database,
           isAvailable,
           renderInvoice,
           buildEInvoice,
+          admitToken,
         }),
       },
     },
-    { prefix: "/public/invoice-links", middleware: [budget] },
+    {
+      prefix: "/public/invoice-links",
+      middleware: [invoiceLinkResponsePolicy, budget],
+    },
   );
+};
 
 const budgetOf = (max: number) =>
   rateLimit({
@@ -549,6 +569,41 @@ const invoiceStatus = async (invoiceId: SafeId<"invoice">) =>
   ).at(0)?.status;
 
 describe("sending an invoice by link", () => {
+  test("a member without time-billing enrolment cannot create an invoice link", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const deliveredBefore = delivered.length;
+    const auditEvents: AuditEvent[] = [];
+    await testDb
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, ids.orgA),
+          eq(featureEnrolments.userId, ids.userA1),
+          eq(featureEnrolments.featureId, "time-billing"),
+        ),
+      );
+    try {
+      // The safe handler resolves the member's feature-access decision before
+      // running its callback; no deployment-flag override is involved.
+      expect(
+        await send(invoiceId, ["not-enrolled@example.test"], { auditEvents }),
+      ).toMatchObject({ code: 404 });
+      expect(await sendRows(invoiceId)).toEqual([]);
+      expect(delivered).toHaveLength(deliveredBefore);
+      expect(auditEvents).toEqual([]);
+      expect(await invoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          featureId: "time-billing",
+        })
+        .onConflictDoNothing();
+    }
+  });
+
   test("emails each recipient a link, replies to the seller, and marks it sent", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const auditEvents: AuditEvent[] = [];
@@ -580,6 +635,13 @@ describe("sending an invoice by link", () => {
       expect(email.firmName).toBe("Example Law Office");
       expect(email.message).toBe("For October.");
       expect(email.link).toMatch(/\/invoice-link#[a-f0-9]{64}$/u);
+      const link = new URL(email.link);
+      expect(link.pathname).toBe("/invoice-link");
+      expect(link.search).toBe("");
+      expect(link.hash).toMatch(/^#[a-f0-9]{64}$/u);
+      expect(`${link.pathname}${link.search}`).not.toContain(
+        link.hash.slice(1),
+      );
     }
     const [row] = await sendRows(invoiceId);
     const token = tokenSentTo("client@example.test");
@@ -846,6 +908,153 @@ describe("invoice send row security", () => {
 });
 
 describe("opening an invoice link", () => {
+  test("view and both downloads share one token budget while another link remains available", async () => {
+    const own = await sentInvoice("shared-token-budget@example.test");
+    const other = await sentInvoice("independent-token-budget@example.test");
+    await using target = serveForTest(
+      createHttpApp({
+        routes: linkRoutes({ budget: budgetOf(1000) }),
+        middleware: [errorBoundary],
+      }),
+    );
+    const operations = ["view", "pdf", "e_invoice"] as const;
+    for (let attempt = 0; attempt < INVOICE_LINK_TOKEN_BUDGET.max; attempt++) {
+      const operation = operations[attempt % operations.length];
+      const response =
+        operation === "view"
+          ? await post(target, "view", { token: own.token })
+          : await post(target, "download", {
+              token: own.token,
+              file: operation,
+            });
+      expect(response.status).toBe(200);
+    }
+    for (const operation of operations) {
+      const response =
+        operation === "view"
+          ? await post(target, "view", { token: own.token })
+          : await post(target, "download", {
+              token: own.token,
+              file: operation,
+            });
+      expect(response.status).toBe(429);
+      expect(response.headers.get("cache-control")).toContain("no-store");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    }
+    expect((await post(target, "view", { token: other.token })).status).toBe(
+      200,
+    );
+  });
+
+  test("repeated unknown-token lookups cool down before another database lookup", async () => {
+    const database = tokenDb();
+    let lookups = 0;
+    const measuredDatabase = {
+      scoped: database.scoped,
+      tenantless: async (read) => {
+        lookups += 1;
+        return await database.tenantless(read);
+      },
+    } satisfies TokenScopedDatabase;
+    await using target = serveForTest(
+      createHttpApp({
+        routes: linkRoutes({
+          budget: budgetOf(1000),
+          database: measuredDatabase,
+        }),
+        middleware: [errorBoundary],
+      }),
+    );
+    const token = createInvoiceLinkToken();
+    for (let attempt = 0; attempt < INVOICE_LINK_TOKEN_BUDGET.max; attempt++) {
+      expect((await post(target, "view", { token })).status).toBe(404);
+    }
+    expect(lookups).toBe(INVOICE_LINK_TOKEN_BUDGET.max);
+    for (const file of ["pdf", "e_invoice"]) {
+      expect((await post(target, "download", { token, file })).status).toBe(
+        429,
+      );
+    }
+    expect(lookups).toBe(INVOICE_LINK_TOKEN_BUDGET.max);
+    expect(
+      (await post(target, "view", { token: createInvoiceLinkToken() })).status,
+    ).toBe(404);
+    expect(lookups).toBe(INVOICE_LINK_TOKEN_BUDGET.max + 1);
+  });
+
+  test("send, view, downloads and refused lookups keep plaintext tokens out of telemetry and audits", async () => {
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+      const auditEvents: AuditEvent[] = [];
+      expect(
+        await send(invoiceId, ["token-secrecy@example.test"], { auditEvents }),
+      ).toMatchObject({ deliveryStatus: "delivered" });
+      const token = tokenSentTo("token-secrecy@example.test");
+      expect((await post(server, "view", { token })).status).toBe(200);
+      for (const file of ["pdf", "e_invoice"]) {
+        expect((await post(server, "download", { token, file })).status).toBe(
+          200,
+        );
+      }
+      const [sendRow] = await sendRows(invoiceId);
+      if (sendRow === undefined) {
+        return panic("Expected send history for token secrecy coverage");
+      }
+      expect(await revoke(invoiceId, sendRow.id)).toMatchObject({
+        revokedAt: expect.any(String),
+      });
+      expect((await post(server, "view", { token })).status).toBe(404);
+      expect(
+        (await post(server, "download", { token, file: "pdf" })).status,
+      ).toBe(404);
+      const recordedAudits = await testDb
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, invoiceId));
+      expect(recordedAudits.map(({ action }) => action).toSorted()).toEqual([
+        "access",
+        "download",
+        "download",
+      ]);
+      expect(auditEvents.length).toBeGreaterThan(0);
+      for (const recorded of [
+        logs.records,
+        analytics.events,
+        analytics.groupIdentifies,
+        auditEvents,
+        recordedAudits,
+        await sendRows(invoiceId),
+      ]) {
+        expect(JSON.stringify(recorded)).not.toContain(token);
+      }
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
+  });
+
+  test("public summaries and every download disable caching and referrers, including refused lookups", async () => {
+    const { token } = await sentInvoice("response-headers@example.test");
+    for (const candidate of [token, "0".repeat(64)]) {
+      const expectedStatus = candidate === token ? 200 : 404;
+      const responses = [
+        await post(server, "view", { token: candidate }),
+        await post(server, "download", { token: candidate, file: "pdf" }),
+        await post(server, "download", {
+          token: candidate,
+          file: "e_invoice",
+        }),
+      ];
+      for (const response of responses) {
+        expect(response.status).toBe(expectedStatus);
+        expect(response.headers.get("cache-control")).toContain("no-store");
+        expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      }
+    }
+  });
+
   const sentInvoice = async (to: string) => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     await send(invoiceId, [to]);

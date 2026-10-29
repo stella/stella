@@ -3,14 +3,14 @@ import { and, count, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { INVOICE_SEND_LIMITS } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import { INVOICE_STATUS, invoices, invoiceSends } from "@/api/db/schema";
-import type { InvoiceSendDeliveryStatus, InvoiceStatus } from "@/api/db/schema";
-import { createInvoiceFormatters } from "@/api/handlers/invoices/pdf/render-helpers";
+import type { InvoiceStatus } from "@/api/db/schema";
 import { sendFinalizedInvoice } from "@/api/handlers/invoices/transition";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -29,7 +29,10 @@ import {
   invoicePaidAmountSql,
   invoicePaymentAmounts,
 } from "@/api/lib/billing/invoice-payments";
+import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { completeInvoiceSendDelivery } from "@/api/lib/billing/invoice-send-delivery";
+import type { InvoiceSendDeliveryOutcome } from "@/api/lib/billing/invoice-send-delivery";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -97,13 +100,11 @@ type SendInvoiceDependencies = {
 };
 
 /**
- * The configured transport. A local development server without one prints
- * the link instead, the way it prints invitation links.
+ * The configured transport. Local development without a provider accepts
+ * delivery without writing the bearer credential to diagnostic output.
  */
 const deliverInvoiceLink: InvoiceLinkDelivery = async (message) => {
   if (!isTransactionalEmailConfigured() && isLocalDevOpen()) {
-    // oxlint-disable-next-line no-console -- dev-only invoice-link echo for local testing
-    console.log(`[DEV] Invoice link for ${message.to}: ${message.link}`);
     return;
   }
   await sendInvoiceLinkEmail(message);
@@ -412,7 +413,7 @@ const deliverAll = async (
 const deliveryStatusOf = (
   failed: readonly string[],
   recipients: readonly string[],
-): InvoiceSendDeliveryStatus => {
+): InvoiceSendDeliveryOutcome => {
   if (failed.length === 0) {
     return "delivered";
   }
@@ -424,7 +425,7 @@ type RecordDeliveryOptions = {
   organizationId: SafeId<"organization">;
   prepared: PreparedSend;
   failed: string[];
-  deliveryStatus: InvoiceSendDeliveryStatus;
+  deliveryStatus: InvoiceSendDeliveryOutcome;
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
   now: Date;
@@ -439,28 +440,16 @@ const recordDelivery = async (
   tx: Transaction,
   options: RecordDeliveryOptions,
 ): Promise<Result<{ status: InvoiceStatus }, HandlerError>> => {
-  const delivery = {
-    deliveryStatus: options.deliveryStatus,
-    failedRecipients: options.failed,
-  };
-  await options.recordAuditEvent(tx, {
-    action: AUDIT_ACTION.UPDATE,
-    resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-    resourceId: options.invoiceId,
-    changes: {
-      emailDelivery: { old: "pending", new: options.deliveryStatus },
-    },
-    metadata: {
-      invoiceSendId: options.prepared.sendId,
-      failedRecipients: options.failed,
-    },
-  });
   if (options.deliveryStatus === "failed") {
-    await tx
-      .update(invoiceSends)
-      .set({ ...delivery, revokedAt: options.now })
-      .where(eq(invoiceSends.id, options.prepared.sendId));
-    return Result.ok({ status: options.prepared.invoice.status });
+    const completed = await completeInvoiceSendDelivery(tx, {
+      sendId: options.prepared.sendId,
+      invoiceId: options.invoiceId,
+      deliveryStatus: options.deliveryStatus,
+      failedRecipients: options.failed,
+      now: options.now,
+      recordAuditEvent: options.recordAuditEvent,
+    });
+    return completed.map(() => ({ status: options.prepared.invoice.status }));
   }
   // A finalized invoice becomes sent through the send transition, which locks
   // the invoice row before anything else is written.
@@ -479,12 +468,19 @@ const recordDelivery = async (
           workspaceId: options.workspaceId,
         })
       : null;
-  await tx
-    .update(invoiceSends)
-    .set(delivery)
-    .where(eq(invoiceSends.id, options.prepared.sendId));
   if (sent?.isErr() === true) {
     return Result.err(sent.error);
+  }
+  const completed = await completeInvoiceSendDelivery(tx, {
+    sendId: options.prepared.sendId,
+    invoiceId: options.invoiceId,
+    deliveryStatus: options.deliveryStatus,
+    failedRecipients: options.failed,
+    now: options.now,
+    recordAuditEvent: options.recordAuditEvent,
+  });
+  if (completed.isErr()) {
+    return Result.err(completed.error);
   }
   // Sending may settle the invoice; report the status stored by the owner.
   const [after] = await tx
@@ -532,12 +528,15 @@ export const createSendInvoice = ({
     }) {
       if (!isDeliveryConfigured()) {
         return Result.err(
-          new HandlerError({
-            status: 503,
-            code: "email_unavailable",
-            message: "Email delivery is not configured on this server",
-            hint: "Download the PDF and send it yourself, or ask the administrator to configure outgoing email.",
-          }),
+          classifyFailure(
+            new HandlerError({
+              status: 503,
+              code: "email_unavailable",
+              message: "Email delivery is not configured on this server",
+              hint: "Download the PDF and send it yourself, or ask the administrator to configure outgoing email.",
+            }),
+            "invoice_email_unconfigured",
+          ),
         );
       }
       const now = new Date();
@@ -587,13 +586,16 @@ export const createSendInvoice = ({
       );
       if (deliveryStatus === "failed") {
         return Result.err(
-          new HandlerError({
-            status: 502,
-            code: "invoice_email_failed",
-            message: "The email could not be delivered to any recipient",
-            hint: "Check the addresses and send again; the link was not activated.",
-            retryable: true,
-          }),
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "invoice_email_failed",
+              message: "The email could not be delivered to any recipient",
+              hint: "Check the addresses and send again; the link was not activated.",
+              retryable: true,
+            }),
+            "upstream_unavailable",
+          ),
         );
       }
       return Result.ok({

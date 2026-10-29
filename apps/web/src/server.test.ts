@@ -66,6 +66,15 @@ await mock.module(
 );
 const { default: server } = await import("@/server");
 
+test("invoice link documents are not cached and never send a referrer", async () => {
+  const response = await server.fetch(
+    new Request("https://stella.test/invoice-link?type=text/html"),
+  );
+  expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
+  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  await response.text();
+});
+
 const cacheClasses = [...new Set(Object.values(ROUTE_CACHE_CLASSES))];
 const mediaTypes = [
   null,

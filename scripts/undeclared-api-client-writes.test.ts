@@ -57,6 +57,72 @@ export const api = apiClient.v1;
 ${internalUiWrites}
 `;
 
+const invoiceLinkWrites = `
+import { INTERNAL_UI_TRANSPORT_ROUTES } from "@stll/api-contract/internal-ui-transport";
+export const invoiceLinkView = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkView,
+  open: async (token: string) => apiClient.public["invoice-links"].view.post({ token }, { fetch: { credentials: "omit" } }),
+} as const;
+export const invoiceLinkDownload = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkDownload,
+  open: async ({ token, file }) => {
+    const response = await apiClient.public["invoice-links"].download.post({ token, file }, { fetch: { credentials: "omit" } });
+    return response;
+  },
+} as const;
+`;
+const invoiceLinkSource = `
+import { createApiClient } from "@stll/api-client";
+export const apiClient = createApiClient(baseUrl, options);
+export const api = apiClient.v1;
+${invoiceLinkWrites}
+`;
+
+test("only manifest-bound public invoice document transports in the canonical owner are exempt", () => {
+  expect(
+    countUndeclaredApiClientWrites(invoiceLinkSource, INTERNAL_UI_OWNER),
+  ).toBe(0);
+  expect(
+    countUndeclaredApiClientWrites(
+      `import { apiClient } from "@/lib/api";\n${invoiceLinkWrites}`,
+      "apps/web/src/lib/another-transport.ts",
+    ),
+  ).toBe(2);
+});
+
+test("public invoice transports cannot change route identity, method, path, body or add another write", () => {
+  const mutations = [
+    invoiceLinkSource.replace(
+      "route: INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkView",
+      "route: INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkDownload",
+    ),
+    invoiceLinkSource.replace(
+      ".view.post({ token }",
+      ".download.post({ token }",
+    ),
+    invoiceLinkSource.replace(".view.post({ token }", ".view.patch({ token }"),
+    invoiceLinkSource.replace(
+      ".view.post({ token }",
+      ".view.post({ token, extra }",
+    ),
+    invoiceLinkSource.replace(
+      '.public["invoice-links"].view',
+      '.public["other-links"].view',
+    ),
+    invoiceLinkSource.replace(
+      "return response;",
+      "await apiClient.other.post({ token }); return response;",
+    ),
+    invoiceLinkSource.replace(
+      ".download.post({ token, file }",
+      ".download.post({ token, file, extra }",
+    ),
+  ];
+  for (const mutation of mutations) {
+    expect(countUndeclaredApiClientWrites(mutation, INTERNAL_UI_OWNER)).toBe(1);
+  }
+});
+
 test("only the two manifest-bound writes in their owning module are exempt", () => {
   expect(
     countUndeclaredApiClientWrites(internalUiSource, INTERNAL_UI_OWNER),

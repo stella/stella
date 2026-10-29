@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
+
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { deliverInvoiceLink } from "@/api/handlers/invoice-links/delivery";
 import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
@@ -10,18 +12,19 @@ import {
   verifyInvoiceLinkCaller,
 } from "@/api/handlers/invoice-links/link-access";
 import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
+import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
+import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
 import {
   invoiceDocumentError,
   invoiceDocumentRenderOptions,
   invoicePdfFileName,
-} from "@/api/handlers/invoices/pdf/document";
-import { buildInvoiceTemplateData } from "@/api/handlers/invoices/pdf/typst/data";
-import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
+} from "@/api/lib/billing/invoice-pdf/document";
+import { buildInvoiceTemplateData } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 
 const config = {
@@ -43,11 +46,14 @@ const config = {
 } satisfies TokenHandlerConfig;
 
 const readFailed = (cause: unknown) =>
-  new HandlerError({
-    status: 500,
-    message: "Failed to open the invoice.",
-    cause,
-  });
+  classifyFailure(
+    new HandlerError({
+      status: 500,
+      message: "Failed to open the invoice.",
+      cause,
+    }),
+    "invoice_link_read_failed",
+  );
 
 /**
  * Opens an invoice from its link: the summary a recipient needs to pay it
@@ -62,14 +68,20 @@ export const createViewInvoiceLink = ({
   db,
   isAvailable = timeBillingDeployed,
   buildEInvoice = buildLinkedEInvoice,
+  admitToken,
 }: {
   db?: TokenScopedDatabase;
   isAvailable?: () => boolean;
   buildEInvoice?: typeof buildLinkedEInvoice;
+  admitToken?: typeof admitInvoiceLinkToken;
 } = {}) =>
   createSafeTokenHandler(
     config,
-    verifyInvoiceLinkCaller({ db, isAvailable }),
+    verifyInvoiceLinkCaller({
+      db,
+      isAvailable,
+      ...(admitToken === undefined ? {} : { admitToken }),
+    }),
     async function* ({ caller, request, server }) {
       const opened = yield* Result.await(
         Result.tryPromise({

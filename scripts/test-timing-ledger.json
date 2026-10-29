@@ -1970,11 +1970,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/api/src/handlers/invoices/pdf/typst/session.test.ts::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/invoices/prefill.integration.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2471,6 +2466,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/billing/arrangements-concurrency.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/billing/invoice-pdf/typst/session.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },

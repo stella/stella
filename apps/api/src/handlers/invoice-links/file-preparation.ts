@@ -7,8 +7,8 @@ import {
   invoiceDocumentError,
   invoicePdfFileName,
   renderInvoiceDocumentPdf,
-} from "@/api/handlers/invoices/pdf/document";
-import type { InvoicePdfRenderer } from "@/api/handlers/invoices/pdf/document";
+} from "@/api/lib/billing/invoice-pdf/document";
+import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 

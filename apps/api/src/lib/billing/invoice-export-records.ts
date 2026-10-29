@@ -17,7 +17,7 @@ import {
   INVOICE_DETAIL_RELATIONS,
   INVOICE_DOCUMENT_COLUMNS,
   INVOICE_SELLER_COLUMNS,
-} from "@/api/handlers/invoices/invoice-detail";
+} from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
 import {
   invoiceInMatter,

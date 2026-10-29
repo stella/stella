@@ -16,20 +16,20 @@ import { brotliCompressSync, gzipSync } from "node:zlib";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
-import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
-import { TYPST_FONT_PATHS } from "@/api/handlers/invoices/pdf/typst/compiler";
-import { buildInvoiceTemplateData } from "@/api/handlers/invoices/pdf/typst/data";
+import type { RenderInvoicePdfOptions } from "@/api/lib/billing/invoice-pdf/render-helpers";
+import { TYPST_FONT_PATHS } from "@/api/lib/billing/invoice-pdf/typst/compiler";
+import { buildInvoiceTemplateData } from "@/api/lib/billing/invoice-pdf/typst/data";
 import {
   CEE_DIACRITICS,
   DUMMY_ISDOC,
   invoiceFixture,
-} from "@/api/handlers/invoices/pdf/typst/fixtures";
-import { toPdfA3 } from "@/api/handlers/invoices/pdf/typst/pdfa";
+} from "@/api/lib/billing/invoice-pdf/typst/fixtures";
+import { toPdfA3 } from "@/api/lib/billing/invoice-pdf/typst/pdfa";
 import {
   loadDefaultInvoiceTemplate,
   renderInvoiceWithTypst,
-} from "@/api/handlers/invoices/pdf/typst/render-typst";
-import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
+} from "@/api/lib/billing/invoice-pdf/typst/render-typst";
+import { openTypstSession } from "@/api/lib/billing/invoice-pdf/typst/session";
 
 const MODES = ["wasm", "browser"] as const;
 type Mode = (typeof MODES)[number];

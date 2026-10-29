@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/valibot";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+
 import type { Transaction } from "@/api/db/root";
 import {
   expenses,
@@ -14,7 +16,7 @@ import {
 import type {
   INVOICE_DOCUMENT_COLUMNS,
   INVOICE_SELLER_COLUMNS,
-} from "@/api/handlers/invoices/invoice-detail";
+} from "@/api/lib/billing/invoice-detail";
 import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { cents } from "@/api/lib/money";
@@ -247,7 +249,7 @@ const settlementFunctionRowSchema = v.object({
     v.maxValue(Number.MAX_SAFE_INTEGER),
     v.transform(cents),
   ),
-  latestPaidOn: v.nullable(v.pipe(v.string(), v.isoDate())),
+  latestPaidOn: v.nullable(apiDateSchema),
 });
 export const parseInvoiceLinkSettlementRow = (row: unknown) =>
   v.parse(settlementFunctionRowSchema, row);

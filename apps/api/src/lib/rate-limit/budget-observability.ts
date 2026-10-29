@@ -7,6 +7,7 @@ export const BUDGET_NAMES = [
   "api.agent_auth_confirm.address",
   "api.folio_collab.address",
   "api.invoice_link.address",
+  "api.invoice_link.token",
   "api.delete_account_otp.address",
   "api.two_factor_manage_otp.address",
   "api.hosted_usage_webhook.address",

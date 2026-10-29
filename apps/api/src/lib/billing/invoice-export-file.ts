@@ -22,6 +22,7 @@ import type {
   InvoiceTableLanguage,
   InvoicingInputError,
 } from "@stll/invoicing";
+import { toMajorUnits } from "@stll/money";
 
 import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { buildXlsxExport } from "@/api/lib/views/table-export";
@@ -71,7 +72,10 @@ const exportCell = (cell: InvoiceTableCell): ExportCell => {
   const displayValue = exportAmountText(cell.amountMinor, cell.currency);
   return {
     type: "number",
-    value: Number(displayValue),
+    value: toMajorUnits({
+      amountCents: cell.amountMinor,
+      currency: cell.currency,
+    }),
     displayValue,
     currency: cell.currency,
     style: "default",

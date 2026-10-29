@@ -63,8 +63,8 @@
         "src/lib/ocr-searchable-pdf-worker.ts!",
         // Spike renderer process and its memory watchdog thread, started by
         // path from the session.
-        "src/handlers/invoices/pdf/typst/worker.ts",
-        "src/handlers/invoices/pdf/typst/watchdog.ts",
+        "src/lib/billing/invoice-pdf/typst/worker.ts",
+        "src/lib/billing/invoice-pdf/typst/watchdog.ts",
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",

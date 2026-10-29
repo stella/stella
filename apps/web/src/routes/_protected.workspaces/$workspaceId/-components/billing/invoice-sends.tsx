@@ -33,6 +33,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -56,8 +57,6 @@ const LINK_STATUS_STYLES = {
   revoked: "bg-muted text-muted-foreground",
   failed: "bg-[var(--option-red-bg)] text-[var(--option-red-fg)]",
 } as const satisfies Record<LinkStatus, string>;
-
-const DATE_TIME = { dateStyle: "medium", timeStyle: "short" } as const;
 
 type InvoiceRef = { workspaceId: string; invoiceId: string };
 
@@ -90,6 +89,24 @@ export const SendInvoiceForm = ({
   );
   useQueryViewError(sends, "SendInvoiceForm:query");
 
+  const onSent = async ({
+    failedRecipients,
+  }: {
+    failedRecipients: string[];
+  }) => {
+    stellaToast.add({
+      type: failedRecipients.length === 0 ? "success" : "warning",
+      title:
+        failedRecipients.length === 0
+          ? t("sent")
+          : t("sentPartial", { addresses: failedRecipients.join(", ") }),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: invoicesKeys.all(workspaceId),
+    });
+    onClose();
+  };
+
   if (sends.type === "pending") {
     return (
       <div className="flex flex-col gap-3 p-4">
@@ -109,19 +126,7 @@ export const SendInvoiceForm = ({
       )}
       invoiceNumber={invoiceNumber}
       onClose={onClose}
-      onSent={async ({ failedRecipients }) => {
-        stellaToast.add({
-          type: failedRecipients.length === 0 ? "success" : "warning",
-          title:
-            failedRecipients.length === 0
-              ? t("sent")
-              : t("sentPartial", { addresses: failedRecipients.join(", ") }),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        });
-        onClose();
-      }}
+      onSent={onSent}
       replyTo={sends.type === "items" ? sends.items.replyTo : null}
       send={async (values) => {
         const response = await invokeCapability(
@@ -351,7 +356,10 @@ const InvoiceSendRow = ({
   const format = useFormatter();
   const queryClient = useQueryClient();
   const when = (iso: string) =>
-    format.dateTime(Temporal.Instant.from(iso).epochMilliseconds, DATE_TIME);
+    format.dateTime(
+      Temporal.Instant.from(iso).epochMilliseconds,
+      MEDIUM_DATE_SHORT_TIME_FORMAT,
+    );
 
   const revoke = useMutation({
     mutationFn: async () =>

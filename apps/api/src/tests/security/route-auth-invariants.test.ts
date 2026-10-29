@@ -23,6 +23,7 @@ import {
 } from "@/api/handlers/feedback/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
+import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { mcpAppSandboxRoute } from "@/api/handlers/mcp-app-sandbox/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
@@ -131,6 +132,8 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   feedbackRoute,
   healthRoute,
   hostedUsageWebhookRoute,
+  // Token-authenticated invoice link; each route carries its own rate budget.
+  invoiceLinksRoute,
   internalTimeEntriesRoute,
   mcpAppSandboxRoute,
   mcpRoute,

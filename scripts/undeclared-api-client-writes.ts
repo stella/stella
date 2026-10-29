@@ -79,6 +79,45 @@ const exactMemberCall = (
   return directProperty(value.callee, name);
 };
 
+type ExactInvoiceLinkWriteOptions = {
+  methodTarget: Expression;
+  body: Extract<Expression, { type: "ObjectExpression" }>;
+  routeId: string;
+};
+
+const exactInvoiceLinkWrite = ({
+  methodTarget,
+  body,
+  routeId,
+}: ExactInvoiceLinkWriteOptions): boolean => {
+  const download =
+    routeId === INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkDownload.id;
+  const links = directProperty(methodTarget, download ? "download" : "view");
+  if (
+    links?.type !== "MemberExpression" ||
+    !links.computed ||
+    links.optional ||
+    links.property.type !== "Literal" ||
+    links.property.value !== "invoice-links"
+  ) {
+    return false;
+  }
+  const client = directProperty(links.object, "public");
+  const keys = body.properties.flatMap((property) =>
+    property.type === "Property" &&
+    property.shorthand &&
+    property.key.type === "Identifier"
+      ? [property.key.name]
+      : [],
+  );
+  return (
+    client?.type === "Identifier" &&
+    client.name === "apiClient" &&
+    body.properties.length === (download ? 2 : 1) &&
+    keys.join(",") === (download ? "token,file" : "token")
+  );
+};
+
 const exactInternalUiWrite = (
   call: CallExpression,
   routeId: string,
@@ -87,11 +126,20 @@ const exactInternalUiWrite = (
   const body = call.arguments.at(0);
   if (
     methodTarget === null ||
-    call.arguments.length !== 1 ||
+    (call.arguments.length !== 1 && call.arguments.length !== 2) ||
     body === undefined ||
     body.type === "SpreadElement" ||
     body.type !== "ObjectExpression"
   ) {
+    return false;
+  }
+  if (
+    routeId === INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkView.id ||
+    routeId === INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkDownload.id
+  ) {
+    return exactInvoiceLinkWrite({ methodTarget, body, routeId });
+  }
+  if (call.arguments.length !== 1) {
     return false;
   }
   if (routeId === INTERNAL_UI_TRANSPORT_ROUTES.mcpConnectorConnect.id) {
@@ -256,6 +304,18 @@ const isOwnedInternalUiWrite = (
     return false;
   }
   const dispatches = [
+    [
+      "invoiceLinkView",
+      "invoiceLinkView",
+      INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkView.id,
+      "open",
+    ],
+    [
+      "invoiceLinkDownload",
+      "invoiceLinkDownload",
+      INTERNAL_UI_TRANSPORT_ROUTES.invoiceLinkDownload.id,
+      "open",
+    ],
     [
       "mcpConnectorConnection",
       "mcpConnectorConnect",

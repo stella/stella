@@ -131,10 +131,71 @@ const AUDITED_HELPERS = [
 ] as const;
 // The system-audit recorder: its one write is the audit record.
 const AUDIT_RECORDER_FILE = "apps/api/src/lib/db/audit-recording.ts";
-const AUDIT_RECORDER_INSERTS = new Set([
-  "insert:auditLogs",
-  "insert:accountAuditLogs",
+const AUDIT_TABLE_NAMES: ReadonlySet<string> = new Set([
+  "auditLogs",
+  "accountAuditLogs",
 ]);
+const AUDIT_RECORDER_INSERTS = new Set(
+  [...AUDIT_TABLE_NAMES].map((name) => `insert:${name}`),
+);
+const AUDIT_TABLE_MODULES = [
+  "apps/api/src/db/schema",
+  "apps/api/src/db/schema/contacts",
+];
+const SQL_TAG_NAMES: ReadonlySet<string> = new Set(["sql"]);
+
+// Admit only a direct, single-statement INSERT into the imported audit table.
+// The surrounding file check confines this to the canonical recording owner.
+const isRawAuditInsert = (context: RuleContext, node: AstNode): boolean => {
+  const callee = unwrapExpression(node.callee);
+  if (
+    callee?.type !== "MemberExpression" ||
+    memberPropertyName(callee) !== "execute" ||
+    !Array.isArray(node.arguments)
+  ) {
+    return false;
+  }
+  const statement = unwrapExpression(node.arguments.at(0));
+  if (
+    statement?.type !== "TaggedTemplateExpression" ||
+    !isImportedFrom({
+      context,
+      node: statement.tag,
+      modules: ["drizzle-orm"],
+      names: SQL_TAG_NAMES,
+    }) ||
+    !isAstNode(statement.quasi) ||
+    !Array.isArray(statement.quasi.quasis) ||
+    !Array.isArray(statement.quasi.expressions)
+  ) {
+    return false;
+  }
+  const parts = statement.quasi.quasis.map((quasi: unknown) => {
+    const value = isAstNode(quasi) ? quasi.value : null;
+    return typeof value === "object" &&
+      value !== null &&
+      "raw" in value &&
+      typeof value.raw === "string"
+      ? value.raw
+      : "";
+  });
+  const prefix = parts.at(0);
+  return (
+    prefix !== undefined &&
+    /^\s*INSERT\s+INTO\s*$/iu.test(prefix) &&
+    parts.every((part) => !part.includes(";")) &&
+    isImportedFrom({
+      context,
+      node: statement.quasi.expressions.at(0),
+      modules: AUDIT_TABLE_MODULES,
+      names: AUDIT_TABLE_NAMES,
+    })
+  );
+};
+
+const isAuditRecorderInsert = (context: RuleContext, node: AstNode): boolean =>
+  AUDIT_RECORDER_INSERTS.has(databaseWriteTarget(context, node)) ||
+  isRawAuditInsert(context, node);
 const SYSTEM_AUDIT_RECORDER_FILE = "apps/api/src/lib/system-audit/record.ts";
 const MEMBER_RUN_MODULE_FILES: ReadonlySet<string> = new Set(
   MEMBER_RUN_MODULES,
@@ -741,10 +802,7 @@ export const createAuditOnMutationPlugin = (
                 isDatabaseWriteCall(context, node) &&
                 !isPublicCorpusMutation({ context, node, tables }) &&
                 // Writing the audit row is the emission, not another audited mutation.
-                !(
-                  auditRecorderFile &&
-                  AUDIT_RECORDER_INSERTS.has(databaseWriteTarget(context, node))
-                )
+                !(auditRecorderFile && isAuditRecorderInsert(context, node))
               ) {
                 if (
                   hasCallSkipDirective({

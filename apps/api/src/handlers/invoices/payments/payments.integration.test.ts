@@ -29,6 +29,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { exportPaidDate } from "@/api/lib/billing/invoice-export-records";
 import {
   INVOICE_LEGACY_PAYMENT_BACKFILL,
   INVOICE_SENT_AT_BACKFILL,
@@ -47,7 +48,6 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { exportPaidDate } from "../export-records";
 import readInvoiceById from "../get";
 import readInvoices from "../list";
 import transitionInvoice from "../transition";

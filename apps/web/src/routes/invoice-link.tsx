@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -18,9 +18,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
-import { apiClient } from "@/lib/api";
-import { browserApiRootUrl } from "@/lib/api-url";
-import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { downloadFile } from "@/lib/utils";
@@ -32,8 +31,6 @@ import {
   qrImageSource,
 } from "./-invoice-link.logic";
 import type { InvoiceLinkFile } from "./-invoice-link.logic";
-
-const DOWNLOAD_TIMEOUT_MS = 60_000;
 
 /**
  * The page an invoice email links to. The link's token rides in the URL
@@ -53,10 +50,7 @@ export const Route = createFileRoute("/invoice-link")({
   component: InvoiceLinkPage,
 });
 
-const viewInvoice = async (token: string) =>
-  unwrapApiResponse(
-    await apiClient.public["invoice-links"].view.post({ token }),
-  );
+const viewInvoice = invoiceLinkView.open;
 
 type InvoiceLinkView = Awaited<ReturnType<typeof viewInvoice>>;
 
@@ -65,23 +59,19 @@ const downloadInvoiceFile = async (
   file: InvoiceLinkFile,
   fileName: string,
 ) => {
-  const response = await fetchWithTimeout(
-    browserApiRootUrl("/public/invoice-links/download"),
-    {
-      method: "POST",
-      credentials: "omit",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, file }),
-      timeout: { type: "idle", ms: DOWNLOAD_TIMEOUT_MS },
+  const downloaded = await Result.tryPromise({
+    try: async () => {
+      downloadFile(await invoiceLinkDownload.open({ token, file }), fileName);
+      return Result.ok(undefined);
     },
-  );
-  if (!response.ok) {
-    throw new APIError({
-      status: response.status,
-      message: "Invoice file download failed",
-    });
-  }
-  downloadFile(await response.blob(), fileName);
+    catch: (cause) =>
+      new APIError({
+        status: 0,
+        message: "Invoice file download failed",
+        cause,
+      }),
+  });
+  return downloaded.isErr() ? Result.err(downloaded.error) : downloaded.value;
 };
 
 function InvoiceLinkPage() {
@@ -177,6 +167,11 @@ const InvoiceSummary = ({
       file: InvoiceLinkFile;
       fileName: string;
     }) => await downloadInvoiceFile(token, file, fileName),
+    onSuccess: (result) => {
+      if (result.isErr()) {
+        notifyUserError(result.error, t("downloadFailed"));
+      }
+    },
     onError: (error) => notifyUserError(error, t("downloadFailed")),
   });
   const { eInvoice } = invoice.files;

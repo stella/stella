@@ -3,18 +3,18 @@ import { Result } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { auditedPresignDownload } from "@/api/lib/audited-download";
 import {
   invoiceDocumentError,
   invoicePdfFileName,
   loadInvoiceDocument,
   renderInvoiceDocumentPdf,
-} from "@/api/handlers/invoices/pdf/document";
-import type { InvoicePdfRenderer } from "@/api/handlers/invoices/pdf/document";
-import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { auditedPresignDownload } from "@/api/lib/audited-download";
+} from "@/api/lib/billing/invoice-pdf/document";
+import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
+import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";

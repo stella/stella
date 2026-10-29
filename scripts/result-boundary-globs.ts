@@ -71,6 +71,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/folio-collab/**/*.ts",
   "apps/api/src/handlers/legal-resolve/**/*.ts",
   "apps/api/src/handlers/legal-reader/**/*.ts",
+  "apps/api/src/handlers/invoice-links/**/*.ts",
   "apps/api/src/handlers/mcp/**/*.ts",
   "apps/api/src/handlers/me/**/*.ts",
   "apps/api/src/handlers/memories/**/*.ts",

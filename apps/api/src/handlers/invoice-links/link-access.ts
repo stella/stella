@@ -1,9 +1,16 @@
 import { panic, Result } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
+
 import type { VerifyCaller } from "@/api/lib/api-handlers";
-import { resolveInvoiceLink } from "@/api/lib/billing/invoice-links";
+import {
+  hashInvoiceLinkToken,
+  isInvoiceLinkTokenShape,
+  resolveInvoiceLink,
+} from "@/api/lib/billing/invoice-links";
 import type { InvoiceLinkScope } from "@/api/lib/billing/invoice-links";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { isRecord } from "@/api/lib/type-guards";
@@ -29,9 +36,11 @@ export const verifyInvoiceLinkCaller =
   ({
     db = tokenScopedDatabase,
     isAvailable,
+    admitToken = admitInvoiceLinkToken,
   }: {
     db?: TokenScopedDatabase | undefined;
     isAvailable: () => boolean;
+    admitToken?: typeof admitInvoiceLinkToken;
   }): VerifyCaller<InvoiceLinkCaller> =>
   async ({ body }) => {
     // A deployment without the feature answers like a dead link, before any
@@ -40,21 +49,34 @@ export const verifyInvoiceLinkCaller =
       return Result.err(linkUnavailable());
     }
     const token = isRecord(body) ? body["token"] : undefined;
+    if (typeof token !== "string" || !isInvoiceLinkTokenShape(token)) {
+      return Result.err(linkUnavailable());
+    }
     const scope = await Result.tryPromise({
-      try: async () => await resolveInvoiceLink(db, token),
+      try: async () => {
+        const admitted = await admitToken(hashInvoiceLinkToken(token));
+        if (admitted.isErr()) {
+          return Result.err(admitted.error);
+        }
+        const found = await resolveInvoiceLink(db, token);
+        return found === null
+          ? Result.err(linkUnavailable())
+          : Result.ok({ ...found, db });
+      },
       catch: (cause) =>
-        new HandlerError({
-          status: 500,
-          message: "Failed to open the invoice link.",
-          cause,
-        }),
+        classifyFailure(
+          new HandlerError({
+            status: 500,
+            message: "Failed to open the invoice link.",
+            cause,
+          }),
+          "invoice_link_read_failed",
+        ),
     });
     if (Result.isError(scope)) {
       return Result.err(scope.error);
     }
-    return scope.value === null
-      ? Result.err(linkUnavailable())
-      : Result.ok({ ...scope.value, db });
+    return scope.value;
   };
 
 /**

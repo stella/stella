@@ -12,6 +12,7 @@ import {
   euCompletionReceipts,
   folioCollabRooms,
   invoices,
+  invoiceSends,
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
@@ -119,6 +120,23 @@ const INVOICE_TRANSITIONS = defineTransitions(
   },
   { terminal: ["void"] },
 );
+
+// Each email attempt completes once; a resend creates a separate pending row.
+const INVOICE_SEND_DELIVERY_TRANSITIONS = defineLifecycle({
+  table: invoiceSends,
+  key: "id",
+  graphs: {
+    deliveryStatus: {
+      edges: {
+        pending: ["delivered", "partial", "failed"],
+        delivered: [],
+        partial: [],
+        failed: [],
+      },
+      terminal: ["delivered", "partial", "failed"],
+    },
+  },
+});
 
 // A failed attempt retries until its budget is spent; a ready archive expires.
 const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
@@ -448,10 +466,7 @@ export const TRANSITIONS = {
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: INVOICE_TRANSITIONS,
-  invoiceSends: {
-    unmanaged:
-      "Email delivery state is finalized by the invoice send handler after its external transport completes.",
-  },
+  invoiceSends: INVOICE_SEND_DELIVERY_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

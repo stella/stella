@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import type { InvoiceLanguage, InvoiceStatus } from "@stll/api-contract";
 import {
   buildCzechQrPaymentPayload,
@@ -196,9 +197,12 @@ export const createInvoiceFormatters = ({
     }
     const canonical =
       kept === 0 ? whole : `${whole}.${decimals.slice(0, kept)}`;
-    const parsed = Number(canonical);
-    return String(parsed) === canonical
-      ? quantityFormat.format(parsed)
+    const parsed = parseDecimalToken(canonical);
+    if (parsed.isErr()) {
+      return panic("Invoice contains an invalid decimal quantity");
+    }
+    return String(parsed.value) === canonical
+      ? quantityFormat.format(parsed.value)
       : canonical;
   };
   return { money, date, vatRate, quantity };

@@ -12,11 +12,11 @@ import {
   entityContextReference,
 } from "@/api/db/entity-feature-policies";
 import { invoices, timeEntries } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import {
   invoicePaidAmountSql,

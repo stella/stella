@@ -510,7 +510,6 @@ export const recordGatedAuditEvent = async ({
   event,
   requestMetadata,
 }: RecordGatedAuditEventOptions): Promise<boolean> => {
-  // audit: skip - This canonical audit insertion owner writes the audit event itself.
   const built = auditRowsOf({
     groups: [{ bindings, events: [event] }],
     requestMetadata,

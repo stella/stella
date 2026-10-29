@@ -9,6 +9,7 @@
 import downloadInvoiceLinkFile from "@/api/handlers/invoice-links/download";
 import viewInvoiceLink from "@/api/handlers/invoice-links/view";
 import { routes } from "@/api/http/route";
+import { invoiceLinkResponsePolicy } from "@/api/lib/billing/invoice-link-response-policy";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
@@ -30,6 +31,6 @@ export const invoiceLinksRoute = routes(
   },
   {
     prefix: "/public/invoice-links",
-    middleware: [invoiceLinkBudget],
+    middleware: [invoiceLinkResponsePolicy, invoiceLinkBudget],
   },
 );

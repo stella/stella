@@ -125,6 +125,9 @@ export const FAILURE_REASON_GRADE = {
   response_invalid: "defect",
   // parser-output-unchanged: invoice renderer failures grade telemetry only.
   invoice_renderer_failed: "defect",
+  // parser-output-unchanged: invoice-link read and delivery grades classify telemetry only.
+  invoice_link_read_failed: "defect",
+  invoice_email_unconfigured: "anticipated",
   visual_preview_unavailable: "defect",
   visual_preview_timeout: "defect",
   visual_preview_response_invalid: "defect",
