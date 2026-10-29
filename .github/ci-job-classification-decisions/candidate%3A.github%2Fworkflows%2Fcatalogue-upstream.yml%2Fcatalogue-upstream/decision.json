@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes refreshed catalogue upstream inputs as a signed-commit pull request."
+}

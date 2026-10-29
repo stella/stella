@@ -1,14 +1,19 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Tareas",
+    "close": "Cerrar",
+    "law": "Jurisprudencia",
     "matters": "Asuntos",
-    "settings": "Configuración"
+    "more": "Más",
+    "settings": "Configuración",
+    "tasks": "Tareas"
   },
   "chat": {
-    "description": "Ten a mano el trabajo en curso y continúa desde cualquier dispositivo.",
     "emptyTitle": "Aún no hay conversaciones",
     "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes.",
+    "noMatchesTitle": "No hay chats coincidentes",
+    "noMatchesDescription": "Ningún título de chat ni asunto contiene «{search}».",
+    "search": "Buscar chats",
     "loadFailed": "No se pudieron cargar sus conversaciones.",
     "retry": "Reintentar",
     "untitled": "Conversación sin título",
@@ -23,19 +28,71 @@
       "yesterday": "Ayer",
       "week": "Últimos 7 días",
       "earlier": "Anteriores"
-    }
+    },
+    "newChat": "Nueva conversación",
+    "composerPlaceholder": "Pregunta a stella",
+    "send": "Enviar",
+    "stop": "Detener",
+    "sendFailed": "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+    "answerWorking": "Trabajando…",
+    "answerStopped": "Detenido.",
+    "answerNeedsInput": "Esta respuesta necesita tu intervención. Continúala en stella en la web.",
+    "answerFailed": "No se pudo completar la respuesta.",
+    "composerMenu": "Abrir el menú de archivos adjuntos y herramientas",
+    "pickTitle": "Elija una conversación",
+    "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +."
   },
   "tasks": {
-    "description": "Consulta lo que requiere atención sin abrir todo el espacio de trabajo.",
     "emptyTitle": "No hay tareas abiertas",
-    "emptyDescription": "Aquí aparecerán las tareas asignadas y próximas."
+    "emptyDescription": "Aquí aparecerán las tareas abiertas que tiene asignadas.",
+    "loadFailed": "No se pudieron cargar sus tareas.",
+    "retry": "Reintentar",
+    "newTask": "Nueva tarea",
+    "add": "Añadir",
+    "name": "Nombre de la tarea",
+    "dueTitle": "Vencimiento",
+    "matterTitle": "Asunto",
+    "findMatter": "Buscar un asunto",
+    "addFailed": "No se pudo añadir la tarea. Inténtelo de nuevo.",
+    "mattersFailed": "No se pudieron cargar sus asuntos.",
+    "dueOn": "vence el {day}",
+    "dueChoice": {
+      "none": "Sin fecha",
+      "today": "Hoy",
+      "tomorrow": "Mañana",
+      "nextWeek": "En una semana"
+    },
+    "due": {
+      "overdue": "Vencidas",
+      "today": "Hoy",
+      "tomorrow": "Mañana",
+      "week": "Esta semana",
+      "later": "Más adelante",
+      "none": "Sin vencimiento"
+    },
+    "markDone": "Marcar como hecha",
+    "reopen": "Reabrir",
+    "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
+    "pickTitle": "Elija una tarea",
+    "pickDescription": "Elija una tarea de la lista para verla aquí.",
+    "openMatter": "Abrir asunto"
   },
   "matters": {
-    "description": "Encuentra un asunto y obtén rápidamente el contexto esencial.",
     "emptyTitle": "Aún no hay asuntos",
     "emptyDescription": "Aquí aparecerán tus asuntos recientes.",
     "loadFailed": "No se pudieron cargar tus asuntos.",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "groupBy": "Agrupar por",
+    "noGrouping": "No agrupar",
+    "groupClient": "Cliente",
+    "personal": "Personal",
+    "newMatter": "Nuevo asunto",
+    "create": "Crear",
+    "name": "Nombre del asunto",
+    "personalHint": "Se crea como asunto personal, visible solo para usted. Añada un cliente y miembros en la web.",
+    "createFailed": "No se pudo crear el asunto. Inténtelo de nuevo.",
+    "pickTitle": "Elija un asunto",
+    "pickDescription": "Elija un asunto de la lista para ver sus documentos y tareas."
   },
   "matter": {
     "documents": "Documentos",
@@ -59,7 +116,10 @@
       "in_review": "En revisión",
       "done": "Hecha",
       "cancelled": "Cancelada"
-    }
+    },
+    "add": "Añadir",
+    "scanDocument": "Escanear un documento",
+    "newTask": "Nueva tarea"
   },
   "entity": {
     "type": "Tipo",
@@ -68,11 +128,18 @@
     "loadFailed": "No se pudo cargar este elemento."
   },
   "signIn": {
-    "title": "Inicia sesión en stella",
-    "description": "Introduce la dirección de tu servidor stella. Aprobarás el inicio de sesión en el navegador.",
+    "beta": "Beta",
+    "headline": "Claridad en cada caso.",
+    "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
+    "submit": "Iniciar sesión",
+    "terms": "Al continuar, aceptas nuestros <terms>Términos de servicio</terms>.",
+    "options": "Opciones de inicio de sesión",
+    "serverTitle": "Servidor",
+    "serverDescription": "La aplicación inicia sesión en stella. Indica otro servidor solo si tu organización tiene uno propio.",
+    "useStella": "Usar stella",
+    "done": "Listo",
     "serverLabel": "Dirección del servidor",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continuar",
     "sessionEnded": "Tu sesión ha terminado. Vuelve a iniciar sesión.",
     "errors": {
       "address": "Introduce una dirección https, por ejemplo stella.example.com.",
@@ -84,6 +151,83 @@
   "settings": {
     "accountTitle": "Cuenta",
     "server": "Servidor",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "deleteAccount": "Eliminar cuenta",
+    "deleteAccountHint": "Abre tu cuenta en la web, donde puedes eliminarla junto con todo lo que es tuyo."
+  },
+  "header": {
+    "search": "Buscar"
+  },
+  "law": {
+    "title": "Jurisprudencia",
+    "newest": "Resoluciones más recientes",
+    "noResults": "Nada coincide con las palabras que exigió esta búsqueda.",
+    "noResultsHint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
+    "unavailable": "La búsqueda no está disponible temporalmente",
+    "retry": "Reintentar",
+    "headnote": "Sumario",
+    "textUnavailable": "No hay texto disponible para esta resolución",
+    "openSource": "Abrir fuente original",
+    "loadFailed": "No se pudo cargar la jurisprudencia.",
+    "share": "Compartir"
+  },
+  "more": {
+    "soon": "Próximamente",
+    "timers": "Temporizadores",
+    "voiceInput": "Entrada de voz"
+  },
+  "writes": {
+    "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
+    "signInAgain": "Volver a iniciar sesión"
+  },
+  "timers": {
+    "title": "Temporizadores",
+    "start": "Iniciar",
+    "startTimer": "Iniciar un temporizador",
+    "newTimer": "Nuevo temporizador",
+    "description": "¿En qué está trabajando?",
+    "matterTitle": "Asunto",
+    "noMatter": "Sin asunto",
+    "noDescription": "Sin descripción",
+    "running": "En marcha",
+    "paused": "En pausa",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "save": "Guardar",
+    "discard": "Descartar",
+    "emptyTitle": "No hay temporizadores",
+    "emptyDescription": "Inicie un temporizador con + y guárdelo como registro de tiempo al terminar.",
+    "loadFailed": "No se pudieron cargar sus temporizadores.",
+    "retry": "Reintentar",
+    "unavailable": "El registro de tiempo no está activado en su organización.",
+    "startFailed": "No se pudo iniciar el temporizador. Inténtelo de nuevo.",
+    "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo.",
+    "more": "{count, plural, one {# temporizador más} other {# temporizadores más}}"
+  },
+  "scan": {
+    "title": "Escanear un documento",
+    "upload": "Subir",
+    "name": "Nombre del documento",
+    "defaultName": "Escaneo {day}",
+    "pages": "{count, plural, one {# página} other {# páginas}}",
+    "matterTitle": "Asunto",
+    "uploadFailed": "No se pudo subir el escaneo. Inténtelo de nuevo.",
+    "failedTitle": "Error al escanear",
+    "failed": "La cámara no pudo guardar el escaneo. Inténtelo de nuevo."
+  },
+  "shortcuts": {
+    "search": "Buscar",
+    "palette": "Paleta de comandos",
+    "next": "Resultado siguiente",
+    "previous": "Resultado anterior",
+    "toggleList": "Mostrar u ocultar la lista"
+  },
+  "palette": {
+    "placeholder": "Busca asuntos y conversaciones, o ejecuta un comando",
+    "noResults": "Nada coincide con «{query}»"
+  },
+  "pane": {
+    "showList": "Mostrar la lista",
+    "hideList": "Ocultar la lista"
   }
 }

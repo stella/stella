@@ -66,7 +66,7 @@
     }
   },
   "apps/web": {
-    "count": 18,
+    "count": 17,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 3,
       "apps/web/src/components/ai-suggestions/review-position-header.tsx": 1,
@@ -79,8 +79,7 @@
       "apps/web/src/lib/workspaces/format-duration.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3,
       "apps/web/src/lib/workspaces/queries/billing-codes.ts": 1,
-      "apps/web/src/lib/workspaces/queries/rates.ts": 1,
-      "apps/web/src/lib/workspaces/queries/time-entries.ts": 1
+      "apps/web/src/lib/workspaces/queries/rates.ts": 1
     }
   },
   "packages/business-registries": {

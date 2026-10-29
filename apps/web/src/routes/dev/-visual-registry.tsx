@@ -14,6 +14,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "mcp-reconnect": {
+    load: async () => {
+      const { McpReconnectPlayground } =
+        await import("./-components/mcp-reconnect-playground");
+      return { default: McpReconnectPlayground };
+    },
+  },
   "task-metadata": {
     load: async () => {
       const { TaskMetadataPlayground } =
@@ -33,6 +40,13 @@ const visualLoaders = {
       const { HandoffConfirmationPlayground } =
         await import("./-components/handoff-confirmation-playground");
       return { default: HandoffConfirmationPlayground };
+    },
+  },
+  "case-law-text-availability": {
+    load: async () => {
+      const { CaseLawTextAvailabilityPlayground } =
+        await import("./-components/case-law-text-availability-playground");
+      return { default: CaseLawTextAvailabilityPlayground };
     },
   },
   "hungarian-decision": {

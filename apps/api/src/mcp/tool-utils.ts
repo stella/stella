@@ -683,7 +683,7 @@ export const oauthScopeRecoveryHint = ({
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
+ * `{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?","requestId?"}}`;
  * `isError` is set so MCP clients still treat it as a failure. Undefined
  * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
  * (an empty `issues` array is treated as absent). Agents branch on `code`;
@@ -699,6 +699,7 @@ export const structuredErrorResult = ({
   issues,
   message,
   retryable,
+  retryAfterMs,
   contactUrl,
 }: {
   code: McpErrorCode;
@@ -706,6 +707,7 @@ export const structuredErrorResult = ({
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
   const requestId = getRequestId();
@@ -715,6 +717,7 @@ export const structuredErrorResult = ({
     ...(hint === undefined ? {} : { hint }),
     ...(issues === undefined || issues.length === 0 ? {} : { issues }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
     ...(requestId === undefined ? {} : { requestId }),
   } as const;
@@ -735,11 +738,17 @@ export const structuredErrorResult = ({
  */
 export const mapValibotIssues = (
   issues: readonly v.BaseIssue<unknown>[],
+  pathAliases: Readonly<Record<string, string>> = {},
 ): McpValidationIssue[] =>
-  issues.map((issue) => ({
-    path: v.getDotPath(issue) ?? "",
-    message: issue.message,
-  }));
+  issues.map((issue) => {
+    const path = v.getDotPath(issue) ?? "";
+    const [root, ...rest] = path.split(".");
+    const aliasedRoot = pathAliases[root ?? ""] ?? root;
+    return {
+      path: [aliasedRoot, ...rest].filter(Boolean).join("."),
+      message: issue.message,
+    };
+  });
 
 /**
  * Build the shared validation envelope. Prefer an actionable cross-field issue
@@ -750,11 +759,12 @@ export const mapValibotIssues = (
 export const validationErrorResult = (
   issues: readonly v.BaseIssue<unknown>[],
   hint?: string,
+  pathAliases?: Readonly<Record<string, string>>,
 ): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
-    issues: mapValibotIssues(issues),
+    issues: mapValibotIssues(issues, pathAliases),
     message:
       issues.find((issue) => issue.type === "partial_check")?.message ??
       issues.at(0)?.message ??
@@ -1244,8 +1254,8 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) =>
-      block.plainText === "" ? [] : [servedBlockText(block)],
+    .flatMap((block, index) =>
+      block.plainText === "" ? [] : [servedBlockText(block, blocks[index - 1])],
     )
     .join("\n\n");
 };
