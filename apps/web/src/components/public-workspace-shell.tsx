@@ -108,8 +108,8 @@ export const PublicWorkspaceShell = ({
   topBar,
 }: PublicWorkspaceShellProps) => {
   const authStatus = useClientAuthStatus();
-  const createMatterDialogOpen = useCreateMatterStore(
-    (state) => state.dialog.status === "open",
+  const createMatterDialogMounted = useCreateMatterStore(
+    (state) => state.dialog.status !== "closed",
   );
   const [authRedirectTo, setAuthRedirectTo] = useState<string | null>(null);
   const requestAuth = (redirectTo: string) => {
@@ -178,7 +178,7 @@ export const PublicWorkspaceShell = ({
             />
           </Suspense>
         )}
-        {authStatus.isAuthenticated && createMatterDialogOpen && (
+        {authStatus.isAuthenticated && createMatterDialogMounted && (
           <Suspense fallback={null}>
             <CreateMatterDialog />
           </Suspense>

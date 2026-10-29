@@ -17,7 +17,7 @@ type EmptyScreenMediaPlacement = "side" | "bottom";
 type EmptyScreenAction = GuideAnchorProps & {
   label: string;
   icon?: LucideIcon;
-  onClick?: () => void;
+  onClick?: ComponentProps<typeof Button>["onClick"];
   href?: string;
   disabled?: boolean;
 };

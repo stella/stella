@@ -767,7 +767,9 @@ function ChatIndex() {
                 {t("chat.landing.noMatters")}
                 {canCreateMatter && (
                   <Button
-                    onClick={() => openCreateMatter()}
+                    onClick={(event) =>
+                      openCreateMatter({ opener: event.currentTarget })
+                    }
                     size="sm"
                     variant="outline"
                   >

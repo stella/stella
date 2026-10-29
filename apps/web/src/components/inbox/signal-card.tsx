@@ -521,12 +521,15 @@ const SuggestionButton = ({
       return (
         <Button
           disabled={disabled}
-          onClick={() => {
-            openCreateMatter(undefined, async (workspaceId) => {
-              await onAccept(suggestion.kind, {
-                type: "workspace",
-                workspaceId,
-              });
+          onClick={(event) => {
+            openCreateMatter({
+              opener: event.currentTarget,
+              onCreated: async (workspaceId) => {
+                await onAccept(suggestion.kind, {
+                  type: "workspace",
+                  workspaceId,
+                });
+              },
             });
           }}
           size="sm"

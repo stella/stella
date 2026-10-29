@@ -5,7 +5,13 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { CalendarCell } from "@stll/ui/calendar";
 import { PlusIcon, SquareCheckIcon } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -212,10 +218,7 @@ export const CalendarDayCell = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
+          <MenuAnchor />
           <MenuPopup anchor={ctxAnchor ?? undefined}>
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />

@@ -31,7 +31,13 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -409,10 +415,7 @@ export const KanbanColumn = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
+          <MenuAnchor />
           <MenuPopup anchor={ctxAnchor ?? undefined}>
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />

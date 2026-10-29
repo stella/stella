@@ -1992,6 +1992,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-e2e-router-push.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
+    "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -3600,6 +3601,18 @@ const config = defineConfig({
       ],
       rules: {
         "icon-button-requires-tooltip/icon-button-requires-tooltip": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/semantic-controls.fixture.tsx",
+      ],
+      rules: {
+        "semantic-controls/require-menu-anchor": "error",
+        "semantic-controls/require-context-menu-target": "error",
+        "semantic-controls/require-specific-icon-label": "error",
       },
     },
     {

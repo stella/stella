@@ -24,7 +24,7 @@ export const QuickEntry = () => {
   if (
     hotkey === undefined ||
     !canCreate ||
-    dialog.status !== "open" ||
+    dialog.status === "closed" ||
     dialog.userId !== user.id ||
     dialog.organizationId !== user.activeOrganizationId
   ) {

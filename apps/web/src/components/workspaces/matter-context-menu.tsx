@@ -29,10 +29,10 @@ import {
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuSeparator,
-  MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -413,7 +413,7 @@ export const useMatterContextMenu = (
       }}
       open={menuOpen}
     >
-      <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+      <MenuAnchor />
       <MenuPopup anchor={menuAnchor ?? undefined} className="z-50">
         <MatterMenuHeader
           clientName={target.client?.displayName ?? null}

@@ -10,12 +10,15 @@ describe("context actions belong to the nearest marked row", () => {
   for (const depth of [1, 2, 5, 10]) {
     test(`nested targets cannot invoke any of their ${depth} ancestor menus`, () => {
       const root = document.createElement("ul");
-      let parent = root;
+      let parent = document.createElement("li");
+      root.append(parent);
       const owners = [];
       for (let index = 0; index <= depth; index += 1) {
         const row = document.createElement("li");
         row.dataset["contextMenuTarget"] = `row-${index}`;
-        parent.append(row);
+        const list = document.createElement("ul");
+        parent.append(list);
+        list.append(row);
         owners.push(row);
         parent = row;
       }

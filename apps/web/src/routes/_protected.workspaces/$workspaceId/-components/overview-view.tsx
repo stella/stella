@@ -24,6 +24,7 @@ import {
 } from "@stll/ui/icons";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -31,7 +32,6 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-  MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
@@ -675,10 +675,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             }}
             open={upcomingMenu.open}
           >
-            <MenuTrigger
-              nativeButton={false}
-              render={<span className="sr-only" />}
-            />
+            <MenuAnchor />
             <MenuPopup anchor={upcomingMenu.anchor ?? undefined}>
               {upcomingMenu.task === null ? (
                 <MenuItem

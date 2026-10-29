@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/inspector";
 import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
 import type { MatterChromeStyle } from "@stll/ui/matter-colors";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -477,10 +477,7 @@ function ProtectedContent() {
           }}
           open={chatMenuOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
+          <MenuAnchor />
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
             <ChatMenuContent label={t("chat.newChat")}>

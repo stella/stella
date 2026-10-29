@@ -46,6 +46,9 @@ const QuickEntryDialog = () => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const closeDialog = useQuickEntryStore((state) => state.closeDialog);
+  const finishClosing = useQuickEntryStore((state) => state.finishClosing);
+  const returnFocus = useQuickEntryStore((state) => state.returnFocus);
+  const isOpen = useQuickEntryStore((state) => state.dialog.status === "open");
   const canCreateExpense = usePermissions({ expense: ["create"] });
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -168,14 +171,19 @@ const QuickEntryDialog = () => {
 
   return (
     <Dialog
-      open
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          finishClosing();
+        }
+      }}
+      open={isOpen}
       onOpenChange={(open) => {
         if (!open && !pending) {
           closeDialog();
         }
       }}
     >
-      <DialogPopup className="max-w-xl">
+      <DialogPopup className="max-w-xl" finalFocus={returnFocus}>
         <DialogFormState
           dirty={matter?.id !== matterBaseline?.id}
           onDiscard={() => setMatter(matterBaseline)}

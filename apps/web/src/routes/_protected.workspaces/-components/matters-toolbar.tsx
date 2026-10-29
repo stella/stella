@@ -219,7 +219,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
       <Button
         aria-label={t("common.newMatter")}
         className={className}
-        onClick={() => openCreateMatter()}
+        onClick={(event) => openCreateMatter({ opener: event.currentTarget })}
         size="xs"
         title={t("common.newMatter")}
       >

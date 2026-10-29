@@ -459,8 +459,9 @@ const useContactColumns = () => {
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground block max-w-xs truncate hover:underline"
+                className="text-muted-foreground hover:text-foreground inline-block max-w-xs truncate align-middle hover:underline"
                 href={`mailto:${primaryEmail.address}`}
+                onClick={(event) => event.stopPropagation()}
                 title={primaryEmail.address}
               >
                 {primaryEmail.address}
@@ -549,8 +550,7 @@ const ContactTableRow = ({
       tabIndex={0}
     >
       {row.getAllCells().map((cell) => {
-        const stopsRowClick =
-          cell.column.id === "email" || cell.column.id === "actions";
+        const stopsRowClick = cell.column.id === "actions";
         return (
           <TableCell
             key={cell.id}

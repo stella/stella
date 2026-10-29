@@ -68,6 +68,7 @@
     "./frame": "./src/components/frame.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
+    "./identity-text": "./src/components/identity-text.tsx",
     "./input": "./src/components/input.tsx",
     "./inline-rename": "./src/components/inline-rename.tsx",
     "./inline-reorder": "./src/lib/inline-reorder.ts",

@@ -20,7 +20,7 @@ export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
   return (
     <WorkspaceSortChips
       labels={{
-        add: t("common.add"),
+        addSort: t("common.sort"),
         remove: t("common.remove"),
         directions: sortDirectionLabels((key) => t(key)),
       }}

@@ -41,6 +41,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { IdentityText } from "@stll/ui/identity-text";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -325,11 +326,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const handleCreateWorkspace = () => {
+  const handleCreateWorkspace = (opener?: HTMLElement) => {
     if (!canCreateMatter) {
       return;
     }
-    openCreateMatter();
+    openCreateMatter(opener ? { opener } : undefined);
   };
 
   // The delete + toast + cache invalidation are owned by the shared
@@ -708,62 +709,60 @@ export const AppSidebar = (props: AppSidebarProps) => {
               return (
                 <Fragment key={item.id}>
                   <NavContextMenu config={navTarget.contextMenu}>
-                    <SidebarMenuItem>
-                      {item.kind === "action" ? (
-                        <SidebarMenuButton
-                          onClick={navTarget.action}
-                          tooltip={label}
+                    {item.kind === "action" ? (
+                      <SidebarMenuButton
+                        onClick={navTarget.action}
+                        tooltip={label}
+                      >
+                        <Icon />
+                        <span>{label}</span>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton asChild tooltip={label}>
+                        <Link
+                          activeProps={{ "data-active": true }}
+                          to={item.to}
                         >
                           <Icon />
                           <span>{label}</span>
-                        </SidebarMenuButton>
-                      ) : (
-                        <SidebarMenuButton asChild tooltip={label}>
-                          <Link
-                            activeProps={{ "data-active": true }}
-                            to={item.to}
-                          >
-                            <Icon />
-                            <span>{label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      )}
-                      {(() => {
-                        if (showNavBadges) {
-                          return <NavBadge digit={digit} />;
-                        }
-                        if (item.id === "search") {
-                          return (
-                            <SidebarMenuBadge>
-                              <kbd className="text-muted-foreground text-3xs">
-                                {formatHotkeyForPlatform(
-                                  searchHotkey,
-                                  hotkeyPlatform,
-                                )}
-                              </kbd>
-                            </SidebarMenuBadge>
-                          );
-                        }
-                        if (item.id === "timesheets") {
-                          return (
-                            <PendingApprovalsNavBadge
-                              organizationId={user.activeOrganizationId}
-                              userId={user.id}
-                            />
-                          );
-                        }
-                        if (item.id === "inbox" && openInboxCount > 0) {
-                          return (
-                            <SidebarMenuBadge>
-                              <span className="text-muted-foreground text-3xs tabular-nums">
-                                {format.number(openInboxCount)}
-                              </span>
-                            </SidebarMenuBadge>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </SidebarMenuItem>
+                        </Link>
+                      </SidebarMenuButton>
+                    )}
+                    {(() => {
+                      if (showNavBadges) {
+                        return <NavBadge digit={digit} />;
+                      }
+                      if (item.id === "search") {
+                        return (
+                          <SidebarMenuBadge>
+                            <kbd className="text-muted-foreground text-3xs">
+                              {formatHotkeyForPlatform(
+                                searchHotkey,
+                                hotkeyPlatform,
+                              )}
+                            </kbd>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      if (item.id === "timesheets") {
+                        return (
+                          <PendingApprovalsNavBadge
+                            organizationId={user.activeOrganizationId}
+                            userId={user.id}
+                          />
+                        );
+                      }
+                      if (item.id === "inbox" && openInboxCount > 0) {
+                        return (
+                          <SidebarMenuBadge>
+                            <span className="text-muted-foreground text-3xs tabular-nums">
+                              {format.number(openInboxCount)}
+                            </span>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      return null;
+                    })()}
                   </NavContextMenu>
                 </Fragment>
               );
@@ -928,7 +927,7 @@ type ContextAction = {
   id: string;
   label: string;
   icon: React.ReactNode;
-  onClick: () => void;
+  onClick: (opener?: HTMLElement) => void;
   variant?: "destructive";
 };
 
@@ -945,6 +944,7 @@ const NavContextMenu = ({
   children: React.ReactNode;
 }): React.ReactNode => {
   const [open, setOpen] = useState(false);
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -953,16 +953,17 @@ const NavContextMenu = ({
   const hasContent = config.primaryAction !== undefined || hasRecents;
 
   if (!hasContent) {
-    return children;
+    return <SidebarMenuItem>{children}</SidebarMenuItem>;
   }
 
   return (
-    <div
-      className="contents"
+    <SidebarMenuItem
       onContextMenu={containedEventHandler((e) => {
         if (!ownsContextMenuTarget(e)) {
           return;
         }
+        const control = e.currentTarget.querySelector("button,a[href]");
+        setReturnFocus(control instanceof HTMLElement ? control : null);
         e.preventDefault();
         e.stopPropagation();
         const x = e.clientX;
@@ -984,9 +985,13 @@ const NavContextMenu = ({
         open={open}
       >
         <MenuAnchor />
-        <MenuPopup anchor={anchor ?? undefined}>
+        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => returnFocus}>
           {config.primaryAction && (
-            <MenuItem onClick={config.primaryAction.onClick}>
+            <MenuItem
+              onClick={() =>
+                config.primaryAction?.onClick(returnFocus ?? undefined)
+              }
+            >
               {config.primaryAction.icon}
               {config.primaryAction.label}
             </MenuItem>
@@ -1000,7 +1005,7 @@ const NavContextMenu = ({
                 item.variant === "destructive" && "text-destructive",
               )}
               key={item.id}
-              onClick={item.onClick}
+              onClick={() => item.onClick(returnFocus ?? undefined)}
             >
               {item.icon}
               {item.label}
@@ -1008,7 +1013,7 @@ const NavContextMenu = ({
           ))}
         </MenuPopup>
       </Menu>
-    </div>
+    </SidebarMenuItem>
   );
 };
 
@@ -1484,12 +1489,7 @@ const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText
-                as="span"
-                className="overflow-hidden text-ellipsis whitespace-pre"
-              >
-                {ws.name}
-              </BidiText>
+              <IdentityText className="whitespace-pre">{ws.name}</IdentityText>
               <Tooltip
                 content={formatFullTimestamp(ws.lastActivityAt)}
                 render={
@@ -1781,9 +1781,9 @@ export const MatterActivityList = ({
                 }
               />
             )}
-            <BidiText as="span" className="min-w-0 flex-1 truncate text-start">
+            <IdentityText className="min-w-0 flex-1 text-start">
               {title}
-            </BidiText>
+            </IdentityText>
             {relativeTime ? (
               <Tooltip
                 content={formatFullTimestamp(item.activityAt)}
@@ -1854,10 +1854,11 @@ const SidebarContextArea = ({
   children,
 }: {
   canCreateWorkspace: boolean;
-  onCreateWorkspace: () => void;
+  onCreateWorkspace: (opener?: HTMLElement) => void;
   children?: React.ReactNode;
 }) => {
   const t = useTranslations();
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const [ctxOpen, setCtxOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
@@ -1870,6 +1871,8 @@ const SidebarContextArea = ({
         if (!ownsContextMenuTarget(e)) {
           return;
         }
+        const control = e.currentTarget.querySelector("button,a[href]");
+        setReturnFocus(control instanceof HTMLElement ? control : null);
         e.preventDefault();
         const x = e.clientX;
         const y = e.clientY;
@@ -1890,9 +1893,14 @@ const SidebarContextArea = ({
         open={ctxOpen}
       >
         <MenuAnchor />
-        <MenuPopup anchor={ctxAnchor ?? undefined}>
+        <MenuPopup
+          anchor={ctxAnchor ?? undefined}
+          finalFocus={() => returnFocus}
+        >
           {canCreateWorkspace && (
-            <MenuItem onClick={onCreateWorkspace}>
+            <MenuItem
+              onClick={() => onCreateWorkspace(returnFocus ?? undefined)}
+            >
               <PlusIcon />
               {t("common.newMatter")}
             </MenuItem>

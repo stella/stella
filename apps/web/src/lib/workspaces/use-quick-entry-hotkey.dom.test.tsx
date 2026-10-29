@@ -16,6 +16,7 @@ const { useQuickEntryHotkey } =
 afterEach(() => {
   cleanup();
   useQuickEntryStore.getState().closeDialog();
+  useQuickEntryStore.getState().finishClosing();
 });
 
 afterAll(async () => {
@@ -74,6 +75,7 @@ describe("global log-time shortcut", () => {
       ...scope,
     });
     useQuickEntryStore.getState().closeDialog();
+    useQuickEntryStore.getState().finishClosing();
 
     const nextScope = { userId: "user-b", organizationId: "organization-b" };
     hook.rerender({ scope: nextScope });
@@ -105,6 +107,7 @@ describe("global log-time shortcut", () => {
       ...scope,
     });
     useQuickEntryStore.getState().closeDialog();
+    useQuickEntryStore.getState().finishClosing();
     hook.rerender({ enabled: false });
     pressLogTime();
     expect(useQuickEntryStore.getState().dialog).toEqual({ status: "closed" });
