@@ -422,6 +422,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
     "packages/locales/src/*",
+    "packages/mcp-apps/src/app-document.ts",
+    "packages/mcp-apps/src/bundles.ts",
     "packages/mcp-apps/src/manifest.ts",
     "packages/mcp-apps/src/resource-uri.ts",
     "packages/mcp-kit/package.json",

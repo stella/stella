@@ -3,44 +3,54 @@ import type { Node, Program } from "@stll/scripts/src/syntax-tree";
 
 /** An identifier in one of these places names a property or a label. */
 const isNameOnly = (node: Node, parent: Node | undefined): boolean => {
-  switch (parent?.type) {
-    case "MemberExpression":
-      return parent.property === node && !parent.computed;
-    case "Property":
-      return parent.key === node && !parent.computed && !parent.shorthand;
-    case "MethodDefinition":
-    case "PropertyDefinition":
-    case "AccessorProperty":
-      return parent.key === node && !parent.computed;
-    case "LabeledStatement":
-    case "BreakStatement":
-    case "ContinueStatement":
-    case "MetaProperty":
-      return true;
-    default:
-      return false;
+  if (parent === undefined) {
+    return false;
   }
+  if (parent.type === "MemberExpression") {
+    return parent.property === node && !parent.computed;
+  }
+  if (parent.type === "Property") {
+    return parent.key === node && !parent.computed && !parent.shorthand;
+  }
+  if (
+    parent.type === "MethodDefinition" ||
+    parent.type === "PropertyDefinition" ||
+    parent.type === "AccessorProperty"
+  ) {
+    return parent.key === node && !parent.computed;
+  }
+  return (
+    parent.type === "LabeledStatement" ||
+    parent.type === "BreakStatement" ||
+    parent.type === "ContinueStatement" ||
+    parent.type === "MetaProperty"
+  );
 };
 
-const patternNames = (pattern: Node | null | undefined): string[] => {
-  switch (pattern?.type) {
-    case "Identifier":
-      return [pattern.name];
-    case "ObjectPattern":
-      return pattern.properties.flatMap((property) =>
-        patternNames(
-          property.type === "RestElement" ? property.argument : property.value,
-        ),
-      );
-    case "ArrayPattern":
-      return pattern.elements.flatMap((element) => patternNames(element));
-    case "RestElement":
-      return patternNames(pattern.argument);
-    case "AssignmentPattern":
-      return patternNames(pattern.left);
-    default:
-      return [];
+const patternNames = (pattern: Node | null): string[] => {
+  if (pattern === null) {
+    return [];
   }
+  if (pattern.type === "Identifier") {
+    return [pattern.name];
+  }
+  if (pattern.type === "ObjectPattern") {
+    return pattern.properties.flatMap((property) =>
+      patternNames(
+        property.type === "RestElement" ? property.argument : property.value,
+      ),
+    );
+  }
+  if (pattern.type === "ArrayPattern") {
+    return pattern.elements.flatMap((element) => patternNames(element));
+  }
+  if (pattern.type === "RestElement") {
+    return patternNames(pattern.argument);
+  }
+  if (pattern.type === "AssignmentPattern") {
+    return patternNames(pattern.left);
+  }
+  return [];
 };
 
 const isFunction = (node: Node) =>
@@ -90,40 +100,42 @@ const varNames = (body: Node): readonly string[] => {
  * reach its whole subtree, its `var` declarations only its body.
  */
 const declaredNames = (node: Node, child: Node): readonly string[] => {
-  switch (node.type) {
-    case "FunctionDeclaration":
-    case "FunctionExpression":
-    case "ArrowFunctionExpression":
-      return [
-        ...node.params.flatMap((parameter) => patternNames(parameter)),
-        ...(node.type === "FunctionExpression" && node.id !== null
-          ? [node.id.name]
-          : []),
-        ...(child === node.body && node.body !== null
-          ? varNames(node.body)
-          : []),
-      ];
-    case "BlockStatement":
-    case "StaticBlock":
-      return lexicalNames(node.body);
-    case "SwitchStatement":
-      return lexicalNames(node.cases.flatMap(({ consequent }) => consequent));
-    case "ForStatement":
-      return node.init?.type === "VariableDeclaration"
-        ? node.init.declarations.flatMap(({ id }) => patternNames(id))
-        : [];
-    case "ForInStatement":
-    case "ForOfStatement":
-      return node.left.type === "VariableDeclaration"
-        ? node.left.declarations.flatMap(({ id }) => patternNames(id))
-        : [];
-    case "CatchClause":
-      return patternNames(node.param);
-    case "ClassExpression":
-      return node.id === null ? [] : [node.id.name];
-    default:
-      return [];
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  ) {
+    return [
+      ...node.params.flatMap((parameter) => patternNames(parameter)),
+      ...(node.type === "FunctionExpression" && node.id !== null
+        ? [node.id.name]
+        : []),
+      ...(node.body !== null && child === node.body ? varNames(node.body) : []),
+    ];
   }
+  if (node.type === "BlockStatement" || node.type === "StaticBlock") {
+    return lexicalNames(node.body);
+  }
+  if (node.type === "SwitchStatement") {
+    return lexicalNames(node.cases.flatMap(({ consequent }) => consequent));
+  }
+  if (node.type === "ForStatement") {
+    return node.init?.type === "VariableDeclaration"
+      ? node.init.declarations.flatMap(({ id }) => patternNames(id))
+      : [];
+  }
+  if (node.type === "ForInStatement" || node.type === "ForOfStatement") {
+    return node.left.type === "VariableDeclaration"
+      ? node.left.declarations.flatMap(({ id }) => patternNames(id))
+      : [];
+  }
+  if (node.type === "CatchClause") {
+    return patternNames(node.param);
+  }
+  if (node.type === "ClassExpression") {
+    return node.id === null ? [] : [node.id.name];
+  }
+  return [];
 };
 
 /** The member `node.name` or `node["name"]` reads, if its parent is one. */

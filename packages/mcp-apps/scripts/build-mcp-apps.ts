@@ -602,6 +602,10 @@ const scriptBuild = (shared: ReadonlySet<string>) =>
     target: "browser",
   }) satisfies Omit<Bun.BuildConfig, "entrypoints">;
 
+// oxc-parser declares import kinds as an ambient const enum of strings.
+const importKind = ({ importName }: { importName: { kind: string } }): string =>
+  importName.kind;
+
 /** An import of a shared module in an app script. */
 type SharedImport = {
   start: number;
@@ -634,7 +638,7 @@ const buildAppScript = async (
   const namespaceLocals = new Set(
     module.staticImports.flatMap(({ entries }) =>
       entries
-        .filter(({ importName }) => importName.kind === "NamespaceObject")
+        .filter((entry) => importKind(entry) === "NamespaceObject")
         .map(({ localName }) => localName.value),
     ),
   );
@@ -650,11 +654,11 @@ const buildAppScript = async (
         end,
         id,
         bindings: entries
-          .filter(({ importName }) => importName.kind !== "NamespaceObject")
+          .filter((entry) => importKind(entry) !== "NamespaceObject")
           .map(
             ({ importName, localName }) =>
               [
-                importName.kind === "Default"
+                importKind({ importName }) === "Default"
                   ? "default"
                   : (importName.name ??
                     panic(`An import from ${id} has no name`)),
@@ -662,7 +666,7 @@ const buildAppScript = async (
               ] as const,
           ),
         namespaces: entries
-          .filter(({ importName }) => importName.kind === "NamespaceObject")
+          .filter((entry) => importKind(entry) === "NamespaceObject")
           .map(({ localName }) => ({
             local: localName.value,
             members: members.get(localName.value),
@@ -696,7 +700,10 @@ const runtimeEntry = (exposed: readonly [string, RuntimeExports][]): string => {
     }
     const bindings = [...names]
       .toSorted()
-      .map((name, binding) => [JSON.stringify(name), `m${index}_${binding}`]);
+      .map(
+        (name, binding) =>
+          [JSON.stringify(name), `m${index}_${binding}`] as const,
+      );
     lines.push(
       bindings.length === 0
         ? `import ${source};`
