@@ -15,7 +15,10 @@ import {
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
@@ -1796,6 +1799,36 @@ describe("the walk", () => {
       idOf(rows.get(resumeAt)),
     );
   });
+
+  test.each([2, 3, PL_NCOURT_WINDOW])(
+    "a narrowing 404 records the publisher answer for window %i",
+    async (window) => {
+      const requests: string[] = [];
+      installWalkStub({
+        rows: await rowsAroundPoison(),
+        poisoned: new Set([POISONED_OFFSET]),
+        total: 166_002,
+        requests,
+      });
+      const cursor = encodePlNcourtCursor({
+        lane: "walk",
+        since: SINCE,
+        offset: POISONED_OFFSET,
+        window,
+        anchor: "",
+      });
+      const page = await fetchPage(cursor);
+      const next = parsePlNcourtCursor(page.nextCursor);
+
+      expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.ANSWERED);
+      expect(page.decisions).toEqual([]);
+      expect(next.offset).toBe(POISONED_OFFSET);
+      expect(next.window).toBeGreaterThanOrEqual(1);
+      expect(next.window).toBeLessThan(window);
+      expect(page.nextCursor).not.toBe(cursor);
+      expect(requests).toHaveLength(1);
+    },
+  );
 
   test("an unservable row is isolated by halving, then kept as a quarantined audit row", async () => {
     const rows = await rowsAroundPoison();

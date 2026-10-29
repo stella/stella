@@ -2154,7 +2154,7 @@ const fetchUnreadableWindow = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
-      publisherRequest: PUBLISHER_REQUEST.FAILED,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         window: Math.ceil(cursor.window / 2),
