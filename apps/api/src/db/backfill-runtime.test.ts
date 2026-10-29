@@ -7,12 +7,18 @@ import {
   BackfillFailedError,
   BackfillHeldError,
 } from "@stll/db-load-gate/backfill-pass";
-import type { Verdict } from "@stll/db-load-gate/health";
+import type { Signal, Verdict } from "@stll/db-load-gate/health";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
+import {
+  AUTOVACUUM_SQL,
+  LONG_TRANSACTION_SQL,
+} from "@stll/db-load-gate/indicators";
 
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
+  BACKFILL_TABLE_CONTENTION,
+  type BackfillTableContention,
   createBackfillRuntime,
   createScriptBackfillRuntime,
   decodeCheckpoint,
@@ -520,3 +526,112 @@ for (const mode of ["database", "script"] as const) {
     },
   );
 }
+
+const LOAD_OBSERVED_AT = 1_000_000;
+
+/** One script runtime over a fake connection whose table is busy in every lock-shaped way. */
+const runAgainstBusyTable = async ({
+  tableContention,
+  ioBalance,
+}: {
+  tableContention: BackfillTableContention | undefined;
+  ioBalance: Signal;
+}) => {
+  const observedAt = new Date(LOAD_OBSERVED_AT).toISOString();
+  const query = async (statement: string) => {
+    if (statement === LONG_TRANSACTION_SQL) {
+      // A writer on the table has held its lock for ten minutes.
+      return await Promise.resolve([{ ageMs: 10 * 60_000, observedAt }]);
+    }
+    if (statement === AUTOVACUUM_SQL) {
+      return await Promise.resolve([{ active: true, observedAt }]);
+    }
+    if (statement.startsWith("SELECT cursor, batch")) {
+      return await Promise.resolve([
+        { cursor: null, batch: initialBatchState(defaultConfig) },
+      ]);
+    }
+    return await Promise.resolve([{ acquired: true }]);
+  };
+  const dialect = new PgDialect();
+  const transaction = asTestRaw<Transaction>({
+    execute: async (statement: Parameters<typeof dialect.sqlToQuery>[0]) =>
+      await query(dialect.sqlToQuery(statement).sql),
+  });
+  const runtime = createScriptBackfillRuntime({
+    name: "table-contention",
+    tableName: "rows",
+    tableContention,
+    initialSize: 1,
+    config: { ...defaultConfig, minSize: 1, maxSize: 1, busyWindows: [] },
+    clock: () => LOAD_OBSERVED_AT,
+    readEbsSignal: async () => await Promise.resolve(ioBalance),
+    log: () => undefined,
+    db: {
+      transaction: async (work) => await work(transaction),
+      execute: transaction.execute,
+    },
+    slot: { tryAcquire: async () => true, release: () => undefined },
+  });
+  const state = { worked: false };
+  try {
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await runtime.step(async () => {
+          state.worked = true;
+          return await Promise.resolve({
+            cursor: null,
+            done: true,
+            value: "ran",
+          });
+        }),
+      catch: (error: unknown) => error,
+    });
+    return {
+      worked: state.worked,
+      held: outcome.isErr() && outcome.error instanceof BackfillHeldError,
+    };
+  } finally {
+    await runtime.close();
+  }
+};
+
+const ioBalanceSignal = (value: number): Signal => ({
+  indicator: "ebs_balance",
+  kind: value < defaultConfig.hardFloor ? "stop" : "normal",
+  value,
+  threshold: defaultConfig.hardFloor,
+  observedAt: new Date(LOAD_OBSERVED_AT).toISOString(),
+  reason: "Minimum byte and IO balance",
+});
+
+test.each([
+  { tableContention: undefined, held: true },
+  { tableContention: BACKFILL_TABLE_CONTENTION.WRITE, held: true },
+  { tableContention: BACKFILL_TABLE_CONTENTION.SHARED_READ, held: false },
+])(
+  "a long lock holder and autovacuum on the table hold $tableContention work only when it writes there",
+  async ({ tableContention, held }) => {
+    expect(
+      await runAgainstBusyTable({
+        tableContention,
+        ioBalance: ioBalanceSignal(100),
+      }),
+    ).toEqual({ worked: !held, held });
+  },
+);
+
+test.each([
+  BACKFILL_TABLE_CONTENTION.WRITE,
+  BACKFILL_TABLE_CONTENTION.SHARED_READ,
+])(
+  "a low IO and byte balance holds %s work, whatever its table contention",
+  async (tableContention) => {
+    expect(
+      await runAgainstBusyTable({
+        tableContention,
+        ioBalance: ioBalanceSignal(defaultConfig.hardFloor - 1),
+      }),
+    ).toEqual({ worked: false, held: true });
+  },
+);

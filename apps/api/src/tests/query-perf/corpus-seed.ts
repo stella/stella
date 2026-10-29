@@ -14,6 +14,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -491,5 +492,79 @@ export const seedSitemapReadBudget = async ({
   return async () => {
     release.resolve(undefined);
     await holding;
+  };
+};
+
+/**
+ * The rows the coverage refresh writes: its summary, its backfill checkpoint
+ * and its audit runs. Table names are code constants.
+ */
+const COVERAGE_REFRESH_STATE = [
+  { table: "case_law_coverage_summaries", where: sql`true` },
+  {
+    table: "database_backfill_states",
+    where: sql`name = ${SCHEDULER_BACKFILL_IDS.coverage}`,
+  },
+  {
+    table: "system_audit_runs",
+    where: sql`actor = 'system:case-law-coverage-refresh'`,
+  },
+] as const;
+
+/** Every row the coverage refresh owns, exactly as stored, per table. */
+export const readCoverageRefreshState = async (database: GatedTestDb) => {
+  const state: Record<string, string> = {};
+  for (const { table, where } of COVERAGE_REFRESH_STATE) {
+    // db-await-in-loop: three fixed tables, read one at a time on one connection.
+    const row = executedRows(
+      await database.execute(sql`SELECT coalesce(
+          jsonb_agg(to_jsonb(stored) ORDER BY to_jsonb(stored)::text),
+          '[]'::jsonb
+        )::text AS rows
+        FROM ${sql.raw(table)} AS stored WHERE ${where}`),
+    ).at(0);
+    const rows =
+      typeof row === "object" && row !== null && "rows" in row
+        ? row.rows
+        : undefined;
+    state[table] =
+      typeof rows === "string" ? rows : panic(`Unreadable ${table} state`);
+  }
+  return state;
+};
+
+const replaceCoverageRefreshState = async (
+  database: GatedTestDb,
+  state: Readonly<Record<string, string>>,
+) => {
+  for (const { table, where } of COVERAGE_REFRESH_STATE) {
+    // db-await-in-loop: three fixed tables, replaced one at a time on one connection.
+    await database.execute(sql`DELETE FROM ${sql.raw(table)} WHERE ${where}`);
+    // db-await-in-loop: the table's stored rows go back right after its delete.
+    await database.execute(sql`INSERT INTO ${sql.raw(table)}
+      SELECT * FROM jsonb_populate_recordset(
+        NULL::${sql.raw(table)},
+        ${state[table] ?? "[]"}::jsonb
+      )`);
+  }
+};
+
+/**
+ * The coverage refresh commits its writes, as the measure-in-place adapter
+ * requires. Each measured run starts without refresh state, so every run takes
+ * the same path, and the fixture is put back exactly as it was found.
+ */
+export const isolateCoverageRefreshMeasurement = async ({
+  database,
+}: SeedSitemapReadBudgetOptions) => {
+  const found = await readCoverageRefreshState(database);
+  await replaceCoverageRefreshState(
+    database,
+    Object.fromEntries(
+      COVERAGE_REFRESH_STATE.map(({ table }) => [table, "[]"]),
+    ),
+  );
+  return async () => {
+    await replaceCoverageRefreshState(database, found);
   };
 };

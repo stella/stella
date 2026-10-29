@@ -10,12 +10,14 @@ import {
   corpusProjectionOutstandingIntentProbe,
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
   describeServed,
+  readCoverageRefreshState,
   seedCorpusReadBudgets,
   serveCaseLaw,
   type ServedCaseLaw,
@@ -359,6 +361,50 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             }
           }
         }
+
+        // The coverage refresh writes. Measured twice in place, it must leave
+        // the fixture exactly as found and take the same path both times.
+        const coverageJob =
+          DECLARED_SCHEDULER_JOBS.find(
+            ({ id }) => id === SCHEDULER_BACKFILL_IDS.coverage,
+          ) ?? panic("The coverage refresh is not declared");
+        const coverageMeasurement =
+          SCHEDULED_JOB_MEASUREMENTS[coverageJob.id] ??
+          panic("The coverage refresh has no measurement");
+        const measureCoverageInPlace = async () => {
+          const served = CASE_LAW_SCENARIOS.quiet.size;
+          await serveCaseLaw(db, served);
+          const release = await coverageMeasurement.prepare?.({
+            database: db,
+            served,
+            openClient,
+          });
+          try {
+            return await measureScheduledJobRun({
+              database: db,
+              jobId: coverageJob.id,
+              task: coverageMeasurement.task,
+            });
+          } finally {
+            await release?.();
+          }
+        };
+        const coverageShape = (
+          run: Awaited<ReturnType<typeof measureCoverageInPlace>>,
+        ) =>
+          run.statements.map(({ statement, planViolations }) => ({
+            statement,
+            violations: planViolations.map(({ kind }) => kind),
+          }));
+        await deadline.run("measure the coverage refresh twice", async () => {
+          const found = await readCoverageRefreshState(db);
+          const first = await measureCoverageInPlace();
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+          const second = await measureCoverageInPlace();
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+          expect(coverageShape(first).length).toBeGreaterThan(0);
+          expect(coverageShape(second)).toEqual(coverageShape(first));
+        });
 
         // The gate must refuse what it exists to refuse. The freshness
         // report's former reads go over its budget on this fixture, and the

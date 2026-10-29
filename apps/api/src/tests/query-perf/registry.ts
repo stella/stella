@@ -7,6 +7,8 @@ import type {
   ScheduledJobReadBudgetId,
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
@@ -16,6 +18,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
 import {
   CASE_LAW_SCENARIOS,
+  isolateCoverageRefreshMeasurement,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
   seedSitemapReadBudget,
@@ -85,6 +88,11 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  [SCHEDULER_BACKFILL_IDS.coverage]: {
+    task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    prepare: isolateCoverageRefreshMeasurement,
+    scenarios: [CASE_LAW_SCENARIOS.quiet],
+  },
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
@@ -100,7 +108,10 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 type DeclaredJobReads = {
   id: string;
   task: string;
-  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  reads:
+    | { budget: ScheduledJobReadBudgetId; governance?: "load-governed" }
+    | "load-governed"
+    | "unmeasured";
 };
 
 /**
@@ -138,6 +149,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.refreshCoverage": "corpus",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
   "statement.caseLaw.coverageSources": "coverage",

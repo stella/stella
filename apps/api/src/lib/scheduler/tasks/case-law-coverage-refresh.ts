@@ -2,20 +2,22 @@ import { Err, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
+import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
 
 import {
+  BACKFILL_TABLE_CONTENTION,
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { lockCaseLawCoverageSnapshot } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   logSchedulerBackfillStatus,
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
 import {
@@ -30,6 +32,22 @@ export const REFRESH_CASE_LAW_COVERAGE_TASK =
 /** One admitted summary refresh per run; a failed refresh retains the old answer. */
 export const CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
 const REFRESH_RUN_BUDGET_MS = 60_000;
+
+/**
+ * The refresh reads the corpus under shared locks and writes only its own
+ * summary row, so it is governed as a reader rather than a corpus writer:
+ * the shared IO balance and busy windows hold it at the default floors, and a
+ * hold never outlasts one refresh interval, so the next scheduled run always
+ * re-reads the load instead of sitting out a backoff it no longer needs. It
+ * still takes the shared backfill slot, so it never runs beside a backfill.
+ */
+export const CASE_LAW_COVERAGE_REFRESH_CONFIG = {
+  ...defaultConfig,
+  minSize: 1,
+  maxSize: 1,
+  batchStatementTimeoutMs: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
+  holdBackoffCapMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
+} as const satisfies HealthConfig;
 
 type CoverageRefreshBatch = {
   cursor: null;
@@ -70,13 +88,9 @@ export const createCaseLawCoverageRefreshTask =
       db,
       name: SCHEDULER_BACKFILL_IDS.coverage,
       tableName: "case_law_decisions",
+      tableContention: BACKFILL_TABLE_CONTENTION.SHARED_READ,
       initialSize: 1,
-      config: {
-        ...SCHEDULER_BACKFILL_CONFIG,
-        minSize: 1,
-        maxSize: 1,
-        batchStatementTimeoutMs: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
-      },
+      config: CASE_LAW_COVERAGE_REFRESH_CONFIG,
       observeStatus: logSchedulerBackfillStatus,
       reporting: "changes",
       statementTimeoutPolicy: "fail",
