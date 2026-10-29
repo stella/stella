@@ -92,6 +92,7 @@ import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
+import { routePresentation } from "@/routes/-route-presentation";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -111,6 +112,7 @@ type ContactFilter = "all" | ContactType;
 const EMPTY_CONTACTS: ContactItem[] = [];
 
 export const Route = createFileRoute("/_protected/contacts/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: async ({ context }) => {
     await ensureRouteInfiniteQueryData(
       context.queryClient,
@@ -1288,12 +1290,19 @@ const CreateContactDialog = ({
               <form.Field name="displayName">
                 {(field) => (
                   <Field name={field.name}>
-                    <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
+                    <FieldLabel>{t("common.displayName")}</FieldLabel>
                     <Input
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
                       value={field.state.value}
                     />
+                    <p className="text-muted-foreground text-xs">
+                      {t(
+                        contactType === "person"
+                          ? "contacts.create.displayNamePersonHint"
+                          : "contacts.create.displayNameOrganizationHint",
+                      )}
+                    </p>
                     <FieldError />
                   </Field>
                 )}

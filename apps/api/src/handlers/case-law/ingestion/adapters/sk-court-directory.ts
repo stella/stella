@@ -1,3 +1,4 @@
+// parser-output-unchanged: Map the new parser-refusal cause to a registry error; successful court resolution is unchanged.
 // parser-output-unchanged: listing-stage labels do not alter directory parsing.
 import { panic, Result } from "better-result";
 

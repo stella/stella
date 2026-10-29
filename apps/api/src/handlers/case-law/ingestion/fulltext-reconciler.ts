@@ -710,6 +710,7 @@ const recoverDeferredDocument = async (
     try: async () =>
       await DEFERRED_DOCUMENT_PROCESSORS[adapter.key]({
         decisionId: row.id,
+        ...(row.contentHash === null ? {} : { recoveryTarget: row }),
         scopedDb,
         signal,
       }),
@@ -904,7 +905,8 @@ const runRecoveryPhases = async (attempt: RecoveryAttempt): Promise<void> => {
   let storageFailure: DecisionTextFailure | null = null;
   if (
     attempt.row.textState.recovery.type ===
-    DECISION_TEXT_RECOVERY.VERIFY_STORAGE
+      DECISION_TEXT_RECOVERY.VERIFY_STORAGE ||
+    policy.recovery === FULLTEXT_RECOVERY_KIND.DEFERRED_PDF
   ) {
     const storage = await verifyHeldStorage(attempt);
     if (storage.type === "complete") {

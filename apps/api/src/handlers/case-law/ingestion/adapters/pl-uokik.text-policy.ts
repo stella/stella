@@ -1,3 +1,4 @@
+// parser-output-unchanged: Extract existing document-absence constants for recovery policy reuse; stored metadata values and parser output are unchanged.
 /**
  * Why a decision whose page was read holds no text, where the reason is one
  * that holds for good: its files are scans, or it has none. A row stating one

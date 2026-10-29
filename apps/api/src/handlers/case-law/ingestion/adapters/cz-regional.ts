@@ -1,3 +1,4 @@
+// parser-output-unchanged: The new parser-refusal cause is non-retryable; served decision parsing and persisted output are unchanged.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.

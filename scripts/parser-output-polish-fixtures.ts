@@ -552,6 +552,12 @@ const collectCourts = async ({ adapterDir, json, rowsFor }: FixtureContext) => {
   for (const name of [
     "pl-courts-detail-common.json.gz",
     "pl-courts-detail-chamber.json.gz",
+    "pl-courts-detail-303939.json.gz",
+    "pl-courts-detail-472699.json.gz",
+    "pl-courts-detail-501501.json.gz",
+    "pl-courts-detail-628.json.gz",
+    "pl-courts-detail-summary-brak.json.gz",
+    "pl-courts-detail-summary-nietezowane.json.gz",
   ]) {
     const payload = await json({ dir: adapterDir, name });
     if (!isRecord(payload) || !isRecord(payload["data"])) {

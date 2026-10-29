@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Err, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -12,6 +12,7 @@ import { caseLawCoverageSummaries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { lockCaseLawCoverageSnapshot } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   logSchedulerBackfillStatus,
   SCHEDULER_BACKFILL_CONFIG,
@@ -27,7 +28,7 @@ export const REFRESH_CASE_LAW_COVERAGE_TASK =
   "caseLaw.refreshCoverage" as const;
 
 /** One admitted summary refresh per run; a failed refresh retains the old answer. */
-const REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
+export const CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
 const REFRESH_RUN_BUDGET_MS = 60_000;
 
 type CoverageRefreshBatch = {
@@ -74,7 +75,7 @@ export const createCaseLawCoverageRefreshTask =
         ...SCHEDULER_BACKFILL_CONFIG,
         minSize: 1,
         maxSize: 1,
-        batchStatementTimeoutMs: REFRESH_STATEMENT_TIMEOUT_MS,
+        batchStatementTimeoutMs: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
       },
       observeStatus: logSchedulerBackfillStatus,
       reporting: "changes",
@@ -89,10 +90,58 @@ export const createCaseLawCoverageRefreshTask =
               await lockCaseLawCoverageSnapshot(tx);
               const policy =
                 await readNonRedistributableCaseLawSourceIdsQuery(tx);
-              const { answer, complete } = await compute(async (read) => {
+              const readState: { failure: Result<void, SchedulerTaskFailure> } =
+                {
+                  failure: Result.ok(undefined),
+                };
+              const readWithin = async <T>(
+                read: (
+                  tx: Pick<Transaction, "execute" | "select">,
+                ) => Promise<T>,
+              ): Promise<Result<T, SchedulerTaskFailure>> => {
                 refreshSignal.throwIfAborted();
-                return await read(tx);
+                if (readState.failure.isErr()) {
+                  return Result.err(readState.failure.error);
+                }
+                const result = await Result.tryPromise({
+                  try: async () => await read(tx),
+                  catch: (cause) =>
+                    new SchedulerTaskFailure({
+                      message: "Case-law coverage read failed",
+                      cause,
+                    }),
+                });
+                if (result.isErr()) {
+                  if (readState.failure.isOk()) {
+                    readState.failure = Result.err(result.error);
+                  }
+                  return Result.err(readState.failure.error);
+                }
+                // Some public readers already return a typed failure instead
+                // of rejecting; either form must abort this transaction.
+                if (result.value instanceof Err) {
+                  const failure = new SchedulerTaskFailure({
+                    message: "Case-law coverage read failed",
+                    cause: result.value.error,
+                  });
+                  if (readState.failure.isOk()) {
+                    readState.failure = Result.err(failure);
+                  }
+                  return Result.err(readState.failure.error);
+                }
+                return result;
+              };
+              const { answer, complete } = await compute(async (read) => {
+                const result = await readWithin(read);
+                if (result.isErr()) {
+                  return abortTransaction(result.error);
+                }
+                return result.value;
               }, policy);
+              // A degraded assembly cannot commit an aborted SQL transaction.
+              if (readState.failure.isErr()) {
+                return abortTransaction(readState.failure.error);
+              }
               refreshSignal.throwIfAborted();
               if (!complete || "message" in answer) {
                 return {

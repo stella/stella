@@ -1,3 +1,4 @@
+// parser-output-unchanged: Exhaustively classify the new parser-refusal error without changing a successfully parsed NALUS record.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";

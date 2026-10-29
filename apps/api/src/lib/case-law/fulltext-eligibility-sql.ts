@@ -1,3 +1,4 @@
+// parser-output-unchanged: This predicate selects recovery queue and health rows; it does not construct or change any parser result.
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 

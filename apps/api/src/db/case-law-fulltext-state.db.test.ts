@@ -29,7 +29,7 @@ const stored = {
 const corpus = { ...stored, storage: "corpus" };
 const migration = readFileSync(
   new URL(
-    "../../drizzle/20261028160000_case_law_fulltext_state/migration.sql",
+    "../../drizzle/20261029094325_case_law_fulltext_state/migration.sql",
     import.meta.url,
   ),
   "utf-8",

@@ -473,6 +473,38 @@ const run = (command: readonly string[], cwd: string): CommandRun => {
   return { ok: result.exitCode === 0, stdout: result.stdout.toString() };
 };
 
+/**
+ * The commit `v<version>` names, when that tag exists and this checkout
+ * contains it. Any failed lookup returns undefined, so the caller runs the
+ * full check.
+ */
+const releasedTagCommit = (version: string): string | undefined => {
+  const ref = `refs/tags/v${version}`;
+  const local = run(
+    ["git", "rev-parse", "--quiet", "--verify", `${ref}^{commit}`],
+    REPO_ROOT,
+  );
+  let commit = local.ok ? local.stdout.trim() : "";
+  if (commit === "") {
+    // CI checkouts carry no tags; the remote still names them.
+    const remote = run(
+      ["git", "ls-remote", "origin", `${ref}^{}`, ref],
+      REPO_ROOT,
+    );
+    const lines = remote.ok ? remote.stdout.trim().split("\n") : [];
+    const peeled = lines.find((line) => line.endsWith(`${ref}^{}`));
+    commit = (peeled ?? lines.at(0) ?? "").split(/\s+/u).at(0) ?? "";
+  }
+  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+    return undefined;
+  }
+  const contained = run(
+    ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+    REPO_ROOT,
+  );
+  return contained.ok ? commit : undefined;
+};
+
 const readPendingCliChangesets = (root: string): readonly string[] =>
   readdirSync(path.join(root, CHANGESET_DIRECTORY))
     .map((name) => `${CHANGESET_DIRECTORY}/${name}`)
@@ -647,6 +679,16 @@ const main = (args: readonly string[]): number => {
       return report({
         status: "not-a-release",
         reason: `${VERSION_FILE} unchanged against ${base}`,
+      });
+    }
+    // A release candidate is tagged from its release pull request's head, and
+    // release-tag runs this check on that exact commit. Landing the pull
+    // request afterwards releases nothing: the merge result is never tagged.
+    const released = releasedTagCommit(version);
+    if (released !== undefined) {
+      return report({
+        status: "not-a-release",
+        reason: `v${version} is already tagged at ${released}, which release-tag checked`,
       });
     }
   }

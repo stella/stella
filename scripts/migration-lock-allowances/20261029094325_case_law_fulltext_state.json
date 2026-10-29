@@ -1,0 +1,6 @@
+{
+  "add-column": "case_law_decisions: ACCESS EXCLUSIVE acquisition is bounded by 1s lock_timeout; nullable text_state has no default or backfill, so no row rewrite occurs. Deploy #7273 readers and drain old readers first; rollback is a forward migration dropping the unused column.",
+  "create-trigger": "case_law_decisions: SHARE ROW EXCLUSIVE acquisition is bounded by 1s lock_timeout; trigger installation is metadata-only and enforces text_state on later writes. Deploy #7273 readers and drain old readers first; rollback is a forward migration dropping the trigger and function.",
+  "add-constraint": "case_law_decisions: ACCESS EXCLUSIVE acquisition is bounded by 1s lock_timeout; NOT VALID avoids scanning legacy rows and enforces the check on subsequent writes. Deploy #7273 readers and drain old readers first; legacy rows are handled by the bounded reconciler, with no VALIDATE in this migration.",
+  "replace-view": "case_law_published_decisions and case_law_unredacted_decisions: ACCESS EXCLUSIVE view-lock acquisition is bounded by 1s lock_timeout; replacement reads no rows and changes only these projections. Deploy #7273 readers and drain old readers first; rollback is a forward migration restoring prior definitions."
+}

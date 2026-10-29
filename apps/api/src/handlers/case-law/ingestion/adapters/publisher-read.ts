@@ -1,3 +1,4 @@
+// parser-output-unchanged: Handle the new typed parser-refusal failure before parsing; successful publisher bodies and parser results are unchanged.
 // parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
 // parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**

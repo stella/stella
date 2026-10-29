@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "modelRefused": "Das Modell hat die Antwort verweigert",
+    "nothingFound": "Nichts gefunden",
     "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
     "rerunAllPage": "Alle erneut ausführen (diese Seite)",
     "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
@@ -130,6 +132,7 @@
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
     "chooseOrganization": "Wählen Sie die Organisation, in der Sie arbeiten möchten",
     "codeSentAgain": "Wir haben einen neuen Code gesendet.",
+    "continueWithApple": "Weiter mit Apple",
     "continueWithEmail": "Weiter",
     "continueWithGoogle": "Weiter mit Google",
     "continueWithMicrosoft": "Weiter mit Microsoft",
@@ -544,6 +547,14 @@
     },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
+    "arrangement": {
+      "alertThreshold": "Warnschwelle (%)",
+      "amountCap": "Honorarobergrenze",
+      "flatFee": "Pauschalhonorar",
+      "invalidCap": "Geben Sie positive Obergrenzen und eine Warnschwelle zwischen 0,01 % und 100 % ein.",
+      "minuteCap": "Zeitlimit (Minuten)",
+      "title": "Honorarvereinbarung"
+    },
     "batchActions": "Massenaktionen",
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
@@ -708,10 +719,29 @@
       },
       "linkedExpenses": "Verknüpfte Ausgaben",
       "linkedTimeEntries": "Verknüpfte Zeiteinträge",
-      "markPaid": "Als bezahlt markieren",
       "noEntries": "Keine Einträge mit dieser Rechnung verknüpft",
       "noInvoices": "Noch keine Rechnungen",
       "paidAt": "Bezahlt am",
+      "payments": {
+        "amountTooHigh": "Der Betrag übersteigt den offenen Betrag von {amount}.",
+        "confirmVoid": "Die Zahlung bleibt als storniert erfasst und wird dieser Rechnung nicht mehr angerechnet.",
+        "empty": "Noch keine Zahlungen erfasst",
+        "method": "Zahlungsart",
+        "methods": {
+          "bank_transfer": "Überweisung",
+          "card": "Karte",
+          "cash": "Bar",
+          "other": "Andere Zahlungsart"
+        },
+        "outstandingAmount": "Offen {amount}",
+        "paidOn": "Zahlungsdatum",
+        "partiallyPaid": "Teilweise bezahlt",
+        "record": "Zahlung erfassen",
+        "summary": "Bezahlt {paid}, offen {outstanding}",
+        "title": "Zahlungen",
+        "void": "Zahlung stornieren",
+        "voided": "Storniert"
+      },
       "removeEntries": "Einträge entfernen",
       "send": "Senden",
       "statuses": {
@@ -893,6 +923,7 @@
     "aiMissing": "KI ist nicht eingerichtet.",
     "availabilityUnknown": "Die Verfügbarkeit konnte nicht bestätigt werden.",
     "deeplMissing": "DeepL ist nicht eingerichtet.",
+    "deeplPdfRequired": "Für die Übersetzung von PDF-Dateien ist DeepL erforderlich.",
     "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
     "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
     "ocrUnavailable": "OCR ist nicht verfügbar.",
@@ -1555,6 +1586,12 @@
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
     "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
+      "dismiss": "Verbindungshinweis ausblenden",
+      "stoppedWorking": "Ihre Verbindung zu <name>{server}</name> funktioniert nicht mehr.",
+      "waitingApproval": "Ihre Verbindung zu <name>{server}</name> wartet auf Genehmigung."
+    },
     "mention": {
       "category": {
         "entities": "In dieser Akte",
@@ -2218,6 +2255,7 @@
     "moveDown": "Nach unten",
     "moveUp": "Nach oben",
     "name": "Name",
+    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
     "newMatter": "Neue Akte",
     "newRow": "Neue Zeile",
     "next": "Weiter",
@@ -2460,6 +2498,8 @@
       "aresNotFound": "Für diese IČO wurde kein Unternehmen gefunden.",
       "aresTitle": "Tschechisches Register (ARES)",
       "contactName": "Kontaktname",
+      "displayNameOrganizationHint": "Optionale Überschreibung; andernfalls aus dem Organisationsnamen erstellt.",
+      "displayNamePersonHint": "Optionale Überschreibung; andernfalls aus Vor- und Nachname erstellt.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Geben Sie eine 8-stellige IČO ein."
     },
@@ -2537,6 +2577,7 @@
       "rowLabel": "Mandant {index}",
       "skippedDuplicateContactId": "Übersprungen: doppelte Kontakt-ID",
       "skippedDuplicateTaxId": "Übersprungen: doppelte Steuernummer",
+      "skippedInFileDuplicate": "Übersprungen: wiederholt eine frühere Zeile der Datei",
       "skippedInvalidRow": "Übersprungen: Die Zeile verletzt die Importregeln",
       "skippedInvalidTaxId": "Übersprungen: ungültige Steuernummer",
       "skippedLimitReached": "Übersprungen: Kontaktlimit erreicht"
@@ -2578,6 +2619,7 @@
       "issue": {
         "address_line_required": "Adresszeile 1 ist erforderlich, wenn eine Adresse angegeben ist.",
         "display_name_required": "Es konnte kein Anzeigename erstellt werden.",
+        "in_file_duplicate": "Duplikat einer früheren Zeile in dieser Datei",
         "invalid_email": "Die E-Mail-Adresse ist ungültig.",
         "invalid_phone": "Die Telefonnummer ist ungültig.",
         "invalid_tags": "Schlagwörter müssen Textwerte sein.",
@@ -2606,7 +2648,11 @@
       "taxIdSchemeBrCpfCnpj": "Brasilianische CPF/CNPJ (Prüfsumme)",
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
-      "validateFailed": "Diese Kontakte konnten nicht geprüft werden."
+      "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
+      "warning": {
+        "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",
+        "possible_in_file_duplicate": "Mögliches Duplikat von Zeile {row}; nur der Name stimmt überein."
+      }
     },
     "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",
     "invalidNationalityCodes": "Geben Sie gültige Staatsangehörigkeitscodes ein.",
@@ -2766,12 +2812,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
       "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
+      "configurationIncomplete": "Diese Aktion ist nicht vollständig eingerichtet. Wenden Sie sich an Ihre Administration.",
       "contact": "Kontaktieren Sie uns",
       "featureDisabled": "Diese Funktion ist vorübergehend deaktiviert.",
+      "leaseLost": "Die Reservierung für die Aktion ist abgelaufen. Bitte versuchen Sie es erneut.",
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
-      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
+      "organizationStateUnreadable": "Der Zugriff der Organisation konnte nicht geprüft werden. Bitte versuchen Sie es in Kürze erneut.",
+      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert.",
+      "storeUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in Kürze erneut."
     },
     "actionFailed": "Das hat nicht funktioniert. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "api": {
@@ -3303,7 +3352,6 @@
       "simple": "Einfaches Markup"
     },
     "moreFormatting": "Weitere Formatierung",
-    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
     "nextChange": "Nächste Änderung",
     "numberedList": "Nummerierte Liste",
     "parseError": "Das Dokument konnte nicht verarbeitet werden. Möglicherweise ist es beschädigt oder liegt in einem nicht unterstützten Format vor.",
@@ -4636,7 +4684,6 @@
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
-      "title": "KI-Konfiguration",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
     "invitations": {
@@ -5031,6 +5078,16 @@
       "preferredNamePlaceholder": "Ihr Name",
       "profileDescription": "Verwalten Sie Ihre persönlichen Einstellungen",
       "sendOtpCode": "Bestätigungscode senden",
+      "signInMethods": {
+        "confirmDescription": "Geben Sie einen neuen Code ein, den wir an Ihre E-Mail-Adresse gesendet haben, um diese Anmeldemethode zu trennen.",
+        "confirmTitle": "{provider} trennen?",
+        "description": "Verbinden Sie Konten, die dieselbe bestätigte E-Mail-Adresse verwenden.",
+        "emailCode": "E-Mail-Code",
+        "emailCodeDescription": "Sie können sich jederzeit mit einem Code anmelden, den wir an Ihre E-Mail-Adresse senden.",
+        "lastMethod": "Verbinden Sie ein weiteres Konto, bevor Sie dieses trennen.",
+        "title": "Anmeldemethoden",
+        "unavailable": "Der E-Mail-Versand muss eingerichtet sein, damit Anmeldemethoden getrennt werden können."
+      },
       "timezone": "Zeitzone",
       "timezoneDescription": "Wird für Zeitstempel in Benachrichtigungen und E-Mails verwendet",
       "timezoneSaved": "Zeitzone aktualisiert",
@@ -5996,6 +6053,9 @@
       "title": "Übersetzung bereit"
     }
   },
+  "transportErrors": {
+    "timeout": "Die Anfrage hat zu lange gedauert. Versuchen Sie es erneut."
+  },
   "validation": {
     "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
     "organizationNameRequired": "Organisationsname ist erforderlich",
@@ -6193,20 +6253,18 @@
         "notOpeningConnect": "Öffnet sich nichts? stella desktop verbinden",
         "notPickedUpDescription": "stella desktop läuft möglicherweise nicht oder ist nicht mit diesem Konto verbunden. Verbinden Sie die App und versuchen Sie es erneut.",
         "notPickedUpTitle": "stella desktop hat das PDF nicht geöffnet",
+        "placementAttachmentsOnly": "Diese Ansicht zeigt die Anhänge des PDF, daher kann der Stempel hier nicht platziert werden. Signieren Sie stattdessen ohne Stempel.",
         "placementBox": "Position des Stempels",
-        "placementConfirm": "stella desktop öffnen",
-        "placementDescription": "Wählen Sie, wie die Signatur im PDF erscheint.",
+        "placementDrawTooLarge": "Zu groß für einen Stempel. Beim Loslassen wird die größte Größe verwendet.",
+        "placementDrawTooSmall": "Zu klein für einen Stempel. Beim Loslassen wird die kleinste Größe verwendet.",
         "placementHint": "Ziehen Sie den Stempel, um ihn zu verschieben, oder ziehen Sie an seiner Ecke, um die Größe zu ändern. Ist der Stempel ausgewählt, verschieben ihn die Pfeiltasten; mit Umschalt und einer Pfeiltaste ändern Sie seine Größe.",
-        "placementInvisible": "Unsichtbare Signatur",
-        "placementInvisibleDescription": "Die Signatur wird in der Datei gespeichert, ohne Markierung auf einer Seite.",
-        "placementPageLabel": "Seite des Stempels",
-        "placementPageOption": "Seite {page, number} von {count, number}",
-        "placementPreview": "Vorschau von Seite {page, number}",
-        "placementPreviewFailed": "Die Seitenvorschau konnte nicht geladen werden.",
+        "placementModeHint": "Ziehen Sie auf einer Seite, um den Stempel zu zeichnen, oder klicken Sie, um ihn zu platzieren.",
+        "placementPlaceOnLastPage": "Auf der letzten Seite platzieren",
+        "placementRedrawHint": "Ziehen Sie den Stempel, um ihn anzupassen, oder zeichnen Sie auf einer beliebigen Seite einen neuen.",
+        "placementSignInvisible": "Ohne Stempel signieren",
+        "placementSignVisible": "Mit Stempel signieren",
         "placementTitle": "PDF signieren",
         "placementTooSmall": "Diese Seite ist zu klein für einen Stempel. Wählen Sie eine andere Seite.",
-        "placementVisible": "Sichtbarer Stempel",
-        "placementVisibleDescription": "Ein Feld auf der Seite zeigt, wer wann signiert hat.",
         "preparingDescription": "Das PDF wird für stella desktop vorbereitet.",
         "readOnlyDescription": "Dieses Dokument ist schreibgeschützt.",
         "signedDescription": "Die Signatur wurde als Version {versionNumber, number} gespeichert.",

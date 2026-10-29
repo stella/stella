@@ -128,7 +128,7 @@ const authStatus = async (organizationId: SafeId<"organization">) =>
 
 const strictLoads = async (
   organizationId: SafeId<"organization">,
-): Promise<Result<unknown, HandlerError<403>>[]> => {
+): Promise<Result<unknown, HandlerError<403 | 503>>[]> => {
   const scope = requestScope(organizationId);
   return [
     await scope(

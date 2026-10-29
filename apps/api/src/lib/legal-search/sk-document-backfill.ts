@@ -78,6 +78,7 @@ import {
   recordDecisionTextFailureTx,
   recordDecisionTextObservationTx,
 } from "@/api/lib/case-law/fulltext-state-store";
+import type { ClaimedDecisionTextWork } from "@/api/lib/case-law/fulltext-state-store";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -1041,7 +1042,36 @@ export const loadPendingDocuments = async ({
 export const corpusBackfillTransfer = (): CorpusTransfer | null =>
   corpusStorageMode === "off" ? null : deployedCorpusTransfer();
 
+type DecisionCorpusRecoveryTarget = Pick<
+  ClaimedDecisionTextWork,
+  | "id"
+  | "sourceId"
+  | "sourceHash"
+  | "sourceObservationOrder"
+  | "textState"
+  | "contentHash"
+  | "textS3Key"
+  | "normalizedS3Key"
+  | "astS3Key"
+>;
+
+/** The recovery claim disproved precisely this storage identity. */
+const holdsCorpusRecoveryTarget = (target: DecisionCorpusRecoveryTarget) =>
+  and(
+    eq(caseLawDecisions.id, target.id),
+    eq(caseLawDecisions.sourceId, target.sourceId),
+    sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${target.sourceHash}`,
+    sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${target.sourceObservationOrder}`,
+    sql`${caseLawDecisions.textState} = ${JSON.stringify(target.textState)}::text::jsonb`,
+    sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${target.contentHash}`,
+    sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${target.textS3Key}`,
+    sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${target.normalizedS3Key}`,
+    sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${target.astS3Key}`,
+  );
+
 export type StoreBackfilledDocumentOptions = {
+  /** Only recovery after a failed storage verification may replace held corpus bytes. */
+  recoveryTarget?: DecisionCorpusRecoveryTarget;
   decision: ClaimedPendingDocument;
   document: BackfilledDocument;
   scopedDb: ScopedDb;
@@ -1154,7 +1184,9 @@ const storeBackfilledDocumentOwned = async ({
   transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
   fence,
-}: Omit<StoreBackfilledDocumentOptions, "scopedDb"> & {
+  recoveryTarget,
+}: Omit<StoreBackfilledDocumentOptions, "scopedDb" | "recoveryTarget"> & {
+  recoveryTarget: DecisionCorpusRecoveryTarget | undefined;
   fence: DeferredDocumentSourceFence;
 }): Promise<"stored" | "superseded"> => {
   const { scopedDb } = fence;
@@ -1176,7 +1208,9 @@ const storeBackfilledDocumentOwned = async ({
     // nulls it: without this, a store whose parse outlived its claim would
     // read a decision another attempt already filled as still empty and
     // overwrite it.
-    storesNoCorpusDocument,
+    recoveryTarget === undefined
+      ? storesNoCorpusDocument
+      : holdsCorpusRecoveryTarget(recoveryTarget),
     holdsClaimedSource(decision.sourceHash),
   );
 
@@ -1293,9 +1327,8 @@ const storeBackfilledDocumentOwned = async ({
         sections,
         ast: document.documentAst,
       },
-      // The queue admits only rows whose corpus stores no document
-      // (`storesNoCorpusDocument`), so no recorded write can match the
-      // fetched document's payload; there is nothing to compare.
+      // Missing payloads and disproven recovery targets both need an actual
+      // write, even when the fetched bytes hash to the previous identity.
       stored: null,
       settle: async ({ intentId, written: packed }) => {
         const outcome = await settleReservedCaseLawCorpusUpload({
@@ -1477,10 +1510,12 @@ const claimDocumentFetchOwned = async ({
   decisionId,
   fence,
   attemptPolicy,
+  recoveryTarget,
 }: {
   decisionId: SafeId<"caseLawDecision">;
   fence: DeferredDocumentSourceFence;
   attemptPolicy: "count" | "reserve-final-attempt";
+  recoveryTarget: DecisionCorpusRecoveryTarget | undefined;
 }): Promise<DocumentFetchClaim> =>
   await fence.scopedDb(async (tx) => {
     const lockResult: unknown = await tx.execute(
@@ -1526,6 +1561,9 @@ const claimDocumentFetchOwned = async ({
             eq(caseLawDecisions.id, decisionId),
             eq(caseLawDecisions.sourceId, fence.sourceId),
             isNull(caseLawDecisions.redactedAt),
+            recoveryTarget === undefined
+              ? undefined
+              : holdsCorpusRecoveryTarget(recoveryTarget),
             isNull(caseLawDecisions.fulltext),
             or(
               isNull(caseLawDecisions.documentFetchAttemptedAt),
@@ -1800,6 +1838,7 @@ export type DecisionDocumentOutcome =
 export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
+  recoveryTarget?: DecisionCorpusRecoveryTarget;
   onDocumentObservation?: DocumentStageObserver | undefined;
   decisionId: SafeId<"caseLawDecision">;
   /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
@@ -1917,6 +1956,7 @@ const runDecisionDocumentFetch = async ({
   scopedDb,
   signal,
   fence,
+  recoveryTarget,
 }: FetchDecisionDocumentOptions & {
   fence: DeferredDocumentSourceFence;
 }): Promise<DecisionDocumentOutcome> => {
@@ -1924,6 +1964,7 @@ const runDecisionDocumentFetch = async ({
     decisionId,
     fence,
     attemptPolicy: "reserve-final-attempt",
+    recoveryTarget,
   });
   if (claim.status === "held") {
     return { status: "claimed" };
@@ -1936,6 +1977,7 @@ const runDecisionDocumentFetch = async ({
         fetchDocument,
         signal,
         fence,
+        recoveryTarget,
       }),
     catch: (error) => error,
   });
@@ -1964,7 +2006,7 @@ const runDecisionDocumentFetch = async ({
   ) {
     cause = result.value.cause;
   }
-  if (cause !== null) {
+  if (cause !== null && recoveryTarget === undefined) {
     await scopedDb(async (tx) => {
       await recordDecisionTextFailureTx(tx, {
         decisionId: claim.decision.id,
@@ -2079,6 +2121,7 @@ const settleFetchedDocument = async ({
 };
 
 type ProcessClaimedDocumentOptions = {
+  recoveryTarget: DecisionCorpusRecoveryTarget | undefined;
   claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
   fetchDocument: SkDocumentFetch;
   signal: AbortSignal;
@@ -2090,6 +2133,7 @@ const processClaimedDocument = async ({
   fetchDocument,
   signal,
   fence,
+  recoveryTarget,
 }: ProcessClaimedDocumentOptions): Promise<DecisionDocumentOutcome> => {
   const { decision } = claim;
   const { documentUrl } = decision;
@@ -2148,7 +2192,7 @@ const processClaimedDocument = async ({
   const stored = await storeBackfilledDocumentOwned({
     decision,
     document,
-
+    recoveryTarget,
     fence,
   });
   if (stored === "superseded") {
@@ -2266,6 +2310,7 @@ export const claimDocumentFetch = async (
         decisionId,
         fence,
         attemptPolicy: "count",
+        recoveryTarget: undefined,
       }),
   });
 
@@ -2280,6 +2325,7 @@ export const storeBackfilledDocument = async (
     operation: async (fence) =>
       await storeBackfilledDocumentOwned({
         ...options,
+        recoveryTarget: options.recoveryTarget,
         fence,
       }),
   });
