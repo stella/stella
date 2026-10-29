@@ -1500,6 +1500,7 @@ const config = defineConfig({
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
+    "no-independent-fallback-state/no-independent-fallback-state": "error",
     "no-direct-folio-snapshot-retirement/no-direct-folio-snapshot-retirement":
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
@@ -1936,6 +1937,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/fill-diagnostics.ts",
+    "./.oxlint-plugins/no-independent-fallback-state.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",

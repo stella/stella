@@ -5,7 +5,8 @@ SET statement_timeout = '5s';
 ALTER TABLE "case_law_decisions" ADD COLUMN "fallback_identity_key" varchar(320),
   ADD COLUMN "fallback_cohort_key" varchar(320),
   ADD COLUMN "fallback_content_hash" varchar(64),
-  ADD COLUMN "fallback_publication_hash" varchar(64);
+  ADD COLUMN "fallback_publication_hash" varchar(64),
+  ADD COLUMN "fallback_document_hash" varchar(64);
 -- The source-scoped unique index is built by the governed online runner.
 -- Existing rows are not rewritten; an observed exact identity fills its key.
 --> statement-breakpoint

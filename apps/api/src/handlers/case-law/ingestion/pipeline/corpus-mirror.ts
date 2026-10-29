@@ -10,7 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
-import type { decisionFallbackColumns } from "@/api/lib/case-law/fallback-decision-identity";
+import type { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import {
   pgPayloadCarriesDocumentFor,
   rowHoldsDocumentFor,
@@ -128,8 +128,9 @@ const FALLBACK_COMPARED_COLUMN_TYPES = {
   fallbackCohortKey: "text",
   fallbackContentHash: "text",
   fallbackPublicationHash: "text",
+  fallbackDocumentHash: "text",
 } as const satisfies Record<
-  keyof ReturnType<typeof decisionFallbackColumns>,
+  keyof ReturnType<typeof decisionFallbackState>["columns"],
   "text"
 >;
 

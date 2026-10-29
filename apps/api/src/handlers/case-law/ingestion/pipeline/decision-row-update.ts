@@ -41,7 +41,7 @@ import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/p
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
-import { decisionFallbackColumns } from "@/api/lib/case-law/fallback-decision-identity";
+import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -260,41 +260,6 @@ export const lostRowWriteStatus = async (
     : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
 };
 
-type FallbackUpdateOptions = Pick<
-  DecisionRowWrite,
-  "persistedSourceDocumentId" | "storageIdentity"
->;
-
-const fallbackUpdateColumns = (
-  { persistedSourceDocumentId, storageIdentity }: FallbackUpdateOptions,
-  existing: ExistingDecision,
-) => {
-  if (persistedSourceDocumentId !== undefined) {
-    return decisionFallbackColumns({
-      type: "document",
-      sourceDocumentId: persistedSourceDocumentId,
-    });
-  }
-  if (
-    storageIdentity.type === "content" &&
-    existing.hasStoredDocument &&
-    (storageIdentity.documentState === "metadata-only" ||
-      existing.fallbackIdentityKey !== null)
-  ) {
-    return {};
-  }
-  const columns = decisionFallbackColumns(storageIdentity);
-  if (
-    storageIdentity.type === "strong" &&
-    existing.hasStoredDocument &&
-    storageIdentity.publishedContentHash !== null
-  ) {
-    // The original weak document remains an exact alias after gaining evidence.
-    return { ...columns, fallbackContentHash: existing.fallbackContentHash };
-  }
-  return columns;
-};
-
 /**
  * The refresh's update of the row: its description, metadata, raw pointer
  * and (unless guarded) payload, fenced on this observation still owning the
@@ -364,7 +329,11 @@ export const describeRowUpdateTx = async (
     : {
         ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
-        ...fallbackUpdateColumns(write, existing),
+        ...decisionFallbackState({
+          storage: write.storageIdentity,
+          previous: existing,
+          persistedSourceDocumentId,
+        }).columns,
         ecli: result.ecli,
         court: result.court,
         courtId: result.courtId ?? null,

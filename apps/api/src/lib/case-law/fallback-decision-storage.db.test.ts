@@ -11,7 +11,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
-  decisionFallbackColumns,
+  decisionFallbackState,
   decisionStorageIdentity,
   decisionStorageIdentityMatch,
 } from "@/api/lib/case-law/fallback-decision-identity";
@@ -53,7 +53,7 @@ test("weak storage matches content without merging same-day same-type cohort mem
       language: input.language,
       decisionDate: input.decisionDate,
       decisionType: input.decisionType,
-      ...decisionFallbackColumns(identity),
+      ...decisionFallbackState({ storage: identity }).columns,
     });
     return id;
   };

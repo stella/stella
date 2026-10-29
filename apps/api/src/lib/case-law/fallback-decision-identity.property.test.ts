@@ -8,7 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
-  decisionFallbackColumns,
+  decisionFallbackState,
   decisionStorageIdentity,
   fallbackDecisionIdentity,
   fallbackDecisionIdentityKey,
@@ -168,8 +168,12 @@ test("same-day same-type weak decisions deduplicate by document and preserve dif
   }
   expect(sibling.cohortKey).toBe(first.cohortKey);
   expect(sibling.contentHash).not.toBe(first.contentHash);
-  expect(decisionFallbackColumns(first).fallbackIdentityKey).toBeNull();
-  expect(decisionFallbackColumns(sibling).fallbackIdentityKey).toBeNull();
+  expect(
+    decisionFallbackState({ storage: first }).columns.fallbackIdentityKey,
+  ).toBeNull();
+  expect(
+    decisionFallbackState({ storage: sibling }).columns.fallbackIdentityKey,
+  ).toBeNull();
 });
 
 test("weak metadata changes move the cohort without changing document identity", () => {

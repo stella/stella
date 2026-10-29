@@ -518,36 +518,200 @@ export const decisionStorageIdentity = (
   };
 };
 
-/** Typed columns derive from the identity branch rather than hand-maintained parallel fields. */
-export const decisionFallbackColumns = (storage: DecisionStorageIdentity) => {
-  switch (storage.type) {
-    case "document":
-      return {
-        fallbackIdentityKey: null,
-        fallbackCohortKey: null,
-        fallbackContentHash: null,
-        fallbackPublicationHash: null,
-      };
-    case "strong":
-      return {
-        fallbackIdentityKey: storage.key,
-        fallbackCohortKey: null,
-        fallbackContentHash: null,
-        fallbackPublicationHash: storage.publicationHash,
-      };
-    case "content":
-      return {
-        fallbackIdentityKey: null,
-        fallbackCohortKey: storage.cohortKey,
-        fallbackContentHash: storage.contentHash,
-        fallbackPublicationHash: storage.publicationHash,
-      };
-    case "unkeyable":
-      return panic("An unkeyable identity cannot be persisted as a decision");
-    default:
-      storage satisfies never;
-      return panic("Unhandled decision storage identity");
+type StoredFallbackState = {
+  fallbackIdentityKey: string | null;
+  fallbackCohortKey: string | null;
+  fallbackPublicationHash: string | null;
+  fallbackContentHash: string | null;
+  fallbackDocumentHash: string | null;
+  contentHash: string | null;
+  hasStoredDocument: boolean;
+  ecli: string | null;
+  sheetNumber: string | null;
+  decisionDate: string | null;
+  decisionType: string | null;
+};
+
+type DecisionFallbackStateOptions = {
+  storage: DecisionStorageIdentity;
+  previous?: StoredFallbackState | undefined;
+  persistedSourceDocumentId?: string | undefined;
+};
+
+const previousDocumentProof = (previous: StoredFallbackState | undefined) =>
+  previous?.hasStoredDocument
+    ? (previous.fallbackDocumentHash ?? previous.contentHash)
+    : null;
+
+const incomingDocumentProof = (
+  storage: Exclude<DecisionStorageIdentity, { type: "document" | "unkeyable" }>,
+) => {
+  if (storage.type === "content" && storage.documentState === "metadata-only") {
+    return null;
   }
+  return storage.publishedContentHash;
+};
+
+const retainedWeakContentClaim = ({
+  identity,
+  previous,
+  documentHash,
+}: {
+  identity: Exclude<FallbackDecisionIdentity, { type: "unidentifiable" }>;
+  previous: StoredFallbackState | undefined;
+  documentHash: string | null;
+}) => {
+  if (!previous?.hasStoredDocument) {
+    return null;
+  }
+  if (previous.fallbackContentHash !== null) {
+    return previous.fallbackContentHash;
+  }
+  if (previous.fallbackIdentityKey !== null || documentHash === null) {
+    return null;
+  }
+  return scopedDocumentHash({
+    identity,
+    evidence: publicationEvidence({}),
+    publishedContentHash: documentHash,
+  });
+};
+
+const preferredStrongKey = (
+  storage: Extract<DecisionStorageIdentity, { type: "strong" }>,
+  previous: StoredFallbackState | undefined,
+) => {
+  const key = previous?.fallbackIdentityKey;
+  if (!key) {
+    return storage.key;
+  }
+  const identity = parseFallbackDecisionIdentityKey(key);
+  if (identity?.type !== "decision") {
+    return panic("A stored strong identity key is invalid");
+  }
+  return identity.evidence.type === "ecli" ? key : storage.key;
+};
+
+const effectiveFallbackIdentity = (
+  storage: Exclude<DecisionStorageIdentity, { type: "document" | "unkeyable" }>,
+  previous: StoredFallbackState | undefined,
+) => {
+  const { identity, publicationFields: fields } = storage;
+  const input = {
+    language: identity.language,
+    caseNumber: identity.caseNumber,
+    court: identity.court.type === "court-name" ? identity.court.name : "",
+    courtId:
+      identity.court.type === "court-id" ? identity.court.courtId : undefined,
+    ecli: fields.evidence.ecli ?? previous?.ecli,
+    sheetNumber: fields.evidence.sheetNumber ?? previous?.sheetNumber,
+    decisionDate: fields.decisionDate ?? previous?.decisionDate,
+    decisionType: fields.decisionType ?? previous?.decisionType,
+  };
+  return {
+    identity: fallbackDecisionIdentity(input),
+    sheetIdentity: fallbackDecisionIdentity({ ...input, ecli: undefined }),
+  };
+};
+
+/** Owns the complete persisted state and cumulative alias claims for every row transition. */
+export const decisionFallbackState = ({
+  storage,
+  previous,
+  persistedSourceDocumentId,
+}: DecisionFallbackStateOptions) => {
+  if (persistedSourceDocumentId !== undefined || storage.type === "document") {
+    return {
+      columns: {
+        fallbackIdentityKey: null,
+        fallbackCohortKey: null,
+        fallbackPublicationHash: null,
+        fallbackContentHash: null,
+        fallbackDocumentHash: null,
+      },
+      aliases: [],
+    };
+  }
+  if (storage.type === "unkeyable") {
+    return panic("An unkeyable identity cannot be persisted as a decision");
+  }
+  const documentHash =
+    incomingDocumentProof(storage) ?? previousDocumentProof(previous);
+  const aliases = new Set(
+    storage.type === "strong" ? storage.aliases.map(({ key }) => key) : [],
+  );
+  if (previous?.fallbackIdentityKey) {
+    aliases.add(previous.fallbackIdentityKey);
+  }
+  const { identity: effective, sheetIdentity } = effectiveFallbackIdentity(
+    storage,
+    previous,
+  );
+  if (sheetIdentity.type === "decision") {
+    const sheetKey = fallbackDecisionIdentityKey(sheetIdentity);
+    if (sheetKey !== null) {
+      aliases.add(sheetKey);
+    }
+  }
+  const effectiveKey = fallbackDecisionIdentityKey(effective);
+  if (effective.type === "unidentifiable" || effectiveKey === null) {
+    return panic("A persisted fallback observation lost its identity");
+  }
+  const contentClaim = retainedWeakContentClaim({
+    identity: storage.identity,
+    previous,
+    documentHash,
+  });
+  let fallbackContentHash = contentClaim;
+  if (storage.type === "content" && storage.documentState === "document") {
+    fallbackContentHash ??= storage.contentHash;
+  }
+  if (effective.type === "decision") {
+    aliases.add(effectiveKey);
+    const identityKey =
+      storage.type === "strong"
+        ? preferredStrongKey(storage, previous)
+        : effectiveKey;
+    return {
+      columns: {
+        fallbackIdentityKey: identityKey,
+        fallbackCohortKey: null,
+        fallbackPublicationHash: storage.publicationHash,
+        fallbackContentHash,
+        fallbackDocumentHash: documentHash,
+      },
+      aliases: [...aliases],
+    };
+  }
+  if (
+    previous?.hasStoredDocument &&
+    storage.type === "content" &&
+    storage.documentState === "metadata-only"
+  ) {
+    return {
+      columns: {
+        fallbackIdentityKey: null,
+        fallbackCohortKey: effectiveKey,
+        fallbackPublicationHash: storage.publicationHash,
+        fallbackContentHash: contentClaim,
+        fallbackDocumentHash: documentHash,
+      },
+      aliases: [...aliases],
+    };
+  }
+  if (storage.type !== "content") {
+    return panic("Strong evidence became a weak identity");
+  }
+  return {
+    columns: {
+      fallbackIdentityKey: null,
+      fallbackCohortKey: effectiveKey,
+      fallbackPublicationHash: storage.publicationHash,
+      fallbackContentHash: storage.contentHash,
+      fallbackDocumentHash: documentHash,
+    },
+    aliases: [...aliases],
+  };
 };
 
 /** Exact indexed identity, with content proof for rows predating the new columns. */
@@ -628,8 +792,6 @@ export const decisionStorageEnrichmentMatch = (
     ...(storage.identity.court.type === "unknown-court"
       ? {}
       : { ecli: ABSENT_FIELD, sheetNumber: ABSENT_FIELD }),
-    RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
-      not(rowHoldsDocumentFor(table)),
   };
   const scope = {
     sourceDocumentId: ABSENT_FIELD,
@@ -642,7 +804,7 @@ export const decisionStorageEnrichmentMatch = (
       RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
         not(rowHoldsDocumentFor(table)),
     };
-    if (storage.type !== "strong" || storage.publishedContentHash === null) {
+    if (storage.publishedContentHash === null) {
       return textless;
     }
     return {
@@ -650,11 +812,11 @@ export const decisionStorageEnrichmentMatch = (
         textless,
         {
           sourceDocumentId: ABSENT_FIELD,
-          fallbackIdentityKey: ABSENT_FIELD,
           language: storage.identity.language,
           caseNumber: storage.identity.caseNumber,
           ...fallbackDecisionCourtMatch(storage.identity),
           OR: [
+            { fallbackDocumentHash: storage.publishedContentHash },
             { contentHash: storage.publishedContentHash },
             {
               fallbackContentHash: scopedDocumentHash({

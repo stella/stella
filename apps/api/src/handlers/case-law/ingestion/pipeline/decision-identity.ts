@@ -197,6 +197,7 @@ const IDENTITY_COLUMNS = {
   citationKey: true,
   country: true,
   decisionDate: true,
+  decisionType: true,
   sourceDocumentId: true,
   ecli: true,
   sheetNumber: true,
@@ -212,6 +213,9 @@ const IDENTITY_COLUMNS = {
   contentHash: true,
   fallbackContentHash: true,
   fallbackIdentityKey: true,
+  fallbackCohortKey: true,
+  fallbackPublicationHash: true,
+  fallbackDocumentHash: true,
   textS3Key: true,
   normalizedS3Key: true,
   astS3Key: true,
@@ -560,8 +564,9 @@ export const findFallbackDecisionTx = async (
     return undefined;
   }
   const compatible = publications.filter((row) =>
-    storageIdentity.type === "strong" &&
-    storageIdentity.publishedContentHash !== null &&
+    (storageIdentity.type === "strong" ||
+      (storageIdentity.type === "content" &&
+        storageIdentity.documentState === "document")) &&
     row.hasStoredDocument
       ? decisionContentEvidenceCompatible(storageIdentity, row)
       : decisionPublicationCompatible(storageIdentity, row),

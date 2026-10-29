@@ -784,6 +784,7 @@ test.each(["ecli", "sheet-number"] as const)(
           fallbackCohortKey: null,
           fallbackContentHash: null,
           fallbackPublicationHash: null,
+          fallbackDocumentHash: null,
           contentHash: corpusContentHash(
             caseLawCanonicalPayload(observation("1", "First member document.")),
           ),

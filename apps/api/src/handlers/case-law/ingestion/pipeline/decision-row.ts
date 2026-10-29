@@ -44,7 +44,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
-  decisionFallbackColumns,
+  decisionFallbackState,
   decisionStorageLockKeys,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import {
@@ -81,11 +81,10 @@ const insertedRowValues = (
   sourceId,
   ...docketColumns,
   sourceDocumentId: persistedSourceDocumentId,
-  ...decisionFallbackColumns(
-    persistedSourceDocumentId === undefined
-      ? storageIdentity
-      : { type: "document", sourceDocumentId: persistedSourceDocumentId },
-  ),
+  ...decisionFallbackState({
+    storage: storageIdentity,
+    persistedSourceDocumentId,
+  }).columns,
   sheetNumber: result.sheetNumber,
   slug,
   ecli: result.ecli,
@@ -223,18 +222,26 @@ const finishInsertedRowTx = async (
 
 const reserveFallbackAliasesTx = async (
   tx: Transaction,
-  write: DecisionRowWrite,
+  {
+    write,
+    previous,
+  }: { write: DecisionRowWrite; previous?: DecisionRowWrite["existing"] },
   decisionId: SafeId<"caseLawDecision">,
 ) => {
-  const { storageIdentity, sourceId } = write;
-  if (storageIdentity.type !== "strong") {
+  const { sourceId } = write;
+  const { aliases } = decisionFallbackState({
+    storage: write.storageIdentity,
+    previous,
+    persistedSourceDocumentId: write.persistedSourceDocumentId,
+  });
+  if (aliases.length === 0) {
     return;
   }
   // audit: skip - public corpus identity bookkeeping, not user activity
   await tx
     .insert(caseLawDecisionFallbackIdentities)
     .values(
-      storageIdentity.aliases.map(({ key }) => ({
+      aliases.map((key) => ({
         sourceId,
         identityKey: key,
         decisionId,
@@ -249,15 +256,12 @@ const reserveFallbackAliasesTx = async (
     .where(
       and(
         eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
-        inArray(
-          caseLawDecisionFallbackIdentities.identityKey,
-          storageIdentity.aliases.map(({ key }) => key),
-        ),
+        inArray(caseLawDecisionFallbackIdentities.identityKey, aliases),
       ),
     )
-    .limit(storageIdentity.aliases.length);
+    .limit(aliases.length);
   if (
-    owners.length !== storageIdentity.aliases.length ||
+    owners.length !== aliases.length ||
     owners.some(({ id }) => id !== decisionId)
   ) {
     panic("Fallback alias reservation conflicts with its decision owner");
@@ -278,13 +282,14 @@ const writeDecisionRow = async (
     const {
       sourceId,
       decisionId,
-      existing,
+      existing: plannedExisting,
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
       plan: { payloadColumns, storedPayloadUnchanged },
       inputProvenance,
     } = write;
+    let existing = plannedExisting;
     for (const identityKey of decisionStorageLockKeys(write.storageIdentity)) {
       // db-await-in-loop: sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
       await lockCaseLawFallbackIdentity({ tx, sourceId, identityKey });
@@ -301,6 +306,7 @@ const writeDecisionRow = async (
       ) {
         return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
       }
+      existing = winner;
     }
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
@@ -362,7 +368,11 @@ const writeDecisionRow = async (
         });
       }
 
-      await reserveFallbackAliasesTx(tx, write, existing.id);
+      await reserveFallbackAliasesTx(
+        tx,
+        { write, previous: existing },
+        existing.id,
+      );
 
       if (payloadNeedsGuard) {
         // The row is locked by the update above, so what this reads is
@@ -438,7 +448,7 @@ const writeDecisionRow = async (
     }
 
     const insertedId = await insertDecisionRowTx(tx, write, slugLadder);
-    await reserveFallbackAliasesTx(tx, write, insertedId);
+    await reserveFallbackAliasesTx(tx, { write }, insertedId);
     if (composedSupplements.length > 0) {
       await markSupplementsMerged(tx, {
         sourceId,
@@ -477,7 +487,7 @@ export const writeDecisionRowWithSlug = async (
   } = write;
   const slugIdentity = persistedSourceDocumentId
     ? `${sourceId}\u0000document\u0000${persistedSourceDocumentId}`
-    : `${sourceId}\u0000case\u0000${JSON.stringify(decisionFallbackColumns(storageIdentity))}`;
+    : `${sourceId}\u0000case\u0000${JSON.stringify(decisionFallbackState({ storage: storageIdentity }).columns)}`;
   const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
   const slugLadder: DecisionSlugLadder = (attempt) =>
     attempt === 0

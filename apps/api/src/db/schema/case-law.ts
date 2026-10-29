@@ -686,6 +686,8 @@ export const caseLawDecisions = p.pgTable(
       length: 64,
     }),
     fallbackContentHash: p.varchar("fallback_content_hash", { length: 64 }),
+    /** Canonical document proof shared by weak and strong observations, independent of corpus mode. */
+    fallbackDocumentHash: p.varchar("fallback_document_hash", { length: 64 }),
     /**
      * Sheet number within the court file (číslo listu), where the source
      * appends one to the docket: `11 C 153/2025-28` is sheet 28 of case
