@@ -1836,7 +1836,7 @@ test("the provision filter reads links through an index, never by scanning them"
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_subtree)_idx/u,
+        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_citing)_idx/u,
       );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }
@@ -1856,8 +1856,8 @@ test("every decision citing a provision is read from the provision's own anchor 
         }).getSQL()}`,
       ),
     );
-    expect(plan).toContain(
-      "Index Scan using case_law_provision_citations_work_subtree_idx",
+    expect(plan).toMatch(
+      /Index (?:Only )?Scan using case_law_provision_citations_work_citing_idx/u,
     );
     // The anchor bounds are the seek, not a filter over the act's links.
     // One plan row per object: `[^}]` keeps the match inside the row.
