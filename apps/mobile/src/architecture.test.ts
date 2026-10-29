@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/mobile-updates";
 
 import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+import manifest from "../package.json" with { type: "json" };
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -183,9 +184,10 @@ describe("the app's dates", () => {
 });
 
 describe("the app's dependencies", () => {
-  const manifest = JSON.parse(
-    readFileSync(path.join(SOURCE_ROOT, "..", "package.json"), "utf-8"),
-  ) as { dependencies: Record<string, string> };
+  /** Test helpers run under Bun beside the tests and may use dev dependencies. */
+  const bundled = appModules.filter(
+    (name) => !name.split(path.sep).includes("test-support"),
+  );
 
   /** `@scope/name/sub` and `name/sub` name the packages `@scope/name` and `name`. */
   const packageOf = (specifier: string): string =>
@@ -202,21 +204,18 @@ describe("the app's dependencies", () => {
   // The release jobs install only `@stll/mobile...`, so a package that is
   // linked at the workspace root but missing here type-checks and bundles
   // locally, then fails the TestFlight archive.
-  test.each(appModules)(
-    "%s imports only packages the app depends on",
-    (name) => {
-      const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
-      expect(
-        importsOf(source)
-          .filter(
-            (specifier) =>
-              !specifier.startsWith(".") && !specifier.startsWith("@/"),
-          )
-          .map(packageOf)
-          .filter((pkg) => !Object.hasOwn(manifest.dependencies, pkg)),
-      ).toEqual([]);
-    },
-  );
+  test.each(bundled)("%s imports only packages the app depends on", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      importsOf(source)
+        .filter(
+          (specifier) =>
+            !specifier.startsWith(".") && !specifier.startsWith("@/"),
+        )
+        .map(packageOf)
+        .filter((pkg) => !Object.hasOwn(manifest.dependencies, pkg)),
+    ).toEqual([]);
+  });
 });
 
 describe("the app's colours", () => {
