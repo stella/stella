@@ -27,6 +27,9 @@ import {
   writeStoredRecord,
 } from "./release-health";
 
+// Dynamic reads consume temporary step summaries, never repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
 const FIXTURES = path.join(import.meta.dir, "__fixtures__/release-health");
 const RELEASE = "v1.4.1";
 const PREVIOUS_RELEASE = "v1.4.0";
@@ -826,14 +829,14 @@ describe("private release records", () => {
     writeStoredRecord({
       release: RELEASE,
       store: STORE,
-      record: privateRecord(),
+      record: readPrivateRecord(privateRecord()),
       call: store.call,
     });
     expect(JSON.parse(store.stored() ?? "")).toEqual(privateRecord());
     writeStoredRecord({
       release: RELEASE,
       store: STORE,
-      record: privateRecord(),
+      record: readPrivateRecord(privateRecord()),
       call: store.call,
     });
     expect(
@@ -848,7 +851,7 @@ describe("private release records", () => {
         writeStoredRecord({
           release: RELEASE,
           store: STORE,
-          record: privateRecord(),
+          record: readPrivateRecord(privateRecord()),
           call,
         }),
       ),
@@ -862,7 +865,7 @@ describe("private release records", () => {
         writeStoredRecord({
           release: RELEASE,
           store: STORE,
-          record: privateRecord(),
+          record: readPrivateRecord(privateRecord()),
           call,
         }),
       );
