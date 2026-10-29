@@ -38,11 +38,9 @@ test("every online step identifies its existing migration or code owner", () => 
     ...ONLINE_MIGRATION_REPAIRS,
   ];
   expect(steps.length).toBeGreaterThan(0);
-  expect(
-    steps
-      .filter(({ introducedBy }) => introducedBy === undefined)
-      .map(({ name }) => name),
-  ).toEqual([]);
+  expectTypeOf<undefined>().not.toExtend<
+    (typeof steps)[number]["introducedBy"]
+  >();
   expect(
     steps
       .filter(({ introducedBy }) =>
