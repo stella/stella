@@ -36,7 +36,7 @@ import {
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
-import { ownsContextMenuTarget } from "@/components/context-menu-target";
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -439,7 +439,7 @@ export const useMatterContextMenu = (
     menuOpen,
     rename: renameState,
     onContextMenu: (e) => {
-      if (!ownsContextMenuTarget(e)) {
+      if (!contextMenuBelongsTo(e)) {
         return;
       }
       e.preventDefault();

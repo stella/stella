@@ -24,6 +24,15 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -71,7 +80,7 @@ import {
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import { ownsContextMenuTarget } from "@/components/context-menu-target";
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
@@ -157,6 +166,7 @@ import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
+import { useDeleteEntities } from "@/lib/workspaces/mutations/entities";
 import {
   workspaceActivityOptions,
   workspacesKeys,
@@ -957,7 +967,7 @@ const NavContextMenu = ({
   return (
     <SidebarMenuItem
       onContextMenu={containedEventHandler((e) => {
-        if (!ownsContextMenuTarget(e)) {
+        if (!contextMenuBelongsTo(e)) {
           return;
         }
         const control = e.currentTarget.querySelector("button,a[href]");
@@ -1119,7 +1129,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
   return result;
 };
 
-const MatterItem = ({
+export const MatterItem = ({
   activeOrganizationId,
   workspace: ws,
   isActive,
@@ -1361,10 +1371,14 @@ const MatterItem = ({
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );
 
+  const [matterReturnFocus, setMatterReturnFocus] =
+    useState<HTMLElement | null>(null);
   const handleMatterContextMenu = (e: React.MouseEvent) => {
-    if (!ownsContextMenuTarget(e)) {
+    if (!contextMenuBelongsTo(e, { id: ws.id, kind: "matter" })) {
       return;
     }
+    const control = e.currentTarget.querySelector("button,a[href]");
+    setMatterReturnFocus(control instanceof HTMLElement ? control : null);
     e.preventDefault();
     e.stopPropagation();
     const x = e.clientX;
@@ -1402,6 +1416,8 @@ const MatterItem = ({
     <>
       <SidebarMenuItem
         data-context-menu-target={ws.id}
+        data-entity-id={ws.id}
+        data-entity-kind="matter"
         className={cn(
           isDropTarget &&
             "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
@@ -1546,6 +1562,7 @@ const MatterItem = ({
               open={menuOpen}
             >
               <MenuTrigger
+                onClick={(event) => setMatterReturnFocus(event.currentTarget)}
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
                 tooltip={t("common.actions")}
@@ -1555,6 +1572,7 @@ const MatterItem = ({
               <MenuPopup
                 align="start"
                 anchor={ctxAnchor ?? undefined}
+                finalFocus={() => matterReturnFocus}
                 side="right"
                 sideOffset={4}
               >
@@ -1650,6 +1668,14 @@ export const MatterActivityList = ({
   const queryClient = useQueryClient();
   const router = useRouter();
   const mounted = useHasMounted();
+  const deleteEntities = useDeleteEntities();
+  const [contextTarget, setContextTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [deleteReturnFocus, setDeleteReturnFocus] =
+    useState<HTMLElement | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const {
     data,
     fetchNextPage,
@@ -1752,99 +1778,143 @@ export const MatterActivityList = ({
   }
 
   return (
-    <SidebarMenuSub className="border-0" id={id}>
-      {items.map((item) => {
-        const title =
-          item.type === "thread" && isPlaceholderThreadTitle(item.title)
-            ? t("chat.newChat")
-            : item.title;
-        const relativeTime = formatRelativeTime(item.activityAt);
-        const content = (
-          <>
-            {item.type === "thread" ? (
-              <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
-            ) : (
-              <EntityKindIcon
-                className="text-muted-foreground size-3.5 shrink-0"
-                fileName={item.fileName}
-                kind={item.entityKind}
-                mimeType={item.mimeType}
-                status={item.status}
-                thumbnail={
-                  item.fieldId
-                    ? {
-                        fieldId: item.fieldId,
-                        hasThumbnail: item.hasThumbnail,
-                        workspaceId,
-                      }
-                    : null
-                }
-              />
-            )}
-            <IdentityText className="min-w-0 flex-1 text-start">
-              {title}
-            </IdentityText>
-            {relativeTime ? (
-              <Tooltip
-                content={formatFullTimestamp(item.activityAt)}
-                render={
-                  <span className="text-muted-foreground shrink-0 tabular-nums" />
-                }
-              >
-                {relativeTime}
-              </Tooltip>
-            ) : null}
-          </>
-        );
-
-        if (item.type === "entity") {
-          return (
-            <SidebarEntityRow
-              entityId={item.id}
-              key={`${item.type}-${item.id}`}
-              name={title}
-              onOpen={() =>
-                detached(openEntity(item), "app-sidebar.open-entity")
-              }
-              workspaceId={workspaceId}
-            >
-              {content}
-            </SidebarEntityRow>
+    <>
+      <SidebarMenuSub className="border-0" id={id}>
+        {items.map((item) => {
+          const title =
+            item.type === "thread" && isPlaceholderThreadTitle(item.title)
+              ? t("chat.newChat")
+              : item.title;
+          const relativeTime = formatRelativeTime(item.activityAt);
+          const content = (
+            <>
+              {item.type === "thread" ? (
+                <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
+              ) : (
+                <EntityKindIcon
+                  className="text-muted-foreground size-3.5 shrink-0"
+                  fileName={item.fileName}
+                  kind={item.entityKind}
+                  mimeType={item.mimeType}
+                  status={item.status}
+                  thumbnail={
+                    item.fieldId
+                      ? {
+                          fieldId: item.fieldId,
+                          hasThumbnail: item.hasThumbnail,
+                          workspaceId,
+                        }
+                      : null
+                  }
+                />
+              )}
+              <IdentityText className="min-w-0 flex-1 text-start">
+                {title}
+              </IdentityText>
+              {relativeTime ? (
+                <Tooltip
+                  content={formatFullTimestamp(item.activityAt)}
+                  render={
+                    <span className="text-muted-foreground shrink-0 tabular-nums" />
+                  }
+                >
+                  {relativeTime}
+                </Tooltip>
+              ) : null}
+            </>
           );
-        }
-        return (
-          <SidebarMenuSubItem
-            data-context-menu-target={item.id}
-            key={`${item.type}-${item.id}`}
-          >
-            <MatterActivityRow>
-              <Link
-                activeProps={{ "data-active": true }}
-                params={{ threadId: item.id, workspaceId }}
-                to="/chat/workspaces/$workspaceId/$threadId"
+
+          if (item.type === "entity") {
+            return (
+              <SidebarEntityRow
+                entityId={item.id}
+                entityKind={item.entityKind}
+                onDelete={(opener) => {
+                  setContextTarget({ id: item.id, title: item.title });
+                  setDeleteReturnFocus(opener);
+                  setDeleteOpen(true);
+                }}
+                key={`${item.type}-${item.id}`}
+                name={title}
+                onOpen={() =>
+                  detached(openEntity(item), "app-sidebar.open-entity")
+                }
+                workspaceId={workspaceId}
               >
                 {content}
-              </Link>
+              </SidebarEntityRow>
+            );
+          }
+          return (
+            <SidebarMenuSubItem
+              data-context-menu-target={item.id}
+              key={`${item.type}-${item.id}`}
+            >
+              <MatterActivityRow>
+                <Link
+                  activeProps={{ "data-active": true }}
+                  params={{ threadId: item.id, workspaceId }}
+                  to="/chat/workspaces/$workspaceId/$threadId"
+                >
+                  {content}
+                </Link>
+              </MatterActivityRow>
+            </SidebarMenuSubItem>
+          );
+        })}
+        {hasNextPage ? (
+          <SidebarMenuSubItem>
+            <MatterActivityRow className="text-muted-foreground justify-start">
+              <button
+                disabled={isFetchingNextPage}
+                onClick={() => {
+                  detached(fetchNextPage(), "app-sidebar.fetch-next-page");
+                }}
+                type="button"
+              >
+                {isFetchingNextPage
+                  ? t("common.loading")
+                  : t("common.showMore")}
+              </button>
             </MatterActivityRow>
           </SidebarMenuSubItem>
-        );
-      })}
-      {hasNextPage ? (
-        <SidebarMenuSubItem>
-          <MatterActivityRow className="text-muted-foreground justify-start">
-            <button
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "app-sidebar.fetch-next-page");
-              }}
-              type="button"
+        ) : null}
+      </SidebarMenuSub>
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <AlertDialogPopup finalFocus={() => deleteReturnFocus}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("workspaces.deleteItem")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("common.deleteConfirmDescription", {
+                name: contextTarget?.title ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={
+                <Button
+                  onClick={() => {
+                    if (contextTarget) {
+                      deleteEntities.mutate({
+                        workspaceId,
+                        entityIds: [contextTarget.id],
+                      });
+                    }
+                  }}
+                  variant="destructive"
+                />
+              }
             >
-              {isFetchingNextPage ? t("common.loading") : t("common.showMore")}
-            </button>
-          </MatterActivityRow>
-        </SidebarMenuSubItem>
-      ) : null}
-    </SidebarMenuSub>
+              {t("common.delete")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 };
 
@@ -1868,7 +1938,7 @@ const SidebarContextArea = ({
     <div
       className="flex min-h-0 flex-1 flex-col"
       onContextMenu={containedEventHandler((e) => {
-        if (!ownsContextMenuTarget(e)) {
+        if (!contextMenuBelongsTo(e)) {
           return;
         }
         const control = e.currentTarget.querySelector("button,a[href]");

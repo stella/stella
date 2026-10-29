@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -9,21 +9,20 @@ import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MenuItem } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { MatterActivityRow } from "@/components/matter-activity-row";
 import { SidebarMenuSubItem } from "@/components/sidebar";
-import { RowDeleteDialog } from "@/components/workspaces/row-delete-dialog";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
-import {
-  useDeleteEntities,
-  useRenameEntity,
-} from "@/lib/workspaces/mutations/entities";
+import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 type SidebarEntityRowProps = {
   children: ReactNode;
   entityId: string;
+  entityKind: string;
+  onDelete: (opener: HTMLElement | null) => void;
   name: string;
   onOpen: () => void;
   workspaceId: string;
@@ -33,15 +32,15 @@ type SidebarEntityRowProps = {
 export const SidebarEntityRow = ({
   children,
   entityId,
+  entityKind,
+  onDelete,
   name,
   onOpen,
   workspaceId,
 }: SidebarEntityRowProps) => {
   const t = useTranslations();
   const returnFocus = useRef<HTMLButtonElement | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const renameEntity = useRenameEntity();
-  const deleteEntities = useDeleteEntities();
   const canRename = usePermissions({ entity: ["update"] });
   const canDelete = usePermissions({ entity: ["delete"] });
   const rename = useInlineRename({
@@ -64,7 +63,10 @@ export const SidebarEntityRow = ({
           </MenuItem>
         )}
         {canDelete && (
-          <MenuItem onClick={() => setDeleteOpen(true)} variant="destructive">
+          <MenuItem
+            onClick={() => onDelete(returnFocus.current)}
+            variant="destructive"
+          >
             <Trash2Icon />
             {t("common.delete")}
           </MenuItem>
@@ -92,8 +94,15 @@ export const SidebarEntityRow = ({
       ) : (
         <MatterActivityRow>
           <button
+            data-entity-id={entityId}
+            data-entity-kind={entityKind}
             onClick={containedEventHandler(onOpen)}
             onContextMenu={containedEventHandler((event) => {
+              if (
+                !contextMenuBelongsTo(event, { id: entityId, kind: entityKind })
+              ) {
+                return;
+              }
               if (canRename || canDelete) {
                 menu.openAt(event);
               }
@@ -107,16 +116,6 @@ export const SidebarEntityRow = ({
         </MatterActivityRow>
       )}
       {menu.element}
-      <RowDeleteDialog
-        isBulk={false}
-        name={name}
-        onConfirm={() =>
-          deleteEntities.mutate({ entityIds: [entityId], workspaceId })
-        }
-        onOpenChange={setDeleteOpen}
-        open={deleteOpen}
-        selectedCount={1}
-      />
     </SidebarMenuSubItem>
   );
 };

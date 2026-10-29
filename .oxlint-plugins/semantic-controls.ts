@@ -25,7 +25,7 @@ import {
 
 const GENERIC_LABEL_KEYS = new Set(["common.add", "common.edit"]);
 const GENERIC_LABEL_FIELDS = new Set(["add", "edit"]);
-const TARGET_OWNERSHIP_CHECKS = new Set(["ownsContextMenuTarget"]);
+const TARGET_OWNERSHIP_CHECKS = new Set(["contextMenuBelongsTo"]);
 
 const attributeOf = (opening: AstNode, name: string) =>
   Array.isArray(opening.attributes)
@@ -130,7 +130,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           resolveTarget:
-            "A marked context-menu row must check ownsContextMenuTarget before opening actions, so nested rows cannot invoke an ancestor's menu.",
+            "A marked context-menu row must check contextMenuBelongsTo before opening actions, so nested rows cannot invoke an ancestor's menu.",
         },
       },
       createOnce(context) {

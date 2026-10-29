@@ -3,7 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-import { ownsContextMenuTarget } from "./context-menu-target";
+import { contextMenuBelongsTo } from "./context-menu-target";
 
 GlobalRegistrator.register();
 afterAll(async () => {
@@ -34,11 +34,11 @@ describe("context actions belong to the nearest marked row", () => {
 
       for (const target of [button, icon, text]) {
         for (const owner of owners) {
-          expect(ownsContextMenuTarget({ currentTarget: owner, target })).toBe(
+          expect(contextMenuBelongsTo({ currentTarget: owner, target })).toBe(
             owner === parent,
           );
         }
-        expect(ownsContextMenuTarget({ currentTarget: button, target })).toBe(
+        expect(contextMenuBelongsTo({ currentTarget: button, target })).toBe(
           true,
         );
       }
@@ -49,16 +49,16 @@ describe("context actions belong to the nearest marked row", () => {
     const row = document.createElement("div");
     const button = document.createElement("button");
     row.append(button);
-    expect(ownsContextMenuTarget({ currentTarget: row, target: button })).toBe(
+    expect(contextMenuBelongsTo({ currentTarget: row, target: button })).toBe(
       true,
     );
     expect(
-      ownsContextMenuTarget({
+      contextMenuBelongsTo({
         currentTarget: row,
         target: document.createElement("button"),
       }),
     ).toBe(false);
-    expect(ownsContextMenuTarget({ currentTarget: null, target: null })).toBe(
+    expect(contextMenuBelongsTo({ currentTarget: null, target: null })).toBe(
       false,
     );
   });

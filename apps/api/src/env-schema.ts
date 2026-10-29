@@ -9,6 +9,10 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
+import {
+  type AppleSignInInput,
+  resolveAppleSignIn,
+} from "@/api/env-apple-sign-in";
 import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
@@ -24,6 +28,7 @@ import {
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
 import { emailAddressSchema } from "@/api/lib/email/normalized-email";
+import { converterSettingsSchema } from "@/api/lib/files/converter-settings";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -371,9 +376,7 @@ export const envApiServerSchema = {
   ),
   FRONTEND_URL: v.pipe(v.string(), v.url()),
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-  GOTENBERG_URL: v.pipe(v.string(), v.url()),
-  GOTENBERG_USERNAME: v.string(),
-  GOTENBERG_PASSWORD: v.string(),
+  ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
@@ -508,6 +511,12 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
+
+  // Social login — Apple. The client secret is minted from the key in process.
+  APPLE_AUTH_CLIENT_ID: v.optional(v.string()),
+  APPLE_AUTH_TEAM_ID: v.optional(v.string()),
+  APPLE_AUTH_KEY_ID: v.optional(v.string()),
+  APPLE_AUTH_PRIVATE_KEY: v.optional(v.string()),
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_USAGE: featureFlagSchema,
@@ -971,7 +980,8 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = InboundMailReceivingInput &
-  EmailEventsInput & {
+  EmailEventsInput &
+  AppleSignInInput & {
     APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
     APP_REVIEW_ORGANIZATION_ID?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
@@ -1161,6 +1171,7 @@ const delegatedInvariantViolation = (
     EmailEventsInput &
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
+    AppleSignInInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
@@ -1180,7 +1191,11 @@ const delegatedInvariantViolation = (
     return inboundMail.error.message;
   }
   const emailEvents = resolveEmailEvents(input);
-  return emailEvents.isErr() ? emailEvents.error.message : null;
+  if (emailEvents.isErr()) {
+    return emailEvents.error.message;
+  }
+  const appleSignIn = resolveAppleSignIn(input);
+  return appleSignIn.isErr() ? appleSignIn.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
@@ -1232,6 +1247,10 @@ export const envApiInvariantViolation = ({
   EMAIL_EVENTS_QUEUE_URL,
   EMAIL_EVENTS_TOPIC_ARN,
   EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
+  APPLE_AUTH_CLIENT_ID,
+  APPLE_AUTH_TEAM_ID,
+  APPLE_AUTH_KEY_ID,
+  APPLE_AUTH_PRIVATE_KEY,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -1269,6 +1288,10 @@ export const envApiInvariantViolation = ({
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,
+    APPLE_AUTH_CLIENT_ID,
+    APPLE_AUTH_TEAM_ID,
+    APPLE_AUTH_KEY_ID,
+    APPLE_AUTH_PRIVATE_KEY,
     runtimeMode,
   });
   if (delegatedViolation !== null) {

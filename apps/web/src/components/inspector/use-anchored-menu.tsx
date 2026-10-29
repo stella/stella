@@ -3,7 +3,7 @@ import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
 import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
 
-import { ownsContextMenuTarget } from "@/components/context-menu-target";
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 
 type AnchorRect = {
   getBoundingClientRect: () => DOMRect;
@@ -35,7 +35,7 @@ export const useAnchoredMenu = ({
   const openAt = (
     event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
   ) => {
-    if (!ownsContextMenuTarget(event)) {
+    if (!contextMenuBelongsTo(event)) {
       return;
     }
     event.preventDefault();
