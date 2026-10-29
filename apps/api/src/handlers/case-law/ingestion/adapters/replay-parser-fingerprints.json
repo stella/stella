@@ -52,12 +52,12 @@
     "fingerprint": "97f28c0697b8c5642c0b556edd8157c6be61848f1c4561cc61720035c4618815"
   },
   "cz-nss": {
-    "version": 24,
-    "fingerprint": "6d58be847311beef7bee3dfd43a50009bb214b6bc7bd4b0a65f72cb545d708b6"
+    "version": 25,
+    "fingerprint": "52b88a01b96382d50d79ec898f29140cc63dfbc2dd52877004e66e62a537abbf"
   },
   "cz-regional": {
     "version": 17,
-    "fingerprint": "5afbc733adc88f12058c04f531ad87ae796575c82b3a74d86d265020cb61c5f2"
+    "fingerprint": "a0380f4dbce526be6c8d2d105a9b576edb9ace4311739de5cb8c9281a984c1e1"
   },
   "cz-uohs": {
     "version": 6,
@@ -77,7 +77,7 @@
   },
   "pl-courts": {
     "version": 18,
-    "fingerprint": "23471294b47dc7d59fbce3d0e92f5179180867058296d7d6dd2e5f64cdd3e7be"
+    "fingerprint": "27f5ea12d2926579883a4231b5292367d627dd2c3c9083ca1a89f35f8069c263"
   },
   "pl-kio": {
     "version": 12,
@@ -113,7 +113,7 @@
   },
   "sk-courts": {
     "version": 21,
-    "fingerprint": "9fcf7df9e3b16a89745fbd056d8ac607e897ad35c1066bba9ed1cb0a0a1de398"
+    "fingerprint": "3e59fbf4416fe9ea5a89011050c78ed28c5b247425cfd4d3e789b30f3a11d35b"
   },
   "sk-us": {
     "version": 18,

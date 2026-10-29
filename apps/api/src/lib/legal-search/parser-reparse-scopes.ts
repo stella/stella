@@ -113,7 +113,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
@@ -121,15 +121,15 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates.",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 24,
+    version: 25,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
@@ -137,7 +137,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -145,7 +145,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
@@ -153,7 +153,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -161,7 +161,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
@@ -169,7 +169,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
@@ -177,7 +177,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -185,7 +185,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
@@ -201,7 +201,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -297,7 +297,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
@@ -305,7 +305,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates.",
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
@@ -313,7 +313,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
@@ -329,7 +329,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -337,7 +337,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
@@ -345,7 +345,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
@@ -353,7 +353,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Retain the listing court in quarantine fingerprints and require court provenance for repair candidates. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
 } as const satisfies ParserVersionScopes<
