@@ -824,3 +824,22 @@ describe("desktop proof replay ownership", () => {
     ).toEqual([1, 2, 3]);
   }, 60_000);
 });
+
+test("generated artefact provenance census stays within its transition list", async () => {
+  const { checkArtefactProvenance } =
+    await import("./generated-artefact-provenance");
+  expect(await checkArtefactProvenance({ root: repoRoot })).toEqual([]);
+});
+
+test("generated artefact provenance detector rejects new raw calls and writes", async () => {
+  const { artefactProvenanceGuardSelfTest, inspectArtefactGenerators } =
+    await import("./generated-artefact-provenance");
+  expect(artefactProvenanceGuardSelfTest()).toBe(true);
+  expect(
+    inspectArtefactGenerators({
+      file: "apps/api/src/unregistered.ts",
+      source:
+        'import { collectTanStackTextRun } from "@/api/lib/tanstack-ai-generate"; collectTanStackTextRun({});',
+    }),
+  ).toMatchObject({ modelImport: true, legacyCalls: 1 });
+});

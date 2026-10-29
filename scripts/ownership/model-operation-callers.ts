@@ -1,3 +1,4 @@
+import { MODEL_OPERATION_BOUNDARIES } from "../../apps/api/src/lib/model-operation-registry.ts";
 import type { OwnershipEntry } from "../ownership-types.ts";
 
 export default {
@@ -58,14 +59,7 @@ export default {
   enforcement: {
     kind: "import",
     specifiers: ["@/api/lib/tanstack-ai-generate"],
-    names: [
-      "generateTanStackTextForTask",
-      "streamTanStackTextForTask",
-      "generateTanStackObjectForTask",
-      "streamTanStackObjectForTask",
-      "streamTanStackChatRun",
-      "generateTanStackChatObject",
-    ],
+    names: MODEL_OPERATION_BOUNDARIES.facade,
     allowed: [
       {
         path: "apps/api/scripts/ai-native-image-canary.ts",
