@@ -275,7 +275,7 @@ const READER_ANNOTATION_MATTER_ROW_FUNCTIONS = [
 
 const FULLTEXT_STATE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261029094325_case_law_fulltext_state",
+  "20261030004000_case_law_fulltext_state",
   "migration.sql",
 );
 

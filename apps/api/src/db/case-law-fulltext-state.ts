@@ -9,7 +9,7 @@ import { eligibleDecisionTextSql } from "@/api/lib/case-law/fulltext-eligibility
 import type { OnlineIndexDeclaration } from "./online-ddl";
 
 const CASE_LAW_TEXT_STATE_CONSTRAINT = "case_law_decisions_text_state_valid";
-const CASE_LAW_TEXT_STATE_MIGRATION = "20261029094325_case_law_fulltext_state";
+const CASE_LAW_TEXT_STATE_MIGRATION = "20261030004000_case_law_fulltext_state";
 
 const CASE_LAW_TEXT_STATE_INDEX = {
   MISSING: "case_law_decisions_text_state_missing_idx",

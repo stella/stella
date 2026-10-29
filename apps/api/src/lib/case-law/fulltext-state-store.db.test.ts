@@ -93,7 +93,7 @@ describe.serial("durable decision text recovery store", () => {
     }
     const migration = readFileSync(
       new URL(
-        "../../../drizzle/20261029094325_case_law_fulltext_state/migration.sql",
+        "../../../drizzle/20261030004000_case_law_fulltext_state/migration.sql",
         import.meta.url,
       ),
       "utf-8",
