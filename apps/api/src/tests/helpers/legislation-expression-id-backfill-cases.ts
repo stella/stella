@@ -70,6 +70,19 @@ export const registerExpressionBackfillCases = ({
   let db: GatedTestDb;
   let continuationAt: Date | undefined;
 
+  // Set the short timeout only after checkpoint setup, at the page boundary.
+  const createPageTimeoutRuntime = ((options) => {
+    const runtime = createRuntime(options);
+    return {
+      ...runtime,
+      step: async (work) =>
+        await runtime.step(async (context) => {
+          await context.tx.execute(sql`SET LOCAL statement_timeout = '100ms'`);
+          return await work(context);
+        }),
+    };
+  }) satisfies typeof createRuntime;
+
   /** One scheduled run; true when it asked to be followed at once. */
   const run = async (
     task: SchedulerTask,
@@ -552,15 +565,7 @@ export const registerExpressionBackfillCases = ({
           const outcome = await run(
             createTask({
               pageRows: 1,
-              createRuntime: (options) =>
-                createRuntime({
-                  ...options,
-                  config: {
-                    ...SCHEDULER_BACKFILL_CONFIG,
-                    ...options.config,
-                    batchStatementTimeoutMs: 100,
-                  },
-                }),
+              createRuntime: createPageTimeoutRuntime,
             }),
             recording,
           );
@@ -620,15 +625,7 @@ export const registerExpressionBackfillCases = ({
                     BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
                     createTask({
                       pageRows: 1,
-                      createRuntime: (options) =>
-                        createRuntime({
-                          ...options,
-                          config: {
-                            ...SCHEDULER_BACKFILL_CONFIG,
-                            ...options.config,
-                            batchStatementTimeoutMs: 100,
-                          },
-                        }),
+                      createRuntime: createPageTimeoutRuntime,
                     }),
                   ],
                 ]),
