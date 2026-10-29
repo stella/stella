@@ -52,7 +52,10 @@ import { parsePlTkPage } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const ADAPTER_FIXTURES = new URL("__fixtures__/", import.meta.url);
 const PARSER_FIXTURES = new URL("../parsers/__fixtures__/", import.meta.url);
@@ -158,8 +161,8 @@ const redirectTo = (path: string): Response =>
 const installPortal = (options: PortalOptions): SeenRequest[] => {
   const seen: SeenRequest[] = [];
   let sessions = 0;
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(requestUrl(input));
       const cookie = new Headers(init?.headers).get("Cookie");
       seen.push({
@@ -201,12 +204,11 @@ const installPortal = (options: PortalOptions): SeenRequest[] => {
         );
       }
       return await Promise.resolve(new Response("", { status: 404 }));
-    },
+    }),
   );
   return seen;
 };
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
 const fixtureClock = Temporal.Now.instant().epochMilliseconds;
 
@@ -222,7 +224,7 @@ afterAll(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -233,13 +235,15 @@ describe("portal session outcomes", () => {
       const cursor = "merits:1645,0,0";
       const startedAt = Temporal.Now.instant().epochMilliseconds;
       let requests = 0;
-      globalThis.fetch = asFetchMock(async () => {
-        requests++;
-        return new Response("entry refused", {
-          status: entryStatus,
-          headers: { "Retry-After": "3" },
-        });
-      });
+      testFetchState.set(
+        asFetchMock(async () => {
+          requests++;
+          return new Response("entry refused", {
+            status: entryStatus,
+            headers: { "Retry-After": "3" },
+          });
+        }),
+      );
       const first = await plTkAdapter.fetchPage(cursor, {});
       if (Result.isOk(first)) {
         throw new TypeError("Expected an entry refusal");
@@ -367,10 +371,12 @@ describe("portal session outcomes", () => {
     const cursor = "merits:1645,0,0";
     const startedAt = Temporal.Now.instant().epochMilliseconds;
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests++;
-      return new Response("entry refused", { status: 403 });
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests++;
+        return new Response("entry refused", { status: 403 });
+      }),
+    );
     const first = await plTkAdapter.fetchPage(cursor, {});
     if (Result.isOk(first)) {
       throw new TypeError("Expected an entry refusal");
@@ -415,10 +421,12 @@ describe("portal session outcomes", () => {
       new URL("pl-tk-entry-refused.html", ADAPTER_FIXTURES),
     ).text();
     const seen: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      seen.push(requestUrl(input));
-      return new Response(body, { status: 403 });
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        seen.push(requestUrl(input));
+        return new Response(body, { status: 403 });
+      }),
+    );
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
@@ -432,19 +440,21 @@ describe("portal session outcomes", () => {
 
   test("a refusal after successful bootstrap holds the cursor without reopening", async () => {
     const seen: string[] = [];
-    globalThis.fetch = asFetchMock(async (input, init) => {
-      const url = new URL(requestUrl(input));
-      seen.push(url.pathname);
-      if (url.pathname === "/ipo/") {
-        return html("<html></html>", [
-          "JSESSIONID=fixture-session; Path=/ipo; Secure; HttpOnly",
-        ]);
-      }
-      expect(new Headers(init?.headers).get("Cookie")).toContain(
-        "JSESSIONID=fixture-session",
-      );
-      return new Response("the portal opened no session", { status: 403 });
-    });
+    testFetchState.set(
+      asFetchMock(async (input, init) => {
+        const url = new URL(requestUrl(input));
+        seen.push(url.pathname);
+        if (url.pathname === "/ipo/") {
+          return html("<html></html>", [
+            "JSESSIONID=fixture-session; Path=/ipo; Secure; HttpOnly",
+          ]);
+        }
+        expect(new Headers(init?.headers).get("Cookie")).toContain(
+          "JSESSIONID=fixture-session",
+        );
+        return new Response("the portal opened no session", { status: 403 });
+      }),
+    );
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
@@ -464,10 +474,12 @@ describe("portal session outcomes", () => {
 
   test("an entry transport failure is source unreachable and makes one request", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests += 1;
-      throw new TypeError("Unable to connect");
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests += 1;
+        throw new TypeError("Unable to connect");
+      }),
+    );
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
@@ -1387,8 +1399,8 @@ describe("a case page that redirects", () => {
 
   test("a redirect on the listing itself fails the page", async () => {
     installPortal({ listingPage: () => undefined });
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(requestUrl(input));
         if (url.pathname === "/ipo/SzukajDrukuj") {
           return await Promise.resolve(redirectTo("/ipo/Szukaj?cid=1"));
@@ -1405,7 +1417,7 @@ describe("a case page that redirects", () => {
             ].filter((header) => header.length > 0),
           ),
         );
-      },
+      }),
     );
 
     const result = await plTkAdapter.fetchPage(null, {});

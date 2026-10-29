@@ -63,6 +63,7 @@ import {
   useOpenChatThreadDecision,
 } from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -123,10 +124,12 @@ import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: ({ context }) => {
     const activeOrganizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
@@ -636,6 +639,7 @@ function ChatIndex() {
               ownerKey={getChatThreadKey(threadRef)}
               workspaceId={draftThreadId}
             />
+            <McpReconnectNotice editor={controller.editor} />
             <ChatInputSurface
               sendDisabled={availability !== "available"}
               anonymized={anonymized}

@@ -25,9 +25,12 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
+
+const testFetchState = createTestFetch();
 
 // The replay seam has one job: given the payload the crawl stored, produce
 // the result the crawl produced. These tests hold the two ends together, so
@@ -56,9 +59,8 @@ const enBinding = {
   },
 };
 
-const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 /**
@@ -71,13 +73,15 @@ afterEach(() => {
 setDefaultTimeout(30_000);
 
 const crawlDecision = async (): Promise<IngestionResult> => {
-  globalThis.fetch = asFetchMock(
-    mock(() =>
-      Promise.resolve(
-        new Response(fulltextHtml, {
-          status: 200,
-          headers: { "Content-Type": "text/html" },
-        }),
+  testFetchState.set(
+    asFetchMock(
+      mock(() =>
+        Promise.resolve(
+          new Response(fulltextHtml, {
+            status: 200,
+            headers: { "Content-Type": "text/html" },
+          }),
+        ),
       ),
     ),
   );
@@ -137,10 +141,12 @@ describe("eu-ecj reparseStoredRaw", () => {
 
     // No fetch is installed for the re-parse: a call to the publisher here
     // fails the test rather than passing silently.
-    globalThis.fetch = asFetchMock(
-      mock(() => {
-        throw new Error("reparseStoredRaw must not contact the publisher");
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(() => {
+          throw new Error("reparseStoredRaw must not contact the publisher");
+        }),
+      ),
     );
 
     const outcome = await reparse(storedFrom(crawled));
@@ -248,12 +254,14 @@ describe("eu-ecj reparseStoredRaw", () => {
 });
 
 test("SPARQL transport JSON URL scalars preserve entity spelling through the real builder", async () => {
-  globalThis.fetch = asFetchMock(
-    mock(() =>
-      Promise.resolve(
-        new Response(fulltextHtml, {
-          headers: { "Content-Type": "text/html" },
-        }),
+  testFetchState.set(
+    asFetchMock(
+      mock(() =>
+        Promise.resolve(
+          new Response(fulltextHtml, {
+            headers: { "Content-Type": "text/html" },
+          }),
+        ),
       ),
     ),
   );

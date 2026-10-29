@@ -211,7 +211,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
+  - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
@@ -239,7 +239,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella contact save`
   - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
   - via `--input` only: date_of_birth
-  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1000}}'`
+  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
@@ -345,6 +345,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
+  - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
 - `stella task delete`
@@ -412,7 +413,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 438
+Beyond the curated commands above, the CLI generates 442
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

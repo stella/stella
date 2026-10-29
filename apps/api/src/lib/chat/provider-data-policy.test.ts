@@ -19,6 +19,7 @@ import type {
   AIRequestPolicy,
 } from "@/api/lib/chat/ai-data-policy";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
   assertManagedOpenRouterModel,
   isManagedProviderAvailable,
@@ -45,12 +46,21 @@ import {
   findTranscriptProblems,
   providerWireFormatOf,
 } from "@/api/tests/helpers/provider-request-transcript";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
 const REQUEST_TEXT = "Reply with OK.";
 const REQUEST_API_KEY = "test-request-key";
+// Managed requests carry the credential their tier resolved; the factory
+// never reads one from the environment.
+const MANAGED_CREDENTIAL = {
+  type: "static",
+  apiKey: REQUEST_API_KEY,
+} as const satisfies ManagedOpenRouterCredential;
 
 const ORIGINAL_REQUESTS = {
   openai: (model: string) => ({
@@ -237,9 +247,17 @@ describe("provider request policy", () => {
                 dataClass === "customer"
                   ? { dataClass, managedAIResidency }
                   : { dataClass };
+              // The managed path serves only the credential its tier hands
+              // in; the factory never reads a key from the environment.
               const result = Result.try({
                 try: () =>
-                  createTanStackTextAdapterFactory({ provider, ...policy }),
+                  createTanStackTextAdapterFactory({
+                    provider,
+                    ...policy,
+                    ...(provider === "openrouter"
+                      ? { managedOpenRouterCredential: MANAGED_CREDENTIAL }
+                      : {}),
+                  }),
                 catch: (error) => error,
               });
               if (dataClass === "customer" && provider !== "openrouter") {
@@ -264,6 +282,18 @@ describe("provider request policy", () => {
           }
         }
       }
+      const withoutCredential = Result.try({
+        try: () =>
+          createTanStackTextAdapterFactory({
+            provider: "openrouter",
+            dataClass: "customer",
+            managedAIResidency: MANAGED_AI_RESIDENCIES[0],
+          }),
+        catch: (error) => error,
+      });
+      expect(
+        Result.isError(withoutCredential) && withoutCredential.error,
+      ).toMatchObject({ status: 503, code: MANAGED_PROVIDER_UNAVAILABLE_CODE });
     } finally {
       Object.assign(env, previous);
     }
@@ -322,6 +352,7 @@ describe("provider request policy", () => {
             const options = {
               organizationId: null,
               modelTier: MANAGED_MODEL_TIER.standard,
+              managedOpenRouterCredential: MANAGED_CREDENTIAL,
               ...policy,
             };
             if (!available) {
@@ -373,6 +404,7 @@ describe("provider request policy", () => {
             provider,
             dataClass: "customer" as const,
             managedAIResidency,
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
           };
           if (provider === "openrouter") {
             expect(
@@ -443,35 +475,37 @@ describe("provider request policy", () => {
         OPENAI_API_KEY: apiKey,
         OPENROUTER_API_KEY: apiKey,
       });
-      globalThis.fetch = Object.assign(
-        async (
-          input: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ) => {
-          const request =
-            input instanceof Request
-              ? input
-              : new Request(input.toString(), init);
-          requests.push({
-            url: request.url,
-            body: await request.json(),
-            authorization: request.headers.get("authorization"),
-            contentType: request.headers.get("content-type"),
-            apiKey:
-              request.headers.get("x-api-key") ??
-              request.headers.get("x-goog-api-key"),
-          });
-          return new Response(
-            JSON.stringify({
-              error: { code: 400, message: "Request unavailable" },
-            }),
-            {
-              status: 400,
-              headers: { "content-type": "application/json" },
-            },
-          );
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (
+            input: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            const request =
+              input instanceof Request
+                ? input
+                : new Request(input.toString(), init);
+            requests.push({
+              url: request.url,
+              body: await request.json(),
+              authorization: request.headers.get("authorization"),
+              contentType: request.headers.get("content-type"),
+              apiKey:
+                request.headers.get("x-api-key") ??
+                request.headers.get("x-goog-api-key"),
+            });
+            return new Response(
+              JSON.stringify({
+                error: { code: 400, message: "Request unavailable" },
+              }),
+              {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              },
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       try {
         const model = MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
@@ -492,6 +526,9 @@ describe("provider request policy", () => {
         const baseline = createTanStackTextAdapterFactory({
           provider,
           dataClass: "public_corpus",
+          ...(provider === "openrouter"
+            ? { managedOpenRouterCredential: MANAGED_CREDENTIAL }
+            : {}),
         })(model);
         for await (const _chunk of baseline.chatStream(chatOptions)) {
           /* consume stream */
@@ -523,7 +560,7 @@ describe("provider request policy", () => {
           expect(requests.at(0)).toEqual(expectedRequest);
         }
       } finally {
-        globalThis.fetch = originalFetch;
+        testFetchState.restore();
         Object.assign(env, previous);
         if (previousBedrockEndpoint === undefined) {
           delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -542,24 +579,26 @@ describe("provider request policy", () => {
     testState.setConfig("AI_PROVIDER", "openrouter");
     testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
     testState.setConfig("OPENROUTER_API_KEY", REQUEST_API_KEY);
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof globalThis.fetch>[0],
-        init?: RequestInit,
-      ) => {
-        const request =
-          input instanceof Request
-            ? input
-            : new Request(input.toString(), init);
-        requests.push({ url: request.url, body: await request.json() });
-        return new Response(
-          JSON.stringify({
-            error: { code: 400, message: "Request unavailable" },
-          }),
-          { status: 400, headers: { "content-type": "application/json" } },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ) => {
+          const request =
+            input instanceof Request
+              ? input
+              : new Request(input.toString(), init);
+          requests.push({ url: request.url, body: await request.json() });
+          return new Response(
+            JSON.stringify({
+              error: { code: 400, message: "Request unavailable" },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
@@ -581,6 +620,7 @@ describe("provider request policy", () => {
           organizationId: null,
           task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
+          managedOpenRouterCredential: MANAGED_CREDENTIAL,
           ...policy,
         });
         expect(model.provider).toBe("openrouter");
@@ -607,7 +647,7 @@ describe("provider request policy", () => {
         });
       }
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     }
   });
 
@@ -625,6 +665,7 @@ describe("provider request policy", () => {
               : { dataClass };
           const factory = createTanStackTextAdapterFactory({
             provider: "openrouter",
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
             ...policy,
           });
           for (const modelId of [
@@ -703,18 +744,20 @@ describe("provider request policy", () => {
     let sent = 0;
     env.USE_MOCK_AI = false;
     env.OPENROUTER_API_KEY = "test-instance-key";
-    globalThis.fetch = Object.assign(
-      async () => {
-        sent += 1;
-        return new Response(
-          JSON.stringify({ error: { message: "Unexpected request" } }),
-          {
-            status: 400,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async () => {
+          sent += 1;
+          return new Response(
+            JSON.stringify({ error: { message: "Unexpected request" } }),
+            {
+              status: 400,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
@@ -726,6 +769,7 @@ describe("provider request policy", () => {
           const model = "google/gemini-3.8-flash";
           const adapter = createTanStackTextAdapterFactory({
             provider: "openrouter",
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
             ...policy,
           })(model);
           for (const invalidModel of [
@@ -791,7 +835,7 @@ describe("provider request policy", () => {
         }
       }
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       env.USE_MOCK_AI = previousMock;
       env.OPENROUTER_API_KEY = previousKey;
     }
@@ -905,42 +949,51 @@ describe("provider request policy", () => {
           const requests: { url: string; body: unknown }[] = [];
           env.USE_MOCK_AI = false;
           env.OPENROUTER_API_KEY = "test-instance-key";
-          globalThis.fetch = Object.assign(
-            async (
-              input: Parameters<typeof globalThis.fetch>[0],
-              init?: RequestInit,
-            ) => {
-              const request =
-                input instanceof Request
-                  ? input
-                  : new Request(input.toString(), init);
-              requests.push({ url: request.url, body: await request.json() });
-              if (status === "aborted") {
-                throw new DOMException("Request aborted", "AbortError");
-              }
-              return new Response(
-                JSON.stringify({
-                  error: {
-                    code: status,
-                    message,
-                    ...("metadata" in response
-                      ? { metadata: response.metadata }
-                      : {}),
-                  },
-                }),
-                { status, headers: { "content-type": "application/json" } },
-              );
-            },
-            { preconnect: originalFetch.preconnect },
+          testFetchState.set(
+            Object.assign(
+              async (
+                input: Parameters<typeof globalThis.fetch>[0],
+                init?: RequestInit,
+              ) => {
+                const request =
+                  input instanceof Request
+                    ? input
+                    : new Request(input.toString(), init);
+                requests.push({ url: request.url, body: await request.json() });
+                if (status === "aborted") {
+                  throw new DOMException("Request aborted", "AbortError");
+                }
+                return new Response(
+                  JSON.stringify({
+                    error: {
+                      code: status,
+                      message,
+                      ...("metadata" in response
+                        ? { metadata: response.metadata }
+                        : {}),
+                    },
+                  }),
+                  { status, headers: { "content-type": "application/json" } },
+                );
+              },
+              { preconnect: originalFetch.preconnect },
+            ),
           );
           try {
             const model = scenario.strict
               ? "google/gemini-3.8-flash"
               : "google/gemini-3.8-flash:online";
-            const adapter = createTanStackTextAdapterFactory({
-              provider: "openrouter",
-              ...scenario.options,
-            })(model);
+            // A customer key serves its own request; managed requests carry
+            // the tier's credential.
+            const adapter = createTanStackTextAdapterFactory(
+              "apiKey" in scenario.options
+                ? { provider: "openrouter", ...scenario.options }
+                : {
+                    provider: "openrouter",
+                    managedOpenRouterCredential: MANAGED_CREDENTIAL,
+                    ...scenario.options,
+                  },
+            )(model);
             const chatOptions = {
               model,
               logger: resolveDebugOption(false),
@@ -1084,7 +1137,7 @@ describe("provider request policy", () => {
               });
             }
           } finally {
-            globalThis.fetch = originalFetch;
+            testFetchState.restore();
             env.USE_MOCK_AI = previousMock;
             env.OPENROUTER_API_KEY = previousKey;
           }

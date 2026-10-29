@@ -802,6 +802,16 @@ export const checkMigrationLocks = ({
   allowances = [],
 }: CheckMigrationLocksOptions) => {
   const errors: string[] = [];
+  const migrationFolders = new Set(
+    sources.map(({ file }) => migrationFolder(file)),
+  );
+  for (const migration of new Set(allowances.map((entry) => entry.migration))) {
+    if (!migrationFolders.has(migration)) {
+      errors.push(
+        `${migrationLockAllowancePath(migration)}: orphan allowance; expected migration folder apps/api/drizzle/${migration}`,
+      );
+    }
+  }
   const counts = new Map<LockMode, number>();
   const remaining = new Map(
     baseline.map((entry) => [`${entry.migration}/${entry.form}`, entry.count]),

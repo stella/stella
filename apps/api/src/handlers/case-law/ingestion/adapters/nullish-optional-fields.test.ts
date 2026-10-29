@@ -3,6 +3,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const { createAtCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
@@ -16,8 +20,6 @@ const { plCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/pl-courts");
 const { skCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
-
-const originalFetch = globalThis.fetch;
 
 // The registry's adapter reserves a slot on the process-wide RIS publisher
 // gate before every request, so a file that walked any RIS adapter within the
@@ -38,7 +40,7 @@ type MockRoute = {
 };
 
 const mockFetchWithBodies = (routes: MockRoute[]) => {
-  const mockedFetch: typeof fetch = Object.assign(
+  const mockedFetch = asFetchMock(
     async (input: string | URL | Request): Promise<Response> => {
       const url = (() => {
         if (typeof input === "string") {
@@ -66,16 +68,13 @@ const mockFetchWithBodies = (routes: MockRoute[]) => {
         },
       });
     },
-    {
-      preconnect: originalFetch.preconnect.bind(originalFetch),
-    },
   );
 
-  globalThis.fetch = mockedFetch;
+  testFetchState.set(mockedFetch);
 };
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   clearRootDbMocks();
 });
 
@@ -384,8 +383,8 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts falls back to the dump item when a detail request times out", async () => {
-    globalThis.fetch = Object.assign(
-      async (input: string | URL | Request): Promise<Response> => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
             return input;
@@ -422,10 +421,7 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
-      },
+      }),
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
@@ -501,8 +497,8 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts keeps rawHash stable when detail fetch availability changes", async () => {
     let detailMode: "ok" | "timeout" = "ok";
 
-    globalThis.fetch = Object.assign(
-      async (input: string | URL | Request): Promise<Response> => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
             return input;
@@ -558,10 +554,7 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
-      },
+      }),
     );
 
     const first = await plCourtsAdapter.fetchPage(null, {});
@@ -592,8 +585,8 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts falls back to the dump item when detail JSON is malformed", async () => {
-    globalThis.fetch = Object.assign(
-      async (input: string | URL | Request): Promise<Response> => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
             return input;
@@ -632,10 +625,7 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
-      },
+      }),
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
@@ -651,66 +641,65 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts sends the shared ingestion User-Agent on detail requests", async () => {
     let detailUserAgent: string | null = null;
 
-    globalThis.fetch = Object.assign(
-      async (
-        input: string | URL | Request,
-        init?: RequestInit,
-      ): Promise<Response> => {
-        const url = (() => {
-          if (typeof input === "string") {
-            return input;
-          }
-          if (input instanceof URL) {
-            return input.href;
-          }
-          return input.url;
-        })();
+    testFetchState.set(
+      asFetchMock(
+        async (
+          input: string | URL | Request,
+          init?: RequestInit,
+        ): Promise<Response> => {
+          const url = (() => {
+            if (typeof input === "string") {
+              return input;
+            }
+            if (input instanceof URL) {
+              return input.href;
+            }
+            return input.url;
+          })();
 
-        if (url.includes("/api/dump/judgments")) {
-          return new Response(
-            JSON.stringify({
-              items: [
-                {
+          if (url.includes("/api/dump/judgments")) {
+            return new Response(
+              JSON.stringify({
+                items: [
+                  {
+                    id: 7,
+                    courtType: "COMMON",
+                    courtCases: [{ caseNumber: "VII K 7/24" }],
+                    judgmentType: "DECISION",
+                    judgmentDate: "2024-07-07",
+                    textContent: "Postanowienie\n\nSygn. akt VII K 7/24",
+                  },
+                ],
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+
+          if (url.includes("/api/judgments/7")) {
+            detailUserAgent = new Headers(init?.headers).get("User-Agent");
+
+            return new Response(
+              JSON.stringify({
+                data: {
                   id: 7,
                   courtType: "COMMON",
                   courtCases: [{ caseNumber: "VII K 7/24" }],
                   judgmentType: "DECISION",
                   judgmentDate: "2024-07-07",
-                  textContent: "Postanowienie\n\nSygn. akt VII K 7/24",
+                  textContent: "<p>Sygn. akt VII K 7/24</p>",
                 },
-              ],
-            }),
-            {
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        if (url.includes("/api/judgments/7")) {
-          detailUserAgent = new Headers(init?.headers).get("User-Agent");
-
-          return new Response(
-            JSON.stringify({
-              data: {
-                id: 7,
-                courtType: "COMMON",
-                courtCases: [{ caseNumber: "VII K 7/24" }],
-                judgmentType: "DECISION",
-                judgmentDate: "2024-07-07",
-                textContent: "<p>Sygn. akt VII K 7/24</p>",
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
               },
-            }),
-            {
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
+            );
+          }
 
-        return new Response("Not found", { status: 404 });
-      },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
-      },
+          return new Response("Not found", { status: 404 });
+        },
+      ),
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});

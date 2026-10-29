@@ -642,17 +642,59 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # A candidate's GitHub release stays a draft until production publishes it,
+  # and only a token with push access can see a draft. This job alone holds
+  # that scope and reads only the manifest, so promotion keeps a read-only
+  # token.
+  rc-manifest:
+    name: Resolve RC manifest images
+    needs: resolve
+    if: github.ref == 'refs/heads/main' && inputs.release_ref != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # read the candidate's draft release
+    outputs:
+      api: ${{ steps.manifest.outputs.api }}
+      web: ${{ steps.manifest.outputs.web }}
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve RC manifest images
+        timeout-minutes: 5
+        id: manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          [[ "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || { echo '::error::Expected an RC tag'; exit 1; }
+          mkdir -p "$RUNNER_TEMP/rc-manifest"
+          bash scripts/gh-retry.sh release download "$RELEASE_REF" --pattern release-manifest.json --dir "$RUNNER_TEMP/rc-manifest"
+          manifest="$RUNNER_TEMP/rc-manifest/release-manifest.json"
+          jq -e --arg sha "$DEPLOY_SHA" --arg ref "$RELEASE_REF" '.commit == $sha and .version == $ref and .webImage.targetEnvironment == "staging"' "$manifest" >/dev/null
+          echo "api=$(jq -er '.image.digest' "$manifest")" >> "$GITHUB_OUTPUT"
+          echo "web=$(jq -er '.webImage.digest' "$manifest")" >> "$GITHUB_OUTPUT"
+
   # The builds run after a skipped wake when staging was already up. A job's
   # default condition skips it when any job it depends on through `needs` was
   # skipped, which promoted nothing yet ended the run green, so promotion
   # names the build results it depends on instead.
   promote-staging:
     name: Promote staging images
-    needs: [resolve, staging-health, staging-wake, build-api, build-web]
+    needs:
+      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]
     if: >-
       !cancelled() && github.ref == 'refs/heads/main' &&
       needs.resolve.result == 'success' &&
-      ((inputs.release_ref != '' &&
+      ((inputs.release_ref != '' && needs.rc-manifest.result == 'success' &&
       (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')) ||
       (needs.build-api.result == 'success' && needs.build-web.result == 'success'))
     runs-on: ubuntu-24.04
@@ -682,10 +724,15 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/staging-proof-readiness.ts
+            scripts/staging-proof-readiness-cli.ts
+            scripts/staging-ecs-readiness.ts
             scripts/post-staging-verification.sh
             scripts/staging-owner.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/db-components.ts
+            apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -693,12 +740,20 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
+      - name: Preserve staging proof tooling across source checkouts
+        run: |
+          mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"staging-proof-readiness*.ts "$RUNNER_TEMP/scripts/"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health,staging-ecs-readiness}.ts "$RUNNER_TEMP/scripts/"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/scripts" >> "$GITHUB_ENV"
+          echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/scripts/state.json" >> "$GITHUB_ENV"
+
       - name: Preserve release verification tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
           echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/staging-owner.sh" "$RUNNER_TEMP/staging-owner.sh"
           echo "STAGING_OWNER_SCRIPT=$RUNNER_TEMP/staging-owner.sh" >> "$GITHUB_ENV"
 
@@ -718,27 +773,6 @@ jobs:
             exit 1
           fi
 
-      # Watches the dispatched run to completion: a promote that fails after
-      # the dispatch is accepted must fail this job, so verify-staging is
-      # skipped by `needs` instead of blocking on a commit that will never
-      # be served.
-      - name: Resolve RC manifest images
-        timeout-minutes: 5
-        id: rc-images
-        if: inputs.release_ref != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_REF: ${{ inputs.release_ref }}
-          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
-        run: |
-          [[ "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || { echo '::error::Expected an RC tag'; exit 1; }
-          mkdir -p "$RUNNER_TEMP/rc-manifest"
-          bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" --pattern release-manifest.json --dir "$RUNNER_TEMP/rc-manifest"
-          manifest="$RUNNER_TEMP/rc-manifest/release-manifest.json"
-          jq -e --arg sha "$DEPLOY_SHA" --arg ref "$RELEASE_REF" '.commit == $sha and .version == $ref and .webImage.targetEnvironment == "staging"' "$manifest" >/dev/null
-          echo "api=$(jq -er '.image.digest' "$manifest")" >> "$GITHUB_OUTPUT"
-          echo "web=$(jq -er '.webImage.digest' "$manifest")" >> "$GITHUB_OUTPUT"
-
       - name: Wait for the current staging owner
         timeout-minutes: 125
         env:
@@ -746,6 +780,10 @@ jobs:
           STAGING_OWNER_MODE: ${{ inputs.release_ref != '' && 'candidate' || 'ordinary' }}
         run: bash "$STAGING_OWNER_SCRIPT"
 
+      # Watches the dispatched run to completion: a promote that fails after
+      # the dispatch is accepted must fail this job, so verify-staging is
+      # skipped by `needs` instead of blocking on a commit that will never
+      # be served.
       - name: Deploy to staging
         # Waits for the infra staging promote; the job's other steps keep the rest.
         timeout-minutes: 350
@@ -757,15 +795,16 @@ jobs:
           workflow-file: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
           release-ref: ${{ inputs.release_ref || needs.build-api.outputs.release-ref }}
           target-environment: staging
-          image-digest: ${{ steps.rc-images.outputs.api || needs.build-api.outputs.digest }}
-          web-image-digest: ${{ steps.rc-images.outputs.web || needs.build-web.outputs.digest }}
+          image-digest: ${{ needs.rc-manifest.outputs.api || needs.build-api.outputs.digest }}
+          web-image-digest: ${{ needs.rc-manifest.outputs.web || needs.build-web.outputs.digest }}
           git-sha: ${{ inputs.release_ref == '' && needs.resolve.outputs.sha || '' }}
           # The infrastructure promote holds its own lease while it runs: the
           # first lease bridges until it starts, the second covers every later
           # step's timeout-minutes (scripts/staging-proof-lease.test.ts).
           staging-lease-before-hours: ${{ inputs.release_ref != '' && '1' || '' }}
-          staging-lease-after-hours: ${{ inputs.release_ref != '' && '3' || '' }}
+          staging-lease-after-hours: ${{ inputs.release_ref != '' && '4' || '' }}
           staging-lease-sha: ${{ inputs.release_ref != '' && needs.resolve.outputs.sha || '' }}
+          proof-state-path: ${{ env.STAGING_PROOF_STATE_PATH }}
 
       # The commit staging is running, recorded where it outlives this run.
       - name: Record staging deployment
@@ -830,15 +869,18 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Verify staging serves the release commit and environment
+        id: proof-readiness
         timeout-minutes: 10
+        continue-on-error: true
         env:
-          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
-          API_DEPLOYMENT_EXPECTED_ENVIRONMENT: staging
-          API_DEPLOYMENT_PROBE_PATH: ready
-          API_DEPLOYMENT_URL: https://api-staging.stll.app
-          EDGE_HEADER_NAME: x-stella-edge-token
-          EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+          E2E_API_URL: https://api-staging.stll.app
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          bun "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts" wait
+          nohup bun "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts" monitor > "$RUNNER_TEMP/staging-proof-readiness.log" 2>&1 &
 
       - name: Install dependencies
         timeout-minutes: 5
@@ -864,6 +906,7 @@ jobs:
       - name: Run staging web smoke
         timeout-minutes: 30
         id: web-smoke
+        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' }}
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
         env:
           STAGING_STATE: ${{ vars.STAGING_STATE }}
@@ -881,7 +924,7 @@ jobs:
       # until it has a record of green runs.
       - name: Run staging response policy checks
         timeout-minutes: 5
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         continue-on-error: true
         run: |
           if bun apps/api/src/scripts/post-deploy-response-policy.ts; then
@@ -904,7 +947,7 @@ jobs:
       - name: Run staging API chat smoke
         timeout-minutes: 5
         id: api-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
         env:
           E2E_API_URL: https://api-staging.stll.app
@@ -920,7 +963,7 @@ jobs:
       # delete the `continue-on-error: true` line below.
       - name: Run staging API model-turn smoke
         timeout-minutes: 5
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         continue-on-error: true
         run: |
           if bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"; then
@@ -942,7 +985,7 @@ jobs:
       - name: Check staging corpus search backend
         id: corpus-preflight
         continue-on-error: ${{ needs.resolve.outputs.corpus_search_waived == 'true' }}
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 2
         env:
           E2E_API_URL: https://api-staging.stll.app
@@ -976,7 +1019,7 @@ jobs:
       - name: Run staging MCP user journeys
         timeout-minutes: 10
         id: mcp-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' && steps.corpus-preflight.outcome == 'success' }}
         run: bun run canary:mcp
         env:
           MCP_CANARY_ENVIRONMENT: staging
@@ -996,7 +1039,7 @@ jobs:
 
       - name: Run deployed application journeys
         id: deployed-journeys
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 20
         uses: ./.github/actions/user-journeys
         with:
@@ -1014,7 +1057,7 @@ jobs:
 
       - name: Run mock-model application journeys
         id: mock-journeys
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 40
         uses: ./.github/actions/user-journeys
         with:
@@ -1029,16 +1072,11 @@ jobs:
 
       - name: Verify candidate staging commit after smokes
         id: candidate-served-after-smokes
-        if: ${{ always() && inputs.release_ref != '' && steps.deployment.outputs.id != '' }}
-        timeout-minutes: 10
+        if: ${{ always() && steps.proof-readiness.outcome != '' && steps.proof-readiness.outcome != 'skipped' }}
+        timeout-minutes: 2
         env:
-          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
-          API_DEPLOYMENT_EXPECTED_ENVIRONMENT: staging
-          API_DEPLOYMENT_PROBE_PATH: ready
-          API_DEPLOYMENT_URL: https://api-staging.stll.app
-          EDGE_HEADER_NAME: x-stella-edge-token
-          EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+          STAGING_PROOF_PREFLIGHT: ${{ steps.proof-readiness.outputs.status }}
+        run: bun "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts" finish
 
       - name: Upload Playwright report
         timeout-minutes: 5
@@ -1064,7 +1102,7 @@ jobs:
 
       - name: Record staging verification
         timeout-minutes: 3
-        if: ${{ always() && steps.deployment.outputs.id != '' && (inputs.release_ref == '' || steps.candidate-served-after-smokes.outcome == 'success') }}
+        if: ${{ always() && steps.deployment.outputs.id != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
@@ -1077,13 +1115,24 @@ jobs:
           CORPUS_PREFLIGHT: ${{ steps.corpus-preflight.outcome }}
           CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
           WAIVE_REASON: ${{ inputs.waive_reason }}
+          PROOF_READINESS: ${{ steps.proof-readiness.outputs.status }}
+          PROOF_ENVIRONMENT: ${{ steps.candidate-served-after-smokes.outputs.status }}
           JOB_STATUS: ${{ job.status }}
           PROOF_MAIN_BASE: ${{ needs.resolve.outputs.main-sha }}
         run: |
           set -euo pipefail
           state=failure
           description="Staging smoke failure: run ${GITHUB_RUN_ID}"
-          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$DEPLOYED_JOURNEYS" == "success" && "$MOCK_JOURNEYS" == "success" && "$JOB_STATUS" == "success" ]]; then
+          if [[ "$PROOF_READINESS" == "proof-tooling-failure" || "$PROOF_ENVIRONMENT" == "proof-tooling-failure" || -z "$PROOF_READINESS" ]]; then
+            state=error
+            description="Staging proof tooling failure: ${GITHUB_RUN_ID}"
+          elif [[ "$PROOF_READINESS" != "ready" ]]; then
+            state=error
+            description="Staging environment unavailable; rerun proof: ${GITHUB_RUN_ID}"
+          elif [[ "$PROOF_ENVIRONMENT" != "ready" ]]; then
+            state=error
+            description="Staging environment interrupted; rerun proof: ${GITHUB_RUN_ID}"
+          elif [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$DEPLOYED_JOURNEYS" == "success" && "$MOCK_JOURNEYS" == "success" && "$JOB_STATUS" == "success" ]]; then
             if [[ "$CORPUS_PREFLIGHT" == "success" && "$MCP_SMOKE" == "success" ]]; then
               state=success
               description="Staging smoke success: run ${GITHUB_RUN_ID}"

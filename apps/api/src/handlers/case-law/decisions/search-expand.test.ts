@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { getModelDefaultReasoningEffort } from "@stll/ai-catalog";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -22,8 +22,11 @@ import {
   streamCarrying,
 } from "@/api/tests/helpers/provider-wire-answer";
 import { loadProviderWireCassettes } from "@/api/tests/helpers/provider-wire-cassette";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // The expansion's own model call, with the organization's real model
 // resolution, request options, adapter and answer parsing; only `fetch` is
@@ -155,11 +158,14 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 testState.beforeAll(() => {
   testState.setConfig("USE_MOCK_AI", false);
-  globalThis.fetch = answeringFetch;
 });
 
-afterAll(() => {
-  globalThis.fetch = realFetch;
+beforeEach(() => {
+  testFetchState.set(answeringFetch);
+});
+
+afterEach(() => {
+  testFetchState.restore();
 });
 
 /** Usage is recorded through the request's database scope; none here. */

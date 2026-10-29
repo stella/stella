@@ -56,7 +56,10 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -112,7 +115,6 @@ const entryOf = (entries: readonly Entry[], unid: string): Entry =>
   entries.find((entry) => unidOf(entry) === unid) ??
   panic(`the view fixtures lost ${unid}`);
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
 
 beforeEach(() => {
@@ -121,7 +123,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -206,18 +208,20 @@ const answerRegister = (model: RegisterModel, url: URL): Response => {
 };
 
 const serveRegister = (model: RegisterModel): void => {
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request) =>
-      await Promise.resolve(
-        answerRegister(
-          model,
-          new URL(
-            typeof input === "string" || input instanceof URL
-              ? input
-              : input.url,
+  testFetchState.set(
+    asFetchMock(
+      async (input: string | URL | Request) =>
+        await Promise.resolve(
+          answerRegister(
+            model,
+            new URL(
+              typeof input === "string" || input instanceof URL
+                ? input
+                : input.url,
+            ),
           ),
         ),
-      ),
+    ),
   );
 };
 
@@ -721,22 +725,28 @@ describe("what the register does not serve", () => {
 
   test("a view answering no rows for positions inside it fails the page rather than reading as caught up", async () => {
     const model = await registerOverFixtures();
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(
-        typeof input === "string" || input instanceof URL ? input : input.url,
-      );
-      return await Promise.resolve(
-        url.searchParams.get("Count") === "1"
-          ? answerRegister(model, url)
-          : Response.json({ "@toplevelentries": String(model.entries.length) }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          typeof input === "string" || input instanceof URL ? input : input.url,
+        );
+        return await Promise.resolve(
+          url.searchParams.get("Count") === "1"
+            ? answerRegister(model, url)
+            : Response.json({
+                "@toplevelentries": String(model.entries.length),
+              }),
+        );
+      }),
+    );
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
 
   test("a view answer that is not a view fails the page rather than reading as empty", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response("<html>Error</html>")),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response("<html>Error</html>")),
+      ),
     );
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
@@ -1126,16 +1136,18 @@ describe("the court rulings a decision page attaches", () => {
 
     const failing = await registerWithRulings();
     const answer = answerRegister;
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(
-        typeof input === "string" || input instanceof URL ? input : input.url,
-      );
-      return await Promise.resolve(
-        url.pathname.includes("VI%20ACa")
-          ? new Response("", { status: 500 })
-          : answer(failing, url),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          typeof input === "string" || input instanceof URL ? input : input.url,
+        );
+        return await Promise.resolve(
+          url.pathname.includes("VI%20ACa")
+            ? new Response("", { status: 500 })
+            : answer(failing, url),
+        );
+      }),
+    );
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
 

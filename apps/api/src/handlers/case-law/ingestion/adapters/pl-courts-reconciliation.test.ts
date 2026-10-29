@@ -24,7 +24,6 @@ import {
   plCourtsAdapter,
   plCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import {
@@ -38,8 +37,12 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(plCourtsAdapter);
 
@@ -115,7 +118,7 @@ const mockFetchWithBodies = (routes: MockRoute[]) => {
     { preconnect: originalFetch.preconnect.bind(originalFetch) },
   );
 
-  globalThis.fetch = mockedFetch;
+  testFetchState.set(mockedFetch);
 };
 
 const searchBody = (items: readonly SaosItem[], totalResults: number): string =>
@@ -132,7 +135,7 @@ const sliceRejection = async (slice: string): Promise<unknown> =>
   );
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   requestedUrls.length = 0;
 });
 
@@ -707,29 +710,31 @@ describe("pl-courts crawl detail reads", () => {
     common: DetailAnswer;
     supreme?: DetailAnswer;
   }) => {
-    globalThis.fetch = Object.assign(
-      async (input: string | URL | Request): Promise<Response> => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/api/dump/judgments")) {
-          return Response.json({
-            items:
-              answers.supreme === undefined
-                ? [COMMON_DUMP_ROW]
-                : [COMMON_DUMP_ROW, SUPREME_DUMP_ROW],
-          });
-        }
-        const answer = [
-          { id: COMMON_COURT_ITEM.id, answer: answers.common },
-          { id: SUPREME_COURT_ITEM.id, answer: answers.supreme },
-        ].find(({ id }) => url.endsWith(`/api/judgments/${id}`))?.answer;
-        if (answer === "throws") {
-          throw new TypeError("fetch failed");
-        }
-        return answer === undefined
-          ? new Response("Not found", { status: 404 })
-          : answer();
-      },
-      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    testFetchState.set(
+      Object.assign(
+        async (input: string | URL | Request): Promise<Response> => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/api/dump/judgments")) {
+            return Response.json({
+              items:
+                answers.supreme === undefined
+                  ? [COMMON_DUMP_ROW]
+                  : [COMMON_DUMP_ROW, SUPREME_DUMP_ROW],
+            });
+          }
+          const answer = [
+            { id: COMMON_COURT_ITEM.id, answer: answers.common },
+            { id: SUPREME_COURT_ITEM.id, answer: answers.supreme },
+          ].find(({ id }) => url.endsWith(`/api/judgments/${id}`))?.answer;
+          if (answer === "throws") {
+            throw new TypeError("fetch failed");
+          }
+          return answer === undefined
+            ? new Response("Not found", { status: 404 })
+            : answer();
+        },
+        { preconnect: originalFetch.preconnect.bind(originalFetch) },
+      ),
     );
   };
 

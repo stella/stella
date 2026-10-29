@@ -68,8 +68,11 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testFetchState = createTestFetch();
 
 /**
  * A search whose index cannot be reached answers every agent the same way:
@@ -98,20 +101,22 @@ const originalPublicLaw = env.FEATURE_PUBLIC_LAW;
 
 beforeEach(() => {
   // The index is gone: every request to it is refused before an answer.
-  globalThis.fetch = Object.assign(
-    async () =>
-      await Promise.reject(
-        Object.assign(new Error("Unable to connect"), {
-          code: "ConnectionRefused",
-        }),
-      ),
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async () =>
+        await Promise.reject(
+          Object.assign(new Error("Unable to connect"), {
+            code: "ConnectionRefused",
+          }),
+        ),
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   env.FEATURE_PUBLIC_LAW = true;
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   env.FEATURE_PUBLIC_LAW = originalPublicLaw;
 });
 
@@ -291,12 +296,16 @@ describe("search_index_unavailable", () => {
     const requested: string[] = [];
     const contextWithoutServingGeneration = (): AuthorizedMcpRequestContext => {
       requested.length = 0;
-      globalThis.fetch = Object.assign(
-        async (input: string | URL | Request) => {
-          requested.push(input instanceof Request ? input.url : String(input));
-          return await Promise.resolve(Response.json({}, { status: 500 }));
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (input: string | URL | Request) => {
+            requested.push(
+              input instanceof Request ? input.url : String(input),
+            );
+            return await Promise.resolve(Response.json({}, { status: 500 }));
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       const context = createContext();
       return {
@@ -687,7 +696,7 @@ describe("public corpus statement budgets", () => {
           searchDecisionsHandler: async () =>
             abortTransaction(
               new ActionAdmissionError({
-                reason: "unavailable",
+                reason: "lease_lost",
                 message: "Action lease was lost",
               }),
             ),
@@ -696,7 +705,7 @@ describe("public corpus statement budgets", () => {
     });
     expect(result.isError).toBe(true);
     expect(payloadOf(result)).toMatchObject({
-      error: { code: "action_admission_unavailable", retryable: true },
+      error: { code: "action_admission_lease_lost", retryable: true },
     });
   });
 

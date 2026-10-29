@@ -34,9 +34,12 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -347,8 +350,8 @@ describe("pl-courts nested tables", () => {
     const row = await rowById(DUMP_PAGE, 332_735);
     const nestedTable = [
       "<table><tbody><tr><td><p>Outer cell</p>",
-      "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
-      "</td></tr></tbody></table>",
+      "<table><tbody><tr><td><p>Nested cell</p></td><td><p>Nested side</p></td></tr></tbody></table>",
+      "</td><td><p>Side cell</p></td></tr></tbody></table>",
     ].join("");
     const decision = decisionFrom({
       listingRow: { ...row, textContent: nestedTable },
@@ -560,9 +563,8 @@ test("SAOS detail null URLs and chambers fall back to the listing", async () => 
 });
 
 describe("SAOS detail refusals preserve the dump crawl's storage policy", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test.each([401, 403, 429])(
@@ -570,17 +572,19 @@ describe("SAOS detail refusals preserve the dump crawl's storage policy", () => 
     async (status) => {
       const listing = await rowById(DUMP_PAGE, 332_735);
       let detailRequests = 0;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.pathname.includes("/dump/")) {
-          return Response.json({ items: [listing] });
-        }
-        expect(url.pathname.endsWith("/332735")).toBe(true);
-        detailRequests += 1;
-        return new Response("refused", { status });
-      });
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          if (url.pathname.includes("/dump/")) {
+            return Response.json({ items: [listing] });
+          }
+          expect(url.pathname.endsWith("/332735")).toBe(true);
+          detailRequests += 1;
+          return new Response("refused", { status });
+        }),
+      );
 
       const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
       expect(detailRequests).toBe(1);

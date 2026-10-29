@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -18,7 +18,7 @@ import type {
   OrgAIConfig,
   OrgAIModelSelection,
 } from "@/api/lib/ai-config";
-import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import { decryptAIConfig as decryptAIConfigResult } from "@/api/lib/ai-config-crypto";
 import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import { toSafeId } from "@/api/lib/branded-types";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -26,9 +26,16 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateAIConfig from "./update-ai-config";
+
+const testFetchState = createTestFetch();
+
+const decryptAIConfig = async (
+  ...args: Parameters<typeof decryptAIConfigResult>
+) => (await decryptAIConfigResult(...args)).unwrap();
 
 type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 
@@ -604,18 +611,22 @@ const openaiDecision = {
   region: "eu",
 } as const;
 
-const createDecisionRequestSpy = () =>
-  spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async () =>
+const createDecisionRequestSpy = () => {
+  const fetchMock = Object.assign(
+    mock(
+      asFetchMock(async () =>
         Response.json({
           model: "gpt-6-luna",
           answers: [{ type: "predicate", name: "probe", probability: 0.99 }],
           usage: { input_tokens: 10, output_tokens: 0 },
         }),
-      { preconnect: globalThis.fetch.preconnect },
+      ),
     ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchMock);
+  return fetchMock;
+};
 
 describe("decision credential dependencies on settings save", () => {
   test.each(["omitted", "reuse"] as const)(
@@ -658,7 +669,7 @@ describe("decision credential dependencies on settings save", () => {
         expect(db.operations()).toBe(1);
         expect(fetch).not.toHaveBeenCalled();
       } finally {
-        fetch.mockRestore();
+        testFetchState.restore();
       }
     },
   );
@@ -719,7 +730,7 @@ describe("decision credential dependencies on settings save", () => {
           );
         }
       } finally {
-        fetch.mockRestore();
+        testFetchState.restore();
       }
     },
   );

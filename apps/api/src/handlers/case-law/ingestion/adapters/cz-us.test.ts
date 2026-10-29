@@ -26,7 +26,6 @@ import {
   RESULTS_PAGE_SIZE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -38,6 +37,7 @@ import {
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import {
   faultedResponse,
   READ_FAULTS,
@@ -49,7 +49,10 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 type ResultRow = {
   id?: string | undefined;
@@ -285,11 +288,13 @@ const installRawMock = (
   respond: (input: string | URL | Request) => Response,
 ): void => {
   nalusRequests = 0;
-  globalThis.fetch = asFetchMock(
-    mock((input: string | URL | Request) => {
-      nalusRequests += 1;
-      return Promise.resolve(respond(input));
-    }),
+  testFetchState.set(
+    asFetchMock(
+      mock((input: string | URL | Request) => {
+        nalusRequests += 1;
+        return Promise.resolve(respond(input));
+      }),
+    ),
   );
 };
 
@@ -326,115 +331,121 @@ const installSearchMock = ({
   const bySz = new Map(rows.map((row) => [row.sz, row]));
   nalusRequests = 0;
   searchRefused = false;
-  globalThis.fetch = asFetchMock(
-    mock((input: string | URL | Request, init?: RequestInit) => {
-      nalusRequests += 1;
-      const url = new URL(resolveUrl(input));
-      const method = requestMethod(input, init);
-      if (url.pathname.endsWith("/Search/Search.aspx") && method === "GET") {
-        return Promise.resolve(
-          new Response(makeSearchForm(), {
-            headers: { "Set-Cookie": "ASP.NET_SessionId=test-session; Path=/" },
-          }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/Search.aspx") && method === "POST") {
-        const form = new URLSearchParams(
-          typeof init?.body === "string" ? init.body : "",
-        );
-        onPost?.(form, new Headers(init?.headers));
-        // The court validates the submitted page size against the options it
-        // rendered and redirects a submit carrying any other value to its
-        // error page, so a size outside the form's own set never reaches a
-        // result set here either.
-        searchRefused = !offeredPageSizes(makeSearchForm()).includes(
-          form.get("ctl00$MainContent$resultsPageSize") ?? "",
-        );
-        if (searchRefused) {
+  testFetchState.set(
+    asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        nalusRequests += 1;
+        const url = new URL(resolveUrl(input));
+        const method = requestMethod(input, init);
+        if (url.pathname.endsWith("/Search/Search.aspx") && method === "GET") {
           return Promise.resolve(
-            new Response(null, {
-              status: 302,
-              headers: { Location: "/Error.aspx" },
+            new Response(makeSearchForm(), {
+              headers: {
+                "Set-Cookie": "ASP.NET_SessionId=test-session; Path=/",
+              },
             }),
           );
         }
-        return Promise.resolve(
-          empty
-            ? new Response(makeNoResultsPage())
-            : new Response(null, {
+        if (url.pathname.endsWith("/Search/Search.aspx") && method === "POST") {
+          const form = new URLSearchParams(
+            typeof init?.body === "string" ? init.body : "",
+          );
+          onPost?.(form, new Headers(init?.headers));
+          // The court validates the submitted page size against the options it
+          // rendered and redirects a submit carrying any other value to its
+          // error page, so a size outside the form's own set never reaches a
+          // result set here either.
+          searchRefused = !offeredPageSizes(makeSearchForm()).includes(
+            form.get("ctl00$MainContent$resultsPageSize") ?? "",
+          );
+          if (searchRefused) {
+            return Promise.resolve(
+              new Response(null, {
                 status: 302,
-                headers: { Location: submitLocation },
+                headers: { Location: "/Error.aspx" },
               }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/Results.aspx")) {
-        return Promise.resolve(
-          new Response(
-            searchRefused
-              ? makeRefusedResultsPage()
-              : makeResultsPage(
-                  rows,
-                  rangeFrom,
-                  reported,
-                  renderPositionOffset,
-                ),
-          ),
-        );
-      }
-      if (url.pathname.endsWith("/Search/GetText.aspx")) {
-        onDetail?.(url, init);
-        const row = bySz.get(url.searchParams.get("sz") ?? "");
-        const counterText =
-          row === undefined
-            ? undefined
-            : /_(?<counter>\d+)$/u.exec(row.sz)?.groups?.["counter"];
-        return Promise.resolve(
-          row
-            ? new Response(
-                unparseableDetail
-                  ? "<html><body>detail unavailable</body></html>"
-                  : makeTextPage(
-                      row.caseNumber,
-                      row.date,
-                      counterText === undefined ? {} : { counter: counterText },
-                    ).replace(
-                      "Lorem ipsum dolor sit amet.",
-                      () => documentText,
-                    ),
-                { status: detailStatus },
-              )
-            : new Response("missing", { status: 404 }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/ResultDetail.aspx")) {
-        const row = rows.find(
-          (candidate) => candidate.id === url.searchParams.get("id"),
-        );
-        return Promise.resolve(
-          row && recordCardStatus === 200
-            ? new Response(
-                makeRecordCardPage(row.caseNumber, row.date, {
-                  rapporteur,
-                  dissenters,
-                }) + recordCardSuffix,
-              )
-            : new Response("no card", {
-                status: recordCardStatus === 200 ? 404 : recordCardStatus,
-              }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
-        if (abstractFailure !== undefined) {
-          return Promise.reject(abstractFailure);
+            );
+          }
+          return Promise.resolve(
+            empty
+              ? new Response(makeNoResultsPage())
+              : new Response(null, {
+                  status: 302,
+                  headers: { Location: submitLocation },
+                }),
+          );
         }
-        return Promise.resolve(
-          new Response(makeAbstractPage(abstract, legalSentence), {
-            status: abstractStatus,
-          }),
-        );
-      }
-      return Promise.resolve(new Response("unexpected", { status: 500 }));
-    }),
+        if (url.pathname.endsWith("/Search/Results.aspx")) {
+          return Promise.resolve(
+            new Response(
+              searchRefused
+                ? makeRefusedResultsPage()
+                : makeResultsPage(
+                    rows,
+                    rangeFrom,
+                    reported,
+                    renderPositionOffset,
+                  ),
+            ),
+          );
+        }
+        if (url.pathname.endsWith("/Search/GetText.aspx")) {
+          onDetail?.(url, init);
+          const row = bySz.get(url.searchParams.get("sz") ?? "");
+          const counterText =
+            row === undefined
+              ? undefined
+              : /_(?<counter>\d+)$/u.exec(row.sz)?.groups?.["counter"];
+          return Promise.resolve(
+            row
+              ? new Response(
+                  unparseableDetail
+                    ? "<html><body>detail unavailable</body></html>"
+                    : makeTextPage(
+                        row.caseNumber,
+                        row.date,
+                        counterText === undefined
+                          ? {}
+                          : { counter: counterText },
+                      ).replace(
+                        "Lorem ipsum dolor sit amet.",
+                        () => documentText,
+                      ),
+                  { status: detailStatus },
+                )
+              : new Response("missing", { status: 404 }),
+          );
+        }
+        if (url.pathname.endsWith("/Search/ResultDetail.aspx")) {
+          const row = rows.find(
+            (candidate) => candidate.id === url.searchParams.get("id"),
+          );
+          return Promise.resolve(
+            row && recordCardStatus === 200
+              ? new Response(
+                  makeRecordCardPage(row.caseNumber, row.date, {
+                    rapporteur,
+                    dissenters,
+                  }) + recordCardSuffix,
+                )
+              : new Response("no card", {
+                  status: recordCardStatus === 200 ? 404 : recordCardStatus,
+                }),
+          );
+        }
+        if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
+          if (abstractFailure !== undefined) {
+            return Promise.reject(abstractFailure);
+          }
+          return Promise.resolve(
+            new Response(makeAbstractPage(abstract, legalSentence), {
+              status: abstractStatus,
+            }),
+          );
+        }
+        return Promise.resolve(new Response("unexpected", { status: 500 }));
+      }),
+    ),
   );
 };
 
@@ -464,7 +475,6 @@ const recentCursor = (verifiedThrough: string, availableTo: string): string =>
   `search:recent-frontier:${verifiedThrough}:${availableTo}:collect:0:0:-`;
 
 describe("czUsAdapter.fetchPage", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeAll(() => {
@@ -480,7 +490,7 @@ describe("czUsAdapter.fetchPage", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -1500,23 +1510,25 @@ describe("czUsAdapter.fetchPage", () => {
     };
     installSearchMock({ rows: [row] });
     const originalFetchForMetadata = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(resolveUrl(input));
-        if (url.pathname.endsWith("/Search/GetText.aspx")) {
-          return Promise.resolve(
-            new Response(
-              makeTextPage(row.caseNumber, row.date, {
-                decisionForm: "Usnesení",
-                parallelQuotation: "NALUS 14/24",
-                popularName: "Testovací věc",
-                counter: 1,
-              }),
-            ),
-          );
-        }
-        return originalFetchForMetadata(input, init);
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          const url = new URL(resolveUrl(input));
+          if (url.pathname.endsWith("/Search/GetText.aspx")) {
+            return Promise.resolve(
+              new Response(
+                makeTextPage(row.caseNumber, row.date, {
+                  decisionForm: "Usnesení",
+                  parallelQuotation: "NALUS 14/24",
+                  popularName: "Testovací věc",
+                  counter: 1,
+                }),
+              ),
+            );
+          }
+          return originalFetchForMetadata(input, init);
+        }),
+      ),
     );
 
     const page = unwrap(
@@ -1544,20 +1556,22 @@ describe("czUsAdapter.fetchPage", () => {
     };
     installSearchMock({ rows: [row] });
     const originalFetchForMetadata = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(resolveUrl(input));
-        if (url.pathname.endsWith("/Search/GetText.aspx")) {
-          return Promise.resolve(
-            new Response(
-              makeTextPage(row.caseNumber, row.date, {
-                parallelQuotation: "234/2002 Sb.<br/>N 53/26 SbNU 73",
-              }),
-            ),
-          );
-        }
-        return originalFetchForMetadata(input, init);
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          const url = new URL(resolveUrl(input));
+          if (url.pathname.endsWith("/Search/GetText.aspx")) {
+            return Promise.resolve(
+              new Response(
+                makeTextPage(row.caseNumber, row.date, {
+                  parallelQuotation: "234/2002 Sb.<br/>N 53/26 SbNU 73",
+                }),
+              ),
+            );
+          }
+          return originalFetchForMetadata(input, init);
+        }),
+      ),
     );
 
     const page = unwrap(
@@ -1580,17 +1594,19 @@ describe("czUsAdapter.fetchPage", () => {
   test("does not advance on an unconfirmed HTTP 200 search response", async () => {
     installSearchMock({ empty: true });
     const originalFetchForSearch = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(resolveUrl(input));
-        if (
-          url.pathname.endsWith("/Search/Search.aspx") &&
-          requestMethod(input, init) === "POST"
-        ) {
-          return Promise.resolve(new Response(makeSearchForm()));
-        }
-        return originalFetchForSearch(input, init);
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          const url = new URL(resolveUrl(input));
+          if (
+            url.pathname.endsWith("/Search/Search.aspx") &&
+            requestMethod(input, init) === "POST"
+          ) {
+            return Promise.resolve(new Response(makeSearchForm()));
+          }
+          return originalFetchForSearch(input, init);
+        }),
+      ),
     );
 
     const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
@@ -2424,8 +2440,6 @@ describe("the record card the court prints beside a decision", () => {
 });
 
 describe("czUsAdapter judges", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-08-08T12:00:00.000Z"));
   });
@@ -2439,7 +2453,7 @@ describe("czUsAdapter judges", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const decisionWithCard = async (
@@ -2717,7 +2731,6 @@ describe("czUsAdapter.reparseStoredRaw", () => {
 });
 
 describe("a failed or refused NALUS read", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeAll(() => {
@@ -2733,7 +2746,7 @@ describe("a failed or refused NALUS read", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -2751,11 +2764,12 @@ describe("a failed or refused NALUS read", () => {
   ) => {
     installSearchMock({ rows: [ROW] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) =>
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) =>
         new URL(resolveUrl(input)).pathname === path
           ? await faultedResponse(fault, async () => await served(input, init))
           : await served(input, init),
+      ),
     );
     return await czUsAdapter.fetchPage(historicalCursor(2024), {});
   };
@@ -2861,13 +2875,15 @@ describe("a failed or refused NALUS read", () => {
       async (status) => {
         installSearchMock({ rows: [ROW] });
         const served = globalThis.fetch;
-        globalThis.fetch = asFetchMock(async (input, init) =>
-          new URL(resolveUrl(input)).pathname === path
-            ? new Response("refused", {
-                status,
-                headers: { "Retry-After": "60" },
-              })
-            : await served(input, init),
+        testFetchState.set(
+          asFetchMock(async (input, init) =>
+            new URL(resolveUrl(input)).pathname === path
+              ? new Response("refused", {
+                  status,
+                  headers: { "Retry-After": "60" },
+                })
+              : await served(input, init),
+          ),
         );
         const page = unwrap(
           await czUsAdapter.fetchPage(historicalCursor(2024), {}),
@@ -2900,8 +2916,10 @@ describe("a failed or refused NALUS read", () => {
   test.each([401, 403, 451] as const)(
     "a session the court answers %d for stops the source as a typed refusal",
     async (status) => {
-      globalThis.fetch = asFetchMock(
-        async () => await Promise.resolve(new Response("", { status })),
+      testFetchState.set(
+        asFetchMock(
+          async () => await Promise.resolve(new Response("", { status })),
+        ),
       );
 
       const rejection: unknown = await openNalusSession().then(

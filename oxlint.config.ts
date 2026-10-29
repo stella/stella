@@ -16,6 +16,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { CI_INSTALL_PREINSTALL_FILES } from "./scripts/ci-install-preinstall-files.ts";
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
@@ -443,6 +444,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
   ]),
+  fixtureRuleOverride("no-auto-hyphenation-in-reader.fixture.tsx", [
+    "no-auto-hyphenation-in-reader/no-auto-hyphenation-in-reader",
+  ]),
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
   ]),
@@ -683,6 +687,12 @@ const browserSurfaceFiles = [
 const noZodImport = {
   name: "zod",
   message: "Use 'valibot' instead of 'zod'.",
+};
+
+// XML is read with saxes, one pass that validates while it reads.
+const noFastXmlParserImport = {
+  name: "fast-xml-parser",
+  message: "Read XML with 'saxes'.",
 };
 
 const noClassicTypeScriptImport = {
@@ -1453,6 +1463,7 @@ const config = defineConfig({
       {
         paths: [
           noZodImport,
+          noFastXmlParserImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
         ],
@@ -1842,6 +1853,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
+    "./.oxlint-plugins/no-raw-query-error-capture.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
@@ -1973,6 +1985,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
@@ -1990,6 +2003,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
+    "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
@@ -2063,6 +2077,14 @@ const config = defineConfig({
       ],
       rules: {
         "narrative-prose-component/require-prose": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-query-error-capture.fixture.ts",
+      ],
+      rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
       },
     },
     {
@@ -2208,6 +2230,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
             ],
@@ -2803,14 +2826,6 @@ const config = defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
-      // Test-only adapter helper consumed exclusively from
-      // `**/*.test.ts`. Not part of any production code path.
-      files: [
-        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-      ],
-      rules: { "no-bare-error/no-bare-error": "off" },
-    },
-    {
       // This helper serializes its boundary into the page before modules load,
       // so it cannot import `panic()` there.
       files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
@@ -3075,6 +3090,11 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // Pre-install tooling cannot import the workspace path owner before dependencies exist.
+      files: [...CI_INSTALL_PREINSTALL_FILES],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
@@ -3750,6 +3770,26 @@ const config = defineConfig({
       },
     },
     {
+      // Reader prose must choose manual word breaks; automated hyphenation
+      // varies by browser and language. Model rationale keeps its own contract.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/ui/src/components/prose.tsx",
+        "apps/web/src/components/references/decision-citation-chip.tsx",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx",
+        ".oxlint-plugins/__fixtures__/no-auto-hyphenation-in-reader.fixture.tsx",
+      ],
+      excludeFiles: [
+        "apps/web/src/features/case-law/research/question-cell.tsx",
+      ],
+      rules: {
+        "no-auto-hyphenation-in-reader/no-auto-hyphenation-in-reader": "error",
+      },
+    },
+    {
       // The reader's face is inherited from the reader root, which reader.css
       // sets from `--reader-body-font`. A font utility on one element inside
       // it mixes two faces in one document; chrome that is sans on purpose
@@ -4043,6 +4083,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               uiPragmaticDragAdapterImport,
@@ -4063,6 +4104,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               uiPragmaticDragAdapterImport,
@@ -4086,6 +4128,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
             ],
@@ -4115,6 +4158,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               workspaceUiUseIntlFormattingImport,
@@ -4255,6 +4299,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4286,6 +4331,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4325,6 +4371,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
@@ -4555,6 +4602,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4591,6 +4639,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4622,6 +4671,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4661,6 +4711,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4711,6 +4762,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4759,6 +4811,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4854,6 +4907,7 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**"],
       rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
         "query-data-requires-state/query-data-requires-state": "error",
       },
     },
@@ -5007,8 +5061,11 @@ const config = defineConfig({
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
+              "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
+              "apps/api/src/env-file-derivative-worker.ts",
+              "apps/api/src/env-converter.ts",
               "apps/api/src/db-url.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
               // Publisher pacing must distinguish deployed runtimes without
@@ -5570,6 +5627,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5599,6 +5657,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               {
@@ -5632,6 +5691,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5652,6 +5712,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiSafeIdBrandingImport,
@@ -5675,6 +5736,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -6095,6 +6157,22 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/mcp/__fixtures__/external-source/replay.ts",
+        ".oxlint-plugins/__fixtures__/no-global-fetch-replacement.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/tests/helpers/test-fetch.ts",
+        "apps/api/src/tests/fetch-state-hooks.ts",
+      ],
+      rules: {
+        "no-global-fetch-replacement/no-global-fetch-replacement": "error",
+      },
+    },
+    {
       // Module mocks of workspace modules test a fabricated dependency graph.
       // Scoped to test files and test helpers, where `mock.module` lives;
       // existing pairs are grandfathered in
@@ -6174,6 +6252,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -6229,6 +6308,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -6302,6 +6382,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,

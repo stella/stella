@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DeepLDocumentError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import {
   DEEPL_TEXT_REQUEST_MAX_BYTES,
@@ -10,6 +11,8 @@ import {
   translateTextBatch,
   translateTextBatches,
 } from "./client";
+
+const testFetchState = createTestFetch();
 
 const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
@@ -35,9 +38,11 @@ const toFetchUrl = (input: Parameters<typeof fetch>[0]): string => {
 type FetchHandler = (input: Parameters<typeof fetch>[0]) => Promise<Response>;
 
 const installFetchMock = (handler: FetchHandler) => {
-  globalThis.fetch = Object.assign(handler, {
-    preconnect: originalFetch.preconnect.bind(originalFetch),
-  }) satisfies typeof fetch;
+  testFetchState.set(
+    Object.assign(handler, {
+      preconnect: originalFetch.preconnect.bind(originalFetch),
+    }) satisfies typeof fetch,
+  );
 };
 
 const translateDocx = async () =>
@@ -56,7 +61,7 @@ describe("DeepL document translation status errors", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -155,7 +160,7 @@ describe("DeepL document translation status errors", () => {
 
 describe("DeepL text translation", () => {
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("translates comment text in input order", async () => {

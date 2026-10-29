@@ -51,8 +51,10 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { pageTitle } from "@/lib/page-title";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
@@ -374,6 +376,14 @@ export const Route = createFileRoute("/knowledge/styles")({
       "knowledge-styles.prefetch",
     );
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "styleSets.title",
+      to: "/knowledge/styles",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("styleSets.title") }] }),
   component: GuardedStyleSetsPage,
 });
 

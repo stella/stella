@@ -10,6 +10,9 @@ import {
   HostedUsageProviderApiError,
 } from "@/api/lib/hosted-usage-provider/client";
 import { POLAR_API_VERSIONS } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const credentials = {
   apiKey: "provider_test_apikey",
@@ -61,7 +64,7 @@ const installFetch = (handler: FetchHandler): void => {
   const nextFetch: typeof globalThis.fetch = Object.assign(handler, {
     preconnect: originalFetch.preconnect,
   });
-  globalThis.fetch = nextFetch;
+  testFetchState.set(nextFetch);
 };
 
 beforeEach(() => {
@@ -69,7 +72,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 describe("createHostedSetupSession", () => {

@@ -14,12 +14,15 @@ import {
   NalusRateLimitedError,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 type GateTrace = {
   reservations: string[][];
@@ -48,17 +51,15 @@ const gatedFetch = (): {
 };
 
 describe("the NALUS publisher budget", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test.each([401, 403, 451])(
     "HTTP %i returns a typed refusal result",
     async (status) => {
-      globalThis.fetch = asFetchMock(
-        async () => new Response(null, { status }),
+      testFetchState.set(
+        asFetchMock(async () => new Response(null, { status })),
       );
       const { fetchNalus, trace } = gatedFetch();
       const result = await fetchNalus(
@@ -88,15 +89,17 @@ describe("the NALUS publisher budget", () => {
   test("document requests emit typed publisher refusals while listing requests stay outside document accounting", async () => {
     for (const fetchStage of ["document", "listing"] as const) {
       const observations: DocumentStageObservation[] = [];
-      globalThis.fetch = asFetchMock(
-        mock(
-          async () =>
-            new Response(null, {
-              status: 302,
-              headers: {
-                Location: "https://nalus.usoud.cz/limit-exceeded.html",
-              },
-            }),
+      testFetchState.set(
+        asFetchMock(
+          mock(
+            async () =>
+              new Response(null, {
+                status: 302,
+                headers: {
+                  Location: "https://nalus.usoud.cz/limit-exceeded.html",
+                },
+              }),
+          ),
         ),
       );
       const { fetchNalus } = gatedFetch();
@@ -151,7 +154,7 @@ describe("the NALUS publisher budget", () => {
   });
 
   test("reserves a slot before every request, against the shared key", async () => {
-    globalThis.fetch = asFetchMock(mock(async () => new Response()));
+    testFetchState.set(asFetchMock(mock(async () => new Response())));
     const { fetchNalus, trace } = gatedFetch();
 
     await fetchNalus("https://nalus.usoud.cz/Search/Search.aspx", {
@@ -177,11 +180,13 @@ describe("the NALUS publisher budget", () => {
 
   test("waits out the reservation before the request leaves", async () => {
     const order: string[] = [];
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        order.push("fetch");
-        return new Response();
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          order.push("fetch");
+          return new Response();
+        }),
+      ),
     );
     const fetchNalus = createNalusFetch({
       redis: () => ({ send: () => 18_000 }),
@@ -198,13 +203,17 @@ describe("the NALUS publisher budget", () => {
   });
 
   test("turns the court's limit redirect into a typed refusal", async () => {
-    globalThis.fetch = asFetchMock(
-      mock(
-        async () =>
-          new Response(null, {
-            status: 302,
-            headers: { Location: "https://nalus.usoud.cz/limit-exceeded.html" },
-          }),
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          async () =>
+            new Response(null, {
+              status: 302,
+              headers: {
+                Location: "https://nalus.usoud.cz/limit-exceeded.html",
+              },
+            }),
+        ),
       ),
     );
     const { fetchNalus } = gatedFetch();
@@ -224,8 +233,8 @@ describe("the NALUS publisher budget", () => {
   });
 
   test("turns a plain 429 into the same refusal", async () => {
-    globalThis.fetch = asFetchMock(
-      mock(async () => new Response("", { status: 429 })),
+    testFetchState.set(
+      asFetchMock(mock(async () => new Response("", { status: 429 }))),
     );
     const { fetchNalus } = gatedFetch();
 
@@ -241,13 +250,15 @@ describe("the NALUS publisher budget", () => {
   });
 
   test("hands back the search form's own 302 unchanged", async () => {
-    globalThis.fetch = asFetchMock(
-      mock(
-        async () =>
-          new Response(null, {
-            status: 302,
-            headers: { Location: "/Search/Results.aspx" },
-          }),
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          async () =>
+            new Response(null, {
+              status: 302,
+              headers: { Location: "/Search/Results.aspx" },
+            }),
+        ),
       ),
     );
     const { fetchNalus } = gatedFetch();
@@ -265,10 +276,12 @@ describe("the NALUS publisher budget", () => {
   });
 
   test("refuses a URL outside the publisher, without spending a slot", async () => {
-    globalThis.fetch = asFetchMock(
-      mock(() => {
-        throw new Error("a request outside NALUS must never be sent");
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(() => {
+          throw new Error("a request outside NALUS must never be sent");
+        }),
+      ),
     );
     const { fetchNalus, trace } = gatedFetch();
 

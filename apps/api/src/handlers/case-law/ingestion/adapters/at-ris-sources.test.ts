@@ -11,8 +11,7 @@ import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs
 import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
-
-import { requireReconciliation } from "./test-utils";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 const SOURCES = [
   {

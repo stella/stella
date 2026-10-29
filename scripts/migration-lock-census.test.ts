@@ -20,6 +20,37 @@ const source = (sql: string) => [
 ];
 
 describe("migration lock census", () => {
+  test.each([
+    { migration: "20990101000000_example", expectedError: null },
+    {
+      migration: "20990102000000_orphan",
+      expectedError:
+        "scripts/migration-lock-allowances/20990102000000_orphan.json: orphan allowance; expected migration folder apps/api/drizzle/20990102000000_orphan",
+    },
+  ])(
+    "allowance requires its migration folder: $migration",
+    ({ migration, expectedError }) => {
+      expect(
+        checkMigrationLocks({
+          sources: source("CREATE TABLE probe(id int);"),
+          baseline: [],
+          allowances: [
+            {
+              migration,
+              form: "create-table",
+              reason: "Creates an empty relation",
+            },
+            {
+              migration,
+              form: "add-column",
+              reason: "Uses a constant fast default",
+            },
+          ],
+        }).errors,
+      ).toEqual(expectedError === null ? [] : [expectedError]);
+    },
+  );
+
   test("every committed migration form is classified and strong locks are reviewed", () => {
     const allowances = readMigrationLockAllowances();
     expect(allowances.errors).toEqual([]);

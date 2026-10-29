@@ -25,7 +25,7 @@ import type {
   ProviderWireCassette,
   ProviderWireExpectation,
 } from "@/api/tests/helpers/provider-wire-cassette";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 
 // Replays the provider wire corpus (`provider-wire-cassette.ts`) through the
@@ -216,6 +216,12 @@ type ReplayTestState = {
 export const installTextReplay = (testState: ReplayTestState) => {
   let replay: ProviderWireReplay | undefined;
   let previousBedrockEndpoint: string | undefined;
+  registerProviderWireReplay({
+    onInstall: (active) => {
+      replay = active;
+    },
+    options: () => ({ retryAfterMs: 1 }),
+  });
   testState.beforeAll(() => {
     // Real adapters, not the local mock model.
     testState.setConfig("USE_MOCK_AI", false);
@@ -224,10 +230,8 @@ export const installTextReplay = (testState: ReplayTestState) => {
     previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
     process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
       "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-    replay = installProviderWireReplay({ retryAfterMs: 1 });
   });
   afterAll(() => {
-    replay?.restore();
     if (previousBedrockEndpoint === undefined) {
       delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
     } else {

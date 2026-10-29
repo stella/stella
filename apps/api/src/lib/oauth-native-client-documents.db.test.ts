@@ -1,12 +1,10 @@
 import {
   afterAll,
-  afterEach,
   beforeEach,
   describe,
   expect,
   type Mock,
   mock,
-  spyOn,
   test,
 } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -16,9 +14,13 @@ import * as v from "valibot";
 
 import { sha256Base64Url } from "@stll/sha256/bun";
 
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
+
+const testFetchState = createTestFetch();
 
 /**
  * stella's own native clients signing in end to end against the real server
@@ -292,7 +294,7 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await api.stop();
   await Promise.all(
     configDirs.map(async (dir) => {
@@ -303,13 +305,11 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(serveInProcess, { preconnect: fetch.preconnect }),
+  fetchSpy = Object.assign(
+    mock(Object.assign(serveInProcess, { preconnect: fetch.preconnect })),
+    { preconnect: globalThis.fetch.preconnect },
   );
-});
-
-afterEach(() => {
-  mock.restore();
+  testFetchState.set(asFetchMock(fetchSpy));
 });
 
 describe("stella CLI client document", () => {

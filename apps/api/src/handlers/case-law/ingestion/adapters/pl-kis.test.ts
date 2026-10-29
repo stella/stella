@@ -47,9 +47,12 @@ import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-typ
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -153,10 +156,9 @@ const urlOf = (input: string | URL | Request): string => {
 const stubPublisher = (
   answer: (call: Call) => Response,
 ): { calls: Call[]; restore: () => void } => {
-  const original = globalThis.fetch;
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const call = {
         url: urlOf(input),
         method: init?.method ?? "GET",
@@ -164,12 +166,12 @@ const stubPublisher = (
       };
       calls.push(call);
       return await Promise.resolve(answer(call));
-    },
+    }),
   );
   return {
     calls,
     restore: () => {
-      globalThis.fetch = original;
+      testFetchState.restore();
     },
   };
 };

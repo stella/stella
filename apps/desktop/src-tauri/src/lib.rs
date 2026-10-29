@@ -12,6 +12,8 @@ mod autostart;
 mod billing_draft_commands;
 mod billing_draft_submit;
 mod bridge;
+mod chatgpt_auth;
+mod chatgpt_auth_commands;
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
@@ -21,6 +23,7 @@ mod clipboard_shortcut;
 mod clipboard_store;
 mod clipboard_welcome;
 mod clipboard_window;
+mod codex_managed_token_broker;
 mod commands;
 mod config;
 mod deep_link;
@@ -85,6 +88,13 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
+
+/// Runs the managed Codex token helper when the process was started as one,
+/// and returns its exit code; `None` for an ordinary launch.
+pub fn run_codex_token_helper() -> Option<i32> {
+  let args = std::env::args_os().collect::<Vec<_>>();
+  codex_managed_token_broker::run_token_helper(&args)
+}
 
 pub fn run() {
   logging::init();
@@ -226,6 +236,7 @@ pub fn run() {
       if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
         app.manage(installation);
       }
+      chatgpt_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -250,6 +261,7 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
+              chatgpt_auth_commands::apply_feature_gate(app, enabled);
             }
           }),
         );

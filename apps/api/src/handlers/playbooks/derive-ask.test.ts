@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import type {
   Response as OpenAIResponse,
   ResponseStreamEvent,
@@ -28,7 +28,10 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -176,31 +179,35 @@ describe("deriveAutoAsks — save resilience", () => {
     const requests: string[] = [];
     const analytics = installRecordingAnalytics();
     const logs = installRecordingLogger();
-    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (
-          input: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ) => {
-          const request = effectiveRequest(input, init);
-          expect(new URL(request.url).pathname).toBe("/v1/responses");
-          const body = v.parse(
-            v.object({ model: v.string(), stream: v.literal(true) }),
-            await request.json(),
-          );
-          requests.push(body.model);
-          return new Response(
-            providerEvents
-              .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-              .join(""),
-            {
-              headers: { "content-type": "text/event-stream" },
-            },
-          );
-        },
-        { preconnect: globalThis.fetch.preconnect },
+    const fetchSpy = Object.assign(
+      mock(
+        Object.assign(
+          async (
+            input: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            const request = effectiveRequest(input, init);
+            expect(new URL(request.url).pathname).toBe("/v1/responses");
+            const body = v.parse(
+              v.object({ model: v.string(), stream: v.literal(true) }),
+              await request.json(),
+            );
+            requests.push(body.model);
+            return new Response(
+              providerEvents
+                .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+                .join(""),
+              {
+                headers: { "content-type": "text/event-stream" },
+              },
+            );
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       ),
+      { preconnect: globalThis.fetch.preconnect },
     );
+    testFetchState.set(fetchSpy);
     clearByokAdapterCache();
     try {
       const position = graded();
@@ -223,7 +230,7 @@ describe("deriveAutoAsks — save resilience", () => {
         },
       });
     } finally {
-      fetchSpy.mockRestore();
+      testFetchState.restore();
       clearByokAdapterCache();
       logs.restore();
       analytics.restore();

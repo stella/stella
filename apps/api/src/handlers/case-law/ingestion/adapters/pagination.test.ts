@@ -15,6 +15,11 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  mockFetchWithFixtures,
+  saveFixture,
+} from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import {
   asFetchMock,
   asTestRaw,
   readTestJson,
@@ -29,7 +34,8 @@ import {
   encodeOffsetCursor,
   encodeTraversalCursor,
 } from "./pagination";
-import { mockFetchWithFixtures, saveFixture } from "./test-utils";
+
+const testFetchState = createTestFetch();
 
 const FIXTURE_NAME = "pagination-test.json";
 const HTML_FIXTURE_NAME = "pagination-test-html.json";
@@ -54,7 +60,7 @@ const itemToDecision = (item: TestItem): IngestionItem => ({
   }),
 });
 
-const createTestFetch = (opts?: {
+const createTestPageFetcher = (opts?: {
   pageSize?: number;
   legacyPageSize?: number;
   firstPage?: FirstPageNumber;
@@ -134,11 +140,11 @@ const mockFetchFromDataset = (
     },
   );
 
-  globalThis.fetch = mockedFetch;
+  testFetchState.set(mockedFetch);
 
   return {
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
     requestedPages,
   };
@@ -161,7 +167,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch();
+    const fetchPage = createTestPageFetcher();
     const result = await fetchPage(null, {});
     expect(result.isOk()).toBe(true);
 
@@ -177,7 +183,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const page = (await createTestFetch()(null, {})).unwrap();
+    const page = (await createTestPageFetcher()(null, {})).unwrap();
 
     // The recorder cites this as a fixture's provenance, so it has to be
     // the request that served the listing rather than a URL rebuilt from
@@ -191,7 +197,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch();
+    const fetchPage = createTestPageFetcher();
     const result = await fetchPage(null, {});
     const page = result.unwrap();
     expect(page.nextCursor).toBe("offset:1");
@@ -203,7 +209,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({ firstPage: 0 });
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
     const result = await fetchPage("offset:21", {});
     const page = result.unwrap();
     expect(page.nextCursor).toBe("offset:22");
@@ -219,7 +225,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({ firstPage: 0 });
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
     const result = await fetchPage("10", {});
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(0);
@@ -273,7 +279,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: HTML_FIXTURE_NAME },
     ]);
 
-    const result = await createTestFetch()(null, {});
+    const result = await createTestPageFetcher()(null, {});
 
     expect(result.isErr()).toBe(true);
     if (!Result.isError(result)) {
@@ -284,7 +290,7 @@ describe("createPagePaginatedFetch", () => {
   });
 
   test("returns error for invalid cursor", async () => {
-    const fetchPage = createTestFetch();
+    const fetchPage = createTestPageFetcher();
     for (const cursor of [
       "not-a-number",
       "offset:12garbage",
@@ -309,7 +315,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({
+    const fetchPage = createTestPageFetcher({
       pageSize: 5,
       firstPage: 0,
     });
@@ -329,7 +335,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({
+    const fetchPage = createTestPageFetcher({
       pageSize: 5,
       skipEven: true,
     });
@@ -500,20 +506,22 @@ const mockFailingEndpoint = (
   const originalFetch = globalThis.fetch;
   const requestedPages: number[] = [];
 
-  globalThis.fetch = Object.assign(
-    async (input: string | URL | Request): Promise<Response> => {
-      const url = new URL(requestUrl(input));
-      requestedPages.push(
-        Number.parseInt(url.searchParams.get("page") ?? "", 10),
-      );
-      return await Promise.resolve(new Response("", { status }));
-    },
-    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  testFetchState.set(
+    Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url = new URL(requestUrl(input));
+        requestedPages.push(
+          Number.parseInt(url.searchParams.get("page") ?? "", 10),
+        );
+        return await Promise.resolve(new Response("", { status }));
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    ),
   );
 
   return {
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
     requestedPages,
   };
@@ -547,7 +555,7 @@ describe("a page the origin never answered does not move the cursor", () => {
    * where it was, so only a successful page supplies the next one.
    */
   const walk = async (
-    fetchPage: ReturnType<typeof createTestFetch>,
+    fetchPage: ReturnType<typeof createTestPageFetcher>,
     from: string,
     cycles: number,
   ): Promise<string | null> => {
@@ -562,21 +570,20 @@ describe("a page the origin never answered does not move the cursor", () => {
   };
 
   test("a transport timeout exhausts retries and keeps the cursor", async () => {
-    const originalFetch = globalThis.fetch;
     const requestedPages: string[] = [];
-    globalThis.fetch = asFetchMock(
-      async (input: Parameters<typeof globalThis.fetch>[0]) => {
+    testFetchState.set(
+      asFetchMock(async (input: Parameters<typeof globalThis.fetch>[0]) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
         requestedPages.push(url.searchParams.get("page") ?? "");
         throw new DOMException("Request timed out", "TimeoutError");
-      },
+      }),
     );
     restore = () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     };
-    const fetchPage = createTestFetch({ firstPage: 0 });
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
     const result = await fetchPage("offset:30", {});
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -598,7 +605,7 @@ describe("a page the origin never answered does not move the cursor", () => {
     restore = endpoint.restore;
 
     const cursor = await walk(
-      createTestFetch({ firstPage: 0 }),
+      createTestPageFetcher({ firstPage: 0 }),
       "offset:30",
       3,
     );
@@ -619,7 +626,7 @@ describe("a page the origin never answered does not move the cursor", () => {
       restore = endpoint.restore;
 
       const cursor = await walk(
-        createTestFetch({ firstPage: 0 }),
+        createTestPageFetcher({ firstPage: 0 }),
         "offset:30",
         2,
       );
@@ -644,25 +651,30 @@ const mockClampedEndpoint = (
   const originalFetch = globalThis.fetch;
   const requestedPages: number[] = [];
 
-  globalThis.fetch = Object.assign(
-    async (input: string | URL | Request): Promise<Response> => {
-      const url = new URL(requestUrl(input));
-      const requested = Number.parseInt(url.searchParams.get("page") ?? "", 10);
-      requestedPages.push(requested);
-      const start = (Math.max(firstPage, requested) - firstPage) * pageSize;
-      return await Promise.resolve(
-        new Response(
-          makeFixture(items.slice(start, start + pageSize), items.length),
-          { headers: { "Content-Type": "application/json; charset=utf-8" } },
-        ),
-      );
-    },
-    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  testFetchState.set(
+    Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url = new URL(requestUrl(input));
+        const requested = Number.parseInt(
+          url.searchParams.get("page") ?? "",
+          10,
+        );
+        requestedPages.push(requested);
+        const start = (Math.max(firstPage, requested) - firstPage) * pageSize;
+        return await Promise.resolve(
+          new Response(
+            makeFixture(items.slice(start, start + pageSize), items.length),
+            { headers: { "Content-Type": "application/json; charset=utf-8" } },
+          ),
+        );
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    ),
   );
 
   return {
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
     requestedPages,
   };
@@ -688,7 +700,7 @@ describe("an offset names the same items whatever the publisher numbers from", (
   ): Promise<void> => {
     const endpoint = mockClampedEndpoint(dataset, firstPage, PAGE_SIZE);
     restore = endpoint.restore;
-    const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
+    const fetchPage = createTestPageFetcher({ pageSize: PAGE_SIZE, firstPage });
 
     for (const offset of [0, PAGE_SIZE, 3 * PAGE_SIZE, 19 * PAGE_SIZE]) {
       const result = await fetchPage(encodeOffsetCursor(offset), {});
@@ -717,7 +729,7 @@ describe("an offset names the same items whatever the publisher numbers from", (
   ): Promise<void> => {
     const endpoint = mockClampedEndpoint(dataset, firstPage, PAGE_SIZE);
     restore = endpoint.restore;
-    const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
+    const fetchPage = createTestPageFetcher({ pageSize: PAGE_SIZE, firstPage });
 
     const seen: string[] = [];
     let cursor: string | null = null;

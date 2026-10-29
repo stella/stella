@@ -35,7 +35,10 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // ── Bounds ───────────────────────────────────────────────
 
@@ -542,22 +545,21 @@ type ExhaustedProbe = {
 };
 
 const installExhaustedSource = (respond: ExhaustedSource): ExhaustedProbe => {
-  const originalFetch = globalThis.fetch;
   const positions = new Set<string>();
 
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = resolveUrl(input);
       const method = init?.method ?? "GET";
       positions.add(positionKey(method, url, init?.body));
       return await Promise.resolve(respond({ method, url }));
-    },
+    }),
   );
 
   return {
     positions,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };
@@ -655,7 +657,6 @@ const describeFootprint = (positions: readonly string[]): string =>
 // ── Invariants ───────────────────────────────────────────
 
 describe("an exhausted source leaves every adapter parked", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   let fixtureClock = FIXTURE_CLOCK_MS;
 
@@ -676,7 +677,7 @@ describe("an exhausted source leaves every adapter parked", () => {
   afterEach(() => {
     // The walk restores fetch after every step; this covers the step that
     // never returned, so one adapter's stub can never answer the next one's.
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
     setSystemTime();
   });

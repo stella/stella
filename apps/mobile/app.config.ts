@@ -49,7 +49,15 @@ const VARIANT_CONFIG = {
  * App Store profile it installed for this variant. Unset locally, where Xcode
  * signs development builds automatically.
  */
-type ReleaseSigning = { profileUuid: string; teamId: string };
+type ReleaseSigning = {
+  profileUuid: string;
+  teamId: string;
+  /** The Live Activity extension's own profile; without it the release leaves the extension out. */
+  widgetsProfileUuid?: string | undefined;
+};
+
+/** The target expo-widgets adds for the widget extension. */
+const WIDGETS_TARGET = "ExpoWidgetsTarget";
 
 /**
  * Signs the app target, and only it, with the release profile. Passed to
@@ -58,24 +66,38 @@ type ReleaseSigning = { profileUuid: string; teamId: string };
  */
 const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
   config,
-  { profileUuid, teamId },
+  { profileUuid, teamId, widgetsProfileUuid },
 ) =>
   withXcodeProject(config, (mod) => {
     const project = mod.modResults;
+    const sign = (buildConfigurationList: string, profile: string) => {
+      for (const [
+        ,
+        configuration,
+      ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
+        project,
+        buildConfigurationList,
+      )) {
+        Object.assign(configuration.buildSettings, {
+          CODE_SIGN_IDENTITY: '"Apple Distribution"',
+          CODE_SIGN_STYLE: "Manual",
+          DEVELOPMENT_TEAM: teamId,
+          PROVISIONING_PROFILE_SPECIFIER: `"${profile}"`,
+        });
+      }
+    };
     const [, target] = IOSConfig.Target.findFirstNativeTarget(project);
-    for (const [
-      ,
-      configuration,
-    ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
-      project,
-      target.buildConfigurationList,
-    )) {
-      Object.assign(configuration.buildSettings, {
-        CODE_SIGN_IDENTITY: '"Apple Distribution"',
-        CODE_SIGN_STYLE: "Manual",
-        DEVELOPMENT_TEAM: teamId,
-        PROVISIONING_PROFILE_SPECIFIER: `"${profileUuid}"`,
-      });
+    sign(target.buildConfigurationList, profileUuid);
+    // Registered before the plugins, this runs after expo-widgets has added
+    // its target.
+    if (widgetsProfileUuid !== undefined) {
+      // Throws when the target is missing, which stops a release that would
+      // otherwise ship an unsigned extension.
+      const [, widgets] = IOSConfig.Target.findNativeTargetByName(
+        project,
+        WIDGETS_TARGET,
+      );
+      sign(widgets.buildConfigurationList, widgetsProfileUuid);
     }
     return mod;
   });
@@ -108,6 +130,17 @@ const updatesFor = (
 
 type AppConfigInputs = {
   buildNumber: number;
+  /**
+   * Whether the build carries the widget extension that draws Live
+   * Activities. A release signs the app target alone, so it leaves the
+   * extension out until the release signs that too.
+   */
+  liveActivities: boolean;
+  /**
+   * Whether the build carries the push entitlement, which a release profile
+   * must grant; releases take it with the profiles that grant both.
+   */
+  pushNotifications: boolean;
   /** The native fingerprint (`scripts/fingerprint.ts`); updates target it. */
   runtimeVersion: string;
   signingCertificatePresent: boolean;
@@ -116,6 +149,8 @@ type AppConfigInputs = {
 
 const appConfigBase = ({
   buildNumber,
+  liveActivities,
+  pushNotifications,
   runtimeVersion,
   signingCertificatePresent,
   variant,
@@ -125,6 +160,8 @@ const appConfigBase = ({
   version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
+  // The web's favicon edge to edge (`scripts/generate-mobile-app-icon.ts`).
+  icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: VARIANT_CONFIG[variant].identifier,
@@ -133,6 +170,55 @@ const appConfigBase = ({
     // The app's only cryptography is HTTPS and the platform keychain, which
     // are exempt; declaring it spares every TestFlight upload the question.
     config: { usesNonExemptEncryption: false },
+    // What the App Store's privacy report and review read. The app tracks no
+    // one and carries no analytics; it keeps the account's email and name and
+    // what the person writes, scans and uploads, all to run the app. The
+    // reasons are the platform APIs React Native and Expo call for the app
+    // itself: settings it stores, file dates and free disk space it reads
+    // for its own files, and the system clock it measures time with.
+    privacyManifests: {
+      NSPrivacyTracking: false,
+      NSPrivacyTrackingDomains: [],
+      NSPrivacyCollectedDataTypes: [
+        ...[
+          "NSPrivacyCollectedDataTypeEmailAddress",
+          "NSPrivacyCollectedDataTypeName",
+          "NSPrivacyCollectedDataTypeOtherUserContent",
+        ].map((type) => ({
+          NSPrivacyCollectedDataType: type,
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: [
+            "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+          ],
+        })),
+      ],
+      NSPrivacyAccessedAPITypes: [
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",
+          NSPrivacyAccessedAPITypeReasons: ["CA92.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",
+          NSPrivacyAccessedAPITypeReasons: ["0A2A.1", "3B52.1", "C617.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",
+          NSPrivacyAccessedAPITypeReasons: ["E174.1", "85F4.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType:
+            "NSPrivacyAccessedAPICategorySystemBootTime",
+          NSPrivacyAccessedAPITypeReasons: ["35F9.1"],
+        },
+      ],
+    },
+    infoPlist: {
+      // The document camera (modules/document-scanner) scans paper into a
+      // matter's documents.
+      NSCameraUsageDescription:
+        "stella scans paper documents with the camera to add them to a matter.",
+    },
   },
   android: {
     package: VARIANT_CONFIG[variant].identifier,
@@ -145,21 +231,67 @@ const appConfigBase = ({
   },
   runtimeVersion,
   updates: updatesFor(variant, signingCertificatePresent),
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    // DM Sans, the web's typeface, embedded in the build.
+    [
+      "expo-font",
+      {
+        fonts: [
+          "@expo-google-fonts/dm-sans/300Light/DMSans_300Light.ttf",
+          "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
+          "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
+          "@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf",
+          "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
+        ],
+      },
+    ],
+    // Notifications from the server: mentions, approvals, finished exports
+    // (src/components/push-registration.tsx).
+    ...(pushNotifications
+      ? [
+          [
+            "expo-notifications",
+            { mode: variant === "development" ? "development" : "production" },
+          ] satisfies [string, unknown],
+        ]
+      : []),
+    // A running timer on the Lock Screen and in the Dynamic Island
+    // (src/widgets/timer-activity.ios.tsx).
+    ...(liveActivities
+      ? [
+          [
+            "expo-widgets",
+            {
+              bundleIdentifier: `${VARIANT_CONFIG[variant].identifier}.widgets`,
+              groupIdentifier: `group.${VARIANT_CONFIG[variant].identifier}`,
+            },
+          ] satisfies [string, unknown],
+        ]
+      : []),
+  ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
   },
-  extra: { variant },
+  extra: { liveActivities, pushNotifications, variant },
 });
 
 export const appConfigFor = ({
   signing,
   ...inputs
-}: AppConfigInputs & {
+}: Omit<AppConfigInputs, "liveActivities" | "pushNotifications"> & {
   signing?: ReleaseSigning | undefined;
 }): ExpoConfig => {
-  const config = appConfigBase(inputs);
+  // The widgets profile comes with the profiles regenerated for the App
+  // Group and push capabilities, so it stands for both.
+  const storeCapabilities =
+    signing === undefined || signing.widgetsProfileUuid !== undefined;
+  const config = appConfigBase({
+    ...inputs,
+    liveActivities: storeCapabilities,
+    pushNotifications: storeCapabilities,
+  });
   return signing === undefined ? config : withReleaseSigning(config, signing);
 };
 
@@ -170,7 +302,7 @@ const readVariant = (value: string | undefined): Variant =>
     : (VARIANTS.find((variant) => variant === value) ??
       panic(`APP_VARIANT must be one of ${VARIANTS.join(", ")}`));
 
-/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number. */
+/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number plus 100. */
 const readBuildNumber = (value: string | undefined): number => {
   if (value === undefined) {
     return 1;
@@ -181,16 +313,23 @@ const readBuildNumber = (value: string | undefined): number => {
     : panic("MOBILE_BUILD_NUMBER must be a positive integer");
 };
 
-/** `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither. */
+/**
+ * `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither; with them,
+ * `MOBILE_WIDGETS_PROFILE_UUID` when the release also signs the Live
+ * Activity extension.
+ */
 const readSigning = (
   teamId: string | undefined,
   profileUuid: string | undefined,
+  widgetsProfileUuid: string | undefined,
 ): ReleaseSigning | undefined => {
   if (teamId === undefined && profileUuid === undefined) {
-    return undefined;
+    return widgetsProfileUuid === undefined
+      ? undefined
+      : panic("MOBILE_WIDGETS_PROFILE_UUID signs only alongside a release");
   }
   return teamId !== undefined && profileUuid !== undefined
-    ? { profileUuid, teamId }
+    ? { profileUuid, teamId, widgetsProfileUuid }
     : panic("APPLE_TEAM_ID and MOBILE_PROFILE_UUID sign a release together");
 };
 
@@ -209,6 +348,7 @@ const appConfig = ({ projectRoot }: ConfigContext): ExpoConfig =>
     signing: readSigning(
       readEnv("APPLE_TEAM_ID"),
       readEnv("MOBILE_PROFILE_UUID"),
+      readEnv("MOBILE_WIDGETS_PROFILE_UUID"),
     ),
     signingCertificatePresent: existsSync(
       path.join(projectRoot, UPDATE_SIGNING_CERTIFICATE),

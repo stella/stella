@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, expect, mock, test } from "bun:test";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -11,13 +11,23 @@ import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-afterEach(() => mock.restore());
+const testFetchState = createTestFetch();
+
+afterEach(() => {
+  testFetchState.restore();
+  mock.restore();
+});
 
 test("the deferred Slovak fetch emits typed document outcomes through the shared boundary", async () => {
   const observations: DocumentStageObservation[] = [];
-  spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response("challenge", { headers: { "content-type": "text/html" } }),
+  const fetchResponse1 = new Response("challenge", {
+    headers: { "content-type": "text/html" },
+  });
+  testFetchState.set(
+    asFetchMock(mock(asFetchMock(async () => fetchResponse1))),
   );
   await withDocumentStageWindow({
     source: ADAPTER_KEYS.SK_COURTS,
@@ -65,7 +75,8 @@ test("document downloads identify the client and preserve the caller's abort and
   const response = new Response("%PDF-", {
     headers: { "Content-Type": "application/octet-stream" },
   });
-  const fetch = spyOn(globalThis, "fetch").mockResolvedValue(response);
+  const fetch = mock(asFetchMock(async () => response));
+  testFetchState.set(asFetchMock(fetch));
   const controller = new AbortController();
   const read = await skCourtsDocumentFetch(
     new URL("https://obcan.justice.sk/content/public/item/fixture-document"),
@@ -103,8 +114,9 @@ test("a document the publisher cannot serve is typed by what the request establi
       { type: "unavailable", cause: { kind: "status", status: 503 } },
     ],
   ] as const) {
-    spyOn(globalThis, "fetch").mockResolvedValue(answer);
+    testFetchState.set(asFetchMock(mock(asFetchMock(async () => answer))));
     expect(await skCourtsDocumentFetch(url, { signal })).toEqual(expected);
+    testFetchState.restore();
     mock.restore();
   }
   expect(

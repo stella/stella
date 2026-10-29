@@ -19,7 +19,6 @@ import {
   skUsAdapter,
   skUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -45,8 +44,12 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(skUsAdapter);
 
@@ -383,8 +386,8 @@ const mockFetch = ({
   let searchCall = 0;
   let downloadCall = 0;
   let facetCall = 0;
-  globalThis.fetch = asFetchMock(
-    (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
@@ -443,7 +446,7 @@ const mockFetch = ({
       return Promise.resolve(
         new Response(`unexpected request: ${url.toString()}`, { status: 500 }),
       );
-    },
+    }),
   );
   return {
     calls: () => searchCall,
@@ -572,10 +575,8 @@ describe("sk-us listing identity", () => {
 });
 
 describe("sk-us listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("asks the publisher for exactly the slice's month", async () => {
@@ -865,8 +866,6 @@ describe("sk-us listSlicePage", () => {
 });
 
 describe("sk-us getTotalCount", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-09-25T09:30:00.000Z"));
   });
@@ -876,7 +875,7 @@ describe("sk-us getTotalCount", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("reads the court's own count over the crawl's whole date span", async () => {
@@ -931,10 +930,8 @@ describe("sk-us getTotalCount", () => {
 });
 
 describe("sk-us buildDecision", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("builds the decision the crawl would have stored", async () => {
@@ -1329,11 +1326,13 @@ describe("sk-us buildDecision", () => {
         supplementary: { [surface]: { type: "status", status: 429 } },
       });
       const served = globalThis.fetch;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) => {
-          requests += 1;
-          return await served(input, init);
-        },
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            requests += 1;
+            return await served(input, init);
+          },
+        ),
       );
       const rejection = await rejectionOf(buildSkUsDecision(PLENARY_OPINION));
       expect(rejection).toBeInstanceOf(AdapterFetchError);
@@ -1507,7 +1506,6 @@ describe("sk-us buildDecision", () => {
 });
 
 describe("sk-us crawl and reconciliation dispose of a missing document differently", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -1515,7 +1513,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -1559,8 +1557,8 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       ],
     });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -1572,7 +1570,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
           return new Response("", { status: 500 });
         }
         return await served(input, init);
-      },
+      }),
     );
 
     const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
@@ -1815,14 +1813,14 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     const abortError = new DOMException("Aborted", "AbortError");
     mockFetch({ search: [], download: { type: "fails", error: abortError } });
     const fetchDocument = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = input instanceof Request ? input.url : String(input);
         if (url.includes("/docDownload/")) {
           controller.abort(abortError);
         }
         return await fetchDocument(input, init);
-      },
+      }),
     );
 
     const outcome = await buildSkUsDecision(CHAMBER_RESOLUTION, {
@@ -1845,11 +1843,10 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
  * so only a count of what it kept shows a build that fails on every row.
  */
 describe("sk-us rows as the court sends them", () => {
-  const originalFetch = globalThis.fetch;
   const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const recordedRows = async (): Promise<Record<string, unknown>[]> => {
@@ -2004,8 +2001,6 @@ describe("sk-us rows as the court sends them", () => {
  * collects documents leaves the cursor past them.
  */
 describe("the sk-us steady-state frontier", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
   });
@@ -2015,7 +2010,7 @@ describe("the sk-us steady-state frontier", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   /** Where the crawl parked after listing the current year to its end. */

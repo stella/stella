@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * A decision per enrolled case-law adapter, built from payloads shaped like
  * the ones its publisher serves.
@@ -13,12 +14,9 @@
  * only exercised where the decision built from the fixture can be checked for
  * it.
  *
- * Building a decision replaces `globalThis.fetch` for the adapters that reach
- * their publisher through it, so a suite using these restores the original in
- * an `afterEach`.
+ * Each build scopes its publisher fetch replacement to the operation and
+ * restores it before returning.
  */
-
-import { panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -134,6 +132,7 @@ import {
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
+import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -143,6 +142,7 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 /** What a guard has to drive one adapter with. */
@@ -256,33 +256,35 @@ const unreadBuild = async (
   );
 
 export const czNsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = url.includes("/WebPrint/")
-        ? CZ_NS_PRINT_PAGE
-        : CZ_NS_DETAIL_PAGE;
-      return await Promise.resolve(
-        new Response(body, { headers: { "Content-Type": "text/html" } }),
-      );
-    });
-
-    const built = await buildCzNsDecision({
-      unid: "0000000000000000000000000000000A",
-      caseNumber: "30 Cdo 3000/2025",
-    });
-    switch (built.type) {
-      case "built":
-        return built.decision;
-      case "detail-unavailable":
-        return await unreadBuild("cz-ns", built.read);
-      case "unkeyable":
-        return panic("cz-ns fixture did not build: unkeyable");
-      default:
-        built satisfies never;
-        return panic("Unhandled cz-ns fixture build");
-    }
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = url.includes("/WebPrint/")
+          ? CZ_NS_PRINT_PAGE
+          : CZ_NS_DETAIL_PAGE;
+        return await Promise.resolve(
+          new Response(body, { headers: { "Content-Type": "text/html" } }),
+        );
+      }),
+      async () => {
+        const built = await buildCzNsDecision({
+          unid: "0000000000000000000000000000000A",
+          caseNumber: "30 Cdo 3000/2025",
+        });
+        switch (built.type) {
+          case "built":
+            return built.decision;
+          case "detail-unavailable":
+            return await unreadBuild("cz-ns", built.read);
+          case "unkeyable":
+            return panic("cz-ns fixture did not build: unkeyable");
+          default:
+            built satisfies never;
+            return panic("Unhandled cz-ns fixture build");
+        }
+      },
+    ),
 });
 
 // ── CZ NSS fixture ───────────────────────────────────────
@@ -418,7 +420,9 @@ const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
       fieldId,
       CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
     ),
-).join("")}</body></html>`;
+).join(
+  "",
+)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -429,36 +433,41 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   zamítá.</p>
 </body></html>`;
 
-export const czNssFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = url.includes("/DokumentDetail/Index/")
-        ? CZ_NSS_DETAIL_PAGE
-        : CZ_NSS_DOCUMENT_PAGE;
-      return await Promise.resolve(
-        new Response(body, {
-          headers: { "Content-Type": "text/html; charset=utf-8" },
-        }),
-      );
-    });
-
-    const built = await buildCzNssDecision({
-      row: {
-        caseNumber: "1 Azs 4/2026",
-        publishedCaseNumber: "1 Azs 4/2026-79",
-        decisionDate: "10.06.2026",
-        decisionType: "Rozsudek",
-        outcome: undefined,
-        documentUrl: "https://vyhledavac.nssoud.cz/DokumentDetail/Index/784237",
-        documentId: "784237",
+export const czNssFixture = (
+  detailHtml = CZ_NSS_DETAIL_PAGE,
+): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = url.includes("/DokumentDetail/Index/")
+          ? detailHtml
+          : CZ_NSS_DOCUMENT_PAGE;
+        return await Promise.resolve(
+          new Response(body, {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }),
+        );
+      }),
+      async () => {
+        const built = await buildCzNssDecision({
+          row: {
+            caseNumber: "1 Azs 4/2026",
+            publishedCaseNumber: "1 Azs 4/2026-79",
+            decisionDate: "10.06.2026",
+            decisionType: "Rozsudek",
+            outcome: undefined,
+            documentUrl:
+              "https://vyhledavac.nssoud.cz/DokumentDetail/Index/784237",
+            documentId: "784237",
+          },
+          session: { cookies: "", token: "", formFields: new Map() },
+          signal: AbortSignal.timeout(30_000),
+        });
+        // A row held listing-only states its typed read outcome.
+        return built.decision;
       },
-      session: { cookies: "", token: "", formFields: new Map() },
-      signal: AbortSignal.timeout(30_000),
-    });
-    // A row held listing-only states its typed read outcome.
-    return built.decision;
-  },
+    ),
 });
 
 // ── CZ Regional fixture ──────────────────────────────────
@@ -629,61 +638,65 @@ const CZ_REGIONAL_CHAIN_PAYLOAD = JSON.stringify([
  * than of a payload written by hand.
  */
 export const czRegionalFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = url.includes("/finalDocChain/affectingDocs/")
-        ? CZ_REGIONAL_CHAIN_PAYLOAD
-        : CZ_REGIONAL_DOCUMENT_PAYLOAD;
-      return await Promise.resolve(
-        new Response(body, { headers: { "Content-Type": "application/json" } }),
-      );
-    });
-
-    const crawled = await buildCzRegionalDecision(CZ_REGIONAL_LISTING_ROW);
-    // A row held listing-only states its typed read outcome.
-    if (crawled.type === "detail-unavailable") {
-      return crawled.decision;
-    }
-    if (crawled.type !== "built") {
-      return panic(`cz-regional fixture did not build: ${crawled.type}`);
-    }
-    const parts = decodeSourceRawEnvelope(crawled.decision.sourceRaw ?? "");
-    if (parts === null) {
-      return panic("the cz-regional fixture stored no envelope");
-    }
-    const chain = await fetchCzRegionalAffectingDocs(
-      crawled.decision.sourceDocumentId ??
-        panic("the cz-regional fixture states no publisher id"),
-    );
-    // The chain pass writes nothing for a chain it did not read, and asks
-    // again on a later run.
-    if (chain.type !== "present") {
-      return await unreadBuild("cz-regional", chain);
-    }
-
-    const reparsed = await czRegionalAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(
-        czRegionalEnvelopeWithChain(parts, chain.value.raw),
-      ),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: crawled.decision.caseNumber,
-      sourceDocumentId: crawled.decision.sourceDocumentId ?? null,
-      language: crawled.decision.language,
-      court: crawled.decision.court,
-      ecli: crawled.decision.ecli ?? null,
-      decisionDate: crawled.decision.decisionDate ?? null,
-      decisionType: crawled.decision.decisionType ?? null,
-      sourceUrl: crawled.decision.sourceUrl ?? null,
-      documentUrl: crawled.decision.documentUrl ?? null,
-      metadata: crawled.decision.metadata,
-    });
-    return reparsed?.type === "parsed"
-      ? reparsed.result
-      : panic(
-          `cz-regional fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = url.includes("/finalDocChain/affectingDocs/")
+          ? CZ_REGIONAL_CHAIN_PAYLOAD
+          : CZ_REGIONAL_DOCUMENT_PAYLOAD;
+        return await Promise.resolve(
+          new Response(body, {
+            headers: { "Content-Type": "application/json" },
+          }),
         );
-  },
+      }),
+      async () => {
+        const crawled = await buildCzRegionalDecision(CZ_REGIONAL_LISTING_ROW);
+        // A row held listing-only states its typed read outcome.
+        if (crawled.type === "detail-unavailable") {
+          return crawled.decision;
+        }
+        if (crawled.type !== "built") {
+          return panic(`cz-regional fixture did not build: ${crawled.type}`);
+        }
+        const parts = decodeSourceRawEnvelope(crawled.decision.sourceRaw ?? "");
+        if (parts === null) {
+          return panic("the cz-regional fixture stored no envelope");
+        }
+        const chain = await fetchCzRegionalAffectingDocs(
+          crawled.decision.sourceDocumentId ??
+            panic("the cz-regional fixture states no publisher id"),
+        );
+        // The chain pass writes nothing for a chain it did not read, and asks
+        // again on a later run.
+        if (chain.type !== "present") {
+          return await unreadBuild("cz-regional", chain);
+        }
+
+        const reparsed = await czRegionalAdapter.reparseStoredRaw?.({
+          raw: new TextEncoder().encode(
+            czRegionalEnvelopeWithChain(parts, chain.value.raw),
+          ),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          caseNumber: crawled.decision.caseNumber,
+          sourceDocumentId: crawled.decision.sourceDocumentId ?? null,
+          language: crawled.decision.language,
+          court: crawled.decision.court,
+          ecli: crawled.decision.ecli ?? null,
+          decisionDate: crawled.decision.decisionDate ?? null,
+          decisionType: crawled.decision.decisionType ?? null,
+          sourceUrl: crawled.decision.sourceUrl ?? null,
+          documentUrl: crawled.decision.documentUrl ?? null,
+          metadata: crawled.decision.metadata,
+        });
+        return reparsed?.type === "parsed"
+          ? reparsed.result
+          : panic(
+              `cz-regional fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
+            );
+      },
+    ),
 });
 
 // ── PL courts fixture ────────────────────────────────────
@@ -1223,38 +1236,41 @@ const CZ_US_PAGES: Readonly<Record<string, string>> = {
  * the text, the record card and the abstract, each read from the court.
  */
 export const czUsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const { pathname } = new URL(
-        input instanceof Request ? input.url : String(input),
-      );
-      return await Promise.resolve(
-        new Response(
-          CZ_US_PAGES[pathname] ?? panic(`cz-us fixture serves no ${pathname}`),
-          {
-            headers: {
-              "Content-Type": "text/html; charset=utf-8",
-              "Set-Cookie": "ASP.NET_SessionId=fixture-session; Path=/",
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        return await Promise.resolve(
+          new Response(
+            CZ_US_PAGES[pathname] ??
+              panic(`cz-us fixture serves no ${pathname}`),
+            {
+              headers: {
+                "Content-Type": "text/html; charset=utf-8",
+                "Set-Cookie": "ASP.NET_SessionId=fixture-session; Path=/",
+              },
             },
-          },
-        ),
-      );
-    });
-
-    // The court's gate paces requests seconds apart; the build is the same
-    // decision without the wait.
-    const sleep = Bun.sleep;
-    Bun.sleep = async () => {
-      await Promise.resolve();
-    };
-    const built = await buildCzUsListedRecord({
-      ...CZ_US_LISTING_ROW,
-    }).finally(() => {
-      Bun.sleep = sleep;
-    });
-    // A record held listing-only states its typed read outcome.
-    return built.decision;
-  },
+          ),
+        );
+      }),
+      async () => {
+        // The court's gate paces requests seconds apart; the build is the same
+        // decision without the wait.
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const built = await buildCzUsListedRecord({
+          ...CZ_US_LISTING_ROW,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        // A record held listing-only states its typed read outcome.
+        return built.decision;
+      },
+    ),
 });
 
 // ── EU ECJ fixture ───────────────────────────────────────
@@ -1434,42 +1450,46 @@ const SK_COURTS_REGISTRY_RECORD = {
  * reads them, so the read-fault guard drives both reads.
  */
 export const skCourtsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      const body = url.pathname.includes("/sud/")
-        ? SK_COURTS_REGISTRY_RECORD
-        : SK_COURTS_DETAIL_RECORD;
-      return await Promise.resolve(Response.json(body));
-    });
-
-    const built = await buildSkCourtsDecision({ ...SK_COURTS_LISTING_ROW });
-    switch (built.type) {
-      // The crawl stores both: a withheld record keeps the listing-only row
-      // with its typed outcome.
-      case "built":
-      case "detail-unavailable":
-        return built.decision;
-      // What the pipeline stores for the item once its bound is spent: the
-      // listing-only row with the typed outcome.
-      case "unread": {
-        const { item } = built;
-        return (
-          planUnreadItems([item], {
-            [item.listing.sourceDocumentId]:
-              UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
-          }).terminal.at(0) ?? panic("sk-courts unread item stored nothing")
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
         );
-      }
-      case "read-failed":
-        throw built.error;
-      case "unkeyable":
-        return panic("sk-courts fixture did not build: unkeyable");
-      default:
-        built satisfies never;
-        return panic(`Unhandled sk-courts build: ${String(built)}`);
-    }
-  },
+        const body = url.pathname.includes("/sud/")
+          ? SK_COURTS_REGISTRY_RECORD
+          : SK_COURTS_DETAIL_RECORD;
+        return await Promise.resolve(Response.json(body));
+      }),
+      async () => {
+        const built = await buildSkCourtsDecision({ ...SK_COURTS_LISTING_ROW });
+        switch (built.type) {
+          // The crawl stores both: a withheld record keeps the listing-only row
+          // with its typed outcome.
+          case "built":
+          case "detail-unavailable":
+            return built.decision;
+          // What the pipeline stores for the item once its bound is spent: the
+          // listing-only row with the typed outcome.
+          case "unread": {
+            const { item } = built;
+            return (
+              planUnreadItems([item], {
+                [item.listing.sourceDocumentId]:
+                  UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+              }).terminal.at(0) ?? panic("sk-courts unread item stored nothing")
+            );
+          }
+          case "read-failed":
+            throw built.error;
+          case "unkeyable":
+            return panic("sk-courts fixture did not build: unkeyable");
+          default:
+            built satisfies never;
+            return panic(`Unhandled sk-courts build: ${String(built)}`);
+        }
+      },
+    ),
 });
 
 // ── SK ÚS fixture ────────────────────────────────────────
@@ -1614,7 +1634,10 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * closes it, through the same derivation, so the guards read the envelope a
  * stored row holds rather than one this helper invented.
  */
-export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
+export const skUsFixture = (
+  documentUrl?: URL,
+  identity?: ParserParityIdentity,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);
@@ -1624,10 +1647,17 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
       }
       const listing = {
         ...SK_US_LISTING_ROW,
-        documentId: "695d557a-08eb-41d2-8cea-2b895f9860e7",
-        mkRSAPNumberOfFile: "III. ÚS 265/2026",
-        mkDateOfDecision: "04/23/2026 00:00:00",
-        mkECLI: null,
+        documentId:
+          identity?.documentId ?? "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        mkRSAPNumberOfFile: identity?.caseNumber ?? "III. ÚS 265/2026",
+        mkDateOfDecision:
+          identity === undefined
+            ? "04/23/2026 00:00:00"
+            : identity.decisionDate.replace(
+                /^(\d{4})-(\d{2})-(\d{2})$/u,
+                "$2/$3/$1 00:00:00",
+              ),
+        mkECLI: identity?.ecli ?? null,
         mkFormOfDecision: "Uznesenie",
       };
       const reparse = skUsAdapter.reparseStoredRaw;
@@ -1646,8 +1676,8 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         sourceDocumentId: listing.documentId,
         language: "sk",
         court: "Ústavný súd SR",
-        ecli: null,
-        decisionDate: "2026-04-23",
+        ecli: listing.mkECLI,
+        decisionDate: identity?.decisionDate ?? "2026-04-23",
         decisionType: listing.mkFormOfDecision,
         sourceUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
         documentUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
@@ -1660,8 +1690,8 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
     const documentContent = JSON.stringify({
       content: Buffer.from(SK_US_DOCUMENT_XHTML).toBase64(),
     });
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    return await withTestFetch(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -1700,43 +1730,44 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
             headers: { "Content-Type": "application/json" },
           }),
         );
+      }),
+      async () => {
+        const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
+        if (built.type === "unread") {
+          // What the pipeline stores for the item once its bound is spent: the
+          // listing-only row with the typed outcome.
+          const { item } = built;
+          return (
+            planUnreadItems([item], {
+              [item.listing.sourceDocumentId]:
+                UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+            }).terminal.at(0) ?? panic("sk-us unread item stored nothing")
+          );
+        }
+        if (built.type !== "built") {
+          return panic(`sk-us fixture did not build: ${built.type}`);
+        }
+        const { decision } = built;
+        const objects = Object.fromEntries(
+          Object.entries(decision.sourceRawObjects ?? {}).map(
+            ([part, { bytes, contentType }]) => [
+              part,
+              sourceBinaryRef({
+                family: RAW_SOURCE_FAMILY.CASE_LAW,
+                sourceId: SK_US_SOURCE_ID,
+                documentId: SK_US_DECISION_ID,
+                bytes,
+                contentType,
+              }),
+            ],
+          ),
+        );
+        return {
+          ...decision,
+          sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+        };
       },
     );
-
-    const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
-    if (built.type === "unread") {
-      // What the pipeline stores for the item once its bound is spent: the
-      // listing-only row with the typed outcome.
-      const { item } = built;
-      return (
-        planUnreadItems([item], {
-          [item.listing.sourceDocumentId]:
-            UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
-        }).terminal.at(0) ?? panic("sk-us unread item stored nothing")
-      );
-    }
-    if (built.type !== "built") {
-      return panic(`sk-us fixture did not build: ${built.type}`);
-    }
-    const { decision } = built;
-    const objects = Object.fromEntries(
-      Object.entries(decision.sourceRawObjects ?? {}).map(
-        ([part, { bytes, contentType }]) => [
-          part,
-          sourceBinaryRef({
-            family: RAW_SOURCE_FAMILY.CASE_LAW,
-            sourceId: SK_US_SOURCE_ID,
-            documentId: SK_US_DECISION_ID,
-            bytes,
-            contentType,
-          }),
-        ],
-      ),
-    );
-    return {
-      ...decision,
-      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
-    };
   },
 });
 
@@ -2779,31 +2810,33 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   rawFieldValues: {},
   buildDecision: async () => {
     const document = czUohsSyntheticPdf();
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response(document)),
+    return await withTestFetch(
+      asFetchMock(async () => await Promise.resolve(new Response(document))),
+      async () => {
+        const record = parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING)[0];
+        const decision = await buildCzUohsDecision(
+          record ?? panic("the ÚOHS fixture lost its first record"),
+        );
+        const objects = Object.fromEntries(
+          Object.entries(decision.sourceRawObjects ?? {}).map(
+            ([part, { bytes, contentType }]) => [
+              part,
+              sourceBinaryRef({
+                family: RAW_SOURCE_FAMILY.CASE_LAW,
+                sourceId: ADAPTER_KEYS.CZ_UOHS,
+                documentId: decision.sourceDocumentId ?? "cz-uohs-fixture",
+                bytes,
+                contentType,
+              }),
+            ],
+          ),
+        );
+        return {
+          ...decision,
+          sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+        };
+      },
     );
-    const record = parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING)[0];
-    const decision = await buildCzUohsDecision(
-      record ?? panic("the ÚOHS fixture lost its first record"),
-    );
-    const objects = Object.fromEntries(
-      Object.entries(decision.sourceRawObjects ?? {}).map(
-        ([part, { bytes, contentType }]) => [
-          part,
-          sourceBinaryRef({
-            family: RAW_SOURCE_FAMILY.CASE_LAW,
-            sourceId: ADAPTER_KEYS.CZ_UOHS,
-            documentId: decision.sourceDocumentId ?? "cz-uohs-fixture",
-            bytes,
-            contentType,
-          }),
-        ],
-      ),
-    );
-    return {
-      ...decision,
-      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
-    };
   },
 });
 
@@ -2821,15 +2854,19 @@ export const ukFclFixture = (
       ),
     ).text();
     const document = await Bun.file(documentUrl).text();
-    globalThis.fetch = asFetchMock(async () => new Response(document));
-    const built = await fetchUkFclDecision({
-      feed,
-      sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
-    });
-    if (built.isErr()) {
-      return await Promise.reject(built.error);
-    }
-    return built.value;
+    return await withTestFetch(
+      asFetchMock(async () => new Response(document)),
+      async () => {
+        const built = await fetchUkFclDecision({
+          feed,
+          sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
+        });
+        if (built.isErr()) {
+          return await Promise.reject(built.error);
+        }
+        return built.value;
+      },
+    );
   },
 });
 
