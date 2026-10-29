@@ -222,3 +222,33 @@ test("metadata-only publications retain the different stated records", () => {
     first,
   );
 });
+
+test("publication identity remains stable across document enrichment", () => {
+  const metadata = decisionStorageIdentity(publishedDecision(""));
+  const detail = decisionStorageIdentity(publishedDecision("Prvé uznesenie."));
+  if (metadata.type !== "content" || detail.type !== "content") {
+    return expect.unreachable(
+      "Weak observations must have publication fingerprints",
+    );
+  }
+  expect(metadata.publicationHash).toBe(detail.publicationHash);
+  expect(metadata.documentState).toBe("metadata-only");
+  expect(detail.documentState).toBe("document");
+  expect(metadata.contentHash).not.toBe(detail.contentHash);
+});
+
+test("textless same-cohort publications retain distinct stated metadata", () => {
+  const first = decisionStorageIdentity({
+    ...publishedDecision(""),
+    metadata: { record: "first" },
+  });
+  const second = decisionStorageIdentity({
+    ...publishedDecision(""),
+    metadata: { record: "second" },
+  });
+  if (first.type !== "content" || second.type !== "content") {
+    return expect.unreachable("Expected weak records");
+  }
+  expect(first.cohortKey).toBe(second.cohortKey);
+  expect(first.contentHash).not.toBe(second.contentHash);
+});

@@ -77,6 +77,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "fallbackIdentityKey",
   "fallbackCohortKey",
   "fallbackContentHash",
+  "fallbackPublicationHash",
   "sheetNumber",
   // Documents, raw observations and analysis are deliberately never loaded by hover.
   "fulltext",

@@ -63,6 +63,7 @@ const PARSED_GENERATION_COLUMNS = {
   fallbackIdentityKey: "bookkeeping",
   fallbackCohortKey: "bookkeeping",
   fallbackContentHash: "bookkeeping",
+  fallbackPublicationHash: "bookkeeping",
   sheetNumber: "parse-input-or-output",
   documentFetchRequestedAt: "bookkeeping",
   documentFetchAttemptedAt: "bookkeeping",

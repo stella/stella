@@ -34,7 +34,7 @@ test.skipIf(!enabled)(
           `CREATE TABLE ${table} (LIKE public.case_law_decisions INCLUDING ALL)`,
         );
         await client.unsafe(
-          `ALTER TABLE ${table} DROP COLUMN IF EXISTS fallback_identity_key, DROP COLUMN IF EXISTS fallback_cohort_key, DROP COLUMN IF EXISTS fallback_content_hash`,
+          `ALTER TABLE ${table} DROP COLUMN IF EXISTS fallback_identity_key, DROP COLUMN IF EXISTS fallback_cohort_key, DROP COLUMN IF EXISTS fallback_content_hash, DROP COLUMN IF EXISTS fallback_publication_hash`,
         );
         const sourceId = Bun.randomUUIDv7();
         await client.unsafe(
@@ -82,7 +82,7 @@ test.skipIf(!enabled)(
         }
         expect(
           await client.unsafe(
-            `SELECT to_jsonb(d)-'fallback_identity_key'-'fallback_cohort_key'-'fallback_content_hash' AS row FROM ${table} d ORDER BY id`,
+            `SELECT to_jsonb(d)-'fallback_identity_key'-'fallback_cohort_key'-'fallback_content_hash'-'fallback_publication_hash' AS row FROM ${table} d ORDER BY id`,
           ),
         ).toEqual(before);
         expect(

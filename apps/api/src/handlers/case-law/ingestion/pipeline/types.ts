@@ -32,6 +32,8 @@ export type AttemptStep = ProcessResult | typeof RECONCILE_CONTENTION;
 export const DECISION_ROW_WRITE_STATUS = {
   APPLIED: "applied",
   /** The docket's supplements changed after this write composed them. */
+  /** A compatible fallback publication appeared after identity resolution. */
+  IDENTITY_MOVED: "identity-moved",
   SUPPLEMENTS_MOVED: "supplements-moved",
   WINNER_PENDING: "winner-pending",
   WINNER_REDACTED: "winner-redacted",

@@ -26,6 +26,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import {
+  decisionStorageEnrichmentMatch,
   decisionStorageIdentity,
   decisionStorageIdentityMatch,
 } from "@/api/lib/case-law/fallback-decision-identity";
@@ -391,6 +392,40 @@ type FindExistingDecisionOptions = Pick<
   repairClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
 };
 
+type FindFallbackDecisionOptions = Pick<
+  FindExistingDecisionOptions,
+  "sourceId" | "storageIdentity"
+>;
+
+export const findFallbackDecisionTx = async (
+  tx: Transaction,
+  { sourceId, storageIdentity }: FindFallbackDecisionOptions,
+) => {
+  const exact = await tx.query.caseLawDecisions.findFirst({
+    where: {
+      sourceId: { eq: sourceId },
+      ...decisionStorageIdentityMatch(storageIdentity),
+    },
+    columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
+  });
+  if (exact !== undefined) {
+    return exact;
+  }
+  const enrichmentMatch = decisionStorageEnrichmentMatch(storageIdentity);
+  if (enrichmentMatch === null) {
+    return undefined;
+  }
+  const publications = await tx.query.caseLawDecisions.findMany({
+    where: { sourceId: { eq: sourceId }, ...enrichmentMatch },
+    columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
+    limit: 2,
+  });
+  // Ambiguous publication fields cannot identify one of several full siblings.
+  return publications.length === 1 ? publications.at(0) : undefined;
+};
+
 /**
  * The stored decision this observation is, and the decision its reserved
  * identities claim. Runs under the identity locks the caller took.
@@ -412,17 +447,14 @@ const findExistingDecisionTx = async (
   let exactClaimedDecisionId = reservedExactClaimedDecisionId;
   let provisionalClaimedDecisionId =
     exactClaimedDecisionId ?? repairClaimedDecisionId;
-  let provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
-    where:
-      provisionalClaimedDecisionId === undefined
-        ? {
-            sourceId: { eq: sourceId },
-            ...decisionStorageIdentityMatch(storageIdentity),
-          }
-        : { id: { eq: provisionalClaimedDecisionId } },
-    columns: IDENTITY_COLUMNS,
-    extras: IDENTITY_EXTRAS,
-  });
+  let provisionalIdentified =
+    provisionalClaimedDecisionId === undefined
+      ? await findFallbackDecisionTx(tx, { sourceId, storageIdentity })
+      : await tx.query.caseLawDecisions.findFirst({
+          where: { id: { eq: provisionalClaimedDecisionId } },
+          columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+        });
   if (
     exactClaimedDecisionId !== undefined &&
     provisionalIdentified === undefined
@@ -484,14 +516,7 @@ const findExistingDecisionTx = async (
   const exactIdentified =
     claimedDecisionId === provisionalClaimedDecisionId
       ? provisionalIdentified
-      : await tx.query.caseLawDecisions.findFirst({
-          where: {
-            sourceId: { eq: sourceId },
-            ...decisionStorageIdentityMatch(storageIdentity),
-          },
-          columns: IDENTITY_COLUMNS,
-          extras: IDENTITY_EXTRAS,
-        });
+      : await findFallbackDecisionTx(tx, { sourceId, storageIdentity });
   const identified =
     exactIdentified ??
     (claimedDecisionId === undefined && exactSourceIdentityCandidates.length > 1

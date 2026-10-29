@@ -13,6 +13,7 @@ import {
   createCaseLawDecisionSlugCandidate,
 } from "@/api/handlers/case-law/decisions/slug";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import { findFallbackDecisionTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
@@ -42,6 +43,7 @@ import {
   FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
 } from "@/api/lib/case-law/fallback-decision-identity-constants";
+import { lockCaseLawFallbackPublication } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -232,6 +234,19 @@ const writeDecisionRow = async (
       plan: { payloadColumns, storedPayloadUnchanged },
       inputProvenance,
     } = write;
+    if (write.storageIdentity.type === "content") {
+      await lockCaseLawFallbackPublication({
+        tx,
+        sourceId,
+        publicationHash: write.storageIdentity.publicationHash,
+      });
+    }
+    if (existing === undefined && write.storageIdentity.type === "content") {
+      const winner = await findFallbackDecisionTx(tx, write);
+      if (winner !== undefined && winner.id !== decisionId) {
+        return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
+      }
+    }
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
       family: "case_law",

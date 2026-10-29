@@ -266,6 +266,7 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "fallbackIdentityKey",
   "fallbackCohortKey",
   "fallbackContentHash",
+  "fallbackPublicationHash",
   // The file's document labels use the published primary reference.
   "sheetNumber",
   // Document-fetch queue priority is internal bookkeeping.

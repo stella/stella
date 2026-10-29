@@ -35,6 +35,15 @@ export const FALLBACK_DECISION_INDEXES = [
     name: "case_law_decisions_source_fallback_cohort_idx",
     tableName: "case_law_decisions",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_source_fallback_publication_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_publication_hash") WHERE "fallback_publication_hash" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, fallback_publication_hash) WHERE (fallback_publication_hash IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_decisions_source_fallback_publication_idx",
+    tableName: "case_law_decisions",
+  },
 ] as const satisfies readonly (RequiredMigrationIndex & {
   createSql: string;
 })[];
@@ -45,6 +54,7 @@ type FallbackDecisionIndexColumns = {
   fallbackIdentityKey: AnyPgColumn;
   fallbackCohortKey: AnyPgColumn;
   fallbackContentHash: AnyPgColumn;
+  fallbackPublicationHash: AnyPgColumn;
 };
 
 /** Schema and online declarations have one owning index module. */
@@ -61,6 +71,9 @@ export const fallbackDecisionIdentityIndexes = (
     .where(
       sql`${columns.sourceDocumentId} IS NULL AND ${columns.fallbackContentHash} IS NOT NULL`,
     ),
+  index("case_law_decisions_source_fallback_publication_idx")
+    .on(columns.sourceId, columns.fallbackPublicationHash)
+    .where(isNotNull(columns.fallbackPublicationHash)),
   index("case_law_decisions_source_fallback_cohort_idx")
     .on(columns.sourceId, columns.fallbackCohortKey)
     .where(isNotNull(columns.fallbackCohortKey)),

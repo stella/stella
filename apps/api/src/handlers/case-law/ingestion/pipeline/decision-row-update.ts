@@ -260,6 +260,31 @@ export const lostRowWriteStatus = async (
     : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
 };
 
+type FallbackUpdateOptions = Pick<
+  DecisionRowWrite,
+  "persistedSourceDocumentId" | "storageIdentity"
+>;
+
+const fallbackUpdateColumns = (
+  { persistedSourceDocumentId, storageIdentity }: FallbackUpdateOptions,
+  existing: ExistingDecision,
+) => {
+  if (persistedSourceDocumentId !== undefined) {
+    return decisionFallbackColumns({
+      type: "document",
+      sourceDocumentId: persistedSourceDocumentId,
+    });
+  }
+  if (
+    storageIdentity.type === "content" &&
+    storageIdentity.documentState === "metadata-only" &&
+    existing.hasStoredDocument
+  ) {
+    return {};
+  }
+  return decisionFallbackColumns(storageIdentity);
+};
+
 /**
  * The refresh's update of the row: its description, metadata, raw pointer
  * and (unless guarded) payload, fenced on this observation still owning the
@@ -276,7 +301,6 @@ export const describeRowUpdateTx = async (
     observationOrder,
     persistedSourceDocumentId,
     persistedDecisionDate,
-    storageIdentity,
     shape: {
       incomingCarriesDocument,
       preservesExistingDetail,
@@ -330,11 +354,7 @@ export const describeRowUpdateTx = async (
     : {
         ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
-        ...decisionFallbackColumns(
-          persistedSourceDocumentId === undefined
-            ? storageIdentity
-            : { type: "document", sourceDocumentId: persistedSourceDocumentId },
-        ),
+        ...fallbackUpdateColumns(write, existing),
         ecli: result.ecli,
         court: result.court,
         courtId: result.courtId ?? null,

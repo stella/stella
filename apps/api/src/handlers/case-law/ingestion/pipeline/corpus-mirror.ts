@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import type { decisionFallbackColumns } from "@/api/lib/case-law/fallback-decision-identity";
 import {
   pgPayloadCarriesDocumentFor,
   rowHoldsDocumentFor,
@@ -122,7 +123,18 @@ export const settleCaseLawCorpusMirrorTx = async ({
  * not a decision column fails to typecheck where `storedRowDiffers` reads it
  * off the table.
  */
+const FALLBACK_COMPARED_COLUMN_TYPES = {
+  fallbackIdentityKey: "text",
+  fallbackCohortKey: "text",
+  fallbackContentHash: "text",
+  fallbackPublicationHash: "text",
+} as const satisfies Record<
+  keyof ReturnType<typeof decisionFallbackColumns>,
+  "text"
+>;
+
 const REFRESH_COMPARED_COLUMN_TYPES = {
+  ...FALLBACK_COMPARED_COLUMN_TYPES,
   caseNumber: "text",
   caseNumberType: "text",
   citationKey: "text",

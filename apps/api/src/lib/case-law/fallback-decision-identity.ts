@@ -1,5 +1,6 @@
 // parser-output-unchanged: fallback storage identity is derived after parsing; adapter output is unchanged.
 import { panic, Result } from "better-result";
+import { not } from "drizzle-orm";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -8,9 +9,10 @@ import type { ListingCourtIdentity } from "@/api/lib/case-law/decision-court-ide
 import { FALLBACK_DECISION_IDENTITY_PREFIX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
-  corpusContentHash,
-  EMPTY_CORPUS_CONTENT_HASHES,
-} from "@/api/lib/legal-search/corpus-content-hash";
+  payloadCarriesDocument,
+  rowHoldsDocumentFor,
+} from "@/api/lib/case-law/stored-payload";
+import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -247,31 +249,33 @@ export const parseFallbackDecisionIdentityKey = (
   return fallbackDecisionIdentityKey(identity) === key ? identity : null;
 };
 
-/** Reuse the canonical normalized document hash; transport envelopes and weak metadata do not identify a document. */
-const publishedDocumentHash = (result: IngestionResult): string => {
-  const hash = corpusContentHash(caseLawCanonicalPayload(result));
-  // A listing-only publication still exposes a record worth retaining. Its
-  // normalized stated fields are the content; transport headers are excluded.
-  return EMPTY_CORPUS_CONTENT_HASHES.includes(hash)
-    ? sha256Hex(
-        JSON.stringify([
-          "published-record",
-          sortDeep({
-            decisionDate: result.decisionDate,
-            decisionType: result.decisionType,
-            ecli: result.ecli,
-            sheetNumber: result.sheetNumber,
-            judges: result.judges,
-            identifiers: result.identifiers,
-            sourceUrl: result.sourceUrl,
-            documentUrl: result.documentUrl,
-            metadata: result.metadata,
-            textFields: result.textFields,
-          }),
-        ]),
-      )
-    : hash;
-};
+/** Only publication fields shared by listing and detail participate; enrichment payloads do not. */
+const publicationFieldsHash = (result: IngestionResult) =>
+  sha256Hex(
+    JSON.stringify(
+      sortDeep({
+        decisionDate: result.decisionDate,
+        decisionType: result.decisionType,
+        judges: result.judges,
+        identifiers: result.identifiers,
+        sourceUrl: result.sourceUrl,
+        documentUrl: result.documentUrl,
+      }),
+    ),
+  );
+
+const scopedPublicationHash = (
+  identity: Exclude<FallbackDecisionIdentity, { type: "unidentifiable" }>,
+  publishedHash: string,
+) =>
+  sha256Hex(
+    JSON.stringify([
+      identity.language,
+      listingCourtTuple(identity.court),
+      identity.caseNumber,
+      publishedHash,
+    ]),
+  );
 
 export type DecisionStorageIdentity =
   | { type: "document"; sourceDocumentId: string }
@@ -289,6 +293,8 @@ export type DecisionStorageIdentity =
       cohortKey: string;
       contentHash: string;
       publishedContentHash: string;
+      publicationHash: string;
+      documentState: "metadata-only" | "document";
     }
   | { type: "unkeyable"; identity: FallbackDecisionIdentity };
 
@@ -307,22 +313,40 @@ export const decisionStorageIdentity = (
   if (identity.type === "decision") {
     return { type: "strong", identity, key };
   }
-  const publishedContentHash = publishedDocumentHash(result);
-  // Weak date/type edits can move the cohort without duplicating its document.
-  const contentHash = sha256Hex(
-    JSON.stringify([
-      identity.language,
-      listingCourtTuple(identity.court),
-      identity.caseNumber,
-      publishedContentHash,
-    ]),
+  const publicationHash = scopedPublicationHash(
+    identity,
+    publicationFieldsHash(result),
   );
+  const publishedContentHash = corpusContentHash(
+    caseLawCanonicalPayload(result),
+  );
+  const documentState = payloadCarriesDocument(caseLawCanonicalPayload(result))
+    ? "document"
+    : "metadata-only";
+  // The stable publication fingerprint bridges enrichment; content still distinguishes siblings.
+  const contentHash =
+    documentState === "metadata-only"
+      ? scopedPublicationHash(
+          identity,
+          sha256Hex(
+            JSON.stringify(
+              sortDeep({
+                publicationHash,
+                metadata: result.metadata,
+                textFields: result.textFields,
+              }),
+            ),
+          ),
+        )
+      : scopedPublicationHash(identity, publishedContentHash);
   return {
     type: "content",
     identity,
     cohortKey: key,
     contentHash,
     publishedContentHash,
+    publicationHash,
+    documentState,
   };
 };
 
@@ -334,18 +358,21 @@ export const decisionFallbackColumns = (storage: DecisionStorageIdentity) => {
         fallbackIdentityKey: null,
         fallbackCohortKey: null,
         fallbackContentHash: null,
+        fallbackPublicationHash: null,
       };
     case "strong":
       return {
         fallbackIdentityKey: storage.key,
         fallbackCohortKey: null,
         fallbackContentHash: null,
+        fallbackPublicationHash: null,
       };
     case "content":
       return {
         fallbackIdentityKey: null,
         fallbackCohortKey: storage.cohortKey,
         fallbackContentHash: storage.contentHash,
+        fallbackPublicationHash: storage.publicationHash,
       };
     case "unkeyable":
       return panic("An unkeyable identity cannot be persisted as a decision");
@@ -408,5 +435,24 @@ export const decisionStorageIdentityMatch = (
         decisionType: storage.identity.evidence.decisionType ?? ABSENT_FIELD,
       },
     ],
+  };
+};
+
+/** A full document can adopt only a textless publication, never another full sibling.
+ * Metadata-only replay may reuse an unambiguous publication; callers require exactly one candidate.
+ */
+export const decisionStorageEnrichmentMatch = (
+  storage: DecisionStorageIdentity,
+) => {
+  if (storage.type !== "content") {
+    return null;
+  }
+  return {
+    sourceDocumentId: ABSENT_FIELD,
+    fallbackPublicationHash: storage.publicationHash,
+    RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
+      storage.documentState === "document"
+        ? not(rowHoldsDocumentFor(table))
+        : rowHoldsDocumentFor(table),
   };
 };

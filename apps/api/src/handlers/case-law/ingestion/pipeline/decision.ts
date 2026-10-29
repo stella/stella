@@ -100,6 +100,7 @@ const settleRowWriteStatus = async ({
       }
       return null;
     }
+    case DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED:
     case DECISION_ROW_WRITE_STATUS.SUPPLEMENTS_MOVED:
       return RECONCILE_CONTENTION;
     case DECISION_ROW_WRITE_STATUS.WINNER_PENDING:

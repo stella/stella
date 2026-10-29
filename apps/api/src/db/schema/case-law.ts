@@ -659,6 +659,10 @@ export const caseLawDecisions = p.pgTable(
     fallbackIdentityKey: p.varchar("fallback_identity_key", { length: 320 }),
     /** Weak source cohort; individual members are identified by normalized content. */
     fallbackCohortKey: p.varchar("fallback_cohort_key", { length: 320 }),
+    /** Shared publication fields, stable when a textless observation receives its document. */
+    fallbackPublicationHash: p.varchar("fallback_publication_hash", {
+      length: 64,
+    }),
     fallbackContentHash: p.varchar("fallback_content_hash", { length: 64 }),
     /**
      * Sheet number within the court file (číslo listu), where the source
