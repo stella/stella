@@ -277,6 +277,75 @@ describe("online work runner", () => {
     expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 1 });
   });
 
+  test("a failure recorded between the snapshot and claim waits for its fresh retry delay", async () => {
+    const { rows, store } = createMemoryStore();
+    rows.set(FIRST, {
+      state: "building",
+      attempts: 2,
+      lastError: null,
+      finishedAt: null,
+    });
+    const claims: OnlineWorkName[] = [];
+    const releases: OnlineWorkName[] = [];
+    const walked: OnlineWorkName[] = [];
+    const work: Promise<unknown>[] = [];
+    const runner = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle: lifecycleWithPending([FIRST]),
+      store,
+      claim: async ({ name }) => {
+        claims.push(name);
+        if (claims.length === 1) {
+          await store.markFailed({ name, error: "another process failed" });
+        }
+        const release = async () => {
+          releases.push(name);
+        };
+        return {
+          type: "claimed",
+          release,
+          run: async (record) => {
+            walked.push(name);
+            try {
+              return await record(Result.ok({ type: "complete" }));
+            } finally {
+              await release();
+            }
+          },
+        };
+      },
+      detach: (finished) => {
+        work.push(finished);
+      },
+    });
+
+    expect((await runner(START)).unwrap()).toEqual({ type: "idle" });
+    expect(walked).toEqual([]);
+    expect(work).toEqual([]);
+    expect(releases).toEqual([FIRST]);
+    expect(rows.get(FIRST)).toMatchObject({ state: "failed", attempts: 2 });
+
+    expect(
+      (await runner(new Date(START.getTime() + 119_999))).unwrap(),
+    ).toEqual({
+      type: "idle",
+    });
+    expect(claims).toEqual([FIRST]);
+    expect(walked).toEqual([]);
+
+    expect(
+      (await runner(new Date(START.getTime() + 120_000))).unwrap(),
+    ).toEqual({
+      type: "started",
+      name: FIRST,
+    });
+    expect(claims).toEqual([FIRST, FIRST]);
+    expect(walked).toEqual([FIRST]);
+    await Promise.all(work);
+    expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 3 });
+    expect(releases).toEqual([FIRST, FIRST]);
+  });
+
   test("a failed unit waits for its retry delay, then is claimed again", async () => {
     const harness = createHarness({ pending: [FIRST] });
     await harness.tick();

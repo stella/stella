@@ -62,6 +62,30 @@ const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
 const retryDelayMs = (attempts: number) =>
   Math.min(RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), RETRY_MAX_MS);
 
+const isEligibleForAttempt = (
+  state: OnlineWorkStateSnapshot | undefined,
+  now: Date,
+) => {
+  if (state === undefined) {
+    return true;
+  }
+  switch (state.state) {
+    case "finalized":
+      return false;
+    case "building":
+      return true;
+    case "failed":
+      return (
+        state.finishedAt === null ||
+        now.getTime() >=
+          state.finishedAt.getTime() + retryDelayMs(state.attempts)
+      );
+    default:
+      state.state satisfies never;
+      return panic("Unknown online work state");
+  }
+};
+
 /**
  * The runner's only access to `online_work_state`. A unit finishes hours
  * after the tick that claimed it, so finish times are the database's clock.
@@ -187,21 +211,9 @@ export const createOnlineWorkRunner = ({
     }
     const states = await store.readStates();
     const stateByName = new Map(states.map((state) => [state.name, state]));
-    const name = pending.find((candidate) => {
-      const state = stateByName.get(candidate);
-      if (state === undefined) {
-        return true;
-      }
-      if (state.state === "finalized") {
-        return false;
-      }
-      return !(
-        state.state === "failed" &&
-        state.finishedAt !== null &&
-        now.getTime() <
-          state.finishedAt.getTime() + retryDelayMs(state.attempts)
-      );
-    });
+    const name = pending.find((candidate) =>
+      isEligibleForAttempt(stateByName.get(candidate), now),
+    );
     if (name === undefined) {
       return Result.ok(IDLE);
     }
@@ -216,15 +228,15 @@ export const createOnlineWorkRunner = ({
         return panic("Unknown online work claim");
     }
     // The snapshot above chose the unit before the lock was held; another
-    // process may have finished it since. Only the state read under the
+    // process may have finished or failed it since. Only the state read under the
     // claim decides whether it still needs work, and counts the attempt.
     const marked = await Result.tryPromise({
       try: async () => {
         const current = (await store.readStates()).find(
           (state) => state.name === name,
         );
-        if (current?.state === "finalized") {
-          return "finished-elsewhere" as const;
+        if (!isEligibleForAttempt(current, now)) {
+          return "ineligible" as const;
         }
         await store.markBuilding({
           name,
@@ -244,7 +256,7 @@ export const createOnlineWorkRunner = ({
         }),
       );
     }
-    if (marked.value === "finished-elsewhere") {
+    if (marked.value === "ineligible") {
       await claimed.release();
       return Result.ok(IDLE);
     }
