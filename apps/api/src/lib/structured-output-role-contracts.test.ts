@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -55,10 +55,13 @@ const testState = createTestState({ file: import.meta.path, config: env });
 testState.beforeAll(() => {
   // Real adapters, not the local mock model.
   testState.setConfig("USE_MOCK_AI", false);
+});
+
+beforeEach(() => {
   globalThis.fetch = answeringFetch;
 });
 
-afterAll(() => {
+afterEach(() => {
   globalThis.fetch = realFetch;
 });
 

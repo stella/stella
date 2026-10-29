@@ -113,7 +113,9 @@ beforeAll(async () => {
   issuerPrivateKey = privateKey;
   issuerKid = "test-issuer-key";
   issuerPublicJwk = { ...(await exportJWK(publicKey)), kid: issuerKid };
+});
 
+beforeEach(() => {
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -139,12 +141,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server.stop();
-  globalThis.fetch = realFetch;
   disableFeature();
   await releaseAgentAuthTestDb();
 });
 
 afterEach(async () => {
+  globalThis.fetch = realFetch;
   await rootDb
     .delete(agentTrustedIssuer)
     .where(eq(agentTrustedIssuer.issuer, ISSUER));

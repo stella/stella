@@ -23,7 +23,7 @@
  * `IngestionResult` would prove only that the pipeline works on the fields
  * this file chose to give it.
  */
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -359,12 +359,14 @@ if (!databaseUrl || !runPostgresTests) {
     const createdSourceIds: SafeId<"caseLawSource">[] = [];
     let restoreFetch: (() => void) | undefined;
 
-    beforeAll(() => {
+    beforeEach(() => {
       restoreFetch = installPublisherStub();
+    });
+    afterEach(() => {
+      restoreFetch?.();
     });
 
     cleanUp(async () => {
-      restoreFetch?.();
       for (const sourceId of createdSourceIds) {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }

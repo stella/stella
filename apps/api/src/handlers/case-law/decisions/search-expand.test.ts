@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { getModelDefaultReasoningEffort } from "@stll/ai-catalog";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -155,10 +155,13 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 testState.beforeAll(() => {
   testState.setConfig("USE_MOCK_AI", false);
+});
+
+beforeEach(() => {
   globalThis.fetch = answeringFetch;
 });
 
-afterAll(() => {
+afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
