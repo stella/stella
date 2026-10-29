@@ -102,6 +102,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AI_MODEL_REASONING",
   "TYPESAFE_MODEL",
   "AI_PROVIDER_BASE_URL",
+  "APPLE_AUTH_CLIENT_ID",
+  "APPLE_AUTH_KEY_ID",
+  "APPLE_AUTH_TEAM_ID",
   "OPENROUTER_WIF_POLICY_ID",
   "OPENROUTER_FAST_TIER_WIF_POLICY_ID",
   "OPENROUTER_WIF_AUDIENCE",
@@ -550,6 +553,13 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
+  APPLE_AUTH_CLIENT_ID:
+    "Sign in with Apple Services ID used as the OAuth client ID; required when the matching web login flag is enabled.",
+  APPLE_AUTH_KEY_ID: "Key ID of the Sign in with Apple private key.",
+  APPLE_AUTH_PRIVATE_KEY:
+    "PEM text of the Sign in with Apple private key (.p8). The API mints the short-lived client secret from it.",
+  APPLE_AUTH_TEAM_ID:
+    "Apple Developer team ID that owns the Services ID and key.",
   GOOGLE_AUTH_CLIENT_ID:
     "Google OAuth client ID; required when the matching web login flag is enabled.",
   GOOGLE_AUTH_CLIENT_SECRET:
@@ -674,6 +684,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show Google login only when the API has matching OAuth credentials.",
   VITE_AUTH_MICROSOFT:
     "Show Microsoft login only when the API has matching OAuth credentials.",
+  VITE_AUTH_APPLE:
+    "Show Sign in with Apple only when the API has a matching Apple configuration.",
   VITE_COLLAB_URL:
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
@@ -716,6 +728,10 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   INBOUND_MAIL_TOPIC_ARN: "another INBOUND_MAIL_* transport key is set",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  APPLE_AUTH_CLIENT_ID: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_KEY_ID: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_PRIVATE_KEY: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_TEAM_ID: "another APPLE_AUTH_* key is set",
   ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
   REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
@@ -886,6 +902,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
+  APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APPLE_AUTH_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APPLE_AUTH_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
+  APPLE_AUTH_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
   GOOGLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
   GOOGLE_AUTH_CLIENT_SECRET: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_GENERATIVE_AI_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -1042,6 +1062,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_AUTH_APPLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_BETA_FEATURES_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1152,7 +1173,7 @@ const sectionFor = (name: string) => {
     return "AI providers";
   }
   if (
-    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|APPLE_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
       name,
     )
   ) {
@@ -1376,6 +1397,7 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "POSTHOG_SOURCEMAP_PROJECT_ID",
   "POSTHOG_SOURCEMAP_PUBLISH",
   "PUBLIC_API_URL",
+  "PUBLIC_APPLE_LOGIN_ENABLED",
   "PUBLIC_APP_URL",
   "PUBLIC_BROWSER_API_URL",
   "PUBLIC_GOOGLE_LOGIN_ENABLED",
