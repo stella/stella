@@ -296,6 +296,9 @@ export function PublicCaseLawIndex({
   const rewriteState = Route.useSearch({
     select: ({ rewrite, rewrittenFrom }) => ({ rewrite, rewrittenFrom }),
   });
+  const filterNotice = Route.useSearch({
+    select: ({ filterNotice: notice }) => notice,
+  });
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
 
@@ -730,12 +733,12 @@ export function PublicCaseLawIndex({
   const feedback = caseLawResultsFeedback({
     notice: {
       country: scope,
-      search,
+      search: { ...search, filterNotice },
       onDismiss: () => {
         detached(
           navigate({
             replace: true,
-            search: { ...search, filterNotice: undefined },
+            search: (previous) => ({ ...previous, filterNotice: undefined }),
           }),
           "cases.dismiss-filter-notice",
         );

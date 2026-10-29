@@ -4,7 +4,7 @@ export const caseLawScopedFiltersSchema = v.object({
   court: v.optional(v.pipe(v.string(), v.maxLength(512))),
   lang: v.optional(v.pipe(v.string(), v.maxLength(16))),
   type: v.optional(v.pipe(v.string(), v.maxLength(128))),
-  sourceId: v.optional(v.pipe(v.string(), v.uuid())),
+  sourceId: v.optional(v.pipe(v.string(), v.maxLength(36), v.uuid())),
 });
 export const CASE_LAW_SCOPED_FILTER_FIELDS = v.keyof(
   caseLawScopedFiltersSchema,
@@ -51,7 +51,7 @@ export const normalizeCaseLawCountryFilters = ({
   >["removed"] = [];
   for (const field of CASE_LAW_SCOPED_FILTER_FIELDS) {
     const value = filters[field];
-    if (value === undefined) {
+    if (value === undefined || value === "") {
       continue;
     }
     const countries = countriesByField[field];

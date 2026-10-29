@@ -155,21 +155,26 @@ export const Route = createFileRoute("/law/cases/")({
       search.type !== undefined ||
       search.sourceId !== undefined
     ) {
-      const validation = await ensureRouteQueryData(
-        queryClient,
-        decisionFilterValidationOptions({
-          country,
-          court: search.court,
-          lang: search.lang,
-          type: search.type,
-          sourceId: search.sourceId,
-        }),
+      const validation = await resultsOrOutage(
+        ensureRouteQueryData(
+          queryClient,
+          decisionFilterValidationOptions({
+            country,
+            court: search.court,
+            lang: search.lang,
+            type: search.type,
+            sourceId: search.sourceId,
+          }),
+        ),
       );
-      const correctedSearch = correctedCaseLawFilterSearch({
-        search,
-        country,
-        validation,
-      });
+      const correctedSearch =
+        validation === null
+          ? null
+          : correctedCaseLawFilterSearch({
+              search,
+              country,
+              validation,
+            });
       if (correctedSearch !== null) {
         redirect({
           to: "/law/cases",

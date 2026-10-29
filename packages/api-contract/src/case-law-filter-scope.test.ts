@@ -52,3 +52,15 @@ test("a Slovak court arriving in a Czech search is removed with its country as a
     removed: [{ field: "court", value: "Ústavný súd SR", countries: ["SVK"] }],
   });
 });
+
+test("blank filters are absent regardless of corpus vocabulary", () => {
+  for (const field of CASE_LAW_SCOPED_FILTER_FIELDS) {
+    expect(
+      normalizeCaseLawCountryFilters({
+        country: "SVK",
+        filters: { [field]: "" },
+        countriesByField,
+      }),
+    ).toEqual({ filters: {}, removed: [] });
+  }
+});

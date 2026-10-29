@@ -47,6 +47,9 @@ for (const { locale, messages, countryName, linkName } of [
       q: "contract",
       type: "judgment",
       page: 2,
+      questions: ["question-fixture"],
+      rewrite: "off",
+      rewrittenFrom: "original contract",
       filterNotice: [
         { field: "court", value: "Ústavný súd SR", countries: ["SVK"] },
       ],
@@ -65,6 +68,7 @@ for (const { locale, messages, countryName, linkName } of [
       }),
     });
     await router.load();
+    await router.navigate({ to: "/law/cases", search });
     let dismissCount = 0;
     render(
       <IntlProvider locale={locale} messages={messages} timeZone="UTC">
@@ -96,6 +100,11 @@ for (const { locale, messages, countryName, linkName } of [
     expect(url.searchParams.get("to")).toBe("2026-12-31");
     expect(url.searchParams.get("q")).toBe("contract");
     expect(url.searchParams.get("type")).toBe("judgment");
+    expect(url.searchParams.get("questions")).toBe(
+      JSON.stringify(["question-fixture"]),
+    );
+    expect(url.searchParams.get("rewrite")).toBe("off");
+    expect(url.searchParams.get("rewrittenFrom")).toBe("original contract");
     expect(url.searchParams.has("filterNotice")).toBe(false);
     expect(url.searchParams.has("page")).toBe(false);
     await act(async () =>

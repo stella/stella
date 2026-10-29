@@ -50,13 +50,13 @@ export const CaseLawFilterNotice = ({
             render={
               <Link
                 to="/law/cases"
-                search={{
-                  ...search,
+                search={(previous) => ({
+                  ...previous,
                   country: toCaseLawCountryParam(destination),
                   [field]: value,
                   filterNotice: undefined,
                   page: undefined,
-                }}
+                })}
               />
             }
           >

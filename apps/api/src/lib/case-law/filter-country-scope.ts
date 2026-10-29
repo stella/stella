@@ -86,7 +86,7 @@ export const readCaseLawFilterScope = async ({
   }
   const fields = CASE_LAW_SCOPED_FILTER_FIELDS.filter(
     (field) => field !== "type",
-  ).filter((field) => filters[field] !== undefined);
+  ).filter((field) => filters[field] !== undefined && filters[field] !== "");
   if (fields.length === 0 && courts.length === 0) {
     return normalizeCaseLawCountryFilters({
       country,

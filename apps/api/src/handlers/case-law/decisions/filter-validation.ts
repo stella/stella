@@ -1,28 +1,42 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import { caseLawScopedFiltersSchema } from "@stll/api-contract/case-law-filter-scope";
+import {
+  caseLawFilterValidationSchema,
+  caseLawScopedFiltersSchema,
+} from "@stll/api-contract/case-law-filter-scope";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { status } from "@/api/http/status";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
+  withPublicCountryUnavailable,
 } from "@/api/lib/legal-search/public-law-country";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 export const decisionFilterValidationQuerySchema = v.object({
   country: tPublicLawCountry,
   ...caseLawScopedFiltersSchema.entries,
 });
 
-export const decisionFilterValidationHandler = async ({
-  country,
-  ...filters
-}: v.InferOutput<typeof decisionFilterValidationQuerySchema>) => {
+export const decisionFilterValidationHandler = async (
+  {
+    country,
+    ...filters
+  }: v.InferOutput<typeof decisionFilterValidationQuerySchema>,
+  caseLawDb = caseLawPublicReadDb,
+) => {
   const read = readPublicLawCountry(country, {
     domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
@@ -41,6 +55,38 @@ export const decisionFilterValidationHandler = async ({
   return await readCaseLawFilterScope({
     country: scope,
     filters,
-    caseLawDb: caseLawPublicReadDb,
+    caseLawDb,
   });
 };
+
+export const createDecisionFilterValidationRoute = (
+  caseLawDb = caseLawPublicReadDb,
+) =>
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "public_indexing" },
+      cache: { kind: "none" },
+      response: withPublicCountryUnavailable(
+        safePublicHandlerResponseSchemasWithStatusText(
+          caseLawFilterValidationSchema,
+        ),
+      ),
+      query: decisionFilterValidationQuerySchema,
+    },
+    async function* ({ query }) {
+      const response = yield* Result.await(
+        Result.tryPromise(
+          async () => await decisionFilterValidationHandler(query, caseLawDb),
+        ),
+      );
+      return Result.ok(
+        projectResponseText(response, caseLawFilterValidationSchema),
+      );
+    },
+  );
+
+const validateDecisionFilters = createDecisionFilterValidationRoute();
+
+export default validateDecisionFilters;

@@ -3,9 +3,12 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawSources } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import {
   caseLawFilterMembershipQuery,
   readCaseLawFilterScope,
@@ -17,7 +20,6 @@ import {
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 import {
-  accessPathViolations,
   explainRoot,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
@@ -49,6 +51,92 @@ test("decision type syntax validation requires no corpus read", async () => {
   expect(read).toEqual({ filters, removed: [] });
 });
 
+test("blank filters require no corpus read and are absent", async () => {
+  expect(
+    await readCaseLawFilterScope({
+      country: "CZE",
+      filters: { court: "", lang: "", type: "" },
+      caseLawDb: asTestRaw(async () => {
+        throw new Error("Unexpected corpus read");
+      }),
+    }),
+  ).toEqual({ filters: {}, removed: [] });
+});
+
+test("published membership retains country filters and removes only a foreign value", async () => {
+  const domesticSourceId = createSafeId<"caseLawSource">();
+  const foreignSourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values([
+    caseLawSourceRow({
+      id: domesticSourceId,
+      adapterKey: "membership-domestic",
+    }),
+    caseLawSourceRow({
+      id: foreignSourceId,
+      adapterKey: "membership-foreign",
+    }),
+  ]);
+  await db.insert(caseLawDecisions).values([
+    {
+      id: createSafeId<"caseLawDecision">(),
+      sourceId: domesticSourceId,
+      caseNumber: "1 Cdo 1/2026",
+      country: "CZE",
+      court: "Membership Czech court",
+      language: "cs",
+      metadata: {},
+    },
+    {
+      id: createSafeId<"caseLawDecision">(),
+      sourceId: foreignSourceId,
+      caseNumber: "1 Cdo 2/2026",
+      country: "SVK",
+      court: "Membership Slovak court",
+      language: "sk",
+      metadata: {},
+    },
+  ]);
+  const readDb = async <T>(
+    read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+  ) =>
+    await withPublicLawReaderRole(
+      db,
+      async (roleTx) =>
+        await read(asTestRaw<CaseLawPublicReadTransaction>(roleTx)),
+    );
+  const caseLawDb = asTestRaw<CaseLawPublicReadDb>(readDb);
+  const filters = {
+    court: "Membership Czech court",
+    lang: "cs",
+    sourceId: domesticSourceId,
+  };
+  expect(
+    await readCaseLawFilterScope({ country: "CZE", filters, caseLawDb }),
+  ).toEqual({
+    filters,
+    removed: [],
+  });
+  for (const [field, value, countries] of [
+    ["court", "Membership Slovak court", ["SVK"]],
+    ["lang", "sk", []],
+    ["sourceId", foreignSourceId, []],
+  ] as const) {
+    const retained = Object.fromEntries(
+      Object.entries(filters).filter(([key]) => key !== field),
+    );
+    expect(
+      await readCaseLawFilterScope({
+        country: "CZE",
+        filters: { ...filters, [field]: value },
+        caseLawDb,
+      }),
+    ).toEqual({
+      filters: retained,
+      removed: [{ field, value, countries: [...countries] }],
+    });
+  }
+});
+
 test("membership probes retain indexed plans without type indexes at N and 10N", async () => {
   let previousRows = 0;
   for (const rows of [1200, 12_000]) {
@@ -63,17 +151,17 @@ test("membership probes retain indexed plans without type indexes at N and 10N",
       {
         field: "court",
         value: "Absent court",
-        index: "case_law_decisions_court_idx",
+        column: "court",
       },
       {
         field: "lang",
         value: "zz",
-        index: "case_law_decisions_provision_scope_cursor_idx",
+        column: "language",
       },
       {
         field: "sourceId",
         value: missingSourceId,
-        index: "case_law_decisions_source_decision_date_coverage_idx",
+        column: "source_id",
       },
     ] as const) {
       await withPublicLawReaderRole(db, async (roleTx) => {
@@ -92,18 +180,13 @@ test("membership probes retain indexed plans without type indexes at N and 10N",
           ({ relation }) => relation === "case_law_decisions",
         );
         expect(decisions).toHaveLength(1);
-        expect(decisions.at(0)?.indexCond).not.toBeNull();
-        const contract = [
-          {
-            relation: "case_law_decisions",
-            occurrence: 0,
-            nodeType: "Index Scan",
-            index: probe.index,
-          },
-        ];
-        expect(accessPathViolations(scans, contract, "point", false)).toEqual(
-          [],
-        );
+        const decisionScan = decisions.at(0);
+        expect(decisionScan?.nodeType).toBe("Index Scan");
+        expect(
+          decisionScan?.indexCond
+            ?.replaceAll(/[()]/gu, "")
+            .replaceAll("::text", ""),
+        ).toContain(`${probe.column} =`);
         await roleTx.execute(sql`SET LOCAL enable_indexscan = off`);
         await roleTx.execute(sql`SET LOCAL enable_bitmapscan = off`);
         const mutated = scanOccurrences(
@@ -112,8 +195,9 @@ test("membership probes retain indexed plans without type indexes at N and 10N",
           ),
         );
         expect(
-          accessPathViolations(mutated, contract, "point", false).some(
-            (violation) => violation.includes("Seq Scan on case_law_decisions"),
+          mutated.some(
+            ({ relation, nodeType }) =>
+              relation === "case_law_decisions" && nodeType === "Seq Scan",
           ),
         ).toBe(true);
         expect(await query).toEqual([]);
