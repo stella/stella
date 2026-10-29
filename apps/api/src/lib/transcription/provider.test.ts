@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import * as fc from "fast-check";
+import * as v from "valibot";
 
 import {
   isTranscriptionModelId,
@@ -23,6 +24,7 @@ import {
   buildTranscriptionRequest,
   normalizeTranscriptionResponse,
   transcribeAudio,
+  transcriptionResultSchema,
 } from "./provider";
 
 const MODEL_ID = "mistralai/voxtral-mini-transcribe";
@@ -74,6 +76,16 @@ describe("transcription request contract", () => {
       if (!isTranscriptionModelId(modelId)) {
         throw new TypeError("Catalog keys must be transcription model ids");
       }
+      const vocabularyStatus =
+        model.vocabularyMechanism === "groq-prompt" ||
+        model.vocabularyMechanism === "azure-phrase-list"
+          ? "applied"
+          : "not-supported";
+      const normalized = normalizeTranscriptionResponse(
+        { text: TEXT, usage: { seconds: 1 } },
+        modelId,
+      ).unwrap();
+      expect(normalized.vocabulary).toBe(vocabularyStatus);
       const built = buildTranscriptionRequest({
         audioBytes: wav(),
         format: "wav",
@@ -231,6 +243,7 @@ describe("transcription request contract", () => {
       detectedLanguage: null,
       durationMs: 6400,
       modelId: MODEL_ID,
+      vocabulary: "not-supported",
     });
   });
 
@@ -271,6 +284,25 @@ describe("transcription request contract", () => {
 });
 
 describe("transcription response boundary", () => {
+  test("requires a closed vocabulary result on every successful response", () => {
+    const result = normalizeTranscriptionResponse(
+      { text: TEXT, usage: { seconds: 1 } },
+      MODEL_ID,
+    ).unwrap();
+    for (const vocabulary of ["applied", "not-supported"]) {
+      expect(
+        v.safeParse(transcriptionResultSchema, { ...result, vocabulary })
+          .success,
+      ).toBe(true);
+    }
+    for (const vocabulary of [undefined, null, "unknown", true]) {
+      expect(
+        v.safeParse(transcriptionResultSchema, { ...result, vocabulary })
+          .success,
+      ).toBe(false);
+    }
+  });
+
   test("normalizes segment and word seconds to integer milliseconds", () => {
     const result = normalizeTranscriptionResponse(
       {
@@ -287,6 +319,7 @@ describe("transcription response boundary", () => {
       detectedLanguage: "sk",
       durationMs: 6400,
       modelId: MODEL_ID,
+      vocabulary: "not-supported",
       segments: [{ startMs: 1, endMs: 1235, text: "K návrhu" }],
       words: [{ startMs: 1, endMs: 124, text: "K" }],
     });

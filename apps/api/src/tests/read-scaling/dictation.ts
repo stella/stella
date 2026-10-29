@@ -16,6 +16,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import type { TranscriptionResult } from "@/api/lib/transcription/provider";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -33,9 +34,10 @@ const RESPONSE = {
   text: "Podání paní Šimůnkové.",
   segments: [],
   detectedLanguage: "cs",
+  vocabulary: "not-supported",
   durationMs: DURATION_MS,
   modelId: MODEL_ID,
-};
+} satisfies TranscriptionResult;
 
 export const seedDictationScaling = async (db: GatedTestDb, size: number) => {
   const organizationId = mintAuthProviderId<"organization">();

@@ -117,6 +117,7 @@ describe("dictation operation request matrix", () => {
       text: TEXT,
       durationMs: 1234,
       detectedLanguage: "cs",
+      vocabulary: "not-supported",
       segments: [{ startMs: 0, endMs: 1234, text: TEXT }],
     });
     expect(f.requests).toHaveLength(1);
@@ -153,6 +154,40 @@ describe("dictation operation request matrix", () => {
     expect(f.requests.at(0)?.key).toBe("Bearer organization-fixture");
     expect(f.settlements.at(0)?.isByok).toBe(true);
   });
+
+  test.each([
+    { provider: "openai", apiKey: "organization-fixture" },
+    { provider: "anthropic", apiKey: "organization-fixture" },
+    { provider: "google", apiKey: "organization-fixture" },
+    { provider: "mistral", apiKey: "organization-fixture" },
+    {
+      provider: "azure_foundry",
+      apiKey: "organization-fixture",
+      baseURL: "https://fixture-resource.example.invalid/openai",
+    },
+  ] as const)(
+    "organization provider %p requires explicit transcription credentials",
+    async (provider) => {
+      const f = fixture();
+      const context = {
+        ...f.context,
+        orgAIConfig: {
+          providers: [provider],
+          overrideModels: null,
+          decision: null,
+        },
+      } satisfies DictationContext;
+      const result = await executeDictation(context, f.dependencies);
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new TypeError("Expected organization credential refusal");
+      }
+      expect(result.error).toMatchObject({ code: "ai_own_key_required" });
+      expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });
+      expect(f.requests).toEqual([]);
+      expect(f.settlements).toEqual([]);
+    },
+  );
 
   test("self-hosted missing credentials refuses before dispatch", async () => {
     const f = fixture();

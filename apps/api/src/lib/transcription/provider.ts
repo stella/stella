@@ -5,7 +5,10 @@ import {
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
-import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
+import type {
+  TranscriptionModelId,
+  TranscriptionVocabularyMechanism,
+} from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   MAX_TRANSCRIPTION_AUDIO_BYTES,
@@ -41,8 +44,15 @@ const MIME_FORMATS = new Map([
 ] as const);
 export const TRANSCRIPTION_AUDIO_MEDIA_TYPES = [...MIME_FORMATS.keys()];
 type AudioFormat = NonNullable<ReturnType<typeof MIME_FORMATS.get>>;
-type TranscriptionModel = (typeof TRANSCRIPTION_MODELS)[TranscriptionModelId];
-type VocabularyMechanism = TranscriptionModel["vocabularyMechanism"];
+const VOCABULARY_STATUS = {
+  none: "not-supported",
+  "groq-prompt": "applied",
+  "azure-phrase-list": "applied",
+  "context-hint": "not-supported",
+} as const satisfies Record<
+  TranscriptionVocabularyMechanism,
+  "applied" | "not-supported"
+>;
 
 const timingSchema = v.object({
   startMs: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -56,6 +66,7 @@ export const transcriptionResultSchema = v.object({
   detectedLanguage: v.nullable(v.string()),
   durationMs: v.pipe(v.number(), v.integer(), v.minValue(1)),
   modelId: v.string(),
+  vocabulary: v.picklist(Object.values(VOCABULARY_STATUS)),
 });
 export type TranscriptionResult = v.InferOutput<
   typeof transcriptionResultSchema
@@ -173,7 +184,7 @@ const vocabularyOptions = {
       }),
     ),
 } as const satisfies Record<
-  VocabularyMechanism,
+  TranscriptionVocabularyMechanism,
   (terms: readonly string[]) => Result<object, HandlerError>
 >;
 
@@ -325,6 +336,8 @@ export const normalizeTranscriptionResponse = (
     detectedLanguage: language ?? null,
     durationMs: Math.round(audioSeconds * 1000),
     modelId,
+    vocabulary:
+      VOCABULARY_STATUS[TRANSCRIPTION_MODELS[modelId].vocabularyMechanism],
   } satisfies TranscriptionResult);
 };
 

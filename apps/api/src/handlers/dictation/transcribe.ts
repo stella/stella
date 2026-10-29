@@ -5,6 +5,7 @@ import {
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { MAX_TRANSCRIPTION_MULTIPART_BYTES } from "@stll/api-contract/transcription";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -245,6 +246,17 @@ export const executeDictation = async (
     const ownKey = ctx.orgAIConfig?.providers.find(
       ({ provider }) => provider === "openrouter",
     )?.apiKey;
+    if (ctx.orgAIConfig !== null && ownKey === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          code: AI_FAILURE_CODES.own_key_required,
+          message:
+            "Transcription is not available with your organization's AI provider.",
+          hint: "Configure an organization OpenRouter key in organization AI settings.",
+        }),
+      );
+    }
     const isByok = ownKey !== undefined;
     const usageCaller = {
       safeDb: ctx.safeDb,
