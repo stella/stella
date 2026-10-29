@@ -1309,7 +1309,7 @@ type StatusUpdateArgs<TTx extends TransitionTransaction> = Pick<
   "tx" | "identity" | "ids" | "match" | "recordTransitionAuditEvent"
 > & {
   spec: TransitionSpec & { table: StatusTable };
-  effectContext?: InvoiceTransitionEffectContext<TTx>;
+  effectContext: InvoiceTransitionEffectContext<TTx> | undefined;
   scope?: TransitionScopeOptions;
   // Untyped callers still need fence validation when the generic excludes a fence.
   options: {
@@ -1402,7 +1402,7 @@ export const transition = async <
     ids: [id],
     match: "one",
     options,
-    ...(effectContext === undefined ? {} : { effectContext }),
+    effectContext,
     recordTransitionAuditEvent: async ([changed]) => {
       await recordTransitionAuditEvent(
         tx,
@@ -1515,7 +1515,7 @@ export const transitionBatch = async <
     ids,
     match: "many",
     options,
-    ...(effectContext === undefined ? {} : { effectContext }),
+    effectContext,
     recordTransitionAuditEvent: async (changed) => {
       await recordTransitionAuditEvent(tx, decode(changed));
     },

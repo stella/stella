@@ -91,6 +91,7 @@ import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-he
 import { qrSvg } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { TRANSITIONS as DATABASE_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transition as transitionStatus,
@@ -663,8 +664,9 @@ const readPublicAndAuthenticatedPaidDates = async (
     userId: null,
     workspaceIds: [],
   });
-  const linked = await publicScope((tx) =>
-    loadLinkedInvoiceData(tx, { ...scope, scopedDb: publicScope }),
+  const linked = await publicScope(
+    async (tx) =>
+      await loadLinkedInvoiceData(tx, { ...scope, scopedDb: publicScope }),
   );
   if (linked === null) {
     return panic("Expected a linked invoice for settlement parity");
@@ -674,12 +676,13 @@ const readPublicAndAuthenticatedPaidDates = async (
     organizationId,
     userId,
     workspaceIds: [workspaceId],
-  })((tx) =>
-    loadInvoiceExport(tx, {
-      organizationId,
-      workspaceId,
-      invoiceIds: [invoiceId],
-    }),
+  })(
+    async (tx) =>
+      await loadInvoiceExport(tx, {
+        organizationId,
+        workspaceId,
+        invoiceIds: [invoiceId],
+      }),
   );
   const authenticatedRecords = toExportRecords(authenticated, [invoiceId]);
   return {
@@ -720,7 +723,7 @@ describe("sending an invoice by link", () => {
       "cleanup-after-unenrolment@example.test",
     ]);
     if (!("id" in firstSend) || typeof firstSend.id !== "string") {
-      return panic("Expected a successful send before unenrolment");
+      panic("Expected a successful send before unenrolment");
     }
     const sendId = firstSend.id;
     const existing = {
@@ -1158,7 +1161,7 @@ describe("sending an invoice by link", () => {
     if (token === undefined) {
       release.resolve(undefined);
       await sending;
-      return panic("The blocked transport must carry an invoice token");
+      panic("The blocked transport must carry an invoice token");
     }
     try {
       const listed = await listSendHistory(invoiceId);
@@ -1199,7 +1202,7 @@ describe("sending an invoice by link", () => {
         ).toEqual({ id: invoiceId });
         const original = (await sendRows(invoiceId)).at(0);
         if (original?.revokedAt === undefined || original.revokedAt === null) {
-          return panic("Reverting must withdraw the in-flight invoice link");
+          panic("Reverting must withdraw the in-flight invoice link");
         }
         withdrawalStamps.push(original.revokedAt);
         expect(
@@ -1243,9 +1246,7 @@ describe("sending an invoice by link", () => {
     expect(transported).toHaveLength(1);
     const token = transported.at(0)?.link.split("#").at(1);
     if (token === undefined) {
-      return panic(
-        "The successful transport must have carried the original token",
-      );
+      panic("The successful transport must have carried the original token");
     }
     const original = (await sendRows(invoiceId)).at(0);
     expect(original).toMatchObject({
@@ -1320,7 +1321,7 @@ describe("sending an invoice by link", () => {
           ).toEqual({ id: invoiceId });
           const [revoked] = await sendRows(invoiceId);
           if (revoked?.revokedAt === null || revoked?.revokedAt === undefined) {
-            return panic("Invoice transition did not revoke its pending send");
+            panic("Invoice transition did not revoke its pending send");
           }
           expect(revoked.deliveryStatus).toBe("pending");
           revokedDuringTransport.push(revoked.revokedAt);
@@ -1344,9 +1345,7 @@ describe("sending an invoice by link", () => {
       );
       const transportedMessage = transported.at(0);
       if (transportedMessage === undefined) {
-        return panic(
-          "Expected one transport attempt before checking its outcome",
-        );
+        panic("Expected one transport attempt before checking its outcome");
       }
       expect(result).toMatchObject({
         code: 409,
@@ -1390,7 +1389,7 @@ describe("sending an invoice by link", () => {
       ]);
       const token = transportedMessage.link.split("#").at(1);
       if (token === undefined) {
-        return panic("The transport did not receive an invoice link");
+        panic("The transport did not receive an invoice link");
       }
       expect(row?.tokenHash).toBe(hashInvoiceLinkToken(token));
       const opened = await post(server, "view", { token });
@@ -1683,7 +1682,7 @@ describe("sending an invoice by link", () => {
     expect(first.nextCursor).not.toBeNull();
     const newest = first.items.at(0);
     if (newest === undefined) {
-      return panic("Expected the newest active invoice link on the first page");
+      panic("Expected the newest active invoice link on the first page");
     }
     expect(await revoke(invoiceId, newest.id)).toMatchObject({ id: newest.id });
     expect((await listSendHistory(invoiceId)).items.at(0)).toMatchObject({
@@ -1710,7 +1709,7 @@ describe("sending an invoice by link", () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const sent = await send(invoiceId, ["unverified-reader@example.test"]);
     if (!("id" in sent)) {
-      return panic("Expected a live link before the member becomes unverified");
+      panic("Expected a live link before the member becomes unverified");
     }
     const token = tokenSentTo("unverified-reader@example.test");
     await testDb
@@ -1777,7 +1776,7 @@ describe("invoice send row security", () => {
     const [existing] = await sendRows(ownInvoice);
     expect(existing).toBeDefined();
     if (existing === undefined) {
-      return panic("Expected the recorded invoice send");
+      panic("Expected the recorded invoice send");
     }
     const own = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
     const inserted = await own(
@@ -1990,7 +1989,7 @@ describe("opening an invoice link", () => {
       }
       const [sendRow] = await sendRows(invoiceId);
       if (sendRow === undefined) {
-        return panic("Expected send history for token secrecy coverage");
+        panic("Expected send history for token secrecy coverage");
       }
       expect(await revoke(invoiceId, sendRow.id)).toMatchObject({
         revokedAt: expect.any(String),
@@ -2409,9 +2408,14 @@ describe("opening an invoice link", () => {
             event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
             event.changes?.["linkRevoked"]?.new === true,
         )
-        .map((event) => event.metadata?.["invoiceSendId"])
-        .toSorted(),
-    ).toEqual(revoked.map(({ id }) => id).toSorted());
+        .map((event) =>
+          v.parse(
+            resourceIdSchema("invoiceSend"),
+            event.metadata?.["invoiceSendId"],
+          ),
+        )
+        .toSorted(compareCodeUnit),
+    ).toEqual(revoked.map(({ id }) => id).toSorted(compareCodeUnit));
     expect(
       await updateInvoice.handler(
         asTestRaw<Parameters<typeof updateInvoice.handler>[0]>(
@@ -2467,7 +2471,7 @@ describe("opening an invoice link", () => {
       })
       .from(sql`(VALUES (1)) AS clock(value)`);
     if (clock === undefined) {
-      return panic("Expected the database clock for invoice link expiry");
+      panic("Expected the database clock for invoice link expiry");
     }
     const expiresAt = new Date(clock.now.getTime() + 86_400_000);
     const applicationNow = new Date(expiresAt.getTime() + 86_400_000);
@@ -2790,7 +2794,7 @@ describe("invoice payment requests", () => {
         ...(variableSymbol === null ? {} : { variableSymbol }),
       }).unwrap();
       if (payload.status !== "payable") {
-        return panic("Expected a payable Czech invoice QR");
+        panic("Expected a payable Czech invoice QR");
       }
       expect(page).toMatchObject({
         outstandingAmount,
@@ -2875,29 +2879,31 @@ describe("public invoice document descriptions", () => {
     const database = tokenDb();
     const scope = await resolveInvoiceLink(database, token);
     if (scope === null) {
-      return panic("Expected a live legacy invoice link");
+      panic("Expected a live legacy invoice link");
     }
     const publicScope = database.scoped({
       organizationId: ids.orgA,
       userId: null,
       workspaceIds: [],
     });
-    const linked = await publicScope((tx) =>
-      loadLinkedInvoiceData(tx, { ...scope, scopedDb: publicScope }),
+    const linked = await publicScope(
+      async (tx) =>
+        await loadLinkedInvoiceData(tx, { ...scope, scopedDb: publicScope }),
     );
     const authenticated = await database.scoped({
       organizationId: ids.orgA,
       userId: ids.userA1,
       workspaceIds: [ids.wsA1],
-    })((tx) =>
-      loadInvoiceDocument(tx, {
-        organizationId: ids.orgA,
-        workspaceId: ids.wsA1,
-        invoiceId,
-      }),
+    })(
+      async (tx) =>
+        await loadInvoiceDocument(tx, {
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          invoiceId,
+        }),
     );
     if (linked === null || authenticated === null) {
-      return panic("Expected both authorized legacy invoice documents");
+      panic("Expected both authorized legacy invoice documents");
     }
     const publicLines = invoiceDocumentRenderOptions(linked.document).invoice
       .lines;

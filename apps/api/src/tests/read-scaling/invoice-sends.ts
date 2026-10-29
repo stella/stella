@@ -39,10 +39,12 @@ const SENDS_PER_INVOICE = 3;
 // Exercise the real handler operation and SQL; only the email provider is replaced.
 const measuredSendInvoice = createSendInvoice({
   admitEmail: async () =>
-    Result.ok({
-      release: async () => undefined,
-      commit: async () => undefined,
-    }),
+    await Promise.resolve(
+      Result.ok({
+        release: async () => await Promise.resolve(),
+        commit: async () => await Promise.resolve(),
+      }),
+    ),
   deliver: async () => {
     await Promise.resolve();
   },

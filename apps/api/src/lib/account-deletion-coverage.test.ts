@@ -282,7 +282,7 @@ describe("account deletion FK coverage", () => {
     for (const { column, reason } of RETAINED_USER_ATTRIBUTION_COLUMNS) {
       const table = getColumnTable(column);
       if (!isPgTable(table)) {
-        return panic("Retained attribution must belong to a PostgreSQL table");
+        panic("Retained attribution must belong to a PostgreSQL table");
       }
       const config = getTableConfig(table);
       const key = gapKey(config.name, column.name);

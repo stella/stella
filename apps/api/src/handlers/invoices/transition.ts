@@ -789,9 +789,7 @@ const applyTransition = async (
     recordTransitionAuditEvent: async (auditTx, row) => {
       if (options.action === "void") {
         if (matterLocks.type !== "acquired") {
-          return panic(
-            "Invoice release requires the running guard's acquired locks",
-          );
+          panic("Invoice release requires the running guard's acquired locks");
         }
         await releaseInvoiceEntries(auditTx, {
           matterLocks,

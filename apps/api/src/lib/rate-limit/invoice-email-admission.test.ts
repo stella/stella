@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+import { compareCodeUnit } from "@stll/collation";
 
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { httpFailureAnswer } from "@/api/lib/errors/http-failure-answer";
@@ -67,7 +68,7 @@ const createCounter = () => {
       [...counters.entries()]
         .filter(([, value]) => value.count > 0 && value.expiresAt > clock)
         .map(([key, value]) => [key, value.count] as const)
-        .toSorted(),
+        .toSorted(([left], [right]) => compareCodeUnit(left, right)),
     context: {
       increment: async (
         requestKey: string,
