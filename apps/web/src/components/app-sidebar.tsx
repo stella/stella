@@ -66,6 +66,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { appSidebarSurfaceProps } from "@/components/app-sidebar-surface";
+import type { AppSidebarSurface } from "@/components/app-sidebar-surface";
 import {
   chatActivityByWorkspace,
   getMatterBillingLinks,
@@ -202,7 +204,7 @@ const SEARCH_DIALOG_STATES = {
 type SearchDialogState =
   (typeof SEARCH_DIALOG_STATES)[keyof typeof SEARCH_DIALOG_STATES];
 
-export const AppSidebar = (props: AppSidebarProps) => {
+export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
@@ -662,20 +664,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   }, [showNavBadges, runNavTarget]);
 
   return (
-    <Sidebar
-      {...props}
-      className={cn(
-        // Unified glass language with the chat composer tray: the same
-        // translucent veil + backdrop-blur-md instead of the solid
-        // sidebar fill so the app chrome reads as one system. The
-        // opaque-leaning fallback keeps contrast where backdrop-filter
-        // is unsupported.
-        "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 [&_[data-slot=sidebar-inner]]:backdrop-blur-md supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
-        props.className,
-      )}
-      collapsible="icon"
-      style={props.style}
-    >
+    <Sidebar {...appSidebarSurfaceProps(surface)} collapsible="icon">
       {/* Stella logo header */}
       <SidebarHeader className="h-12 border-b p-0">
         <div
@@ -1045,7 +1034,7 @@ type PendingEntityDrop = {
   entities: CopyToMatterEntity[];
 };
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
+type AppSidebarProps = { surface: AppSidebarSurface };
 type MatterItemProps = {
   activeOrganizationId: string;
   userId: string;

@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 
-import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/case-law/review-column-grants";
+// Relative with its extension: the oxlint plugin loads this file in plain Node,
+// which does not resolve the `@/api` path alias.
+import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grants.ts";
 
 /**
  * Exact PostgreSQL columns required or permitted for the public-law reader role.
