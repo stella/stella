@@ -170,7 +170,11 @@ const entities: TableTreeNode[] = Array.from(
 // cells can be compared with the one its number sits on.
 const columns = [{ id: selectColId }, { id: "_value", cell: () => "Value" }];
 
-type FixtureProps = { contentMode: TableContentMode; onOpen: () => void };
+type FixtureProps = {
+  contentMode: TableContentMode;
+  onOpen: () => void;
+  columnLayout: "with-value" | "selection-only";
+};
 
 const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
@@ -206,13 +210,13 @@ const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
     ));
 };
 
-const EntityFixture = ({ contentMode }: FixtureProps) => {
+const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
   const lastSelectedIndex = useRef<number | null>(null);
   const table = useTable({
     features: workspaceTableFeatures,
     data: entities,
-    columns,
+    columns: columnLayout === "selection-only" ? columns.slice(0, 1) : columns,
     getRowId: ({ entityId }) => entityId,
     state: { rowSelection },
     onRowSelectionChange,
@@ -254,10 +258,15 @@ const fixtures = new Map<string, React.ComponentType<FixtureProps>>([
   ],
 ]);
 
-const renderHost = async (
-  host: string,
-  contentMode: TableContentMode = "tight",
-) => {
+const renderHost = async ({
+  host,
+  contentMode = "tight",
+  columnLayout = "with-value",
+}: {
+  host: string;
+  contentMode?: TableContentMode;
+  columnLayout?: FixtureProps["columnLayout"];
+}) => {
   const Fixture = fixtures.get(host);
   if (!Fixture) {
     throw new Error(`No selection-column fixture for ${host}`);
@@ -279,6 +288,7 @@ const renderHost = async (
         <div role="grid">
           <Fixture
             contentMode={contentMode}
+            columnLayout={columnLayout}
             onOpen={() => {
               openCount++;
             }}
@@ -333,32 +343,41 @@ const renderHost = async (
 };
 
 describe("every shared selection-column host", () => {
-  test("entity actions have their own space beside values, outside the selection cell", async () => {
-    const { view, assertNotOpened } = await renderHost(
-      "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
-    );
-    const checkbox = view.getByRole("checkbox", { name: "1" });
-    const row = checkbox.closest('[role="row"]');
-    const actions = row?.querySelector('button[aria-label="Actions"]');
-    expect(actions).not.toBeNull();
-    expect(
-      actions?.closest('[role="gridcell"]') ===
-        checkbox.closest('[role="gridcell"]'),
-    ).toBe(false);
-    expect(row?.querySelectorAll('button[aria-label="Actions"]')).toHaveLength(
-      1,
-    );
-    fireEvent.click(checkbox);
-    expect(checkbox.getAttribute("aria-checked")).toBe("true");
-    assertNotOpened();
-  });
+  test.each([
+    { columnLayout: "with-value" },
+    { columnLayout: "selection-only" },
+  ] satisfies { columnLayout: FixtureProps["columnLayout"] }[])(
+    "entity actions have their own space outside the selection cell (%s)",
+    async ({ columnLayout }) => {
+      const { view, assertNotOpened } = await renderHost({
+        host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+        columnLayout,
+      });
+      const checkbox = view.getByRole("checkbox", { name: "1" });
+      const row = checkbox.closest('[role="row"]');
+      const actions = row?.querySelector('button[aria-label="Actions"]');
+      expect(actions).not.toBeNull();
+      expect(
+        actions?.closest('[role="gridcell"]') ===
+          checkbox.closest('[role="gridcell"]'),
+      ).toBe(false);
+      expect(
+        row?.querySelectorAll('button[aria-label="Actions"]'),
+      ).toHaveLength(1);
+      fireEvent.click(checkbox);
+      expect(checkbox.getAttribute("aria-checked")).toBe("true");
+      assertNotOpened();
+    },
+  );
 
   test("the exercised host set equals the imports in product source", () => {
     expect(selectionHosts.toSorted()).toEqual([...fixtures.keys()].toSorted());
   });
   for (const host of selectionHosts) {
     test(`${host}: number and empty cell clicks select without opening the row`, async () => {
-      const { view, assertNotOpened, assertOpened } = await renderHost(host);
+      const { view, assertNotOpened, assertOpened } = await renderHost({
+        host,
+      });
       const first = view.getByRole("checkbox", { name: "1" });
       fireEvent.click(view.getByText("1"));
       expect(first.getAttribute("aria-checked")).toBe("true");
@@ -375,7 +394,7 @@ describe("every shared selection-column host", () => {
     });
     for (const contentMode of TABLE_CONTENT_MODES) {
       test(`${host} (${contentMode}): the number, the checkbox and the row's cells share one first line`, async () => {
-        const { view } = await renderHost(host, contentMode);
+        const { view } = await renderHost({ host, contentMode });
         const number = view.getByText("1");
         expect(number.dataset["slot"]).toBe("table-row-number");
         const numberClasses = number.className.split(" ");
@@ -410,7 +429,7 @@ describe("every shared selection-column host", () => {
       });
     }
     test(`${host}: checkbox clicks toggle once and shift-click selects a range`, async () => {
-      const { view, assertNotOpened } = await renderHost(host);
+      const { view, assertNotOpened } = await renderHost({ host });
       const first = view.getByRole("checkbox", { name: "1" });
       const indicator = first.querySelector('[data-slot="checkbox"]');
       if (!indicator) {

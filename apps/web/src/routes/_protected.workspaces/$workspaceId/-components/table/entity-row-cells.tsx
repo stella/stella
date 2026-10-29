@@ -497,6 +497,7 @@ export const DraggableRow = ({
           visibleCells={visibleCells}
         />
         <RowEndFillerCell
+          actions={visibleCells.length === 1 ? rowActions : undefined}
           addPropertyColumn={addPropertyColumn}
           renderColumns={renderColumns}
           selected={selected}

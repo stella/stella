@@ -72,26 +72,33 @@ export const TableEndFiller = <TRow extends TableRowData>({
 );
 
 type RowEndFillerCellProps<TRow extends TableRowData> = EndFillerInput<TRow> & {
+  actions?: React.ReactNode;
   selected: boolean;
 };
 
 export const RowEndFillerCell = <TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
+  actions,
   selected,
 }: RowEndFillerCellProps<TRow>) => (
   <WorkspaceGridCell
-    aria-hidden="true"
-    className={cn("p-0", addPropertyColumn && "border-e-0")}
+    aria-hidden={actions === undefined ? true : undefined}
+    className={cn(
+      "flex items-center justify-end p-0",
+      addPropertyColumn && "border-e-0",
+    )}
     data-state={selected ? "selected" : undefined}
-    role="presentation"
+    role={actions === undefined ? "presentation" : "gridcell"}
     style={{
       gridColumn: getEndFillerGridColumn({
         renderColumns,
         addPropertyColumn,
       }),
     }}
-  />
+  >
+    {actions}
+  </WorkspaceGridCell>
 );
 
 type AddPropertyCellProps<TRow extends TableRowData> = {
