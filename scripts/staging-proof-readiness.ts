@@ -49,6 +49,9 @@ export const monitorStagingReadiness = async ({
   let gapStartedAt: number | undefined;
   while (now() < deadlineMs) {
     const finalCheck = proofFinished();
+    // A failed read counts from when it began: a probe that times out spent
+    // that whole time without an answer.
+    const readStartedAt = now();
     const sample = await read({
       timeoutMs: Math.min(readTimeoutMs, deadlineMs - now()),
     });
@@ -56,13 +59,18 @@ export const monitorStagingReadiness = async ({
       return { status: "environment-interrupted" };
     }
     if (sample.status === "not-ready") {
-      gapStartedAt ??= now();
+      gapStartedAt ??= readStartedAt;
       if (now() - gapStartedAt > gapToleranceMs) {
         return { status: "environment-interrupted" };
       }
     } else {
       if (gapStartedAt !== undefined) {
-        recoveredGapsMs.push(now() - gapStartedAt);
+        const gapMs = now() - gapStartedAt;
+        // Coming back after the tolerance does not undo the interruption.
+        if (gapMs > gapToleranceMs) {
+          return { status: "environment-interrupted" };
+        }
+        recoveredGapsMs.push(gapMs);
         gapStartedAt = undefined;
       }
       if (finalCheck) {

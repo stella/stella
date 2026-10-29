@@ -71,6 +71,45 @@ test("a replaced task back on the same deployment within the tolerance is a reco
   expect(reads).toBe(4);
 });
 
+test("readiness back only after the tolerance still interrupts the proof", async () => {
+  const clock = fakeClock();
+  let reads = 0;
+  const outcome = await monitorStagingReadiness({
+    ...timing,
+    ...clock,
+    signal: new AbortController().signal,
+    read: async () => {
+      reads += 1;
+      return { status: reads === 2 || reads === 3 ? "not-ready" : "ready" };
+    },
+  });
+  // Away from t=30, back at t=90: the gap (60) exceeds the tolerance (40).
+  expect(outcome).toEqual({ status: "environment-interrupted" });
+  expect(reads).toBe(4);
+});
+
+test("a failed read counts toward the gap from when it began", async () => {
+  const clock = fakeClock();
+  let reads = 0;
+  const outcome = await monitorStagingReadiness({
+    ...timing,
+    ...clock,
+    signal: new AbortController().signal,
+    read: async ({ timeoutMs }) => {
+      reads += 1;
+      if (reads === 2) {
+        // The probe times out: it spends its whole budget without an answer.
+        clock.advance(timeoutMs);
+        return { status: "not-ready" };
+      }
+      return { status: "ready" };
+    },
+  });
+  // Started at t=30, timed out at t=50, back at t=80: a 50 gap, over 40.
+  expect(outcome).toEqual({ status: "environment-interrupted" });
+  expect(reads).toBe(3);
+});
+
 test("readiness away longer than the tolerance interrupts the proof", async () => {
   const clock = fakeClock();
   let reads = 0;

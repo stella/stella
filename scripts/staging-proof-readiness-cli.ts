@@ -14,12 +14,15 @@ import {
 } from "./staging-proof-readiness";
 
 const MONITOR_DEADLINE_MS = 180 * 60_000;
-const FINISH_DEADLINE_MS = 45_000;
 const SAMPLE_INTERVAL_MS = 10_000;
 const READ_TIMEOUT_MS = 10_000;
 // A replaced task (a Spot reclaim, a failed health check) is back in well under
 // a minute; readiness away for longer interrupts the proof.
 const READINESS_GAP_TOLERANCE_MS = 60_000;
+// Finishing waits for the monitor's verdict, which a gap open at the end of the
+// journeys may take the whole tolerance plus one read and one interval to reach.
+const FINISH_DEADLINE_MS =
+  READINESS_GAP_TOLERANCE_MS + READ_TIMEOUT_MS + SAMPLE_INTERVAL_MS + 15_000;
 
 type ReadStagingReadinessOptions = {
   url: URL;
