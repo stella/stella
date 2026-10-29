@@ -238,16 +238,18 @@ const createClientInvoice = createSafeRootHandler(
       if (selection.isErr()) {
         return selection;
       }
-      return (
-        await scopedDb(
-          async (tx) =>
-            await resolveClientInvoiceMatters(tx, {
-              organizationId: session.activeOrganizationId,
-              clientId: params.clientId,
-              workspaceIds: selection.value.ids,
-            }),
-        )
-      ).map(() => undefined);
+      const authorization = await scopedDb(
+        async (tx) =>
+          await resolveClientInvoiceMatters(tx, {
+            organizationId: session.activeOrganizationId,
+            clientId: params.clientId,
+            workspaceIds: selection.value.ids,
+          }),
+      );
+      if (authorization.isErr()) {
+        return authorization;
+      }
+      return Result.ok(undefined);
     },
   },
 );
