@@ -25,4 +25,4 @@ test("activity billing review keeps accepted edits through UI actions", async ()
   const output = `${stdout}\n${stderr}`;
   expect(exitCode, output).toBe(0);
   expect(output).toMatch(/\b[1-9]\d* pass\b/u);
-});
+}, 30_000); // timeout: starts an isolated React/Tauri process and runs its consent and editing fixture suite
