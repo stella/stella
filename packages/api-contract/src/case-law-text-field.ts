@@ -194,7 +194,14 @@ export type DecisionDateAvailability = {
  */
 export const DECISION_TEXT_FIDELITY_METADATA_KEY = "textFidelity";
 
-export const DECISION_TEXT_FIDELITY_STATUSES = ["mismatch"] as const;
+/**
+ * `mismatch`: characters are missing or added. `reordered`: the text carries
+ * exactly the printed characters, in another order.
+ */
+export const DECISION_TEXT_FIDELITY_STATUSES = [
+  "mismatch",
+  "reordered",
+] as const;
 
 export type DecisionTextFidelity = {
   status: (typeof DECISION_TEXT_FIDELITY_STATUSES)[number];
@@ -202,6 +209,8 @@ export type DecisionTextFidelity = {
   missingChars: number;
   /** Non-space characters the text carries that the source did not print. */
   extraChars: number;
+  /** Offset in the printed non-space sequence where the reading first departs from it. */
+  firstDifferenceAt: number;
 };
 
 export const isDecisionTextFidelity = (
@@ -212,9 +221,11 @@ export const isDecisionTextFidelity = (
   "status" in value &&
   "missingChars" in value &&
   "extraChars" in value &&
+  "firstDifferenceAt" in value &&
   DECISION_TEXT_FIDELITY_STATUSES.some((status) => status === value.status) &&
   Number.isSafeInteger(value.missingChars) &&
-  Number.isSafeInteger(value.extraChars);
+  Number.isSafeInteger(value.extraChars) &&
+  Number.isSafeInteger(value.firstDifferenceAt);
 
 export const SK_COURTS_SOURCE_URL_STATUSES = [
   "published",

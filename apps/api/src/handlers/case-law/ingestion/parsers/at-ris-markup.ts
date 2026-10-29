@@ -444,24 +444,45 @@ export const risTextFidelity = (
       read += inlineNonSpace(item.inlines);
     }
   }
+  return orderedFidelity(printed, read);
+};
+
+/** Where two character sequences first differ; the shorter length if one extends the other. */
+const firstDifference = (left: string, right: string): number => {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    if (left[index] !== right[index]) {
+      return index;
+    }
+  }
+  return length;
+};
+
+/**
+ * The reading matches only when it carries the printed non-space characters
+ * in the printed order. Counts say how many characters are missing or added;
+ * equal counts in another order are `reordered`, never a match.
+ */
+const orderedFidelity = (
+  printed: string,
+  read: string,
+): DecisionTextFidelity | undefined => {
+  if (printed === read) {
+    return undefined;
+  }
   const missingChars = surplusChars(printed, read);
   const extraChars = surplusChars(read, printed);
-  return missingChars === 0 && extraChars === 0
-    ? undefined
-    : { status: "mismatch", missingChars, extraChars };
+  return {
+    status: missingChars === 0 && extraChars === 0 ? "reordered" : "mismatch",
+    missingChars,
+    extraChars,
+    firstDifferenceAt: firstDifference(printed, read),
+  };
 };
 
 /** The same comparison for text already reduced to its characters. */
 export const compareTextFidelity = (
   printed: string,
   read: string,
-): DecisionTextFidelity | undefined => {
-  const missingChars = surplusChars(
-    nonSpaceChars(printed),
-    nonSpaceChars(read),
-  );
-  const extraChars = surplusChars(nonSpaceChars(read), nonSpaceChars(printed));
-  return missingChars === 0 && extraChars === 0
-    ? undefined
-    : { status: "mismatch", missingChars, extraChars };
-};
+): DecisionTextFidelity | undefined =>
+  orderedFidelity(nonSpaceChars(printed), nonSpaceChars(read));

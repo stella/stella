@@ -175,6 +175,7 @@ describe("RIS retention projection", () => {
       status: "mismatch",
       missingChars: "verloren".length,
       extraChars: 0,
+      firstDifferenceAt: expect.any(Number),
     });
   });
 

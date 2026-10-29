@@ -1258,8 +1258,10 @@ export const assembleAtRisDecision = (
       parser: source.key,
       caseNumber: data.caseNumber,
       codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
       missingChars: parsed.textFidelity.missingChars,
       extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
     });
   }
 

@@ -347,6 +347,7 @@ describe("decision text fields", () => {
       status: "mismatch",
       missingChars: 3,
       extraChars: 0,
+      firstDifferenceAt: 12,
     };
     expect(
       storeDecisionTextFields({ metadata: { textFidelity }, textFields })[
@@ -358,7 +359,9 @@ describe("decision text fields", () => {
         metadata: { textFidelity: { status: "mismatch" } },
         textFields,
       }),
-    ).toThrow("Text fidelity must carry a status and character counts");
+    ).toThrow(
+      "Text fidelity must carry a status, character counts and its first difference",
+    );
   });
 
   test("preserves stored text when a new parse fails", () => {

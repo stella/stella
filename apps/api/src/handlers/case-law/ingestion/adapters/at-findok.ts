@@ -927,8 +927,10 @@ export const assembleAtFindokDecision = (
       parser: ADAPTER_KEYS.AT_FINDOK,
       caseNumber: item.gz,
       codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
       missingChars: parsed.textFidelity.missingChars,
       extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
     });
   }
   const headnotes =

@@ -5,6 +5,7 @@ import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import {
+  compareTextFidelity,
   isRisElement,
   readRisContent,
   risTextFidelity,
@@ -211,6 +212,7 @@ describe("RIS text fidelity", () => {
       status: "mismatch",
       missingChars: "zwei-drei".length,
       extraChars: 0,
+      firstDifferenceAt: "eins".length,
     });
   });
 
@@ -230,6 +232,7 @@ describe("RIS text fidelity", () => {
       status: "mismatch",
       missingChars: 1,
       extraChars: 0,
+      firstDifferenceAt: 1,
     });
   });
 
@@ -247,6 +250,29 @@ describe("RIS text fidelity", () => {
       status: "mismatch",
       missingChars: 0,
       extraChars: 2,
+      firstDifferenceAt: "abc".length,
+    });
+  });
+
+  // Equal character counts are not a match: the order is part of the text.
+  test("words read in another order are reordered, not a match", () => {
+    const content = contentOf(
+      wrapped(
+        '<absatz ct="text">nicht</absatz><absatz ct="text">zulässig</absatz>',
+      ),
+    );
+    const { items } = readRisContent(content);
+    expect(risTextFidelity(content, items.toReversed())).toEqual({
+      status: "reordered",
+      missingChars: 0,
+      extraChars: 0,
+      firstDifferenceAt: 0,
+    });
+    expect(compareTextFidelity("nicht zulässig", "zulässig nicht")).toEqual({
+      status: "reordered",
+      missingChars: 0,
+      extraChars: 0,
+      firstDifferenceAt: 0,
     });
   });
 
@@ -261,6 +287,7 @@ describe("RIS text fidelity", () => {
       status: "mismatch",
       missingChars: "verloren".length,
       extraChars: 0,
+      firstDifferenceAt: "sichtbar".length,
     });
   });
 

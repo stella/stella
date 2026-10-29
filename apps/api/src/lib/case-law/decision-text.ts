@@ -318,7 +318,9 @@ export const storeDecisionTextFields = ({
   }
   const textFidelity = metadata[DECISION_TEXT_FIDELITY_METADATA_KEY];
   if (textFidelity !== undefined && !isDecisionTextFidelity(textFidelity)) {
-    return panic("Text fidelity must carry a status and character counts");
+    return panic(
+      "Text fidelity must carry a status, character counts and its first difference",
+    );
   }
   const sourceUrlStatus = metadata["sourceUrlStatus"];
   if (sourceUrlStatus !== undefined) {
