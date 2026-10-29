@@ -18,6 +18,8 @@ import {
   splitTestId,
 } from "./flaky-test-quarantine";
 import { QUARANTINE_ACTION, unownedBunTestSteps } from "./flaky-test-workflow";
+import { evaluate } from "./github-expression";
+import { workflowJobSteps } from "./workflow-steps";
 
 const committed = readFileSync(
   path.join(REPOSITORY_ROOT, REGISTRY_FILE),
@@ -207,6 +209,54 @@ describe("workflow quarantine ownership", () => {
   });
 
   test.each([
+    [undefined, "!cancelled()", false],
+    ["failure()", "failure()", false],
+    ["success()", "always()", false],
+    ["!cancelled()", "always()", false],
+    ["always()", "!cancelled()", true],
+    ["!cancelled()", undefined, true],
+    [undefined, undefined, true],
+    ["contains('failure()', 'failure')", "!cancelled()", false],
+    ["!cancelled() && inputs.enabled", "!cancelled()", false],
+  ])(
+    "setup condition %s covers later condition %s: %s",
+    (setup, consumer, covered) => {
+      const fixture = {
+        jobs: {
+          check: {
+            steps: [
+              { run: "exit 1" },
+              { uses: QUARANTINE_ACTION, if: setup },
+              { run: "bun test", if: consumer },
+            ],
+          },
+        },
+      };
+      expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual(
+        covered ? [] : ["fixture.yml: jobs.check.steps[2]"],
+      );
+    },
+  );
+
+  test("each repeated setup owns the tests that follow it", () => {
+    const fixture = {
+      jobs: {
+        check: {
+          steps: [
+            { uses: QUARANTINE_ACTION, if: "always()" },
+            { run: "bun test" },
+            { uses: QUARANTINE_ACTION },
+            { run: "bun test", if: "!cancelled()" },
+          ],
+        },
+      },
+    };
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([
+      "fixture.yml: jobs.check.steps[3]",
+    ]);
+  });
+
+  test.each([
     "bun --filter @stll/api test",
     "bun --filter=@stll/api test:e2e:browser",
     "bun --cwd apps/api test",
@@ -238,4 +288,52 @@ describe("Playwright image quarantine forwarding", () => {
     );
     expect(source).toContain('--volume "$workspace:$workspace"');
   });
+});
+
+test("independent suites retain quarantine setup after an earlier step fails", () => {
+  const workflow = Bun.YAML.parse(
+    readFileSync(
+      path.join(REPOSITORY_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    ),
+  );
+  const steps = workflowJobSteps(workflow, "service-suites");
+  const index = steps.findIndex(
+    (step) => step["name"] === "Run Valkey-gated API suites",
+  );
+  const setup = steps
+    .slice(0, index)
+    .findLast((step) => step["uses"] === QUARANTINE_ACTION);
+  const suite = steps.at(index);
+  if (setup === undefined || suite === undefined) {
+    throw new TypeError("Suite and preceding quarantine setup are required");
+  }
+  const context = {
+    values: {
+      "needs.ci-plan.outputs.valkey_suites_required": "true",
+      "github.event_name": "workflow_dispatch",
+      "needs.ci-plan.outputs.suite_depth": "full",
+    },
+    status: { always: true, success: false, failure: true, cancelled: false },
+  };
+  expect(evaluate(String(suite["if"]), context)).toBe(true);
+  expect(
+    evaluate(
+      typeof setup["if"] === "string" ? setup["if"] : "success()",
+      context,
+    ),
+  ).toBe(true);
+});
+
+test("quoted replay instructions do not run test commands", () => {
+  expect(
+    unownedBunTestSteps(
+      {
+        jobs: {
+          summary: { steps: [{ run: 'echo "bun test"', if: "failure()" }] },
+        },
+      },
+      "fixture.yml",
+    ),
+  ).toEqual([]);
 });

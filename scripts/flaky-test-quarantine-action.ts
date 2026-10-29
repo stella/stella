@@ -20,11 +20,11 @@ const requiredEnvironment = (name: string): string => {
 };
 
 export const configureFlakyTestQuarantine = (): void => {
-  const workspace = requiredEnvironment("GITHUB_WORKSPACE");
+  requiredEnvironment("GITHUB_WORKSPACE");
   const environmentFile = requiredEnvironment("GITHUB_ENV");
   const runnerTemp = requiredEnvironment("RUNNER_TEMP");
   const preload = path.join(
-    workspace,
+    path.resolve(import.meta.dirname, ".."),
     "scripts/flaky-test-quarantine-preload.ts",
   );
   const reportDirectory = path.join(runnerTemp, "flaky-test-quarantine");
@@ -47,7 +47,7 @@ export const reportFlakyTestQuarantine = (): void => {
   const result = spawnSync(
     "bun",
     [
-      "scripts/flaky-test-history.ts",
+      path.join(import.meta.dirname, "flaky-test-history.ts"),
       "job-summary",
       "--reports",
       path.join(runnerTemp, "flaky-test-quarantine"),

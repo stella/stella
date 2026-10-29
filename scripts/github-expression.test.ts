@@ -6,6 +6,8 @@ import {
   definitelyFalse,
   evaluate,
   expressionValueSources,
+  hasStatusCheckFunction,
+  stepConditionCovers,
   UNKNOWN,
 } from "./github-expression";
 
@@ -289,4 +291,99 @@ test("direct planner projections resolve from producer evidence and preserve lit
       source || "[]",
     );
   }
+});
+
+test("status functions are identified structurally, including nested calls", () => {
+  expect(hasStatusCheckFunction("contains('failure()', 'failure')")).toBe(
+    false,
+  );
+  expect(hasStatusCheckFunction("contains(toJSON(failure()), 'true')")).toBe(
+    true,
+  );
+});
+
+test("coverage certificates hold across boolean inputs and status transitions", () => {
+  const formulas = [
+    "true",
+    "false",
+    "inputs.a",
+    "!inputs.a",
+    "inputs.a && inputs.b",
+    "inputs.a || inputs.b",
+    "!(inputs.a && inputs.b)",
+    "inputs.a == true",
+    "inputs.a != false",
+    "success()",
+    "failure()",
+    "!cancelled()",
+  ];
+  const statuses = [false, true].flatMap((failure) =>
+    [false, true].map((cancelled) => ({
+      always: true,
+      success: !failure && !cancelled,
+      failure,
+      cancelled,
+    })),
+  );
+  let certificates = 0;
+  for (const a of formulas) {
+    for (const b of formulas) {
+      const earlier = `always() && (${a})`;
+      const later = `always() && (${b})`;
+      if (!stepConditionCovers({ earlier, later, stableStepIds: new Set() })) {
+        continue;
+      }
+      certificates += 1;
+      for (const first of statuses) {
+        for (const second of statuses) {
+          if (
+            (first.failure && !second.failure) ||
+            (first.cancelled && !second.cancelled)
+          ) {
+            continue;
+          }
+          for (const x of [false, true]) {
+            for (const y of [false, true]) {
+              const values = { "inputs.a": x, "inputs.b": y };
+              if (evaluate(later, { values, status: second }) === true) {
+                expect(
+                  evaluate(earlier, { values, status: first }),
+                  `${earlier} covers ${later}`,
+                ).toBe(true);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  expect(certificates).toBeGreaterThan(0);
+  expect(certificates).toBeLessThan(formulas.length ** 2);
+});
+
+test.each([
+  "env.READY",
+  "job.status",
+  "github.action",
+  "steps.future.outputs.ready",
+])("changing step values cannot certify coverage: %s", (reference) => {
+  const condition = `!cancelled() && ${reference} == 'ready'`;
+  expect(
+    stepConditionCovers({
+      earlier: condition,
+      later: condition,
+      stableStepIds: new Set(),
+    }),
+  ).toBe(false);
+});
+
+test("completed step outputs can certify the same or a narrower condition", () => {
+  expect(
+    stepConditionCovers({
+      earlier: "!cancelled() && steps.ready.outputs.status == 'ready'",
+      later:
+        "!cancelled() && steps.ready.outputs.status == 'ready' && inputs.enabled",
+      stableStepIds: new Set(["ready"]),
+    }),
+  ).toBe(true);
 });

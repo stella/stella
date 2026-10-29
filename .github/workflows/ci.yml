@@ -1648,7 +1648,7 @@ jobs:
       # Parser versions must advance whenever an adapter's parser inputs
       # change. The guard needs no dependency installation.
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: "parser-version-guard: Check parser version guard"
@@ -1851,7 +1851,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run protocol and malformed-stream tests
@@ -2695,10 +2695,10 @@ jobs:
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Standalone lockfile guard
@@ -3010,6 +3010,7 @@ jobs:
           fi
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test .claude/mcp
@@ -4185,6 +4186,7 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run Valkey-gated API suites
@@ -5320,6 +5322,7 @@ jobs:
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() }}
         timeout-minutes: 1
         uses: ./.github/actions/flaky-test-quarantine
 

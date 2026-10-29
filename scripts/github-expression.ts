@@ -489,6 +489,190 @@ export const evaluate = (source: string, context: Context): Result =>
     or: or3,
   });
 
+/** Status checks inside quoted strings do not suppress GitHub's success default. */
+export const hasStatusCheckFunction = (source: string): boolean =>
+  parseExpression(source, {
+    literal: () => false,
+    reference: () => false,
+    call: (name, args) =>
+      STATUS_FUNCTIONS.has(name.toLowerCase()) || args.some(Boolean),
+    not: (value) => value,
+    compare: (_operator, left, right) => left || right,
+    and: (left, right) => left || right,
+    or: (left, right) => left || right,
+  });
+
+type ConditionTerms = readonly ReadonlyMap<string, boolean>[];
+
+const andConditionTerms = (
+  left: ConditionTerms,
+  right: ConditionTerms,
+): ConditionTerms => {
+  const result: ReadonlyMap<string, boolean>[] = [];
+  for (const a of left) {
+    for (const b of right) {
+      const term = new Map(a);
+      let compatible = true;
+      for (const [key, value] of b) {
+        if (term.has(key) && term.get(key) !== value) {
+          compatible = false;
+          break;
+        }
+        term.set(key, value);
+      }
+      if (compatible) {
+        result.push(term);
+      }
+      if (result.length > 1024) {
+        panic("Condition proof exceeds its term budget");
+      }
+    }
+  }
+  return result;
+};
+
+const notConditionTerms = (terms: ConditionTerms): ConditionTerms => {
+  let result: ConditionTerms = [new Map()];
+  for (const term of terms) {
+    result = andConditionTerms(
+      result,
+      [...term].map(([key, value]) => new Map([[key, !value]])),
+    );
+  }
+  return result;
+};
+
+type ConditionProofValue = {
+  key: string;
+  value: Result;
+  terms: ConditionTerms;
+};
+const conditionProofValue = (
+  key: string,
+  value: Result = UNKNOWN,
+): ConditionProofValue => {
+  if (value !== UNKNOWN) {
+    return {
+      key: JSON.stringify(value),
+      value,
+      terms: isTruthy(value) ? [new Map()] : [],
+    };
+  }
+  return { key, value, terms: [new Map([[key, true]])] };
+};
+
+type ConditionProofOptions = {
+  source: string;
+  status: Context["status"];
+  phase: string;
+  stableStepIds: ReadonlySet<string>;
+};
+const conditionProof = ({
+  source,
+  status,
+  phase,
+  stableStepIds,
+}: ConditionProofOptions) => {
+  const semantics: ExpressionSemantics<ConditionProofValue> = {
+    literal: (value) => conditionProofValue("literal", value),
+    reference: (reference) => {
+      const normalized = reference.toLowerCase();
+      const step = /^steps\.([^.]+)\./u.exec(normalized)?.at(1);
+      const stable =
+        !normalized.startsWith("env.") &&
+        normalized !== "job.status" &&
+        !normalized.startsWith("github.action") &&
+        (step === undefined || stableStepIds.has(step));
+      return conditionProofValue(
+        JSON.stringify([stable ? "shared" : phase, reference]),
+      );
+    },
+    call: (name, args) =>
+      conditionProofValue(
+        JSON.stringify([
+          name.toLowerCase() === "hashfiles" ? phase : "call",
+          name.toLowerCase(),
+          args.map(({ key }) => key),
+        ]),
+        callFunction(
+          name,
+          args.map(({ value }) => value),
+          { values: {}, status },
+        ),
+      ),
+    not: (value) => ({
+      key: JSON.stringify(["not", value.key]),
+      value: UNKNOWN,
+      terms: notConditionTerms(value.terms),
+    }),
+    compare: (operator, left, right) => {
+      const inverse = operator === "!=";
+      const atom = conditionProofValue(
+        JSON.stringify([inverse ? "==" : operator, left.key, right.key]),
+        compare(operator, left.value, right.value),
+      );
+      return inverse && atom.value === UNKNOWN
+        ? { ...atom, terms: notConditionTerms(atom.terms) }
+        : atom;
+    },
+    and: (left, right) => ({
+      key: JSON.stringify(["and", left.key, right.key]),
+      value: and3(left.value, right.value),
+      terms: andConditionTerms(left.terms, right.terms),
+    }),
+    or: (left, right) => ({
+      key: JSON.stringify(["or", left.key, right.key]),
+      value: or3(left.value, right.value),
+      terms: [...left.terms, ...right.terms],
+    }),
+  };
+  const terms = parseExpression(source, semantics).terms;
+  return hasStatusCheckFunction(source) || status?.success === true
+    ? terms
+    : [];
+};
+
+const STEP_STATUSES = [
+  { always: true, success: true, failure: false, cancelled: false },
+  { always: true, success: false, failure: true, cancelled: false },
+  { always: true, success: false, failure: false, cancelled: true },
+  { always: true, success: false, failure: true, cancelled: true },
+] as const;
+
+type StepConditionCoverageOptions = {
+  earlier: string;
+  later: string;
+  stableStepIds: ReadonlySet<string>;
+};
+/** Proves coverage across possible failures and cancellation between ordered steps. */
+export const stepConditionCovers = ({
+  earlier,
+  later,
+  stableStepIds,
+}: StepConditionCoverageOptions): boolean =>
+  STEP_STATUSES.every((earlierStatus, index) => {
+    const missing = notConditionTerms(
+      conditionProof({
+        source: earlier,
+        status: earlierStatus,
+        phase: "earlier",
+        stableStepIds,
+      }),
+    );
+    return STEP_STATUSES.slice(index).every(
+      (laterStatus) =>
+        andConditionTerms(
+          conditionProof({
+            source: later,
+            status: laterStatus,
+            phase: "later",
+            stableStepIds,
+          }),
+          missing,
+        ).length === 0,
+    );
+  });
+
 type ExpressionValueSource =
   | { type: "literal"; value: Value }
   | { type: "reference"; path: string }

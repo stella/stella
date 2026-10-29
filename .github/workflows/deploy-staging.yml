@@ -844,12 +844,47 @@ jobs:
       # Post-deploy verification stays in the serialized promotion job. If it
       # were a separate job, a newer promotion could start while this smoke
       # still measures the previous commit.
+      - name: Checkout quarantine tooling
+        timeout-minutes: 3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .quarantine-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/flaky-test-quarantine/action.yml
+            .github/actions/flaky-test-quarantine/main.mjs
+            .github/actions/flaky-test-quarantine/post.mjs
+            scripts/flaky-test-quarantine-action.ts
+            scripts/flaky-test-quarantine-preload.ts
+            scripts/flaky-test-quarantine.json
+            scripts/flaky-test-history.ts
+            scripts/flaky-test-quarantine.ts
+            scripts/api-test-shard-plan.ts
+            scripts/ci-failure-digest.ts
+            scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve quarantine tooling across source checkouts
+        timeout-minutes: 1
+        run: |
+          mkdir -p "$RUNNER_TEMP/quarantine-tooling"
+          cp -R "$GITHUB_WORKSPACE/.quarantine-tooling/.github" "$RUNNER_TEMP/quarantine-tooling/.github"
+          cp -R "$GITHUB_WORKSPACE/.quarantine-tooling/scripts" "$RUNNER_TEMP/quarantine-tooling/scripts"
+
       - name: Checkout deployed source
         timeout-minutes: 3
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
+
+      - name: Restore quarantine tooling after source checkout
+        timeout-minutes: 1
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.quarantine-tooling"
+          cp -R "$RUNNER_TEMP/quarantine-tooling/." "$GITHUB_WORKSPACE/.quarantine-tooling/"
 
       # Journeys run from the target revision, including its dependencies.
       - name: Require target journey harness
@@ -904,9 +939,11 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' && hashFiles('.github/actions/flaky-test-quarantine/action.yml') != '' }}
+        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 1
-        uses: ./.github/actions/flaky-test-quarantine
+        uses: ./.quarantine-tooling/.github/actions/flaky-test-quarantine
+        with:
+          token: ${{ github.token }}
 
       - name: Run staging web smoke
         timeout-minutes: 30

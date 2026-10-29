@@ -1,6 +1,13 @@
+import { Result } from "better-result";
+import parse from "shell-quote/parse";
+
+import { stepConditionCovers } from "./github-expression";
+
 type WorkflowStep = {
   run?: unknown;
   uses?: unknown;
+  if?: unknown;
+  id?: unknown;
 };
 
 type WorkflowJob = {
@@ -13,10 +20,18 @@ type Workflow = {
 
 export const QUARANTINE_ACTION =
   "./.github/actions/flaky-test-quarantine" as const;
+const PRESERVED_QUARANTINE_ACTION =
+  "./.quarantine-tooling/.github/actions/flaky-test-quarantine" as const;
 
 const includesBunTestCommand = (command: string): boolean =>
-  command.split(/[;&|\n]/u).some((part) => {
-    const words = part.trim().split(/\s+/u);
+  command.split("\n").some((part) => {
+    if (!/\bbun\b/u.test(part)) {
+      return false;
+    }
+    const parsed = Result.try(() => parse(part, (name) => `$${name}`));
+    const words = parsed.isOk()
+      ? parsed.value.map((token) => (typeof token === "string" ? token : ""))
+      : part.trim().split(/\s+/u);
     const bunIndex = words.indexOf("bun");
     if (bunIndex === -1) {
       return false;
@@ -47,6 +62,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const workflowSteps = (job: WorkflowJob): readonly WorkflowStep[] =>
   Array.isArray(job.steps) ? job.steps.filter(isRecord) : [];
 
+const conditionOf = (step: WorkflowStep): string | undefined => {
+  if (step.if === undefined) {
+    return "true";
+  }
+  return typeof step.if === "string" || typeof step.if === "boolean"
+    ? String(step.if)
+    : undefined;
+};
+
 export const unownedBunTestSteps = (
   value: unknown,
   workflowPath: string,
@@ -65,12 +89,35 @@ export const unownedBunTestSteps = (
       continue;
     }
     const steps = workflowSteps(job);
-    const owner = steps.findIndex(({ uses }) => uses === QUARANTINE_ACTION);
-    for (const [index, { run }] of steps.entries()) {
+    let owner:
+      | { condition: string | undefined; stableStepIds: ReadonlySet<string> }
+      | undefined;
+    const priorStepIds = new Set<string>();
+    for (const [index, step] of steps.entries()) {
+      if (
+        step.uses === QUARANTINE_ACTION ||
+        step.uses === PRESERVED_QUARANTINE_ACTION
+      ) {
+        owner = {
+          condition: conditionOf(step),
+          stableStepIds: new Set(priorStepIds),
+        };
+      }
+      if (typeof step.id === "string") {
+        priorStepIds.add(step.id.toLowerCase());
+      }
+      const { run } = step;
+      const later = conditionOf(step);
       if (
         typeof run === "string" &&
         includesBunTestCommand(run) &&
-        (owner === -1 || owner >= index)
+        (owner?.condition === undefined ||
+          later === undefined ||
+          !stepConditionCovers({
+            earlier: owner.condition,
+            later,
+            stableStepIds: owner.stableStepIds,
+          }))
       ) {
         violations.push(`${workflowPath}: jobs.${jobName}.steps[${index}]`);
       }

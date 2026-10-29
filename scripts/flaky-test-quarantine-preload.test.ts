@@ -144,6 +144,7 @@ type RunOptions = {
   failUnquarantined?: boolean;
   reportDir?: "set" | "unset";
   source?: string;
+  registryLocation?: "workspace" | "tooling";
 };
 
 const run = ({
@@ -151,15 +152,18 @@ const run = ({
   failUnquarantined = false,
   reportDir = "set",
   source = SOURCE,
+  registryLocation = "workspace",
 }: RunOptions) => {
   const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-"));
   roots.push(root);
-  mkdirSync(path.join(root, "scripts"));
-  mkdirSync(path.join(root, "pkg"));
-  writeFileSync(
-    path.join(root, "scripts/flaky-test-quarantine.json"),
-    serializeRegistry({ entries: names.map(entry) }),
+  const registryPath = path.join(
+    root,
+    registryLocation === "tooling" ? "tooling/scripts" : "scripts",
+    "flaky-test-quarantine.json",
   );
+  mkdirSync(path.dirname(registryPath), { recursive: true });
+  mkdirSync(path.join(root, "pkg"));
+  writeFileSync(registryPath, serializeRegistry({ entries: names.map(entry) }));
   writeFileSync(path.join(root, FIXTURE), source);
   writeFileSync(path.join(root, "runner.ts"), RUNNER);
   if (failUnquarantined) {
@@ -180,10 +184,8 @@ const run = ({
     env: {
       ...inherited,
       BUN_OPTIONS: `--preload=${PRELOAD}`,
-      [QUARANTINE_REGISTRY_ENV]: path.join(
-        root,
-        "scripts/flaky-test-quarantine.json",
-      ),
+      [QUARANTINE_REGISTRY_ENV]: registryPath,
+      GITHUB_WORKSPACE: root,
       ...(reportDir === "set" ? { [QUARANTINE_REPORT_DIR_ENV]: reports } : {}),
     },
     stdout: "pipe",
@@ -246,6 +248,7 @@ const runReceiverFixture = ({
     cwd: root,
     env: {
       ...inherited,
+      GITHUB_WORKSPACE: root,
       ...(preload
         ? {
             BUN_OPTIONS: `--preload=${PRELOAD}`,
@@ -598,4 +601,18 @@ describe("outer", () => {
     expect(exitCode).not.toBe(0);
     expect(records).toEqual([]);
   });
+});
+
+test("a preserved registry applies to tests in the deployed workspace", () => {
+  const { exitCode, records } = run({
+    names: FAILING,
+    registryLocation: "tooling",
+  });
+  expect(exitCode).toBe(0);
+  expect(records).toContainEqual(
+    expect.objectContaining({
+      type: "failed",
+      id: `${FIXTURE}::${FAILING.at(0)}`,
+    }),
+  );
 });
