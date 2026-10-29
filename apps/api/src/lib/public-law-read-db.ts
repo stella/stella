@@ -187,9 +187,7 @@ const observedQueryBuilder = <T extends object>(
             },
           );
           if (Result.isError(outcome)) {
-            return abortTransaction(
-              publicLawReadFailure(outcome.error, provenance),
-            );
+            return abortTransaction(outcome.error);
           }
           return outcome.value;
         };
