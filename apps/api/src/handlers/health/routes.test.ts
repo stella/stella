@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { envBase } from "@/api/env-base";
 import { createHealthRoute } from "@/api/handlers/health/routes";
 import { createHttpApp } from "@/api/http/app";
 import type { ReadinessOutcome } from "@/api/lib/health/readiness";
@@ -39,6 +40,68 @@ describe("health routes", () => {
     }
     expect(readinessCalls).toBe(0);
   });
+
+  test("readiness reports the configured base-environment marker", async () => {
+    await using server = serveHealth({
+      probeReadiness: async () => ({ status: "ready" }),
+    });
+
+    const response = await server.fetch(new Request("http://localhost/ready"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      deployEnvironment: envBase.DEPLOY_ENVIRONMENT ?? null,
+    });
+  });
+
+  for (const deployEnvironment of [
+    "production",
+    "staging",
+    undefined,
+  ] as const) {
+    test(`readiness reports ${String(deployEnvironment)} without changing probe work`, async () => {
+      let readinessCalls = 0;
+      await using server = serveHealth({
+        readDeployEnvironment: () => deployEnvironment,
+        probeReadiness: async () => {
+          readinessCalls++;
+          return { status: "ready" };
+        },
+      });
+
+      for (let request = 0; request < 2; request++) {
+        const response = await server.fetch(
+          new Request("http://localhost/ready"),
+        );
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({
+          status: "ok",
+          deployEnvironment: deployEnvironment ?? null,
+          version: APP_VERSION,
+          commit: APP_COMMIT_SHA,
+        });
+      }
+      expect(readinessCalls).toBe(1);
+    });
+
+    test(`unready responses retain the ${String(deployEnvironment)} marker`, async () => {
+      await using server = serveHealth({
+        readDeployEnvironment: () => deployEnvironment,
+        probeReadiness: async () => ({
+          status: "not-ready",
+          failed: ["database"],
+        }),
+      });
+
+      const response = await server.fetch(
+        new Request("http://localhost/ready"),
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: "error",
+        deployEnvironment: deployEnvironment ?? null,
+      });
+    });
+  }
 
   test("readiness fails closed", async () => {
     let readinessCalls = 0;

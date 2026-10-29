@@ -154,8 +154,8 @@ type CatalogEntry = {
   scope: string;
   additionalScopes?: readonly string[];
   /**
-   * When true, this capability's REST route resolves workspace access through
-   * `validateWorkspaceAccessIncludingArchived` (e.g. `matters.unarchive`), so
+   * When true, this capability's REST route admits archived matters
+   * (`workspaceStatus: "active-or-archived"`, e.g. `matters.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
    */
   allowsArchivedWorkspace?: boolean;
@@ -796,6 +796,12 @@ const mapStatusResponse = (
           ? responseBody["hint"]
           : refusal.hint,
       retryable: refusal.retryable,
+      retryAfterMs:
+        typeof responseBody["retryAfterMs"] === "number" &&
+        Number.isFinite(responseBody["retryAfterMs"]) &&
+        responseBody["retryAfterMs"] >= 0
+          ? responseBody["retryAfterMs"]
+          : undefined,
       contactUrl:
         typeof responseBody["contactUrl"] === "string"
           ? responseBody["contactUrl"]
@@ -2042,7 +2048,7 @@ const invokeCapabilityHandler = async ({
  * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
  *   per-capability `destructive` flag.
  * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
- *   mirrors `validateWorkspaceAccess`(-IncludingArchived per fix-4 flag).
+ *   mirrors the route's `workspaceStatus` (archived admitted per that flag).
  * - Member permissions + usage preflight: run inside the safe-handler wrapper
  *   (`endpoint.handler`), the same code path REST uses; validateOnly
  *   additionally mirrors the permission gate explicitly (the wrapper is not
@@ -2252,6 +2258,19 @@ const capabilityReferenceRefusal = async ({
   return null;
 };
 
+/** Configs without permissions (session-kind) pass, exactly as their wrapper does. */
+const holdsConfigAuthority = (
+  context: McpRequestContext,
+  { permissions }: EndpointConfig,
+): boolean =>
+  permissions === undefined || hasEffectiveAuthority(context, permissions);
+
+const capabilityPermissionDenied = (id: string) =>
+  structuredErrorResult({
+    code: "permission_denied",
+    message: `Your member role does not permit capability "${id}"`,
+  });
+
 const executeInvoke = async ({
   context,
   entry,
@@ -2291,6 +2310,15 @@ const executeInvoke = async ({
     params: validatedParams,
     query: validatedQuery,
   } = validated;
+
+  // Static authority. The config's own grant needs nothing from the
+  // request, so it is checked before any step below reads tenant data
+  // (reference visibility, the feature probe, the stored upload purpose): a
+  // caller who may not perform the capability learns nothing about the rows
+  // it names.
+  if (!holdsConfigAuthority(context, endpoint.config)) {
+    return capabilityPermissionDenied(id);
+  }
 
   const referenceRefusal = await capabilityReferenceRefusal({
     context,
@@ -2380,29 +2408,18 @@ const executeInvoke = async ({
     });
   }
 
-  // 9. Authority. The safe wrapper checks the member role on its own, but only
-  // the role: a machine API key's permission set lives on the MCP session, so
-  // this is the one place the two can be ANDed. Every grant this call spends is
-  // checked here, the config's and the purpose's alike, because a handler that
-  // decides a grant from the request reads the role by itself. It runs on both
+  // 9. Purpose authority. The safe wrapper checks the member role on its own,
+  // but only the role: a machine API key's permission set lives on the MCP
+  // session, so this executor is the one place the two can be ANDed: for the
+  // config's grant (static authority, above) and for the purpose's grant here,
+  // which depends on the validated request and the stored row. It runs on both
   // paths and before the limiter below, so a caller who may not perform the
-  // capability is refused without consuming anyone else's budget. Configs
-  // without permissions (session-kind) skip the check, exactly as their wrapper
-  // does.
-  const permissions = endpoint.config.permissions;
-  const requiredPermissions = [
-    ...(permissions === undefined ? [] : [permissions]),
-    ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
-  ];
+  // capability is refused without consuming anyone else's budget.
   if (
-    requiredPermissions.some(
-      (required) => !hasEffectiveAuthority(context, required),
-    )
+    purposeRequirement !== null &&
+    !hasEffectiveAuthority(context, purposeRequirement.permission)
   ) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: `Your member role does not permit capability "${id}"`,
-    });
+    return capabilityPermissionDenied(id);
   }
 
   if (validateOnly) {

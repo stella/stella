@@ -60,6 +60,63 @@ describe("workspace hygiene", () => {
     );
   });
 
+  test("rejects telemetry packages the API replaced, naming the replacement", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: { "@opentelemetry/sdk-logs": "0.223.0" },
+      },
+      webPackageJson: {
+        dependencies: {
+          "@opentelemetry/api": "1.9.1",
+          "@opentelemetry/semantic-conventions": "1.43.0",
+          analytics: "npm:posthog-node@5.55.0",
+          "posthog-js": "1.0.0",
+        },
+        name: "@stll/web",
+        optionalDependencies: {
+          "@opentelemetry/exporter-logs-otlp-http": "0.223.0",
+        },
+        peerDependencies: { "@opentelemetry/api-logs": "0.223.0" },
+        devDependencies: { "@opentelemetry/resources": "2.12.0" },
+      },
+    });
+
+    const posthogClient = "apps/api/src/lib/analytics/posthog-client.ts";
+    const otlpExporter = "apps/api/src/lib/observability/otlp-log-exporter.ts";
+    expect(
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter(
+        (issue) =>
+          issue.message.includes(posthogClient) ||
+          issue.message.includes(otlpExporter),
+      ),
+    ).toEqual([
+      {
+        message: `@opentelemetry/sdk-logs is blocked; replaced by ${otlpExporter}`,
+        path: "package.json",
+      },
+      {
+        message: `@opentelemetry/api is blocked; replaced by the log types in ${otlpExporter}`,
+        path: "apps/web/package.json",
+      },
+      {
+        message: `posthog-node is blocked; replaced by the fetch client in ${posthogClient}`,
+        path: "apps/web/package.json",
+      },
+      {
+        message: `@opentelemetry/resources is blocked; replaced by ${otlpExporter}`,
+        path: "apps/web/package.json",
+      },
+      {
+        message: `@opentelemetry/api-logs is blocked; replaced by ${otlpExporter}`,
+        path: "apps/web/package.json",
+      },
+      {
+        message: `@opentelemetry/exporter-logs-otlp-http is blocked; replaced by the fetch client in ${otlpExporter}`,
+        path: "apps/web/package.json",
+      },
+    ]);
+  });
+
   test("rejects exact npm text-search dependencies and accepts similar names", async () => {
     const deniedNames = [
       "fuse.js",
@@ -698,11 +755,37 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
           path: "apps/web/package.json",
         },
       ]),
     );
+  });
+
+  test("rejects the TypeScript 6 compiler API in the ported scripts package", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    writeFileSync(
+      path.join(rootDir, "packages/scripts/package.json"),
+      JSON.stringify({
+        dependencies: { typescript6: "catalog:" },
+        name: "@stll/scripts",
+        scripts: {
+          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        },
+      }),
+    );
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+      path: "packages/scripts/package.json",
+    });
   });
 });
 
@@ -750,6 +833,17 @@ const createWorkspaceRoot = ({
   mkdirSync(path.join(rootDir, "apps/web/src"), { recursive: true });
   mkdirSync(path.join(rootDir, "apps/landing"), { recursive: true });
   mkdirSync(path.join(rootDir, "packages/scripts"), { recursive: true });
+  mkdirSync(path.join(rootDir, "apps/api"), { recursive: true });
+  writeFileSync(
+    path.join(rootDir, "apps/api/package.json"),
+    JSON.stringify({
+      devDependencies: { typescript6: "catalog:" },
+      name: "@stll/api",
+      scripts: {
+        typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+      },
+    }),
+  );
   writeFileSync(
     path.join(rootDir, "package.json"),
     JSON.stringify(validRootPackage),
@@ -775,7 +869,6 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "packages/scripts/package.json"),
     JSON.stringify({
-      dependencies: { typescript6: "catalog:" },
       name: "@stll/scripts",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",

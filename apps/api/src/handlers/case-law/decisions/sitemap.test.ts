@@ -156,7 +156,7 @@ test("sitemap bounds every language group even within a larger batch", async () 
   if (!("items" in response)) {
     panic("Sitemap overflow fixture failed to load");
   }
-  expect(response.items.length).toBe(variants.length);
+  expect(response.items).toHaveLength(1);
   for (const item of response.items) {
     expect(item.languageAlternates.length).toBe(
       LIMITS.caseLawLanguageAlternatesPerGroupMax,

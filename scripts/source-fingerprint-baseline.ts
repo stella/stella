@@ -37,13 +37,22 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  type Node,
+  type ObjectProperty as Property,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
-import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
+import {
+  addedEntries,
+  ledgerGitEnv,
+  runLedgerMembershipGuard,
+} from "./ledger-membership.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE = BASELINE_PATHS.sourceFingerprint;
@@ -143,88 +152,101 @@ export const ledgerKeys = (baseline: Baseline): string[] =>
 type SourceFile = { path: string; source: string };
 type WriterMember = { key: string; kind: WriterKind };
 
-const propertyNameOf = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
+const propertyNameOf = (name: Node): string | null => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  if (name.type === "Literal" && typeof name.value === "string") {
+    return name.value;
+  }
+  return null;
+};
 
-const enclosingName = (node: ts.Node): string => {
+const enclosingName = (ancestors: readonly Node[], source: string): string => {
   const names: string[] = [];
-  // Ancestors up to the source file, the root of every parsed node.
-  for (
-    let current = node.parent;
-    !ts.isSourceFile(current);
-    current = current.parent
-  ) {
+  for (const current of ancestors) {
     if (
-      (ts.isFunctionDeclaration(current) ||
-        ts.isMethodDeclaration(current) ||
-        ts.isClassDeclaration(current)) &&
-      current.name !== undefined
+      (current.type === "FunctionDeclaration" ||
+        current.type === "ClassDeclaration") &&
+      current.id
     ) {
-      names.unshift(current.name.getText());
+      names.push(current.id.name);
     } else if (
-      ts.isVariableDeclaration(current) &&
-      ts.isIdentifier(current.name)
+      (current.type === "MethodDefinition" && current.kind === "method") ||
+      (current.type === "Property" && current.method)
     ) {
-      names.unshift(current.name.text);
+      names.push(source.slice(current.key.start, current.key.end));
+    } else if (
+      current.type === "VariableDeclarator" &&
+      current.id.type === "Identifier"
+    ) {
+      names.push(current.id.name);
     }
   }
   return names.length === 0 ? "module" : names.join("/");
 };
 
-const isNullValue = (node: ts.Expression): boolean =>
-  node.kind === ts.SyntaxKind.NullKeyword ||
-  (ts.isTaggedTemplateExpression(node) &&
-    /^\s*NULL\s*$/iu.test(node.template.getText().slice(1, -1)));
+const isNullValue = (node: Node): boolean =>
+  (node.type === "Literal" && node.value === null) ||
+  (node.type === "TaggedTemplateExpression" &&
+    node.quasi.expressions.length === 0 &&
+    /^\s*NULL\s*$/iu.test(node.quasi.quasis.at(0)?.value.raw ?? ""));
 
 /** Whether an identifier or property in `node` names one of `names`. */
-const mentions = (node: ts.Node, names: ReadonlySet<string>): boolean => {
+const mentions = (node: Node, names: ReadonlySet<string>): boolean => {
   let found = false;
-  const visit = (child: ts.Node): void => {
+  walk(node, (child) => {
     if (found) {
-      return;
+      return "skip-children";
     }
-    if (ts.isIdentifier(child) && names.has(child.text)) {
+    if (child.type === "Identifier" && names.has(child.name)) {
       found = true;
-      return;
     }
-    ts.forEachChild(child, visit);
-  };
-  visit(node);
+    return undefined;
+  });
   return found;
 };
 
 const EXTERNAL_ID = new Set(["externalId"]);
 
+const dedupeFunctionName = (node: Node) => {
+  let name: string | undefined;
+  if (node.type === "FunctionDeclaration") {
+    name = node.id?.name;
+  } else if (
+    node.type === "VariableDeclarator" &&
+    node.id.type === "Identifier" &&
+    (node.init?.type === "ArrowFunctionExpression" ||
+      node.init?.type === "FunctionExpression")
+  ) {
+    name = node.id.name;
+  }
+  return name;
+};
+
 const writerMembersOf = ({
   path: file,
   source,
 }: SourceFile): WriterMember[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(file, source);
   const members: WriterMember[] = [];
-  // A second write of the same kind in one function gets its own ordinal key
-  // (`#2`, …), so it is a new member rather than a duplicate of a listed one.
+  // A second write of the same kind in one function gets its own ordinal key.
   const seen = new Map<string, number>();
-  const add = (node: ts.Node, kind: WriterKind, name = enclosingName(node)) => {
+  const add = (kind: WriterKind, name: string) => {
     const base = `${file}::${kind}::${name}`;
     const ordinal = (seen.get(base) ?? 0) + 1;
     seen.set(base, ordinal);
-    members.push({
-      key: ordinal === 1 ? base : `${base}#${ordinal}`,
-      kind,
-    });
+    members.push({ key: ordinal === 1 ? base : `${base}#${ordinal}`, kind });
   };
-  const visit = (node: ts.Node): void => {
-    if (ts.isObjectLiteralExpression(node)) {
-      const properties = new Map<string, ts.ObjectLiteralElementLike>();
+  walk(program, (node, ancestors) => {
+    if (node.type === "ObjectExpression") {
+      const properties = new Map<string, Property>();
       for (const property of node.properties) {
         const name =
-          property.name === undefined ? null : propertyNameOf(property.name);
-        if (name !== null) {
+          property.type === "Property" && !property.computed
+            ? propertyNameOf(property.key)
+            : null;
+        if (name !== null && property.type === "Property") {
           properties.set(name, property);
         }
       }
@@ -233,101 +255,82 @@ const writerMembersOf = ({
         properties.has("externalSource") &&
         externalId !== undefined &&
         !(
-          ts.isPropertyAssignment(externalId) &&
-          isNullValue(externalId.initializer)
+          externalId.kind === "init" &&
+          !externalId.method &&
+          !externalId.shorthand &&
+          isNullValue(externalId.value)
         );
       if (
         writesExternalId &&
         ![...CHANGE_MARKERS].some((marker) => properties.has(marker))
       ) {
-        add(node, "external-id-write");
+        add("external-id-write", enclosingName(ancestors, source));
       }
       const dedupe = properties.get("dedupeKey");
       if (
-        dedupe !== undefined &&
-        ts.isPropertyAssignment(dedupe) &&
-        mentions(dedupe.initializer, EXTERNAL_ID) &&
-        !mentions(dedupe.initializer, CHANGE_MARKERS)
+        dedupe?.kind === "init" &&
+        !dedupe.method &&
+        !dedupe.shorthand &&
+        mentions(dedupe.value, EXTERNAL_ID) &&
+        !mentions(dedupe.value, CHANGE_MARKERS)
       ) {
-        add(dedupe, "external-id-dedupe-key");
+        add("external-id-dedupe-key", enclosingName(ancestors, source));
       }
     }
-    const isDedupeFunctionDeclaration =
-      ts.isFunctionDeclaration(node) &&
-      node.name?.text.endsWith("DedupeKey") === true;
-    const isDedupeFunctionVariable =
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text.endsWith("DedupeKey") &&
-      node.initializer !== undefined &&
-      (ts.isArrowFunction(node.initializer) ||
-        ts.isFunctionExpression(node.initializer));
-    const dedupeFunction =
-      (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) &&
-      (isDedupeFunctionDeclaration || isDedupeFunctionVariable)
-        ? node
-        : undefined;
+    const name = dedupeFunctionName(node);
     if (
-      dedupeFunction !== undefined &&
-      mentions(dedupeFunction, EXTERNAL_ID) &&
-      !mentions(dedupeFunction, CHANGE_MARKERS)
+      name?.endsWith("DedupeKey") &&
+      mentions(node, EXTERNAL_ID) &&
+      !mentions(node, CHANGE_MARKERS)
     ) {
-      add(
-        dedupeFunction,
-        "external-id-dedupe-key",
-        dedupeFunction.name?.getText() ?? "module",
-      );
+      add("external-id-dedupe-key", name);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return members;
 };
 
-/** A table literal (`pgTable("name", { … })`) with an `external_id` column and no change marker. */
+/** A table literal with an `external_id` column and no change marker. */
 const tableMembersOf = ({ path: file, source }: SourceFile): WriterMember[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(file, source);
   const members: WriterMember[] = [];
-  const visit = (node: ts.Node): void => {
-    const [tableName, columns] = ts.isCallExpression(node)
-      ? node.arguments
-      : [];
+  walk(program, (node) => {
+    const [tableName, columns] =
+      node.type === "CallExpression" ? node.arguments : [];
     if (
-      tableName !== undefined &&
-      columns !== undefined &&
-      ts.isStringLiteral(tableName) &&
-      ts.isObjectLiteralExpression(columns)
+      tableName?.type !== "Literal" ||
+      typeof tableName.value !== "string" ||
+      columns?.type !== "ObjectExpression"
     ) {
-      const columnNames = new Set<string>();
-      for (const property of columns.properties) {
-        if (!ts.isPropertyAssignment(property)) {
-          continue;
-        }
-        const first = ts.isCallExpression(property.initializer)
-          ? property.initializer.arguments.at(0)
-          : undefined;
-        if (first !== undefined && ts.isStringLiteral(first)) {
-          columnNames.add(first.text);
-        }
-      }
+      return;
+    }
+    const columnNames = new Set<string>();
+    for (const property of columns.properties) {
       if (
-        columnNames.has("external_id") &&
-        ![...CHANGE_MARKER_COLUMNS].some((column) => columnNames.has(column))
+        property.type !== "Property" ||
+        property.kind !== "init" ||
+        property.method ||
+        property.shorthand
       ) {
-        members.push({
-          key: `${file}::external-id-table::${tableName.text}`,
-          kind: "external-id-table",
-        });
+        continue;
+      }
+      const first =
+        property.value.type === "CallExpression"
+          ? property.value.arguments.at(0)
+          : undefined;
+      if (first?.type === "Literal" && typeof first.value === "string") {
+        columnNames.add(first.value);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    if (
+      columnNames.has("external_id") &&
+      ![...CHANGE_MARKER_COLUMNS].some((column) => columnNames.has(column))
+    ) {
+      members.push({
+        key: `${file}::external-id-table::${tableName.value}`,
+        kind: "external-id-table",
+      });
+    }
+  });
   return members;
 };
 
@@ -551,12 +554,23 @@ const baselineAt = (args: readonly string[]): Baseline | null => {
   if (baseRef === undefined || baseRef === "") {
     panic("--base requires a nonempty Git reference");
   }
-  const result = Bun.spawnSync(["git", "show", `${baseRef}:${BASELINE}`], {
+  // Evolution is the branch's own change, so it is read at the fork point: a
+  // fingerprint the base bumped after the fork never reads as a decrease here.
+  // An unresolvable base keeps its ref, so the read below reports it.
+  const forkPoint = Bun.spawnSync(["git", "merge-base", "HEAD", baseRef], {
     cwd: ROOT,
+    env: ledgerGitEnv(),
+    stderr: "pipe",
+  });
+  const revision =
+    forkPoint.exitCode === 0 ? forkPoint.stdout.toString().trim() : baseRef;
+  const result = Bun.spawnSync(["git", "show", `${revision}:${BASELINE}`], {
+    cwd: ROOT,
+    env: ledgerGitEnv(),
     stderr: "pipe",
   });
   if (result.exitCode === 0) {
-    return parseBaseline(result.stdout.toString(), `${baseRef}:${BASELINE}`);
+    return parseBaseline(result.stdout.toString(), `${revision}:${BASELINE}`);
   }
   if (baseIndex !== -1) {
     panic(`Cannot read source fingerprint baseline at ${baseRef}`);

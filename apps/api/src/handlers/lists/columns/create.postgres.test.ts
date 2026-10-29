@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   legalListColumns,
@@ -190,23 +192,20 @@ if (!databaseUrl || !runPostgres) {
             pending.push(
               ...workers.map(async (worker) => await worker.create()),
             );
-            const deadline = performance.now() + 5000;
-            while (performance.now() < deadline) {
-              const snapshot = await db.execute<{ waiting: number }>(sql`
-                SELECT count(*)::integer AS waiting FROM pg_stat_activity
-                WHERE pid IN (${sql.join(
-                  workers.map(({ pid }) => sql`${pid}`),
-                  sql`, `,
-                )})
-                  AND wait_event_type = 'Lock'`);
-              if (snapshot.at(0)?.waiting === workers.length) {
-                return;
-              }
-              await Bun.sleep(10);
-            }
-            panic(
-              "All column workers must reach the locked admission boundary",
-            );
+            await waitForExternalState({
+              description:
+                "every column worker waits at the locked admission boundary",
+              read: async () =>
+                (
+                  await db.execute<{ waiting: number }>(sql`
+                    SELECT count(*)::integer AS waiting FROM pg_stat_activity
+                    WHERE pid IN (${sql.join(
+                      workers.map(({ pid }) => sql`${pid}`),
+                      sql`, `,
+                    )})
+                      AND wait_event_type = 'Lock'`)
+                ).at(0)?.waiting === workers.length,
+            });
           });
         } finally {
           // Drain writers after releasing the control lock, before deleting fixture rows.
