@@ -40,6 +40,11 @@ test("every online step identifies its existing migration or code owner", () => 
   expect(steps.length).toBeGreaterThan(0);
   expect(
     steps
+      .filter(({ introducedBy }) => introducedBy === undefined)
+      .map(({ name }) => name),
+  ).toEqual([]);
+  expect(
+    steps
       .filter(({ introducedBy }) =>
         typeof introducedBy === "string"
           ? !folders.has(introducedBy)

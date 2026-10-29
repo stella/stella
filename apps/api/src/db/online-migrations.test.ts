@@ -1130,6 +1130,20 @@ describe("online migrations", () => {
     expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
   });
 
+  test("startup refuses an incomplete code-owned index retirement", async () => {
+    const retirementName = "case_law_provision_citations_work_subtree_idx";
+    const harness = createHarness({
+      retiredIndexes: ONLINE_INDEX_REPLACEMENTS.map(
+        ({ legacyName }) => legacyName,
+      ).filter((name) => name !== retirementName),
+    });
+    expect(
+      await rejectionOf(reportOnlineMigrations(harness.pool)),
+    ).toMatchObject({
+      message: `Online replacement_drop ${retirementName} owned by src/db/online-migrations.ts is not complete: retired index remains`,
+    });
+  });
+
   test("retires a legacy index only after both replacements validate", async () => {
     const harness = createHarness({ retiredIndexes: [] });
 
