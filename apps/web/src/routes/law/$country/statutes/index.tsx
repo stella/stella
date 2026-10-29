@@ -449,19 +449,19 @@ const useStatuteListFilterChips = ({
  * at page one, since the cursors were cut for the old one.
  */
 const useStatuteListOrder = ({
-  sort,
+  order,
   year,
-}: Pick<StatutesIndexSearch, "sort" | "year">) => {
+}: Pick<StatutesIndexSearch, "order" | "year">) => {
   const t = useTranslations();
   const navigate = Route.useNavigate();
   return statuteColumnOrder({
-    sort,
+    sort: order,
     year,
     needsYearReason: t("statutes.sortNeedsYear"),
     onSortChange: (next) => {
       detached(
         navigate({
-          search: (previous) => ({ ...previous, page: undefined, sort: next }),
+          search: (previous) => ({ ...previous, page: undefined, order: next }),
         }),
         "statutes.sort-navigate",
       );
@@ -478,11 +478,11 @@ function PublicStatuteList({
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({
-    select: ({ page, pageSize, q, sort, type, validity, year }) => ({
+    select: ({ page, pageSize, q, order, type, validity, year }) => ({
       page,
       pageSize,
       q,
-      sort,
+      order,
       type,
       validity,
       year,
@@ -763,7 +763,7 @@ function PublicStatuteList({
         {dataView.type !== "error" && (
           <PublicLawResultsBoundary
             resetOn={data}
-            searchKey={`${country}:${search.q ?? ""}:${search.type ?? ""}:${search.validity ?? ""}:${search.year ?? ""}:${search.sort ?? ""}`}
+            searchKey={`${country}:${search.q ?? ""}:${search.type ?? ""}:${search.validity ?? ""}:${search.year ?? ""}:${search.order ?? ""}`}
           >
             <StatuteTable
               emptyState={

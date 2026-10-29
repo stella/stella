@@ -112,14 +112,14 @@ describe("a column order in the list address", () => {
   test("reaches the request with the year that bounds it", async () => {
     const requests = await readRequests({
       year: 2012,
-      sort: "amendments-desc",
+      order: "amendments-desc",
     });
     expect(requests.at(0)?.searchParams.get("sort")).toBe("amendments-desc");
     expect(requests.at(0)?.searchParams.get("year")).toBe("2012");
   });
 
   test("is left out without a year, so the list reads its default order", async () => {
-    const requests = await readRequests({ sort: "amendments-desc" });
+    const requests = await readRequests({ order: "amendments-desc" });
     expect(requests).toHaveLength(1);
     expect(requests.at(0)?.searchParams.has("sort")).toBe(false);
   });
@@ -127,9 +127,9 @@ describe("a column order in the list address", () => {
   test("an order this build does not know reads as the default order", () => {
     const search = v.parse(statutesIndexSearchSchema, {
       year: 2012,
-      sort: "popularity-desc",
+      order: "popularity-desc",
     });
-    expect(search.sort).toBeUndefined();
+    expect(search.order).toBeUndefined();
   });
 });
 

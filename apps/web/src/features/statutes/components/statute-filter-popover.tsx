@@ -95,7 +95,7 @@ const YearSection = ({
         // text rather than leaving an edit the URL no longer holds.
         key={selectedValue ?? ""}
         defaultValue={
-          selectedValue === undefined ? null : Number(selectedValue)
+          selectedValue === undefined ? undefined : Number(selectedValue)
         }
         format={YEAR_FORMAT}
         inputProps={{ "aria-labelledby": headingId }}

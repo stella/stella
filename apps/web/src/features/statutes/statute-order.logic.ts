@@ -1,7 +1,7 @@
 /**
  * The order the statute list is read in, as its column headers state it.
  *
- * The URL carries one `sort` (`amendments-desc`); the API serves it only over
+ * The URL carries one `order` (`amendments-desc`); the API serves it only over
  * one year's acts (`statuteListSortIsBounded`). The headers read that one
  * rule: with a year they order the list, without one each sort item says why
  * it cannot, and the list keeps its default order.
@@ -119,7 +119,6 @@ export const statuteTableSorting = (
     }
     if (!isStatuteColumnId(first.id)) {
       panic(`The statute table sorted by an unknown column: ${first.id}`);
-      return;
     }
     order.onChange({
       column: first.id,

@@ -41,9 +41,9 @@ export const createStatuteListFilters = (
   ...(search.type === undefined ? {} : { documentType: search.type }),
   ...(search.validity === undefined ? {} : { validity: search.validity }),
   ...(search.year === undefined ? {} : { year: search.year }),
-  ...(search.sort === undefined || !statuteListSortIsBounded(search)
+  ...(search.order === undefined || !statuteListSortIsBounded(search)
     ? {}
-    : { sort: search.sort }),
+    : { sort: search.order }),
 });
 
 /**

@@ -53,8 +53,10 @@ export const statutesIndexSearchSchema = routeSearchSchema({
     undefined,
   ),
   // A column order; read only alongside a year (`statuteListSortIsBounded`).
-  // An order this build does not know reads as the default order.
-  sort: v.fallback(v.optional(v.picklist(STATUTE_LIST_SORTS)), undefined),
+  // An order this build does not know reads as the default order. Named
+  // apart from the case-law list's `sort`, whose values differ: a navigation
+  // between the two lists carries the other list's search along.
+  order: v.fallback(v.optional(v.picklist(STATUTE_LIST_SORTS)), undefined),
 });
 
 export type StatutesIndexSearch = v.InferOutput<
@@ -111,6 +113,6 @@ export const changeStatutesIndexQuery = ({
     type: previous.type,
     year,
     validity: intent.type === "text" ? undefined : previous.validity,
-    sort: statuteListSortIsBounded({ year }) ? previous.sort : undefined,
+    order: statuteListSortIsBounded({ year }) ? previous.order : undefined,
   };
 };

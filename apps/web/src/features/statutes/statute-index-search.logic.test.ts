@@ -148,7 +148,7 @@ describe("a column order across filter changes", () => {
   const sorted = v.parse(statutesIndexSearchSchema, {
     page: 2,
     year: 2012,
-    sort: "citedBy-desc",
+    order: "citedBy-desc",
   });
 
   test("lasts while the year does, and starts again at page one", () => {
@@ -158,7 +158,7 @@ describe("a column order across filter changes", () => {
         previous: sorted,
         query,
       });
-      expect(next.sort).toBe("citedBy-desc");
+      expect(next.order).toBe("citedBy-desc");
       expect(next.page).toBeUndefined();
     }
   });
@@ -170,7 +170,7 @@ describe("a column order across filter changes", () => {
     ];
     for (const previous of withoutYear) {
       expect(
-        changeStatutesIndexQuery({ country: "cze", previous, query: "" }).sort,
+        changeStatutesIndexQuery({ country: "cze", previous, query: "" }).order,
       ).toBeUndefined();
     }
     expect(
@@ -178,7 +178,7 @@ describe("a column order across filter changes", () => {
         country: "cze",
         previous: sorted,
         query: "contractual obligations",
-      }).sort,
+      }).order,
     ).toBeUndefined();
   });
 
