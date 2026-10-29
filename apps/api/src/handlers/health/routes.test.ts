@@ -171,17 +171,6 @@ describe("startup probe", () => {
     expect(await response.json()).toMatchObject({ status: "starting" });
   });
 
-  test("opens once dependencies are ready while sanctions warm in the background", async () => {
-    await using server = serveHealth({
-      probeReadiness: async () => ({ status: "ready" }),
-    });
-
-    expect((await server.fetch(startedRequest())).status).toBe(200);
-    expect(
-      (await server.fetch(new Request("http://localhost/live"))).status,
-    ).toBe(200);
-  });
-
   test("opens after one readiness success and reports build metadata", async () => {
     await using server = serveHealth({
       probeReadiness: async () => ({ status: "ready" }),

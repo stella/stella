@@ -880,6 +880,56 @@ test("a cold start converges when editions load for longer than any request dead
   }
 });
 
+test("an edition re-warms after the worker holding its index is retired", async () => {
+  const workers: Worker[] = [];
+  const loads = new Map<SanctionsSource, number>();
+  const pool = createSanctionsMatcherPool({
+    createWorker: () => {
+      const worker = new Worker(
+        new URL("sanctions-matcher-worker.ts", import.meta.url),
+      );
+      workers.push(worker);
+      return worker;
+    },
+  });
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    loadEntries: async (options) => {
+      const entries = await loadEditionEntries(options);
+      const source = entries.at(0)?.source ?? panic("Missing fixture entry");
+      loads.set(source, (loads.get(source) ?? 0) + 1);
+      return entries;
+    },
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    expect(
+      (await publicScreen(publicProps("A Completely Distant Name"))).unwrap()
+        .status,
+    ).toBe("clear");
+
+    const first = workers.at(0) ?? panic("Missing matcher worker");
+    await first.terminate();
+    const recovering = (
+      await publicScreen(publicProps("A Completely Distant Name"))
+    ).unwrap();
+    expect(recovering.lists.every(({ reason }) => reason === "warming")).toBe(
+      true,
+    );
+    await publicScreen.warmupSettled();
+
+    expect(
+      (await publicScreen(publicProps("A Completely Distant Name"))).unwrap()
+        .status,
+    ).toBe("clear");
+    expect(workers).toHaveLength(2);
+    expect([...loads.values()].every((count) => count === 2)).toBe(true);
+  } finally {
+    await pool.close();
+  }
+});
+
 test("a startup failure remains tied to its edition while a replacement warms", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });

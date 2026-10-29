@@ -166,7 +166,7 @@ test("the bound terminalizes the matcher state used by public screening", async 
   expect(loaderState).toBe("terminal");
 });
 
-test("concurrent starts warm each edition once and emit one duration observation", async () => {
+test("the one startup observation uses the matcher's measured edition durations", async () => {
   let instant = 0;
   let calls = 0;
   const observations: unknown[] = [];
@@ -182,6 +182,7 @@ test("concurrent starts warm each edition once and emit one duration observation
     now: () => instant,
     sleep: async () => undefined,
     terminalize: () => undefined,
+    editionDurations: () => ({ eu: 17 }),
     observe: (observation) => {
       observations.push(observation);
     },
@@ -196,6 +197,6 @@ test("concurrent starts warm each edition once and emit one duration observation
 
   expect(calls).toBe(1);
   expect(observations).toEqual([
-    { totalMs: 23, editions: { eu: 23 }, reason: "settled" },
+    { totalMs: 23, editions: { eu: 17 }, reason: "settled" },
   ]);
 });

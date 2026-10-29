@@ -189,8 +189,9 @@ const createEditionReads = ({
 
 /**
  * Loads editions into the matcher one at a time in the background, apart from
- * request deadlines: a slow edition finishes, and each loaded one stays loaded
- * and keeps screening while another loads or fails.
+ * request deadlines: a slow edition finishes and each loaded one stays loaded.
+ * Screening answers `warming` for the whole pass rather than lease the worker
+ * that holds the indexes.
  */
 const createEditionWarmer = ({
   pool,
@@ -200,14 +201,14 @@ const createEditionWarmer = ({
 }: Required<PublicScreeningOptions>) => {
   const { now } = clock;
   const targets = new Map<SanctionsSource, WarmTarget>();
-  const warmedEditions = new Map<SanctionsSource, string>();
+  const durations = new Map<SanctionsSource, number>();
   const state = initialEditionWarmerState();
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
   const readEdition = createEditionReads({ loadEntries, clock });
-  // The read runs outside any lease: loaded lists keep screening meanwhile.
-  // Only the transfer and index hold the matcher.
+  // The read runs outside any lease; the pass (`pass` below) keeps requests
+  // off the matcher meanwhile.
   const warm = async (
     db: SanctionsReadDb,
     source: SanctionsSource,
@@ -233,40 +234,37 @@ const createEditionWarmer = ({
         value: Result.err({ reason: "short-read" }),
       };
     }
-    state.holdsMatcher = true;
-    try {
-      return await pool.run(
-        async (session): Promise<Result<void, WarmFailure>> => {
-          if (session.hasEdition(source, edition.id)) {
-            return Result.ok(undefined);
-          }
-          const indexed = await session.load({
-            source,
-            editionId: edition.id,
-            list: {
-              version: {
-                source,
-                publishedAt: edition.publishedAt,
-                fileId: edition.fileId,
-              },
-              entries: loaded.value,
-            },
-          });
-          if (indexed !== "indexed") {
-            return Result.err({ reason: "matcher-unavailable" });
-          }
-          logger.info("sanctions.edition_warmed", {
-            source,
-            entries: edition.entryCount,
-            durationMs: Math.round(now() - startedAt),
-          });
+    return await pool.run(
+      async (session): Promise<Result<void, WarmFailure>> => {
+        if (session.hasEdition(source, edition.id)) {
           return Result.ok(undefined);
-        },
-        { deadlineMs: SANCTIONS_WARM_STALL_MS },
-      );
-    } finally {
-      state.holdsMatcher = false;
-    }
+        }
+        const indexed = await session.load({
+          source,
+          editionId: edition.id,
+          list: {
+            version: {
+              source,
+              publishedAt: edition.publishedAt,
+              fileId: edition.fileId,
+            },
+            entries: loaded.value,
+          },
+        });
+        if (indexed !== "indexed") {
+          return Result.err({ reason: "matcher-unavailable" });
+        }
+        const durationMs = Math.round(now() - startedAt);
+        durations.set(source, durationMs);
+        logger.info("sanctions.edition_warmed", {
+          source,
+          entries: edition.entryCount,
+          durationMs,
+        });
+        return Result.ok(undefined);
+      },
+      { deadlineMs: SANCTIONS_WARM_STALL_MS },
+    );
   };
 
   const settle = (
@@ -281,7 +279,6 @@ const createEditionWarmer = ({
     const failure = warmFailure(outcome);
     // A load that lands after startup gave up still clears the failure.
     if (failure === null) {
-      warmedEditions.set(source, target.edition.id);
       targets.delete(source);
       return;
     }
@@ -302,17 +299,27 @@ const createEditionWarmer = ({
   };
 
   const pass = async () => {
-    for (;;) {
-      const instant = now();
-      const due = [...targets].find(([, target]) => target.retryAt <= instant);
-      if (due === undefined || state.db === null) {
-        // In the same step as the last look: any later request starts a pass.
-        state.active = false;
-        return;
+    // Requests bypass the pool for the whole pass, including database reads
+    // between editions. Otherwise a short request can acquire the warmed
+    // worker in that gap, time out mid-reply, and retire every loaded index.
+    state.holdsMatcher = true;
+    try {
+      for (;;) {
+        const instant = now();
+        const due = [...targets].find(
+          ([, target]) => target.retryAt <= instant,
+        );
+        if (due === undefined || state.db === null) {
+          // In the same step as the last look: any later request starts a pass.
+          state.active = false;
+          return;
+        }
+        const [source, target] = due;
+        // db-await-in-loop: one edition at a time keeps a single bounded load in memory
+        settle(source, target, await warm(state.db, source, target));
       }
-      const [source, target] = due;
-      // db-await-in-loop: one edition at a time keeps a single bounded load in memory
-      settle(source, target, await warm(state.db, source, target));
+    } finally {
+      state.holdsMatcher = false;
     }
   };
 
@@ -330,8 +337,9 @@ const createEditionWarmer = ({
   };
 
   return {
-    /** The warmup is indexing an edition; the matcher answers nothing else. */
+    /** A warm pass is running; the matcher answers nothing else until it ends. */
     holdsMatcher: () => state.holdsMatcher,
+    durations: () => Object.fromEntries(durations),
     /** Like `want`, without asking for the edition: a request that cannot check it. */
     status: (
       source: SanctionsSource,
@@ -379,11 +387,6 @@ const createEditionWarmer = ({
       source: SanctionsSource,
       edition: SanctionsActiveEdition,
     ): "warming" | "load-failed" => {
-      // The warmer, rather than individual requests, owns an edition for the
-      // process lifetime. A stale concurrent caller cannot open a second path.
-      if (warmedEditions.get(source) === edition.id) {
-        return "load-failed";
-      }
       state.db = db;
       const instant = now();
       let target = targets.get(source);
@@ -562,6 +565,7 @@ export const createPublicSanctionsScreening = ({
   };
   return Object.assign(screenPublic, {
     warmupSettled: warmer.settled,
+    warmupDurations: warmer.durations,
     warmupStartupState: warmer.startupState,
     warmupTerminalize: warmer.terminalize,
     /** Test seam: ask for an edition the way a request does, synchronously. */

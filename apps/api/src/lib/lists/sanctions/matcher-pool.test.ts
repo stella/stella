@@ -1113,6 +1113,55 @@ test("a deadline on an idle worker keeps its indexes for the next lease", async 
   }
 });
 
+test("screening deadlines queued behind a warm lease do not retire its worker", async () => {
+  const clock = createMatcherTestClock();
+  const recording = recordingMatcherWorker();
+  let spawned = 0;
+  const pool = createSanctionsMatcherPool({
+    deadlineMs: 20,
+    clock,
+    createWorker: () => {
+      spawned += 1;
+      return recording.createWorker();
+    },
+  });
+  const warmHeld = Promise.withResolvers<undefined>();
+  const releaseWarm = Promise.withResolvers<undefined>();
+  try {
+    const warming = pool.run(
+      async (session) => {
+        expect(
+          await session.load({
+            source: "eu",
+            editionId: "first",
+            list: list("Acme Trading"),
+          }),
+        ).toBe("indexed");
+        warmHeld.resolve(undefined);
+        await releaseWarm.promise;
+        return "warm";
+      },
+      { deadlineMs: 10_000 },
+    );
+    await warmHeld.promise;
+
+    const queued = pool.run(async () => "screened");
+    clock.advance(20);
+    expect(await queued).toEqual({ status: "unavailable", cause: "deadline" });
+    releaseWarm.resolve(undefined);
+    expect(await warming).toEqual({ status: "completed", value: "warm" });
+
+    expect(
+      await pool.run(async (session) => session.hasEdition("eu", "first")),
+    ).toEqual({ status: "completed", value: true });
+    expect(spawned).toBe(1);
+    expect(recording.work.indexes).toBe(1);
+  } finally {
+    releaseWarm.resolve(undefined);
+    await pool.close();
+  }
+});
+
 test("loading indexes an edition once, including an empty one, and screening reuses it", async () => {
   const recording = recordingMatcherWorker();
   const pool = createSanctionsMatcherPool({
