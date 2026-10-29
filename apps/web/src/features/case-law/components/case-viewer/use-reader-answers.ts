@@ -12,11 +12,12 @@ import type {
 import { Temporal } from "@stll/time";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -36,6 +37,7 @@ import {
   ReaderAnswerFailure,
 } from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
+import { useReaderAnswerLanguage } from "./use-reader-answer-language";
 
 // oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
 const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
@@ -58,6 +60,7 @@ const createReaderAnswerRuntime = (scope: string) => {
     ownedMessageIds,
     controllers,
     busy: new Set<string>(),
+    settled: new Map<string, Promise<void>>(),
     isCancelled: () => phase === "cancelled",
     reactivate: () => {
       phase = "active";
@@ -363,6 +366,13 @@ type PerformReaderAnswerOperationOptions = Pick<
   authenticated: boolean;
   setIsCreating: Dispatch<SetStateAction<boolean>>;
 };
+type ReaderAnswerOperationResult =
+  | { status: "started" }
+  | { status: "queued"; settled: Promise<void> }
+  | {
+      status: "refused";
+      reason: "disabled" | "unauthenticated" | "cancelled" | "streaming";
+    };
 const performReaderAnswerOperation = async (
   queryKey: DataTag<readonly unknown[], ReaderAnswer[], Error>,
   {
@@ -377,17 +387,28 @@ const performReaderAnswerOperation = async (
     setBusyAnswerIds,
     setErrors,
   }: PerformReaderAnswerOperationOptions,
-) => {
-  if (!enabled || !authenticated || runtime.isCancelled()) {
-    return;
+): Promise<ReaderAnswerOperationResult> => {
+  if (!enabled) {
+    return { status: "refused", reason: "disabled" };
+  }
+  if (!authenticated) {
+    return { status: "refused", reason: "unauthenticated" };
+  }
+  if (runtime.isCancelled()) {
+    return { status: "refused", reason: "cancelled" };
   }
   await queryClient.cancelQueries({ queryKey });
   if (runtime.isCancelled()) {
-    return;
+    return { status: "refused", reason: "cancelled" };
   }
   const busyKey = id ?? "create";
   if (runtime.busy.has(busyKey)) {
-    return;
+    return {
+      status: "queued",
+      settled:
+        runtime.settled.get(busyKey) ??
+        panic("Busy reader answer operation must have a settlement promise"),
+    };
   }
   if (
     id !== null &&
@@ -396,9 +417,16 @@ const performReaderAnswerOperation = async (
       ?.find((answer) => answer.id === id)
       ?.messages.some((message) => message.status === "streaming")
   ) {
-    return;
+    return { status: "refused", reason: "streaming" };
   }
   runtime.busy.add(busyKey);
+  let settleOperation: () => void = () => undefined;
+  runtime.settled.set(
+    busyKey,
+    new Promise<void>((resolve) => {
+      settleOperation = resolve;
+    }),
+  );
   const controller = new AbortController();
   runtime.controllers.add(controller);
   if (id === null) {
@@ -417,8 +445,10 @@ const performReaderAnswerOperation = async (
   });
   runtime.controllers.delete(controller);
   runtime.busy.delete(busyKey);
+  runtime.settled.delete(busyKey);
+  settleOperation();
   if (runtime.isCancelled() || controller.signal.aborted) {
-    return;
+    return { status: "refused", reason: "cancelled" };
   }
   const result = outcome.andThen((value) => value ?? Result.ok(undefined));
   if (result.isErr()) {
@@ -439,6 +469,7 @@ const performReaderAnswerOperation = async (
       return next;
     });
   }
+  return { status: "started" };
 };
 
 type ReaderAnswersRecoveryOptions = {
@@ -531,7 +562,7 @@ const readerAnswersRecoveryOptions = ({
       if (context.signal.aborted || runtime.isCancelled()) {
         return readQueryResult(fetched);
       }
-      getAnalytics().captureError(fetched.error, {
+      captureQueryError(fetched.error, {
         fingerprintKey: "readerAnswersRecoveryOptions.queryFn:failure",
         scope: {
           type: "handler",
@@ -554,16 +585,76 @@ const readerAnswersRecoveryOptions = ({
   });
 };
 
+type SaveReaderAnswerLanguageOptions = {
+  language: ReturnType<typeof useReaderAnswerLanguage>;
+  nextLanguage: string;
+  answerId: string | undefined;
+  run: (input: StreamAnswerOptions) => Promise<ReaderAnswerOperationResult>;
+};
+
+/** Persist before regeneration so subsequent turns use the same preference. */
+const saveReaderAnswerLanguage = async ({
+  language,
+  nextLanguage,
+  answerId,
+  run,
+}: SaveReaderAnswerLanguageOptions) => {
+  const result = await language.saveLanguage(nextLanguage);
+  if (result.isErr()) {
+    notifyUserError(result.error, getTranslator()("errors.actionFailed"));
+    return;
+  }
+  const saved = result.value;
+  switch (saved.status) {
+    case "pending":
+    case "superseded":
+      return;
+    case "saved": {
+      if (answerId === undefined) {
+        return;
+      }
+      const input = {
+        answerId,
+        operation: "regenerate",
+        path: `/${encodeURIComponent(answerId)}/regenerate`,
+        body: saved.locale === undefined ? {} : { locale: saved.locale },
+        regenerate: true,
+      } satisfies StreamAnswerOptions;
+      let regeneration = await run(input);
+      while (regeneration.status === "queued") {
+        await regeneration.settled;
+        regeneration = await run(input);
+      }
+      if (regeneration.status === "refused") {
+        notifyUserError(
+          new ReaderAnswerFailure({
+            kind: "request",
+            message: `Reader answer regeneration refused: ${regeneration.reason}`,
+          }),
+          getTranslator()("errors.actionFailed"),
+        );
+      }
+      return;
+    }
+    default:
+      saved satisfies never;
+      panic("Unhandled reader answer language save status");
+  }
+};
+
 export type UseReaderAnswersOptions = {
   decisionId: string;
   generationMode: "enabled" | "gated";
+  documentLanguage?: string;
 };
 export const useReaderAnswers = ({
   decisionId,
   generationMode,
+  documentLanguage,
 }: UseReaderAnswersOptions) => {
   const user = useMaybeAuthenticatedUser();
-  const locale = useLocale();
+  const language = useReaderAnswerLanguage(documentLanguage);
+  const { locale, languagePreference, isSavingLanguage } = language;
   const queryClient = useQueryClient();
   const options = readerAnswersOptions({
     decisionId,
@@ -652,10 +743,15 @@ export const useReaderAnswers = ({
   const answers = query.data ?? [];
   return {
     answers,
+    languagePreference,
+    isSavingLanguage,
+    isLanguagePending: isCreating || isSavingLanguage,
+    setAnswerLanguage: async (nextLanguage: string, answerId?: string) =>
+      await saveReaderAnswerLanguage({ language, nextLanguage, answerId, run }),
     failureNotices: readerAnswerFailureNotices({
       answers,
       failures,
-      queryError: query.error,
+      queryError: query.error ?? language.error ?? null,
     }),
     activeAnswerId: activation.id,
     openRevision: activation.revision,
@@ -663,9 +759,9 @@ export const useReaderAnswers = ({
     busyAnswerIds,
     isCreating,
     errors,
-    error: errors.get("create") ?? query.error,
+    error: errors.get("create") ?? query.error ?? language.error ?? null,
     isLoading: query.isLoading,
-    createExplain: async (anchor: ReaderAnswerAnchor) =>
+    createExplain: async (anchor: ReaderAnswerAnchor) => {
       await run({
         answerId: null,
         operation: "explain",
@@ -674,27 +770,30 @@ export const useReaderAnswers = ({
           decisionId: toSafeId<"caseLawDecision">(decisionId),
           kind: "explain",
           anchor,
-          locale,
+          ...(locale === undefined ? {} : { locale }),
         },
         anchor,
         regenerate: false,
-      }),
-    followUp: async (answerId: string, question: string) =>
+      });
+    },
+    followUp: async (answerId: string, question: string) => {
       await run({
         answerId,
         operation: "follow-up",
         path: `/${encodeURIComponent(answerId)}/messages`,
-        body: { question, locale },
+        body: { question, ...(locale === undefined ? {} : { locale }) },
         regenerate: false,
-      }),
-    regenerate: async (answerId: string) =>
+      });
+    },
+    regenerate: async (answerId: string) => {
       await run({
         answerId,
         operation: "regenerate",
         path: `/${encodeURIComponent(answerId)}/regenerate`,
-        body: { locale },
+        body: locale === undefined ? {} : { locale },
         regenerate: true,
-      }),
+      });
+    },
     remove: async (answerId: string) =>
       await perform(answerId, {
         operationId: "remove",

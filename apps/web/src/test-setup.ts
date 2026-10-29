@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeEach, mock } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
 import {
   installDomNetworkGuard,
   markTestEnded,
@@ -67,6 +69,9 @@ beforeEach(() => {
 afterEach(() => {
   markTestEnded();
   markTimerTestEnded();
+  // After the guard has cancelled the test's own leaked timers, so the drain
+  // fires only what libraries left on a fake clock (see `restoreRealTimers`).
+  restoreRealTimers();
   reportRefusedRequests();
   reportLeakedTimers();
 });

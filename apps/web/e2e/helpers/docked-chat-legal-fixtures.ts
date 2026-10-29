@@ -1,4 +1,3 @@
-import "@tanstack/react-router";
 import type { Page } from "@playwright/test";
 import { panic } from "better-result";
 
@@ -198,22 +197,4 @@ export const installDockedLegalFixtures = async (page: Page) => {
       await route.fulfill({ json: body });
     },
   );
-};
-
-/** Navigate after the public shell has hydrated, so browser fixtures can answer the read. */
-export const navigatePublicLawFixture = async (page: Page, path: string) => {
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  // Matches are committed after the router's asynchronous hydration. Unlike
-  // sidebar controls, this signal also exists when the mobile sheet is closed.
-  await page.waitForFunction(() => {
-    const router = window.__TSR_ROUTER__;
-    return router !== undefined && router.state.matches.length > 0;
-  });
-  await page.evaluate(async (target) => {
-    const router = window.__TSR_ROUTER__;
-    if (router === undefined) {
-      throw new Error("The public shell must have a hydrated router");
-    }
-    await router.navigate({ href: target });
-  }, path);
 };

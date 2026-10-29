@@ -1,0 +1,4 @@
+{
+  "add-column": "The constant English default uses PostgreSQL's fast-default catalog path without rewriting user rows; lock acquisition is bounded by 1s and the statement by 5s.",
+  "add-constraint": "The locale CHECK is added NOT VALID without scanning existing users and protects new writes immediately; its gated online validation follows schema commit, with 1s lock and 5s statement bounds here."
+}

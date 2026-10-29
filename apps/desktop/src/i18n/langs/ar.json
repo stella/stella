@@ -299,7 +299,7 @@
     "moreOptions": "المزيد من الخيارات",
     "moreItemActions": "مزيد من الإجراءات للعنصر {number}",
     "noResults": "لا توجد مقتطفات مطابقة",
-    "noResultsDescription": "هل تريد البحث عن «{query}» في السجلات بدلاً من ذلك؟",
+    "noResultsSearchRegistries": "البحث عن «{query}» في السجلات",
     "noGroup": "بلا مجموعة",
     "newGroupOption": "مجموعة جديدة…",
     "copyItem": "نسخ العنصر {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "اضغط {shortcut} لتصفح سجلك واختيار مقتطف.",
     "welcomeShortcutTitle": "افتحها من أي مكان.",
     "welcomeStart": "ابدأ النسخ",
-    "welcomeTitle": "تعرّف على حافظتك"
+    "welcomeTitle": "تعرّف على حافظتك",
+    "registryIdentifierSearchHint": "أدخل {identifiers}."
   },
   "activity": {
     "title": "النشاط",
@@ -618,5 +619,46 @@
       "fullDiskAccess": "الوصول الكامل إلى القرص",
       "administrator": "صلاحيات المسؤول"
     }
+  },
+  "agentSubscriptions": {
+    "title": "اشتراكات الذكاء الاصطناعي",
+    "chatGpt": "ChatGPT",
+    "description": "استخدم خطة ChatGPT الخاصة بك لطلبات الذكاء الاصطناعي في stella. يُحتسب الاستخدام من خطة ChatGPT، بشكل منفصل عن اشتراكك في stella.",
+    "continueWithChatGpt": "المتابعة باستخدام ChatGPT",
+    "continueAs": "المتابعة باسم {email}",
+    "useDifferentAccount": "استخدام حساب آخر",
+    "signingIn": "أكمل تسجيل الدخول في المتصفح.",
+    "cancel": "إلغاء",
+    "pasteDescription": "إذا عرض المتصفح صفحة خطأ بعد تسجيل الدخول، فانسخ عنوانها والصقه هنا.",
+    "pasteSubmit": "إكمال تسجيل الدخول",
+    "connected": "تم ربط ChatGPT",
+    "connectedAs": "تم ربط ChatGPT · {email}",
+    "manageUsage": "إدارة الاستخدام",
+    "disconnect": "قطع الاتصال",
+    "needsReconnect": "انتهت صلاحية اتصالك بـ ChatGPT. سجّل الدخول مرة أخرى لمواصلة استخدام خطتك.",
+    "notice": {
+      "actionFailed": "لم ينجح ذلك. حاول مرة أخرى.",
+      "pasteRejected": "هذا العنوان لا يخص عملية تسجيل الدخول الحالية. انسخ العنوان كاملًا من علامة تبويب المتصفح التي فُتحت.",
+      "revocationUnconfirmed": "تم قطع الاتصال على هذا الكمبيوتر، لكن ChatGPT لم يؤكد ذلك. يمكنك أيضًا إزالة stella من إعدادات ChatGPT."
+    },
+    "failure": {
+      "declined": "تم رفض تسجيل الدخول في المتصفح.",
+      "planUsageNotGranted": "لم يُسمح لـ stella باستخدام خطة ChatGPT الخاصة بك. سجّل الدخول مرة أخرى واسمح بذلك.",
+      "differentAccount": "سجّلت الدخول بحساب ChatGPT آخر. لم يتغير الاتصال المحفوظ.",
+      "stateMismatch": "تعذّر التحقق من تسجيل الدخول. حاول مرة أخرى.",
+      "timedOut": "استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.",
+      "browserUnavailable": "تعذّر فتح المتصفح. حاول مرة أخرى.",
+      "callbackUnavailable": "تعذّر تجهيز تسجيل الدخول على هذا الكمبيوتر. حاول مرة أخرى.",
+      "registrationIncomplete": "لم يُكمل ChatGPT ربط stella. حاول مرة أخرى.",
+      "codeExpired": "انتهت صلاحية تسجيل الدخول قبل اكتماله. حاول مرة أخرى.",
+      "verification": "تعذّر التحقق من رد ChatGPT. حاول مرة أخرى.",
+      "clientRejected": "لم يعد ChatGPT يقبل هذا الاتصال. اربطه مجددًا بحساب آخر.",
+      "unreachable": "تعذّر الوصول إلى تسجيل الدخول في ChatGPT. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
+      "storage": "تعذّرت قراءة الاتصال أو حفظه على هذا الكمبيوتر."
+    },
+    "callbackConnectedTitle": "تم ربط ChatGPT",
+    "callbackConnectedBody": "يمكنك إغلاق علامة التبويب هذه والعودة إلى stella.",
+    "callbackNotConnectedTitle": "لم يتم ربط ChatGPT",
+    "callbackNotConnectedBody": "عُد إلى stella لمعرفة ما حدث وحاول مرة أخرى."
   }
 }

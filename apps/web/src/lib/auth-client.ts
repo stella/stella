@@ -125,6 +125,7 @@ const authClientPlugins = [
       locale: { type: "string" },
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
+      readerAnswerLanguage: { type: "string", required: false },
       wordEditShortcut: { type: "string", required: false },
       userShortcuts: { type: "string", required: false },
       guideProgress: { type: "string", required: false },

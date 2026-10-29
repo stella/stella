@@ -1,9 +1,12 @@
 import type { Locator, Page } from "@playwright/test";
 
 import {
+  DECISION_READER_BOOT_PATH,
+  openVisitorDecision,
+} from "../helpers/decision-reader";
+import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
-  navigatePublicLawFixture,
 } from "../helpers/docked-chat-legal-fixtures";
 import { expect, test } from "../helpers/test";
 
@@ -14,12 +17,12 @@ const NARROW_VIEWPORTS = [
   { width: 580, height: 900 },
 ] as const;
 
-// A direct load renders the decision on the server, where page.route cannot
-// answer the decision read; boot on a public page and navigate on the client
-// so the read comes from the browser (as decision-paragraph-range does).
 const openDecision = async (page: Page) => {
   await installDockedLegalFixtures(page);
-  await navigatePublicLawFixture(page, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
+  await openVisitorDecision(page, {
+    bootPath: DECISION_READER_BOOT_PATH,
+    path: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
+  });
   await expect(page.locator(".reader-scroll article")).toBeVisible();
 };
 

@@ -10,6 +10,7 @@ import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
 import { env } from "@/api/env";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
@@ -26,7 +27,6 @@ import type {
   SafeOutboundFetchResponse,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const DEFAULT_VALIDATION_TIMEOUT_MS = 5000;
 const PROBE_MAX_BYTES = 1_000_000;

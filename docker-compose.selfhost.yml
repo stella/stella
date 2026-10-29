@@ -62,6 +62,37 @@ services:
     mem_limit: ${STELLA_DOCUMENT_PROCESSING_WORKER_MEM_LIMIT:-1g}
     cpus: ${STELLA_DOCUMENT_PROCESSING_WORKER_CPUS:-1.0}
 
+  file-derivative-worker:
+    image: ${STELLA_API_IMAGE:?set STELLA_API_IMAGE to a digest-qualified image}
+    env_file:
+      - ${STELLA_API_ENV_FILE:-deploy/selfhost/.env}
+    environment:
+      NODE_ENV: production
+    command:
+      - bun
+      - /app/file-derivative-worker.js
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const response = await fetch('http://api:3001/ready', { signal: AbortSignal.timeout(4000) }); if (!response.ok) process.exit(1);"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${STELLA_FILE_DERIVATIVE_WORKER_PIDS_LIMIT:-256}
+    mem_limit: ${STELLA_FILE_DERIVATIVE_WORKER_MEM_LIMIT:-1g}
+    cpus: ${STELLA_FILE_DERIVATIVE_WORKER_CPUS:-1.0}
+
   gotenberg:
     image: gotenberg/gotenberg:8.37.0@sha256:f29984bd1e226bf1b93ba90af06000afa8b315853e99d27b9aaa41b93f15c769
     environment:

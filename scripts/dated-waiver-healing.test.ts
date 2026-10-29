@@ -21,7 +21,6 @@ import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
   armRemoval,
-  armRemovalUnlessHeld,
   collectProbeReport,
   disarmRemoval,
   executeProbeCommand,
@@ -1002,7 +1001,6 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
     | undefined;
   let created = 0;
   let disarmExit = 0;
-  let mergeHold: string | undefined;
   let publications = 0;
   const effects: string[] = [];
   const request = async (
@@ -1089,25 +1087,6 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
   const actions = {
     ...sink,
     openRemoval: async () => {
-      if (mergeHold && proposal && proposal.status !== "closed") {
-        const existing = proposal;
-        await disarmRemoval(existing.number, async (command) => {
-          expect(command).toEqual([
-            "gh",
-            "pr",
-            "merge",
-            String(existing.number),
-            "--repo",
-            "stella/stella",
-            "--disable-auto",
-          ]);
-          effects.push("disarm");
-          if (disarmExit === 0) {
-            existing.status = "unarmed";
-          }
-          return { exitCode: disarmExit, stderr: "" };
-        });
-      }
       publications++;
       if (!proposal || proposal.status === "closed") {
         proposal = {
@@ -1123,29 +1102,25 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       } satisfies PublishedRemoval;
     },
     armRemoval: async (published: PublishedRemoval) => {
-      await armRemovalUnlessHeld({
-        removal: published,
-        mergeHold,
-        run: async (command) => {
-          expect(command).toEqual([
-            "gh",
-            "pr",
-            "merge",
-            String(published.number),
-            "--repo",
-            "stella/stella",
-            "--auto",
-            "--match-head-commit",
-            removal.headSha,
-          ]);
-          if (!proposal) {
-            throw new TypeError("Proposal fixture missing");
-          }
-          expect(published.number).toBe(proposal.number);
-          proposal.status = "armed";
-          effects.push("arm");
-          return { exitCode: disarmExit, stderr: "" };
-        },
+      await armRemoval(published, async (command) => {
+        expect(command).toEqual([
+          "gh",
+          "pr",
+          "merge",
+          String(published.number),
+          "--repo",
+          "stella/stella",
+          "--auto",
+          "--match-head-commit",
+          removal.headSha,
+        ]);
+        if (!proposal) {
+          throw new TypeError("Proposal fixture missing");
+        }
+        expect(published.number).toBe(proposal.number);
+        proposal.status = "armed";
+        effects.push("arm");
+        return { exitCode: disarmExit, stderr: "" };
       });
     },
     retireRemoval: async (waiver: DatedWaiver) =>
@@ -1181,9 +1156,6 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
     refuseDisarm: (exit: number) => {
       disarmExit = exit;
     },
-    holdMerge: (value: string) => {
-      mergeHold = value;
-    },
     publications: () => publications,
   };
 };
@@ -1206,7 +1178,7 @@ test("a removal proposal is retired when another change removes its waiver", asy
       key: waiverKey(lifecycleOwner),
     },
   ]);
-  expect(healingWriteNeeded(empty, orphans)).toBe(true);
+  expect(healingWriteNeeded(empty, { orphans, renewalOpen: false })).toBe(true);
   await applyHealing({
     report: empty,
     actions: healing.actions,
@@ -1220,9 +1192,12 @@ test("a removal proposal is retired when another change removes its waiver", asy
   );
   expect(healing.fake.tasks).toEqual([]);
   expect(await reconciliation.discover()).toEqual([]);
-  expect(healingWriteNeeded(empty, await reconciliation.discover())).toBe(
-    false,
-  );
+  expect(
+    healingWriteNeeded(empty, {
+      orphans: await reconciliation.discover(),
+      renewalOpen: false,
+    }),
+  ).toBe(false);
   await applyHealing({
     report: empty,
     actions: healing.actions,
@@ -1230,21 +1205,6 @@ test("a removal proposal is retired when another change removes its waiver", asy
     reconciliation,
   });
   expect(healing.effects).toEqual(["publish", "arm", "disarm", "close"]);
-});
-
-test("a merge hold disarms a republished green removal", async () => {
-  const healing = await proposalLifecycle();
-  await healing.run("green");
-  expect(healing.proposal()?.status).toBe("armed");
-  const publicationsBeforeRefresh = healing.publications();
-  const number = healing.proposal()?.number;
-
-  healing.holdMerge("1");
-  await healing.run("green");
-
-  expect(healing.publications()).toBe(publicationsBeforeRefresh + 1);
-  expect(healing.effects).toEqual(["publish", "arm", "disarm"]);
-  expect(healing.proposal()).toMatchObject({ number, status: "unarmed" });
 });
 
 test("orphan retirement refusals join the run failure and leave a recoverable proposal", async () => {

@@ -432,6 +432,9 @@ describe("the composer's Stop", () => {
 
     expect(server.log).toEqual([`chat ${TURN_A}`, `cancel ${TURN_A}`]);
     expect(await sent).toEqual(Result.ok(undefined));
+    server.cancels[0]?.answer.resolve(settled(TURN_A, "cancelled"));
+    await tick();
+    expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
   });
 
   test("takes a refused continuation of the stopped turn quietly", async () => {

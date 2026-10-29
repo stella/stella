@@ -46,8 +46,6 @@ const {
 } = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
-const { isWorkspaceDocumentRoutePath } =
-  await import("@/components/workspaces/entity-utils");
 const { Route: robotsRoute, robotsHandlers } =
   await import("@/routes/robots[.]txt");
 
@@ -1005,14 +1003,13 @@ describe("public law sitemap", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
     );
 
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id/document"),
-    ).toBe(true);
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id"),
-    ).toBe(false);
+    // The document page comes from the route matches (see
+    // use-workspace-view-params.dom.test.tsx), read in beforeLoad.
     expect(source).toContain(
-      "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
+      "return { documentOnScreen: getCurrentWorkspaceDocument(matches) };",
+    );
+    expect(source).toContain(
+      "const isDocumentRoute = context.documentOnScreen !== undefined;",
     );
     expect(source).toContain("if (isDocumentRoute)");
     expect(source).toContain("timeEntrySummaryOptions(");

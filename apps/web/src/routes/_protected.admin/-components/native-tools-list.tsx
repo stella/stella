@@ -26,16 +26,14 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 export const NativeToolsList = () => {
   const t = useTranslations();
   const [search, setSearch] = useState("");
   const { activeOrganizationId } = useAuthenticatedUser();
-  const view = useQueryView(
-    useQuery(mcpConnectorsOptions(activeOrganizationId)),
-  );
+  const view = queryView(useQuery(mcpConnectorsOptions(activeOrganizationId)));
   const canEdit = usePermissions({ organizationSettings: ["update"] });
   const visible =
     view.type === "items"

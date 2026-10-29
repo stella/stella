@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 type MatterSearchItem = { id: string; name: string };
 
@@ -15,21 +15,14 @@ export const filterMatterPickerItems = <TItem extends MatterSearchItem>({
   query,
   selectedId,
 }: FilterMatterPickerItemsOptions<TItem>): readonly TItem[] => {
-  const normalizedQuery = query.trim().toLowerCase();
-  const matches =
-    normalizedQuery.length === 0
-      ? items
-      : items.filter(
-          (item) =>
-            containsSearchMatchKey(item.name.toLowerCase(), normalizedQuery) ||
-            containsSearchMatchKey(
-              getClientLabel(item).toLowerCase(),
-              normalizedQuery,
-            ),
-        );
+  const matches = filterBySearchQuery({
+    items,
+    query,
+    fields: (item) => [item.name, getClientLabel(item)],
+  });
 
   if (
-    normalizedQuery.length > 0 ||
+    query.trim().length > 0 ||
     selectedId === null ||
     selectedId === undefined
   ) {

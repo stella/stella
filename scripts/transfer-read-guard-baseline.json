@@ -679,20 +679,6 @@
     "reason": "Related-receipt overflow probe: reads MAX_RELATED_RECEIPTS + 1 and reports selectionStatus \"truncated\" with the first MAX ids; migrate when readBounded can return the kept rows on overflow."
   },
   {
-    "file": "apps/api/src/handlers/invoices/invoice-lines.ts",
-    "function": "module/materialiseAttachedEntryLines/unlinedExpenses",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/invoices/invoice-lines.ts",
-    "function": "module/materialiseAttachedEntryLines/unlinedTimeEntries",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/legislation/facets.ts",
     "function": "module/buildLegislationFacetsQuery",
     "kind": "constant-limit",
@@ -889,13 +875,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/time-entries/suggestions/load.ts",
-    "function": "module/loadTimeSuggestions",
-    "kind": "constant-limit",
-    "count": 2,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/summary/get.ts",
     "function": "module/readTimeEntrySummary/createSafeHandler[1]",
     "kind": "constant-limit",
@@ -1029,13 +1008,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "function": "module/guardRunningTimeEntries",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/lib/buffer-intent-reconciliation.ts",
     "function": "module/reserveObjectCleanupIntents",
     "kind": "constant-limit",
@@ -1083,13 +1055,6 @@
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/chat/run-log.ts",
-    "function": "module/createRunLogReader",
-    "kind": "fixed-page-size",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
     "file": "apps/api/src/lib/chat/run-log.ts",
@@ -1520,20 +1485,6 @@
   },
   {
     "file": "apps/api/src/lib/s3.ts",
-    "function": "module/fetchCredentialJson",
-    "kind": "total-timeout-body",
-    "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/s3.ts",
-    "function": "module/fetchImdsCredentials",
-    "kind": "total-timeout-body",
-    "count": 6,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/s3.ts",
     "function": "module/fetchObject",
     "kind": "numeric-timeout",
     "count": 1,
@@ -1904,20 +1855,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
-    "function": "module/postFolioCollabJson",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
-    "function": "module/postFolioCollabJson",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/components/inspector/external-reference-panel.tsx",
     "function": "module/useExternalPdfBuffer",
     "kind": "numeric-timeout",
@@ -1997,20 +1934,6 @@
   {
     "file": "apps/web/src/components/selfhost-update-banner.tsx",
     "function": "module/SelfhostUpdateBanner",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    "function": "module/requestManualOcr",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    "function": "module/requestManualOcr",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
@@ -2107,41 +2030,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/readDocumentProperties",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/readDocumentProperties",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/saveEmailAttachment",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/saveEmailAttachment",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/updateDocumentProperty",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/lib/files/storage-fetch.ts",
     "function": "module/fetchStorageArrayBuffer",
     "kind": "numeric-timeout",
@@ -2212,20 +2100,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
-    "function": "module/requestTimeEntries",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
-    "function": "module/requestTimeEntries",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
     "function": "module/useProcuracaoExtraction/extractFile",
     "kind": "numeric-timeout",
@@ -2244,20 +2118,6 @@
     "function": "module/ActivityExportMenu/exportActivity",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
-    "function": "module/InvoicePdfDownloadButton",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
-    "function": "module/InvoicePdfDownloadButton",
-    "kind": "total-timeout-body",
-    "count": 2,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {

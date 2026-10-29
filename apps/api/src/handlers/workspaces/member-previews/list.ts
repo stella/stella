@@ -47,6 +47,8 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "preferredName",
   // Editor shortcut preferences are unrelated to team previews.
   "wordEditShortcut",
+  // Answer language is a private reading preference.
+  "readerAnswerLanguage",
   // Keyboard rebindings belong to the user's settings.
   "userShortcuts",
   // Onboarding progress belongs to the signed-in user's session.
@@ -61,6 +63,10 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "createdAt",
   // Profile modification time is not displayed in avatar previews.
   "updatedAt",
+  // Mail provider refusals are account delivery state, not a display profile.
+  "emailUndeliverableAddress",
+  "emailUndeliverableReason",
+  "emailUndeliverableAt",
 ] as const satisfies readonly (keyof UserRow)[];
 
 const USER_PROFILE_PREVIEW_COLUMNS = {

@@ -14,6 +14,7 @@ export const AUTH_USER_ADDITIONAL_FIELDS = {
     type: "string",
     required: false,
   },
+  readerAnswerLanguage: { type: "string", required: false },
   wordEditShortcut: {
     type: "string",
     required: false,

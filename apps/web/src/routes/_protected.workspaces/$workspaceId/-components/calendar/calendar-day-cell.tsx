@@ -158,10 +158,11 @@ export const CalendarDayCell = ({
               render={
                 <button
                   aria-label={t("common.add")}
-                  className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex size-5 items-center justify-center rounded opacity-0 transition-opacity group-hover/day:opacity-100"
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex size-5 items-center justify-center rounded opacity-0 transition-opacity group-hover/day:opacity-100 pointer-coarse:opacity-100"
                   type="button"
                 />
               }
+              tooltip={t("common.add")}
             >
               <PlusIcon className="size-3.5" />
             </MenuTrigger>

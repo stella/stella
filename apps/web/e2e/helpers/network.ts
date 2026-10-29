@@ -72,6 +72,8 @@ export type NetworkCapture = {
   }[];
   // Scheduled release rounds; only measurement navigations install the barrier.
   depthChain: string[][];
+  // Exact resources, independent of the UUID-normalized endpoint budgets.
+  duplicateGetCounts?: Record<string, number>;
 };
 
 export type NetworkCollector = {
@@ -136,6 +138,8 @@ type NetworkCollectorOptions = {
 type NetworkRecord = {
   method: string;
   pathname: string;
+  url: string;
+  startedAt: number;
   // From the API's dev/test-only `x-db-queries` response header (the
   // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
@@ -318,6 +322,8 @@ export const createNetworkCollector = (
         const record: NetworkRecord = {
           method: request.method(),
           pathname: new URL(request.url()).pathname,
+          url: request.url(),
+          startedAt: Date.now(),
           dbQueries: null,
           dbQueryHeaderMissing: false,
           responseBytes: null,
@@ -386,6 +392,7 @@ export const createNetworkCollector = (
       await Promise.all(pendingBodyReads);
       return {
         depthChain: rounds.rounds,
+        duplicateGetCounts: countDuplicateGets(records),
         requests: records.map(
           ({
             method,
@@ -427,9 +434,45 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
+const DUPLICATE_GET_WINDOW_MS = 2000;
+
+type TimedNetworkRequest = {
+  method: string;
+  url: string;
+  startedAt: number;
+};
+
+/** Count excess reads of the same resource, preserving IDs and query values. */
+export const countDuplicateGets = (
+  requests: readonly TimedNetworkRequest[],
+): Record<string, number> => {
+  const lastStartedAt = new Map<string, number>();
+  const counts = new Map<string, number>();
+  for (const { method, url, startedAt } of requests) {
+    if (method !== "GET") {
+      continue;
+    }
+    const normalized = new URL(url);
+    normalized.hash = "";
+    normalized.searchParams.sort();
+    const key = `${method} ${normalized.pathname}${normalized.search}`;
+    const previous = lastStartedAt.get(key);
+    if (
+      previous !== undefined &&
+      startedAt - previous <= DUPLICATE_GET_WINDOW_MS
+    ) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    lastStartedAt.set(key, startedAt);
+  }
+  return Object.fromEntries(counts);
+};
+
 // --- baseline machinery ----------------------------------------------------
 
 export type RouteNetworkMetrics = {
+  // Diagnostic only: the duplicate budget is always zero, never recorded.
+  duplicateGetCounts?: Record<string, number>;
   // Observed request keys, unique + sorted.
   requests: string[];
   // Per request key, how many times it was observed.
@@ -511,6 +554,9 @@ export const summarizeCapture = (
     }
   }
   return {
+    ...(capture.duplicateGetCounts === undefined
+      ? {}
+      : { duplicateGetCounts: capture.duplicateGetCounts }),
     requests: Object.keys(requestCounts).toSorted(),
     requestCounts: Object.fromEntries(
       Object.entries(requestCounts).toSorted(([a], [b]) => a.localeCompare(b)),
@@ -786,6 +832,22 @@ const requestCountBudget = (
   return { ...budget, ...entry.requestCounts };
 };
 
+const duplicateGetProblems = (results: Map<string, RouteNetworkMetrics>) => {
+  const problems: string[] = [];
+  for (const [route, metrics] of results) {
+    for (const [key, count] of Object.entries(
+      metrics.duplicateGetCounts ?? {},
+    )) {
+      if (count > 0) {
+        problems.push(
+          `Duplicate API GET on ${route}: ${key} repeated ${count} time(s) within ${DUPLICATE_GET_WINDOW_MS}ms. Share the query owner and consume its fresh cache.`,
+        );
+      }
+    }
+  }
+  return problems;
+};
+
 // The guard is deliberately one-directional: it only fails when a route grows a
 // NEW request or a DEEPER waterfall. A request that disappears or a shallower
 // waterfall is an improvement, never a failure — a late/conditional call that
@@ -799,7 +861,7 @@ export const diffNetworkBaseline = (
     changedRoutes = [],
   }: DiffNetworkBaselineOptions = {},
 ): NetworkBaselineDiff => {
-  const problems: string[] = [];
+  const problems = duplicateGetProblems(results);
   const notices: string[] = [];
 
   if (baseline === null) {
@@ -1021,6 +1083,7 @@ export const assertNetworkBaseline = (
   // tighten depths, then re-run `write` a few times to re-accumulate
   // timing-conditional requests.
   if (mode === "write" || mode === "rewrite") {
+    expect(duplicateGetProblems(results), "no duplicate API GETs").toEqual([]);
     const existing = mode === "write" ? readNetworkBaseline() : null;
     const baseline =
       existing === null

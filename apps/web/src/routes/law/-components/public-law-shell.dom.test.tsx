@@ -10,6 +10,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
@@ -38,6 +39,9 @@ const statute = {
   title: "178/2026 Sb., o portálu kritické infrastruktury",
 } satisfies Parameters<typeof statuteLawCrumbTrailOf>[0];
 const decision = {
+  caseFile: { items: [], nextCursor: null, limit: 50 },
+  id: toSafeId<"caseLawDecision">("decision-7-azs-172-2025"),
+  languageGroupKey: null,
   court: "Nejvyšší správní soud",
   courtAbbreviation: "NSS",
   courtTier: "supreme",
@@ -155,7 +159,9 @@ test("decision shell links court and decision year before the current docket and
   );
   expect(yearUrl.pathname).toBe("/law/cases");
   expect(yearUrl.searchParams.get("court")).toBe(decision.court);
-  expect(yearUrl.searchParams.get("year")).toBe("2026");
+  expect(yearUrl.searchParams.get("from")).toBe("2026-01-01");
+  expect(yearUrl.searchParams.get("to")).toBe("2026-12-31");
+  expect(yearUrl.searchParams.has("year")).toBe(false);
   expect(container.querySelector('[aria-current="page"]')?.textContent).toBe(
     decision.caseNumber,
   );
@@ -208,3 +214,33 @@ test("versioned statute breadcrumb names an expression that never entered into f
     screen.queryByRole("img", { name: en.statutes.status.current }),
   ).toBeNull();
 });
+
+// The bar narrows with the pane beside an open inspector, not only with the
+// window, so a crumb that may shrink has to clip its own text: one that
+// shrinks while its text keeps its width is drawn over its neighbours.
+test.each([{ kind: "statute" }, { kind: "decision" }] as const)(
+  "$kind trail folds by the bar's width and no crumb shrinks without truncating",
+  async ({ kind }) => {
+    const { container } = await mount({ kind });
+    expect(
+      container.querySelector('[data-slot="breadcrumb"]')?.parentElement
+        ?.className,
+    ).toContain("@container/law-crumbs");
+    const crumbs = [
+      ...container.querySelectorAll(
+        '[data-slot="breadcrumb-item"], [data-slot="breadcrumb-separator"]',
+      ),
+    ];
+    expect(crumbs.length).toBeGreaterThan(0);
+    for (const crumb of crumbs) {
+      const classes = [...crumb.classList];
+      // Folding by the window's width would leave a narrow pane unfolded.
+      expect(classes.filter((name) => /^(max-)?sm:/u.test(name))).toEqual([]);
+      if (classes.includes("min-w-0")) {
+        expect(crumb.querySelector(".truncate")).not.toBeNull();
+      } else {
+        expect(classes).toContain("shrink-0");
+      }
+    }
+  },
+);

@@ -193,7 +193,14 @@ type HandlerErrorBaseProps<
 
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
+> = HandlerErrorBaseProps<TStatus> &
+  HandlerErrorRetryAdvice &
+  // Gateway/availability statuses must state their semantics; the status alone
+  // cannot distinguish an upstream outage from configuration or output defects.
+  (
+    | { status: Exclude<HandlerErrorStatusCode, 502 | 503> }
+    | { code: HandlerErrorCode }
+  );
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
@@ -423,6 +430,17 @@ export class StoredAstDegradedError extends TaggedError(
 )<{
   message: string;
   degradations: readonly PersistedAstDegradation[];
+}> {}
+
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
+)<{
+  message: string;
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */

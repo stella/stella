@@ -3,6 +3,7 @@ import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { waitFor } from "@stll/test-kit";
 
 import type { OnlineIndexConfig } from "../env-online-index";
@@ -47,16 +48,52 @@ const waitForPhase = async (
   pid: number,
   phase = "waiting for writers before build",
 ) => {
-  for (let attempt = 0; attempt < 400; attempt++) {
-    const progress = await observer<
-      { phase: string }[]
-    >`SELECT phase FROM pg_stat_progress_create_index WHERE pid = ${pid}`;
-    if (progress.at(0)?.phase === phase) {
-      return;
-    }
-    await Bun.sleep(5);
-  }
-  throw new TypeError(`CIC did not reach ${phase}`);
+  await waitForExternalState({
+    description: `CIC reaches ${phase}`,
+    intervalMs: 5,
+    read: async () =>
+      (
+        await observer<
+          { phase: string }[]
+        >`SELECT phase FROM pg_stat_progress_create_index WHERE pid = ${pid}`
+      ).at(0)?.phase === phase,
+  });
+};
+
+/** Resolves once backend `pid` has exited. */
+const waitForBackendExit = async (
+  observer: ReservedSQL,
+  pid: number,
+  description: string,
+) => {
+  await waitForExternalState({
+    description,
+    intervalMs: 5,
+    read: async () =>
+      (
+        await observer<
+          { alive: boolean }[]
+        >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}) AS alive`
+      ).at(0)?.alive === false,
+  });
+};
+
+/** Resolves once backend `pid` waits on a lock. */
+const waitForLockWait = async (
+  observer: ReservedSQL,
+  pid: number,
+  description: string,
+) => {
+  await waitForExternalState({
+    description,
+    intervalMs: 5,
+    read: async () =>
+      (
+        await observer<
+          { waiting: boolean }[]
+        >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND wait_event_type = 'Lock') AS waiting`
+      ).at(0)?.waiting === true,
+  });
 };
 
 const waitForAbort = async (_milliseconds: number, signal: AbortSignal) => {
@@ -78,11 +115,7 @@ type Fixture = {
   pid: number;
   table: string;
   name: string;
-  index: {
-    name: string;
-    tableName: string;
-    definitionBody: string;
-    isUnique: boolean;
+  index: Parameters<typeof ensureOnlineIndexValid>[0]["index"] & {
     createSql: string;
   };
   gate: OnlineIndexGateOptions & {
@@ -149,6 +182,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
       );
       await owner.unsafe(`INSERT INTO public.${table} VALUES (1, 2)`);
       const index = {
+        introducedBy: "20261001123000_database_backfill_state",
         name,
         tableName: table,
         definitionBody: `ON public.${table} USING btree (id)`,
@@ -273,34 +307,40 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       let activeSamples = 0;
       const isDone = () => done;
       try {
-        while (!isDone()) {
-          const waits = await fixture.observer<
-            { waitMs: number; active: boolean | null }[]
-          >`SELECT extract(epoch FROM clock_timestamp() - l.waitstart)::double precision * 1000 AS "waitMs",
-              a.wait_event_type = 'Lock' AS active
-            FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
-            WHERE l.pid = ${fixture.pid} AND l.locktype = 'relation'
-              AND l.relation = ${`public.${fixture.table}`}::regclass
-              AND l.mode = 'AccessExclusiveLock' AND NOT l.granted
-              AND l.waitstart IS NOT NULL`;
-          for (const wait of waits) {
-            samples++;
-            // The longest lock timeout bounds each wait. pg_locks can still
-            // show the timed-out request's wait row for a moment after the
-            // timeout fires (see below), so allow that observation edge.
-            expect(wait.waitMs).toBeLessThanOrEqual(500 + LOCK_ROW_EDGE_MS);
-            if (wait.active === true) {
-              activeSamples++;
+        // Samples the build's lock waits until the gated work settles.
+        await waitForExternalState({
+          description: "the gated work settles",
+          intervalMs: 5,
+          timeoutMs: 30_000,
+          read: async () => {
+            const waits = await fixture.observer<
+              { waitMs: number; active: boolean | null }[]
+            >`SELECT extract(epoch FROM clock_timestamp() - l.waitstart)::double precision * 1000 AS "waitMs",
+                a.wait_event_type = 'Lock' AS active
+              FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+              WHERE l.pid = ${fixture.pid} AND l.locktype = 'relation'
+                AND l.relation = ${`public.${fixture.table}`}::regclass
+                AND l.mode = 'AccessExclusiveLock' AND NOT l.granted
+                AND l.waitstart IS NOT NULL`;
+            for (const wait of waits) {
+              samples++;
+              // The longest lock timeout bounds each wait. pg_locks can still
+              // show the timed-out request's wait row for a moment after the
+              // timeout fires (see below), so allow that observation edge.
+              expect(wait.waitMs).toBeLessThanOrEqual(500 + LOCK_ROW_EDGE_MS);
+              if (wait.active === true) {
+                activeSamples++;
+              }
+              if (reader === undefined) {
+                const started = Date.now();
+                reader = fixture.owner
+                  .unsafe(`SELECT * FROM public.${fixture.table}`)
+                  .then(() => Date.now() - started);
+              }
             }
-            if (reader === undefined) {
-              const started = Date.now();
-              reader = fixture.owner
-                .unsafe(`SELECT * FROM public.${fixture.table}`)
-                .then(() => Date.now() - started);
-            }
-          }
-          await Bun.sleep(5);
-        }
+            return isDone();
+          },
+        });
       } finally {
         if (!isDone()) {
           await fixture.blocker`ROLLBACK`;
@@ -538,18 +578,11 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         async () => await gate.attempt(fixture.index.createSql),
       );
       expect(outcome.isErr()).toBe(true);
-      for (let attempt = 0; attempt < 400; attempt++) {
-        const rows = await fixture.observer<
-          { alive: boolean }[]
-        >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${fixture.pid}) AS alive`;
-        if (!rows.at(0)?.alive) {
-          break;
-        }
-        if (attempt === 399) {
-          throw new TypeError("Closed runner backend did not exit");
-        }
-        await Bun.sleep(5);
-      }
+      await waitForBackendExit(
+        fixture.observer,
+        fixture.pid,
+        "the closed runner backend exits",
+      );
       expect(await indexState(fixture)).toMatchObject({ valid: false });
       await fixture.blocker`ROLLBACK`;
       await repair(fixture, connectionAdapter(fixture.owner));
@@ -875,20 +908,16 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           clock: () => clock,
           wait: async () => {
             if (polls === 0 && needsScanBarrier) {
-              for (let attempt = 0; attempt < 400; attempt++) {
-                const locks = await fixture.observer<
-                  { waiting: boolean }[]
-                >`SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = ${fixture.pid} AND locktype = 'advisory' AND NOT granted) AS waiting`;
-                if (locks.at(0)?.waiting) {
-                  break;
-                }
-                if (attempt === 399) {
-                  throw new TypeError(
-                    "Index scan did not reach advisory barrier",
-                  );
-                }
-                await Bun.sleep(5);
-              }
+              await waitForExternalState({
+                description: "the index scan reaches the advisory barrier",
+                intervalMs: 5,
+                read: async () =>
+                  (
+                    await fixture.observer<
+                      { waiting: boolean }[]
+                    >`SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = ${fixture.pid} AND locktype = 'advisory' AND NOT granted) AS waiting`
+                  ).at(0)?.waiting === true,
+              });
               if (phase === "waiting for writers before validation") {
                 await blockBuild(fixture);
               } else {
@@ -1016,18 +1045,11 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.gate,
         clock: () => clock,
         wait: async () => {
-          for (let attempt = 0; attempt < 400; attempt++) {
-            const rows = await fixture.observer<
-              { waiting: boolean }[]
-            >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${fixture.pid} AND wait_event_type = 'Lock') AS waiting`;
-            if (rows.at(0)?.waiting) {
-              break;
-            }
-            if (attempt === 399) {
-              throw new TypeError("DROP did not reach reader lock barrier");
-            }
-            await Bun.sleep(5);
-          }
+          await waitForLockWait(
+            fixture.observer,
+            fixture.pid,
+            "the DROP reaches the reader lock barrier",
+          );
           polls++;
           expect(polls).toBeLessThanOrEqual(2);
           if (polls === 2) {
@@ -1063,15 +1085,16 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       const blockerPid = (
         await fixture.blocker<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
       ).at(0)?.pid;
-      for (let attempt = 0; attempt < 400; attempt++) {
-        const rows = await fixture.observer<
-          { idle: boolean }[]
-        >`SELECT state = 'idle in transaction' AS idle FROM pg_stat_activity WHERE pid = ${blockerPid ?? 0}`;
-        if (rows.at(0)?.idle) {
-          break;
-        }
-        await Bun.sleep(5);
-      }
+      await waitForExternalState({
+        description: "the writer is idle in its transaction",
+        intervalMs: 5,
+        read: async () =>
+          (
+            await fixture.observer<
+              { idle: boolean }[]
+            >`SELECT state = 'idle in transaction' AS idle FROM pg_stat_activity WHERE pid = ${blockerPid ?? 0}`
+          ).at(0)?.idle === true,
+      });
       const gate = createOnlineIndexGate({
         connection: fixture.connection,
         observer: fixture.observation,
@@ -1114,12 +1137,11 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         await fixture.observer<
           { pid: number }[]
         >`SELECT pid FROM pg_locks WHERE locktype = 'relation' AND relation = ${`public.${fixture.table}`}::regclass AND NOT granted`;
-      for (let attempt = 0; attempt < 400; attempt++) {
-        if ((await queuedRequests()).length > 0) {
-          break;
-        }
-        await Bun.sleep(5);
-      }
+      await waitForExternalState({
+        description: "a lock request queues on the table",
+        intervalMs: 5,
+        read: async () => (await queuedRequests()).length > 0,
+      });
       expect(await queuedRequests()).toHaveLength(1);
       const gate = createOnlineIndexGate({
         connection: fixture.connection,
@@ -1189,6 +1211,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           await fixture.connection.execute(statement, parameters);
         },
       };
+      let discardFirstProgress = true;
       let clock = fixture.gate.clock();
       let polls = 0;
       const retire = async (
@@ -1199,6 +1222,35 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           index: { name: fixture.name, tableName: fixture.table },
           reserveObserver: async () => ({
             ...fixture.observation,
+            // The gate consumes the lock observation that releases its test barrier.
+            // A separate pg_stat_activity read can precede a transient wait-event edge.
+            query: async (statement, parameters) => {
+              if (!statement.includes("pg_stat_progress_create_index")) {
+                return await fixture.observation.query(statement, parameters);
+              }
+              let progress: readonly unknown[] = [];
+              await waitForExternalState({
+                description:
+                  "the DROP monitor observes its writer lock barrier",
+                intervalMs: 5,
+                read: async () => {
+                  progress = await fixture.observation.query(
+                    statement,
+                    parameters,
+                  );
+                  if (discardFirstProgress) {
+                    discardFirstProgress = false;
+                    return false;
+                  }
+                  return progress.some(
+                    (row) =>
+                      isRecord(row) &&
+                      row["phase"] === "waiting for concurrent index lock",
+                  );
+                },
+              });
+              return progress;
+            },
             release: () => undefined,
           }),
           gate: { ...fixture.gate, clock: () => clock, wait },
@@ -1206,18 +1258,11 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
 
       expect(
         await retire(async () => {
-          for (let attempt = 0; attempt < 400; attempt++) {
-            const rows = await fixture.observer<
-              { waiting: boolean }[]
-            >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${fixture.pid} AND wait_event_type = 'Lock') AS waiting`;
-            if (rows.at(0)?.waiting) {
-              break;
-            }
-            if (attempt === 399) {
-              throw new TypeError("DROP did not reach the writer lock barrier");
-            }
-            await Bun.sleep(5);
-          }
+          await waitForLockWait(
+            fixture.observer,
+            fixture.pid,
+            "the DROP reaches the writer lock barrier",
+          );
           polls++;
           expect(polls).toBeLessThanOrEqual(2);
           if (polls === 2) {
@@ -1387,18 +1432,11 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       }
       expect(independentCancellationAttempted).toBe(true);
       expect(terminated).toBe(true);
-      for (let attempt = 0; attempt < 400; attempt++) {
-        const rows = await fixture.owner<
-          { alive: boolean }[]
-        >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${fixture.pid}) AS alive`;
-        if (!rows.at(0)?.alive) {
-          break;
-        }
-        if (attempt === 399) {
-          throw new TypeError("Disposed runner backend did not exit");
-        }
-        await Bun.sleep(5);
-      }
+      await waitForBackendExit(
+        fixture.owner,
+        fixture.pid,
+        "the disposed runner backend exits",
+      );
       await fixture.blocker`ROLLBACK`;
       fixture.observer = fixture.blocker;
       fixture.observation = connectionAdapter(fixture.blocker);

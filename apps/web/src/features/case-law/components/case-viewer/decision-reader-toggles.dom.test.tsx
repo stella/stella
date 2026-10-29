@@ -214,6 +214,10 @@ const filler = (from: number, to: number) =>
 
 const ast = {
   blocks: [
+    {
+      ...paragraph("publisher", "Zveřejněno v databázi soudních rozhodnutí."),
+      role: "apparatus",
+    },
     paragraph("intro", "Úvodem soud shrnuje průběh řízení."),
     paragraph("above", ABOVE_PARAGRAPH),
     ...filler(1, 8),
@@ -294,7 +298,7 @@ const provisionAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id: documentId,
         slug: "test-act",
@@ -611,6 +615,10 @@ describe("in-reader toggles keep the reader's place", () => {
 
   test("the reader renders every kind of toggle the assertions cover", async () => {
     await renderReaders();
+    expect(
+      readerParts("page").section.querySelector(".reader-apparatus > summary")
+        ?.textContent,
+    ).toBe(messages.caseLaw.reader.headMatter);
     const kinds = new Set(pageToggles().map(toggleKind));
     expect([...kinds].toSorted()).toEqual(["disclosure", "peek", "pressed"]);
     const pressed = pageToggles().filter(
@@ -824,16 +832,16 @@ describe("a card shows the cited part and, on request, the whole provision", () 
   test("showing the whole provision and folding it back leave the pressed control where it was", async () => {
     const { card, fold, scroller } = await openEverything();
     expect(fold.getAttribute("aria-expanded")).toBe("false");
-    expect(
-      blockTexts(card, '[data-slot="provision-card-wording"] > *'),
-    ).toEqual(["Wording odst_4 of par_31."]);
+    expect(blockTexts(card, '[data-slot="provision-card-wording"] p')).toEqual([
+      "Wording odst_4 of par_31.",
+    ]);
 
     scroller.scrollTop = contentTop(scroller, fold) - VIEW_PX / 3;
     const before = offsetOf(fold);
     await activate(fold);
     await waitFor(() => {
       expect(
-        blockTexts(card, '[data-slot="provision-card-wording"] > *'),
+        blockTexts(card, '[data-slot="provision-card-wording"] p'),
       ).toHaveLength(FULL_LINES.length);
     });
     await act(async () => {
@@ -854,9 +862,9 @@ describe("a card shows the cited part and, on request, the whole provision", () 
       await sleep(0);
     });
     expect(fold.getAttribute("aria-expanded")).toBe("false");
-    expect(
-      blockTexts(card, '[data-slot="provision-card-wording"] > *'),
-    ).toEqual(["Wording odst_4 of par_31."]);
+    expect(blockTexts(card, '[data-slot="provision-card-wording"] p')).toEqual([
+      "Wording odst_4 of par_31.",
+    ]);
     expect(Math.abs(offsetOf(fold) - before)).toBeLessThanOrEqual(
       POSITION_TOLERANCE_PX,
     );
@@ -868,7 +876,7 @@ describe("a card shows the cited part and, on request, the whole provision", () 
     await activate(fold);
     await waitFor(() => {
       expect(
-        card.querySelectorAll('[data-slot="provision-card-wording"] > *'),
+        card.querySelectorAll('[data-slot="provision-card-wording"] p'),
       ).toHaveLength(FULL_LINES.length);
     });
     for (const name of READERS) {

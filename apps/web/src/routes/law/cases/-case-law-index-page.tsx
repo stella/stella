@@ -13,12 +13,10 @@ import { useTranslations } from "use-intl";
 import { namedDecisionsOf } from "@stll/api-contract/decision-query-intent";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
+  type DecisionSort,
   SEARCH_TOTAL_NOT_COUNTED,
-  type SearchSort,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import { publicLawNumberedPagerModel } from "@/components/public-law-table/public-law-pagination.logic";
@@ -48,7 +46,6 @@ import {
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   decisionDateRange,
-  decisionSortOrder,
   isStrictSearch,
   STRICT_SEARCH_VALUE,
   validDecisionDate,
@@ -94,6 +91,10 @@ import {
   useDecisionBrowseFacets,
 } from "@/features/case-law/decision-filter-facets";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
+import {
+  decisionDateOrder,
+  decisionOrder,
+} from "@/features/case-law/decision-order.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
   createDecisionFiltersFromSearch,
@@ -113,8 +114,9 @@ import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logi
 import { useCaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import {
   searchTiming,
@@ -123,7 +125,11 @@ import {
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { isSearchUnavailableError } from "@/lib/public-law-api";
+import { queryView, queryViewError } from "@/lib/query-view.logic";
+import {
+  PublicLawListFailure,
+  PublicLawResultsBoundary,
+} from "@/routes/law/-components/public-law-list-failure";
 
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
@@ -243,7 +249,7 @@ export function PublicCaseLawIndex({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const search = Route.useSearch({
     select: ({
       country,
@@ -297,9 +303,11 @@ export function PublicCaseLawIndex({
       locale: getMessageLocale(),
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
+  const scopedSearch = { ...search, country: countryParam };
+  const { page: _page, pageSize: _pageSize, ...resultSetSearch } = scopedSearch;
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
-  const typedFilters = createDecisionFiltersFromSearch(search, {
+  const typedFilters = createDecisionFiltersFromSearch(scopedSearch, {
     excerpt: layout.excerpt,
   });
   const filters = useExpandedDecisionFilters(typedFilters, intent);
@@ -347,18 +355,17 @@ export function PublicCaseLawIndex({
     // The count and the facets stay drawn while a new search is in flight.
     placeholderData: keepPreviousData,
   });
-  const {
-    data: pageData,
-    error,
-    isLoading,
-    isPlaceholderData,
-    refetch,
-  } = useQuery({
+  const pageQuery = useQuery({
     ...decisionsPageOptions({ filters, page: wantedPage, pageSize }),
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
   });
+  const { data: pageData, isPlaceholderData, refetch } = pageQuery;
+  const pageView = queryView(pageQuery);
+  const error = queryViewError(pageView);
+  const firstPageError = queryViewError(queryView(firstPageQuery));
+  const isLoading = pageView.type === "pending";
   useCaseLawResultsTiming({
     query: search.q,
     page: pageData,
@@ -371,7 +378,7 @@ export function PublicCaseLawIndex({
     searchFetched: firstPageQuery.isFetched,
     searchFetchStatus: firstPageQuery.fetchStatus,
   });
-  // A backend that cannot be reached is this region's failure, not the page's.
+  // A failed search is this region's failure, not the page's.
   // The loader lets it through for the same reason, so both the first render
   // and a filter applied to a drawn page arrive here.
   const loadedSearch = Route.useMatch({
@@ -379,9 +386,7 @@ export function PublicCaseLawIndex({
   });
   const isSearchUnavailable = publicLawSearchOutage({
     hasPages: pageData !== undefined,
-    isQueryOutage:
-      isSearchUnavailableError(error) ||
-      isSearchUnavailableError(firstPageQuery.error),
+    isQueryOutage: error !== undefined || firstPageError !== undefined,
     loaded: loadedSearch,
   });
   // The rows are the only region that waits: either they are not there yet,
@@ -422,8 +427,9 @@ export function PublicCaseLawIndex({
     page: rows === "rows" ? pager.nextPage : null,
     pageSize,
   });
-  // A page the reader steps to brings them to its first row once it is drawn.
+  // Keep the pager reachable for another keyboard step after the rows change.
   const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "preserve",
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
@@ -650,7 +656,7 @@ export function PublicCaseLawIndex({
         excerpt: layout.excerpt,
         navigate: routerNavigate,
         queryClient,
-        search: { ...search, q: entry },
+        search: { ...scopedSearch, q: entry },
         uiLocale,
       }),
       "cases.open-match",
@@ -691,14 +697,23 @@ export function PublicCaseLawIndex({
   });
   const askScope = useCaseLawAskScope(countryParam);
 
-  // No sort control where no order applies: a browse listing is newest-first
-  // by definition, and an identifier lookup is answered by the identity path,
-  // which ranks by relevance whatever the URL asks for. Offering a choice the
-  // answer ignores would also mark the date column as sorted when it is not.
-  const sortable = intent.type === "text";
-  const sort: SearchSort | null = sortable
-    ? decisionSortOrder(search.sort)
-    : null;
+  // One resolution of the order for the whole page: the toolbar, the date
+  // header and the listing's heading all read it. No order applies to an
+  // identifier lookup, which the identity path ranks whatever the URL asks
+  // for; offering a choice the answer ignores would also mark the date column
+  // as sorted when it is not.
+  const order = decisionOrder(intent, search.sort);
+  const changeSort = (next: DecisionSort) => {
+    detached(
+      searchNavigation((previous) => ({ ...previous, sort: next })),
+      "cases.sort-navigate",
+    );
+  };
+  const dateOrder = decisionDateOrder({
+    order,
+    onSortChange: changeSort,
+    unavailableReason: t("caseLaw.sort.oldestUnavailable"),
+  });
 
   // The pane below claims the page's height, so on a normal viewport nothing
   // overflows here and the table owns the only scroll. The page scroller stays
@@ -761,19 +776,8 @@ export function PublicCaseLawIndex({
           layout={layout}
           onLayoutChange={setLayout}
           sort={
-            sort === null ? undefined : (
-              <DecisionSortControl
-                onSortChange={(next) => {
-                  detached(
-                    searchNavigation((previous) => ({
-                      ...previous,
-                      sort: next,
-                    })),
-                    "cases.sort-navigate",
-                  );
-                }}
-                sort={sort}
-              />
+            order.type === "identity" ? undefined : (
+              <DecisionSortControl onSortChange={changeSort} order={order} />
             )
           }
           summary={
@@ -783,8 +787,8 @@ export function PublicCaseLawIndex({
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
               <CaseLawResultsSummary
                 exactCount={exact.length}
-                intent={intent}
                 isRefreshing={isRefreshing}
+                order={order}
                 page={pager.currentPage}
                 relaxedHitCount={pageData?.relaxedHitCount}
                 total={searchTotal}
@@ -825,8 +829,10 @@ export function PublicCaseLawIndex({
         />
 
         {isSearchUnavailable ? (
-          <SearchUnavailable
-            onRetry={() => {
+          <PublicLawListFailure
+            description={t("caseLaw.searchUnavailable.description")}
+            error={error ?? firstPageError}
+            reset={() => {
               detached(
                 Promise.all([refetch(), firstPageQuery.refetch()]),
                 "cases.search-retry",
@@ -834,8 +840,12 @@ export function PublicCaseLawIndex({
             }}
           />
         ) : (
-          <>
+          <PublicLawResultsBoundary
+            searchKey={JSON.stringify(resultSetSearch)}
+            resetOn={pageData}
+          >
             <DecisionTable
+              dateOrder={dateOrder}
               decisions={find.rows}
               emptyState={
                 intent.type === "text" ? (
@@ -882,7 +892,7 @@ export function PublicCaseLawIndex({
               )}
               pageSize={pageSize}
             />
-          </>
+          </PublicLawResultsBoundary>
         )}
       </div>
     </main>
@@ -982,36 +992,3 @@ const useCaseLawRewriteFlow = ({
     searchOriginalWords,
   };
 };
-
-type SearchUnavailableProps = {
-  onRetry: () => void;
-};
-
-/**
- * The results region when the search backend could not be reached. It stands
- * where the grid stands, so the box and the filters above it keep working and
- * the reader's query stays in the URL for the retry to use.
- *
- * The same shape the workspace tables and the citation panels use for a read
- * that failed, rather than the page-level `EmptyScreen`: this replaces one
- * region of a drawn page, and a hero would read as the whole page being gone.
- */
-function SearchUnavailable({ onRetry }: SearchUnavailableProps) {
-  const t = useTranslations();
-
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <SearchXIcon className="text-muted-foreground size-8" />
-      <div className="max-w-sm">
-        <p className="text-sm">{t("caseLaw.searchUnavailable.title")}</p>
-        <p className="text-foreground-strong-muted mt-1 text-xs">
-          {t("caseLaw.searchUnavailable.description")}
-        </p>
-      </div>
-      <Button onClick={onRetry} size="sm" variant="secondary">
-        <RefreshCwIcon />
-        {t("common.retry")}
-      </Button>
-    </div>
-  );
-}
