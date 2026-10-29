@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import { abortTransaction } from "@/api/db/safe-db";
 import {
+  searchHistoryCountryClears,
   searchHistoryEntries,
-  searchHistoryJurisdictionClears,
   searchHistoryOwners,
   searchHistoryTombstones,
 } from "@/api/db/schema";
@@ -19,7 +19,7 @@ import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import {
   holdSearchHistoryOwnerAccess,
   lockSearchHistoryOwner,
-  searchHistoryJurisdictionSchema,
+  searchHistoryCountrySchema,
 } from "./entries";
 import {
   assertSearchHistoryScope,
@@ -32,10 +32,10 @@ const config = {
     "Personal history refreshes through the caller-owned query cache",
   ),
   description:
-    "Delete your search history in the active organization: every search and opened decision or statute it holds, or with `jurisdiction` only what `search-history.list` lists for that country. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
+    "Delete your search history in the active organization. With `country`, remove that country's entries and older searches that recorded no country; older documents without a known country must finish classification before a country clear. Omit `country` to remove all history. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
   query: v.object({
     ...searchHistoryScopeQuery.entries,
-    jurisdiction: v.optional(searchHistoryJurisdictionSchema),
+    country: v.optional(searchHistoryCountrySchema),
   }),
   permissions: { searchHistory: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -66,13 +66,13 @@ const clearSearchHistory = createSafeRootHandler(
           .values(owner)
           .onConflictDoNothing();
         await lockSearchHistoryOwner(tx, owner);
-        if (query.jurisdiction !== undefined) {
+        if (query.country !== undefined) {
           // The legacy cutoff applies only to rows that never named a country.
           // Countryful imports use their own country's barrier.
           const legacyDocumentScope = and(
             eq(searchHistoryEntries.organizationId, owner.organizationId),
             eq(searchHistoryEntries.userId, owner.userId),
-            isNull(searchHistoryEntries.jurisdiction),
+            isNull(searchHistoryEntries.country),
             ne(searchHistoryEntries.kind, "search"),
           );
           const failedLegacyDocuments = await tx
@@ -81,7 +81,7 @@ const clearSearchHistory = createSafeRootHandler(
             .where(
               and(
                 legacyDocumentScope,
-                isNotNull(searchHistoryEntries.jurisdictionRepairFailedAt),
+                isNotNull(searchHistoryEntries.countryRepairFailedAt),
               ),
             )
             .limit(1);
@@ -120,20 +120,20 @@ const clearSearchHistory = createSafeRootHandler(
               ),
             );
           await tx
-            .insert(searchHistoryJurisdictionClears)
+            .insert(searchHistoryCountryClears)
             .values({
               ...owner,
-              jurisdiction: query.jurisdiction,
+              country: query.country,
               clearedAt: sql`clock_timestamp()`,
             })
             .onConflictDoUpdate({
               target: [
-                searchHistoryJurisdictionClears.organizationId,
-                searchHistoryJurisdictionClears.userId,
-                searchHistoryJurisdictionClears.jurisdiction,
+                searchHistoryCountryClears.organizationId,
+                searchHistoryCountryClears.userId,
+                searchHistoryCountryClears.country,
               ],
               set: {
-                clearedAt: sql`GREATEST(${searchHistoryJurisdictionClears.clearedAt}, excluded.cleared_at)`,
+                clearedAt: sql`GREATEST(${searchHistoryCountryClears.clearedAt}, excluded.cleared_at)`,
               },
             });
           const deletedEntries = tx.$with("deleted_scoped_search_history").as(
@@ -144,8 +144,8 @@ const clearSearchHistory = createSafeRootHandler(
                   eq(searchHistoryEntries.organizationId, owner.organizationId),
                   eq(searchHistoryEntries.userId, owner.userId),
                   or(
-                    eq(searchHistoryEntries.jurisdiction, query.jurisdiction),
-                    isNull(searchHistoryEntries.jurisdiction),
+                    eq(searchHistoryEntries.country, query.country),
+                    isNull(searchHistoryEntries.country),
                   ),
                 ),
               )

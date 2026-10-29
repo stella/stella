@@ -66,7 +66,7 @@ checks:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_014
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test release image CI gate')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
     # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
     run: bun test --timeout 50000 scripts/ci-plan.test.ts
 
@@ -109,6 +109,14 @@ checks:
   # Root script tests belong to no workspace package, so no scoped test
   # run reaches them. Other steps call some by path; this runs every
   # other one, so a new test cannot miss CI by missing a step.
+  - name: Test depth repository scripts
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs repository script tests whose declared cost requires the full-depth path."
+    id: depth_repository_scripts
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.suite_depth == 'full' && github.event_name != 'merge_group' && (inputs.pr_depth_only == true || inputs.heavy_only == true)) }}
+    run: bun scripts/run-unlisted-script-tests.ts --depth --timeout 120000
+
   - name: Test remaining repository scripts
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -672,6 +680,22 @@ checks:
     # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
     run: bun scripts/design-tokens-doc.ts --check
 
+  - name: Icon module imports
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    id: static_check_126
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Icon module imports')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_126 != 'true') }}
+    timeout-minutes: 2
+    # Every lucide-react import goes through packages/ui/src/icons.ts, whose
+    # re-export list follows what the apps and packages import from it. A
+    # direct import or a re-export nothing imports fails here.
+    # Rewrite: `bun scripts/codemod-icons.ts`.
+    run: |
+      bun test scripts/codemod-icons.test.ts
+      bun --preload ./scripts/offline-network-preload.ts scripts/codemod-icons.ts --check
+
   - name: Suppression waiver ledger
     env:
       CI_CHECK_KIND: STATIC
@@ -1012,7 +1036,6 @@ checks:
       bash scripts/check-release-changelog.test.sh
       bash scripts/prepare-release-tag.test.sh
       bash scripts/release-pull-requests.test.sh
-      bash scripts/check-main-merge-hold.test.sh
       bash scripts/create-release-manifest.test.sh
       bash scripts/promote-desktop-release.test.sh
 

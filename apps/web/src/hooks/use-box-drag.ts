@@ -21,7 +21,9 @@ type Drag<Box, Mode> = {
   surface: { height: number; width: number };
 };
 
-type BoxDragStartOptions<Mode> = {
+type BoxDragStartOptions<Box, Mode> = {
+  /** The box the gesture starts from, when it is not the rendered one. */
+  from?: Box | undefined;
   mode: Mode;
   surface: HTMLElement;
 };
@@ -42,7 +44,7 @@ export const useBoxDrag = <Box, Mode>({
 
   const startDrag = (
     event: PointerEvent<HTMLElement>,
-    { mode, surface }: BoxDragStartOptions<Mode>,
+    { from = box, mode, surface }: BoxDragStartOptions<Box, Mode>,
   ) => {
     if (event.button !== 0) {
       return;
@@ -51,7 +53,7 @@ export const useBoxDrag = <Box, Mode>({
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.focus({ preventScroll: true });
     dragRef.current = {
-      box,
+      box: from,
       mode,
       origin: { x: event.clientX, y: event.clientY },
       pointerId: event.pointerId,

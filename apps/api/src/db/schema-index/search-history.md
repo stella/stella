@@ -4,57 +4,59 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## search_history_entries · `searchHistoryEntries` · search-history.ts:38 · rls
+## search_history_entries · `searchHistoryEntries` · search-history.ts:33 · rls
 
 A user's own law search history in one organization: what they searched for and which decisions and statutes they opened.
 
 ```text
-search_history_entries.id                             pUuid               pk,not null       search-history.ts:41
-search_history_entries.organization_id                safeOrganizationId  fk,not null       search-history.ts:42
-search_history_entries.user_id                        text                fk,not null       search-history.ts:45
-search_history_entries.kind                           text                not null          search-history.ts:49
-search_history_entries.court_id                       varchar             null              search-history.ts:50
-search_history_entries.jurisdiction                   varchar             null              search-history.ts:51
-search_history_entries.jurisdiction_repair_failed_at  timestamptz         null              search-history.ts:53  Set when an old encrypted document cannot be assigned a country.
-search_history_entries.lookup_key                     varchar             not null          search-history.ts:54
-search_history_entries.ciphertext                     bytea               not null          search-history.ts:55
-search_history_entries.iv                             bytea               not null          search-history.ts:56
-search_history_entries.first_used_at                  timestamptz         default,not null  search-history.ts:57
-search_history_entries.last_used_at                   timestamptz         default,not null  search-history.ts:58
-search_history_entries.use_count                      integer             default,not null  search-history.ts:59
+search_history_entries.id                        pUuid               pk,not null       search-history.ts:36
+search_history_entries.organization_id           safeOrganizationId  fk,not null       search-history.ts:37
+search_history_entries.user_id                   text                fk,not null       search-history.ts:40
+search_history_entries.kind                      text                not null          search-history.ts:44
+search_history_entries.country                   text                null              search-history.ts:50  The jurisdiction the entry belongs to: the one a query was typed under, or the one an opened page's path names.
+search_history_entries.country_used_at           timestamptz         null              search-history.ts:52  When the latest use naming `country` happened; it decides refiling.
+search_history_entries.court_id                  varchar             null              search-history.ts:53
+search_history_entries.base_lookup_key           varchar             null              search-history.ts:55  Opaque base identity carried through the additive country rollout.
+search_history_entries.country_repair_failed_at  timestamptz         null              search-history.ts:57  Set when an old encrypted document cannot be assigned a country.
+search_history_entries.lookup_key                varchar             not null          search-history.ts:58
+search_history_entries.ciphertext                bytea               not null          search-history.ts:59
+search_history_entries.iv                        bytea               not null          search-history.ts:60
+search_history_entries.first_used_at             timestamptz         default,not null  search-history.ts:61
+search_history_entries.last_used_at              timestamptz         default,not null  search-history.ts:62
+search_history_entries.use_count                 integer             default,not null  search-history.ts:63
 ```
 
-## search_history_owners · `searchHistoryOwners` · search-history.ts:125 · rls
+## search_history_owners · `searchHistoryOwners` · search-history.ts:142 · rls
 
 Serializes one owner's writes and retains the cutoff from their last clear.
 
 ```text
-search_history_owners.organization_id      safeOrganizationId  fk,not null  search-history.ts:128
-search_history_owners.user_id              text                fk,not null  search-history.ts:131
-search_history_owners.cleared_at           timestamptz         null         search-history.ts:135
-search_history_owners.legacy_cleared_at    timestamptz         null         search-history.ts:137  Blocks old searches that had no country after any country clear.
-search_history_owners.tombstone_cutoff_at  timestamptz         null         search-history.ts:139  Oldest imports excluded after bounded tombstone compaction.
+search_history_owners.organization_id      safeOrganizationId  fk,not null  search-history.ts:145
+search_history_owners.user_id              text                fk,not null  search-history.ts:148
+search_history_owners.cleared_at           timestamptz         null         search-history.ts:152
+search_history_owners.legacy_cleared_at    timestamptz         null         search-history.ts:154  Blocks countryless imports after any country clear.
+search_history_owners.tombstone_cutoff_at  timestamptz         null         search-history.ts:156  Oldest imports excluded after bounded tombstone compaction.
 ```
 
-## search_history_jurisdiction_clears · `searchHistoryJurisdictionClears` · search-history.ts:154 · rls
+## search_history_country_clears · `searchHistoryCountryClears` · search-history.ts:171 · rls
 
 A country clear blocks old uses of that country without affecting others.
 
 ```text
-search_history_jurisdiction_clears.organization_id  safeOrganizationId  not null  search-history.ts:157
-search_history_jurisdiction_clears.user_id          text                not null  search-history.ts:158
-search_history_jurisdiction_clears.jurisdiction     varchar             not null  search-history.ts:159
-search_history_jurisdiction_clears.cleared_at       timestamptz         not null  search-history.ts:160
+search_history_country_clears.organization_id  safeOrganizationId  fk,not null  search-history.ts:174
+search_history_country_clears.user_id          text                fk,not null  search-history.ts:175
+search_history_country_clears.country          varchar             not null     search-history.ts:176
+search_history_country_clears.cleared_at       timestamptz         not null     search-history.ts:177
 ```
 
-## search_history_tombstones · `searchHistoryTombstones` · search-history.ts:209 · rls
+## search_history_tombstones · `searchHistoryTombstones` · search-history.ts:226 · rls
 
 A deleted identity's keyed hash and cutoff prevent stale imports restoring it.
 
 ```text
-search_history_tombstones.organization_id  safeOrganizationId  fk,not null  search-history.ts:212
-search_history_tombstones.user_id          text                fk,not null  search-history.ts:215
-search_history_tombstones.kind             text                not null     search-history.ts:219
-search_history_tombstones.lookup_key       varchar             not null     search-history.ts:220
-search_history_tombstones.deleted_at       timestamptz         not null     search-history.ts:221
+search_history_tombstones.organization_id  safeOrganizationId  fk,not null  search-history.ts:229
+search_history_tombstones.user_id          text                fk,not null  search-history.ts:232
+search_history_tombstones.kind             text                not null     search-history.ts:236
+search_history_tombstones.lookup_key       varchar             not null     search-history.ts:237
+search_history_tombstones.deleted_at       timestamptz         not null     search-history.ts:238
 ```

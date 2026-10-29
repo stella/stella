@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -70,8 +70,8 @@ import {
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
-  PdfSignDialogs,
-  usePdfSignFlow,
+  PdfSignRequiredDialog,
+  usePdfSignFromList,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
@@ -154,6 +154,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
 import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -161,7 +162,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -175,6 +176,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
@@ -286,6 +288,7 @@ const useOpenPDFPageEditor = ({
   workspaceId,
 }: UseOpenPDFPageEditorOptions): (() => void) | undefined => {
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return undefined;
   }
@@ -293,7 +296,7 @@ const useOpenPDFPageEditor = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
+        params: viewParams,
         search: {
           entity: entityId,
           field: target.fieldId,
@@ -396,6 +399,7 @@ export const RowActions = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
@@ -415,7 +419,7 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(propertiesQuery);
+  const propertiesView = queryView(propertiesQuery);
   useQueryViewError(propertiesView, "RowActions:query");
   const properties =
     propertiesView.type === "items" ? propertiesView.items : undefined;
@@ -496,13 +500,17 @@ export const RowActions = ({
     readOnly: entity.readOnly,
   });
   const desktopEditGate = useDesktopActionGate("edit-file");
-  const pdfSignFlow = usePdfSignFlow();
   // A folder has no file; a row always shows the current version.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity: !entity.readOnly,
     entityId: entity.entityId,
     file: isBulk ? null : file,
     isCurrentVersion: true,
+    workspaceId,
+  });
+  const { flow: pdfSignFlow, sign: signPdf } = usePdfSignFromList({
+    entity,
+    target: pdfSignTarget,
     workspaceId,
   });
   const openCopyToMatterDialog = () => {
@@ -526,7 +534,7 @@ export const RowActions = ({
         detached(
           navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
-            params: { workspaceId, viewId: "all" },
+            params: viewParams,
             search: {
               entity: entity.entityId,
               field: file.fieldId,
@@ -921,7 +929,6 @@ export const RowActions = ({
     const toastId = stellaToast.add({
       title: t("common.duplicating"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
     let failedCount = 0;
     let firstFailure: unknown;
@@ -985,7 +992,7 @@ export const RowActions = ({
       if (openedDuplicate) {
         await navigate({
           to: "/workspaces/$workspaceId/$viewId/document",
-          params: { workspaceId, viewId: "all" },
+          params: viewParams,
           search: {
             entity: openedDuplicate.entityId,
             field: openedDuplicate.fieldId,
@@ -1243,7 +1250,7 @@ export const RowActions = ({
               ? {
                   capability: "desktop",
                   label: pdfSignFlow.actionLabel,
-                  onSelect: pdfSignFlow.start,
+                  onSelect: signPdf,
                   onSetUp: pdfSignFlow.setUp,
                   status: pdfSignFlow.status,
                 }
@@ -1324,9 +1331,7 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {pdfSignTarget !== null && (
-        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
-      )}
+      {pdfSignTarget !== null && <PdfSignRequiredDialog flow={pdfSignFlow} />}
       <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );
@@ -1721,10 +1726,7 @@ const RowTranslationDialog = ({
   target: TranslationTarget | null;
   workspaceId: string;
 }) => {
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return null;
   }
@@ -1738,7 +1740,7 @@ const RowTranslationDialog = ({
       mode="controlled"
       onOpenChange={onOpenChange}
       open={open}
-      viewId={viewMatch?.params.viewId ?? "all"}
+      viewId={viewId}
       workspaceId={workspaceId}
     />
   );

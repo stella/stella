@@ -57,8 +57,8 @@ import {
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   pendingUploads,
   rateEntries,
+  searchHistoryCountryClears,
   searchHistoryEntries,
-  searchHistoryJurisdictionClears,
   searchHistoryOwners,
   searchHistoryTombstones,
   sharepointConnections,
@@ -1344,7 +1344,7 @@ export const deletePersonalBillingRates = async (
 
 const DELETE_SEARCH_HISTORY_TABLES = [
   searchHistoryEntries,
-  searchHistoryJurisdictionClears,
+  searchHistoryCountryClears,
   searchHistoryOwners,
   searchHistoryTombstones,
 ] as const satisfies readonly PgTable[];

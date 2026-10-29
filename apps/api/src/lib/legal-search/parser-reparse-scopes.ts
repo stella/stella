@@ -133,35 +133,35 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 28,
+    version: 30,
     scope: {
       type: "all",
       reason:
-        "paragraph text, ruling roles, separate-opinion headings and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 19,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 12,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
     version: 14,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph text and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; none has feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 16,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
@@ -173,11 +173,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 8,
+    version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
+        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 13,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -290,23 +290,31 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+    },
+  },
+  [ADAPTER_KEYS.UK_FCL]: {
+    version: 3,
+    scope: {
+      type: "all",
+      reason:
+        "Read the stated judgment type and ECLI availability from the stored XML envelope.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -314,7 +322,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:

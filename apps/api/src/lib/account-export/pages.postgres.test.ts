@@ -411,6 +411,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
                   workspaceId,
                   verificationRunId,
                   verificationClaimId,
+                  entityId: null,
+                  pageTextSha256: null,
                   groupId: null,
                   kind: "comment",
                   visibility: comment.visibility,
@@ -588,7 +590,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
             }
             return await prepareSearchHistoryRows({ organizationId, userId }, [
               {
-                entry: { kind: "search", query, jurisdiction: "CZE" },
+                entry: { kind: "search", query, country: "CZE" },
                 usedAt: new Date(),
               },
             ]);

@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -125,17 +127,17 @@ const acquireClock = async (fixture: HistoryFixture) => {
   return result;
 };
 
-const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const clock = await acquireClock(fixture);
-    if (Date.parse(clock.issuedAt) > cutoff.getTime()) {
-      return clock;
-    }
-    // Both clocks must differ despite the issued clock's millisecond rounding.
-    await Bun.sleep(1);
-  }
-  return panic("Expected an import clock strictly after the database cutoff");
-};
+// Both clocks must differ despite the issued clock's millisecond rounding,
+// so this reads the database clock until it has moved past the cutoff.
+const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) =>
+  await waitForExternalState({
+    description: "an import clock strictly after the database cutoff",
+    intervalMs: 1,
+    read: async () => {
+      const clock = await acquireClock(fixture);
+      return Date.parse(clock.issuedAt) > cutoff.getTime() && clock;
+    },
+  });
 
 const readHistory = async (fixture: HistoryFixture) => {
   const result = await list.handler(
@@ -153,7 +155,7 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
   const result = await record.handler(
     createTestHandlerContext<Parameters<typeof record.handler>[0]>({
       ...identity(fixture),
-      body: { kind: "search", query, jurisdiction: "CZE" },
+      body: { kind: "search", query, country: "CZE" },
     }),
   );
   if (result instanceof HttpStatusResponse) {
@@ -253,7 +255,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: { kind: "search", query, jurisdiction: "CZE" },
+                entry: { kind: "search", query },
                 usedAt: localUsedAt.toISOString(),
               },
             ],
@@ -316,7 +318,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: { kind: "search", query, jurisdiction: "CZE" },
+                entry: { kind: "search", query },
                 usedAt: localUsedAt.toISOString(),
               },
             ],
@@ -349,11 +351,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "Later local query",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "Later local query" },
                 usedAt: localUsedAt.toISOString(),
               },
             ],
@@ -396,11 +394,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "Future local query",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "Future local query" },
                 usedAt: localUsedAt.toISOString(),
               },
             ],
@@ -444,7 +438,7 @@ describe("search history import clock integration", () => {
                 clientNow: clientNow.toISOString(),
                 entries: [
                   {
-                    entry: { kind: "search", query, jurisdiction: "CZE" },
+                    entry: { kind: "search", query },
                     usedAt: usedAt.toISOString(),
                   },
                 ],
@@ -480,11 +474,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "Recent ambiguous query",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "Recent ambiguous query" },
                 usedAt: usedAt.toISOString(),
               },
             ],
@@ -511,11 +501,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "Later delayed query",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "Later delayed query" },
                 usedAt: clientNow.toISOString(),
               },
             ],
@@ -558,11 +544,7 @@ describe("search history import clock integration", () => {
             clientNow: clientNow.toISOString(),
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "náhrada škody",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "náhrada škody" },
                 usedAt: usedAt.toISOString(),
               },
             ],
@@ -595,11 +577,7 @@ describe("search history import clock integration", () => {
             clientNow: new Date().toISOString(),
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "Signed clock query",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "Signed clock query" },
                 usedAt: new Date().toISOString(),
               },
             ],
@@ -633,11 +611,7 @@ describe("search history import clock integration", () => {
                 clientNow: clientNow.toISOString(),
                 entries: [
                   {
-                    entry: {
-                      kind: "search",
-                      query: "Local clock query",
-                      jurisdiction: "CZE",
-                    },
+                    entry: { kind: "search", query: "Local clock query" },
                     usedAt: new Date(clientNow.getTime() - 1000).toISOString(),
                   },
                 ],
@@ -665,11 +639,7 @@ describe("search history import clock integration", () => {
             clientNow: "invalid",
             entries: [
               {
-                entry: {
-                  kind: "search",
-                  query: "Local clock query",
-                  jurisdiction: "CZE",
-                },
+                entry: { kind: "search", query: "Local clock query" },
                 usedAt: new Date().toISOString(),
               },
             ],

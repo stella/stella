@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 4,
-  "reason": "Four search-history jurisdiction maintenance writes run under the authenticated user mutation that owns their transaction and records its audit receipt."
-}

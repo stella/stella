@@ -29,7 +29,7 @@ export const searchHistoryEntryMatch = (entry: SearchHistoryIdentity) => {
 };
 
 /** The country whose law page a recorded decision or statute path opens. */
-export const searchHistoryPathJurisdiction = (
+export const searchHistoryPathCountry = (
   path: string,
 ): PublicCountry | null => {
   const country = (

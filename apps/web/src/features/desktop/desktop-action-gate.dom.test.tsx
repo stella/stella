@@ -287,9 +287,7 @@ describe("desktop action gate uses observed presence", () => {
       if (action !== "edit-file" && action !== "sign-pdf") {
         panic(`Unexpected test action: ${action}`);
       }
-      const started = Result.ok<{ readonly status: "started" }>({
-        status: "started",
-      });
+      const started = Result.ok({ status: "started" } as const);
       const connect = spyOn(
         desktopBridge,
         "linkDesktopAccount",
@@ -550,10 +548,11 @@ describe("desktop status line in a menu", () => {
   });
 
   test("an unlinked app is connected from its status line", async () => {
+    const started = Result.ok({ status: "started" } as const);
     const connect = spyOn(
       desktopBridge,
       "linkDesktopAccount",
-    ).mockResolvedValue(Result.ok({ status: "started" }));
+    ).mockResolvedValue(started);
     mountSetupMenu(PRESENCE_FIXTURES.not_connected);
 
     await act(async () => {

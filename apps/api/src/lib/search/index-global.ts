@@ -41,7 +41,10 @@ import {
   searchDocumentsAccessSql,
   workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
+import {
+  mapEntityHit,
+  searchRankingTier,
+} from "@/api/lib/search/global-search-mappers";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
@@ -52,11 +55,15 @@ import {
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
+import type { SearchRankingTier } from "@/api/lib/search/pagination";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
-import { buildSearchTsQuery } from "@/api/lib/search/query";
+import {
+  buildPlainSearchTsQuery,
+  buildSearchTsQuery,
+} from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
@@ -73,12 +80,25 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 const REINDEX_BATCH_SIZE = 100;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
 const MATTER_RELEVANCE_BOOST = 0.15;
+// File extensions a query typed as a filename may end with; matched against
+// the lower-cased, unaccented query.
+const FILENAME_EXTENSION_PATTERN =
+  "\\.(pdf|docx?|dotx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|md|csv|html?|eml|msg|jpe?g|png|gif|tiff?|zip)$";
+
+const SEARCH_TIER = {
+  FILTER_ONLY: 0,
+  LOOSE: 1,
+  ALL_TITLE_TOKENS: 2,
+  TITLE_PREFIX: 3,
+  EXACT_TITLE: 4,
+} as const satisfies Record<string, SearchRankingTier>;
 
 type RawRow = Record<string, unknown>;
 type CountRow = { total?: unknown };
 
 type ScoredGlobalSearchHit = {
   hit: GlobalSearchHit;
+  tier: SearchRankingTier;
   score: number;
 };
 
@@ -355,7 +375,11 @@ const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
     color: toNullableString(row["color"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -376,7 +400,11 @@ const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -414,7 +442,11 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -435,7 +467,11 @@ const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const facetBuckets = (
@@ -540,6 +576,7 @@ const buildSearchFilterFragments = ({
   const hasSearchQuery = query.trim().length > 0;
   const restrictToEntities = hasEditorFilter || hasMimeTypeFilter;
   const tsQuery = buildSearchTsQuery(query);
+  const titleTsQuery = buildPlainSearchTsQuery(query);
   const normalizedUpdatedFrom =
     updatedFrom === undefined
       ? undefined
@@ -633,6 +670,26 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
     relevanceBoost?: number | undefined;
   }): SQL => sql`${searchScoreValue(options)} AS score`;
+  const searchTierValue = (title: SQL): SQL => {
+    if (!hasSearchQuery) {
+      return sql`${SEARCH_TIER.FILTER_ONLY}::int`;
+    }
+    const foldedTitle = sql`lower(unaccent(arabic_normalize(${title})))`;
+    const foldedQuery = sql`lower(unaccent(arabic_normalize(${query.trim()})))`;
+    // Only a recognised file extension is dropped, so a query typed as a
+    // filename still prefixes its title while dotted legal references such as
+    // "Article 1.2" stay whole.
+    const foldedQueryStem = sql`regexp_replace(${foldedQuery}, ${FILENAME_EXTENSION_PATTERN}, '')`;
+    return sql`CASE
+      WHEN ${foldedTitle} = ${foldedQuery} THEN ${SEARCH_TIER.EXACT_TITLE}::int
+      WHEN starts_with(${foldedTitle}, ${foldedQueryStem}) THEN ${SEARCH_TIER.TITLE_PREFIX}::int
+      WHEN to_tsvector('simple', unaccent(arabic_normalize(${title}))) @@ ${titleTsQuery}
+        THEN ${SEARCH_TIER.ALL_TITLE_TOKENS}::int
+      ELSE ${SEARCH_TIER.LOOSE}::int
+    END`;
+  };
+  const searchTier = (title: SQL): SQL =>
+    sql`${searchTierValue(title)} AS tier`;
   const searchOrderBy = ({
     id,
     updatedAt,
@@ -641,7 +698,7 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
   }): SQL =>
     hasSearchQuery
-      ? sql`score DESC, ${id} DESC`
+      ? sql`tier DESC, score DESC, ${id} DESC`
       : sql`${updatedAt} DESC, ${id} DESC`;
   const entityTypeFilter = sqlWhen(
     selected.size > 0,
@@ -673,6 +730,8 @@ const buildSearchFilterFragments = ({
     searchHeadline,
     searchScore,
     searchScoreValue,
+    searchTier,
+    searchTierValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -753,6 +812,8 @@ const readGlobalSearch = async (
     searchHeadline,
     searchScore,
     searchScoreValue,
+    searchTier,
+    searchTierValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -804,6 +865,7 @@ const readGlobalSearch = async (
         file_field.property_id AS file_property_id,
         file_field.mime_type,
         ${searchHeadline(sql`sd.title || ' ' || sd.searchable_text`)},
+        ${searchTier(sql`sd.title`)},
         ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},
         sd.updated_at
       FROM search_documents sd
@@ -822,6 +884,7 @@ const readGlobalSearch = async (
         ${entityWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`sd.title`),
           score: searchScoreValue({
             tsv: sql`sd.tsv`,
             updatedAt: sql`sd.updated_at`,
@@ -842,6 +905,7 @@ const readGlobalSearch = async (
         wsd.title,
         w.color,
         ${searchHeadline(sql`wsd.title || ' ' || wsd.searchable_text`)},
+        ${searchTier(sql`wsd.title`)},
         ${searchScore({
           tsv: sql`wsd.tsv`,
           updatedAt: sql`wsd.updated_at`,
@@ -856,6 +920,7 @@ const readGlobalSearch = async (
         ${matterWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`wsd.title`),
           score: searchScoreValue({
             tsv: sql`wsd.tsv`,
             updatedAt: sql`wsd.updated_at`,
@@ -879,6 +944,7 @@ const readGlobalSearch = async (
         csd.contact_type,
         csd.title,
         ${searchHeadline(sql`csd.title || ' ' || csd.searchable_text`)},
+        ${searchTier(sql`csd.title`)},
         ${searchScore({ tsv: sql`csd.tsv`, updatedAt: sql`csd.updated_at` })},
         csd.updated_at
       FROM contact_search_documents csd
@@ -888,6 +954,7 @@ const readGlobalSearch = async (
         ${contactWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`csd.title`),
           score: searchScoreValue({
             tsv: sql`csd.tsv`,
             updatedAt: sql`csd.updated_at`,
@@ -926,6 +993,7 @@ const readGlobalSearch = async (
           WHERE identifier.decision_id = d.id
         ) AS identifiers,
         ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
+        ${searchTier(sql`clsd.title`)},
         ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
         d.updated_at
       FROM case_law_search_documents clsd
@@ -937,6 +1005,7 @@ const readGlobalSearch = async (
         ${caseLawUpdatedFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`clsd.title`),
           score: searchScoreValue({
             tsv: sql`clsd.tsv`,
             updatedAt: sql`d.updated_at`,
@@ -965,6 +1034,7 @@ const readGlobalSearch = async (
         w.name AS workspace_name,
         cst.title,
         ${searchHeadline(sql`cst.title || ' ' || cst.searchable_text`)},
+        ${searchTier(sql`cst.title`)},
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
@@ -978,6 +1048,7 @@ const readGlobalSearch = async (
         ${chatTextSearchFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`cst.title`),
           score: searchScoreValue({
             tsv: sql`cst.tsv`,
             updatedAt: sql`t.updated_at`,
