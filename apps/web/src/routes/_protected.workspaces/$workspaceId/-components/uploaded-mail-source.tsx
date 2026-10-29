@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import type { CorrespondenceChannel } from "@stll/api-contract/correspondence";
@@ -6,6 +7,7 @@ import { Button } from "@stll/ui/button";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 import { OriginalSignature } from "./original-signature";
 
@@ -42,6 +44,7 @@ export const UploadedSource = ({
 }) => {
   const labels = SOURCE_LABEL_KEYS[channel];
   const t = useTranslations();
+  const router = useRouter();
   let uploaderName = t("common.unknownUser");
   if (uploader?.userStatus === "deleted") {
     uploaderName = t("tasks.deletedAccount");
@@ -68,7 +71,14 @@ export const UploadedSource = ({
         className="min-h-11"
         onClick={() =>
           detached(
-            openEntityInInspector(sourceEntityId, t(labels.title), workspaceId),
+            openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
+              entityId: sourceEntityId,
+              label: t(labels.title),
+              workspaceId,
+            }),
             "correspondence.open-source-file",
           )
         }

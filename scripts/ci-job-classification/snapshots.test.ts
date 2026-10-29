@@ -14,6 +14,7 @@ import { decisionKeyFromPath, writeDecision } from "./decisions";
 import { generateClassification, readClassificationInputs } from "./generate";
 import type { DerivedJob } from "./generate";
 import { decisionPathForKey } from "./inputs";
+import { verifyPublicMetadata } from "./public-metadata";
 import { writeSnapshots } from "./snapshots";
 
 const git = (directory: string, ...args: string[]) => {
@@ -58,7 +59,10 @@ const write = (root: string, file: string, text: string) => {
   writeFileSync(absolute, text);
 };
 
-const createFixture = (newWorkflow = reusable()) => {
+const createFixture = (
+  newWorkflow = reusable(),
+  callers = [".github/workflows/caller.yml"],
+) => {
   const directory = mkdtempSync(
     path.join(tmpdir(), "classification-snapshots-"),
   );
@@ -76,7 +80,9 @@ const createFixture = (newWorkflow = reusable()) => {
   write(source, ".github/workflows/shared.yml", newWorkflow);
   const newSha = commit(source, "new");
 
-  write(root, ".github/workflows/caller.yml", caller(oldSha));
+  for (const file of callers) {
+    write(root, file, caller(oldSha));
+  }
   write(
     root,
     ".github/ci-job-classification-sources.json",
@@ -153,6 +159,115 @@ test("a bumped pin snapshots the new revision and preserves the review decision"
   expect(decision.qualifier).toBe(
     "reviewed supplier6:.github/workflows/shared.yml/shared",
   );
+});
+
+test("a pin bumped in one of two callers copies the decision to the new revision", () => {
+  const fixture = createFixture(reusable(), [
+    ".github/workflows/caller.yml",
+    ".github/workflows/other.yml",
+  ]);
+  write(fixture.root, ".github/workflows/caller.yml", caller(fixture.newSha));
+  writeSnapshots({
+    root: fixture.root,
+    sources: sources(fixture.source, fixture.newSha),
+    base: fixture.base,
+  });
+
+  const snapshots = readClassificationInputs(fixture.root).snapshots;
+  expect(Object.keys(snapshots).toSorted()).toEqual(["supplier6", "supplier7"]);
+  const decisionKind = (key: string) =>
+    JSON.parse(
+      readFileSync(path.join(fixture.root, decisionPathForKey(key)), "utf-8"),
+    ).kind;
+  // The revision still pinned keeps its decision; the new one starts from
+  // a copy, which passes only while the job's digest is unchanged.
+  expect(decisionKind("supplier6:.github/workflows/shared.yml/shared")).toBe(
+    "ordinary",
+  );
+  expect(decisionKind("supplier7:.github/workflows/shared.yml/shared")).toBe(
+    "ordinary",
+  );
+  const result = checkJobClassification(fixture.root, fixture.base);
+  const message = result.isErr() ? result.error.message : "";
+  expect(message).not.toContain("supplier7:");
+});
+
+test("a bump of one of two workflows from one source moves only that job's decision", () => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "classification-snapshots-"),
+  );
+  const source = path.join(directory, "source");
+  const root = path.join(directory, "candidate");
+  for (const repository of [source, root]) {
+    mkdirSync(repository);
+    git(repository, "init", "-q");
+    git(repository, "config", "user.email", "tests@example.com");
+    git(repository, "config", "user.name", "Tests");
+  }
+  const lint = reusable().replace("shared:", "lint:");
+  write(source, ".github/workflows/shared.yml", reusable());
+  write(source, ".github/workflows/lint.yml", lint);
+  const oldSha = commit(source, "old");
+  const newSha = commit(source, "new");
+  const lintCaller = (sha: string) =>
+    caller().replace(
+      "echo local\n",
+      () =>
+        `echo local\n  lint:\n    uses: acme/shared/.github/workflows/lint.yml@${sha}\n`,
+    );
+  write(root, ".github/workflows/caller.yml", caller(oldSha));
+  write(root, ".github/workflows/other.yml", lintCaller(oldSha));
+  write(
+    root,
+    ".github/ci-job-classification-sources.json",
+    `${JSON.stringify(
+      {
+        supplier6: {
+          origin: { type: "git", owner: "acme", repo: "shared", sha: oldSha },
+          documents: {
+            ".github/workflows/lint.yml": lint,
+            ".github/workflows/shared.yml": reusable(),
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  mkdirSync(path.join(root, ".github/ci-job-classification-decisions"));
+  let jobs: ReadonlyMap<string, DerivedJob> | undefined;
+  generateClassification({
+    ...readClassificationInputs(root),
+    observeJobs: (value) => {
+      jobs = value;
+    },
+  });
+  for (const [key, job] of jobs ?? new Map<string, DerivedJob>()) {
+    writeDecision(root, key, {
+      kind: "ordinary",
+      qualifier: `reviewed ${key}`,
+      reviewedDigest: job.digest,
+    });
+  }
+  const base = commit(root, "base");
+  write(root, ".github/workflows/caller.yml", caller(newSha));
+  writeSnapshots({ root, sources: sources(source, newSha), base });
+
+  const remoteDecisions = readdirSync(
+    path.join(root, ".github/ci-job-classification-decisions"),
+  )
+    .map((name) =>
+      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+    )
+    .filter((key) => key.startsWith("supplier"))
+    .toSorted();
+  expect(remoteDecisions).toEqual([
+    "supplier6:.github/workflows/lint.yml/lint",
+    "supplier7:.github/workflows/shared.yml/shared",
+  ]);
+  const result = checkJobClassification(root, base);
+  const message = result.isErr() ? result.error.message : "";
+  expect(message).not.toContain("supplier");
 });
 
 test("an unchanged pin writes nothing", () => {
@@ -324,5 +439,97 @@ test("two old revisions converging on one with different kinds need a review", (
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain("Missing or changed job review");
+  }
+});
+
+test("nested composite actions retain the reusable workflow checkout mount", () => {
+  const sha = "a".repeat(40);
+  const fixture = createFixture(
+    reusable(`uses: actions/checkout@${sha}
+        with:
+          ref: \${{ job.workflow_sha }}
+          path: .tooling
+      - uses: ./.tooling/.github/actions/outer`),
+  );
+  for (const { name, next } of [
+    { name: "outer", next: "middle" },
+    { name: "middle", next: "inner" },
+  ]) {
+    write(
+      fixture.source,
+      `.github/actions/${name}/action.yml`,
+      `runs:
+  using: composite
+  steps:
+    - uses: ./.tooling/.github/actions/${next}
+`,
+    );
+  }
+  write(
+    fixture.source,
+    ".github/actions/inner/action.yml",
+    `runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo nested
+`,
+  );
+  const revision = commit(fixture.source, "nested metadata closure");
+  write(fixture.root, ".github/workflows/caller.yml", caller(revision));
+  writeSnapshots({
+    root: fixture.root,
+    sources: sources(fixture.source, revision),
+    base: fixture.base,
+  });
+  const inputs = readClassificationInputs(fixture.root);
+  const snapshot = Object.values(inputs.snapshots).find(
+    ({ origin }) => origin.sha === revision,
+  );
+  expect(Object.keys(snapshot?.documents ?? {}).toSorted()).toEqual([
+    ".github/actions/inner/action.yml",
+    ".github/actions/middle/action.yml",
+    ".github/actions/outer/action.yml",
+    ".github/workflows/shared.yml",
+  ]);
+  // Fixture review decisions are explicit; production refresh never invents them.
+  generateClassification({
+    ...inputs,
+    observeJobs: (jobs) => {
+      for (const [key, job] of jobs) {
+        writeDecision(fixture.root, key, {
+          kind: "ordinary",
+          qualifier: `fixture ${key}`,
+          reviewedDigest: job.digest,
+        });
+      }
+    },
+  });
+  const generated = generateClassification(
+    readClassificationInputs(fixture.root),
+  );
+  expect(generated.isOk()).toBe(true);
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  const nested = generated.value.nodes.filter(
+    (node) => node.type === "metadata" && node.path.includes("/actions/"),
+  );
+  expect(nested).toHaveLength(3);
+  const changedOrigin = verifyPublicMetadata({
+    manifest: generated.value,
+    reader: {
+      ...inputs.reader,
+      read: (repository, file) => {
+        const text = inputs.reader.read(repository, file);
+        return file === ".github/workflows/shared.yml"
+          ? text.replace(`\${{ job.workflow_sha }}`, "main")
+          : text;
+      },
+    },
+  });
+  expect(changedOrigin.isErr()).toBe(true);
+  if (changedOrigin.isErr()) {
+    expect(changedOrigin.error.message).toContain("origin mismatch");
   }
 });

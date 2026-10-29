@@ -5,6 +5,8 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   ACCOUNT_ACCESS,
@@ -53,6 +55,10 @@ export const createProposePositions = ({
       request,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError(undefined));
+      }
+
       const organizationId = session.activeOrganizationId;
       const prepared = yield* yield* prepareProposal({
         body,

@@ -16,6 +16,7 @@
  */
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "@stll/api-contract/statute-gazette";
@@ -36,7 +37,13 @@ import {
   parseEuWorkIdentifier,
 } from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";
+import type {
+  JurisdictionProfile,
+  SectionUnit,
+  WorkIdentifier,
+} from "./provision-citation-profile";
 import { provisionCitationProfileFor } from "./provision-citation-profiles";
+import { SK_PROFILE } from "./sk-provision-citation-profile";
 import {
   formatUsCodeReference,
   locateUsCodeCitations,
@@ -69,6 +76,8 @@ export type StatuteAbbreviationEntry = {
   eli: string;
   /** RegExp source accepting exactly this jurisdiction's printed variants. */
   patternSource: string;
+  /** Profile aliases retain their case-sensitive spelling. */
+  caseSensitive?: boolean;
 };
 
 export type StatuteAbbreviation = Pick<
@@ -96,7 +105,12 @@ export type LocatedGazetteCitation = {
   start: number;
 };
 
-type GazetteWork = { number: string; year: string };
+type GazetteWork = {
+  number: string;
+  year: string;
+  /** A grammar that reads several collections captures their printed spelling. */
+  collection?: string | undefined;
+};
 
 /** The subdivisions a citation path can name, outermost first. */
 export type ProvisionLevelKey = "section" | "subsection" | "letter" | "point";
@@ -362,7 +376,10 @@ export const createProvisionCitationGrammar = <
         );
   const matchers = abbreviations.map((entry) => ({
     entry,
-    matcher: new RegExp(`^(?:${entry.patternSource})$`, "iu"),
+    matcher: new RegExp(
+      `^(?:${entry.patternSource})$`,
+      entry.caseSensitive === true ? "u" : "iu",
+    ),
   }));
   const gazettePattern = new RegExp(gazette.source, "giu");
 
@@ -581,7 +598,11 @@ export const createProvisionCitationGrammar = <
         if (number === undefined || year === undefined) {
           return null;
         }
-        const work = { number, year };
+        const work = {
+          number,
+          year,
+          collection: match?.groups?.["collection"],
+        };
         return { identifier: gazette.identifier(work), eli: gazette.eli(work) };
       },
     },
@@ -629,7 +650,11 @@ export const createProvisionCitationGrammar = <
           continue;
         }
         citations.push({
-          eli: gazette.eli({ number, year }),
+          eli: gazette.eli({
+            number,
+            year,
+            collection: match.groups?.["collection"],
+          }),
           end: match.index + match[0].length,
           jurisdiction,
           start: match.index,
@@ -641,6 +666,84 @@ export const createProvisionCitationGrammar = <
     target: "hosted",
     citationForm: { type: "catalog" },
   };
+};
+
+/**
+ * Pattern for a printed spelling whose spaces admit any whitespace run, or
+ * none after a period ("Z. z." also reads "Z.z." and "Z.&nbsp;z."). Split
+ * before escaping: `RegExp.escape` encodes spaces as `\x20`.
+ */
+const spacedSpellingSource = (spelling: string): string => {
+  const words = spelling.split(/\s+/u);
+  return words
+    .map((word, index) => {
+      let gap = "";
+      if (index > 0) {
+        gap =
+          words.at(index - 1)?.endsWith(".") === true
+            ? String.raw`\s*`
+            : String.raw`\s+`;
+      }
+      return `${gap}${RegExp.escape(word)}`;
+    })
+    .join("");
+};
+
+/** A date-free reader links only aliases that never name another act. */
+const profileAbbreviations = (
+  profile: JurisdictionProfile,
+  eliForWork: (work: WorkIdentifier) => string,
+) => {
+  const bySpelling = new Map<
+    string,
+    { spelling: string; works: Map<string, string>; units: Set<SectionUnit> }
+  >();
+  for (const entry of profile.aliases) {
+    for (const spelling of entry.spellings) {
+      const key = spelling.toLowerCase().replace(/\.\s+/gu, ".");
+      let group = bySpelling.get(key);
+      if (group === undefined) {
+        group = { spelling, works: new Map(), units: new Set() };
+        bySpelling.set(key, group);
+      }
+      group.units.add(entry.unit ?? "section");
+      group.works.set(
+        formatWorkIdentifier(entry.identifier),
+        eliForWork(entry.identifier),
+      );
+    }
+  }
+  return [...bySpelling.values()].flatMap(({ spelling, works, units }) => {
+    if (units.size !== 1 || !units.has("section")) {
+      return [];
+    }
+    const eli = works.size === 1 ? works.values().next().value : undefined;
+    if (eli === undefined) {
+      return [];
+    }
+    return [
+      {
+        canonicalAbbreviation: spelling,
+        eli,
+        patternSource: `${spacedSpellingSource(spelling)}(?![\\p{L}\\p{N}])`,
+        caseSensitive: true,
+      },
+    ];
+  });
+};
+
+const slovakWorkEli = ({ number, year }: GazetteWork) =>
+  `https://www.slov-lex.sk/eli/sk/zz/${year}/${String(parseIntegerToken(number, { sign: "unsigned" }).unwrap("Gazette numbers contain only bounded decimal digits"))}`;
+
+const slovakCollection = (printed: string | undefined) => {
+  const key = printed?.replace(/\s+/gu, "").toLowerCase();
+  return (
+    SK_PROFILE.collections.find(({ spellings }) =>
+      spellings.some(
+        (spelling) => spelling.replace(/\s+/gu, "").toLowerCase() === key,
+      ),
+    )?.canonical ?? panic("Slovak gazette match has no declared collection")
+  );
 };
 
 const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
@@ -743,7 +846,65 @@ export const PROVISION_CITATION_GRAMMARS = {
   GBR: unsupported("GBR"),
   HUN: unsupported("HUN"),
   POL: unsupported("POL"),
-  SVK: unsupported("SVK"),
+  SVK: createProvisionCitationGrammar({
+    abbreviations: profileAbbreviations(SK_PROFILE, ({ number, year }) =>
+      slovakWorkEli({ number: String(number), year: String(year) }),
+    ),
+    anchorSeparator: SK_PROFILE.anchor.join,
+    connectors: [
+      ",",
+      ...SK_PROFILE.enumerationConnectors.map(
+        (word) => `${RegExp.escape(word)}(?=\\s)`,
+      ),
+      String.raw`v\s+spojení\s+s(?=\s)`,
+    ],
+    gazette: {
+      eli: slovakWorkEli,
+      identifier: ({ number, year, collection }) =>
+        formatWorkIdentifier({
+          number: parseIntegerToken(number, { sign: "unsigned" }).unwrap(
+            "Gazette numbers contain only bounded decimal digits",
+          ),
+          year: parseIntegerToken(year, { sign: "unsigned" }).unwrap(
+            "Gazette years contain four decimal digits",
+          ),
+          collection: slovakCollection(collection),
+        }),
+      source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?<collection>${SK_PROFILE.collections
+        .flatMap(({ spellings }) => spellings)
+        .toSorted((left, right) => right.length - left.length)
+        .map(spacedSpellingSource)
+        .join("|")})(?![\p{L}\p{N}/]|\.+[\p{L}\p{N}/])`,
+    },
+    jurisdiction: SK_PROFILE.jurisdiction,
+    levels: [
+      {
+        key: "section",
+        marker: `(?:${RegExp.escape(SK_PROFILE.citationTerms.section)}){1,2}`,
+        value: String.raw`\d{1,4}[a-zA-Z]?`,
+        anchorMarker: SK_PROFILE.anchor.render.section(""),
+      },
+      {
+        key: "subsection",
+        marker: RegExp.escape(SK_PROFILE.citationTerms.subsection),
+        value: String.raw`\d+[a-zA-Z]?`,
+        anchorMarker: SK_PROFILE.anchor.render.subsection(""),
+      },
+      {
+        key: "letter",
+        marker: `(?:${RegExp.escape(SK_PROFILE.citationTerms.letter)}|${RegExp.escape(normalizeUnicode(SK_PROFILE.citationTerms.letter, "NFD"))})`,
+        value: String.raw`(?<value>[a-zA-Z])\)?`,
+        anchorMarker: SK_PROFILE.anchor.render.letter(""),
+      },
+      {
+        key: "point",
+        marker: `${RegExp.escape(SK_PROFILE.citationTerms.point)}(?![\\p{L}])`,
+        value: String.raw`\d+`,
+        anchorMarker: SK_PROFILE.anchor.render.point(""),
+      },
+    ],
+    unit: "section",
+  }),
   USA: {
     jurisdiction: "USA",
     status: "supported",

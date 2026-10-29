@@ -1,0 +1,6 @@
+{
+  "create-table-references": "The new empty source table references existing matter, record and entity keys. Creating its foreign keys locks the parents but scans no existing source rows; lock_timeout is 1s and statement_timeout is 5s.",
+  "row-level-security": "ENABLE and FORCE ROW LEVEL SECURITY apply to the newly created empty source table. Both are catalog changes without a data rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "The four source lifecycle triggers are attached through catalog changes; this migration executes no application DML or history backfill. Lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "add-foreign-key": "After the source lifecycle triggers are installed, the current-source foreign key changes from cascade to restrict as NOT VALID, without scanning live rows. Gated online validation follows; lock_timeout is 1s and statement_timeout is 5s."
+}

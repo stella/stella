@@ -20,8 +20,8 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { allCorrespondenceQueryRoot } from "@/lib/resource-query-roots.logic";
-import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import {
   organizationDataBoxesKeys,
@@ -39,7 +39,7 @@ export const OrganizationDataBoxesCard = () => {
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useAuthenticatedUser();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
-  const view = useQueryView(
+  const view = queryView(
     useQuery(
       organizationDataBoxesOptions({ organizationId: activeOrganizationId }),
     ),
@@ -121,12 +121,15 @@ export const OrganizationDataBoxesCard = () => {
                   {canEdit && (
                     <Button
                       aria-label={t("settings.organization.dataBoxes.remove", {
-                        boxId,
+                        address: boxId,
                       })}
                       className="min-h-11"
                       disabled={pending}
                       onClick={() => remove.mutate(boxId)}
                       size="sm"
+                      tooltip={t("settings.organization.dataBoxes.remove", {
+                        address: boxId,
+                      })}
                       variant="ghost"
                     >
                       <Trash2Icon className="size-4" />

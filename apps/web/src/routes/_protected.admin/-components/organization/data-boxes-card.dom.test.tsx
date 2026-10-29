@@ -152,7 +152,7 @@ test("data-box settings validate IDs and declare writes while refreshing corresp
   fireEvent.click(
     view.getByRole("button", {
       name: messages.settings.organization.dataBoxes.remove.replace(
-        "{boxId}",
+        "{address}",
         "newbox1",
       ),
     }),

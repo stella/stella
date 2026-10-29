@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, ne, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { account, member, user } from "@/api/db/auth-schema";
@@ -232,43 +232,46 @@ export const anonymizeDeletedAccountRow = async (
     .where(eq(user.id, userId));
 };
 
-type MarkAccountEmailUndeliverableOptions = {
+type MarkAccountEmailsUndeliverableOptions = {
   database: Pick<typeof rootDb, "update">;
-  email: NormalizedEmail;
+  emails: readonly NormalizedEmail[];
   reason: AccountEmailUndeliverableReason;
   at: Date;
 };
 
 /**
- * Records the mail provider's refusal of an address on the account that uses
- * it. The first refusal's reason and time stand while the account keeps that
- * address; an address no account uses changes nothing. Returns whether an
- * account was marked.
+ * Records the mail provider's refusal of addresses on the accounts that use
+ * them, in one statement. The first refusal's reason and time stand while an
+ * account keeps that address; an address no account uses changes nothing.
+ * Returns how many accounts were marked.
  */
-export const markAccountEmailUndeliverable = async ({
+export const markAccountEmailsUndeliverable = async ({
   database,
-  email,
+  emails,
   reason,
   at,
-}: MarkAccountEmailUndeliverableOptions): Promise<boolean> => {
+}: MarkAccountEmailsUndeliverableOptions): Promise<number> => {
+  if (emails.length === 0) {
+    return 0;
+  }
   const marked = await database
     .update(user)
     .set({
-      emailUndeliverableAddress: email,
+      emailUndeliverableAddress: sql`${user.email}`,
       emailUndeliverableReason: reason,
       emailUndeliverableAt: at,
     })
     .where(
       and(
-        eq(user.email, email),
+        inArray(user.email, [...emails]),
         or(
           isNull(user.emailUndeliverableAddress),
-          ne(user.emailUndeliverableAddress, email),
+          ne(user.emailUndeliverableAddress, user.email),
         ),
       ),
     )
     .returning({ id: user.id });
-  return marked.length > 0;
+  return marked.length;
 };
 
 const undeliverableReasonSchema = v.picklist(

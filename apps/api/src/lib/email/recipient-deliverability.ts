@@ -1,6 +1,6 @@
 import { rootDb } from "@/api/db/root";
 import {
-  markAccountEmailUndeliverable,
+  markAccountEmailsUndeliverable,
   readAccountEmailUndeliverable,
 } from "@/api/lib/db/account-row";
 import type { AccountEmailUndeliverableReason } from "@/api/lib/email/deliverability-contract";
@@ -14,10 +14,15 @@ import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 export const readRecipientRefusal = async (email: NormalizedEmail) =>
   await readAccountEmailUndeliverable(rootDb, email);
 
-/** Records the provider's refusal on the account using this address. */
-export const recordRecipientRefusal = async (
-  email: NormalizedEmail,
+/** Records the provider's refusal on the accounts using these addresses. */
+export const recordRecipientRefusals = async (
+  emails: readonly NormalizedEmail[],
   reason: AccountEmailUndeliverableReason,
   at: Date,
 ) =>
-  await markAccountEmailUndeliverable({ database: rootDb, email, reason, at });
+  await markAccountEmailsUndeliverable({
+    database: rootDb,
+    emails,
+    reason,
+    at,
+  });

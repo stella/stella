@@ -29,6 +29,7 @@ import { createSha256 } from "@stll/sha256/node";
 
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
+import { PENDING_CONTRACT_MIGRATIONS } from "../apps/api/src/lib/db/pending-contract-migrations/registry";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
 import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
@@ -122,6 +123,7 @@ const GUARDED_CATEGORIES = [
   "destructive-change",
   "bulk-backfill",
   "access-control",
+  "schema-contract",
 ] as const;
 
 const GUARDED_CATEGORY_GUIDANCE = {
@@ -131,6 +133,8 @@ const GUARDED_CATEGORY_GUIDANCE = {
     "Migrations should be fast, additive DDL. Move bulk or idempotent backfills to an out-of-band batched script (see the pattern in apps/api/src/scripts/backfill-case-law-slugs.ts), or add a bounded WHERE clause.",
   "access-control":
     "Privilege, ownership, and policy changes widen or shift data access. Confirm least privilege and workspace isolation are preserved.",
+  "schema-contract":
+    "Ship uniqueness after compatible writers: move the SQL to the pending-contract registry, or name the writers that already enforce it in a typed acknowledgement.",
 } as const satisfies Record<GuardedCategory, string>;
 
 const ACKNOWLEDGEMENT_MARKER_PATTERN =
@@ -143,6 +147,15 @@ const LINE_COMMENT_PATTERN = /^\s*--/u;
 const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
+const PENDING_CONTRACT_MIGRATIONS_DIR =
+  "apps/api/src/lib/db/pending-contract-migrations";
+// Migrations at or before this timestamp were already immutable when the
+// uniqueness contract rule shipped. New history must sort after this cutoff;
+// do not extend it when adding migrations.
+const UNIQUE_CONTRACT_MIGRATION_CUTOFF = "20261027160600";
+const PENDING_CONTRACT_SQL_FILES = new Set(
+  PENDING_CONTRACT_MIGRATIONS.map(({ name }) => `${name}.sql`),
+);
 // Migrations applied before the current rule set. Shared with squawk via
 // scripts/check-migrations.sh. Entries are immutable migrations, so the list
 // only shrinks (scripts/check-migration-baseline.ts); a listed file that no
@@ -416,7 +429,113 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
+type UniquenessToken = { kind: "word" | "punctuation"; value: string };
+
+const isUniquenessWordCharacter = (char: string): boolean => {
+  const code = char.codePointAt(0) ?? -1;
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    code === 95 ||
+    (code >= 97 && code <= 122)
+  );
+};
+
+const uniquenessTokens = (statement: string): UniquenessToken[] => {
+  const tokens: UniquenessToken[] = [];
+  for (let index = 0; index < statement.length;) {
+    const char = statement[index] ?? "";
+    if (char === "(" || char === ")" || char === ",") {
+      tokens.push({ kind: "punctuation", value: char });
+      index++;
+      continue;
+    }
+    if (!isUniquenessWordCharacter(char)) {
+      index++;
+      continue;
+    }
+    const start = index;
+    while (
+      index < statement.length &&
+      isUniquenessWordCharacter(statement[index] ?? "")
+    ) {
+      index++;
+    }
+    tokens.push({
+      kind: "word",
+      value: statement.slice(start, index).toUpperCase(),
+    });
+  }
+  return tokens;
+};
+
+const isUniquenessKeyword = (
+  tokens: UniquenessToken[],
+  index: number,
+): boolean => {
+  const token = tokens[index];
+  return (
+    token?.kind === "word" &&
+    (token.value === "UNIQUE" ||
+      token.value === "EXCLUDE" ||
+      (token.value === "PRIMARY" && tokens[index + 1]?.value === "KEY"))
+  );
+};
+
+// ALTER TABLE's ADD grammar has two uniqueness-producing branches: table
+// constraints and column definitions. Their contract keyword is at the action's
+// top level, while commas in modifiers such as INCLUDE are parenthesized.
+const addsUniquenessContract = (tokens: UniquenessToken[]): boolean => {
+  if (tokens[0]?.value !== "ALTER" || tokens[1]?.value !== "TABLE") {
+    return false;
+  }
+
+  let depth = 0;
+  let actionIsAdd = false;
+  for (let index = 2; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token?.value === "(") {
+      depth++;
+      continue;
+    }
+    if (token?.value === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth !== 0) {
+      continue;
+    }
+    if (token?.value === ",") {
+      actionIsAdd = false;
+      continue;
+    }
+    if (!actionIsAdd) {
+      actionIsAdd = token?.value === "ADD";
+      continue;
+    }
+    if (isUniquenessKeyword(tokens, index)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const addsUniqueIndex = (tokens: UniquenessToken[]): boolean =>
+  tokens[0]?.value === "CREATE" &&
+  tokens[1]?.value === "UNIQUE" &&
+  tokens[2]?.value === "INDEX";
+
 const GUARDED_RULES = [
+  {
+    id: "add-unique-constraint",
+    description:
+      "adds a uniqueness contract to a table that predates this migration",
+    category: "schema-contract",
+    matches: (statement) => {
+      const tokens = uniquenessTokens(statement);
+      return addsUniqueIndex(tokens) || addsUniquenessContract(tokens);
+    },
+  },
   {
     id: "drop-object",
     description: "drops a database object",
@@ -2358,6 +2477,106 @@ const catalogOnlyTriggerDefinitions = (
   );
 };
 
+const SQL_IDENTIFIER_SOURCE = '(?:"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)';
+const SQL_RELATION_SOURCE = `${SQL_IDENTIFIER_SOURCE}(?:\\s*\\.\\s*${SQL_IDENTIFIER_SOURCE})?`;
+const CREATE_TABLE_RELATION_PATTERN = new RegExp(
+  `^\\s*CREATE\\s+(?:UNLOGGED\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
+  "iu",
+);
+const UNIQUE_INDEX_RELATION_PATTERN = new RegExp(
+  `^\\s*CREATE\\s+UNIQUE\\s+INDEX\\s+(?:CONCURRENTLY\\s+)?(?:IF\\s+NOT\\s+EXISTS\\s+)?${SQL_IDENTIFIER_SOURCE}\\s+ON\\s+(?:ONLY\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
+  "iu",
+);
+const ALTER_TABLE_RELATION_PATTERN = new RegExp(
+  `^\\s*ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
+  "iu",
+);
+const UNIQUENESS_WRITER_PATTERN = /^[A-Za-z0-9_./#:-]+$/u;
+
+const hasUniquenessWriters = (reason: string): boolean => {
+  if (!reason.startsWith("writers:")) {
+    return false;
+  }
+  const separator = reason.indexOf(";");
+  if (separator === -1) {
+    return false;
+  }
+  const reviewReason = reason.slice(separator + 1);
+  if (reviewReason.length < 12 || reviewReason.includes("\n")) {
+    return false;
+  }
+  return reason
+    .slice("writers:".length, separator)
+    .split(",")
+    .every((writer) => UNIQUENESS_WRITER_PATTERN.test(writer.trim()));
+};
+
+const normalizeSqlRelation = (relation: string): string => {
+  const parts = relation
+    .split(".")
+    .map((part) => part.trim().replace(/^"|"$/gu, "").replace(/""/gu, '"'))
+    .map((part) => part.toLowerCase());
+  if (parts.length > 1) {
+    return parts.join(".");
+  }
+  return `public.${parts.at(0) ?? panic("SQL relation has no identifier")}`;
+};
+
+const matchedRelation = (pattern: RegExp, statement: Statement) => {
+  const relation = pattern.exec(statement.raw)?.groups?.["relation"];
+  return relation === undefined ? undefined : normalizeSqlRelation(relation);
+};
+
+const uniquenessContractRuleAppliesToFile = (file: string): boolean => {
+  const normalized = file.replaceAll("\\", "/");
+  if (
+    (normalized.startsWith(`${PENDING_CONTRACT_MIGRATIONS_DIR}/`) ||
+      normalized.includes(`/${PENDING_CONTRACT_MIGRATIONS_DIR}/`)) &&
+    PENDING_CONTRACT_SQL_FILES.has(path.posix.basename(normalized))
+  ) {
+    return false;
+  }
+
+  const migration = new RegExp(
+    `(?:^|/)${DEFAULT_MIGRATIONS_DIR}/(?<name>[^/]+)/migration\\.sql$`,
+    "u",
+  ).exec(normalized)?.groups?.["name"];
+  if (migration === undefined) {
+    return true;
+  }
+
+  const timestamp = /^\d{14}/u.exec(migration)?.[0];
+  return (
+    timestamp === undefined || timestamp > UNIQUE_CONTRACT_MIGRATION_CUTOFF
+  );
+};
+
+const existingTableUniquenessStatements = (
+  file: string,
+  statements: Statement[],
+): Set<Statement> => {
+  if (!uniquenessContractRuleAppliesToFile(file)) {
+    return new Set();
+  }
+
+  const createdTables = new Set(
+    statements
+      .map((statement) =>
+        matchedRelation(CREATE_TABLE_RELATION_PATTERN, statement),
+      )
+      .filter((relation) => relation !== undefined),
+  );
+
+  return new Set(
+    statements.filter((statement) => {
+      const relation =
+        matchedRelation(UNIQUE_INDEX_RELATION_PATTERN, statement) ??
+        matchedRelation(ALTER_TABLE_RELATION_PATTERN, statement);
+      return relation !== undefined && !createdTables.has(relation);
+    }),
+  );
+};
+
 const checkSource = (
   { file, source }: MigrationIndexSource,
   indexFindings: Finding[],
@@ -2365,6 +2584,10 @@ const checkSource = (
   const lines = source.split("\n");
   const statements = parseStatements(source);
   const catalogTriggerDefinitions = catalogOnlyTriggerDefinitions(statements);
+  const existingTableUniqueness = existingTableUniquenessStatements(
+    file,
+    statements,
+  );
 
   const invariantFindings = indexFindings.filter(
     (finding) => finding.file === file,
@@ -2426,6 +2649,13 @@ const checkSource = (
       }
 
       if (
+        rule.id === "add-unique-constraint" &&
+        !existingTableUniqueness.has(statement)
+      ) {
+        continue;
+      }
+
+      if (
         rule.id === "drop-object" &&
         isIndexRebuiltLater(statements, position)
       ) {
@@ -2435,6 +2665,18 @@ const checkSource = (
       const acknowledgement = findAcknowledgement(statement, rule.id);
       if (acknowledgement) {
         acknowledgement.usedRuleIds.add(rule.id);
+        if (
+          rule.id === "add-unique-constraint" &&
+          !hasUniquenessWriters(acknowledgement.reason)
+        ) {
+          acknowledgementErrors.push({
+            file,
+            line: acknowledgement.line,
+            ruleId: "invalid-uniqueness-writers",
+            description:
+              'add-unique-constraint acknowledgement must use "writers: <path-or-symbol>[, ...]; <review reason>"',
+          });
+        }
         continue;
       }
 

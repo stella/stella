@@ -14,7 +14,7 @@ correspondence.workspace_id                     safeWorkspaceId     fk,not null 
 correspondence.direction                        text                null              correspondence.ts:126
 correspondence.channel                          text                not null          correspondence.ts:127
 correspondence.source                           text                default,not null  correspondence.ts:128
-correspondence.source_entity_id                 safeUuid            null              correspondence.ts:134  The current uploaded source file; correspondence_sources owns its lifetime.
+correspondence.source_entity_id                 safeUuid            fk,null           correspondence.ts:134  The current uploaded source file; correspondence_sources owns its lifetime.
 correspondence.intake                           text                null              correspondence.ts:137  Delivery provenance; correspondence_provenance_check binds these columns to the source.
 correspondence.authenticated_sender_address     text                null              correspondence.ts:138
 correspondence.original_signature               jsonb               null              correspondence.ts:139
@@ -47,11 +47,11 @@ correspondence.updated_at                       timestamptz         default,not 
 Each uploaded file belongs to one record in its matter, across both channels.
 
 ```text
-correspondence_sources.{...entityFeatureGateColumns()}  spread                        correspondence.ts:294
-correspondence_sources.organization_id                  safeOrganizationId  not null  correspondence.ts:295
-correspondence_sources.workspace_id                     safeWorkspaceId     not null  correspondence.ts:296
-correspondence_sources.correspondence_id                safeUuid            not null  correspondence.ts:297
-correspondence_sources.entity_id                        safeUuid            not null  correspondence.ts:298
+correspondence_sources.{...entityFeatureGateColumns()}  spread                           correspondence.ts:294
+correspondence_sources.organization_id                  safeOrganizationId  fk,not null  correspondence.ts:295
+correspondence_sources.workspace_id                     safeWorkspaceId     fk,not null  correspondence.ts:296
+correspondence_sources.correspondence_id                safeUuid            fk,not null  correspondence.ts:297
+correspondence_sources.entity_id                        safeUuid            fk,not null  correspondence.ts:298
 ```
 
 ## correspondence_filers · `correspondenceFilers` · correspondence.ts:362 · rls
@@ -59,11 +59,11 @@ correspondence_sources.entity_id                        safeUuid            not 
 ```text
 correspondence_filers.{...entityFeatureGateColumns()}  spread                                correspondence.ts:365
 correspondence_filers.id                               pUuid               pk,not null       correspondence.ts:366
-correspondence_filers.organization_id                  safeOrganizationId  not null          correspondence.ts:367
-correspondence_filers.workspace_id                     safeWorkspaceId     not null          correspondence.ts:368
-correspondence_filers.correspondence_id                safeUuid            not null          correspondence.ts:369
+correspondence_filers.organization_id                  safeOrganizationId  fk,not null       correspondence.ts:367
+correspondence_filers.workspace_id                     safeWorkspaceId     fk,not null       correspondence.ts:368
+correspondence_filers.correspondence_id                safeUuid            fk,not null       correspondence.ts:369
 correspondence_filers.filed_by_user_id                 text                fk,null           correspondence.ts:370
-correspondence_filers.filed_by_allowed_sender_id       safeUuid            null              correspondence.ts:373
+correspondence_filers.filed_by_allowed_sender_id       safeUuid            fk,null           correspondence.ts:373
 correspondence_filers.filed_by_display                 jsonb               null              correspondence.ts:376
 correspondence_filers.filed_at                         timestamptz         default,not null  correspondence.ts:378
 ```
@@ -73,10 +73,10 @@ correspondence_filers.filed_at                         timestamptz         defau
 ```text
 correspondence_attachments.{...entityFeatureGateColumns()}  spread                                correspondence.ts:460
 correspondence_attachments.id                               pUuid               pk,not null       correspondence.ts:461
-correspondence_attachments.organization_id                  safeOrganizationId  not null          correspondence.ts:462
-correspondence_attachments.workspace_id                     safeWorkspaceId     not null          correspondence.ts:463
-correspondence_attachments.correspondence_id                safeUuid            not null          correspondence.ts:464
-correspondence_attachments.entity_id                        safeUuid            not null          correspondence.ts:465
+correspondence_attachments.organization_id                  safeOrganizationId  fk,not null       correspondence.ts:462
+correspondence_attachments.workspace_id                     safeWorkspaceId     fk,not null       correspondence.ts:463
+correspondence_attachments.correspondence_id                safeUuid            fk,not null       correspondence.ts:464
+correspondence_attachments.entity_id                        safeUuid            fk,not null       correspondence.ts:465
 correspondence_attachments.ordinal                          integer             not null          correspondence.ts:466
 correspondence_attachments.filename                         text                not null          correspondence.ts:467
 correspondence_attachments.media_type                       text                not null          correspondence.ts:468
@@ -89,8 +89,8 @@ correspondence_attachments.created_at                       timestamptz         
 
 ```text
 matter_inbound_addresses.id               pUuid               pk,not null       correspondence.ts:532
-matter_inbound_addresses.organization_id  safeOrganizationId  not null          correspondence.ts:533
-matter_inbound_addresses.workspace_id     safeWorkspaceId     not null          correspondence.ts:534
+matter_inbound_addresses.organization_id  safeOrganizationId  fk,not null       correspondence.ts:533
+matter_inbound_addresses.workspace_id     safeWorkspaceId     fk,not null       correspondence.ts:534
 matter_inbound_addresses.token            varchar             not null          correspondence.ts:535
 matter_inbound_addresses.created_by       text                fk,null           correspondence.ts:536
 matter_inbound_addresses.created_at       timestamptz         default,not null  correspondence.ts:539
@@ -102,7 +102,7 @@ matter_inbound_addresses.revoked_by       text                fk,null           
 
 ```text
 correspondence_allowed_senders.id                   pUuid               pk,not null       correspondence.ts:573
-correspondence_allowed_senders.organization_id      safeOrganizationId  not null          correspondence.ts:574
+correspondence_allowed_senders.organization_id      safeOrganizationId  fk,not null       correspondence.ts:574
 correspondence_allowed_senders.address              text                not null          correspondence.ts:575
 correspondence_allowed_senders.kind                 text                not null          correspondence.ts:576
 correspondence_allowed_senders.scope                text                not null          correspondence.ts:577
@@ -117,17 +117,17 @@ correspondence_allowed_senders.revoked_at           timestamptz         null    
 
 ```text
 correspondence_allowed_sender_matters.id                 pUuid               pk,not null  correspondence.ts:661
-correspondence_allowed_sender_matters.organization_id    safeOrganizationId  not null     correspondence.ts:662
-correspondence_allowed_sender_matters.workspace_id       safeWorkspaceId     not null     correspondence.ts:663
-correspondence_allowed_sender_matters.allowed_sender_id  safeUuid            not null     correspondence.ts:664
+correspondence_allowed_sender_matters.organization_id    safeOrganizationId  fk,not null  correspondence.ts:662
+correspondence_allowed_sender_matters.workspace_id       safeWorkspaceId     fk,not null  correspondence.ts:663
+correspondence_allowed_sender_matters.allowed_sender_id  safeUuid            fk,not null  correspondence.ts:664
 ```
 
 ## correspondence_drop_logs · `correspondenceDropLogs` · correspondence.ts:698 · rls
 
 ```text
 correspondence_drop_logs.id               pUuid               pk,not null  correspondence.ts:701
-correspondence_drop_logs.organization_id  safeOrganizationId  not null     correspondence.ts:702
-correspondence_drop_logs.workspace_id     safeWorkspaceId     not null     correspondence.ts:703
+correspondence_drop_logs.organization_id  safeOrganizationId  fk,not null  correspondence.ts:702
+correspondence_drop_logs.workspace_id     safeWorkspaceId     fk,not null  correspondence.ts:703
 correspondence_drop_logs.sender_address   text                not null     correspondence.ts:704
 correspondence_drop_logs.reason           text                not null     correspondence.ts:705
 correspondence_drop_logs.received_at      timestamptz         not null     correspondence.ts:706

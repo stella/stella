@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
-import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";

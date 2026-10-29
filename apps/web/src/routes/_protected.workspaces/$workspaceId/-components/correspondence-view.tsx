@@ -115,7 +115,9 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   } else if (isError) {
     addressStatus = (
       <div className="mt-1 flex items-center gap-2">
-        <p className="text-destructive text-sm">{t("common.error")}</p>
+        <p className="text-destructive text-sm">
+          {t("common.somethingWentWrong")}
+        </p>
         <Button
           className="min-h-11"
           onClick={() => detached(refetch(), "correspondence.retry-address")}

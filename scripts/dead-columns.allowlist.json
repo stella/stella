@@ -78,5 +78,10 @@
     "table": "usage_policies",
     "column": "storageBytesPerAssignment",
     "reason": "not app-code dead: read by the migration-owned organization_storage_capacity function in apps/api/drizzle/20261005090300_organization_effective_policy/migration.sql, which every storage reservation calls. Migrations are excluded by design."
+  },
+  {
+    "table": "expenses",
+    "column": "receiptFileId",
+    "reason": "unreferenced as of 2026-10-27: no handler writes a receipt file yet. Its only reference was the matter-deletion storage census, which expenses left when matter deletion began retaining them; decide: wire receipts or drop."
   }
 ]

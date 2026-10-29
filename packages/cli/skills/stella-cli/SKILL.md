@@ -214,7 +214,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -383,7 +383,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
-  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
+  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|submitted|approved|billed|written_off)
 - `stella time-entry save`
   - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --narrative-language, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
@@ -412,7 +412,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 434
+Beyond the curated commands above, the CLI generates 439
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
@@ -436,7 +436,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.

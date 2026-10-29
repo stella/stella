@@ -10,6 +10,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 import {
   euProvisionSourceUrl,
   locateEuProvisionCitations,
@@ -17,7 +18,11 @@ import {
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
-import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
+import {
+  DecisionText,
+  prepareDecisionProvisionCards,
+  prepareDecisionTextPlacements,
+} from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
   DecisionReaderProvider,
@@ -26,6 +31,7 @@ import {
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import type {
   CitedProvisionTarget,
+  DecisionProvisionAnchor,
   ProvisionPreviewData,
   ReaderDecision,
 } from "./reader-types";
@@ -277,14 +283,19 @@ test("a decision renders numbered anchored text and resolved marks without readi
   expect(renderedCitations).toEqual(["citation"]);
 });
 
-const permalinkFixture = (variant: "case-law" | "statute") =>
+const PERMALINK_CORPORA = {
+  "case-law": { variant: "case-law" },
+  statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+} as const;
+
+const permalinkFixture = (variant: keyof typeof PERMALINK_CORPORA) =>
   ast.blocks.map((block) => (
     <BlockRenderer
       activeMatchIndex={-1}
       block={block}
       key={block.id}
       rangesByPieceId={{}}
-      variant={variant}
+      {...PERMALINK_CORPORA[variant]}
     />
   ));
 
@@ -323,11 +334,26 @@ test("a supplied copy adapter preserves existing permalink markup", () => {
   }
 });
 
+/** A card's quoted runs: whether each is marked cited, and its paragraphs. */
+const quotedRuns = (markup: string) =>
+  Array.from(
+    markup.matchAll(
+      /<div(?: class="[^"]*")?( data-cited="")? data-slot="provision-card-quote">(.*?)<\/div>/gu,
+    ),
+    ([, cited, body = ""]) => ({
+      cited: cited !== undefined,
+      texts: Array.from(
+        body.matchAll(/<p[^>]*>(.*?)<\/p>/gu),
+        ([, paragraph]) => paragraph,
+      ),
+    }),
+  );
+
 test("a provision card identifies unavailable parts until its full wording recovers them", () => {
   const provision = (part: string) =>
     ({
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2012/89",
         id: "act",
         slug: null,
@@ -456,12 +482,10 @@ test("a provision card identifies unavailable parts until its full wording recov
     expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
     expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
     expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
-    expect(unresolved).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
-    );
-    expect(unresolved).toMatch(
-      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
-    );
+    expect(quotedRuns(unresolved)).toEqual([
+      { cited: true, texts: [fullAvailableBlock.text] },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
     const recovered = render({
       availableWording: wording,
       missingWording,
@@ -484,18 +508,17 @@ test("a provision card identifies unavailable parts until its full wording recov
       'data-slot="provision-card-unavailable-part"',
     );
     expect(recovered).not.toContain("Text of § 5 odst. 2 is not available");
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Doplněné znění druhého odstavce\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Písmeno citovaného druhého odstavce\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
-    );
+    expect(quotedRuns(recovered)).toEqual([
+      {
+        cited: true,
+        texts: [
+          fullAvailableBlock.text,
+          fullMissingBlock.text,
+          fullMissingChildBlock.text,
+        ],
+      },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
   }
   const allUnavailable = render({
     availableWording: null,
@@ -523,7 +546,7 @@ for (const response of ["error", "null", "empty"] as const) {
     const root = createRoot(container);
     const citation = {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2012/89",
         id: "act",
         slug: null,
@@ -691,7 +714,7 @@ for (const response of ["error", "null", "empty"] as const) {
 test("a hover preview scrolls a long provision inside a viewport-bound cap, inline cards keep growing and a margin card shows a note-sized glimpse", async () => {
   const provision = {
     document: {
-      country: "cz",
+      country: "CZE",
       eli: "/eli/cz/sb/2012/89",
       id: "act",
       slug: null,
@@ -864,4 +887,66 @@ test("EU provisions link to EUR-Lex in every supported citation language without
     expect(markup).toContain('target="_blank"');
     expect(placements.provisionsByAnchorId.size).toBe(0);
   }
+});
+
+test("a margin card's ranges are the cited words of its paragraph", () => {
+  const sentence = "Podle § 90 a § 91 rozhodl soud.";
+  const provision = (section: number) =>
+    ({
+      id: `provision-${String(section)}`,
+      sentenceText: sentence,
+      spanStart: 0,
+      reference: {
+        section,
+        sectionSuffix: null,
+        subsection: null,
+        letter: null,
+        unit: "section",
+      },
+      target: {
+        document: {
+          country: "CZE",
+          id: "act",
+          eli: "eli/act",
+          slug: null,
+          versionValidFrom: null,
+        },
+        preview: null,
+        payload: {
+          documentId: "act",
+          eli: "eli/act",
+          jurisdiction: "CZE",
+          anchorId: `par_${String(section)}`,
+          provisionLabel: `§ ${String(section)}`,
+          statuteTitle: "Zákon",
+          versionValidFrom: null,
+          versionCount: 1,
+        },
+      },
+    }) satisfies DecisionProvisionAnchor;
+  const cards = prepareDecisionProvisionCards({
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cited",
+        anchorId: "p-9",
+        number: 9,
+        inlines: [{ type: "text", text: sentence }],
+        plainText: sentence,
+      },
+    ],
+    provisionAnchors: [provision(90), provision(91)],
+  });
+  expect(
+    cards.map(({ ranges, startAnchorId }) => [
+      startAnchorId,
+      ranges.map(({ citationId, end, start }) => [
+        citationId,
+        sentence.slice(start, end),
+      ]),
+    ]),
+  ).toEqual([
+    ["p-9", [["provision-90", "§ 90"]]],
+    ["p-9", [["provision-91", "§ 91"]]],
+  ]);
 });

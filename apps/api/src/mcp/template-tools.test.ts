@@ -1586,6 +1586,7 @@ describe("MCP template tools", () => {
       Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Organization AI configuration unavailable",
         }),
       ),
@@ -1641,7 +1642,7 @@ describe("MCP template tools", () => {
 
   test.each([
     { reason: "busy", code: "action_concurrency_busy" },
-    { reason: "unavailable", code: "action_admission_unavailable" },
+    { reason: "store_unavailable", code: "limiter_store_unavailable" },
   ] as const)(
     "preview_template_conditions maps action admission %s to its canonical envelope",
     async ({ reason, code }) => {
@@ -2169,6 +2170,7 @@ describe("MCP template tools", () => {
       error: "Scanner unavailable.",
       storedTemplateError: new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Scanner unavailable.",
         hint: "Retry the request.",
       }),

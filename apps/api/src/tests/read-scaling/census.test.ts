@@ -14,11 +14,16 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
+import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -31,6 +36,7 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -39,8 +45,14 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
+  suggestionRangeScalingScenario,
+  mobileClientMetadataScalingScenario,
+  ...documentAnnotationScalingScenarios,
+  myOpenTasksScalingScenario,
+  mobileUpdateScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
