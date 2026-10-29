@@ -1061,11 +1061,19 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "mobile-icons",
     outputKind: "committed",
-    outputs: ["apps/mobile/src/icons.gen.ts", "apps/mobile/src/brand.gen.ts"],
+    outputs: [
+      "apps/mobile/src/icons.gen.ts",
+      "apps/mobile/src/brand.gen.ts",
+      "apps/mobile/src/bar-glyphs.gen.ts",
+      "apps/mobile/assets/bar-glyphs/**",
+    ],
     inputs: [
       "packages/ui/src/icons.ts",
       "packages/ui/src/components/stella-wordmark.tsx",
       "scripts/generate-mobile-icons.ts",
+      // lucide-static's outlined glyphs, at the version the lockfile pins.
+      "apps/mobile/package.json",
+      "bun.lock",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
     ],
