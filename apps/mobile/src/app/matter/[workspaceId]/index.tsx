@@ -1,10 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import type { NativeStackHeaderItem } from "expo-router/native-stack";
 import { useTranslations } from "use-intl";
 
 import { useRevision } from "@/components/changes";
 import { MatterEntities } from "@/components/matter-entities";
-import { useGlyphImage } from "@/components/ui/use-glyph-image";
+import { barGlyph } from "@/components/ui/bar-glyph";
 import { useScan } from "@/components/use-scan";
 import { useSession } from "@/connection/session-provider";
 import { canScan } from "@/native/document-scanner";
@@ -21,16 +20,11 @@ const MatterScreen = () => {
   }>();
   const { state } = useSession();
   const revision = useRevision("documents", "tasks");
-  const addItems = useAddItems(workspaceId);
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: name ?? "",
-          unstable_headerRightItems: () => addItems,
-        }}
-      />
+      <Stack.Screen options={{ title: name ?? "" }} />
+      <AddMenu workspaceId={workspaceId} />
       {state.status === "signed-in" ? (
         <MatterEntities
           key={revision}
@@ -43,45 +37,34 @@ const MatterScreen = () => {
 };
 
 /** The matter's "+": a menu of what can be added to it. */
-function useAddItems(workspaceId: string): NativeStackHeaderItem[] {
+const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations("matter");
   const router = useRouter();
   const scan = useScan(workspaceId);
-  const plusGlyph = useGlyphImage("plus");
 
-  if (plusGlyph === null) {
-    return [];
-  }
-  return [
-    {
-      icon: { source: plusGlyph, type: "image" },
-      label: t("add"),
-      menu: {
-        items: [
-          ...(canScan()
-            ? [
-                {
-                  label: t("scanDocument"),
-                  onPress: scan,
-                  type: "action" as const,
-                },
-              ]
-            : []),
-          {
-            label: t("newTask"),
-            onPress: () => {
-              router.push({
-                pathname: "/task/new",
-                params: { matterId: workspaceId },
-              });
-            },
-            type: "action",
-          },
-        ],
-      },
-      type: "menu",
-    },
-  ];
-}
+  return (
+    <Stack.Toolbar placement="right">
+      <Stack.Toolbar.Menu>
+        {barGlyph("plus")}
+        <Stack.Toolbar.Label>{t("add")}</Stack.Toolbar.Label>
+        {canScan() ? (
+          <Stack.Toolbar.MenuAction onPress={scan}>
+            {t("scanDocument")}
+          </Stack.Toolbar.MenuAction>
+        ) : null}
+        <Stack.Toolbar.MenuAction
+          onPress={() => {
+            router.push({
+              pathname: "/task/new",
+              params: { matterId: workspaceId },
+            });
+          }}
+        >
+          {t("newTask")}
+        </Stack.Toolbar.MenuAction>
+      </Stack.Toolbar.Menu>
+    </Stack.Toolbar>
+  );
+};
 
 export default MatterScreen;

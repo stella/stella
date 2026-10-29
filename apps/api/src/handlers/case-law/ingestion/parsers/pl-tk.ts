@@ -1,3 +1,5 @@
+// parser-output-unchanged: The case DOM is shared for one assembly and cleanup happens on one owned clone; stored fields, HTML and AST output are unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own retention self-check changes no stored field or AST.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -35,10 +37,6 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
-import {
-  validateAndLog,
-  type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import {
   type MetadataUrlDefect,
   type SafeHref,
@@ -1281,22 +1279,9 @@ type ParsePlTkTextInput = {
   textHtml: string;
 };
 
-/**
- * Check the blocks against the text they were built from. The reference is
- * the portal's own markup, so text the builder failed to emit shows up as
- * lost content rather than being absent from both sides.
- */
-export const validatePlTkBlocks = (
-  caseNumber: string,
-  textHtml: string,
-  blocks: Block[],
-): ValidationResult =>
-  validateAndLog(
-    { parser: "pl-tk", caseNumber },
-    `<body>${textHtml}</body>`,
-    blocks,
-  );
-
+// The pipeline checks the blocks against the portal's own case page, read
+// from the stored raw (retention/sources/pl-tk.ts), not against the fragment
+// this parser selected.
 export const parsePlTkText = (
   input: ParsePlTkTextInput,
 ): { documentAst: DocumentAst; fulltext: string } => {
@@ -1304,7 +1289,6 @@ export const parsePlTkText = (
     input.page.cleanedTextByDocumentId.get(input.documentId) ??
     panic(`Ruling ${input.documentId} was not read from its parsed page`);
   const blocks = buildBlocks(input.page.$, fragment);
-  validatePlTkBlocks(input.caseNumber, input.textHtml, blocks);
   return {
     documentAst: {
       version: 1,
