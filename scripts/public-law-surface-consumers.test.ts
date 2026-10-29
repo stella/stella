@@ -63,6 +63,8 @@ const CONSUMERS = {
   "apps/web/src/features/statutes/statute-route-resolution.ts": "pages",
   "apps/web/src/features/statutes/components/pending-statute-changes.logic.ts":
     "pages",
+  // The iOS app opens decisions as the web's decision pages do.
+  "apps/mobile/src/state/case-law.ts": "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",

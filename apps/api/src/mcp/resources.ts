@@ -9,7 +9,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
-import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
+import { readMcpAppBundle } from "@stll/mcp-apps/bundles";
 import {
   CASE_LAW_RESULTS_APP,
   CITATION_GRAPH_APP,
@@ -166,7 +166,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     requiredTools: sameRequiredTools(CITATION_GRAPH_APP.linkedTools),
-    read: () => MCP_APP_BUNDLES["citation-graph"],
+    read: () => readMcpAppBundle("citation-graph"),
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },
@@ -182,7 +182,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     requiredTools: sameRequiredTools(STATUTE_TIMELINE_APP.linkedTools),
-    read: () => MCP_APP_BUNDLES["statute-timeline"],
+    read: () => readMcpAppBundle("statute-timeline"),
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },
@@ -198,7 +198,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     requiredTools: sameRequiredTools(DECISION_READER_APP.linkedTools),
-    read: () => MCP_APP_BUNDLES["decision-reader"],
+    read: () => readMcpAppBundle("decision-reader"),
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },
@@ -215,7 +215,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     requiredTools: sameRequiredTools(CASE_LAW_RESULTS_APP.linkedTools),
-    read: () => MCP_APP_BUNDLES["case-law-results"],
+    read: () => readMcpAppBundle("case-law-results"),
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },
@@ -314,10 +314,10 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     requiredTools: sameRequiredTools(DOCUMENT_UPLOAD_APP.linkedTools),
-    // A text import makes Bun embed the generated app in the compiled API
-    // binary. Reading from the source tree at runtime would work in dev but
-    // fail in the production image, which ships only the compiled server.
-    read: () => MCP_APP_BUNDLES["document-upload"],
+    // Text imports make Bun embed the generated app parts in the compiled
+    // API bundle. Reading from the source tree at runtime would work in dev
+    // but fail in the production image, which ships only the compiled server.
+    read: () => readMcpAppBundle("document-upload"),
     resourceMeta: () => uploadAppResourceMeta(),
   },
   {
@@ -329,7 +329,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     requiredTools: sameRequiredTools(FILE_COMPARISON_APP.linkedTools),
-    read: () => MCP_APP_BUNDLES["file-comparison"],
+    read: () => readMcpAppBundle("file-comparison"),
     resourceMeta: () => uploadAppResourceMeta(),
   },
 ];

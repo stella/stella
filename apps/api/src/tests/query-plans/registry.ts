@@ -82,7 +82,10 @@ import type {
   AccessPath,
   HeapFetchMitigation,
 } from "@/api/tests/query-plans/plan-walker";
-import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
+import {
+  QUERY_PLAN_PROVISION_SUBTREE_ROWS,
+  QUERY_PLAN_SAMPLE,
+} from "@/api/tests/query-plans/seed";
 
 type QueryPlanEntry = {
   id: string;
@@ -551,10 +554,14 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.top-citing-decisions"],
   },
   {
-    // A provision's cited-by page: its whole subtree of link rows, one range
-    // of the byte-ordered anchor index, never a walk of the work's links.
+    // A provision's cited-by page: its subtree of link rows is one
+    // index-only range of the byte-ordered anchor index, never a walk of the
+    // work's links, grouped per decision before any decision is read. The
+    // seed concentrates thousands of link rows on this one subtree.
+    // `citing-decisions-plan.db.test.ts` holds the decision and heap reads
+    // to the page at two subtree sizes.
     id: "case-law.provision-citing-decisions",
-    class: "aggregate",
+    class: "page",
     role: "public-law-reader",
     build: (tx) =>
       citingDecisionsPageQuery({
@@ -563,8 +570,8 @@ export const QUERY_PLAN_REGISTRY = [
           citingDecisionConditions(
             {
               jurisdiction: QUERY_PLAN_SAMPLE.caseLaw.country,
-              work: "/eli/cz/sb/2024/1",
-              anchor: "section-1",
+              work: QUERY_PLAN_SAMPLE.caseLaw.provisionWork,
+              anchor: QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor,
             },
             citingJurisdictionScope(QUERY_PLAN_SAMPLE.caseLaw.country) ??
               panic("The query-plan country must be public"),
@@ -574,6 +581,15 @@ export const QUERY_PLAN_REGISTRY = [
         limit: citationPageSize,
       }),
     seed: "case-law",
+    // The seeded subtree is two thirds of a small table, where a sequential
+    // scan would win; the corpus table is many times the subtree.
+    planMode: "covering-index",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: QUERY_PLAN_PROVISION_SUBTREE_ROWS,
+      reason:
+        "The subtree range visits at most one heap page per link row under the provision, and none on an all-visible page; it reads no decision.",
+    },
     contract: planContracts["case-law.provision-citing-decisions"],
   },
   {
