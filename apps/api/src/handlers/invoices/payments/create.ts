@@ -6,7 +6,7 @@ import {
   INVOICE_PAYMENT_METHODS,
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -57,7 +57,7 @@ const recordInvoicePaymentHandler = createSafeHandler(
       "Record a payment on a finalized or sent invoice: amount in minor units of the " +
       "invoice currency, paidOn no later than today. Reaching the total marks " +
       "it paid; more than the outstanding amount is refused.",
-    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
+    permissions: withBillingRead({ invoice: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

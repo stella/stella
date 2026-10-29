@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -60,7 +60,7 @@ const createInvoice = createSafeHandler(
   }) {
     if (
       body.expectedTotalAmount !== undefined &&
-      !hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+      !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION)
     ) {
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),
@@ -83,7 +83,10 @@ const createInvoice = createSafeHandler(
     );
     return Result.ok({
       ...result,
-      totalAmount: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+      totalAmount: hasMemberPermission(
+        memberRole,
+        BILLING_MATTER_READ_PERMISSION,
+      )
         ? result.totalAmount
         : null,
     });

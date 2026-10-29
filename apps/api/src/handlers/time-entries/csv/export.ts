@@ -3,7 +3,7 @@ import { and } from "drizzle-orm";
 
 import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { timeEntryAmount } from "@stll/money";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { entityContextId } from "@/api/db/entity-feature-policies";
 import { timeEntries } from "@/api/db/schema";
@@ -118,7 +118,7 @@ const config = {
     "status, task and activity codes, and narratives. Filter by date-worked " +
     "range, status, and work item. Unlike the LEDES export this includes " +
     "non-billable and written-off entries; the row count is capped.",
-  permissions: { ...BILLING_READ_PERMISSION, timeEntry: ["approve"] },
+  permissions: withBillingRead({ timeEntry: ["approve"] }),
   mcp: {
     type: "capability",
     readClass: "tenant",

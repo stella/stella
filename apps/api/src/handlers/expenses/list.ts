@@ -7,7 +7,7 @@ import {
   booleanFromString,
   numberFromString,
 } from "@stll/api-contract/http-input";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -70,7 +70,7 @@ const config = {
     "(dateFrom/dateTo, ISO YYYY-MM-DD), status, category, and billable. Each " +
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
-  permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
+  permissions: withBillingRead({ workspace: ["read"] }),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {

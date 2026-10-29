@@ -84,6 +84,23 @@ export const BILLING_READ_PERMISSION = {
   billing: ["read"],
 } as const satisfies PermissionInput;
 
+/** Reading monetary data also requires the matter read grant, including on attenuated credentials. */
+export const withBillingRead = <const T extends Partial<PermissionMap>>(
+  permissions: T,
+) => {
+  const { workspace, ...operationPermissions } = permissions;
+  return {
+    ...operationPermissions,
+    ...BILLING_READ_PERMISSION,
+    workspace:
+      workspace === undefined
+        ? ["read" as const]
+        : [...new Set(["read" as const, ...workspace])],
+  };
+};
+
+export const BILLING_MATTER_READ_PERMISSION = withBillingRead({});
+
 export const ac = createAccessControl(statements);
 
 const externalStellaGrants = {

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { InvoiceTotals } from "@stll/invoicing";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -43,7 +43,7 @@ const deleteInvoiceLine = createSafeHandler(
       "entry or expense line returns its entry to approved, unbilled status, " +
       "so it can be billed again. Only never-issued drafts can be edited; " +
       "issued invoices require a credit note even after reverting to draft.",
-    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
+    permissions: withBillingRead({ invoice: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

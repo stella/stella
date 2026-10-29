@@ -3,7 +3,7 @@ import { count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -321,7 +321,7 @@ const createContact = createSafeRootHandler(
   }) {
     if (
       body.defaultHourlyRate !== undefined &&
-      !hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+      !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION)
     ) {
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),

@@ -7,7 +7,7 @@ import {
   booleanFromString,
   numberFromString,
 } from "@stll/api-contract/http-input";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import {
   timeEntrySourceSchema,
@@ -332,7 +332,10 @@ const readTimeEntries = createSafeHandler(
         timezoneId: row.timezoneId,
         durationMinutes: row.durationMinutes,
         billedMinutes: row.billedMinutes,
-        rateAtEntry: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+        rateAtEntry: hasMemberPermission(
+          memberRole,
+          BILLING_MATTER_READ_PERMISSION,
+        )
           ? row.rateAtEntry
           : null,
         currency: row.currency,

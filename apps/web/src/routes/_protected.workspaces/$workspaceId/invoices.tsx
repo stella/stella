@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { PlusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -35,7 +35,7 @@ export const Route = createFileRoute(
     if (
       !(await ensureMemberPermission({
         queryClient: context.queryClient,
-        permissions: BILLING_READ_PERMISSION,
+        permissions: BILLING_MATTER_READ_PERMISSION,
       })) ||
       !(await isTimeBillingRouteEnabled(context.queryClient, {
         userId: context.user.id,

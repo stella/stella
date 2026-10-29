@@ -4,7 +4,7 @@ import { and } from "drizzle-orm";
 import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { MoneyTotals, timeEntryAmount } from "@stll/money";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
@@ -242,7 +242,7 @@ const config = {
     "entry plus total hours and totals per currency. Filter by date-worked " +
     "range, status, and work item. Returns PDF bytes; use " +
     "time-entries.csv.export to get the same entries as text.",
-  permissions: { ...BILLING_READ_PERMISSION, timeEntry: ["approve"] },
+  permissions: withBillingRead({ timeEntry: ["approve"] }),
   mcp: {
     type: "capability",
     readClass: "tenant",

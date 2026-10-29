@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { numberFromString } from "@stll/api-contract/http-input";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { parsePlainDate } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -333,7 +333,10 @@ const listApprovalQueue = createSafeRootHandler(
       ...queue,
       items: queue.items.map((item) => ({
         ...item,
-        rateAtEntry: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+        rateAtEntry: hasMemberPermission(
+          memberRole,
+          BILLING_MATTER_READ_PERMISSION,
+        )
           ? item.rateAtEntry
           : null,
       })),

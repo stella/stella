@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
@@ -130,7 +130,7 @@ export async function finalizeToolEgress(
   const payload = responsePayload(response);
   if (
     hasVisibleMoney(outputSchema, payload) &&
-    !hasEffectiveAuthority(context, BILLING_READ_PERMISSION)
+    !hasEffectiveAuthority(context, BILLING_MATTER_READ_PERMISSION)
   ) {
     return structuredErrorResult({
       code: "permission_denied",

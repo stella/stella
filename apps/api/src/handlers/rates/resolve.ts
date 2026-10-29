@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resolveRate } from "@/api/lib/billing/rates";
@@ -32,7 +32,7 @@ const resolveRateHandler = createSafeHandler(
       "first, then the organization role, then the table default). Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
-    permissions: BILLING_READ_PERMISSION,
+    permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "resolve_rate" },

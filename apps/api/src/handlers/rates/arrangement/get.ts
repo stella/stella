@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { billingArrangements } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -52,7 +52,7 @@ const readBillingArrangement = createSafeHandler(
     contract: "patch",
     description:
       "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
-    permissions: BILLING_READ_PERMISSION,
+    permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

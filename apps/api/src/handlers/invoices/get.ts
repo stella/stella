@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -32,7 +32,7 @@ const readInvoiceById = createSafeHandler(
       "before invoice lines lists no lines for its attached entries until " +
       "its first line edit; its totals still count them. Use " +
       "invoices.list for a paginated summary without lines.",
-    permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
+    permissions: withBillingRead({ workspace: ["read"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "list_invoices" },

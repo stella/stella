@@ -4,9 +4,11 @@ import * as v from "valibot";
 
 import { moneySchema } from "@stll/api-contract/billing-money";
 import {
+  BILLING_MATTER_READ_PERMISSION,
   BILLING_READ_PERMISSION,
   memberHasPermissions,
   roles,
+  withBillingRead,
 } from "@stll/permissions";
 
 import listExpenses from "@/api/handlers/expenses/list";
@@ -17,14 +19,19 @@ import {
   getSafeHandlerAccessMetadata,
 } from "@/api/lib/api-handlers";
 import { moneyPaths } from "@/api/lib/billing/money-response";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
 import { apiApp } from "@/api/server";
 import {
   createTestHandlerContext,
@@ -38,10 +45,23 @@ const carriesBillingRead = (permissions: unknown) =>
   Array.isArray(permissions["billing"]) &&
   permissions["billing"].includes("read");
 
+const carriesMoneyRead = (permissions: unknown) =>
+  isRecord(permissions) &&
+  Array.isArray(permissions["billing"]) &&
+  permissions["billing"].includes("read") &&
+  Array.isArray(permissions["workspace"]) &&
+  permissions["workspace"].includes("read");
+
 const monetaryRouteOffenders = (routes: readonly RouteEntry[]) =>
   routes
     .filter(({ definition }) => {
       const paths = moneyPaths(definition.config["moneyResponse"]);
+      if (
+        carriesBillingRead(definition.config["permissions"]) &&
+        !carriesMoneyRead(definition.config["permissions"])
+      ) {
+        return true;
+      }
       if (paths.length === 0) {
         return false;
       }
@@ -56,8 +76,8 @@ const monetaryRouteOffenders = (routes: readonly RouteEntry[]) =>
       }
       return (
         paths.some(({ nullable }) => !nullable) &&
-        (!carriesBillingRead(definition.config["permissions"]) ||
-          !carriesBillingRead(metadata.permissions))
+        (!carriesMoneyRead(definition.config["permissions"]) ||
+          !carriesMoneyRead(metadata.permissions))
       );
     })
     .map(({ method, path }) => `${method} ${path}`);
@@ -105,11 +125,24 @@ test("a new route with renamed nested Money fails the census without the billing
       ...mutation.definition,
       config: {
         ...mutation.definition.config,
-        permissions: BILLING_READ_PERMISSION,
+        permissions: BILLING_MATTER_READ_PERMISSION,
       },
     },
   };
   expect(monetaryRouteOffenders([fixed])).toEqual([]);
+  const billingOnly = {
+    ...fixed,
+    definition: {
+      ...fixed.definition,
+      config: {
+        ...fixed.definition.config,
+        permissions: BILLING_READ_PERMISSION,
+      },
+    },
+  };
+  expect(monetaryRouteOffenders([billingOnly])).toEqual([
+    `${billingOnly.method} /unrelated/new-operation`,
+  ]);
 });
 
 test("native Money schemas bind the same authority in normal and anonymized modes", () => {
@@ -122,6 +155,15 @@ test("native Money schemas bind the same authority in normal and anonymized mode
       const contract = getStaticMcpToolOutputContract(definition.name);
       expect(contract, definition.name).toBeDefined();
       const paths = moneyPaths(contract?.outputSchemaSource);
+      if (
+        definition.permissions.type === "all" &&
+        carriesBillingRead(definition.permissions.permissions)
+      ) {
+        expect(
+          carriesMoneyRead(definition.permissions.permissions),
+          definition.name,
+        ).toBe(true);
+      }
       if (paths.length === 0) {
         continue;
       }
@@ -132,7 +174,7 @@ test("native Money schemas bind the same authority in normal and anonymized mode
       expect(definition.permissions.type, definition.name).toBe("all");
       if (definition.permissions.type === "all") {
         expect(
-          carriesBillingRead(definition.permissions.permissions),
+          carriesMoneyRead(definition.permissions.permissions),
           definition.name,
         ).toBe(true);
       }
@@ -253,5 +295,71 @@ test("MCP and AI egress enforce Money schemas identically in normal and anonymiz
         }),
       ).toEqual({ status: "success", data: { renamed: null } });
     }
+  }
+});
+
+test("money permissions preserve operation grants and require both credential reads", async () => {
+  const permissions = withBillingRead({
+    invoice: ["update"],
+    workspace: ["update"],
+  });
+  expect(permissions).toEqual({
+    invoice: ["update"],
+    workspace: ["read", "update"],
+    billing: ["read"],
+  });
+  const credentialPermissions = BILLING_READ_PERMISSION;
+  const context = asTestRaw<
+    Parameters<typeof BILLING_TOOL_HANDLERS.list_invoices>[0]["context"]
+  >({ memberRole: "owner", credentialPermissions });
+  const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+    ({ name }) => name === "list_invoices",
+  );
+  expect(definition).toBeDefined();
+  if (!definition) {
+    return;
+  }
+  expect(hasMcpToolAuthority(context, definition)).toBe(false);
+  expect(
+    hasMcpToolAuthority(
+      { ...context, credentialPermissions: BILLING_MATTER_READ_PERMISSION },
+      definition,
+    ),
+  ).toBe(true);
+  for (const args of [
+    { matter_id: "00000000-0000-4000-8000-000000000001" },
+    { invoice_id: "00000000-0000-4000-8000-000000000002" },
+  ]) {
+    expect(
+      await BILLING_TOOL_HANDLERS.list_invoices({ context, args }),
+    ).toEqual({
+      status: "error",
+      error: { type: "text", message: "Forbidden" },
+    });
+  }
+  const rest = createTestHandlerContext({
+    audit: NO_AUDIT,
+    safeDb: NO_DB,
+    scopedDb: NO_DB,
+    memberRole: authorizedMemberRole({
+      role: "owner",
+      credential: { type: "attenuated", permissions: credentialPermissions },
+    }),
+    body: {},
+    params: {},
+    query: {},
+  });
+  expect(await listExpenses.handler(asTestRaw(rest))).toMatchObject({
+    code: 403,
+  });
+  for (const mode of ["default", "anonymized"] as const) {
+    expect(
+      await finalizeToolEgress({
+        context,
+        mode,
+        outputSchema: v.object({ amount: moneySchema }),
+        response: { status: "success", data: { amount: 123 } },
+      }),
+    ).toMatchObject({ status: "error" });
   }
 });

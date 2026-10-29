@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import type { OrganizationRoleName } from "@stll/auth-model";
 import {
-  BILLING_READ_PERMISSION,
+  BILLING_MATTER_READ_PERMISSION,
   memberHasPermissions,
 } from "@stll/permissions";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -31,7 +31,7 @@ export const MemberBillingAccessCell = ({
   const roleGrant = memberHasPermissions({
     role,
     billingAccess: false,
-    permissions: BILLING_READ_PERMISSION,
+    permissions: BILLING_MATTER_READ_PERMISSION,
   });
   const mutation = useMutation({
     mutationFn: async (next: boolean) => {

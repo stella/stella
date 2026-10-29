@@ -3,7 +3,7 @@ import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
@@ -75,7 +75,7 @@ const readRateEntries = createSafeHandler(
       "currency units, its effective dates, and its person or organization role selector " +
       "(both null for the table fallback). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
-    permissions: BILLING_READ_PERMISSION,
+    permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

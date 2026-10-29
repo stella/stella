@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -25,7 +25,7 @@ const voidInvoicePaymentHandler = createSafeHandler(
     description:
       "Void a mistaken invoice payment. The payment stays on record as " +
       "voided; a paid invoice it no longer covers returns to its prior status.",
-    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
+    permissions: withBillingRead({ invoice: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

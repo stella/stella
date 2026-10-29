@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { type InvoiceTotals, quantityText } from "@stll/invoicing";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceLines } from "@/api/db/schema";
@@ -88,7 +88,7 @@ const updateInvoiceLine = createSafeHandler(
       "snapshotted quantity, unit, and price; its description and VAT may change. Omitted fields stay " +
       "unchanged. Only drafts that have never been issued can be edited; " +
       "issued invoices require a credit note, even after reverting to draft.",
-    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
+    permissions: withBillingRead({ invoice: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

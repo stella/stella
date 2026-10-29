@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import type { invoicePayments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -54,7 +54,7 @@ const listInvoicePayments = createSafeHandler(
     description:
       "List an invoice's payments oldest first, voided ones included, with " +
       "its paid and outstanding amounts in minor units.",
-    permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
+    permissions: withBillingRead({ workspace: ["read"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

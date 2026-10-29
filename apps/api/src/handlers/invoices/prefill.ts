@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { readMatterInvoicePrefill } from "@/api/lib/billing/invoice-prefill-operation";
@@ -22,7 +22,7 @@ const prefillInvoice = createSafeHandler(
       "each with where it came from; and the organization's VAT rate periods, " +
       "since billing fewer items can move the supply date into another rate. " +
       "Pass the chosen ids to invoices.create, which applies the same prefill.",
-    permissions: { ...BILLING_READ_PERMISSION, invoice: ["create"] },
+    permissions: withBillingRead({ invoice: ["create"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -134,7 +134,7 @@ const useTimeEntryFormState = ({
   contextState = "available",
 }: TimeEntryFormStateOptions) => {
   const t = useTranslations();
-  const canReadBilling = usePermissions(BILLING_READ_PERMISSION);
+  const canReadBilling = usePermissions(BILLING_MATTER_READ_PERMISSION);
   const [rateOverride, setRateOverride] = useState(
     () => (defaultValues?.rateAtEntry ?? 0) > 0,
   );

@@ -3,7 +3,7 @@ import { and, asc } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { withBillingRead } from "@stll/permissions";
 
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -60,7 +60,7 @@ const readInvoices = createSafeHandler(
       "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
       "total, and paid and outstanding amounts, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
-    permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
+    permissions: withBillingRead({ workspace: ["read"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "list_invoices" },

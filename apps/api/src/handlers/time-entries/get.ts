@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
@@ -100,7 +100,10 @@ const readTimeEntryById = createSafeHandler(
 
     return Result.ok({
       ...row,
-      rateAtEntry: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+      rateAtEntry: hasMemberPermission(
+        memberRole,
+        BILLING_MATTER_READ_PERMISSION,
+      )
         ? row.rateAtEntry
         : null,
       userName,

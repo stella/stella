@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { workspaceContacts, workspaces } from "@/api/db/schema";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
@@ -144,7 +144,7 @@ const readContactById = createSafeRootHandler(
       ...contactFields,
       defaultHourlyRate: hasMemberPermission(
         memberRole,
-        BILLING_READ_PERMISSION,
+        BILLING_MATTER_READ_PERMISSION,
       )
         ? contact.defaultHourlyRate
         : null,

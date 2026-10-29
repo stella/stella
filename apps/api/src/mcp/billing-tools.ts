@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
-import { BILLING_READ_PERMISSION, roles } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION, roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -687,7 +687,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
   const input = parsed.output;
   const canReadBilling = hasEffectiveAuthority(
     context,
-    BILLING_READ_PERMISSION,
+    BILLING_MATTER_READ_PERMISSION,
   );
 
   // Detail mode.
@@ -1301,7 +1301,7 @@ const resolveRateArgsSchema = nullAsAbsent(
 const handleResolveRateTool: McpToolHandler<
   v.InferInput<typeof RESOLVE_RATE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, BILLING_READ_PERMISSION)) {
+  if (!hasEffectiveAuthority(context, BILLING_MATTER_READ_PERMISSION)) {
     return errorResult("Forbidden");
   }
 
@@ -1546,7 +1546,7 @@ const invoiceDetailView = (
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, BILLING_READ_PERMISSION)) {
+  if (!hasEffectiveAuthority(context, BILLING_MATTER_READ_PERMISSION)) {
     return errorResult("Forbidden");
   }
 
@@ -1840,7 +1840,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
-    permissions: { type: "all", permissions: BILLING_READ_PERMISSION },
+    permissions: { type: "all", permissions: BILLING_MATTER_READ_PERMISSION },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
@@ -1871,7 +1871,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
-    permissions: { type: "all", permissions: BILLING_READ_PERMISSION },
+    permissions: { type: "all", permissions: BILLING_MATTER_READ_PERMISSION },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

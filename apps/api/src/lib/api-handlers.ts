@@ -8,7 +8,7 @@ import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { Money } from "@stll/api-contract/billing-money";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { CentsAmount } from "@stll/money";
-import { BILLING_READ_PERMISSION } from "@stll/permissions";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -1715,7 +1715,7 @@ const createSafeScopedHandler = <
             await runCheckedScopedHandler(operation, usageLane, ctx.set),
         );
         if (
-          !hasMemberPermission(memberRole, BILLING_READ_PERMISSION) &&
+          !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION) &&
           hasVisibleMoney(config.moneyResponse, result)
         ) {
           return toSafeStatusResponse(403, {
