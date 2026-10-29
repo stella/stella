@@ -3,17 +3,17 @@ import type { RunFinishedOutcome, StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 
 const duration = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
-const timestamp = v.pipe(v.string(), v.isoTimestamp());
 const timingFields = {
   finished: { status: v.literal("finished"), durationMs: duration },
   running: {
     status: v.literal("running"),
     durationMs: duration,
-    startedAt: timestamp,
-    observedAt: timestamp,
+    startedAt: apiDateTimeSchema,
+    observedAt: apiDateTimeSchema,
     elapsedMs: duration,
   },
 } as const satisfies {
