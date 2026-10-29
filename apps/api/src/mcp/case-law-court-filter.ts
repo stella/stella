@@ -6,6 +6,7 @@ import {
   apexCourtAbbreviations,
   courtAbbreviation,
 } from "@stll/api-contract/case-law-court-abbreviations";
+import { ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 import { createTtlFlightCache } from "@stll/concurrency/ttl-flight-cache";
 import { Temporal } from "@stll/time";
 
@@ -114,15 +115,24 @@ export const storedCourtIdentities = (
  * of one court are one reading, so they share an entry, its value the first
  * spelling and the others its aliases.
  */
+const registeredCourts = Object.values(ECLI_COURT_REGISTRY).flatMap(
+  (registry) => Object.values(registry),
+);
+
 const courtVocabulary = (
   identities: readonly StoredCourtIdentity[],
 ): VocabularyEntry[] =>
   identities.map(({ abbreviation, spellings: [value, ...others] }) => ({
     value,
-    aliases:
-      abbreviation === undefined
-        ? others
-        : [...others, ...apexCourtAliases(abbreviation)],
+    aliases: [
+      ...others,
+      ...registeredCourts.flatMap((court) =>
+        court.name === value && "citationAliases" in court
+          ? court.citationAliases
+          : [],
+      ),
+      ...(abbreviation === undefined ? [] : apexCourtAliases(abbreviation)),
+    ],
   }));
 
 /** An apex court's abbreviation, and its English names where it has any. */

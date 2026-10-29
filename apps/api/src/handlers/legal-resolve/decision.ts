@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 
 import { normalizeCountry } from "@stll/agent-input";
+import { ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 import {
+  exactDecisionMatches,
   parseDecisionQuery,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
@@ -28,6 +30,10 @@ import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  readCourtFilter,
+  storedCourtIdentities,
+} from "@/api/mcp/case-law-court-filter";
 import {
   MCP_CONTENT_MAX_CHARS,
   resolveTextWindowBounds,
@@ -163,7 +169,7 @@ const candidate = (row: DecisionIdentityRow) => ({
 const resolvedDecision = async (
   row: DecisionIdentityRow,
   read: typeof readDecisionReaderSource,
-): Promise<LegalResolveResponse> => {
+): Promise<Extract<LegalResolveResponse, { status: "resolved" }>> => {
   const content = await read({
     decisionId: row.id,
     phase: "blocks",
@@ -247,49 +253,130 @@ export const resolveDecision = async ({
     countries: CASE_LAW_SURFACE_COUNTRIES.identity,
     locator: decisionIdentityLocatorOf(intent),
   });
-  const resolution = resolveDecisionIdentity(intent, rows, { reporters });
-  switch (resolution.status) {
-    case "none":
-      return { status: "not_found", reason: "no_exact_identity" };
-    case "ambiguous": {
-      // A printed sheet no stored decision is known to carry. One decision
-      // in the file is the one the reader asked for; several are left open.
-      if (resolution.reason === "selector_unmatched") {
-        // Only a printed sheet narrows the open candidates to decisions with
-        // no recorded sheet; a part selector leaves the whole file open, so a
-        // lone candidate may be a sibling under another part.
-        const [only, ...rest] = resolution.candidates;
-        const printedSheet =
-          intent.kind === "docket" && intent.selector.kind === "sheet";
-        return printedSheet && only !== undefined && rest.length === 0
-          ? await resolvedDecision(only, read)
-          : { status: "not_found", reason: "no_exact_identity" };
-      }
-      return {
-        status: "ambiguous",
-        candidates: resolution.candidates
+  // Read the court against the full registry, not just this docket's holders:
+  // a court with no hit must still constrain the citation.
+  const registry = Object.entries(ECLI_COURT_REGISTRY).find(
+    ([jurisdiction]) => jurisdiction === normalized.value.alpha2,
+  )?.[1];
+  const identities = storedCourtIdentities(country, [
+    ...new Set([
+      ...Object.values(registry ?? {}).map(({ name }) => name),
+      ...rows.map(({ court }) => court),
+    ]),
+  ]);
+  const courtReading =
+    intent.kind === "docket" && intent.embeddedIn !== undefined
+      ? readCourtFilter({ court: intent.embeddedIn, identities })
+      : undefined;
+  const namedCourts =
+    courtReading?.type === "court" ? courtReading.courts : undefined;
+  // A sheet lookup intentionally does not load every member of a file.
+  // Discover other courts through the indexed bare-family lookup while
+  // retaining the exact read for selecting the requested decision.
+  const docketRows =
+    namedCourts !== undefined &&
+    intent.kind === "docket" &&
+    intent.selector.kind !== "none"
+      ? await lookup({
+          caseLawDb: caseLawPublicReadDb,
+          country,
+          countries: CASE_LAW_SURFACE_COUNTRIES.identity,
+          locator: {
+            kind: "docket",
+            value: intent.family,
+            family: intent.family,
+            selector: { kind: "none" },
+          },
+        })
+      : [];
+  const family = exactDecisionMatches(
+    intent,
+    [...new Map([...rows, ...docketRows].map((row) => [row.id, row])).values()],
+    { reporters },
+  );
+  const otherCourtCandidates =
+    namedCourts === undefined
+      ? []
+      : family
+          .filter(({ court }) => !namedCourts.includes(court))
           .slice(0, LIMITS.caseLawLookupCandidatesMax)
-          .map(candidate),
-      };
-    }
-    case "unique":
-      return await resolvedDecision(resolution.decision, read);
-    case "incomplete_identifier": {
-      // A bare docket of a file that can hold several decisions. When the
-      // lookup finds exactly one, that is the decision: asking for a sheet
-      // the reader does not have only hides it. Several stay unresolved, and
-      // exact identity never picks one of them for the caller.
-      const [only, ...rest] = resolution.candidates;
-      if (only !== undefined && rest.length === 0) {
-        return await resolvedDecision(only, read);
-      }
-      return {
-        status: "incomplete_identifier",
-        missing: [...resolution.missing],
-      };
-    }
-    default:
-      resolution satisfies never;
-      return panic("Unhandled decision identity resolution");
+          .map((row) => ({
+            ...candidate(row),
+            court: row.court,
+            decisionDate: row.decisionDate,
+            decisionType: row.decisionType,
+            subjectSummary: row.subjectSummary ?? null,
+          }));
+  const scopedRows =
+    namedCourts === undefined
+      ? rows
+      : rows.filter(({ court }) => namedCourts.includes(court));
+  if (
+    namedCourts !== undefined &&
+    family.length > 0 &&
+    !family.some(({ court }) => namedCourts.includes(court))
+  ) {
+    return {
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates,
+    };
   }
+  type LookupResolutionResponse = Exclude<
+    LegalResolveResponse,
+    { status: "country_unavailable" }
+  >;
+  const resolve = async (): Promise<LookupResolutionResponse> => {
+    const resolution = resolveDecisionIdentity(intent, scopedRows, {
+      reporters,
+    });
+    switch (resolution.status) {
+      case "none":
+        return { status: "not_found", reason: "no_exact_identity" };
+      case "ambiguous": {
+        // A printed sheet no stored decision is known to carry. One decision
+        // in the file is the one the reader asked for; several are left open.
+        if (resolution.reason === "selector_unmatched") {
+          // Only a printed sheet narrows the open candidates to decisions with
+          // no recorded sheet; a part selector leaves the whole file open, so a
+          // lone candidate may be a sibling under another part.
+          const [only, ...rest] = resolution.candidates;
+          const printedSheet =
+            intent.kind === "docket" && intent.selector.kind === "sheet";
+          return printedSheet && only !== undefined && rest.length === 0
+            ? await resolvedDecision(only, read)
+            : { status: "not_found", reason: "no_exact_identity" };
+        }
+        return {
+          status: "ambiguous",
+          candidates: resolution.candidates
+            .slice(0, LIMITS.caseLawLookupCandidatesMax)
+            .map(candidate),
+        };
+      }
+      case "unique":
+        return await resolvedDecision(resolution.decision, read);
+      case "incomplete_identifier": {
+        // A bare docket of a file that can hold several decisions. When the
+        // lookup finds exactly one, that is the decision: asking for a sheet
+        // the reader does not have only hides it. Several stay unresolved, and
+        // exact identity never picks one of them for the caller.
+        const [only, ...rest] = resolution.candidates;
+        if (only !== undefined && rest.length === 0) {
+          return await resolvedDecision(only, read);
+        }
+        return {
+          status: "incomplete_identifier",
+          missing: [...resolution.missing],
+        };
+      }
+      default:
+        resolution satisfies never;
+        return panic("Unhandled decision identity resolution");
+    }
+  };
+  const result = await resolve();
+  return otherCourtCandidates.length === 0
+    ? result
+    : { ...result, otherCourtCandidates };
 };

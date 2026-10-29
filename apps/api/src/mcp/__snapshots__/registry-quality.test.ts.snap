@@ -1430,7 +1430,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+    "description": "Resolve one docket or ECLI; use search_case_law for descriptions. A recognized CZ/SK court name or alias in identifier constrains the docket. otherCourtCandidates lists other holders with court, decisionId, date, type and bounded publisher subjectSummary; judge relevance yourself, no subject matching. A docket held only elsewhere returns not_found/not_at_this_court, never switches courts. Resolved returns language, languageAlternates, decisionId and bounded text; continue partial text with read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists parts to supply and retry. Country_unavailable means no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -1461,7 +1461,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+          "description": "One docket with its sheet when known, or ECLI. Include the court name or citation alias to constrain a CZ/SK docket. Use search_case_law for descriptions."
         }
       }
     }
@@ -8086,7 +8086,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+    "description": "Resolve one docket or ECLI; use search_case_law for descriptions. A recognized CZ/SK court name or alias in identifier constrains the docket. otherCourtCandidates lists other holders with court, decisionId, date, type and bounded publisher subjectSummary; judge relevance yourself, no subject matching. A docket held only elsewhere returns not_found/not_at_this_court, never switches courts. Resolved returns language, languageAlternates, decisionId and bounded text; continue partial text with read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists parts to supply and retry. Country_unavailable means no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -8117,7 +8117,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+          "description": "One docket with its sheet when known, or ECLI. Include the court name or citation alias to constrain a CZ/SK docket. Use search_case_law for descriptions."
         }
       }
     }
@@ -15208,7 +15208,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+    "description": "Resolve one docket or ECLI; use search_case_law for descriptions. A recognized CZ/SK court name or alias in identifier constrains the docket. otherCourtCandidates lists other holders with court, decisionId, date, type and bounded publisher subjectSummary; judge relevance yourself, no subject matching. A docket held only elsewhere returns not_found/not_at_this_court, never switches courts. Resolved returns language, languageAlternates, decisionId and bounded text; continue partial text with read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists parts to supply and retry. Country_unavailable means no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -15239,7 +15239,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+          "description": "One docket with its sheet when known, or ECLI. Include the court name or citation alias to constrain a CZ/SK docket. Use search_case_law for descriptions."
         }
       }
     }
@@ -17178,7 +17178,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+    "description": "Resolve one docket or ECLI; use search_case_law for descriptions. A recognized CZ/SK court name or alias in identifier constrains the docket. otherCourtCandidates lists other holders with court, decisionId, date, type and bounded publisher subjectSummary; judge relevance yourself, no subject matching. A docket held only elsewhere returns not_found/not_at_this_court, never switches courts. Resolved returns language, languageAlternates, decisionId and bounded text; continue partial text with read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists parts to supply and retry. Country_unavailable means no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -17209,7 +17209,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+          "description": "One docket with its sheet when known, or ECLI. Include the court name or citation alias to constrain a CZ/SK docket. Use search_case_law for descriptions."
         }
       }
     }

@@ -5,6 +5,7 @@ import {
   apexCourtAbbreviations,
   courtAbbreviation,
 } from "@stll/api-contract/case-law-court-abbreviations";
+import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -245,4 +246,25 @@ describe("court and courts combine as the search ANDs them", () => {
       courtSpellings: undefined,
     });
   });
+});
+
+test("every registered Czech court citation alias keeps its court, including branches", () => {
+  const courts = Object.values(CZ_ECLI_COURT_REGISTRY);
+  const identities = storedCourtIdentities(
+    "CZE",
+    courts.map(({ name }) => name),
+  );
+  for (const { name, citationAliases = [] } of courts) {
+    for (const alias of citationAliases) {
+      const reading = readCourtFilter({
+        court: `rozsudek ${alias} 65 A 3/2025`,
+        identities,
+      });
+      expect(reading.type, alias).toBe("court");
+      if (reading.type !== "court") {
+        continue;
+      }
+      expect(reading.courts, alias).toEqual([name]);
+    }
+  }
 });
