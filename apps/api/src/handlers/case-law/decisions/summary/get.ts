@@ -74,6 +74,9 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "sourceUrl",
   "documentUrl",
   "sourceDocumentId",
+  "fallbackIdentityKey",
+  "fallbackCohortKey",
+  "fallbackContentHash",
   "sheetNumber",
   // Documents, raw observations and analysis are deliberately never loaded by hover.
   "fulltext",

@@ -59,6 +59,10 @@ const PARSED_GENERATION_COLUMNS = {
   sourceUrl: "parse-input-or-output",
   documentUrl: "parse-input-or-output",
   sourceDocumentId: "parse-input-or-output",
+  // Derived identity fingerprints do not change the parsed document generation.
+  fallbackIdentityKey: "bookkeeping",
+  fallbackCohortKey: "bookkeeping",
+  fallbackContentHash: "bookkeeping",
   sheetNumber: "parse-input-or-output",
   documentFetchRequestedAt: "bookkeeping",
   documentFetchAttemptedAt: "bookkeeping",

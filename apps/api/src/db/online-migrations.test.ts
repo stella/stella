@@ -4,6 +4,10 @@ import { describe, expect, test } from "bun:test";
 import { defaultConfig } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import {
+  FALLBACK_DECISION_IDENTITY_INDEX,
+  PREVIOUS_FALLBACK_DECISION_INDEX,
+} from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
@@ -105,7 +109,6 @@ const REPORT_EXPORT_INDEX = "report_exports_workspace_requester_created_idx";
 const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
 const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
-const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
 const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
 const LEGACY_DOCUMENT_DATE_INDEX =
@@ -133,6 +136,18 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test("the online runner does not rebuild the obsolete docket-only fallback index", () => {
+    expect(
+      ONLINE_MIGRATION_INDEXES.some(
+        ({ name }) => name === PREVIOUS_FALLBACK_DECISION_INDEX,
+      ),
+    ).toBe(false);
+    expect(
+      ONLINE_INDEX_REPLACEMENTS.flatMap(
+        ({ replacementNames }) => replacementNames,
+      ),
+    ).not.toContain(PREVIOUS_FALLBACK_DECISION_INDEX);
+  });
   /**
    * The online phase runs inside the release's migrate run, so a walk or a
    * full-table scan there holds the release for its whole length. The
@@ -695,7 +710,7 @@ describe("online migrations", () => {
     expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
   });
 
-  test("retires a legacy index only after both replacements validate", async () => {
+  test("retires a legacy index only after publisher and fallback replacements validate", async () => {
     const harness = createHarness();
 
     await runOnlineMigrations(harness.pool);
@@ -708,7 +723,7 @@ describe("online migrations", () => {
       indexOfStatement(harness.statements, SOURCE_DOCUMENT_INDEX),
     );
     expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
+      indexOfStatement(harness.statements, FALLBACK_DECISION_IDENTITY_INDEX),
     );
   });
 
@@ -795,7 +810,7 @@ describe("online migrations", () => {
     // the gate is what refuses. Invalid on both reads would fail during the
     // phase instead and never reach the gate this test is about.
     const harness = createHarness({
-      indexStates: { [SOURCE_CASE_INDEX]: [true, false] },
+      indexStates: { [FALLBACK_DECISION_IDENTITY_INDEX]: [true, false] },
     });
 
     const rejection: unknown = await runOnlineMigrations(harness.pool).then(
@@ -803,7 +818,7 @@ describe("online migrations", () => {
       (error: unknown) => error,
     );
     expect(rejection).toMatchObject({
-      message: `Required migration index ${SOURCE_CASE_INDEX} is not ready`,
+      message: `Required migration index ${FALLBACK_DECISION_IDENTITY_INDEX} is not ready`,
     });
     // The phase found both replacements valid, so it neither rebuilt nor
     // reindexed either one.

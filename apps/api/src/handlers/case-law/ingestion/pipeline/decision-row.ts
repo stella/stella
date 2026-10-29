@@ -37,6 +37,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { decisionFallbackColumns } from "@/api/lib/case-law/fallback-decision-identity";
+import {
+  FALLBACK_DECISION_CONTENT_INDEX,
+  FALLBACK_DECISION_IDENTITY_INDEX,
+} from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -52,6 +57,7 @@ const insertedRowValues = (
     result,
     persistedSourceDocumentId,
     persistedDecisionDate,
+    storageIdentity,
     observedAt,
     observationOrder,
     sourceFingerprintVersion,
@@ -65,6 +71,11 @@ const insertedRowValues = (
   sourceId,
   ...docketColumns,
   sourceDocumentId: persistedSourceDocumentId,
+  ...decisionFallbackColumns(
+    persistedSourceDocumentId === undefined
+      ? storageIdentity
+      : { type: "document", sourceDocumentId: persistedSourceDocumentId },
+  ),
   sheetNumber: result.sheetNumber,
   slug,
   ecli: result.ecli,
@@ -384,10 +395,16 @@ export const writeDecisionRowWithSlug = async (
   scopedDb: ScopedDb,
   write: DecisionRowWrite,
 ): Promise<Result<DecisionRowWriteStatus, unknown>> => {
-  const { sourceId, existing, persistedSourceDocumentId, result } = write;
+  const {
+    sourceId,
+    existing,
+    persistedSourceDocumentId,
+    storageIdentity,
+    result,
+  } = write;
   const slugIdentity = persistedSourceDocumentId
     ? `${sourceId}\u0000document\u0000${persistedSourceDocumentId}`
-    : `${sourceId}\u0000case\u0000${result.caseNumber}\u0000${result.language}`;
+    : `${sourceId}\u0000case\u0000${JSON.stringify(decisionFallbackColumns(storageIdentity))}`;
   const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
   const slugLadder: DecisionSlugLadder = (attempt) =>
     attempt === 0
@@ -430,12 +447,17 @@ export const isConcurrentIdentityInsert = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
+    FALLBACK_DECISION_CONTENT_INDEX,
+  ) ||
+  isPgConstraintError(
+    error,
+    PG_ERROR.UNIQUE_VIOLATION,
     "case_law_decisions_source_document_idx",
   ) ||
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_case_lang_null_idx",
+    FALLBACK_DECISION_IDENTITY_INDEX,
   ) ||
   isPgConstraintError(
     error,

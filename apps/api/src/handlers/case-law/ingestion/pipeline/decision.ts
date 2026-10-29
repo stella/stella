@@ -137,33 +137,51 @@ const storedInputMatchesDecision = (
     existing.id === input.decisionId &&
     existing.sourceRawS3Key === input.sourceRawS3Key);
 
+const unresolvedFallbackIdentity = (
+  observation: ReturnType<typeof observeDecision>,
+  sourceId: SafeId<"caseLawSource">,
+): ProcessResult | null => {
+  if (observation.storageIdentity.type === "unkeyable") {
+    logger.warn("case_law.ingestion.fallback_identity_unresolved", {
+      sourceId,
+      identityType: observation.storageIdentity.type,
+    });
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY,
+    };
+  }
+  return null;
+};
+
 /**
  * One pass over a decision: resolve its identity, settle what an existing
  * row makes of it, store its raw payload, plan and write its row, then queue
  * its corpus mirror. Each phase answers the attempt's outcome, or a
  * contention the caller reconciles by running the attempt again.
  */
-const runDecisionAttempt = async ({
-  metadataUrlSchema,
-  statedEcliIdentity,
-  input,
-  inputProvenance,
-  judges,
-  sourceId,
-  scopedDb,
-  observedAt,
-  observationOrder,
-  refresh,
-  sourceFingerprintVersion,
-  sourceFingerprintFromStoredRaw,
-  corpus,
-  corpusBatch,
-  polarityRules,
-  signal,
-  s3Policy,
-}: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
-  signal?.throwIfAborted();
-  const observation = observeDecision({ input, sourceId, metadataUrlSchema });
+const runDecisionAttempt = async (
+  {
+    metadataUrlSchema,
+    statedEcliIdentity,
+    inputProvenance,
+    judges,
+    sourceId,
+    scopedDb,
+    observedAt,
+    observationOrder,
+    refresh,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw,
+    corpus,
+    corpusBatch,
+    polarityRules,
+    signal,
+    s3Policy,
+  }: ProcessDecisionAttemptOptions,
+  observation: ReturnType<typeof observeDecision>,
+): Promise<AttemptStep> => {
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
@@ -279,6 +297,7 @@ const runDecisionAttempt = async ({
         ...(s3Policy === undefined ? {} : { s3Policy }),
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
+        storageIdentity: observation.storageIdentity,
         sourceId,
         decisionId,
         result: plan.preparedResult,
@@ -374,7 +393,16 @@ const runDecisionAttempt = async ({
 const processDecisionAttempt = async (
   options: ProcessDecisionAttemptOptions,
 ): Promise<ProcessResult> => {
-  const step = await runDecisionAttempt(options);
+  options.signal?.throwIfAborted();
+  const observation = observeDecision(options);
+  const fallbackFailure = unresolvedFallbackIdentity(
+    observation,
+    options.sourceId,
+  );
+  if (fallbackFailure !== null) {
+    return fallbackFailure;
+  }
+  const step = await runDecisionAttempt(options, observation);
   if (step.status !== RECONCILE_CONTENTION.status) {
     return step;
   }

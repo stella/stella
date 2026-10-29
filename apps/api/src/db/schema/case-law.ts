@@ -69,6 +69,8 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
+import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
 import {
   publishedCaseLawDecisionFor,
   unredactedCaseLawDecisionFor,
@@ -653,6 +655,11 @@ export const caseLawDecisions = p.pgTable(
      * case-number key, which is sound for a source holding one court.
      */
     sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    /** Canonical court and decision evidence for rows without a publisher document id. */
+    fallbackIdentityKey: p.varchar("fallback_identity_key", { length: 320 }),
+    /** Weak source cohort; individual members are identified by normalized content. */
+    fallbackCohortKey: p.varchar("fallback_cohort_key", { length: 320 }),
+    fallbackContentHash: p.varchar("fallback_content_hash", { length: 64 }),
     /**
      * Sheet number within the court file (číslo listu), where the source
      * appends one to the docket: `11 C 153/2025-28` is sheet 28 of case
@@ -810,16 +817,15 @@ export const caseLawDecisions = p.pgTable(
         languageGroupKey: t.languageGroupKey,
       }),
     ),
-    // Identity, in two halves that together cover every row exactly once.
-    // Where the publisher states an id, that is the key. Where it does not,
-    // the case number still serves, because such a source holds one court
-    // and its numbering is unique within it.
+    // Publisher ids identify documents; fallback keys include court and decision
+    // evidence. The obsolete docket-only index is removed by the contract migration.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
+    ...fallbackDecisionIdentityIndexes(t),
     p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
+      .uniqueIndex(PREVIOUS_FALLBACK_DECISION_INDEX)
       .on(t.sourceId, t.caseNumber, t.language)
       .where(isNull(t.sourceDocumentId)),
     p

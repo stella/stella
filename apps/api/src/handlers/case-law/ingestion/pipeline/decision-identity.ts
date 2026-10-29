@@ -25,6 +25,10 @@ import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/sup
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
+import {
+  decisionStorageIdentity,
+  decisionStorageIdentityMatch,
+} from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import {
   STATED_ECLI_IDENTITY,
@@ -44,29 +48,6 @@ const ecliComparisonKey = (ecli: string): string | undefined =>
     value: ecli,
   }) || undefined;
 
-type CaseLawDecisionIdentityOptions = Pick<
-  IngestionResult,
-  "caseNumber" | "language" | "sourceDocumentId"
-> & { sourceId: SafeId<"caseLawSource"> };
-
-const NULL_SOURCE_DOCUMENT_ID_FILTER = { isNull: true } as const;
-
-/** Match exactly the two partial unique indexes that define source identity. */
-const caseLawDecisionIdentityWhere = ({
-  caseNumber,
-  language,
-  sourceDocumentId,
-  sourceId,
-}: CaseLawDecisionIdentityOptions) =>
-  sourceDocumentId
-    ? { sourceId: { eq: sourceId }, sourceDocumentId }
-    : {
-        sourceId: { eq: sourceId },
-        caseNumber,
-        language,
-        sourceDocumentId: NULL_SOURCE_DOCUMENT_ID_FILTER,
-      };
-
 /** The adapter's observation, sanitized, and the publisher identities it names. */
 export type ObservedDecision = {
   observed: IngestionResult;
@@ -75,6 +56,7 @@ export type ObservedDecision = {
    * a stated date was unusable, undefined when none was stated.
    */
   persistedDecisionDate: string | null | undefined;
+  storageIdentity: ReturnType<typeof decisionStorageIdentity>;
   exactSourceIdentityCandidates: string[];
   repairSourceIdentityCandidates: string[];
   sourceIdentityCandidates: string[];
@@ -184,6 +166,10 @@ export const observeDecision = ({
   }
   return {
     observed,
+    storageIdentity: decisionStorageIdentity({
+      ...observed,
+      decisionDate: persistedDecisionDate ?? undefined,
+    }),
     persistedDecisionDate,
     exactSourceIdentityCandidates,
     repairSourceIdentityCandidates,
@@ -395,6 +381,7 @@ type FindExistingDecisionOptions = Pick<
   | "legacyCaseNumbers"
   | "observed"
   | "repairSourceIdentityCandidates"
+  | "storageIdentity"
 > & {
   sourceId: SafeId<"caseLawSource">;
   statedEcliIdentity: StatedEcliIdentity;
@@ -414,6 +401,7 @@ const findExistingDecisionTx = async (
     exactSourceIdentityCandidates,
     legacyCaseNumbers,
     observed,
+    storageIdentity,
     repairSourceIdentityCandidates,
     sourceId,
     statedEcliIdentity,
@@ -427,12 +415,10 @@ const findExistingDecisionTx = async (
   let provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
     where:
       provisionalClaimedDecisionId === undefined
-        ? caseLawDecisionIdentityWhere({
-            caseNumber: observed.caseNumber,
-            language: observed.language,
-            sourceDocumentId: observed.sourceDocumentId,
-            sourceId,
-          })
+        ? {
+            sourceId: { eq: sourceId },
+            ...decisionStorageIdentityMatch(storageIdentity),
+          }
         : { id: { eq: provisionalClaimedDecisionId } },
     columns: IDENTITY_COLUMNS,
     extras: IDENTITY_EXTRAS,
@@ -499,12 +485,10 @@ const findExistingDecisionTx = async (
     claimedDecisionId === provisionalClaimedDecisionId
       ? provisionalIdentified
       : await tx.query.caseLawDecisions.findFirst({
-          where: caseLawDecisionIdentityWhere({
-            caseNumber: observed.caseNumber,
-            language: observed.language,
-            sourceDocumentId: observed.sourceDocumentId,
-            sourceId,
-          }),
+          where: {
+            sourceId: { eq: sourceId },
+            ...decisionStorageIdentityMatch(storageIdentity),
+          },
           columns: IDENTITY_COLUMNS,
           extras: IDENTITY_EXTRAS,
         });
@@ -623,6 +607,7 @@ export const resolveDecisionIdentityTx = async (
   tx: Transaction,
   {
     observed,
+    storageIdentity,
     exactSourceIdentityCandidates,
     legacyCaseNumbers,
     repairSourceIdentityCandidates,
@@ -693,6 +678,7 @@ export const resolveDecisionIdentityTx = async (
       exactSourceIdentityCandidates,
       legacyCaseNumbers,
       observed,
+      storageIdentity,
       repairSourceIdentityCandidates,
       sourceId,
       statedEcliIdentity,

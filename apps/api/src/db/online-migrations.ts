@@ -8,6 +8,8 @@ import {
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
+import { FALLBACK_DECISION_INDEXES } from "@/api/lib/case-law/fallback-decision-identity-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -227,6 +229,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  ...FALLBACK_DECISION_INDEXES,
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:
@@ -793,7 +796,11 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "search_history_entries_owner_country_recent_idx",
     tableName: "search_history_entries",
   },
-  ...REWRITTEN_MIGRATION_INDEXES,
+  // Historical migration receipts remain valid; the obsolete fallback index
+  // is no longer a current requirement and the contract phase retires it.
+  ...REWRITTEN_MIGRATION_INDEXES.filter(
+    ({ name }) => name !== PREVIOUS_FALLBACK_DECISION_INDEX,
+  ),
 ];
 
 type OnlineIndexCutover = {
@@ -871,7 +878,9 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     legacyName: "case_law_decisions_source_case_lang_idx",
     replacementNames: [
       "case_law_decisions_source_document_idx",
-      "case_law_decisions_source_case_lang_null_idx",
+      ...FALLBACK_DECISION_INDEXES.filter(({ isUnique }) => isUnique).map(
+        ({ name }) => name,
+      ),
     ],
   },
   // A provision's citing rows are its whole subtree, which the exact-anchor

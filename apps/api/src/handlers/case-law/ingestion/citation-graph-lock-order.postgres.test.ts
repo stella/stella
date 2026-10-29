@@ -296,6 +296,7 @@ if (!databaseUrl || !enabled) {
             sourceId,
             result: observed.observed,
             persistedDecisionDate: observed.persistedDecisionDate,
+            storageIdentity: observed.storageIdentity,
             composedSupplements: [],
             observedAt: new Date("2026-01-02"),
             observationOrder: 2n,
