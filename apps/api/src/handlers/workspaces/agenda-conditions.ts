@@ -1,4 +1,4 @@
-import { and, gte, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, isNull, notInArray, or } from "drizzle-orm";
 
 import { TASK_STATUS } from "@stll/api-contract";
 
@@ -24,23 +24,3 @@ export const openAgendaTask = (table: EntitiesTable) =>
       notInArray(table.status, [TASK_STATUS.DONE, TASK_STATUS.CANCELLED]),
     ),
   );
-
-/** Due today or later in the database's calendar. */
-export const dueFromToday = (table: EntitiesTable) =>
-  gte(table.dueDate, sql`CURRENT_DATE`);
-
-/**
- * Due on or after the reader's local date. A reader's date differs from the
- * database's by at most a day either way, so a value outside that window is
- * clamped to it; without one, the database's today applies.
- */
-export const dueFromReaderDate = (
-  table: EntitiesTable,
-  readerDate: string | undefined,
-) =>
-  readerDate === undefined
-    ? dueFromToday(table)
-    : gte(
-        table.dueDate,
-        sql`GREATEST(LEAST(${readerDate}::date, CURRENT_DATE + 1), CURRENT_DATE - 1)`,
-      );

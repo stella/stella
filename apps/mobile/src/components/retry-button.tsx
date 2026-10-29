@@ -1,5 +1,6 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import { ActivityIndicator } from "react-native";
 
+import { Button } from "@/components/ui/button";
 import { useAppColors } from "@/theme";
 
 /** The outlined button a failed load offers to run again. */
@@ -9,19 +10,14 @@ export const RetryButton = ({
 }: {
   label: string;
   onPress: () => void;
-}) => {
-  const colors = useAppColors();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.retry, { borderColor: colors.border }]}
-    >
-      <Text style={[styles.retryLabel, { color: colors.accent }]}>{label}</Text>
-    </Pressable>
-  );
-};
+}) => (
+  <Button
+    className="mt-3 self-center"
+    label={label}
+    onPress={onPress}
+    variant="outline"
+  />
+);
 
 /** Where loading the next page of a list stands. */
 export type PagingState = "idle" | "loading" | "failed";
@@ -38,28 +34,10 @@ export const PagingFooter = ({
 }) => {
   const colors = useAppColors();
   if (state === "loading") {
-    return <ActivityIndicator color={colors.muted} style={styles.paging} />;
+    return <ActivityIndicator className="py-3" color={colors.muted} />;
   }
   if (state === "failed") {
     return <RetryButton label={label} onPress={onRetry} />;
   }
   return null;
 };
-
-const styles = StyleSheet.create({
-  paging: {
-    paddingVertical: 12,
-  },
-  retry: {
-    alignSelf: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  retryLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

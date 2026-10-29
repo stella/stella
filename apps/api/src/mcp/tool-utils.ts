@@ -743,11 +743,17 @@ export const structuredErrorResult = ({
  */
 export const mapValibotIssues = (
   issues: readonly v.BaseIssue<unknown>[],
+  pathAliases: Readonly<Record<string, string>> = {},
 ): McpValidationIssue[] =>
-  issues.map((issue) => ({
-    path: v.getDotPath(issue) ?? "",
-    message: issue.message,
-  }));
+  issues.map((issue) => {
+    const path = v.getDotPath(issue) ?? "";
+    const [root, ...rest] = path.split(".");
+    const aliasedRoot = pathAliases[root ?? ""] ?? root;
+    return {
+      path: [aliasedRoot, ...rest].filter(Boolean).join("."),
+      message: issue.message,
+    };
+  });
 
 /**
  * Build the shared validation envelope. Prefer an actionable cross-field issue
@@ -758,11 +764,12 @@ export const mapValibotIssues = (
 export const validationErrorResult = (
   issues: readonly v.BaseIssue<unknown>[],
   hint?: string,
+  pathAliases?: Readonly<Record<string, string>>,
 ): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
-    issues: mapValibotIssues(issues),
+    issues: mapValibotIssues(issues, pathAliases),
     message:
       issues.find((issue) => issue.type === "partial_check")?.message ??
       issues.at(0)?.message ??
@@ -1281,8 +1288,8 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) =>
-      block.plainText === "" ? [] : [servedBlockText(block)],
+    .flatMap((block, index) =>
+      block.plainText === "" ? [] : [servedBlockText(block, blocks[index - 1])],
     )
     .join("\n\n");
 };

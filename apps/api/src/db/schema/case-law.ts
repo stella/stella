@@ -86,6 +86,7 @@ import {
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+  decisionDateNotBeforeFilingYearSql,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
@@ -126,6 +127,7 @@ import {
   tsvector,
   user,
   wsPolicies,
+  xid8,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -568,6 +570,53 @@ const provisionSearchIndex = (t: ProvisionSearchIndexColumns) =>
     .on(t.country, sql`${t.citationAuthority} DESC`, sql`${t.id} DESC`)
     .where(publishedCaseLawDecisionFor(t));
 
+const publishedCoverageIndexes = (
+  t: PublishedCourtDateColumns & { sourceId: PgColumn; caseNumber: PgColumn },
+) => [
+  // A source without facet rows still needs exact court counts; cover its
+  // published population so that fallback never needs a full-corpus scan.
+  p
+    .index("case_law_decisions_source_court_coverage_idx")
+    .on(t.sourceId, t.court)
+    .where(publishedCaseLawDecisionFor(t)),
+  // Filing-year filtering must be in the index: an entire source may have
+  // invalid dates, so filtering each endpoint candidate walks its full heap.
+  p
+    .index("case_law_decisions_source_filing_date_coverage_idx")
+    .on(t.sourceId, t.decisionDate, t.id)
+    .where(
+      sql`${publishedCaseLawDecisionFor(t)} AND ${decisionDateNotBeforeFilingYearSql(
+        {
+          date: t.decisionDate,
+          country: t.country,
+          caseNumber: t.caseNumber,
+        },
+      )}`,
+    ),
+];
+
+/**
+ * The browse walk with one language chosen. Without it a language is a filter
+ * on the country's walk, which skips every newer version in another language
+ * (a multilingual court publishes most languages weeks after the first), or a
+ * probe of `case_law_decisions_provision_scope_cursor_idx`, which holds no
+ * date, so the page sorts every version in that language. Language sits
+ * between country and the sort key, so a language's walk is its own index
+ * range, read in order.
+ */
+const publishedLanguageDateIndex = (
+  t: PublishedCourtDateColumns & { language: PgColumn },
+) =>
+  p
+    .index("case_law_decisions_country_language_date_published_idx")
+    .on(
+      t.country,
+      t.language,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -902,6 +951,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_country_date_published_idx")
       .on(t.country, sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id)
       .where(publishedCaseLawDecisionFor(t)),
+    publishedLanguageDateIndex(t),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
@@ -945,6 +995,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_decision_date_coverage_idx")
       .on(t.sourceId, t.decisionDate, t.id)
       .where(publishedCaseLawDecisionFor(t)),
+    ...publishedCoverageIndexes(t),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
@@ -1444,6 +1495,13 @@ export const caseLawDecisionAliases = p.pgTable(
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+    // case_law_decision_reject_retired_uuid reads aliases during owner decision INSERT/UPDATE.
+    p.pgPolicy("case_law_decision_aliases_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+    }),
   ],
 );
 
@@ -2312,10 +2370,20 @@ export const caseLawProvisionCitations = p.pgTable(
     // One provision with every subdivision under it, for either work key.
     // The anchor compares byte-wise so a subtree is one contiguous range
     // (`provisionAnchorSubtreeSql`); under the database collation `par_510`
-    // sorts between `par_51` and `par_51-odst_1`.
+    // sorts between `par_51` and `par_51-odst_1`. The trailing date,
+    // decision and span make the range index-only for the cited-by page,
+    // which groups a subtree per decision, with the offset of its earliest
+    // mention, before it reads any decision.
     p
-      .index("case_law_provision_citations_work_subtree_idx")
-      .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+      .index("case_law_provision_citations_work_citing_idx")
+      .on(
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+        t.spanStart,
+      ),
     // Candidate membership starts with a decision and then seeks only the
     // requested work's anchor subtree. Unrelated links from the same decision
     // never enter the range.
@@ -2329,8 +2397,15 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart,
       ),
     p
-      .index("case_law_provision_citations_eli_subtree_idx")
-      .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)
+      .index("case_law_provision_citations_eli_citing_idx")
+      .on(
+        t.jurisdiction,
+        t.workEli,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+        t.spanStart,
+      )
       .where(isNotNull(t.workEli)),
     p.check(
       "provision_citations_work_number_shape",
@@ -2632,6 +2707,43 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * The sitemap months a write touched, appended by triggers (migration
+ * `20261029140900_case_law_sitemap_changes`): the month a decision left and
+ * the month it entered. A month of `*` asks for a whole country, and a
+ * country of `*` for every country (a source's redistribution changed). The
+ * refresh recounts each logged month and deletes exactly the rows its count's
+ * own snapshot saw, so a row is consumed only by a count that includes its
+ * change. One row per month per transaction, so a bulk write logs each month
+ * once. A queue, not a watermark: ids order nothing.
+ */
+export const caseLawSitemapChanges = p.pgTable(
+  "case_law_sitemap_changes",
+  {
+    id: p
+      .bigint({ mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity({ name: "case_law_sitemap_changes_id_seq" }),
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    xact: xid8()
+      .notNull()
+      .default(sql`pg_current_xact_id()`),
+  },
+  (t) => [
+    p
+      .unique("case_law_sitemap_changes_month_xact_key")
+      .on(t.country, t.year, t.month, t.xact),
+    p.pgPolicy("case_law_sitemap_change_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
   ],
 );
 

@@ -1,23 +1,53 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  baselineEnvironment,
   buildQuery,
   evaluateRelease,
   gatePromotion,
+  type GitHubCall,
   previousRelease,
+  readPrivateRecord,
+  readPublicRecord,
+  readStoredRecord,
   RELEASE_HEALTH_ASSET,
+  requirePrivateStore,
   summarize,
   windowEnd,
+  writeStoredRecord,
 } from "./release-health";
+
+// Dynamic reads consume temporary step summaries, never repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
 
 const FIXTURES = path.join(import.meta.dir, "__fixtures__/release-health");
 const RELEASE = "v1.4.1";
 const PREVIOUS_RELEASE = "v1.4.0";
+/** Published after environments were recorded: read for production alone. */
+const RECORDED_BASELINE = {
+  ref: PREVIOUS_RELEASE,
+  publishedAt: "2026-10-29T05:00:00Z",
+};
+/** Its window closed before environments were recorded. */
+const LEGACY_BASELINE = {
+  ref: PREVIOUS_RELEASE,
+  publishedAt: "2026-10-27T11:51:20Z",
+};
 const CHECKED_AT = "2026-10-17T13:00:00Z";
+const PRIVATE_BASELINE = {
+  ref: PREVIOUS_RELEASE,
+  publishedAt: "2026-10-17T12:00:00Z",
+};
 
 const recorded = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURES, `${name}.json`), "utf-8"));
@@ -178,18 +208,26 @@ describe("post-release regression check", () => {
     }
   });
 
-  test("the summary names fingerprints but never counts", () => {
+  test("the public summary exposes only the verdict, count and opaque reference", () => {
     const summary = summarize(evaluateFixture("new-fingerprint"));
 
     expect(summary).toContain("v1.4.1 is unhealthy");
-    expect(summary).toContain("`/v1/summaries` SummaryGenerationError");
+    expect(summary).toContain("Findings: 1");
+    expect(summary).toContain("release-health:v1.4.1");
+    for (const detail of [
+      "/v1/summaries",
+      "SummaryGenerationError",
+      "model_output_incomplete",
+    ]) {
+      expect(summary).not.toContain(detail);
+    }
     expect(summary).not.toContain("10");
   });
 
   test("the generated environment predicate excludes staging RC traffic", () => {
     const { query } = buildQuery({
       release: RELEASE,
-      previous: PREVIOUS_RELEASE,
+      previous: RECORDED_BASELINE,
       until: CHECKED_AT,
     });
     const predicate = query.query
@@ -224,10 +262,72 @@ describe("post-release regression check", () => {
     }
   });
 
+  test("a legacy baseline counts its unrecorded events, the checked release never does", () => {
+    const { query } = buildQuery({
+      release: RELEASE,
+      previous: LEGACY_BASELINE,
+      until: CHECKED_AT,
+    });
+    const predicate = query.query
+      .split("\n")
+      .find((line) => line.includes("properties.deploy_environment"));
+    if (predicate === undefined) {
+      throw new TypeError(
+        "Release health query has no deployment environment predicate",
+      );
+    }
+    const database = new Database(":memory:");
+    try {
+      database.run(
+        "CREATE TABLE properties (deploy_environment TEXT, app_version TEXT, occurrences INTEGER)",
+      );
+      database.run(
+        "INSERT INTO properties VALUES ('staging', '1.4.0', 999), ('production', '1.4.0', 7), (NULL, '1.4.0', 500), (NULL, '1.4.1', 300), ('production', '1.4.1', 2)",
+      );
+      const sql = predicate
+        .replace(/^AND /u, "")
+        .replaceAll("properties.", "")
+        .replaceAll("{environment}", "$environment")
+        .replaceAll("{version_1}", "$baseline");
+      const sum = (version: string) =>
+        database
+          .query(
+            `SELECT SUM(occurrences) AS occurrences FROM properties WHERE app_version = $version AND ${sql}`,
+          )
+          .all({
+            $environment: "production",
+            $baseline: "1.4.0",
+            $version: version,
+          });
+      expect(sum("1.4.0")).toEqual([{ occurrences: 507 }]);
+      expect(sum("1.4.1")).toEqual([{ occurrences: 2 }]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("only a baseline whose window closed before environments were recorded is legacy", () => {
+    expect(baselineEnvironment(LEGACY_BASELINE)).toBe("unrecorded");
+    expect(baselineEnvironment(RECORDED_BASELINE)).toBe("recorded");
+    // Its window closes after the cutoff, so it stays production-only.
+    expect(
+      baselineEnvironment({
+        ref: PREVIOUS_RELEASE,
+        publishedAt: "2026-10-29T04:00:00Z",
+      }),
+    ).toBe("recorded");
+    const recordedQuery = buildQuery({
+      release: RELEASE,
+      previous: RECORDED_BASELINE,
+      until: CHECKED_AT,
+    });
+    expect(recordedQuery.query.query).not.toContain("IS NULL");
+  });
+
   test("versions travel as placeholders, without the tag prefix", () => {
     const { query } = buildQuery({
       release: RELEASE,
-      previous: "v1.4.0",
+      previous: RECORDED_BASELINE,
       until: CHECKED_AT,
     });
 
@@ -297,6 +397,8 @@ describe("promote gate", () => {
     verdict: value,
     release: "v1.4.0",
     checkedAt: "2026-10-17T11:01:00Z",
+    ...(value === "unhealthy" ? { findings: 1 } : {}),
+    ...(value === "inconclusive" ? { cause: "query_failed" } : {}),
   });
 
   test("refuses after an unhealthy or inconclusive release unless acknowledged", () => {
@@ -369,37 +471,465 @@ describe("promote gate", () => {
 });
 
 describe("command line", () => {
-  test("evaluate writes the verdict and appends the summary", () => {
+  test("evaluate preserves every finding privately and publishes only metadata", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "release-health-"));
-    const verdictFile = path.join(directory, RELEASE_HEALTH_ASSET);
-    const summaryFile = path.join(directory, "summary.md");
-    writeFileSync(summaryFile, "");
+    try {
+      const verdictFile = path.join(directory, RELEASE_HEALTH_ASSET);
+      const summaryFile = path.join(directory, "summary.md");
+      const recordFile = path.join(directory, "private.json");
+      const resultFile = path.join(directory, "query.json");
+      const fixtures = ["unclassified", "new-fingerprint", "overflow"].map(
+        recorded,
+      );
+      const response = {
+        columns: [
+          "release",
+          "kind",
+          "handler",
+          "error_class",
+          "error_code",
+          "failure_reason",
+          "occurrences",
+        ],
+        results: fixtures.flatMap((fixture) => {
+          if (
+            typeof fixture !== "object" ||
+            fixture === null ||
+            !("results" in fixture) ||
+            !Array.isArray(fixture.results)
+          ) {
+            throw new TypeError("fixture requires results");
+          }
+          return fixture.results;
+        }),
+      };
+      const evaluation = evaluateRelease({
+        release: RELEASE,
+        baselineRelease: PREVIOUS_RELEASE,
+        checkedAt: CHECKED_AT,
+        response,
+      });
+      expect(new Set(evaluation.findings.map(({ type }) => type))).toEqual(
+        new Set(["unclassified", "new_fingerprint", "overflow"]),
+      );
+      writeFileSync(resultFile, JSON.stringify(response));
+      writeFileSync(summaryFile, "existing summary\n");
+      const result = Bun.spawnSync([
+        "bun",
+        path.join(import.meta.dir, "release-health.ts"),
+        "evaluate",
+        "--release",
+        RELEASE,
+        "--previous",
+        PREVIOUS_RELEASE,
+        "--previous-published-at",
+        PRIVATE_BASELINE.publishedAt,
+        "--result",
+        resultFile,
+        "--now",
+        CHECKED_AT,
+        "--until",
+        CHECKED_AT,
+        "--record",
+        recordFile,
+        "--verdict",
+        verdictFile,
+        "--summary",
+        summaryFile,
+      ]);
+      expect(result.exitCode).toBe(0);
+      const publicJson = readFileSync(verdictFile, "utf-8");
+      expect(JSON.parse(publicJson)).toEqual({
+        ...evaluation.verdict,
+        findings: evaluation.findings.length,
+        record: `release-health:${RELEASE}`,
+      });
+      expect(
+        readPrivateRecord(JSON.parse(readFileSync(recordFile, "utf-8"))),
+      ).toEqual({
+        version: 1,
+        verdict: evaluation.verdict,
+        baseline: { release: PREVIOUS_RELEASE, environment: "unrecorded" },
+        query: buildQuery({
+          release: RELEASE,
+          previous: PRIVATE_BASELINE,
+          until: CHECKED_AT,
+        }).query,
+        window: {
+          start: "2026-10-17T12:00:00.000Z",
+          end: CHECKED_AT,
+          baselineLookbackDays: 14,
+        },
+        findings: evaluation.findings,
+      });
+      const summary = readFileSync(summaryFile, "utf-8");
+      expect(summary).toBe(`existing summary\n${summarize(evaluation)}`);
+      for (const finding of evaluation.findings) {
+        if (finding.type === "overflow") {
+          continue;
+        }
+        for (const detail of Object.values(finding.fingerprint)) {
+          expect(publicJson).not.toContain(detail);
+          expect(summary).not.toContain(detail);
+        }
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
 
-    const result = Bun.spawnSync([
-      "bun",
-      path.join(import.meta.dir, "release-health.ts"),
-      "evaluate",
-      "--release",
-      RELEASE,
-      "--result",
-      path.join(FIXTURES, "unclassified.json"),
-      "--now",
-      CHECKED_AT,
-      "--verdict",
-      verdictFile,
-      "--summary",
-      summaryFile,
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(JSON.parse(readFileSync(verdictFile, "utf-8"))).toEqual({
+const privateRecord = () =>
+  ({
+    version: 1,
+    verdict: {
       verdict: "unhealthy",
       release: RELEASE,
       checkedAt: CHECKED_AT,
-      findings: 1,
+      findings: 3,
+    },
+    baseline: { release: PREVIOUS_RELEASE, environment: "unrecorded" },
+    query: buildQuery({
+      release: RELEASE,
+      previous: PRIVATE_BASELINE,
+      until: CHECKED_AT,
+    }).query,
+    window: {
+      start: "2026-10-17T12:00:00Z",
+      end: CHECKED_AT,
+      baselineLookbackDays: 14,
+    },
+    findings: [
+      ...evaluateFixture("unclassified").findings,
+      ...evaluateFixture("new-fingerprint").findings,
+      ...evaluateFixture("overflow").findings,
+    ],
+  }) as const satisfies ReturnType<typeof readPrivateRecord>;
+
+describe("persisted release health records", () => {
+  test("legacy count-only assets have unknown detail availability", () => {
+    expect(
+      readPublicRecord({
+        verdict: "unhealthy",
+        release: "v0.9.68",
+        checkedAt: CHECKED_AT,
+        findings: 6,
+      }).details,
+    ).toEqual({ type: "unknown" });
+  });
+
+  test("invalid ISO instants cannot enter public verdict records", () => {
+    expect(() =>
+      readPublicRecord({
+        verdict: "healthy",
+        release: RELEASE,
+        checkedAt: "2026-99-99T99:99:99Z",
+      }),
+    ).toThrow("Timestamp is not a UTC ISO instant");
+  });
+
+  test("all finding variants roundtrip with their baseline and window", () => {
+    const record = privateRecord();
+    expect(readPrivateRecord(structuredClone(record))).toEqual(record);
+    expect(
+      readPublicRecord({
+        ...record.verdict,
+        record: `release-health:${RELEASE}`,
+      }).details,
+    ).toEqual({
+      type: "private",
+      count: 3,
+      reference: `release-health:${RELEASE}`,
     });
-    expect(readFileSync(summaryFile, "utf-8")).toContain(
-      "unclassified failure",
+  });
+
+  test("preserves the historical query and bindings without rebuilding them", () => {
+    const record = privateRecord();
+    const historical = {
+      ...record,
+      query: {
+        kind: "HogQLQuery",
+        query: "SELECT historical_predicate",
+        values: { environment: "historical-case", previous: "0.9.68" },
+      },
+    };
+    expect(readPrivateRecord(historical).query).toEqual(historical.query);
+  });
+
+  test("rejects malformed findings, counts, baseline and window", () => {
+    const record = privateRecord();
+    const invalid = [
+      { ...record, baseline: { release: "main", environment: "unrecorded" } },
+      {
+        ...record,
+        baseline: { release: PREVIOUS_RELEASE, environment: "unknown" },
+      },
+      ...[
+        null,
+        [],
+        { ...record.query, kind: "OtherQuery" },
+        { ...record.query, query: null },
+        { ...record.query, values: [] },
+        { ...record.query, values: { environment: 1 } },
+      ].map((query) => ({ ...record, query })),
+      { ...record, window: { ...record.window, baselineLookbackDays: 1 } },
+      { ...record, window: { ...record.window, end: "2026-10-17T14:00:00Z" } },
+      { ...record, findings: record.findings.slice(1) },
+      ...["future", "overflow", "unclassified", "new_fingerprint"].map(
+        (type) => ({ ...record, findings: [{ type, occurrences: -1 }] }),
+      ),
+      ...["unclassified", "new_fingerprint"].map((type) => ({
+        ...record,
+        findings: [{ type, occurrences: 1, fingerprint: { handler: null } }],
+      })),
+      { ...record, findings: [{ type: "future", occurrences: 1 }] },
+    ];
+    for (const value of invalid) {
+      expect(() => readPrivateRecord(value)).toThrow(/release|stable/u);
+    }
+    expect(() =>
+      readPublicRecord({ ...record.verdict, record: "release-health:v1.4.0" }),
+    ).toThrow("Invalid release health reference");
+  });
+
+  test("gate refusal provides the exact authenticated findings command", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "release-health-gate-"));
+    try {
+      const previous = path.join(directory, "previous.json");
+      const verdict = path.join(directory, "verdict.json");
+      writeFileSync(
+        previous,
+        JSON.stringify({
+          tag: RELEASE,
+          publishedAt: "2026-10-17T10:00:00Z",
+          verdictAssetId: 1,
+        }),
+      );
+      writeFileSync(verdict, JSON.stringify(privateRecord().verdict));
+      const result = Bun.spawnSync([
+        "bun",
+        path.join(import.meta.dir, "release-health.ts"),
+        "gate",
+        "--previous-release",
+        previous,
+        "--verdict",
+        verdict,
+        "--now",
+        CHECKED_AT,
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain(
+        `bun scripts/release-health.ts findings --release ${RELEASE}.`,
+      );
+      expect(result.stderr.toString()).not.toContain("/v1/summaries");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+const STORE = "test-owner/private-records";
+
+type StoreState = {
+  readonly privateStore?: boolean;
+  readonly draft?: boolean | "inaccessible";
+  readonly corrupt?: "none" | "readback" | "baseline" | "json";
+};
+
+const isRecordLike = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** A draft-release store answering the commands the record path sends. */
+const fakeStore = ({
+  privateStore = true,
+  draft = true,
+  corrupt = "none",
+}: StoreState = {}) => {
+  let stored: string | undefined;
+  const ok = (stdout = "") => ({ exitCode: 0, stdout });
+  const call: GitHubCall = (args) => {
+    const [command, action] = args;
+    if (command === "api") {
+      return args[1] === `repos/${STORE}`
+        ? ok(String(privateStore))
+        : { exitCode: 5, stdout: "" };
+    }
+    if (command === "release" && action === "view") {
+      return draft === "inaccessible"
+        ? { exitCode: 1, stdout: "PRIVATE_RECORD_SENTINEL /v1/summaries" }
+        : ok(JSON.stringify({ isDraft: draft }));
+    }
+    if (command === "release" && action === "upload") {
+      const record: unknown = JSON.parse(readFileSync(args[3] ?? "", "utf-8"));
+      if (!isRecordLike(record)) {
+        return { exitCode: 3, stdout: "" };
+      }
+      const window = record["window"];
+      if (corrupt === "readback" && isRecordLike(window)) {
+        record["window"] = { ...window, start: "2026-10-17T12:00:00.000Z" };
+      }
+      if (corrupt === "baseline") {
+        record["baseline"] = { release: "PRIVATE_RECORD_SENTINEL" };
+      }
+      stored =
+        corrupt === "json"
+          ? "{PRIVATE_RECORD_SENTINEL"
+          : JSON.stringify(record);
+      return ok();
+    }
+    if (command === "release" && action === "download") {
+      const directory = args.at(args.indexOf("--dir") + 1);
+      if (stored === undefined || directory === undefined) {
+        return { exitCode: 1, stdout: "" };
+      }
+      writeFileSync(path.join(directory, `${RELEASE}.json`), stored);
+      return ok();
+    }
+    return { exitCode: 2, stdout: "" };
+  };
+  return { call, stored: () => stored };
+};
+
+const failure = (run: () => unknown): string => {
+  try {
+    run();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("expected a refusal");
+};
+
+describe("private release records", () => {
+  test("refuse a public store", () => {
+    const { call } = fakeStore({ privateStore: false });
+    expect(failure(() => requirePrivateStore(STORE, call))).toContain(
+      "store must be a private repository",
     );
+  });
+
+  test("refuse a store that is no longer a draft", () => {
+    const { call } = fakeStore({ draft: false });
+    expect(failure(() => requirePrivateStore(STORE, call))).toContain(
+      "must remain a draft release",
+    );
+  });
+
+  test("name an inaccessible draft without echoing the response", () => {
+    const { call } = fakeStore({ draft: "inaccessible" });
+    const message = failure(() => requirePrivateStore(STORE, call));
+    expect(message).toContain("contents:write");
+    expect(message).toContain("404");
+    expect(message).not.toContain("PRIVATE_RECORD_SENTINEL");
+    expect(message).not.toContain("/v1/summaries");
+  });
+
+  test("write, rewrite and read back the same record", () => {
+    const store = fakeStore();
+    requirePrivateStore(STORE, store.call);
+    writeStoredRecord({
+      release: RELEASE,
+      store: STORE,
+      record: readPrivateRecord(privateRecord()),
+      call: store.call,
+    });
+    expect(JSON.parse(store.stored() ?? "")).toEqual(privateRecord());
+    writeStoredRecord({
+      release: RELEASE,
+      store: STORE,
+      record: readPrivateRecord(privateRecord()),
+      call: store.call,
+    });
+    expect(
+      readStoredRecord({ release: RELEASE, store: STORE, call: store.call }),
+    ).toEqual(privateRecord());
+  });
+
+  test("refuse a record that reads back differently", () => {
+    const { call } = fakeStore({ corrupt: "readback" });
+    expect(
+      failure(() =>
+        writeStoredRecord({
+          release: RELEASE,
+          store: STORE,
+          record: readPrivateRecord(privateRecord()),
+          call,
+        }),
+      ),
+    ).toContain("readback");
+  });
+
+  for (const corrupt of ["baseline", "json"] as const) {
+    test(`refuse a malformed stored record (${corrupt})`, () => {
+      const { call } = fakeStore({ corrupt });
+      const message = failure(() =>
+        writeStoredRecord({
+          release: RELEASE,
+          store: STORE,
+          record: readPrivateRecord(privateRecord()),
+          call,
+        }),
+      );
+      expect(message).toContain("malformed");
+      expect(message).not.toContain("PRIVATE_RECORD_SENTINEL");
+    });
+  }
+
+  // The one subprocess run: the CLI wires the same functions to gh-retry.sh.
+  test("the record command stores a record through the GitHub CLI", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "release-health-store-"));
+    try {
+      const recordFile = path.join(directory, "record.json");
+      writeFileSync(recordFile, JSON.stringify(privateRecord()));
+      const gh = path.join(directory, "gh");
+      writeFileSync(
+        gh,
+        [
+          "#!/usr/bin/env bash",
+          "set -euo pipefail",
+          'dir="$(dirname "$0")"',
+          'case "$1 $2" in',
+          `  "api repos/${STORE}") printf true ;;`,
+          `  "release view") printf '{"isDraft":true}' ;;`,
+          '  "release upload") cp "$4" "$dir/stored.json" ;;',
+          '  "release download")',
+          "    while [[ $# -gt 0 ]]; do",
+          `      if [[ "$1" == --dir ]]; then cp "$dir/stored.json" "$2/${RELEASE}.json"; fi`,
+          "      shift",
+          "    done ;;",
+          "  *) exit 2 ;;",
+          "esac",
+          "",
+        ].join("\n"),
+      );
+      chmodSync(gh, 0o700);
+      const run = Bun.spawnSync(
+        [
+          "bun",
+          path.join(import.meta.dir, "release-health.ts"),
+          "record",
+          "--release",
+          RELEASE,
+          "--record",
+          recordFile,
+          "--store",
+          STORE,
+        ],
+        {
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            GH_TOKEN: "",
+            GITHUB_REPOSITORY: "test-owner/public-app",
+          },
+        },
+      );
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout.toString()).toBe("");
+      expect(
+        JSON.parse(readFileSync(path.join(directory, "stored.json"), "utf-8")),
+      ).toEqual(privateRecord());
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

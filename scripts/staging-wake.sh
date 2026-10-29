@@ -45,7 +45,9 @@ health_url="${STAGING_HEALTH_URL:-https://api-staging.stll.app/ready}"
 : "${GH_RETRY_SCRIPT:?GH_RETRY_SCRIPT is required}"
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 : "${DEPLOY_SHA:?DEPLOY_SHA is required}"
-[[ "$lease_hours" =~ ^[1-9][0-9]*$ ]] || { echo '::error::STAGING_LEASE_HOURS must be a positive integer.' >&2; exit 2; }
+# The hours staging-power.yml offers as choices; it refuses any other value.
+readonly allowed_lease_hours=(1 2 4 8)
+[[ " ${allowed_lease_hours[*]} " == *" ${lease_hours} "* ]] || { echo "::error::STAGING_LEASE_HOURS must be one of ${allowed_lease_hours[*]} (got '${lease_hours}')." >&2; exit 2; }
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 deploy_run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}/actions/runs/${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
 

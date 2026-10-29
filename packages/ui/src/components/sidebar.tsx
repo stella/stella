@@ -208,6 +208,7 @@ const Sidebar = ({
   mobileTitle = DEFAULT_MOBILE_TITLE,
   mobileDescription = DEFAULT_MOBILE_DESCRIPTION,
   className,
+  style,
   children,
   ...props
 }: React.ComponentProps<"div"> & {
@@ -240,6 +241,7 @@ const Sidebar = ({
           className,
         )}
         data-slot="sidebar"
+        style={style}
         {...props}
       >
         {children}
@@ -250,22 +252,32 @@ const Sidebar = ({
   if (isMobile) {
     const mobileStyle: SidebarStyle = {
       "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+      ...style,
     };
     return (
-      <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
+      <Sheet onOpenChange={setOpenMobile} open={openMobile}>
         <SheetPopup
-          className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) [&>button]:hidden"
+          className={cn(
+            "bg-sidebar text-sidebar-foreground w-(--sidebar-width) [&>button]:hidden",
+            className,
+          )}
           data-mobile="true"
           data-sidebar="sidebar"
           data-slot="sidebar"
           side={side === "left" ? "inline-start" : "inline-end"}
           style={mobileStyle}
+          {...props}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{mobileTitle}</SheetTitle>
             <SheetDescription>{mobileDescription}</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div
+            className="flex h-full w-full flex-col"
+            data-slot="sidebar-inner"
+          >
+            {children}
+          </div>
         </SheetPopup>
       </Sheet>
     );
@@ -319,6 +331,7 @@ const Sidebar = ({
           className,
         )}
         data-slot="sidebar-container"
+        style={style}
         {...props}
       >
         <div
@@ -735,7 +748,7 @@ const SidebarMenuAction = ({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0 pointer-coarse:opacity-100",
         className,
       )}
       data-sidebar="menu-action"

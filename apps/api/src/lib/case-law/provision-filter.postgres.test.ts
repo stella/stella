@@ -143,7 +143,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         const subtreeClones =
           await db.execute(sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_provision_citations'
-            AND indexdef LIKE '%(jurisdiction, work_identifier, anchor COLLATE "C")%'`);
+            AND indexdef LIKE '%(jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id, span_start)%'`);
         for (const row of subtreeClones) {
           const name = row["indexname"];
           if (typeof name !== "string") {
@@ -154,7 +154,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         }
         const subtree = (
           await db.execute(sql`SELECT indexdef FROM pg_indexes
-          WHERE schemaname = 'public' AND indexname = 'case_law_provision_citations_work_subtree_idx'`)
+          WHERE schemaname = 'public' AND indexname = 'case_law_provision_citations_work_citing_idx'`)
         ).at(0)?.["indexdef"];
         if (typeof subtree !== "string") {
           panic("The migrated provision subtree index is absent");
@@ -234,7 +234,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
             ),
           );
           for (const scan of citationScans(scopePlan)) {
-            expect(String(scan["Index Name"])).toContain("work_subtree");
+            expect(String(scan["Index Name"])).toContain("work_citing");
             expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
               SCOPE_LIMIT + 1,
             );

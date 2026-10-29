@@ -265,6 +265,26 @@ describe("parseNssDecisionHtml", () => {
       expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
       expect(texts.some((t) => t.includes("Konf 4/2011"))).toBe(false);
     });
+
+    test("keeps a citation that opens the page behind the header", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(`<html><body>
+          <p style="text-align:center"><span style="font-weight:bold">ROZSUDEK</span></p>
+          <p style="text-align:center"><span style="font-weight:bold">Odůvodnění:</span></p>
+          <p>[1] Soud odkázal na rozsudek ze dne 3. 2. 2011, č. j.</p>
+          <p>[OBRÁZEK]pokračování 2 1 As 23/2012-45 2 Afs 1/2010-50, podle něhož soud rozhodl.</p>
+          <p>[OBRÁZEK]pokračování 3 22 Cdo 4223/2018 22 Cdo 4223/2018-137 [2] Soud uvážil dále.</p>
+        </body></html>`),
+      );
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      // A different docket after the header's is the page's text; the same
+      // docket repeated with its sheet is the header's.
+      expect(fulltext).toContain("2 Afs 1/2010-50, podle něhož soud rozhodl.");
+      expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
+      expect(texts.some((t) => t.includes("4223/2018"))).toBe(false);
+      expect(fulltext).toContain("Soud uvážil dále.");
+    });
   });
 
   describe("section separators", () => {
@@ -410,7 +430,83 @@ describe("parseNssDecisionHtml", () => {
     });
   });
 
+  test.each([
+    ["separate", ""],
+    ["joined", "<p>pokračování 2 1 As 23/2012-45</p>"],
+    ["joined", "<p>[OBRÁZEK]</p>"],
+  ])(
+    "unfinished paragraphs stay %s according to page furniture %s",
+    (reading, furniture) => {
+      const before =
+        "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+      const after = "náklady řízení přitom musí být doloženy.";
+      const { documentAst } = parseNssDecisionHtml(
+        baseInput(
+          `<body>${bold("Odůvodnění:")}<p>${before}</p>${furniture}<p>${after}</p></body>`,
+        ),
+      );
+      const paragraphs = documentAst.blocks.filter(
+        (block) => block.type === "paragraph",
+      );
+      expect(paragraphs.map((block) => block.plainText)).toEqual(
+        reading === "joined" ? [`${before} ${after}`] : [before, after],
+      );
+    },
+  );
+
+  test.each([
+    ["joined", ""],
+    ["joined", "text-indent:0pt;"],
+    ["separate", "text-indent:35.4pt;"],
+    ["separate", "text-indent:-10pt;"],
+  ])("indented paragraph and %s continuation with %s", (reading, indent) => {
+    const before =
+      "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+    const after = "náklady řízení přitom musí být doloženy.";
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(
+        `<body>${bold("Odůvodnění:")}<p style="text-indent:35.4pt;text-align:justify">${before}</p><p style="${indent}text-align:justify">${after}</p></body>`,
+      ),
+    );
+    const paragraphs = documentAst.blocks.filter(
+      (block) => block.type === "paragraph",
+    );
+    expect(paragraphs.map((block) => block.plainText)).toEqual(
+      reading === "joined" ? [`${before} ${after}`] : [before, after],
+    );
+  });
+
   describe("unordered list content", () => {
+    test.each(["list", "table"])(
+      "%s boundaries keep adjacent unfinished reasoning paragraphs apart",
+      (kind) => {
+        const before =
+          "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+        const item =
+          "náklady řízení účelně vynaložené na zastoupení a na opatření všech podkladů";
+        const after =
+          "následující vyjádření soudu pokračuje samostatným odstavcem.";
+        const structural =
+          kind === "list"
+            ? `<ul><li>${item}</li></ul>`
+            : `<table><tr><td>${item}</td><td>Hodnota</td></tr></table>`;
+        const expectedItem = kind === "list" ? item : `${item} | Hodnota`;
+        const { documentAst } = parseNssDecisionHtml(
+          baseInput(
+            `<body>${bold("Odůvodnění:")}<p>${before}</p>${structural}<p>${after}</p></body>`,
+          ),
+        );
+        const paragraphs = documentAst.blocks.filter(
+          (block) => block.type === "paragraph",
+        );
+        expect(paragraphs.map((block) => block.plainText)).toEqual([
+          before,
+          expectedItem,
+          after,
+        ]);
+      },
+    );
+
     /**
      * Aspose renders enumerations in the reasoning (case-file
      * inventories, evidence lists) as <ul type="disc">. The chunk
@@ -1191,3 +1287,61 @@ for (const tag of ["script", "style"]) {
     );
   });
 }
+
+test("a closing inside a closed quotation cannot arm a separate opinion", () => {
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body>
+    <p>Odůvodnění:</p>
+    <p>[1] Soud cituje rozhodnutí: „Citace začíná.</p>
+    <p>V Brně dne 1. ledna 2025</p>
+    <p>Odlišné stanovisko soudce Jana Nováka</p>
+    <p>Citace končí.“</p>
+    <p>[2] Soud pokračuje v odůvodnění.</p>
+  </body></html>`),
+  );
+  expect(
+    documentAst.blocks.filter(
+      (block) =>
+        "role" in block &&
+        (block.role === "dissent" || block.role === "closing"),
+    ),
+  ).toEqual([]);
+  expect(
+    documentAst.blocks.some(
+      (block) =>
+        block.plainText === "Odlišné stanovisko soudce Jana Nováka" &&
+        block.type === "paragraph",
+    ),
+  ).toBe(true);
+});
+
+test("a header-shaped prefix remains prose without a layout boundary", () => {
+  const text = "Pokračování 2 1 As 23/2012-45 soud uvedl v citovaném podání.";
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body><p>Odůvodnění:</p><p>${text}</p></body></html>`),
+  );
+  expect(documentAst.blocks.map((block) => block.plainText)).toContain(text);
+});
+
+test("a copied reasoning heading cannot reset the quotation surrounding a closing", () => {
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body>
+    <p>Odůvodnění:</p><p>[1] Soud cituje: „Začátek citace.</p>
+    <p>Odůvodnění:</p><p>V Brně dne 1. ledna 2025</p>
+    <p>Odlišné stanovisko soudce Jana Nováka</p><p>Konec citace.“</p>
+    <p>[2] Soud pokračuje v odůvodnění.</p>
+  </body></html>`),
+  );
+  expect(
+    documentAst.blocks.filter(
+      (block) =>
+        "role" in block &&
+        (block.role === "dissent" || block.role === "closing"),
+    ),
+  ).toEqual([]);
+  expect(
+    documentAst.blocks.filter(
+      (block) => block.type === "heading" && block.plainText === "Odůvodnění:",
+    ),
+  ).toHaveLength(1);
+});
