@@ -34,9 +34,16 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
+import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+import {
+  describeReleaseLoad,
+  jobsRunDuringLoad,
+  judgeReleaseLoad,
+  runReleaseLoad,
+} from "./mcp-canary-release-load";
 
 export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
@@ -262,6 +269,8 @@ const PROBE_NAMES = {
   stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
   toolsList: `POST ${MCP_HTTP_PATH} (modern tools/list)`,
   toolCall: `POST ${MCP_HTTP_PATH} (search_case_law)`,
+  legislationSearch: `POST ${MCP_HTTP_PATH} (search_legislation)`,
+  caseLawCoverage: `POST ${MCP_HTTP_PATH} (case_law_coverage)`,
   unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
 } as const;
 
@@ -696,10 +705,13 @@ export const describeToolCallFailure = ({
     : line;
 };
 
-export const evaluateToolCall = ({
-  status,
-  body,
-}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+export const evaluateToolCall = (
+  { status, body }: Pick<ProbeResponse, "body" | "status">,
+  {
+    name = PROBE_NAMES.toolCall,
+    answered = "read-only case-law search returned content",
+  }: { name?: string; answered?: string } = {},
+): ProbeResult => {
   const result = jsonRpcResult(body);
   if (
     status !== 200 ||
@@ -711,15 +723,111 @@ export const evaluateToolCall = ({
     )
   ) {
     return failed(
-      PROBE_NAMES.toolCall,
+      name,
       `expected a non-error JSON-RPC tool result with content (${describeToolCallFailure({ status, body })})`,
     );
   }
-  return passed(
-    PROBE_NAMES.toolCall,
-    "read-only case-law search returned content",
-  );
+  return passed(name, answered);
 };
+
+/**
+ * Why a tool call failed its latency budget, or undefined within it. The
+ * budget is the API's own table (`mcp/tool-latency-budgets.ts`), the one the
+ * slow-tool alarm counts by, so a slow tool fails the canary, and with it the
+ * release proof, before it ships.
+ */
+export const describeToolLatencyOverBudget = ({
+  toolName,
+  elapsedMs,
+}: {
+  toolName: string;
+  elapsedMs: number;
+}): string | undefined => {
+  const { budgetMs, overBudget } = judgeMcpToolLatency({
+    toolName,
+    elapsedMs,
+  });
+  return overBudget
+    ? `${toolName} answered in ${String(Math.round(elapsedMs))} ms, over its ${String(budgetMs)} ms latency budget`
+    : undefined;
+};
+
+/** A tool call's correctness result, failed as well when it ran over budget. */
+export const judgeToolCallProbe = (
+  result: ProbeResult,
+  { toolName, elapsedMs }: { toolName: string; elapsedMs: number },
+): ProbeResult => {
+  const overBudget = describeToolLatencyOverBudget({ toolName, elapsedMs });
+  if (overBudget === undefined) {
+    return result.status === PROBE_STATUS.passed
+      ? {
+          ...result,
+          detail: `${result.detail} in ${String(Math.round(elapsedMs))} ms`,
+        }
+      : result;
+  }
+  return result.status === PROBE_STATUS.failed
+    ? { ...result, detail: `${result.detail}; ${overBudget}` }
+    : failed(result.name, overBudget);
+};
+
+type ToolCallProbe = {
+  name: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  /** The pass line: what a correct answer showed. */
+  answered: string;
+};
+
+/**
+ * The read-only tools a credentialed run calls, each judged for content and
+ * for latency. Public-corpus reads: they need no tenant data, so the same
+ * calls hold for the release proof and the deployed canary.
+ */
+export const TOOL_CALL_PROBES = [
+  {
+    name: PROBE_NAMES.toolCall,
+    toolName: "search_case_law",
+    arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+    answered: "read-only case-law search returned content",
+  },
+  {
+    name: PROBE_NAMES.legislationSearch,
+    toolName: "search_legislation",
+    arguments: { query: "zákoník práce", country: "CZ", limit: 1 },
+    answered: "read-only legislation search returned content",
+  },
+  {
+    name: PROBE_NAMES.caseLawCoverage,
+    toolName: "case_law_coverage",
+    arguments: { country: "CZ" },
+    answered: "case-law coverage returned content",
+  },
+] as const satisfies readonly ToolCallProbe[];
+
+const runToolCallProbe =
+  ({ name, toolName, arguments: args, answered }: ToolCallProbe) =>
+  async (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): Promise<ProbeResult> => {
+    const startedAt = performance.now();
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      },
+      fetcher,
+    );
+    return judgeToolCallProbe(evaluateToolCall(response, { name, answered }), {
+      toolName,
+      elapsedMs: performance.now() - startedAt,
+    });
+  };
 
 type AuthenticatedProbe = {
   name: string;
@@ -731,26 +839,10 @@ type AuthenticatedProbe = {
  * skip report both read it, so neither can describe a probe the other lacks.
  */
 export const AUTHENTICATED_PROBES = [
-  {
-    name: PROBE_NAMES.toolCall,
-    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
-      evaluateToolCall(
-        await postJsonRpc(
-          {
-            baseUrl,
-            token,
-            era: "modern",
-            id: 3,
-            method: "tools/call",
-            params: {
-              name: "search_case_law",
-              arguments: { queries: ["contract"], country: "CZ", limit: 1 },
-            },
-          },
-          fetcher,
-        ),
-      ),
-  },
+  ...TOOL_CALL_PROBES.map((probe) => ({
+    name: probe.name,
+    run: runToolCallProbe(probe),
+  })),
   {
     name: PROBE_NAMES.stream,
     run: runAuthenticatedStreamProbe,
@@ -1430,12 +1522,120 @@ export const runDesktopProbe = async (
   return results;
 };
 
+const RELEASE_LOAD_PROBE = "release load during scheduled jobs";
+
+const scheduledLoadRunsSchema = v.object({
+  runs: v.array(
+    v.object({
+      jobId: v.string(),
+      startedAt: v.string(),
+      finishedAt: v.nullable(v.string()),
+    }),
+  ),
+});
+
+/**
+ * Brings the scheduled corpus jobs forward, runs the MCP load while they run
+ * (`mcp-canary-release-load.ts`), and fails when a heavy tool's 95th
+ * percentile is over its budget or when no job ran inside the window.
+ */
+export const runReleaseLoadProbe = async (
+  { baseUrl, token, smokeSecret }: CanaryTarget & { smokeSecret: string },
+  fetcher: CanaryFetcher = deploymentFetcher,
+  load: typeof runReleaseLoad = runReleaseLoad,
+): Promise<ProbeResult> =>
+  await runNamedProbe(RELEASE_LOAD_PROBE, async () => {
+    const jobsUrl = new URL("/smoke/scheduled-jobs", baseUrl);
+    const smokeHeaders = { "x-smoke-secret": smokeSecret };
+    const forward = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "POST",
+        headers: smokeHeaders,
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    if (
+      forward.status !== 200 ||
+      !v.is(
+        v.object({ dueAt: v.string(), jobs: v.array(v.unknown()) }),
+        forward.body,
+      )
+    ) {
+      return failed(
+        RELEASE_LOAD_PROBE,
+        "could not bring the scheduled corpus jobs forward",
+      );
+    }
+    const search = await readProbeResponse(
+      await fetcher(new URL("/v1/case/decisions/search", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "contract", country: "CZ", limit: 5 }),
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const decisionIds = v.is(
+      v.object({ hits: v.array(v.object({ decisionId: v.string() })) }),
+      search.body,
+    )
+      ? search.body.hits.map(({ decisionId }) => decisionId)
+      : [];
+    if (decisionIds.length === 0) {
+      return failed(RELEASE_LOAD_PROBE, "no case-law decision to read");
+    }
+    let id = 100;
+    const { samples, window } = await load({
+      decisionIds,
+      call: async ({ toolName, arguments: args }) => {
+        id += 1;
+        const response = await postJsonRpc(
+          {
+            baseUrl,
+            token,
+            era: "modern",
+            id,
+            method: "tools/call",
+            params: { name: toolName, arguments: args },
+          },
+          fetcher,
+        );
+        if (response.status === 429) {
+          return "rate_limited";
+        }
+        return evaluateToolCall(response).status === PROBE_STATUS.passed
+          ? "answered"
+          : "failed";
+      },
+    });
+    const { verdicts, failures } = judgeReleaseLoad(samples);
+    const after = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "GET",
+        headers: smokeHeaders,
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const ran =
+      window !== null && v.is(scheduledLoadRunsSchema, after.body)
+        ? jobsRunDuringLoad(after.body.runs, window)
+        : [];
+    if (ran.length === 0) {
+      failures.push("no scheduled corpus job ran during the load");
+    }
+    const detail = `${describeReleaseLoad(verdicts)}; jobs run during the load: ${ran.join(", ") || "none"}`;
+    return failures.length === 0
+      ? passed(RELEASE_LOAD_PROBE, detail)
+      : failed(RELEASE_LOAD_PROBE, `${failures.join("; ")}; ${detail}`);
+  });
+
 type StagingJourneyOptions = {
   baseUrl: string;
   smokeSecret?: string | undefined;
+  /** Runs the release load after the credentialed probes. */
+  load?: boolean | undefined;
 };
 export const runStagingCredentialJourneys = async (
-  { baseUrl, smokeSecret }: StagingJourneyOptions,
+  { baseUrl, smokeSecret, load = false }: StagingJourneyOptions,
   fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> => {
   const bootstrapName = "staging credential bootstrap";
@@ -1449,6 +1649,9 @@ export const runStagingCredentialJourneys = async (
         skipped(name, "no staging smoke session available"),
       ),
       skipped("desktop handoff redeem", "missing SMOKE_SESSION_SECRET"),
+      ...(load
+        ? [skipped(RELEASE_LOAD_PROBE, "missing SMOKE_SESSION_SECRET")]
+        : []),
     ];
   }
   const results: ProbeResult[] = [];
@@ -1532,11 +1735,22 @@ export const runStagingCredentialJourneys = async (
           fetcher,
         )),
       );
+      if (load) {
+        results.push(
+          await runReleaseLoadProbe(
+            { baseUrl, token: mintedToken, smokeSecret },
+            fetcher,
+          ),
+        );
+      }
     } else {
       results.push(
         ...AUTHENTICATED_PROBES.map(({ name }) =>
           skipped(name, "staging credential bootstrap failed"),
         ),
+        ...(load
+          ? [skipped(RELEASE_LOAD_PROBE, "staging credential bootstrap failed")]
+          : []),
       );
     }
     const browserCookie = sessionCookie;
@@ -1827,7 +2041,18 @@ const createReviewJourneyContext = (
   };
   const rpc = async (call: JsonRpcCall) => {
     state.lastResponse = undefined;
+    const startedAt = performance.now();
     state.lastResponse = await postJsonRpc(call, targetFetch);
+    const overBudget =
+      call.method === "tools/call"
+        ? describeToolLatencyOverBudget({
+            toolName: call.params.name,
+            elapsedMs: performance.now() - startedAt,
+          })
+        : undefined;
+    if (overBudget !== undefined) {
+      reject(overBudget);
+    }
     const result = jsonRpcResult(state.lastResponse.body);
     if (
       state.lastResponse.status !== 200 ||
@@ -2807,6 +3032,7 @@ const run = async () => {
           process.env[
             MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
           ],
+        load: process.env["MCP_CANARY_RELEASE_LOAD"] === "on",
       })),
     );
   } else {

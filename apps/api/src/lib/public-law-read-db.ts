@@ -19,14 +19,25 @@ import {
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
   getPublicReadSignal,
   getPublicReadStatementTimeoutMs,
   withPublicReadIo,
 } from "@/api/lib/legal-search/public-read-timeout-context";
+import {
+  remainingRequestBudgetMs,
+  requestBoundedTimeoutMs,
+  requestBudgetExpiry,
+} from "@/api/lib/load/request-latency-budget";
 import { logger } from "@/api/lib/observability/logger";
-import { getPgErrorCode } from "@/api/lib/pg-error";
+import {
+  getPgDriverErrorCode,
+  getPgErrorCode,
+  PG_DRIVER_ERROR,
+  PG_ERROR,
+} from "@/api/lib/pg-error";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -516,6 +527,16 @@ const validateExternalPublicLawDatabase = async (
 
 type PublicLawReadGuard = readonly [setting: string, value: string];
 
+/**
+ * Which of a read's installed guards the request's budget set, recorded
+ * when `configureReadTransaction` installs them, so a timeout is reported as
+ * the budget's only when the budget is what shortened it.
+ */
+export type ReadGuardProvenance = {
+  statementTimeoutClamped: boolean;
+  transactionDeadline: boolean;
+};
+
 /** Any handle that can run the setup statements, including a test's own. */
 type ConfigurableReadTransaction = {
   execute: (query: SqlFragment) => Promise<unknown>;
@@ -549,6 +570,8 @@ export const configureReadTransaction = async (
   tx: ConfigurableReadTransaction,
   isolation: PublicLawReadIsolation,
   guards: readonly PublicLawReadGuard[],
+  /** Filled in with which of the installed guards the request's budget set. */
+  provenance?: ReadGuardProvenance,
 ): Promise<void> => {
   if (isolation === "repeatable-read") {
     await tx.execute(
@@ -581,15 +604,33 @@ export const configureReadTransaction = async (
     panic("Public-law read guards require read-only and a statement timeout");
   }
   const requestTimeoutMs = getPublicReadStatementTimeoutMs();
+  // Inside a request latency scope the whole transaction ends at the
+  // request's deadline. `statement_timeout` alone restarts with every
+  // statement, so a run of statements could still outlast the request;
+  // `transaction_timeout` counts them together and ends the session even
+  // between statements. Zero outside a scope: no deadline of the request's.
+  const requestDeadlineMs = requestBoundedTimeoutMs(0);
+  const statementCapMs =
+    requestTimeoutMs === undefined
+      ? statementTimeoutMs
+      : Math.min(statementTimeoutMs, requestTimeoutMs);
+  const requestStatementTimeoutMs = requestBoundedTimeoutMs(statementCapMs);
+  // Which installed timeouts are the request's: only those may later be
+  // reported as its budget running out.
+  if (provenance !== undefined) {
+    provenance.statementTimeoutClamped =
+      requestStatementTimeoutMs < statementCapMs;
+    provenance.transactionDeadline = requestDeadlineMs > 0;
+  }
   await setSharedReadTransactionGuards(tx, {
-    statementTimeoutMs:
-      requestTimeoutMs === undefined
-        ? statementTimeoutMs
-        : Math.min(statementTimeoutMs, requestTimeoutMs),
+    statementTimeoutMs: requestStatementTimeoutMs,
     ...(lockTimeoutMs === undefined ? {} : { lockTimeoutMs }),
     ...(idleInTransactionTimeoutMs === undefined
       ? {}
       : { idleInTransactionTimeoutMs }),
+    ...(requestDeadlineMs > 0
+      ? { transactionTimeoutMs: requestDeadlineMs }
+      : {}),
   });
 };
 
@@ -728,6 +769,13 @@ const openPublicReadDatabase = async (
  * Public handlers intentionally do not receive `scopedDb`, `session`, or
  * workspace context. Requiring this branded wrapper keeps public reads from
  * accidentally depending on authenticated route macros.
+ *
+ * Inside a request latency scope the guards end the transaction at the
+ * request's deadline. A statement or transaction timeout is reported as the
+ * budget's `timeout_budgeted` TimeoutError (the database error its cause)
+ * only when the guard that fired is one the request's budget shortened, as
+ * recorded when it was installed; a timeout of the read's own, or an explicit
+ * cancel, keeps its own error and grade.
  */
 export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
@@ -739,6 +787,10 @@ export const publicLawReadDb = async <T>(
     const isolation = options?.isolation ?? "read-committed";
     const pool = await getPublicLawDatabase();
     const resource = await openPublicReadDatabase(pool, signal);
+    const provenance: ReadGuardProvenance = {
+      statementTimeoutClamped: false,
+      transactionDeadline: false,
+    };
     let outcome: Result<T, unknown>;
     try {
       const read = io.readTransaction(
@@ -748,7 +800,12 @@ export const publicLawReadDb = async <T>(
           if (envBase.PUBLIC_LAW_DATABASE_URL === undefined) {
             await setSharedPublicLawReaderRole(tx);
           }
-          await configureReadTransaction(tx, isolation, publicLawReadGuards());
+          await configureReadTransaction(
+            tx,
+            isolation,
+            publicLawReadGuards(),
+            provenance,
+          );
 
           return await fn(tx);
         },
@@ -764,7 +821,59 @@ export const publicLawReadDb = async <T>(
     // A driver cancellation is the caller's abort, not a statement timeout.
     signal?.throwIfAborted();
     if (Result.isError(outcome)) {
-      return abortTransaction(outcome.error);
+      return abortTransaction(publicLawReadFailure(outcome.error, provenance));
     }
     return outcome.value;
   });
+/**
+ * What a failed read rejects with: the budget's `timeout_budgeted`
+ * TimeoutError when a guard the request clamped ended it, else the failure
+ * itself (a non-Error rejection wrapped, so the rejection is always an Error).
+ */
+const publicLawReadFailure = (
+  error: unknown,
+  provenance: ReadGuardProvenance,
+): Error => {
+  const expiry = requestBudgetExpiry(error, {
+    clampedTimeout: endedByRequestClampedGuard(error, provenance),
+  });
+  if (expiry !== undefined) {
+    return expiry;
+  }
+  return error instanceof Error
+    ? error
+    : new DatabaseError({
+        message: "Public-law read transaction rejected with a non-Error value",
+        cause: error,
+      });
+};
+
+/**
+ * Whether the guard that ended the read is one the request's budget set: the
+ * statement timeout when the budget shortened it, or the transaction deadline,
+ * which only the budget sets. The server ending the session for that deadline
+ * between two statements reaches the client as a closed connection with no
+ * SQLSTATE. Both a cancelled statement and a closed connection count only
+ * once the budget is spent: either can also result from an explicit cancel
+ * while time remains. Clamped timers round up to whole milliseconds so a
+ * real timeout cannot precede the budget's deadline.
+ */
+const endedByRequestClampedGuard = (
+  error: unknown,
+  { statementTimeoutClamped, transactionDeadline }: ReadGuardProvenance,
+): boolean => {
+  switch (getPgErrorCode(error)) {
+    case PG_ERROR.QUERY_CANCELED:
+      return statementTimeoutClamped && remainingRequestBudgetMs() === 0;
+    case PG_ERROR.TRANSACTION_TIMEOUT:
+      return transactionDeadline;
+    case undefined:
+      return (
+        transactionDeadline &&
+        getPgDriverErrorCode(error) === PG_DRIVER_ERROR.CONNECTION_CLOSED &&
+        remainingRequestBudgetMs() === 0
+      );
+    default:
+      return false;
+  }
+};

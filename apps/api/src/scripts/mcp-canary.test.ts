@@ -25,6 +25,7 @@ import {
   type CanaryFetcher,
   createDeploymentFetcher,
   createJsonRpcRequest,
+  describeToolLatencyOverBudget,
   evaluateAuthorizationMetadata,
   evaluateAuthorize,
   evaluateCredentialExpiry,
@@ -36,6 +37,7 @@ import {
   evaluateToolCall,
   evaluateToolsList,
   evaluateUnauthenticated,
+  judgeToolCallProbe,
   LOOPBACK_REDIRECTS,
   runAuthenticatedStreamProbe,
   runDesktopProbe,
@@ -44,6 +46,7 @@ import {
   runReviewAccountJourney,
   runStagingCredentialJourneys,
   summarize,
+  TOOL_CALL_PROBES,
 } from "./mcp-canary";
 
 const REVIEW_BASE_URL = "https://api.example";
@@ -1468,6 +1471,89 @@ describe("authorization server probes", () => {
     });
     expect(long.length).toBeLessThan(300);
     expect(long).toContain("...");
+  });
+});
+
+describe("tool latency budgets", () => {
+  const answered = evaluateToolCall(
+    {
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        result: { content: [{ type: "text", text: "ok" }] },
+      },
+    },
+    {
+      name: "POST /mcp (search_legislation)",
+      answered: "read-only legislation search returned content",
+    },
+  );
+
+  test("fails a correct answer that ran over its tool's budget", () => {
+    expect(
+      judgeToolCallProbe(answered, {
+        toolName: "search_legislation",
+        elapsedMs: 10_512.4,
+      }),
+    ).toEqual({
+      name: "POST /mcp (search_legislation)",
+      status: "failed",
+      detail:
+        "search_legislation answered in 10512 ms, over its 8000 ms latency budget",
+    });
+  });
+
+  test("passes a correct answer within budget and says how long it took", () => {
+    expect(
+      judgeToolCallProbe(answered, {
+        toolName: "search_legislation",
+        elapsedMs: 1480,
+      }),
+    ).toEqual({
+      name: "POST /mcp (search_legislation)",
+      status: "passed",
+      detail: "read-only legislation search returned content in 1480 ms",
+    });
+  });
+
+  test("keeps both causes when a wrong answer was also slow", () => {
+    const wrong = evaluateToolCall({ status: 502, body: null });
+    expect(
+      judgeToolCallProbe(wrong, {
+        toolName: "search_case_law",
+        elapsedMs: 9000,
+      }).detail,
+    ).toBe(
+      `${wrong.detail}; search_case_law answered in 9000 ms, over its 8000 ms latency budget`,
+    );
+  });
+
+  test("judges an ordinary read by the default budget", () => {
+    expect(
+      describeToolLatencyOverBudget({
+        toolName: "list_tasks",
+        elapsedMs: 2000,
+      }),
+    ).toBeUndefined();
+    expect(
+      describeToolLatencyOverBudget({
+        toolName: "case_law_coverage",
+        elapsedMs: 3134,
+      }),
+    ).toBe(
+      "case_law_coverage answered in 3134 ms, over its 2000 ms latency budget",
+    );
+  });
+
+  test("times every probed tool, including the slow-prone corpus reads", () => {
+    expect(TOOL_CALL_PROBES.map(({ toolName }) => toolName)).toEqual([
+      "search_case_law",
+      "search_legislation",
+      "case_law_coverage",
+    ]);
+    expect(AUTHENTICATED_PROBES.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(TOOL_CALL_PROBES.map(({ name }) => name)),
+    );
   });
 });
 

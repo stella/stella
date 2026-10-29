@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import type { VocabularyEntry } from "@stll/agent-input";
 import { normalizeVocabularyValue } from "@stll/agent-input";
@@ -19,10 +19,11 @@ import type { AgentCaseLawSearchWarning } from "@/api/lib/case-law/search-warnin
 import {
   filterDroppedWarning,
   filterReadWarning,
+  filterUnreadWarning,
 } from "@/api/lib/case-law/search-warnings";
+import { runBoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 /**
@@ -381,7 +382,11 @@ export const resolveCourtFilter = async ({
   }
   const courts = await loadCaseLawCourtNames(context, country);
   if (courts === null) {
-    return { court, courts: requestedCourts, warnings: [] };
+    return {
+      court,
+      courts: requestedCourts,
+      warnings: [filterUnreadWarning({ filter: "court" })],
+    };
   }
   const identities = storedCourtIdentities(country, courts);
   const listWarnings: AgentCaseLawSearchWarning[] = [];
@@ -432,9 +437,10 @@ const COURT_NAMES_CACHE_TTL_MS = 10 * 60_000;
 
 /**
  * A filter reading is presentation of the caller's intent, not a gate, so the
- * list read gets a short budget: without it the filter is used as sent.
+ * list read gets a short sub-budget of the search's own: without the list the
+ * filter is used as sent, and the search says so.
  */
-const COURT_NAMES_READ_TIMEOUT_MS = 1500;
+const COURT_NAMES_READ_BUDGET_MS = 1500;
 
 const COURT_FILTER_VOCABULARY_SINK = failureSink({
   event: "mcp.case_law.court_filter_vocabulary_unavailable",
@@ -459,28 +465,24 @@ const readCachedCourtNames = async (
 
 /**
  * The country's stored courts, or null when they cannot be read in time. A
- * null list leaves the filter as sent: the search then answers exactly as it
- * did before this reader existed, which is the honest degradation.
+ * null list leaves the filter as sent, and the search reports it with a
+ * `filter_unread` warning rather than waiting the list out.
  */
 const loadCaseLawCourtNames = async (
   context: McpRequestContext,
   country: string,
 ): Promise<readonly string[] | null> => {
-  const read = context.testDependencies?.readCaseLawCourtNames;
-  if (read !== undefined) {
-    return await read(country);
-  }
-  const courts = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(async () => await readCachedCourtNames(country), {
-        label: "case-law-court-filter-vocabulary",
-        timeoutMs: COURT_NAMES_READ_TIMEOUT_MS,
-      }),
-    catch: (cause) => cause,
+  const read =
+    context.testDependencies?.readCaseLawCourtNames ?? readCachedCourtNames;
+  const courts = await runBoundedRequestStep(async () => await read(country), {
+    label: "case-law-court-filter-vocabulary",
+    budgetMs: COURT_NAMES_READ_BUDGET_MS,
   });
-  if (Result.isError(courts)) {
-    observeFailure(courts.error, { sink: COURT_FILTER_VOCABULARY_SINK });
-    return null;
+  if (courts.status === "complete") {
+    return courts.value;
   }
-  return courts.value;
+  // A spent budget is graded `timeout_budgeted`; any other failure keeps its
+  // own grade.
+  observeFailure(courts.error, { sink: COURT_FILTER_VOCABULARY_SINK });
+  return null;
 };

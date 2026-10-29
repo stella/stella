@@ -212,6 +212,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/verification/*",
     "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",
     "apps/api/src/lib/legal-search/document-builders/inline-style.ts",
+    "apps/api/src/lib/load/request-latency-budget.ts",
     "apps/api/src/lib/load/work-admission.ts",
     "apps/api/src/lib/load/work-budget.ts",
     "apps/api/src/lib/load/work-pools.ts",

@@ -119,6 +119,8 @@ export const caseLawSearchWarnings = ({
  * - `filter_dropped`: the value named no known value, or several different
  *   ones, so the search ran without that filter rather than returning
  *   nothing for it.
+ * - `filter_unread`: the known values could not be read within the search's
+ *   budget, so the value was used exactly as sent, unread.
  * - `many_required_terms`: a phrasing required many words in one passage and
  *   filled fewer result slots than it was given, so dropping a word is the
  *   likelier fix than paging. Raised only under `MCP_CASE_LAW_SEARCH_GUIDANCE`
@@ -130,6 +132,7 @@ export const caseLawSearchWarnings = ({
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
   "filter_dropped",
+  "filter_unread",
   "many_required_terms",
   "provision_cited_widely",
 ] as const;
@@ -182,6 +185,21 @@ export const filterDroppedWarning = ({
   code: "filter_dropped",
   message: `${received} names no single ${filter}, so this search ran without the ${filter} filter.`,
   hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
+});
+
+/**
+ * The stored values a filter is read against were unavailable in time, so
+ * the search compared the value as sent: an exact stored spelling still
+ * matches, any other spelling matches nothing.
+ */
+export const filterUnreadWarning = ({
+  filter,
+}: {
+  filter: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "filter_unread",
+  message: `The stored ${filter} values could not be read in time, so the ${filter} filter was used exactly as sent.`,
+  hint: `If this page looks narrower than expected, pass ${filter} as the corpus stores it, or search again.`,
 });
 
 export const manyRequiredTermsWarning = ({
@@ -285,6 +303,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       received: '"Česká republika"',
       known: 'Known values include "Nejvyšší soud".',
     }),
+  filter_unread: () => filterUnreadWarning({ filter: "court" }),
   provision_cited_widely: () =>
     provisionCitedWidelyWarning({
       provision: "§ 2910 OZ",
