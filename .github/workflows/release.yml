@@ -1686,6 +1686,7 @@ jobs:
 
       - name: Download the release's extension package
         id: package
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
@@ -1709,6 +1710,7 @@ jobs:
 
       - name: Verify the package is the production release build
         if: steps.package.outputs.zip != ''
+        timeout-minutes: 5
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
           ZIP: ${{ steps.package.outputs.zip }}
