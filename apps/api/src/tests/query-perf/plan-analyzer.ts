@@ -2,6 +2,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 
 import { isExceptedPlanViolation } from "./plan-exceptions";
+import type { QueryPerfProfileId } from "./profiles";
 import { isLargeQueryPerfRelation } from "./table-sizes";
 
 /** Fixture rows represent one percent of the production-shape population. */
@@ -23,6 +24,7 @@ export type PlanViolation = {
     | "spill"
     | "scaled-time";
   owner: string;
+  profileId: QueryPerfProfileId;
   statement: string;
   node: Record<string, unknown>;
   message: string;
@@ -33,11 +35,15 @@ const children = (node: Record<string, unknown>) => {
   return Array.isArray(plans) ? plans.filter(isRecord) : [];
 };
 
-const hasBound = (node: Record<string, unknown>): boolean => {
+const hasOuterStreamBound = (node: Record<string, unknown>): boolean => {
   if (node["Node Type"] === "Limit" || typeof node["Index Cond"] === "string") {
     return true;
   }
-  return children(node).some(hasBound);
+  const plans = children(node);
+  const child = plans.at(0);
+  return (
+    plans.length === 1 && child !== undefined && hasOuterStreamBound(child)
+  );
 };
 
 const nodeLabel = (node: Record<string, unknown>) => {
@@ -50,11 +56,13 @@ export const analyzePlan = ({
   document,
   owner,
   ownerDeadlineMs,
+  profileId,
   statement,
 }: {
   document: ExplainPlanDocument;
   owner: string;
   ownerDeadlineMs: number | undefined;
+  profileId: QueryPerfProfileId;
   statement: string;
 }): PlanViolation[] => {
   const violations: PlanViolation[] = [];
@@ -66,6 +74,7 @@ export const analyzePlan = ({
     violations.push({
       kind,
       owner,
+      profileId,
       statement,
       node,
       message: `${owner}: ${detail}; statement: ${statement}; node: ${nodeLabel(node)}`,
@@ -82,13 +91,14 @@ export const analyzePlan = ({
     const nodeType = node["Node Type"];
     const relation = node["Relation Name"];
     const discarded = node["Rows Removed by Index Recheck"];
+    const lossyHeapBlocks = node["Lossy Heap Blocks"];
     if (
       typeof relation === "string" &&
       isLargeQueryPerfRelation(relation) &&
       (nodeType === "Seq Scan" ||
         (nodeType === "Bitmap Heap Scan" &&
-          typeof discarded === "number" &&
-          discarded > 0))
+          ((typeof discarded === "number" && discarded > 0) ||
+            (typeof lossyHeapBlocks === "number" && lossyHeapBlocks > 0))))
     ) {
       report(
         "large-scan",
@@ -103,7 +113,7 @@ export const analyzePlan = ({
         outer !== undefined &&
         typeof rows === "number" &&
         rows > NESTED_LOOP_OUTER_ROW_LIMIT &&
-        !hasBound(outer)
+        !hasOuterStreamBound(outer)
       ) {
         report(
           "unbounded-nested-loop",
@@ -114,13 +124,19 @@ export const analyzePlan = ({
     }
     const sortMethod = node["Sort Method"];
     const hashBatches = node["Hash Batches"];
+    const hashAggBatches = node["HashAgg Batches"];
+    const diskUsage = node["Disk Usage"];
     if (
       (nodeType === "Sort" &&
         typeof sortMethod === "string" &&
         sortMethod.toLowerCase().startsWith("external")) ||
       (nodeType === "Hash" &&
         typeof hashBatches === "number" &&
-        hashBatches > 1)
+        hashBatches > 1) ||
+      (nodeType === "Aggregate" &&
+        node["Strategy"] === "Hashed" &&
+        ((typeof hashAggBatches === "number" && hashAggBatches > 1) ||
+          (typeof diskUsage === "number" && diskUsage > 0)))
     ) {
       report("spill", node, "sort or hash spilled to disk");
     }

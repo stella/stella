@@ -41,7 +41,7 @@ import { seedQueryPerf } from "./seed";
 import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
-const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
 
 const log = (record: Record<string, unknown>) => {
@@ -138,6 +138,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   query: entry.query,
                   owner: budgetId,
                   ownerDeadlineMs: entry.ownerDeadlineMs,
+                  profileId,
                 }),
             );
             log({
@@ -179,6 +180,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   query: entry.query,
                   owner: budgetId,
                   ownerDeadlineMs: entry.ownerDeadlineMs,
+                  profileId,
                 }),
             );
             log({
@@ -252,6 +254,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 build: entry.build,
                 owner: budgetId,
                 ownerDeadlineMs: entry.ownerDeadlineMs,
+                profileId: "corpus",
               }),
           );
           log({
@@ -361,6 +364,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 build: () => query,
                 owner: "fixture.unboundedFreshness",
                 ownerDeadlineMs: undefined,
+                profileId: "corpus",
               });
               pages += result.metrics.sharedBlocks;
             }
@@ -396,6 +400,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               build: () => query,
               owner: "fixture.convergenceRevisionChecks",
               ownerDeadlineMs: undefined,
+              profileId: "corpus",
             });
             pages += result.metrics.sharedBlocks;
           }

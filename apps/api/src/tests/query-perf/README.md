@@ -12,7 +12,8 @@ The analyzer walks every measured statement. It rejects sequential scans on
 large (or undeclared) relations, lossy bitmap heap scans, nested loops with
 more than 1,000 unbounded outer rows, sort/hash spills, and execution time
 that would exceed one quarter of the measured owner's runtime statement
-deadline after scaling. An owner without its own deadline is a typed finding.
+deadline after scaling. Every measurement also has a fixed 10-second execution-
+time guard. An owner without its own deadline is a typed finding.
 The fixture represents 1% of the production-shape population, so its
 documented scale factor is 100. Time is a coarse deadline guard rather than a
 benchmark; pages and plan shape are the deterministic gates. The suite does

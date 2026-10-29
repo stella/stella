@@ -162,6 +162,7 @@ export const measureScheduledJobRun = async ({
           owner: jobId,
           ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
           statement: normalized,
+          profileId: "corpus",
         }),
         statement: normalized,
       });
