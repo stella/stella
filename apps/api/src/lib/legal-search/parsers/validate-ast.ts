@@ -252,7 +252,7 @@ const publisherComparisonWords = ({
       }
       joined += fragment.word;
       for (const letter of fragment.word) {
-        node = node?.children.get(letter);
+        node = node.children.get(letter);
         if (node === undefined) {
           break;
         }
