@@ -2,9 +2,10 @@ import { useState } from "react";
 import type { ComponentType } from "react";
 
 import { useRouter } from "expo-router";
-import { FlatList, Pressable, View } from "react-native";
+import { FlatList, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
@@ -279,24 +280,28 @@ const PaletteScreen = () => {
             </View>
           }
           renderItem={({ index, item }) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: index === current }}
-              className={`active:bg-accent mx-2 flex-row items-center gap-3 rounded-xl px-3 py-2.5 ${index === current ? "bg-accent" : ""}`}
-              onPress={item.run}
-            >
-              <item.glyph color={ui.mutedForeground} size={18} />
-              <View className="flex-1">
-                <Text numberOfLines={1} variant="rowTitle">
-                  {item.title}
-                </Text>
-                {item.detail === undefined || item.detail === "" ? null : (
-                  <Text numberOfLines={1} variant="caption">
-                    {item.detail}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
+            <View className="px-2">
+              <Button
+                accessibilityState={{ selected: index === current }}
+                onPress={item.run}
+                size="row"
+                variant="ghost"
+              >
+                <View className="flex-1 flex-row items-center gap-3 px-3 py-2.5">
+                  <item.glyph color={ui.mutedForeground} size={18} />
+                  <View className="flex-1">
+                    <Text numberOfLines={1} variant="rowTitle">
+                      {item.title}
+                    </Text>
+                    {item.detail === undefined || item.detail === "" ? null : (
+                      <Text numberOfLines={1} variant="caption">
+                        {item.detail}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </Button>
+            </View>
           )}
         />
       </View>

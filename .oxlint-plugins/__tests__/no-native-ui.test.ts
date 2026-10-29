@@ -18,7 +18,7 @@ const lint = async (module: string, source: string): Promise<number[]> =>
 
 // One statement per pattern a registry row lists, so every pattern of every
 // generated rule is proven to report, from the registry itself.
-const nativeStatements = (patterns: NativePatterns): string[] => [
+const webStatements = (patterns: NativePatterns): string[] => [
   ...(patterns.elements ?? []).map((element) => `<${element} />;`),
   ...(patterns.roles ?? []).map((role) => `<div role="${role}" />;`),
   ...(patterns.inputTypes ?? []).flatMap((type) => [
@@ -51,19 +51,49 @@ const CLEAN_SOURCE = [
   'export const q = <div aria-label="Toolbar" />;',
 ].join("\n");
 
+/** `TextInput[multiline]` rendered as the element it names. */
+const reactNativeStatement = (selector: string): string => {
+  const [component = selector, flag] = selector.replace("]", "").split("[");
+  return flag === undefined ? `<${component} />;` : `<${component} ${flag} />;`;
+};
+
+const reactNativeComponents = (selectors: readonly string[]): string[] => [
+  ...new Set(selectors.map((selector) => selector.split("[")[0] ?? selector)),
+];
+
+/**
+ * A source holding every pattern a rule reports, one per line after an
+ * import of the React Native components it names, and the lines expected.
+ */
+const nativeSource = ({
+  patterns,
+  reactNative,
+}: {
+  patterns: NativePatterns;
+  reactNative: readonly string[];
+}): { source: string; lines: number[] } => {
+  const statements = [
+    ...webStatements(patterns),
+    ...reactNative.map(reactNativeStatement),
+  ];
+  const header = `import { ${reactNativeComponents(reactNative).join(", ")} } from "react-native";`;
+  return {
+    source: [header, ...statements].join("\n"),
+    lines: statements.map((_, index) => index + 2),
+  };
+};
+
 const ENTRIES = nativeEntries();
 
 describe.each(ENTRIES)(
   "no-native-ui/no-native-$module",
-  ({ module, patterns }) => {
+  ({ module, patterns, reactNative }) => {
     test.concurrent(
       "reports every native pattern the registry lists",
       async () => {
-        const statements = nativeStatements(patterns);
-        expect(statements.length).toBeGreaterThan(0);
-        expect(await lint(module, statements.join("\n"))).toEqual(
-          statements.map((_, index) => index + 1),
-        );
+        const { source, lines } = nativeSource({ patterns, reactNative });
+        expect(lines.length).toBeGreaterThan(0);
+        expect(await lint(module, source)).toEqual(lines);
       },
     );
 
@@ -77,6 +107,50 @@ describe.each(ENTRIES)(
 );
 
 describe("no-native-ui edge cases", () => {
+  test.concurrent(
+    "a React Native component is reported only when imported from react-native",
+    async () => {
+      const source = [
+        'import { Pressable as Touchable, View } from "react-native";',
+        'import * as RN from "react-native";',
+        'import { Pressable } from "react-native-gesture-handler";',
+        "export const a = <Touchable onPress={go} />;",
+        "export const b = <RN.TouchableOpacity onPress={go} />;",
+        "export const c = <Pressable onPress={go} />;",
+        "export const d = <View />;",
+        "export const e = <Button onPress={go}>Save</Button>;",
+        'export const f = <View accessibilityRole="button" />;',
+      ].join("\n");
+      expect(await lint("button", source)).toEqual([4, 5, 9]);
+    },
+  );
+
+  test.concurrent(
+    "a multi-line TextInput is the textarea's, a single-line one the input's",
+    async () => {
+      const source = [
+        'import { TextInput } from "react-native";',
+        "export const a = <TextInput />;",
+        "export const b = <TextInput multiline />;",
+        "export const c = <TextInput multiline={false} />;",
+        "export const d = <TextInput multiline={grows} />;",
+      ].join("\n");
+      expect(await lint("input", source)).toEqual([2, 4]);
+      expect(await lint("textarea", source)).toEqual([3, 5]);
+    },
+  );
+
+  test.concurrent(
+    "the design system's Text is not React Native's",
+    async () => {
+      const source = [
+        'import { Text } from "@stll/ui/text";',
+        'export const a = <Text variant="caption">Hi</Text>;',
+      ].join("\n");
+      expect(await lint("text", source)).toEqual([]);
+    },
+  );
+
   test.concurrent(
     "a design-system Button cast as a switch is a switch",
     async () => {

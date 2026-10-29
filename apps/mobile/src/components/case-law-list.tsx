@@ -1,17 +1,12 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  ScrollView,
-  View,
-} from "react-native";
+import { FlatList, RefreshControl, ScrollView, View } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { DecisionRow } from "@/components/decision-row";
@@ -43,7 +38,6 @@ type DecisionsRequest = {
  * web's case-law index lists them. A choice of jurisdiction heads the list.
  */
 export const CaseLawList = ({ serverUrl }: { serverUrl: string }) => {
-  const colors = useAppColors();
   const locale = useLocale();
   const { settledQuery } = useHeaderSearch();
   const query = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH).trim();
@@ -77,9 +71,7 @@ export const CaseLawList = ({ serverUrl }: { serverUrl: string }) => {
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedDecisions
         onCountry={show}
         onReload={reload}

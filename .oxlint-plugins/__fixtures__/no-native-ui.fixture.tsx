@@ -8,6 +8,14 @@
 
 import type { ComponentProps } from "react";
 
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  Text as PlatformText,
+  TextInput,
+} from "react-native";
+
 import { Input } from "@stll/ui/input";
 import { MenuCheckboxItem } from "@stll/ui/menu";
 import { Switch } from "@stll/ui/switch";
@@ -63,6 +71,24 @@ export const _flagged = ({ id, label }: { id: string; label: string }) => (
     <textarea aria-label={label} />
     {/* oxlint-disable-next-line no-native-ui/no-native-tooltip */}
     <span title={label} />
+  </>
+);
+
+// --- Flagged: React Native components a native renderer already wraps ---
+export const _flaggedReactNative = ({ label }: { label: string }) => (
+  <>
+    {/* oxlint-disable-next-line no-native-ui/no-native-button */}
+    <Pressable accessibilityLabel={label} />
+    {/* oxlint-disable-next-line no-native-ui/no-native-loader */}
+    <ActivityIndicator />
+    {/* oxlint-disable-next-line no-native-ui/no-native-sheet */}
+    <Modal visible={false} />
+    {/* oxlint-disable-next-line no-native-ui/no-native-text */}
+    <PlatformText>{label}</PlatformText>
+    {/* oxlint-disable-next-line no-native-ui/no-native-input */}
+    <TextInput accessibilityLabel={label} />
+    {/* oxlint-disable-next-line no-native-ui/no-native-textarea */}
+    <TextInput accessibilityLabel={label} multiline />
   </>
 );
 

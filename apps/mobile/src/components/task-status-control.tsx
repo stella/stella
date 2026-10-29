@@ -1,7 +1,7 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -20,7 +21,6 @@ import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
 import { readTask, setTaskStatus } from "@/state/tasks";
 import type { TaskDetail } from "@/state/tasks";
-import { useAppColors } from "@/theme";
 
 const CLOSED: ReadonlySet<string> = new Set(TASK_CLOSED_STATUSES);
 
@@ -43,7 +43,6 @@ export const TaskStatusControl = ({
   source: AccessTokenSource;
   taskId: string;
 }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   const [load] = useState(async () => {
     const result = await readTask({ fetch, matterId, source, taskId });
@@ -54,7 +53,7 @@ export const TaskStatusControl = ({
   });
 
   return (
-    <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+    <Suspense fallback={<Loader />}>
       <LoadedTaskStatus
         load={load}
         matterId={matterId}

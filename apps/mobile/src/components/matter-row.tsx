@@ -1,7 +1,8 @@
 import { Link, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Text } from "@stll/ui/text";
 
@@ -68,25 +69,27 @@ export const MatterRow = ({
       }}
     >
       <Link.Trigger>
-        <Pressable
-          accessibilityRole="button"
+        <Button
           accessibilityState={{ selected: open }}
-          className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
+          size="row"
+          variant="ghost"
         >
-          <View className="pt-0.5">
-            <MatterIcon matter={matter} size={18} />
-          </View>
-          <View className="flex-1 gap-0.5">
-            <Text numberOfLines={2} variant="rowTitle">
-              {matter.name}
-            </Text>
-            {details.length === 0 ? null : (
-              <Text numberOfLines={1} variant="caption">
-                {details.join(" · ")}
+          <View className="border-border flex-1 flex-row gap-3 border-b py-3">
+            <View className="pt-0.5">
+              <MatterIcon matter={matter} size={18} />
+            </View>
+            <View className="flex-1 gap-0.5">
+              <Text numberOfLines={2} variant="rowTitle">
+                {matter.name}
               </Text>
-            )}
+              {details.length === 0 ? null : (
+                <Text numberOfLines={1} variant="caption">
+                  {details.join(" · ")}
+                </Text>
+              )}
+            </View>
           </View>
-        </Pressable>
+        </Button>
       </Link.Trigger>
       <Link.Menu>
         <Link.MenuAction

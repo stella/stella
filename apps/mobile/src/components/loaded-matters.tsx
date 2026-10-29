@@ -1,9 +1,10 @@
 import { use } from "react";
 
 import { Result } from "better-result";
-import { FlatList, Pressable, RefreshControl, SectionList } from "react-native";
+import { FlatList, RefreshControl, SectionList, View } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
@@ -76,21 +77,23 @@ export const LoadedMatters = ({
           const open = searching || !collapsed.has(section.key);
           const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
           return (
-            <Pressable
-              accessibilityRole="button"
+            <Button
               accessibilityState={{ expanded: open }}
-              className="flex-row items-center gap-2 pt-6 pb-1 active:opacity-60"
               disabled={searching}
               onPress={() => {
                 toggleGroup(section.key);
               }}
+              size="row"
+              variant="ghost"
             >
-              <Text className="flex-1" numberOfLines={1} variant="headline">
-                {section.client ?? t("personal")}
-              </Text>
-              <Text variant="caption">{section.count}</Text>
-              <Chevron color={colors.muted} size={18} />
-            </Pressable>
+              <View className="flex-1 flex-row items-center gap-2 pt-6 pb-1">
+                <Text className="flex-1" numberOfLines={1} variant="headline">
+                  {section.client ?? t("personal")}
+                </Text>
+                <Text variant="caption">{section.count}</Text>
+                <Chevron color={colors.muted} size={18} />
+              </View>
+            </Button>
           );
         }}
         sections={groupByClient(matters, locale).map(

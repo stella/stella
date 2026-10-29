@@ -1,7 +1,8 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator } from "react-native";
+
+import { Loader } from "@stll/ui/loader";
 
 import { useRevision } from "@/components/changes";
 import { LoadedTasks } from "@/components/loaded-tasks";
@@ -10,7 +11,6 @@ import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { listMyTasks } from "@/state/tasks";
 import type { TasksLoad } from "@/state/tasks";
-import { useAppColors } from "@/theme";
 
 /**
  * The signed-in person's open tasks, loaded once, again on every pull to
@@ -22,7 +22,6 @@ export const TasksList = ({ source }: { source: AccessTokenSource }) => {
 };
 
 const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   // A session the server ended sends the person back to sign in, from the
   // load itself rather than from a render.
@@ -42,9 +41,7 @@ const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedTasks load={load} onReload={reload} refreshing={refreshing} />
     </Suspense>
   );

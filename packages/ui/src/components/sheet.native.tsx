@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { cn } from "../lib/utils";
 import { Button } from "./button.native";
 import type { SheetContract } from "./sheet.shared";
 import { Text } from "./text.native";
@@ -49,7 +50,7 @@ export const SheetPopup = ({
 }: ViewProps & { className?: string | undefined }) => (
   <KeyboardAvoidingView
     behavior={Platform.OS === "ios" ? "padding" : undefined}
-    className={`bg-background flex-1 gap-4 px-5 pt-5 ${className ?? ""}`}
+    className={cn("bg-background flex-1 gap-4 px-5 pt-5", className)}
     {...props}
   />
 );
@@ -60,7 +61,7 @@ export const SheetHeader = ({
   ...props
 }: ViewProps & { className?: string | undefined }) => (
   <View
-    className={`flex-row items-center justify-between gap-4 ${className ?? ""}`}
+    className={cn("flex-row items-center justify-between gap-4", className)}
     {...props}
   />
 );
@@ -79,7 +80,7 @@ export const SheetPanel = ({
   ...props
 }: ComponentProps<typeof ScrollView>) => (
   <ScrollView
-    contentContainerClassName={`gap-4 ${contentContainerClassName ?? ""}`}
+    contentContainerClassName={cn("gap-4", contentContainerClassName)}
     keyboardShouldPersistTaps="handled"
     {...props}
   />

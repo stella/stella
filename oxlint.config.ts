@@ -11,6 +11,7 @@ import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-
 import {
   nativeEntries,
   nativeRuleId,
+  reactNativeRuleModules,
 } from "./.oxlint-plugins/no-native-ui-registry.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
@@ -40,6 +41,7 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DESIGN_SYSTEM_CONSUMER_FILES,
   PRODUCT_FRONTEND_FILES,
+  REACT_NATIVE_CONSUMER_FILES,
 } from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
@@ -186,6 +188,11 @@ const derivedAttributeRuleOptions = {
 const NO_NATIVE_UI_RULE_IDS = nativeEntries().map(({ module }) =>
   nativeRuleId(module),
 );
+
+// The same rules for components that have a React Native renderer, for the
+// app that renders through them.
+const NO_NATIVE_UI_REACT_NATIVE_RULE_IDS =
+  reactNativeRuleModules().map(nativeRuleId);
 
 const fixtureRuleOverrides = [
   {
@@ -6755,6 +6762,24 @@ const config = defineConfig({
       ],
       rules: Object.fromEntries(
         NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
+      ),
+    },
+    {
+      // The React Native app renders through @stll/ui's native renderers
+      // (`<component>.native.tsx`) and never the React Native component one
+      // of them replaces (a raw Pressable, ActivityIndicator, Modal or Text).
+      // Only components with a native renderer have a rule here. Tests render
+      // bare harness markup.
+      files: [...REACT_NATIVE_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: Object.fromEntries(
+        NO_NATIVE_UI_REACT_NATIVE_RULE_IDS.map(
+          (rule) => [rule, "error"] as const,
+        ),
       ),
     },
     {

@@ -2,11 +2,12 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -19,7 +20,6 @@ import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { readFileProperty, uploadDocument } from "@/state/document-upload";
 import { listMatters } from "@/state/matters";
-import { useAppColors } from "@/theme";
 
 /**
  * A scan the document camera saved, presented as a sheet: its name, how many
@@ -37,7 +37,6 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("scan");
   const tabs = useTranslations("tabs");
   const format = useFormatter();
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -153,13 +152,13 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
             <Text variant="caption">{t("pages", { count: pageCount })}</Text>
           </View>
         </View>
-        {uploading ? <ActivityIndicator color={colors.muted} /> : null}
+        {uploading ? <Loader /> : null}
         <WriteFailureNotice failure={failure} message={t("uploadFailed")} />
         <View className="gap-2">
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={setMatterId}

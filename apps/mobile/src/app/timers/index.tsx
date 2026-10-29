@@ -2,8 +2,10 @@ import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useRouter } from "expo-router";
-import { ActivityIndicator, RefreshControl, ScrollView } from "react-native";
+import { RefreshControl, ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
+
+import { Loader } from "@stll/ui/loader";
 
 import { useChanged, useRevision } from "@/components/changes";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
@@ -57,7 +59,6 @@ const TimersScreen = () => {
 };
 
 const TimersLoader = ({ source }: { source: AccessTokenSource }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   const loadTimers = async (): Promise<TimersLoad> => {
     const [timers, matters] = await Promise.all([
@@ -85,9 +86,7 @@ const TimersLoader = ({ source }: { source: AccessTokenSource }) => {
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedTimers
         load={load}
         onReload={reload}

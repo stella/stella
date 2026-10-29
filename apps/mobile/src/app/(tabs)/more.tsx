@@ -1,9 +1,10 @@
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
-import { Pressable, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { screenStyles } from "@/components/empty-state-screen";
@@ -116,10 +117,7 @@ const MoreRowView = ({ last, row }: { last: boolean; row: MoreRow }) => {
   const { href } = row;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: href === null }}
-      className="flex-row items-center gap-3 pl-4 active:opacity-60"
+    <Button
       disabled={href === null}
       onPress={() => {
         if (typeof href === "function") {
@@ -128,29 +126,33 @@ const MoreRowView = ({ last, row }: { last: boolean; row: MoreRow }) => {
           router.push(href);
         }
       }}
+      size="row"
+      variant="ghost"
     >
-      <View
-        className="size-8 items-center justify-center rounded-lg"
-        style={{ backgroundColor: ui[`option${row.tile}Bg`] }}
-      >
-        <LucideGlyphs
-          color={ui[`option${row.tile}Fg`]}
-          name={row.glyph}
-          size={18}
-        />
+      <View className="flex-1 flex-row items-center gap-3 pl-4">
+        <View
+          className="size-8 items-center justify-center rounded-lg"
+          style={{ backgroundColor: ui[`option${row.tile}Bg`] }}
+        >
+          <LucideGlyphs
+            color={ui[`option${row.tile}Fg`]}
+            name={row.glyph}
+            size={18}
+          />
+        </View>
+        <View
+          className={`min-h-12 flex-1 flex-row items-center gap-2 py-3 pr-4 ${last ? "" : "border-border border-b"}`}
+        >
+          <Text className="flex-1" variant="rowTitle">
+            {row.label}
+          </Text>
+          {href === null ? (
+            <Text variant="caption">{t("soon")}</Text>
+          ) : (
+            <ChevronRightIcon color={colors.muted} size={18} />
+          )}
+        </View>
       </View>
-      <View
-        className={`min-h-12 flex-1 flex-row items-center gap-2 py-3 pr-4 ${last ? "" : "border-border border-b"}`}
-      >
-        <Text className="flex-1" variant="rowTitle">
-          {row.label}
-        </Text>
-        {href === null ? (
-          <Text variant="caption">{t("soon")}</Text>
-        ) : (
-          <ChevronRightIcon color={colors.muted} size={18} />
-        )}
-      </View>
-    </Pressable>
+    </Button>
   );
 };

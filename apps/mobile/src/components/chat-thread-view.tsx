@@ -1,15 +1,10 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  View,
-} from "react-native";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { ChatComposer } from "@/components/chat-composer";
@@ -56,7 +51,6 @@ export const ChatThreadView = ({
   source: AccessTokenSource;
   threadId: string;
 }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   const loadThread = async (): Promise<Load<ChatMessagesPage>> => {
     const result = await readChatThread({ fetch, matterId, source, threadId });
@@ -78,9 +72,7 @@ export const ChatThreadView = ({
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator color={colors.accent} style={styles.fill} />}
-    >
+    <Suspense fallback={<Loader style={styles.fill} />}>
       <LoadedThread
         load={load}
         matterId={matterId}
@@ -306,7 +298,7 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
       )}
       {status === "streaming" ? (
         <View style={styles.working}>
-          <ActivityIndicator color={colors.muted} size="small" />
+          <Loader size="sm" />
           <Text style={[styles.notice, { color: colors.muted }]}>
             {t("answerWorking")}
           </Text>

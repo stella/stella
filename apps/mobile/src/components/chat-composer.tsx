@@ -1,12 +1,14 @@
 import { useState } from "react";
 
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_COMPACT_ROW_CLASS,
   COMPOSER_COMPACT_TEXT_CELL_CLASS,
+  COMPOSER_CONTROL_BUTTON_SIZE,
   COMPOSER_SEND_BUTTON_CLASS,
 } from "@stll/ui/composer-tokens";
 import { Textarea } from "@stll/ui/textarea";
@@ -60,13 +62,16 @@ export const ChatComposer = ({
     <View className="bg-background px-3 pt-1 pb-2">
       <View className={`${COMPOSER_BOX_CLASS} border-border`}>
         <View className={`flex-row ${COMPOSER_COMPACT_ROW_CLASS}`}>
-          <Pressable
+          {/* The web's composer menu trigger (composer-plus-menu.tsx): a
+              secondary round control at the composer's control size. */}
+          <Button
             accessibilityLabel={t("composerMenu")}
-            accessibilityRole="button"
-            className={`border-border bg-secondary size-7 items-center justify-center rounded-full border ${control}`}
+            className={`border-border size-7 shrink-0 rounded-full border ${control}`}
+            size={COMPOSER_CONTROL_BUTTON_SIZE}
+            variant="secondary"
           >
             <PlusIcon color={ui.secondaryForeground} size={16} />
-          </Pressable>
+          </Button>
           <View className={`flex-1 ${COMPOSER_COMPACT_TEXT_CELL_CLASS}`}>
             <Textarea
               accessibilityLabel={t("composerPlaceholder")}
@@ -78,29 +83,25 @@ export const ChatComposer = ({
             />
           </View>
           {busy ? (
-            <Pressable
+            <Button
               accessibilityLabel={t("stop")}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canStop }}
-              className={`items-center justify-center ${COMPOSER_SEND_BUTTON_CLASS} ${control}`}
+              className={`${COMPOSER_SEND_BUTTON_CLASS} ${control}`}
               disabled={!canStop}
               onPress={onStop}
-              style={{ opacity: canStop ? 1 : 0.64 }}
+              size={COMPOSER_CONTROL_BUTTON_SIZE}
             >
               <SquareIcon color={ui.background} size={14} />
-            </Pressable>
+            </Button>
           ) : (
-            <Pressable
+            <Button
               accessibilityLabel={t("send")}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSend }}
-              className={`items-center justify-center ${COMPOSER_SEND_BUTTON_CLASS} ${control}`}
+              className={`${COMPOSER_SEND_BUTTON_CLASS} ${control}`}
               disabled={!canSend}
               onPress={send}
-              style={{ opacity: canSend ? 1 : 0.64 }}
+              size={COMPOSER_CONTROL_BUTTON_SIZE}
             >
               <ArrowUpIcon color={ui.background} size={14} />
-            </Pressable>
+            </Button>
           )}
         </View>
       </View>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import oxlintConfig from "../../oxlint.config.ts";
@@ -12,15 +12,18 @@ import {
 import { flattenLayers } from "../../scripts/oxlint-effective-config.ts";
 import {
   DESIGN_SYSTEM_CONSUMER_FILES,
-  DESIGN_SYSTEM_TOKEN_ONLY_WORKSPACES,
+  REACT_NATIVE_CONSUMER_FILES,
 } from "../../scripts/product-frontend-files.ts";
 import {
   nativeEntries,
   nativeRuleId,
   nativeRuleName,
   NO_NATIVE_UI_PLUGIN,
+  NO_NATIVE_UI_REACT_NATIVE,
   NO_NATIVE_UI_REGISTRY,
   type NoNativeUiEntry,
+  type ReactNativeColumn,
+  reactNativeRuleModules,
   registryKeyForExport,
 } from "../no-native-ui-registry.ts";
 import plugin from "../no-native-ui.ts";
@@ -56,6 +59,18 @@ const exportTarget = (value: unknown): string | null => {
 };
 
 const REGISTRY: Record<string, NoNativeUiEntry> = NO_NATIVE_UI_REGISTRY;
+const REACT_NATIVE: Record<string, ReactNativeColumn> =
+  NO_NATIVE_UI_REACT_NATIVE;
+
+/** Each export's React Native module, keyed by subpath, when it names one. */
+const reactNativeTargets = Object.entries(uiExports).flatMap(
+  ([subpath, value]) => {
+    const target = isRecord(value) ? value["react-native"] : undefined;
+    return typeof target === "string"
+      ? [{ subpath, key: registryKeyForExport(subpath), target }]
+      : [];
+  },
+);
 const registryKeys = new Set(Object.keys(REGISTRY));
 const exportKeys = new Set(Object.keys(uiExports).map(registryKeyForExport));
 const generatedRuleIds = nativeEntries().map(({ module }) =>
@@ -138,6 +153,82 @@ describe("no-native-ui registry", () => {
   });
 });
 
+describe("no-native-ui React Native column", () => {
+  const components = Object.entries(REGISTRY).flatMap(([module, entry]) =>
+    entry.kind === "not-component" ? [] : [module],
+  );
+
+  test("every component has a native renderer or a web-only reason", () => {
+    expect(
+      components.filter((module) => REACT_NATIVE[module] === undefined),
+    ).toEqual([]);
+    expect(
+      Object.keys(REACT_NATIVE).filter(
+        (module) => !components.includes(module),
+      ),
+    ).toEqual([]);
+    expect(
+      Object.entries(REACT_NATIVE).flatMap(([module, column]) =>
+        column.kind === "web-only" && column.reason.trim().length < 12
+          ? [module]
+          : [],
+      ),
+    ).toEqual([]);
+  });
+
+  test("a renderer's every export resolves to its native module", () => {
+    const missing = Object.entries(REACT_NATIVE).flatMap(([module, column]) => {
+      if (column.kind !== "renderer") {
+        return [];
+      }
+      const subpaths = Object.keys(uiExports).filter(
+        (subpath) => registryKeyForExport(subpath) === module,
+      );
+      return subpaths.flatMap((subpath) => {
+        const native = reactNativeTargets.find(
+          (entry) => entry.subpath === subpath,
+        );
+        return native !== undefined &&
+          native.target.endsWith(".native.tsx") &&
+          existsSync(path.join(ROOT, "packages/ui", native.target))
+          ? []
+          : [subpath];
+      });
+    });
+    expect(missing).toEqual([]);
+  });
+
+  test("a web-only component exports no native module", () => {
+    expect(
+      reactNativeTargets.flatMap(({ subpath, key }) =>
+        REACT_NATIVE[key]?.kind === "renderer" ? [] : [subpath],
+      ),
+    ).toEqual([]);
+  });
+
+  test("each React Native component is claimed by one rule", () => {
+    const selectors = nativeEntries().flatMap(({ reactNative }) => reactNative);
+    expect(
+      selectors.filter(
+        (selector, index) => selectors.indexOf(selector) !== index,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a renderer that replaces a React Native component generates its rule", () => {
+    const ruleModules = new Set(nativeEntries().map(({ module }) => module));
+    expect(
+      Object.entries(REACT_NATIVE).flatMap(([module, column]) =>
+        column.kind === "renderer" &&
+        column.replaces.length > 0 &&
+        !ruleModules.has(module)
+          ? [module]
+          : [],
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("no-native-ui production scope", () => {
   test("the plugin is registered", () => {
     expect(stringArray(oxlintConfig.jsPlugins)).toContain(
@@ -158,17 +249,38 @@ describe("no-native-ui production scope", () => {
     expect(notError).toEqual([]);
   });
 
+  test("every React Native rule is an error across the app", () => {
+    // Other scopes cover the app too; this is the one that sets these rules.
+    const appScope = scopes.find(
+      ({ files, rules }) =>
+        files.length === REACT_NATIVE_CONSUMER_FILES.length &&
+        REACT_NATIVE_CONSUMER_FILES.every((glob) => files.includes(glob)) &&
+        Object.keys(rules).some((rule) =>
+          rule.startsWith(`${NO_NATIVE_UI_PLUGIN}/`),
+        ),
+    );
+    expect(appScope).toBeDefined();
+    const wanted = reactNativeRuleModules().map(nativeRuleId);
+    expect(wanted.length).toBeGreaterThan(0);
+    expect(wanted.filter((rule) => appScope?.rules[rule] !== "error")).toEqual(
+      [],
+    );
+    // A rule for a web-only component would name an import the app lacks.
+    expect(
+      Object.keys(appScope?.rules ?? {}).filter(
+        (rule) =>
+          rule.startsWith(`${NO_NATIVE_UI_PLUGIN}/`) && !wanted.includes(rule),
+      ),
+    ).toEqual([]);
+  });
+
   test("every workspace that depends on @stll/ui is a consumer surface", () => {
     const workspaces = [
       ...new Bun.Glob("{apps,packages}/*/package.json").scanSync(ROOT),
     ].toSorted();
     const uncovered = workspaces.flatMap((manifestPath) => {
       const manifest = readJson(manifestPath);
-      if (
-        !isRecord(manifest) ||
-        manifest.name === UI_PACKAGE ||
-        path.dirname(manifestPath) in DESIGN_SYSTEM_TOKEN_ONLY_WORKSPACES
-      ) {
+      if (!isRecord(manifest) || manifest.name === UI_PACKAGE) {
         return [];
       }
       const dependsOnUi = [
@@ -181,7 +293,9 @@ describe("no-native-ui production scope", () => {
       });
       const sourceGlob = `${path.dirname(manifestPath)}/src/**/*.{ts,tsx}`;
       return dependsOnUi &&
-        !DESIGN_SYSTEM_CONSUMER_FILES.some((glob) => glob === sourceGlob)
+        ![...DESIGN_SYSTEM_CONSUMER_FILES, ...REACT_NATIVE_CONSUMER_FILES].some(
+          (glob) => glob === sourceGlob,
+        )
         ? [path.dirname(manifestPath)]
         : [];
     });

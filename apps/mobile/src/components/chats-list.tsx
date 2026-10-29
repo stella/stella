@@ -1,9 +1,9 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator } from "react-native";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import { Loader } from "@stll/ui/loader";
 
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadedChats } from "@/components/loaded-chats";
@@ -13,7 +13,6 @@ import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
 import { listChatThreads } from "@/state/chat-threads";
 import type { ChatThreadsPage } from "@/state/chat-threads";
-import { useAppColors } from "@/theme";
 
 /**
  * Loads the signed-in person's recent threads once, again on every pull to
@@ -21,7 +20,6 @@ import { useAppColors } from "@/theme";
  * conversation starts from the header's button, as t3code's does.
  */
 export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
-  const colors = useAppColors();
   const { settledQuery } = useHeaderSearch();
   const searched = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH);
   const { end } = useSession();
@@ -52,9 +50,7 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedChats
         load={request.load}
         onReload={reload}

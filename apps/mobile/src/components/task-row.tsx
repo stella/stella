@@ -1,8 +1,9 @@
 import { Link, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -66,38 +67,44 @@ export const TaskRow = ({
       }}
     >
       <Link.Trigger>
-        <Pressable
-          accessibilityRole="button"
+        <Button
           accessibilityState={{ selected: open }}
-          className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
+          size="row"
+          variant="ghost"
         >
-          <View className="pt-0.5">
-            <CircleIcon color={ui.mutedForeground} size={18} />
+          <View className="border-border flex-1 flex-row gap-3 border-b py-3">
+            <View className="pt-0.5">
+              <CircleIcon color={ui.mutedForeground} size={18} />
+            </View>
+            <View className="flex-1 gap-0.5">
+              <Text numberOfLines={2} variant="rowTitle">
+                {task.name === null ||
+                task.name === undefined ||
+                task.name === ""
+                  ? matter("untitled")
+                  : task.name}
+              </Text>
+              <Text numberOfLines={1} variant="caption">
+                {task.matterName}
+                {due === undefined ? null : (
+                  <>
+                    {" · "}
+                    <Text
+                      style={
+                        overdue
+                          ? { color: ui.destructiveForeground }
+                          : undefined
+                      }
+                      variant="caption"
+                    >
+                      {due}
+                    </Text>
+                  </>
+                )}
+              </Text>
+            </View>
           </View>
-          <View className="flex-1 gap-0.5">
-            <Text numberOfLines={2} variant="rowTitle">
-              {task.name === null || task.name === undefined || task.name === ""
-                ? matter("untitled")
-                : task.name}
-            </Text>
-            <Text numberOfLines={1} variant="caption">
-              {task.matterName}
-              {due === undefined ? null : (
-                <>
-                  {" · "}
-                  <Text
-                    style={
-                      overdue ? { color: ui.destructiveForeground } : undefined
-                    }
-                    variant="caption"
-                  >
-                    {due}
-                  </Text>
-                </>
-              )}
-            </Text>
-          </View>
-        </Pressable>
+        </Button>
       </Link.Trigger>
       <Link.Menu>
         <Link.MenuAction

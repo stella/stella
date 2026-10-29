@@ -2,10 +2,12 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -18,7 +20,6 @@ import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { listMatters } from "@/state/matters";
 import { createTask, dayAt } from "@/state/tasks";
-import { useAppColors, useUiColors } from "@/theme";
 
 /** The due dates the sheet offers, as days from today; null leaves it undated. */
 const DUE_CHOICES = [
@@ -45,8 +46,6 @@ const NewTaskScreen = () => {
 const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("tasks");
   const tabs = useTranslations("tabs");
-  const colors = useAppColors();
-  const ui = useUiColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -143,28 +142,18 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           </View>
           <View className="flex-row flex-wrap gap-2">
             {DUE_CHOICES.map((choice) => (
-              <Pressable
+              <Button
                 accessibilityRole="radio"
                 accessibilityState={{ selected: due === choice.key }}
-                className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
-                  due === choice.key
-                    ? "border-foreground bg-foreground"
-                    : "border-border bg-card"
-                }`}
                 key={choice.key}
                 onPress={() => {
                   setDue(choice.key);
                 }}
+                size="chip"
+                variant={due === choice.key ? "default" : "outline"}
               >
-                <Text
-                  style={
-                    due === choice.key ? { color: ui.background } : undefined
-                  }
-                  variant="label"
-                >
-                  {t(`dueChoice.${choice.key}`)}
-                </Text>
-              </Pressable>
+                {t(`dueChoice.${choice.key}`)}
+              </Button>
             ))}
           </View>
         </View>
@@ -172,7 +161,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={setMatterId}
