@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  readRolePrivilegeCensus,
   type RoleCensus,
   withMigratedRolePrivilegeCensus,
 } from "@/api/tests/helpers/role-privilege-census-fixture";

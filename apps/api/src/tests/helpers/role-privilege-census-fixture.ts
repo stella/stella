@@ -20,7 +20,7 @@ type CensusRow = {
   value: string;
 };
 
-const readRolePrivilegeCensus = async (
+export const readRolePrivilegeCensus = async (
   database: SQL,
 ): Promise<RoleCensus[]> => {
   const rows = await database.unsafe<CensusRow[]>(`
