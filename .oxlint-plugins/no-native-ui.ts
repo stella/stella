@@ -241,8 +241,8 @@ const parseSelector = (
 ): { component: string; flag: string | null } => {
   const match = /^(?<component>\w+)(?:\[(?<flag>\w+)\])?$/u.exec(selector);
   return {
-    component: match?.groups?.["component"] ?? selector,
-    flag: match?.groups?.["flag"] ?? null,
+    component: match?.groups?.component ?? selector,
+    flag: match?.groups?.flag ?? null,
   };
 };
 
