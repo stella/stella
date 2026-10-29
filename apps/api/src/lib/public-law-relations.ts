@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/case-law/review-column-grants";
+// Relative, not `@/api`: the public-case-law-db-boundary lint plugin loads
+// this module under Node, which resolves neither the API path alias nor an
+// extensionless path.
+import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grants.ts";
 
 /**
  * Exact PostgreSQL columns required or permitted for the public-law reader role.
