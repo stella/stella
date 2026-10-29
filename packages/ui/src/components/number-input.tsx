@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { NumberField as NumberFieldPrimitive } from "@base-ui/react/number-field";
 
 import { CONTROL_SIZE } from "../lib/control-size";
@@ -19,9 +21,21 @@ type NumberInputProps = Omit<
   inputClassName?: string;
   inputProps?: Omit<
     NumberFieldPrimitive.Input.Props,
-    "className" | "defaultValue" | "id" | "onChange" | "type" | "value"
+    | "className"
+    | "defaultValue"
+    | "id"
+    | "onChange"
+    | "render"
+    | "type"
+    | "value"
   >;
   size?: ControlSize;
+  /**
+   * The unit the value is in ("pt", "%"), shown muted at the end of the
+   * control so the number reads with its unit while the typed text stays a
+   * bare number.
+   */
+  suffix?: ReactNode;
 };
 
 /**
@@ -35,6 +49,7 @@ const NumberInput = ({
   inputProps,
   dir = "ltr",
   size = CONTROL_SIZE.default,
+  suffix,
   ...props
 }: NumberInputProps) => (
   <NumberFieldPrimitive.Root
@@ -50,10 +65,32 @@ const NumberInput = ({
       className={cn(
         INPUT_ELEMENT_CLASS_NAME,
         INPUT_SIZE_CLASS_NAMES[size],
+        "tabular-nums",
+        suffix !== undefined && "pe-1",
         inputClassName,
       )}
       data-slot="number-input"
+      // The field steps with the arrow keys, so assistive technology hears a
+      // spin button with its bounds and current value rather than a text box.
+      render={(inputElementProps, state) => (
+        <input
+          {...inputElementProps}
+          aria-valuemax={props.max}
+          aria-valuemin={props.min}
+          aria-valuenow={state.value ?? undefined}
+          dir={dir}
+          role="spinbutton"
+        />
+      )}
     />
+    {suffix === undefined ? null : (
+      <span
+        className="text-muted-foreground pointer-events-none flex shrink-0 items-center pe-2.5 text-xs"
+        data-slot="number-input-suffix"
+      >
+        {suffix}
+      </span>
+    )}
   </NumberFieldPrimitive.Root>
 );
 

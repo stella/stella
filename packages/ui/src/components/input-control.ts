@@ -23,3 +23,14 @@ export const INPUT_SIZE_CLASS_NAMES = {
   [CONTROL_SIZE.default]: undefined,
   [CONTROL_SIZE.lg]: "min-h-9.5 leading-9.5 sm:min-h-8.5 sm:leading-8.5",
 } as const satisfies Record<ControlSize, string | undefined>;
+
+/**
+ * A field edited where it is read: an option's name in a list, a page
+ * heading, the summary under it. No box until focused, the type, leading and
+ * colour of the text around it, so the row keeps the height of its text; a
+ * focus ring marks it while editing. A slim inline inset gives the ring and
+ * the caret room, and a matching negative margin keeps the text in line with
+ * its neighbours.
+ */
+export const INLINE_FIELD_CLASS_NAME =
+  "placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -mx-1 min-h-0 w-full min-w-0 rounded-sm bg-transparent px-1 py-0 font-[inherit] text-[length:inherit] leading-[inherit] text-inherit outline-none focus-visible:ring-2";
