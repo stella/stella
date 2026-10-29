@@ -191,6 +191,15 @@ export const PublicLawTable = <
         <FindHighlightScope highlight={findHighlight}>
           <WorkspaceTable
             contentMode={layout.contentMode}
+            // Nothing matched: what to do next stands right under the
+            // headers, where the first result would have been.
+            emptyState={
+              emptyState ?? (
+                <p className="text-muted-foreground text-center text-sm">
+                  {t("common.noResults")}
+                </p>
+              )
+            }
             // A results list is as tall as its results. The end filler has
             // nothing to fill here and nothing to add at the end of, so it
             // would draw as one empty bordered row under the last result.
@@ -203,49 +212,7 @@ export const PublicLawTable = <
             table={table}
           />
         </FindHighlightScope>
-        {rows.length === 0 && !isWaiting && (
-          // The table stays a table when nothing matched: a few blurred rows
-          // where results would be, and what to do next over them, rather
-          // than a header above a blank box with a line of text far below.
-          <div className="relative min-h-56 flex-1">
-            <EmptyRowsBackdrop />
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="bg-background border-border/70 w-full max-w-md rounded-lg border p-4 shadow-xs">
-                {emptyState ?? (
-                  <p className="text-muted-foreground text-center text-sm">
-                    {t("common.noResults")}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </MobileTableOrientationGate>
   );
 };
-
-/**
- * Rows' worth of shape behind the empty-results card. Decoration only: hidden
- * from assistive technology, still, and blurred so it never reads as rows
- * still loading.
- */
-const EmptyRowsBackdrop = () => (
-  <div
-    aria-hidden="true"
-    className="pointer-events-none flex flex-col blur-xs select-none"
-  >
-    <BackdropRow textClassName="w-3/4" />
-    <BackdropRow textClassName="w-2/3" />
-    <BackdropRow textClassName="w-5/6" />
-    <BackdropRow textClassName="w-1/2" />
-    <BackdropRow textClassName="w-3/5" />
-  </div>
-);
-
-const BackdropRow = ({ textClassName }: { textClassName: string }) => (
-  <div className="border-border/45 flex items-center gap-4 border-b px-3 py-3">
-    <span className="bg-muted h-3 w-20 shrink-0 rounded-sm" />
-    <span className={cn("bg-muted h-3 rounded-sm", textClassName)} />
-  </div>
-);

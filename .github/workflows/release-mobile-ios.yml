@@ -13,7 +13,8 @@ defaults:
 # App Store profile were created once by hand and live in this repository's
 # secrets; CI never creates or changes either. The App Store Connect API key
 # it uploads with has the App Manager role and serves this workflow alone.
-# The build number is this run's number, which only grows.
+# The build number is this run's number plus 100, which only grows; builds 1
+# to 4 were uploaded by hand before this workflow existed.
 
 on:
   workflow_dispatch:
@@ -49,7 +50,6 @@ jobs:
       contents: read
     env:
       APP_VARIANT: ${{ inputs.variant }}
-      MOBILE_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +67,9 @@ jobs:
           fi
           sudo xcode-select --switch "$xcode"
           xcodebuild -version
+
+      - name: Number the build above the hand-uploaded ones
+        run: echo "MOBILE_BUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -123,6 +126,33 @@ jobs:
             echo "MOBILE_BUNDLE_IDENTIFIER=$expected"
             echo "MOBILE_PROFILE_UUID=$uuid"
           } >> "$GITHUB_ENV"
+
+      # The Live Activity extension is a target of its own and needs its own
+      # profile. Without one the app config leaves the extension out, so a
+      # release still builds before the widgets profile exists.
+      - name: Install the widget extension's App Store profile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_BASE64: ${{ inputs.variant == 'production' && secrets.MOBILE_WIDGETS_PROFILE_PRODUCTION || secrets.MOBILE_WIDGETS_PROFILE_PREVIEW }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROFILE_BASE64" ]; then
+            echo "No widgets profile: this build leaves the Live Activity out." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          expected="$MOBILE_BUNDLE_IDENTIFIER.widgets"
+          profile="$RUNNER_TEMP/widgets.mobileprovision"
+          printf '%s' "$PROFILE_BASE64" | base64 -d > "$profile"
+          decoded="$RUNNER_TEMP/widgets-profile.plist"
+          security cms -D -i "$profile" > "$decoded"
+          identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$decoded")"
+          if [ "$identifier" != "$APPLE_TEAM_ID.$expected" ]; then
+            echo "the widgets profile signs $identifier, not $APPLE_TEAM_ID.$expected" >&2
+            exit 1
+          fi
+          uuid="$(plutil -extract UUID raw -o - "$decoded")"
+          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+          echo "MOBILE_WIDGETS_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
 
       - name: Generate the native iOS project
         working-directory: apps/mobile
@@ -198,8 +228,11 @@ jobs:
           plutil -insert signingStyle -string manual "$export_options"
           plutil -insert signingCertificate -string "Apple Distribution" "$export_options"
           plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
-          plutil -insert provisioningProfiles -json \
-            "{\"$MOBILE_BUNDLE_IDENTIFIER\":\"$MOBILE_PROFILE_UUID\"}" "$export_options"
+          profiles="{\"$MOBILE_BUNDLE_IDENTIFIER\":\"$MOBILE_PROFILE_UUID\""
+          if [ -n "${MOBILE_WIDGETS_PROFILE_UUID:-}" ]; then
+            profiles="$profiles,\"$MOBILE_BUNDLE_IDENTIFIER.widgets\":\"$MOBILE_WIDGETS_PROFILE_UUID\""
+          fi
+          plutil -insert provisioningProfiles -json "$profiles}" "$export_options"
           plutil -insert manageAppVersionAndBuildNumber -bool NO "$export_options"
 
           key_path="$RUNNER_TEMP/app-store-connect.p8"

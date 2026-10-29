@@ -25,9 +25,9 @@
       "name": "check_counterparty",
       "nameChars": 18,
       "descriptionChars": 440,
-      "inputSchemaChars": 3772,
-      "totalChars": 4230,
-      "estimatedTokens": 1725
+      "inputSchemaChars": 3727,
+      "totalChars": 4185,
+      "estimatedTokens": 1706
     },
     {
       "name": "compare_documents",
@@ -432,10 +432,10 @@
     {
       "name": "resolve_case_law_decision",
       "nameChars": 25,
-      "descriptionChars": 554,
-      "inputSchemaChars": 671,
-      "totalChars": 1250,
-      "estimatedTokens": 473
+      "descriptionChars": 538,
+      "inputSchemaChars": 681,
+      "totalChars": 1244,
+      "estimatedTokens": 472
     },
     {
       "name": "resolve_law_citation",
@@ -448,10 +448,10 @@
     {
       "name": "resolve_rate",
       "nameChars": 12,
-      "descriptionChars": 272,
-      "inputSchemaChars": 406,
-      "totalChars": 690,
-      "estimatedTokens": 264
+      "descriptionChars": 222,
+      "inputSchemaChars": 495,
+      "totalChars": 729,
+      "estimatedTokens": 285
     },
     {
       "name": "run_playbook",
@@ -473,9 +473,9 @@
       "name": "save_contact",
       "nameChars": 12,
       "descriptionChars": 303,
-      "inputSchemaChars": 2245,
-      "totalChars": 2560,
-      "estimatedTokens": 1041
+      "inputSchemaChars": 2200,
+      "totalChars": 2515,
+      "estimatedTokens": 1022
     },
     {
       "name": "save_document",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127453,
-    "estimatedTokens": 50526
+    "characters": 127396,
+    "estimatedTokens": 50508
   }
 }

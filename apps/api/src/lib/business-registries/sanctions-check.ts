@@ -7,7 +7,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
-import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_DISPATCH,
+  NO_REGISTRY_WEB_SEARCH,
+} from "@/api/lib/business-registries/dispatch";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_REGISTRY_BY_COUNTRY } from "@/api/lib/business-registries/sanctions-check-vocabulary";
@@ -167,6 +170,7 @@ const resolveCompanyName = async ({
     registry,
     q: companyId,
     executeLookup: dependencies.executeLookup,
+    loadWebSearch: NO_REGISTRY_WEB_SEARCH,
   });
   if (lookup.isErr()) {
     // The register refusing the ID itself (a failed checksum) is the caller's
