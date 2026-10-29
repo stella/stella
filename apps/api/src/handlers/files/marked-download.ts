@@ -197,7 +197,9 @@ export const readMarkedDownload = async function* ({
   return Result.ok(
     secureDocumentResponse({
       body: download.body,
-      contentLength: download.contentLength,
+      ...(download.contentLength === undefined
+        ? {}
+        : { contentLength: download.contentLength }),
       contentType: PDF_MIME_TYPE,
       disposition: "attachment",
       fileName: sanitizeFilename(content.fileName),
