@@ -8,6 +8,7 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
   DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_FIDELITY_METADATA_KEY,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
@@ -16,6 +17,7 @@ import {
   type DecisionTextAbsenceEntry,
   type DecisionTextAbsenceParseResult,
   type DecisionTextFieldKey,
+  isDecisionTextFidelity,
   parseDecisionTextAbsence,
   type ReadDecisionTextFields,
   SK_COURTS_SOURCE_URL_STATUSES,
@@ -313,6 +315,10 @@ export const storeDecisionTextFields = ({
     if (reason !== undefined) {
       absent.push({ field: "decisionDate", reason });
     }
+  }
+  const textFidelity = metadata[DECISION_TEXT_FIDELITY_METADATA_KEY];
+  if (textFidelity !== undefined && !isDecisionTextFidelity(textFidelity)) {
+    return panic("Text fidelity must carry a status and character counts");
   }
   const sourceUrlStatus = metadata["sourceUrlStatus"];
   if (sourceUrlStatus !== undefined) {

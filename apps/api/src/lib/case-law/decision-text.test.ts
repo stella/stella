@@ -339,6 +339,28 @@ describe("decision text fields", () => {
     );
   });
 
+  test("a text fidelity marker is stored as stated and checked", () => {
+    const textFields = absentDecisionTextFields(
+      TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    );
+    const textFidelity = {
+      status: "mismatch",
+      missingChars: 3,
+      extraChars: 0,
+    };
+    expect(
+      storeDecisionTextFields({ metadata: { textFidelity }, textFields })[
+        "textFidelity"
+      ],
+    ).toEqual(textFidelity);
+    expect(() =>
+      storeDecisionTextFields({
+        metadata: { textFidelity: { status: "mismatch" } },
+        textFields,
+      }),
+    ).toThrow("Text fidelity must carry a status and character counts");
+  });
+
   test("preserves stored text when a new parse fails", () => {
     expect(
       preserveStoredTextAfterParseFailure({

@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
@@ -10,11 +11,7 @@ import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-x
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
-import {
-  inlineNonSpaceCount,
-  nonSpaceCount,
-  normalizeInlineLayout,
-} from "./at-ris-markup";
+import { compareTextFidelity, normalizeInlineLayout } from "./at-ris-markup";
 import {
   inlinesToPlainText,
   visibleHtmlText,
@@ -42,6 +39,8 @@ export type ParseFindokDecisionOutput = {
   envelope: FindokEnvelopeFields;
   statutes: string[];
   subjectCodes: string[];
+  /** Set when the text read differs from what the publisher printed. */
+  textFidelity: DecisionTextFidelity | undefined;
 };
 
 /**
@@ -194,8 +193,7 @@ export const parseFindokDecisionXml = (
 
   const blocks: Block[] = [];
   let blockIndex = 0;
-  let readChars = 0;
-  let sourceChars = 0;
+  let printed = "";
   const inlinesOf = (document: cheerio.CheerioAPI, node: AnyNode): Inline[] => {
     const inlines = normalizeInlineLayout(
       walkInlines(document, document(node), {
@@ -203,7 +201,6 @@ export const parseFindokDecisionXml = (
         superscripts: true,
       }),
     );
-    readChars += inlineNonSpaceCount(inlines);
     return inlines;
   };
   const appendParagraph = (inlines: Inline[]): void => {
@@ -226,7 +223,6 @@ export const parseFindokDecisionXml = (
         appendParagraph(
           normalizeInlineLayout([{ type: "text", text: node.data }]),
         );
-        readChars += nonSpaceCount(node.data);
       }
       return;
     }
@@ -274,19 +270,10 @@ export const parseFindokDecisionXml = (
       );
     }
 
-    sourceChars += nonSpaceCount(visibleHtmlText(body));
+    printed += visibleHtmlText(body);
     body.contents().each((_, node) => {
       appendNode(node, document);
     });
-  }
-
-  if (sourceChars !== readChars) {
-    return Result.err(
-      new ParseXmlError({
-        message: "Findok decision text did not survive into the document",
-        cause: { lost: sourceChars - readChars },
-      }),
-    );
   }
 
   if (blocks.length === 0) {
@@ -298,6 +285,10 @@ export const parseFindokDecisionXml = (
     );
   }
 
+  const textFidelity = compareTextFidelity(
+    printed,
+    blocks.map((block) => block.plainText).join(""),
+  );
   const ecli = optionalText(envelope, "Grundk > ecli");
   const keywords = distinctTexts(envelope, "Grundk matbez_erf");
   const statutes = distinctTexts(envelope, "Grundk ngesamt_erf");
@@ -330,5 +321,6 @@ export const parseFindokDecisionXml = (
     fulltext: blocks.map((block) => block.plainText).join("\n\n"),
     keywords,
     statutes,
+    textFidelity,
   });
 };

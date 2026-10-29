@@ -184,6 +184,38 @@ export type DecisionDateAvailability = {
   status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
 };
 
+/**
+ * Whether the stored text carries every character the source printed.
+ *
+ * A parser that finds its reading differs from the printed text still stores
+ * and publishes the decision; the difference is stated here, in
+ * `metadata.textFidelity`, beside the raw it can be re-read from. A decision
+ * whose reading matches states nothing.
+ */
+export const DECISION_TEXT_FIDELITY_METADATA_KEY = "textFidelity";
+
+export const DECISION_TEXT_FIDELITY_STATUSES = ["mismatch"] as const;
+
+export type DecisionTextFidelity = {
+  status: (typeof DECISION_TEXT_FIDELITY_STATUSES)[number];
+  /** Non-space characters the source printed that the text lacks. */
+  missingChars: number;
+  /** Non-space characters the text carries that the source did not print. */
+  extraChars: number;
+};
+
+export const isDecisionTextFidelity = (
+  value: unknown,
+): value is DecisionTextFidelity =>
+  typeof value === "object" &&
+  value !== null &&
+  "status" in value &&
+  "missingChars" in value &&
+  "extraChars" in value &&
+  DECISION_TEXT_FIDELITY_STATUSES.some((status) => status === value.status) &&
+  Number.isSafeInteger(value.missingChars) &&
+  Number.isSafeInteger(value.extraChars);
+
 export const SK_COURTS_SOURCE_URL_STATUSES = [
   "published",
   "not-published-by-source",

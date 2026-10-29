@@ -58,6 +58,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1036,6 +1037,16 @@ const buildListingOnly = ({
   const data = readDecisionMetadata(source, item);
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: source.key,
+      caseNumber: data.caseNumber,
+      codes: "TEXT_FIDELITY_MISMATCH",
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+    });
+  }
+
   const raw = storedRaw({ item, documentXml: rawDetail });
   return plainTextIngestionResult(
     {
@@ -1278,6 +1289,9 @@ export const assembleAtRisDecision = (
         {
           ...decisionMetadata(source, data, parsed.sections),
           headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+          ...(parsed.textFidelity === undefined
+            ? {}
+            : { textFidelity: parsed.textFidelity }),
         },
         AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
       ),

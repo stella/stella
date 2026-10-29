@@ -7,7 +7,7 @@ import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/a
 import {
   isRisElement,
   readRisContent,
-  risContentLoss,
+  risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 
 const FIXTURES = [
@@ -178,7 +178,7 @@ describe("RIS markup read as text", () => {
   });
 });
 
-describe("RIS content loss", () => {
+describe("RIS text fidelity", () => {
   const contentOf = (xml: string) => {
     const $ = cheerio.load(xml, { xml: true });
     const content = $("nutzdaten").first().get(0);
@@ -188,23 +188,33 @@ describe("RIS content loss", () => {
     return content;
   };
 
-  test.each(FIXTURES)("%s: no printed character is lost", async (name) => {
-    const content = contentOf(await fixtureXml(name));
-    expect(risContentLoss(content, readRisContent(content).items)).toBe(0);
-  });
+  test.each(FIXTURES)(
+    "%s: the reading carries every printed character",
+    async (name) => {
+      const content = contentOf(await fixtureXml(name));
+      expect(
+        risTextFidelity(content, readRisContent(content).items),
+      ).toBeUndefined();
+      expect((await parseFixture(name)).textFidelity).toBeUndefined();
+    },
+  );
 
-  test("a dropped item is reported with the characters it carried", () => {
+  test("a dropped item is counted with the characters it carried", () => {
     const content = contentOf(
       wrapped(
         '<absatz ct="text">eins</absatz><absatz ct="text">zwei<gdash/>drei</absatz>',
       ),
     );
     const { items } = readRisContent(content);
-    expect(risContentLoss(content, items)).toBe(0);
-    expect(risContentLoss(content, items.slice(0, 1))).toBe("zwei-drei".length);
+    expect(risTextFidelity(content, items)).toBeUndefined();
+    expect(risTextFidelity(content, items.slice(0, 1))).toEqual({
+      status: "mismatch",
+      missingChars: "zwei-drei".length,
+      extraChars: 0,
+    });
   });
 
-  test("a dropped character element is reported", () => {
+  test("a dropped character element is counted", () => {
     const content = contentOf(wrapped('<absatz ct="text">a<amp/>b</absatz>'));
     const [item] = readRisContent(content).items;
     if (item?.type !== "paragraph") {
@@ -216,10 +226,45 @@ describe("RIS content loss", () => {
         (inline) => !(inline.type === "text" && inline.text === "&"),
       ),
     };
-    expect(risContentLoss(content, [withoutAmp])).toBe(1);
+    expect(risTextFidelity(content, [withoutAmp])).toEqual({
+      status: "mismatch",
+      missingChars: 1,
+      extraChars: 0,
+    });
   });
 
-  test("a document whose text does not survive is refused", () => {
+  test("an added character is counted", () => {
+    const content = contentOf(wrapped('<absatz ct="text">abc</absatz>'));
+    const [item] = readRisContent(content).items;
+    if (item?.type !== "paragraph") {
+      throw new Error("expected a paragraph");
+    }
+    const added = {
+      ...item,
+      inlines: [...item.inlines, { type: "text" as const, text: " xy" }],
+    };
+    expect(risTextFidelity(content, [added])).toEqual({
+      status: "mismatch",
+      missingChars: 0,
+      extraChars: 2,
+    });
+  });
+
+  test("text the reader cannot place is stored with a marker, not refused", () => {
+    const parsed = parseXml(
+      wrapped('<absatz ct="text">sichtbar</absatz><abstand>verloren</abstand>'),
+    ).unwrap();
+    expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual(
+      ["sichtbar"],
+    );
+    expect(parsed.textFidelity).toEqual({
+      status: "mismatch",
+      missingChars: "verloren".length,
+      extraChars: 0,
+    });
+  });
+
+  test("a document with no text is refused", () => {
     expect(parseXml(wrapped("   ")).isErr()).toBe(true);
   });
 });

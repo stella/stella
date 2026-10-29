@@ -65,8 +65,10 @@ import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -920,6 +922,15 @@ export const assembleAtFindokDecision = (
     return buildListingOnly(payload, "detail-xml-unparseable", documentXml);
   }
   const parsed = parseResult.value;
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: ADAPTER_KEYS.AT_FINDOK,
+      caseNumber: item.gz,
+      codes: "TEXT_FIDELITY_MISMATCH",
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+    });
+  }
   const headnotes =
     headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
   return plainTextIngestionResult({
@@ -963,6 +974,7 @@ export const assembleAtFindokDecision = (
       headnoteNumbers: headnotes?.headnoteNumbers,
       headnoteStatutes: headnotes?.statutes,
       sourceAttribution: "Findok, Austrian Federal Ministry of Finance, CC0",
+      textFidelity: parsed.textFidelity,
     },
     rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,

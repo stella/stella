@@ -80,6 +80,7 @@ it("keeps a line break between the sentences it separates", async () => {
     ).text(),
   }).unwrap();
 
+  expect(parsed.textFidelity).toBeUndefined();
   expect(parsed.fulltext).toContain("Sitz haben.\nMit Bescheid vom25.6.2015");
   expect(parsed.fulltext).not.toMatch(/\p{Ll}{2}[.;:]\p{Lu}/u);
   expect(

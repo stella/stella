@@ -156,6 +156,27 @@ describe("RIS retention projection", () => {
     ).toBe(false);
   });
 
+  test("stores a decision whose reading differs from print, with a typed marker", async () => {
+    const xml = (
+      await Bun.file(new URL("at-ris-vwgh-randnummern.xml", PARSERS_DIR)).text()
+    ).replace(
+      "</abschnitt></nutzdaten>",
+      "<abstand>verloren</abstand></abschnitt></nutzdaten>",
+    );
+    const decision = assembleAtRisDecision(
+      AT_RIS_SOURCES[ADAPTER_KEYS.AT_VWGH],
+      await firstListedItem(ADAPTER_KEYS.AT_VWGH),
+      { documentXml: xml },
+    );
+    expect(decision.isListingOnly).not.toBe(true);
+    expect(hasUsableAst(decision.documentAst)).toBe(true);
+    expect(decision.metadata?.["textFidelity"]).toEqual({
+      status: "mismatch",
+      missingChars: "verloren".length,
+      extraChars: 0,
+    });
+  });
+
   test("leaves the page header and footer out of the publisher text", async () => {
     const xml = await Bun.file(
       new URL("at-ris-vfgh-text.xml", PARSERS_DIR),

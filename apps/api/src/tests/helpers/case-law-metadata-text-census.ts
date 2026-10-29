@@ -449,6 +449,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   templateId: excluded(PUBLISHER_ID),
   templateVersionId: excluded(PUBLISHER_ID),
   textComplete: INSPECTED,
+  textFidelity: INSPECTED,
   textNumbers: INSPECTED,
   textSections: INSPECTED,
   textSelection: INSPECTED,

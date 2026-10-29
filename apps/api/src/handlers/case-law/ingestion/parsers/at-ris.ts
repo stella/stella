@@ -2,6 +2,7 @@
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
+import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import type {
@@ -14,8 +15,8 @@ import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import {
   readRisContent,
-  risContentLoss,
   type RisItem,
+  risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
@@ -43,6 +44,8 @@ export type RisDocumentSections = Readonly<Record<string, string>>;
 
 export type ParseRisDecisionOutput = {
   documentAst: DocumentAst;
+  /** Set when the text read differs from what the publisher printed. */
+  textFidelity: DecisionTextFidelity | undefined;
   /** Elements outside the RIS vocabulary; their text is kept. */
   unknownElements: readonly string[];
   fulltext: string;
@@ -133,23 +136,25 @@ export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
 type RisParagraphItem = Extract<RisItem, { type: "paragraph" }>;
 
 /**
- * A document whose `abstand` count is this share of its `absatz` count
- * separates paragraphs with `abstand`. Documents set from a typed
- * transcript print every wrapped line as an `absatz` and only a real
- * paragraph break as an `abstand`; courts that print one `absatz` per
- * paragraph use `abstand` seldom.
+ * A printed line this long was filled to a margin; a shorter one is a
+ * heading, a label or a field. The `abstand` share of a document does not
+ * say which it is: across the recorded decisions it runs continuously from
+ * 0 to 0.96, with transcripts and one-paragraph-per-`absatz` decisions on
+ * both sides of any cut. The boundary between two lines does.
  */
-const MIN_ABSTAND_SHARE = 0.2;
+export const MIN_WRAPPED_LINE_CHARS = 55;
 
 /** A sentence ends here: the author ended the line, not a margin. */
 const SENTENCE_END_RE = /[.!?:;]["'’“”»«)\]]*$/u;
 
-/** A list marker or numbered point opens a unit of its own. */
+/** A list marker, numbered point or `Label:` field opens a unit of its own. */
 const STRUCTURAL_START_RE =
-  /^(?:\(?\d{1,3}[.)]|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*])(?:\s|$)/u;
+  /^(?:\(?\d{1,3}[.)]|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*]|\p{Lu}[\p{L}/ ]{1,30}:\s)/u;
 
 const continuesLine = (above: string, below: string): boolean =>
-  !SENTENCE_END_RE.test(above) && !STRUCTURAL_START_RE.test(below);
+  above.length >= MIN_WRAPPED_LINE_CHARS &&
+  !SENTENCE_END_RE.test(above) &&
+  !STRUCTURAL_START_RE.test(below);
 
 const wrappableText = (item: RisItem | undefined): string | undefined =>
   item?.type === "paragraph" &&
@@ -159,19 +164,12 @@ const wrappableText = (item: RisItem | undefined): string | undefined =>
     : undefined;
 
 /**
- * Join the printed lines of an abstand-delimited transcript into
- * paragraphs: consecutive `absatz` lines of one content type belong to one
- * paragraph when the first stops mid-sentence. Elsewhere every `absatz` is
- * a paragraph, as the publisher sets it.
+ * Join the printed lines of a transcript into paragraphs: consecutive
+ * `absatz` lines of one content type, with no `abstand` between them, belong
+ * to one paragraph when the first fills a line and stops mid-sentence and the
+ * second does not open a point, list item or field.
  */
-const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
-  const breaks = items.filter((item) => item.type === "break").length;
-  const lines = items.filter(
-    (item) => wrappableText(item) !== undefined,
-  ).length;
-  if (lines === 0 || breaks < lines * MIN_ABSTAND_SHARE) {
-    return [...items];
-  }
+export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
   const joined: RisItem[] = [];
   let current: RisParagraphItem | undefined;
   for (const item of items) {
@@ -204,12 +202,11 @@ const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
   return joined;
 };
 
-type RisParseFailure = "no-text" | "no-blocks" | "content-lost";
+type RisParseFailure = "no-text" | "no-blocks";
 
 const FAILURE_MESSAGE = {
   "no-text": "RIS XML nutzdaten element has no decision text",
   "no-blocks": "RIS XML decision text produced no document blocks",
-  "content-lost": "RIS XML decision text did not survive into the document",
 } as const satisfies Record<RisParseFailure, string>;
 
 const parseFailure = (failure: RisParseFailure, cause?: unknown) =>
@@ -233,10 +230,7 @@ export const parseRisDecisionXml = (
   if (items.length === 0) {
     return parseFailure("no-text");
   }
-  const lost = risContentLoss(content, items);
-  if (lost !== 0) {
-    return parseFailure("content-lost", { lost });
-  }
+  const textFidelity = risTextFidelity(content, items);
 
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
@@ -313,5 +307,6 @@ export const parseRisDecisionXml = (
       ]),
     ),
     unknownElements,
+    textFidelity,
   });
 };

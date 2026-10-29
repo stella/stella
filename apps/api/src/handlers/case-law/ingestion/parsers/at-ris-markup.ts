@@ -14,6 +14,7 @@
 import { panic } from "better-result";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
@@ -369,61 +370,98 @@ export const readRisContent = (content: Element): RisReading => {
 
 const NON_SPACE = /[^\s\u00a0]/gu;
 
-export const nonSpaceCount = (text: string): number =>
-  text.match(NON_SPACE)?.length ?? 0;
+const nonSpaceChars = (text: string): string =>
+  (text.match(NON_SPACE) ?? []).join("");
 
-const sourceNonSpace = (node: AnyNode): number => {
+const sourceNonSpace = (node: AnyNode): string => {
   if (isText(node)) {
-    return nonSpaceCount(node.data);
+    return nonSpaceChars(node.data);
   }
   if (!isTag(node)) {
-    return 0;
+    return "";
   }
   const spec = specOf(node.name);
   if (spec?.type === "furniture") {
-    return 0;
+    return "";
   }
   if (spec?.type === "character") {
-    return nonSpaceCount(spec.text);
+    return nonSpaceChars(spec.text);
   }
-  let count = 0;
+  let printed = "";
   for (const child of node.children) {
-    count += sourceNonSpace(child);
+    printed += sourceNonSpace(child);
   }
-  return count;
+  return printed;
 };
 
-export const inlineNonSpaceCount = (inlines: readonly Inline[]): number => {
-  let count = 0;
+const inlineNonSpace = (inlines: readonly Inline[]): string => {
+  let read = "";
   for (const node of inlines) {
     if (node.type === "text") {
-      count += nonSpaceCount(node.text);
+      read += nonSpaceChars(node.text);
     } else if (hasInlineChildren(node)) {
-      count += inlineNonSpaceCount(node.children);
+      read += inlineNonSpace(node.children);
     }
   }
-  return count;
+  return read;
+};
+
+/** How many characters of `left` have no counterpart in `right`. */
+const surplusChars = (left: string, right: string): number => {
+  const counts = new Map<string, number>();
+  for (const char of right) {
+    counts.set(char, (counts.get(char) ?? 0) + 1);
+  }
+  let surplus = 0;
+  for (const char of left) {
+    const remaining = counts.get(char) ?? 0;
+    if (remaining === 0) {
+      surplus += 1;
+      continue;
+    }
+    counts.set(char, remaining - 1);
+  }
+  return surplus;
 };
 
 /**
- * The printed characters of `content` that `items` do not carry: the
- * publisher's non-space characters (text, and the characters its empty
- * elements print) minus those read. Zero for a complete reading; the parser
- * refuses a document otherwise.
+ * Compare the non-space characters the publisher printed (text, and what its
+ * empty character elements print) with those `items` carry. A difference is
+ * a typed marker for the caller to store beside the decision, never a
+ * reason to withhold it.
  */
-export const risContentLoss = (
+export const risTextFidelity = (
   content: Element,
   items: readonly RisItem[],
-): number => {
-  let printed = 0;
+): DecisionTextFidelity | undefined => {
+  let printed = "";
   for (const child of content.children) {
     printed += sourceNonSpace(child);
   }
-  let read = 0;
+  let read = "";
   for (const item of items) {
     if (item.type !== "break") {
-      read += inlineNonSpaceCount(item.inlines);
+      read += inlineNonSpace(item.inlines);
     }
   }
-  return printed - read;
+  const missingChars = surplusChars(printed, read);
+  const extraChars = surplusChars(read, printed);
+  return missingChars === 0 && extraChars === 0
+    ? undefined
+    : { status: "mismatch", missingChars, extraChars };
+};
+
+/** The same comparison for text already reduced to its characters. */
+export const compareTextFidelity = (
+  printed: string,
+  read: string,
+): DecisionTextFidelity | undefined => {
+  const missingChars = surplusChars(
+    nonSpaceChars(printed),
+    nonSpaceChars(read),
+  );
+  const extraChars = surplusChars(nonSpaceChars(read), nonSpaceChars(printed));
+  return missingChars === 0 && extraChars === 0
+    ? undefined
+    : { status: "mismatch", missingChars, extraChars };
 };
