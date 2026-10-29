@@ -39,6 +39,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DIALOG_MOBILE_LAYOUT,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -103,6 +104,10 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import {
+  fadeScrollEdges,
+  SCROLL_EDGE_FADE_CLASS,
+} from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
@@ -869,7 +874,7 @@ const DialogShell = ({
     >
       <DialogPopup
         backdropClassName="bg-background/50 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/92 max-w-sm rounded-[26px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] px-5 py-3"
@@ -1523,7 +1528,7 @@ const ClipboardWelcomeDialog = ({
     >
       <DialogPopup
         backdropClassName="bg-background/54 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/94 max-w-xl rounded-[28px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] p-4"
@@ -1685,6 +1690,13 @@ const ClipboardApp = () => {
     (node: HTMLDivElement | null) => {
       timelineRailRef.current = node;
       observeTimelineRail(node);
+      const stopFading = fadeScrollEdges(node);
+      // A returned cleanup replaces React's detach call with `null`.
+      return () => {
+        stopFading?.();
+        timelineRailRef.current = null;
+        observeTimelineRail(null);
+      };
     },
     [observeTimelineRail],
   );
@@ -2943,21 +2955,27 @@ const ClipboardApp = () => {
                     </p>
                     {filterQuery ? (
                       <Button
-                        className="text-muted-foreground h-auto max-w-sm px-2 py-1 text-wrap"
+                        className="h-auto min-h-11 max-w-sm rounded-xl px-4 py-2 text-wrap"
                         onClick={() =>
                           applyScope({ next: "registry", focusSearch: true })
                         }
-                        size="sm"
-                        variant="link"
                       >
-                        {t("noResultsDescription", { query: filterQuery })}
+                        <Building2Icon aria-hidden="true" className="size-4" />
+                        <span className="min-w-0 wrap-break-word">
+                          {t("noResultsSearchRegistries", {
+                            query: filterQuery,
+                          })}
+                        </span>
                       </Button>
                     ) : null}
                   </div>
                 ) : (
                   <div
                     aria-label={t("timeline")}
-                    className="clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    className={cn(
+                      "clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1 [--fade-size:3rem]",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     onPointerMove={handleRailPointerMove}
                     onWheel={handleRailWheel}
                     ref={attachTimelineRail}
@@ -3220,9 +3238,13 @@ const ClipboardApp = () => {
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
                   <div
-                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    className={cn(
+                      "flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     data-clipboard-groups-scroller=""
                     onWheel={handleRailWheel}
+                    ref={fadeScrollEdges}
                   >
                     {snapshot.groups.map((group, groupIndex) => {
                       const groupStyle: ClipboardGroupStyle = {

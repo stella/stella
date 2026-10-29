@@ -2,6 +2,7 @@ import type { Browser } from "@playwright/test";
 import * as v from "valibot";
 
 import { assertSsrDocument } from "@stll/ssr-testkit";
+import { matterChromeStyle } from "@stll/ui/matter-colors";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
@@ -186,6 +187,47 @@ test("anonymous visitors can search and browse by legal task", async ({
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
     });
   }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS });
+
+  // Resolve canonical chrome values through CSS without mirroring each palette.
+  // Pass plain entries across Playwright's serialization boundary so its
+  // recursive argument type does not expand React's entire CSSProperties.
+  const chromeProperties = Object.entries(matterChromeStyle(null)).map(
+    ([name, value]) => {
+      if (typeof value !== "string") {
+        throw new TypeError("Chrome fixture values must be strings");
+      }
+      return { name, value };
+    },
+  );
+  expect(chromeProperties.length).toBeGreaterThan(0);
+  const chromeValues = await page
+    .locator('[data-slot="workspace-shell"]')
+    .filter({ has: search })
+    .evaluate((shell, properties) => {
+      const probe = document.createElement("span");
+      probe.hidden = true;
+      for (const { name, value } of properties) {
+        probe.style.setProperty(name, value);
+      }
+      shell.append(probe);
+      const rootStyle = getComputedStyle(document.documentElement);
+      const shellStyle = getComputedStyle(shell);
+      const probeStyle = getComputedStyle(probe);
+      const values = properties.map(({ name }) => ({
+        name,
+        rootValue: rootStyle.getPropertyValue(name).trim(),
+        shellValue: shellStyle.getPropertyValue(name).trim(),
+        expectedValue: probeStyle.getPropertyValue(name).trim(),
+      }));
+      probe.remove();
+      return values;
+    }, chromeProperties);
+  for (const { name, rootValue, shellValue, expectedValue } of chromeValues) {
+    expect(expectedValue, name).not.toBe("");
+    expect(rootValue, name).toBe("");
+    expect(shellValue, name).toBe(expectedValue);
+  }
+
   await expect(
     page.getByRole("link", { name: /Companies House/u }),
   ).toBeVisible();

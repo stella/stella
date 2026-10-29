@@ -23,7 +23,10 @@ import {
   unredactedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import {
+  readCaseLawCoverageSourcesQuery,
+  readCaseLawCoverageSummaryQuery,
+} from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
   readDecisionHandler,
@@ -1189,6 +1192,11 @@ describe("public-law reader role", () => {
         await readCaseLawCoverageSourcesQuery(tx);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
 
+        expect(await readCaseLawCoverageSummaryQuery(tx)).toEqual({
+          message: "Coverage is unavailable",
+        });
+        exercised.add(readCaseLawCoverageSummaryQuery.publicLawSharedQuery);
+
         await readCaseLawSourceHealthQuery(tx);
         exercised.add(readCaseLawSourceHealthQuery.publicLawSharedQuery);
 
@@ -1344,14 +1352,13 @@ describe("public-law reader role", () => {
     const viewRelations = new Set([
       "case_law_published_decisions",
       "case_law_unredacted_decisions",
+      "case_law_withdrawal_status",
     ]);
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
     const policyRelations = requiredRelations.filter(
-      (relation) =>
-        relation !== "case_law_published_decisions" &&
-        relation !== "case_law_unredacted_decisions",
+      (relation) => !viewRelations.has(relation),
     );
     const declaredRelations = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
     expect(

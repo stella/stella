@@ -37,6 +37,7 @@ type OrganizationFileUsageErrorProps = {
 };
 
 export class OrganizationFileUsageError extends HandlerError<409 | 503> {
+  declare code: string;
   static {
     declareFingerprintFields(this, ["reason"]);
   }
@@ -78,6 +79,7 @@ export const organizationFileUsageHandlerError = (
 ): HandlerError<409 | 413 | 503> =>
   new HandlerError({
     status: organizationFileUsageResponseStatus(error.reason),
+    code: error.code,
     message: error.message,
     cause: error,
   });

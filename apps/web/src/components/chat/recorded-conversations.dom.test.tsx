@@ -1166,6 +1166,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
+  "continue-connector-request": notRecorded(
+    "The recorder posts text messages only; connector cards submit through their own endpoint.",
+  ),
   copy: OUTSIDE_THE_CONVERSATION,
   "delete-thread": OUTSIDE_THE_CONVERSATION,
   deny: recordedAs(approvedAs("deny")),
@@ -1201,6 +1204,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "submit-connector-request": notRecorded(
+    "The recorder posts text messages only; connector cards submit through their own endpoint.",
+  ),
   "submit-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
@@ -1222,9 +1228,6 @@ const SUPERSEDE_SCENARIOS = new Set([
   "supersede-approval-then-grant",
   "supersede-ask-user",
 ]);
-
-/** A replay renders the thread once per checked step, in a second tab. */
-const REPLAY_TIMEOUT_MS = 60_000;
 
 /** A stored interrupt without a readable binding kind. */
 const UNBOUND_INTERRUPT = "unbound";
@@ -1275,7 +1278,6 @@ describe("a recorded conversation, rendered", () => {
     async (scenario) => {
       await replay(scenario);
     },
-    REPLAY_TIMEOUT_MS,
   );
 
   test.each(SCENARIOS)(
@@ -1283,7 +1285,6 @@ describe("a recorded conversation, rendered", () => {
     async (scenario) => {
       await replay(scenario, FIRST_SEND.routeHandoff);
     },
-    REPLAY_TIMEOUT_MS,
   );
 
   test("a first turn sent from the new-chat route ends in every interrupt kind the server binds", () => {
@@ -1331,33 +1332,28 @@ describe("a recorded conversation, rendered", () => {
         expect(shown.denied).toContain("call-1");
       }
     },
-    REPLAY_TIMEOUT_MS,
   );
 
-  test(
-    "a conversation grant answers each matching approval exactly once, without a click",
-    async () => {
-      const { recording, server } = await replay("conversation-grant");
-      const autoApproved = recording.steps.flatMap(({ action }) =>
-        action.type === "auto-approve" ? [action.toolCallId] : [],
-      );
-      // The fixture must reach the grant: two approvals, neither clicked.
-      expect(autoApproved).toEqual(["call-1", "call-2"]);
-      const answered = server.posted.flatMap(({ body }) =>
-        resumedInterrupts(body),
-      );
-      for (const toolCallId of autoApproved) {
-        const interruptId = storedToolCalls(recording).find(
-          ({ id }) => id === toolCallId,
-        )?.approval?.id;
-        expect(
-          answered.filter((id) => id === interruptId),
-          finding(RENDER_ORACLE.grantAnswersOnce, toolCallId),
-        ).toHaveLength(1);
-      }
-    },
-    REPLAY_TIMEOUT_MS,
-  );
+  test("a conversation grant answers each matching approval exactly once, without a click", async () => {
+    const { recording, server } = await replay("conversation-grant");
+    const autoApproved = recording.steps.flatMap(({ action }) =>
+      action.type === "auto-approve" ? [action.toolCallId] : [],
+    );
+    // The fixture must reach the grant: two approvals, neither clicked.
+    expect(autoApproved).toEqual(["call-1", "call-2"]);
+    const answered = server.posted.flatMap(({ body }) =>
+      resumedInterrupts(body),
+    );
+    for (const toolCallId of autoApproved) {
+      const interruptId = storedToolCalls(recording).find(
+        ({ id }) => id === toolCallId,
+      )?.approval?.id;
+      expect(
+        answered.filter((id) => id === interruptId),
+        finding(RENDER_ORACLE.grantAnswersOnce, toolCallId),
+      ).toHaveLength(1);
+    }
+  });
 
   test("a recording performs every action the page offers, or says why not", () => {
     const performed = SCENARIOS.flatMap((scenario) =>

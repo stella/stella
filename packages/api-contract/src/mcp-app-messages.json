@@ -34,7 +34,7 @@
     "loading": "جارٍ التحميل",
     "noResults": "لا توجد نتائج",
     "retry": "إعادة المحاولة",
-    "error": "خطأ",
+    "error": "حدث خطأ ما. حاول مرة أخرى.",
     "open": "فتح",
     "openInStella": "فتح في stella",
     "openOriginalSource": "فتح المصدر الأصلي",
@@ -125,7 +125,8 @@
     "positive": "مُقرّ",
     "supportive": "متَّبع",
     "mixed": "متباين",
-    "unclassified": "غير مصنَّف"
+    "unclassified": "غير مصنَّف",
+    "noDecisionText": "لا يتوفر نص الحكم"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -162,7 +163,7 @@
     "loading": "Načítám",
     "noResults": "Žádné výsledky",
     "retry": "Spustit znovu",
-    "error": "Chyba",
+    "error": "Něco se pokazilo. Zkuste to znovu.",
     "open": "Otevřít",
     "openInStella": "Otevřít ve stelle",
     "openOriginalSource": "Otevřít originál",
@@ -253,7 +254,8 @@
     "positive": "Potvrzeno",
     "supportive": "Následováno",
     "mixed": "Smíšené",
-    "unclassified": "Neklasifikováno"
+    "unclassified": "Neklasifikováno",
+    "noDecisionText": "Rozhodnutí nemá text"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -290,7 +292,7 @@
     "loading": "Wird geladen …",
     "noResults": "Keine Ergebnisse",
     "retry": "Erneut versuchen",
-    "error": "Fehler",
+    "error": "Etwas ist schiefgelaufen. Versuchen Sie es erneut.",
     "open": "Öffnen",
     "openInStella": "In stella öffnen",
     "openOriginalSource": "Originalquelle öffnen",
@@ -381,7 +383,8 @@
     "positive": "Gebilligt",
     "supportive": "Gefolgt",
     "mixed": "Uneinheitlich",
-    "unclassified": "Nicht eingeordnet"
+    "unclassified": "Nicht eingeordnet",
+    "noDecisionText": "Kein Entscheidungstext"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -418,7 +421,7 @@
     "loading": "Loading",
     "noResults": "No results",
     "retry": "Retry",
-    "error": "Error",
+    "error": "Something went wrong. Try again.",
     "open": "Open",
     "openInStella": "Open in stella",
     "openOriginalSource": "Open original source",
@@ -509,7 +512,8 @@
     "positive": "Endorsed",
     "supportive": "Followed",
     "mixed": "Mixed",
-    "unclassified": "Unclassified"
+    "unclassified": "Unclassified",
+    "noDecisionText": "No decision text"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -546,7 +550,7 @@
     "loading": "Laadimine",
     "noResults": "Tulemused puuduvad",
     "retry": "Proovi uuesti",
-    "error": "Viga",
+    "error": "Midagi läks valesti. Proovige uuesti.",
     "open": "Ava",
     "openInStella": "Ava stellas",
     "openOriginalSource": "Ava algallikas",
@@ -637,7 +641,8 @@
     "positive": "Heaks kiidetud",
     "supportive": "Järgitud",
     "mixed": "Vastuoluline",
-    "unclassified": "Liigitamata"
+    "unclassified": "Liigitamata",
+    "noDecisionText": "Lahendi tekst puudub"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -674,7 +679,7 @@
     "loading": "Chargement",
     "noResults": "Aucun résultat",
     "retry": "Réessayer",
-    "error": "Erreur",
+    "error": "Une erreur est survenue. Réessayez.",
     "open": "Ouvrir",
     "openInStella": "Ouvrir dans stella",
     "openOriginalSource": "Ouvrir la source d’origine",
@@ -765,7 +770,8 @@
     "positive": "Approuvée",
     "supportive": "Suivie",
     "mixed": "Mitigée",
-    "unclassified": "Non classée"
+    "unclassified": "Non classée",
+    "noDecisionText": "Texte de la décision absent"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -802,7 +808,7 @@
     "loading": "Betöltés",
     "noResults": "Nincs találat",
     "retry": "Újrapróbál",
-    "error": "Hiba",
+    "error": "Hiba történt. Próbálja újra.",
     "open": "Megnyitás",
     "openInStella": "Megnyitás a stella alkalmazásban",
     "openOriginalSource": "Eredeti forrás megnyitása",
@@ -893,7 +899,8 @@
     "positive": "Megerősített",
     "supportive": "Követett",
     "mixed": "Vegyes",
-    "unclassified": "Besorolatlan"
+    "unclassified": "Besorolatlan",
+    "noDecisionText": "Nincs határozatszöveg"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -930,7 +937,7 @@
     "loading": "Ielādē",
     "noResults": "Nav rezultātu",
     "retry": "Mēģināt vēlreiz",
-    "error": "Kļūda",
+    "error": "Kaut kas nogāja greizi. Mēģiniet vēlreiz.",
     "open": "Atvērt",
     "openInStella": "Atvērt lietotnē stella",
     "openOriginalSource": "Atvērt sākotnējo avotu",
@@ -1021,7 +1028,8 @@
     "positive": "Apstiprināts",
     "supportive": "Sekots",
     "mixed": "Pretrunīgs",
-    "unclassified": "Neklasificēts"
+    "unclassified": "Neklasificēts",
+    "noDecisionText": "Nav nolēmuma teksta"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -1058,7 +1066,7 @@
     "loading": "Įkeliama",
     "noResults": "Rezultatų nėra",
     "retry": "Bandyti dar kartą",
-    "error": "Klaida",
+    "error": "Kažkas nepavyko. Bandykite dar kartą.",
     "open": "Atidaryti",
     "openInStella": "Atverti programoje stella",
     "openOriginalSource": "Atverti pirminį šaltinį",
@@ -1149,7 +1157,8 @@
     "positive": "Patvirtintas",
     "supportive": "Sekama",
     "mixed": "Mišrus",
-    "unclassified": "Neklasifikuota"
+    "unclassified": "Neklasifikuota",
+    "noDecisionText": "Nėra sprendimo teksto"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -1186,7 +1195,7 @@
     "loading": "Ładowanie",
     "noResults": "Brak wyników",
     "retry": "Spróbuj ponownie",
-    "error": "Błąd",
+    "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "open": "Otwórz",
     "openInStella": "Otwórz w stelli",
     "openOriginalSource": "Otwórz źródło oryginalne",
@@ -1277,7 +1286,8 @@
     "positive": "Zaaprobowane",
     "supportive": "Podzielone",
     "mixed": "Mieszane",
-    "unclassified": "Niesklasyfikowane"
+    "unclassified": "Niesklasyfikowane",
+    "noDecisionText": "Brak tekstu orzeczenia"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -1314,7 +1324,7 @@
     "loading": "Carregando",
     "noResults": "Nenhum resultado",
     "retry": "Tentar novamente",
-    "error": "Erro",
+    "error": "Algo deu errado. Tente novamente.",
     "open": "Abrir",
     "openInStella": "Abrir no stella",
     "openOriginalSource": "Abrir fonte original",
@@ -1405,7 +1415,8 @@
     "positive": "Endossada",
     "supportive": "Seguida",
     "mixed": "Mista",
-    "unclassified": "Não classificada"
+    "unclassified": "Não classificada",
+    "noDecisionText": "Sem texto da decisão"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -1442,7 +1453,7 @@
     "loading": "Načítavam",
     "noResults": "Žiadne výsledky",
     "retry": "Skúsiť znova",
-    "error": "Chyba",
+    "error": "Niečo sa pokazilo. Skúste to znova.",
     "open": "Otvoriť",
     "openInStella": "Otvoriť v stelle",
     "openOriginalSource": "Otvoriť originál",
@@ -1533,7 +1544,8 @@
     "positive": "Potvrdené",
     "supportive": "Nasledované",
     "mixed": "Zmiešané",
-    "unclassified": "Neklasifikované"
+    "unclassified": "Neklasifikované",
+    "noDecisionText": "Rozhodnutie nemá text"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -1570,7 +1582,7 @@
     "loading": "Cargando",
     "noResults": "Sin resultados",
     "retry": "Reintentar",
-    "error": "Error",
+    "error": "Algo salió mal. Inténtalo de nuevo.",
     "open": "Abrir",
     "openInStella": "Abrir en stella",
     "openOriginalSource": "Abrir fuente original",
@@ -1661,6 +1673,7 @@
     "positive": "Respaldada",
     "supportive": "Seguida",
     "mixed": "Mixta",
-    "unclassified": "Sin clasificar"
+    "unclassified": "Sin clasificar",
+    "noDecisionText": "Sin texto de la resolución"
   }
 }
