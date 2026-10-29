@@ -141,7 +141,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
@@ -149,7 +149,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 18,
+    version: 19,
     scope: {
       type: "all",
       reason:
