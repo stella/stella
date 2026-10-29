@@ -1,6 +1,11 @@
 import { EventType } from "@tanstack/ai";
 import { expect, test } from "bun:test";
 
+import {
+  buildWireSnapshot,
+  unsafeFixture,
+} from "@/api/tests/helpers/chat-fixtures";
+
 import { createRunMessageRoles } from "./run-log-roles";
 
 test("unattributed text stays unknown across missing and unrelated boundaries", () => {
@@ -77,24 +82,29 @@ test("restored roles retain every open identity and clear only the matching end"
 
 test("transcript snapshots record every wire role and preserve labels they do not change", () => {
   const roles = createRunMessageRoles();
-  roles.classify({
-    type: EventType.MESSAGES_SNAPSHOT,
-    messages: [
-      { id: "user", role: "user", content: "own" },
-      { id: "assistant", role: "assistant", content: "answer" },
-      { id: "system", role: "system", content: "context" },
-      { id: "developer", role: "developer", content: "context" },
-      { id: "tool", role: "tool", toolCallId: "call", content: "result" },
+  roles.classify(
+    unsafeFixture(
+      "Exhaustive wire-role matrix includes developer, activity and reasoning roles the native serializer cannot emit.",
       {
-        id: "activity",
-        role: "activity",
-        activityType: "progress",
-        content: {},
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          { id: "user", role: "user", content: "own" },
+          { id: "assistant", role: "assistant", content: "answer" },
+          { id: "system", role: "system", content: "context" },
+          { id: "developer", role: "developer", content: "context" },
+          { id: "tool", role: "tool", toolCallId: "call", content: "result" },
+          {
+            id: "activity",
+            role: "activity",
+            activityType: "progress",
+            content: {},
+          },
+          { id: "reasoning", role: "reasoning", content: "reasoning" },
+        ],
       },
-      { id: "reasoning", role: "reasoning", content: "reasoning" },
-    ],
-  });
-  roles.classify({ type: EventType.MESSAGES_SNAPSHOT, messages: [] });
+    ),
+  );
+  roles.classify(buildWireSnapshot([]));
   roles.classify({
     type: EventType.STATE_SNAPSHOT,
     snapshot: { messages: [{ id: "assistant", role: "user" }] },
@@ -122,10 +132,9 @@ test("transcript snapshots record every wire role and preserve labels they do no
       }).type,
     ).toBe(id === "user" ? "authored" : "generated");
   }
-  roles.classify({
-    type: EventType.MESSAGES_SNAPSHOT,
-    messages: [{ id: "assistant", role: "user", content: "own" }],
-  });
+  roles.classify(
+    buildWireSnapshot([{ id: "assistant", role: "user", content: "own" }]),
+  );
   expect(
     roles.classify({
       type: EventType.TEXT_MESSAGE_CONTENT,
@@ -149,21 +158,21 @@ test.each(["assistant", "user"] as const)(
           messageId: identity,
           role: initialRole,
         });
-        roles.classify({
-          type: EventType.MESSAGES_SNAPSHOT,
-          messages: [{ id: identity, role, content: "prior" }],
-        });
+        roles.classify(
+          buildWireSnapshot([{ id: identity, role, content: "prior" }]),
+        );
       } else {
         roles.restore([
           { messageId: identity, role: initialRole, current: true },
           { messageId: identity, role, current: false },
         ]);
       }
-      roles.classify({ type: EventType.MESSAGES_SNAPSHOT, messages: [] });
-      roles.classify({
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [{ id: "other", role: initialRole, content: "prior" }],
-      });
+      roles.classify(buildWireSnapshot([]));
+      roles.classify(
+        buildWireSnapshot([
+          { id: "other", role: initialRole, content: "prior" },
+        ]),
+      );
       expect(
         roles.classify({ type: EventType.TEXT_MESSAGE_CHUNK, delta: "text" }),
       ).toEqual({
@@ -188,16 +197,15 @@ test.each(["assistant", "user"] as const)(
       } else {
         roles.restore([{ messageId: null, role, current: true }]);
       }
-      roles.classify({
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
+      roles.classify(
+        buildWireSnapshot([
           {
             id: "other",
             role: role === "user" ? "assistant" : "user",
             content: "prior",
           },
-        ],
-      });
+        ]),
+      );
       expect(
         roles.classify({ type: EventType.TEXT_MESSAGE_CHUNK, delta: "text" }),
       ).toEqual({

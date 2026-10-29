@@ -87,6 +87,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -2626,29 +2627,22 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       );
       const identity = createSafeId<"chatMessage">();
       const role = first === "user" ? "user" : "assistant";
-      const initial = {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [{ id: identity, role, content: "prior" }],
-      } satisfies StreamChunk;
+      const initial = buildWireSnapshot([
+        { id: identity, role, content: "prior" },
+      ]);
       const declaredRole = next === "repeat" ? role : next;
       const replacementRole = declaredRole === "user" ? "user" : "assistant";
-      const messages =
-        next === "empty"
-          ? []
-          : ([
-              { id: identity, role: replacementRole, content: "prior" },
-            ] satisfies Extract<
-              StreamChunk,
-              { type: EventType.MESSAGES_SNAPSHOT }
-            >["messages"]);
-      const continuation = (
+      const continuation =
         next === "state"
-          ? {
+          ? ({
               type: EventType.STATE_SNAPSHOT,
               snapshot: { messages: [{ id: identity, role: "user" }] },
-            }
-          : { type: EventType.MESSAGES_SNAPSHOT, messages }
-      ) satisfies StreamChunk;
+            } satisfies StreamChunk)
+          : buildWireSnapshot(
+              next === "empty"
+                ? []
+                : [{ id: identity, role: replacementRole, content: "prior" }],
+            );
       const additional = next === "same" ? [] : [continuation];
       const prefix = [initial, ...additional];
       await writer.append(prefix);
@@ -2716,19 +2710,17 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       const initialText = initialRole === "user" ? own : secret;
       const laterText = laterRole === "user" ? own : secret;
       await writer.append([
-        {
-          type: EventType.MESSAGES_SNAPSHOT,
-          messages: [{ id: identity, role: initialRole, content: "prior" }],
-        },
+        buildWireSnapshot([
+          { id: identity, role: initialRole, content: "prior" },
+        ]),
         {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId: identity,
           delta: initialText,
         },
-        {
-          type: EventType.MESSAGES_SNAPSHOT,
-          messages: [{ id: identity, role: laterRole, content: "prior" }],
-        },
+        buildWireSnapshot([
+          { id: identity, role: laterRole, content: "prior" },
+        ]),
         {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId: identity,
@@ -2805,10 +2797,9 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           messageId: identity,
           role: initialRole,
         },
-        {
-          type: EventType.MESSAGES_SNAPSHOT,
-          messages: [{ id: identity, role: laterRole, content: "prior" }],
-        },
+        buildWireSnapshot([
+          { id: identity, role: laterRole, content: "prior" },
+        ]),
         { type: EventType.TEXT_MESSAGE_CHUNK, delta },
         { type: EventType.TEXT_MESSAGE_END, messageId: identity },
       ]);
