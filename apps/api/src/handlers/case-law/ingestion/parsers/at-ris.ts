@@ -1,3 +1,4 @@
+// parser-output-unchanged: retention is checked by the pipeline against the stored raw; the parser no longer validates itself, and its blocks are unchanged.
 /** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
@@ -12,10 +13,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;
@@ -42,7 +39,6 @@ export type ParseRisDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
   sections: RisDocumentSections;
-  validationIssues: string[];
 };
 
 const normalizedText = (text: string): string =>
@@ -152,10 +148,9 @@ export const parseRisDecisionXml = (
     );
   }
 
-  const validationContent = content.clone();
-  validationContent.find("kzinhalt, fzinhalt").remove();
-  const validationText = normalizedText(validationContent.text());
-  if (validationText === "") {
+  const decisionContent = content.clone();
+  decisionContent.find("kzinhalt, fzinhalt").remove();
+  if (normalizedText(decisionContent.text()) === "") {
     return Result.err(
       new ParseXmlError({
         message: "RIS XML nutzdaten element has no decision text",
@@ -255,17 +250,6 @@ export const parseRisDecisionXml = (
     );
   }
 
-  const validation = validateAndLog(
-    {
-      parser: "at-ris",
-      caseNumber: input.caseNumber,
-      language: "de",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml([validationText]),
-    blocks,
-  );
-
   return Result.ok({
     documentAst: {
       version: 1,
@@ -293,6 +277,5 @@ export const parseRisDecisionXml = (
         printed.join("\n\n"),
       ]),
     ),
-    validationIssues: validation.issues.map((issue) => issue.code),
   });
 };

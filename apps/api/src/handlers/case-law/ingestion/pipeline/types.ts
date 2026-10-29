@@ -5,6 +5,7 @@ import type {
   CaseLawJudgeDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import type { SourceRetention } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StatedEcliIdentity } from "@/api/lib/legal-search/adapter-manifest";
@@ -138,6 +139,7 @@ export type ProcessDecisionAttemptOptions = {
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
   statedEcliIdentity: StatedEcliIdentity;
+  retention: SourceRetention;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
@@ -173,6 +175,7 @@ export type ProcessDecisionOptions = Omit<
   | "refresh"
   | "metadataUrlSchema"
   | "statedEcliIdentity"
+  | "retention"
   | "sourceFingerprintVersion"
   | "sourceFingerprintFromStoredRaw"
 > & {
