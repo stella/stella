@@ -55,7 +55,9 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
             statement_timeout: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
           },
           logger: {
-            logQuery: (text, params) => captured.push({ text, params }),
+            logQuery: (text, params) => {
+              captured.push({ text, params });
+            },
           },
         });
         for (const [name, value] of Object.entries(plannerSettings)) {
