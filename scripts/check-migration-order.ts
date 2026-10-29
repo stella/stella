@@ -17,7 +17,8 @@ import {
 
 type MigrationIdentityViolation =
   | { type: "invalid-name"; directory: string }
-  | { type: "removed-base-migration"; directory: string };
+  | { type: "removed-base-migration"; directory: string }
+  | { type: "stale-timestamp"; directory: string; newestBaseDirectory: string };
 
 type MigrationIdentityChanges = {
   addedDirectories: readonly string[];
@@ -70,6 +71,45 @@ export const findMigrationIdentityViolation = ({
     }
   }
   return null;
+};
+
+type MigrationTimestampViolation = Extract<
+  MigrationIdentityViolation,
+  { type: "stale-timestamp" }
+>;
+
+export const findMigrationTimestampViolations = ({
+  addedDirectories,
+  baseDirectories,
+}: {
+  addedDirectories: readonly string[];
+  baseDirectories: readonly string[];
+}): MigrationTimestampViolation[] => {
+  let newestBase: { directory: string; stamp: string } | undefined;
+  for (const directory of baseDirectories) {
+    const stamp = MIGRATION_TIMESTAMP.exec(directory)?.at(1);
+    if (
+      stamp !== undefined &&
+      (newestBase === undefined || stamp > newestBase.stamp)
+    ) {
+      newestBase = { directory, stamp };
+    }
+  }
+  if (newestBase === undefined) {
+    return [];
+  }
+  const violations: MigrationTimestampViolation[] = [];
+  for (const directory of addedDirectories) {
+    const stamp = MIGRATION_TIMESTAMP.exec(directory)?.at(1);
+    if (stamp !== undefined && stamp <= newestBase.stamp) {
+      violations.push({
+        type: "stale-timestamp",
+        directory,
+        newestBaseDirectory: newestBase.directory,
+      });
+    }
+  }
+  return violations;
 };
 
 export const readMigrationChanges = ({
@@ -368,7 +408,22 @@ export const readMigrationBaseSnapshot = ({
   )) {
     baseHashes[file] = hashBytes(readGitFile({ ref: mergeBase, file, cwd }));
   }
-  return { mergeBase, changes, baseInventory, baseHashes };
+  const baseDirectories = new TextDecoder()
+    .decode(
+      runGit({
+        arguments_: [
+          "ls-tree",
+          "--name-only",
+          baseRef,
+          "--",
+          "apps/api/drizzle/",
+        ],
+        cwd,
+      }),
+    )
+    .split("\n")
+    .filter((directory) => MIGRATION_TIMESTAMP.test(directory));
+  return { mergeBase, changes, baseInventory, baseHashes, baseDirectories };
 };
 
 export const formatAliasSummary = (
@@ -406,10 +461,11 @@ if (import.meta.main) {
     panic("Usage: bun scripts/check-migration-order.ts <base-ref>");
   }
 
-  const { changes, baseInventory, baseHashes } = readMigrationBaseSnapshot({
-    baseRef,
-    cwd: REPO_ROOT,
-  });
+  const { changes, baseInventory, baseHashes, baseDirectories } =
+    readMigrationBaseSnapshot({
+      baseRef,
+      cwd: REPO_ROOT,
+    });
   const violation = findMigrationIdentityViolation(changes);
   if (violation?.type === "invalid-name") {
     panic(
@@ -422,6 +478,21 @@ if (import.meta.main) {
         `the migration's identity in the deployed ledger. Renaming a merged ` +
         `migration makes deployed databases re-run it under the new name; deleting ` +
         `it removes it from fresh databases. Add a new migration instead.`,
+    );
+  }
+
+  const timestampViolations = findMigrationTimestampViolations({
+    addedDirectories: changes.addedDirectories,
+    baseDirectories,
+  });
+  if (timestampViolations.length > 0) {
+    panic(
+      timestampViolations
+        .map(
+          ({ directory, newestBaseDirectory }) =>
+            `New migration ${directory} must be stamped later than the newest base migration ${newestBaseDirectory}. Re-stamp the unmerged migration later than that one; never re-stamp a merged migration.`,
+        )
+        .join("\n"),
     );
   }
 

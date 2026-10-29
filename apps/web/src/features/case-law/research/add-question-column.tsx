@@ -277,6 +277,7 @@ const PickQuestionTrigger = ({
               type="button"
             />
           }
+          tooltip={label}
         >
           <PlusIcon className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME} />
         </MenuTrigger>

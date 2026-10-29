@@ -34,7 +34,9 @@ describe("seller profile refusal alerts", () => {
         );
 
         expect(markup).toContain('role="alert"');
-        expect(markup).toContain(catalogs[locale].errors.actionFailed);
+        expect(markup).toContain(
+          renderToStaticMarkup(catalogs[locale].errors.actionFailed),
+        );
         expect(markup).not.toContain("Private server details");
         expect(markup).not.toContain("secret()");
       });
@@ -49,7 +51,9 @@ describe("seller profile refusal alerts", () => {
         const markup = renderRefusal(error, locale);
 
         expect(markup).toContain('role="alert"');
-        expect(markup).toContain(catalogs[locale].errors.actionFailed);
+        expect(markup).toContain(
+          renderToStaticMarkup(catalogs[locale].errors.actionFailed),
+        );
         expect(markup).not.toContain("Private server details");
         expect(markup).not.toContain("secret()");
       }

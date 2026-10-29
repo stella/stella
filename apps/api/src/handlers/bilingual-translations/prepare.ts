@@ -8,6 +8,8 @@
 import { Result } from "better-result";
 
 import { prepareBilingualTranslationBodySchema } from "@/api/handlers/bilingual-translations/schemas";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
@@ -52,6 +54,7 @@ const config = {
 const prepareBilingualTranslation = createSafeHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     body,
     orgAIConfig,
@@ -63,6 +66,10 @@ const prepareBilingualTranslation = createSafeHandler(
     user,
     workspaceId,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     if (body.sourceLang.toLowerCase() === body.targetLang.toLowerCase()) {
       return Result.err(
         new HandlerError({
@@ -176,6 +183,7 @@ const prepareBilingualTranslation = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The translation could not be prepared. Try again.",
         }),
       );

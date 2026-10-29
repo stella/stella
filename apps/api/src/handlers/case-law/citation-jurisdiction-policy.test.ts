@@ -44,7 +44,6 @@ test("every registered source publishes for a declared jurisdiction", () => {
  */
 const DECLARED_AHEAD_OF_A_SOURCE: readonly CaseLawJurisdiction[] = [
   "USA",
-  "GBR",
   "BRA",
 ];
 

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   legislationNameMatchKey,
+  legislationNameQueryKeys,
   legislationWorkNameForms,
   planLegislationWorkNames,
 } from "@/api/lib/legal-search/legislation-work-names";
@@ -48,6 +49,48 @@ describe("legislationNameMatchKey", () => {
   test("a bare number or nothing is not a name", () => {
     expect(legislationNameMatchKey("2012")).toBeNull();
     expect(legislationNameMatchKey(" ,; ")).toBeNull();
+  });
+});
+
+/** 45/2013 Sb. as the corpus stores its title. */
+const VICTIMS_TITLE =
+  "45/2013 Sb., o obětech trestných činů a o změně některých zákonů (zákon o obětech trestných činů)";
+
+describe("legislationNameQueryKeys", () => {
+  test("a declined short title also reads as the nominative a stored title states", () => {
+    const stated = legislationWorkNameForms(VICTIMS_TITLE).flatMap((form) =>
+      form.origin === "derived" && form.derivation === "derived_parenthetical"
+        ? [form.matchKey]
+        : [],
+    );
+    expect(stated).toEqual(["zákon o obětech trestných činů"]);
+    // The citation's own key misses the stored name; the declined head reads it.
+    const own = legislationNameMatchKey("zákona o obětech trestných činů");
+    expect(stated).not.toContain(own);
+    const keys = legislationNameQueryKeys(
+      "zákona o obětech trestných činů",
+      "CZE",
+    );
+    expect(keys).toEqual([
+      "zákona o obětech trestných činů",
+      "zákon o obětech trestných činů",
+    ]);
+    for (const key of stated) {
+      expect(keys).toContain(key);
+    }
+  });
+
+  test("a query in the nominative, without a title head, or without a jurisdiction is its own key", () => {
+    expect(
+      legislationNameQueryKeys("zákon o obětech trestných činů", "CZE"),
+    ).toEqual(["zákon o obětech trestných činů"]);
+    expect(legislationNameQueryKeys("občanský zákoník", "cze")).toEqual([
+      "občanský zákoník",
+    ]);
+    expect(
+      legislationNameQueryKeys("zákona o obětech trestných činů", undefined),
+    ).toEqual(["zákona o obětech trestných činů"]);
+    expect(legislationNameQueryKeys("2012", "CZE")).toEqual([]);
   });
 });
 

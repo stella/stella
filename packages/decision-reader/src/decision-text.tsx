@@ -48,6 +48,7 @@ import {
   HighlightedText,
   InlineContent,
   rangesForPiece,
+  READER_PROSE_CLASS,
   WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
@@ -273,7 +274,7 @@ const EditorialSupplementBody = ({
       ) : (
         <p
           className={cn(
-            "reader-justify",
+            READER_PROSE_CLASS,
             variant === "abstract" && "text-foreground-strong-muted",
           )}
           data-anchor={blockAnchorId}
@@ -592,6 +593,7 @@ const buildAnchorsByPieceId = ({
             decision: span.source.decision,
             citation: span.source,
             treatment: span.source.treatment,
+            blockId,
             children: marked,
           });
         },
@@ -749,7 +751,17 @@ export type PrepareDecisionTextPlacementsOptions = {
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
 };
 
+/** Where one citation on a card sits, in its paragraph's rendered text. */
+export type DecisionProvisionCitationRange = {
+  citationId: string;
+  end: number;
+  start: number;
+};
+
 export type DecisionProvisionCard = ProvisionCardCitations & {
+  /** Every citation the card stands for, on the same offset axis as a
+   * reader selection anchored in the paragraph. */
+  ranges: DecisionProvisionCitationRange[];
   startAnchorId: string;
 };
 
@@ -774,7 +786,13 @@ export const prepareDecisionProvisionCards = ({
       (left, right) => left.start - right.start,
     );
     for (const card of provisionCardsOf(spans.map(({ source }) => source))) {
-      cards.push({ ...card, startAnchorId: block.anchorId });
+      const ranges: DecisionProvisionCitationRange[] = [];
+      for (const { end, source, start } of spans) {
+        if (card.citationIds.includes(source.id)) {
+          ranges.push({ citationId: source.id, end, start });
+        }
+      }
+      cards.push({ ...card, ranges, startAnchorId: block.anchorId });
     }
   }
   return cards;

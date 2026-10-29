@@ -1,4 +1,5 @@
 // parser-output-unchanged: [pl-uokik] BRA adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
+// parser-output-unchanged: [pl-uokik] POL.parse is used only as a null check; filingYear is not projected, and the explicit whitespace class equals ECMAScript whitespace.
 // parser-output-unchanged: [pl-uokik] BP extends only GBR and the division-list export leaves the POL grammar used by this adapter unchanged.
 // parser-output-unchanged: [pl-uokik] GBR adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
@@ -6,18 +7,87 @@
 // parser-output-unchanged: The EU letterless form is read only under the EU scope; every other grammar accepts and keys as before, scoped and unscoped.
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
+
+/** Filing-year evidence; abbreviated years carry no inferred century. */
+export type DecisionDocketFilingYear =
+  | { readonly type: "known"; readonly year: number }
+  | { readonly type: "none-in-format" }
+  | { readonly type: "unparseable" };
+
+/** Encoded formats expose the same named year capture to TypeScript and SQL. */
+type DecisionDocketFilingYearFormat =
+  | { readonly type: "none-in-format"; readonly patterns: readonly RegExp[] }
+  | { readonly type: "encoded"; readonly patterns: readonly RegExp[] };
+
+type DecisionDocketFilingYearRule =
+  | { readonly type: "none-in-format" }
+  | {
+      readonly type: "formats";
+      readonly formats: readonly DecisionDocketFilingYearFormat[];
+    };
+
+const filingYearOf = (
+  raw: string,
+  rule: DecisionDocketFilingYearRule,
+): DecisionDocketFilingYear => {
+  switch (rule.type) {
+    case "none-in-format":
+      return { type: "none-in-format" };
+    case "formats": {
+      const folded = foldDecisionIdentifierInput(raw).replace(
+        DECISION_SHEET_SUFFIX_RE,
+        "",
+      );
+      for (const format of rule.formats) {
+        for (const pattern of format.patterns) {
+          const matched = pattern.exec(folded);
+          if (matched === null) {
+            continue;
+          }
+          switch (format.type) {
+            case "none-in-format":
+              return { type: "none-in-format" };
+            case "encoded": {
+              const year =
+                matched.groups?.["year"] ??
+                panic("Encoded filing-year format has no year capture");
+              if (year.length !== 4) {
+                return { type: "unparseable" };
+              }
+              const parsed = parseIntegerToken(year, { min: 1, max: 9999 });
+              return parsed.isErr()
+                ? { type: "unparseable" }
+                : { type: "known", year: parsed.value };
+            }
+            default:
+              format satisfies never;
+              return panic("Unknown docket filing-year format");
+          }
+        }
+      }
+      return { type: "unparseable" };
+    }
+    default:
+      rule satisfies never;
+      return panic("Unknown docket filing-year rule");
+  }
+};
 
 /** A normalized docket accepted by one jurisdiction's declared grammar. */
 export type ParsedDecisionDocket<TJurisdiction extends string = string> = {
   readonly jurisdiction: TJurisdiction;
   readonly formatted: string;
   readonly canonical: string;
+  readonly filingYear: DecisionDocketFilingYear;
 };
 
 type DecisionDocketGrammarFor<TJurisdiction extends string> = {
+  readonly filingYearRule: DecisionDocketFilingYearRule;
+  readonly filingYear: (raw: string) => DecisionDocketFilingYear;
   readonly jurisdiction: TJurisdiction;
   /** Read where the scope names this jurisdiction. */
   readonly parse: (raw: string) => ParsedDecisionDocket<TJurisdiction> | null;
@@ -44,6 +114,13 @@ type DecisionDocketGrammarFor<TJurisdiction extends string> = {
  */
 export const DECISION_DASH_CLASS_SOURCE = String.raw`-‐-―−`;
 
+/** ECMAScript whitespace, shared with the SQL identifier fold. */
+export const DECISION_IDENTIFIER_WHITESPACE =
+  "\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
+const DECISION_WHITESPACE_RE = new RegExp(
+  `[${DECISION_IDENTIFIER_WHITESPACE}]+`,
+  "gu",
+);
 const DECISION_DASH_RE = new RegExp(`[${DECISION_DASH_CLASS_SOURCE}]`, "gu");
 const DECISION_SHEET_SUFFIX_RE = /-\d{1,4}$/u;
 
@@ -54,7 +131,7 @@ const DECISION_SHEET_SUFFIX_RE = /-\d{1,4}$/u;
 export const foldDecisionIdentifierInput = (raw: string): string =>
   normalizeUnicode(raw, "NFKC")
     .replace(DECISION_DASH_RE, "-")
-    .replace(/\s+/gu, " ")
+    .replace(DECISION_WHITESPACE_RE, " ")
     .trim();
 
 export const canonicalDecisionIdentifierKey = (value: string): string =>
@@ -68,6 +145,7 @@ export const canonicalDecisionIdentifierKey = (value: string): string =>
 const canonicalDocketKey = canonicalDecisionIdentifierKey;
 
 type CreateDecisionDocketGrammarOptions<TJurisdiction extends string> = {
+  readonly filingYearRule: DecisionDocketFilingYearRule;
   readonly jurisdiction: TJurisdiction;
   /** Forms read in every scope. */
   readonly patterns: readonly RegExp[];
@@ -96,6 +174,7 @@ const asWritten = (folded: string): string => folded;
 
 const createDecisionDocketGrammar = <const TJurisdiction extends string>({
   canonicalize,
+  filingYearRule,
   format,
   jurisdiction,
   ownScopePatterns = [],
@@ -114,10 +193,13 @@ const createDecisionDocketGrammar = <const TJurisdiction extends string>({
         jurisdiction,
         formatted: format(folded),
         canonical: canonicalize(folded),
+        filingYear: filingYearOf(folded, filingYearRule),
       };
     };
   return {
     jurisdiction,
+    filingYearRule,
+    filingYear: (raw) => filingYearOf(raw, filingYearRule),
     parse: parseBy([...patterns, ...ownScopePatterns]),
     parseUnscoped: parseBy(patterns),
   };
@@ -457,7 +539,7 @@ export const polishConstitutionalDocketKey = (
  * `As`) by different courts and lowercase by a reader typing a query.
  */
 const CZE_SENATE_DOCKET_RE =
-  /^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/iu;
+  /^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-\d{1,4})?$/iu;
 
 /**
  * A Czech docket whose registry mark stands alone, with no senate number in
@@ -473,7 +555,7 @@ const CZE_SENATE_DOCKET_RE =
  * branch.
  */
 const CZE_LETTER_FIRST_DOCKET_RE =
-  /^\p{Lu}\p{Ll}{0,6}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/u;
+  /^\p{Lu}\p{Ll}{0,6}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-\d{1,4})?$/u;
 
 const CZE_DOCKET_PATTERNS = [
   CZE_SENATE_DOCKET_RE,
@@ -651,7 +733,11 @@ const parseSlovakDocket: DecisionDocketGrammarFor<"SVK">["parse"] = (raw) => {
   );
   const constitutional = slovakConstitutionalDocketOf(folded);
   if (constitutional !== null) {
-    return { jurisdiction: "SVK", ...constitutional };
+    return {
+      jurisdiction: "SVK",
+      ...constitutional,
+      filingYear: filingYearOf(raw, slovakDocketGrammar.filingYearRule),
+    };
   }
   if (!SVK_DOCKET_RE.test(folded)) {
     return null;
@@ -665,10 +751,21 @@ const parseSlovakDocket: DecisionDocketGrammarFor<"SVK">["parse"] = (raw) => {
       "$<senate>$<registry>/$<ordinal>/$<year>",
     ),
     canonical: canonicalSlovakDocketKey(folded),
+    filingYear: filingYearOf(raw, slovakDocketGrammar.filingYearRule),
   };
 };
 
 const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
+  filingYearRule: {
+    type: "formats",
+    formats: [
+      {
+        type: "encoded",
+        patterns: [SVK_DOCKET_RE, SVK_CONSTITUTIONAL_DOCKET_RE],
+      },
+    ],
+  },
+  filingYear: (raw) => filingYearOf(raw, slovakDocketGrammar.filingYearRule),
   jurisdiction: "SVK",
   parse: parseSlovakDocket,
   parseUnscoped: parseSlovakDocket,
@@ -1152,12 +1249,20 @@ const BRA_DOCKET_PATTERNS = [
 
 export const DECISION_DOCKET_GRAMMARS = {
   AUT: createDecisionDocketGrammar({
+    filingYearRule: { type: "none-in-format" },
     canonicalize: canonicalDocketKey,
     format: formatAustrianDocket,
     jurisdiction: "AUT",
     patterns: AUT_DOCKET_PATTERNS,
   }),
   BRA: createDecisionDocketGrammar({
+    filingYearRule: {
+      type: "formats",
+      formats: [
+        { type: "encoded", patterns: [BR_CNJ_NUMBER_RE, BR_CNJ_DIGITS_RE] },
+        { type: "none-in-format", patterns: [BR_CLASS_NUMBER_RE] },
+      ],
+    },
     canonicalize: canonicalBrazilianDocketKey,
     format: formatBrazilianDocket,
     jurisdiction: "BRA",
@@ -1165,12 +1270,17 @@ export const DECISION_DOCKET_GRAMMARS = {
     patterns: [],
   }),
   CZE: createDecisionDocketGrammar({
+    filingYearRule: {
+      type: "formats",
+      formats: [{ type: "encoded", patterns: CZE_DOCKET_PATTERNS }],
+    },
     canonicalize: (folded) => canonicalDocketKey(folded.replaceAll(".", "")),
     format: formatCzechDocket,
     jurisdiction: "CZE",
     patterns: CZE_DOCKET_PATTERNS,
   }),
   EU: createDecisionDocketGrammar({
+    filingYearRule: { type: "none-in-format" },
     canonicalize: (folded) =>
       canonicalDocketKey(folded.replace(EU_DOCKET_LEAD_RE, "")),
     format: formatEuDocket,
@@ -1179,18 +1289,21 @@ export const DECISION_DOCKET_GRAMMARS = {
     patterns: EU_DOCKET_PATTERNS,
   }),
   GBR: createDecisionDocketGrammar({
+    filingYearRule: { type: "none-in-format" },
     canonicalize: canonicalBritishDocketKey,
     format: asWritten,
     jurisdiction: "GBR",
     patterns: GBR_DOCKET_PATTERNS,
   }),
   HUN: createDecisionDocketGrammar({
+    filingYearRule: { type: "none-in-format" },
     canonicalize: canonicalHungarianDocketKey,
     format: asWritten,
     jurisdiction: "HUN",
     patterns: HUN_DOCKET_PATTERNS,
   }),
   POL: createDecisionDocketGrammar({
+    filingYearRule: { type: "none-in-format" },
     canonicalize: canonicalPolishDocketKey,
     format: formatPolishDocket,
     jurisdiction: "POL",
@@ -1198,6 +1311,7 @@ export const DECISION_DOCKET_GRAMMARS = {
   }),
   SVK: slovakDocketGrammar,
   USA: createDecisionDocketGrammar({
+    filingYearRule: { type: "none-in-format" },
     canonicalize: canonicalUnitedStatesDocketKey,
     format: formatUnitedStatesDocket,
     jurisdiction: "USA",

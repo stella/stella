@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 export type DesktopPresenceType = DesktopPresence["type"];
 
@@ -67,7 +67,7 @@ export const useDesktopPresence = (): Pick<DesktopPresence, "type"> => {
     }),
     enabled: user !== null,
   });
-  const view = useQueryView(query);
+  const view = queryView(query);
   switch (view.type) {
     case "items":
       return view.refetchError === undefined ? view.items : ASSUMED_PRESENCE;

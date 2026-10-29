@@ -248,8 +248,23 @@ const servedWorkflowSteps = (mode: McpMode): readonly ReferenceSection[] => {
  * document whose every step was filtered out is not a reference, so the
  * resource is not served there rather than shipping a title and no procedure.
  */
-export const hasLegislationWorkflowContent = (mode: McpMode): boolean =>
-  servedWorkflowSteps(mode).length > 0;
+export const legislationWorkflowToolNames = (
+  mode: McpMode,
+): readonly string[] => {
+  const listedToolNames = listedToolNamesFor(mode);
+  const sections = [
+    ...servedWorkflowSteps(mode),
+    ...FACTS.filter((fact) => isServedOnSurface(fact, listedToolNames)),
+  ];
+  return [
+    ...new Set([
+      SEARCH_LEGISLATION,
+      ...sections.flatMap(({ detail, title }) =>
+        namedToolNames(`${title}. ${detail}`),
+      ),
+    ]),
+  ];
+};
 
 /**
  * Build the legislation-workflow reference text for one audience: only the

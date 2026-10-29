@@ -90,7 +90,7 @@ import {
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -98,7 +98,7 @@ import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -689,7 +689,7 @@ const FieldRenderer = ({
    *  fields, never for array sub-item rows. */
   onEditField?: ((path: string) => void) | undefined;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
   const label = field.label ?? field.path;
@@ -1317,13 +1317,13 @@ const RegistryAutofillControl = ({
     }
 
     if (data instanceof Response || data.type !== "lookup" || !data.hit) {
-      notifyUserError(error, t("templates.registryNotFound"));
+      notifyUserProblem(t("templates.registryNotFound"));
       return;
     }
 
     const updates = buildAutofillUpdates(groupFields, data.hit);
     if (updates.length === 0) {
-      notifyUserError(undefined, t("templates.registryNotFound"));
+      notifyUserProblem(t("templates.registryNotFound"));
       return;
     }
     onApply(updates);
@@ -1880,7 +1880,7 @@ export const TemplateForm = ({
             break;
           }
         }
-        notifyUserError(undefined, t("templates.validationErrors"));
+        notifyUserProblem(t("templates.validationErrors"));
         return;
       }
 
@@ -2062,7 +2062,7 @@ export const TemplateForm = ({
       return;
     }
     if (!validateAll(values)) {
-      notifyUserError(undefined, t("templates.validationErrors"));
+      notifyUserProblem(t("templates.validationErrors"));
       return;
     }
 
@@ -2232,7 +2232,7 @@ export const TemplateForm = ({
    *  submittable form. */
   const handleChooseMatter = () => {
     if (!validateAll(values)) {
-      notifyUserError(undefined, t("templates.validationErrors"));
+      notifyUserProblem(t("templates.validationErrors"));
       return;
     }
     if (!confirmEmptyFields("moveToMatter", values)) {
