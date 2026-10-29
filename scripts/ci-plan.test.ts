@@ -57,6 +57,7 @@ import {
 } from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import depthScriptTests from "./depth-script-tests.json" with { type: "json" };
 import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { GENERATORS } from "./generated-files";
 import {
@@ -1435,7 +1436,6 @@ test("CI result rejects a failed check leg after independent guards finish", () 
   }
 });
 
-// timeout: Runs the bounded Bash and jq evidence matrix in real subprocesses.
 test.each(resultJob.needs)(
   "failed %s cannot pass with cancelled siblings or supersession evidence",
   (failedJob) => {
@@ -1462,7 +1462,6 @@ test.each(resultJob.needs)(
     }
     expectResultGates(gates);
   },
-  30_000,
 );
 
 test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
@@ -2630,7 +2629,6 @@ test("every bounded-install implementation and fixture selects Windows", () => {
   }
 });
 
-// timeout: Executes the complete selected-job matrix in real Bash processes.
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];
@@ -2681,7 +2679,7 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     });
   }
   expectResultGates(gates);
-}, 30_000);
+});
 
 const MatrixJob = v.object({
   strategy: v.object({
@@ -6120,11 +6118,12 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 
 test("workflow and planner changes run every planner test as a merge-group gate", () => {
   const root = nodePath.resolve(import.meta.dirname, "..");
+  const depthTests = new Set(Object.keys(depthScriptTests));
   const plannerTests = [
     ...new Bun.Glob(
       "scripts/{ci-*plan*,ci-checks-partition,ci-completed-depth,ci-pr-pilot,ci-pr-depth-workflow,main-heavy*,thin-queue,github-expression}.test.ts",
     ).scanSync({ cwd: root }),
-  ];
+  ].filter((file) => !depthTests.has(file));
   expect(plannerTests).toContain("scripts/ci-checks-partition.test.ts");
   expect(plannerTests).toContain("scripts/ci-plan.test.ts");
   const unlisted = new Set(unlistedTests(plannerTests, workflow));
@@ -6141,7 +6140,8 @@ test("workflow and planner changes run every planner test as a merge-group gate"
         if (
           step.run?.includes(file) ||
           (unlisted.has(file) &&
-            step.run?.includes("bun scripts/run-unlisted-script-tests.ts"))
+            step.run?.includes("bun scripts/run-unlisted-script-tests.ts") &&
+            step.run.includes("--depth") === depthTests.has(file))
         ) {
           const existing = owners.get(file) ?? [];
           existing.push({ job, step });
@@ -7656,7 +7656,6 @@ test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
   }
 });
 
-// timeout: Executes the bounded event/depth/browser matrix in real Bash processes.
 test("browser planning, scheduling and result gates agree across events and depths", () => {
   const cases = (
     [
@@ -7743,7 +7742,7 @@ test("browser planning, scheduling and result gates agree across events and dept
       ),
     ),
   );
-}, 30_000);
+});
 
 test("untrusted PRs skip browser CI while the result gate preserves its trust failure", () => {
   const cases = [SUITE_DEPTH.fast, SUITE_DEPTH.full].flatMap((depth) =>
