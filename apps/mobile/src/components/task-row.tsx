@@ -119,8 +119,9 @@ export const TaskRow = ({
               }
             })();
           }}
-          title={t("markDone")}
-        />
+        >
+          {t("markDone")}
+        </Link.MenuAction>
         <Link.MenuAction
           icon="folder"
           onPress={() => {
@@ -129,8 +130,9 @@ export const TaskRow = ({
               params: { name: task.matterName, workspaceId: task.matterId },
             });
           }}
-          title={t("openMatter")}
-        />
+        >
+          {t("openMatter")}
+        </Link.MenuAction>
       </Link.Menu>
     </Link>
   );

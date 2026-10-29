@@ -30,7 +30,7 @@ const TIMER: Timer = {
 const recordingServer = () => {
   const requests: string[] = [];
   const fetch: Fetch = async (input, init) => {
-    const path = String(input).replace(SESSION.serverUrl, "");
+    const path = input.replace(SESSION.serverUrl, "");
     const body = typeof init?.body === "string" ? ` ${init.body}` : "";
     requests.push(`${init?.method ?? "GET"} ${path}${body}`);
     return Response.json({});

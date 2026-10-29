@@ -29,7 +29,7 @@ const FILE = {
 const world = (storage: number) => {
   const requests: string[] = [];
   const fetch: Fetch = async (input, init) => {
-    const url = String(input);
+    const url = input;
     const method = init?.method ?? "GET";
     if (url === FILE.uri) {
       return new Response("%PDF");
@@ -37,7 +37,7 @@ const world = (storage: number) => {
     if (url === STORAGE) {
       const headers = new Headers(init?.headers);
       requests.push(
-        `${method} storage ${headers.get("x-amz-checksum-sha256")}`,
+        `${method} storage ${headers.get("x-amz-checksum-sha256") ?? "unsigned"}`,
       );
       return new Response(null, { status: storage });
     }

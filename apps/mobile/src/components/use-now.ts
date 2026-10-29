@@ -10,7 +10,7 @@ export const useNow = (ticking: boolean): number => {
   const [now, setNow] = useState(epochMilliseconds);
   useEffect(() => {
     if (!ticking) {
-      return;
+      return undefined;
     }
     const tick = setInterval(() => {
       setNow(epochMilliseconds());

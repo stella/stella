@@ -96,14 +96,16 @@ export const MatterRow = ({
               params: { matterId: matter.id },
             });
           }}
-          title={t("newTask")}
-        />
+        >
+          {t("newTask")}
+        </Link.MenuAction>
         <Link.MenuAction
           hidden={!canScan()}
           icon="doc.viewfinder"
           onPress={scan}
-          title={t("scanDocument")}
-        />
+        >
+          {t("scanDocument")}
+        </Link.MenuAction>
       </Link.Menu>
     </Link>
   );

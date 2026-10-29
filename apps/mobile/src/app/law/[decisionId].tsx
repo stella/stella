@@ -26,9 +26,6 @@ const DecisionScreen = () => {
     decisionId: string;
   }>();
   const session = state.status === "signed-in" ? state.source.session() : null;
-  const [load, setLoad] = useState<Promise<Load<Decision>> | null>(() =>
-    session === null ? null : loadDecision(decisionId, session.serverUrl),
-  );
 
   return (
     <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>
@@ -42,22 +39,43 @@ const DecisionScreen = () => {
           title: caseNumber ?? t("title"),
         }}
       />
-      {load === null || session === null ? null : (
-        <Suspense
-          fallback={
-            <ActivityIndicator className="flex-1" color={colors.muted} />
-          }
-        >
-          <DecisionReader
-            load={load}
-            onReload={() => {
-              setLoad(loadDecision(decisionId, session.serverUrl));
-            }}
-            webOrigin={new URL(session.tokenEndpoint).origin}
-          />
-        </Suspense>
+      {session === null ? null : (
+        <LoadedDecision
+          decisionId={decisionId}
+          serverUrl={session.serverUrl}
+          webOrigin={new URL(session.tokenEndpoint).origin}
+        />
       )}
     </View>
+  );
+};
+
+/** The decision's text, loaded on opening and again on a pull to reload. */
+const LoadedDecision = ({
+  decisionId,
+  serverUrl,
+  webOrigin,
+}: {
+  decisionId: string;
+  serverUrl: string;
+  webOrigin: string;
+}) => {
+  const colors = useAppColors();
+  const [load, setLoad] = useState(
+    async () => await loadDecision(decisionId, serverUrl),
+  );
+  return (
+    <Suspense
+      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
+    >
+      <DecisionReader
+        load={load}
+        onReload={() => {
+          setLoad(loadDecision(decisionId, serverUrl));
+        }}
+        webOrigin={webOrigin}
+      />
+    </Suspense>
   );
 };
 

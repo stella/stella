@@ -1,5 +1,5 @@
 import { requireNativeView, requireOptionalNativeModule } from "expo";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 /** A hardware keyboard shortcut, named for the iPad's ⌘ overlay. */
@@ -25,7 +25,7 @@ const NativeKeyCommands =
 /**
  * Wraps the app so a hardware keyboard's shortcuts reach it from anywhere,
  * a text field being typed in too. Without the native view, as on Android,
- * it is only its children.
+ * its children fill the same frame with no shortcuts.
  */
 export const KeyCommands = ({
   children,
@@ -36,7 +36,7 @@ export const KeyCommands = ({
   onCommand: (id: string) => void;
 }>) =>
   NativeKeyCommands === null ? (
-    children
+    <View style={StyleSheet.absoluteFill}>{children}</View>
   ) : (
     <NativeKeyCommands
       commands={commands}
