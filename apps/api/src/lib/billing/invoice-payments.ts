@@ -26,6 +26,7 @@ import { transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import type { CentsAmount } from "@/api/lib/money";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 /**
@@ -49,7 +50,10 @@ import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
  */
 const payableAmount = (totalAmount: number) => Math.abs(totalAmount);
 
-type PaymentAmounts = { paidAmount: number; outstandingAmount: number };
+type PaymentAmounts = {
+  paidAmount: CentsAmount;
+  outstandingAmount: CentsAmount;
+};
 
 /** The paid and outstanding amounts an invoice read exposes. */
 export const invoicePaymentAmounts = ({
@@ -59,8 +63,10 @@ export const invoicePaymentAmounts = ({
   totalAmount: number;
   paidAmount: number;
 }): PaymentAmounts => ({
-  paidAmount,
-  outstandingAmount: Math.max(0, payableAmount(totalAmount) - paidAmount),
+  paidAmount: cents(paidAmount),
+  outstandingAmount: cents(
+    Math.max(0, payableAmount(totalAmount) - paidAmount),
+  ),
 });
 
 /** The sum of the non-voided payments among an invoice's loaded payments. */

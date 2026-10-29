@@ -19,11 +19,12 @@ import type {
 import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
 import type { PayBySquareResult } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
 export type RenderInvoicePdfOptions = {
   /** A payment request may use the remaining balance while the document retains its original totals. */
-  paymentAmountMinor?: number;
+  paymentAmountMinor?: CentsAmount;
   invoice: {
     status: InvoiceStatus;
     documentType: InvoiceDocumentType;
