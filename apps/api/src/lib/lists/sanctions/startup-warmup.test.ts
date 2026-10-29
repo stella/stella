@@ -165,3 +165,37 @@ test("the bound terminalizes the matcher state used by public screening", async 
   expect(warmup.status().status).toBe("terminal");
   expect(loaderState).toBe("terminal");
 });
+
+test("concurrent starts warm each edition once and emit one duration observation", async () => {
+  let instant = 0;
+  let calls = 0;
+  const observations: unknown[] = [];
+  const firstScreen = Promise.withResolvers<undefined>();
+  const releaseScreen = Promise.withResolvers<undefined>();
+  const warmup = createSanctionsStartupWarmup({
+    screen: async () => {
+      calls++;
+      firstScreen.resolve(undefined);
+      await releaseScreen.promise;
+      return await screened(list(null));
+    },
+    now: () => instant,
+    sleep: async () => undefined,
+    terminalize: () => undefined,
+    observe: (observation) => {
+      observations.push(observation);
+    },
+  });
+
+  warmup.start();
+  await firstScreen.promise;
+  warmup.start();
+  instant = 23;
+  releaseScreen.resolve(undefined);
+  await Promise.all([warmup.settled(), warmup.settled()]);
+
+  expect(calls).toBe(1);
+  expect(observations).toEqual([
+    { totalMs: 23, editions: { eu: 23 }, reason: "settled" },
+  ]);
+});

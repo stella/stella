@@ -18,7 +18,6 @@ import {
   createStartupGate,
   STARTUP_STATE,
 } from "@/api/lib/health/startup-gate";
-import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
@@ -32,7 +31,6 @@ const PROBE_CACHE_TTL_MS = 5000;
 type HealthRouteOptions = {
   readDeployEnvironment?: () => typeof envBase.DEPLOY_ENVIRONMENT;
   probeReadiness?: () => Promise<ReadinessOutcome>;
-  probeSanctionsStartup?: () => "warming" | "terminal";
 };
 
 const readinessOutcome = async (
@@ -64,7 +62,6 @@ const readinessOutcome = async (
 export const createHealthRoute = ({
   readDeployEnvironment = () => envBase.DEPLOY_ENVIRONMENT,
   probeReadiness = probeApiReadiness,
-  probeSanctionsStartup = () => sanctionsStartupWarmup.status().status,
 }: HealthRouteOptions = {}) => {
   const readinessFields = Object.fromEntries(
     DEPLOY_ENV_CONTRACT.flatMap(({ readinessField }) =>
@@ -102,7 +99,7 @@ export const createHealthRoute = ({
       return { status: STARTUP_STATE.started, ...BUILD_METADATA };
     }
     const outcome = await readinessResponse();
-    if (!outcome.ok || probeSanctionsStartup() !== "terminal") {
+    if (!outcome.ok) {
       set.status = 503;
       return { status: STARTUP_STATE.starting, ...BUILD_METADATA };
     }

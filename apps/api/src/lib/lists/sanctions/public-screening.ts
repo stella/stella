@@ -200,6 +200,7 @@ const createEditionWarmer = ({
 }: Required<PublicScreeningOptions>) => {
   const { now } = clock;
   const targets = new Map<SanctionsSource, WarmTarget>();
+  const warmedEditions = new Map<SanctionsSource, string>();
   const state = initialEditionWarmerState();
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
@@ -280,6 +281,7 @@ const createEditionWarmer = ({
     const failure = warmFailure(outcome);
     // A load that lands after startup gave up still clears the failure.
     if (failure === null) {
+      warmedEditions.set(source, target.edition.id);
       targets.delete(source);
       return;
     }
@@ -377,6 +379,11 @@ const createEditionWarmer = ({
       source: SanctionsSource,
       edition: SanctionsActiveEdition,
     ): "warming" | "load-failed" => {
+      // The warmer, rather than individual requests, owns an edition for the
+      // process lifetime. A stale concurrent caller cannot open a second path.
+      if (warmedEditions.get(source) === edition.id) {
+        return "load-failed";
+      }
       state.db = db;
       const instant = now();
       let target = targets.get(source);
