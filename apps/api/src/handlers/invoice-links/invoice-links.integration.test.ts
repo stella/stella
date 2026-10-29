@@ -66,6 +66,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  auditEventChanges,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -1263,7 +1264,11 @@ describe("sending an invoice by link", () => {
       reference: "REVISED-DURING-SEND",
     });
     expect(
-      auditEvents.filter((event) => event.changes?.["action"]?.new === "send"),
+      auditEvents.filter(
+        (event) =>
+          event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
+          auditEventChanges(event)?.["action"]?.new === "send",
+      ),
     ).toEqual([]);
     expect((await post(server, "view", { token })).status).toBe(404);
     for (const file of ["pdf", "e_invoice"]) {
