@@ -117,6 +117,7 @@ export type SafeIdType =
   | "infoSoudTrackedCase"
   | "invoice"
   | "invoiceLine"
+  | "invoicePayment"
   | "justification"
   | "legislationDocument"
   | "legislationIndexJob"
