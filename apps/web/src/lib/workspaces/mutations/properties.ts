@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyContentType } from "@/lib/api-contract";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -77,6 +79,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
         fingerprintKey: "useCreateProperty:failure",
         scope: { type: "handler", handlerId: "useCreateProperty:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -141,6 +144,7 @@ export const useCreatePropertiesBatch = ({
           handlerId: "useCreatePropertiesBatch:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -202,6 +206,7 @@ export const useUpdateProperty = () => {
         fingerprintKey: "useUpdateProperty:failure",
         scope: { type: "handler", handlerId: "useUpdateProperty:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -248,6 +253,7 @@ export const useSuggestPrompt = () => {
         fingerprintKey: "useSuggestPrompt:failure",
         scope: { type: "handler", handlerId: "useSuggestPrompt:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -282,6 +288,7 @@ export const useDeleteProperty = () => {
         fingerprintKey: "useDeleteProperty:failure",
         scope: { type: "handler", handlerId: "useDeleteProperty:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

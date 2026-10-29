@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
+import { TransactionRollbackError } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -18,6 +19,7 @@ import {
   AggregateLockUpgradeRefused,
   withAggregateLock,
   withAggregateSavepoint,
+  withAggregateTransaction,
 } from "./aggregate-lock";
 
 const recorder = () => {
@@ -26,10 +28,14 @@ const recorder = () => {
     statements.push(new PgDialect().sqlToQuery(statement).sql);
     return aggregateExecutionRows(statement);
   };
+  const rollback = (): never => {
+    throw new TransactionRollbackError();
+  };
   const tx = asTestRaw<Transaction>({
     execute,
+    rollback,
     transaction: async (run: (child: Transaction) => Promise<unknown>) =>
-      await run(asTestRaw<Transaction>({ execute })),
+      await run(asTestRaw<Transaction>({ execute, rollback })),
   });
   return { tx, statements };
 };
@@ -231,3 +237,36 @@ test("shared savepoint reentry keeps ancestor exclusive coverage", async () => {
   });
   expect(statements).toHaveLength(2);
 });
+
+test.each(["commit", "rollback"] as const)(
+  "a root savepoint %s leaves the database reusable for later transactions",
+  async (outcome) => {
+    const root = {
+      transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+        await run(recorder().tx),
+    };
+    const first = withAggregateSavepoint(root, async (tx) => {
+      await withAggregateLock({ ...aggregateFences().orgFeatureAdmission, tx });
+      if (outcome === "rollback") {
+        tx.rollback();
+      }
+      return "committed";
+    });
+    if (outcome === "rollback") {
+      expect(await rejectionOf(first)).toBeInstanceOf(TransactionRollbackError);
+    } else {
+      expect(await first).toBe("committed");
+    }
+    for (const iteration of [1, 2]) {
+      expect(
+        await withAggregateTransaction(root, async (tx) => {
+          await withAggregateLock({
+            ...aggregateFences().orgFeatureAdmission,
+            tx,
+          });
+          return iteration;
+        }),
+      ).toBe(iteration);
+    }
+  },
+);

@@ -103,13 +103,13 @@ describe("required provision tokens", () => {
     }
   });
 
-  test("does not mistake a civil procedure title for a civil code", () => {
-    expect(
-      readCorpusProvisionMentions(
-        tokenizeCorpusFreeText("§ 451 Občianskeho súdneho poriadku zákonníka"),
-        sk,
-      ),
-    ).toEqual([]);
+  test("reads a civil procedure title as that act, never as the civil code", () => {
+    const works = readCorpusProvisionMentions(
+      tokenizeCorpusFreeText("§ 451 Občianskeho súdneho poriadku zákonníka"),
+      sk,
+    ).flatMap((mention) => mention.works);
+    expect(works).toEqual([{ number: 99, year: 1963, collection: "Zb." }]);
+    expect(works).not.toContainEqual(skCivilCode);
   });
 
   test("never reads quoted phrases or crosses a phrase boundary", () => {

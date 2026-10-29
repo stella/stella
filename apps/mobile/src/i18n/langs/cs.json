@@ -8,7 +8,34 @@
   "chat": {
     "description": "Mějte rozpracovanou práci po ruce a pokračujte z jakéhokoli zařízení.",
     "emptyTitle": "Zatím žádné konverzace",
-    "emptyDescription": "Zde se zobrazí nové konverzace a nedávná vlákna."
+    "emptyDescription": "Zde se zobrazí nové konverzace a nedávná vlákna.",
+    "noMatchesTitle": "Žádné odpovídající konverzace",
+    "noMatchesDescription": "Žádný název konverzace ani spisu neobsahuje „{search}“.",
+    "search": "Hledat konverzace",
+    "loadFailed": "Vaše konverzace se nepodařilo načíst.",
+    "retry": "Zkusit znovu",
+    "untitled": "Konverzace bez názvu",
+    "loadMoreFailed": "Načíst další",
+    "loadOlderFailed": "Načíst starší zprávy",
+    "toolUsed": "Použito: {tool}",
+    "threadTitle": "Konverzace",
+    "threadLoadFailed": "Tuto konverzaci se nepodařilo načíst.",
+    "threadEmptyDescription": "Tato konverzace zatím nemá žádné zprávy.",
+    "sections": {
+      "today": "Dnes",
+      "yesterday": "Včera",
+      "week": "Posledních 7 dní",
+      "earlier": "Dříve"
+    },
+    "newChat": "Nová konverzace",
+    "composerPlaceholder": "Zeptejte se stelly",
+    "send": "Odeslat",
+    "stop": "Zastavit",
+    "sendFailed": "Zprávu se nepodařilo odeslat. Zkuste to znovu.",
+    "answerWorking": "Pracuji…",
+    "answerStopped": "Zastaveno.",
+    "answerNeedsInput": "Tato odpověď čeká na váš vstup. Pokračujte v ní ve webové aplikaci stella.",
+    "answerFailed": "Odpověď se nepodařilo dokončit."
   },
   "tasks": {
     "description": "Podívejte se, co vyžaduje pozornost, aniž byste otevírali celý pracovní prostor.",

@@ -18,11 +18,13 @@ import {
   clausesOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ClauseDetailView } from "@/routes/knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/knowledge/-components/clause-list";
@@ -91,6 +93,13 @@ export const Route = createFileRoute("/knowledge/clauses")({
       "knowledge-clauses.prefetch",
     );
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "knowledge-detail",
+      detail: "clauses",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("common.clauses") }] }),
   component: GuardedClausesPage,
 });
 

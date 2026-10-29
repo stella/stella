@@ -382,12 +382,14 @@ describe("release workflows run the gate", () => {
   const read = (file: string) =>
     readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
-  test("the tag workflow refuses a stable tag before pushing it", () => {
+  test("the RC workflow checks CLI coupling before its candidate tag push", () => {
     const workflow = read(".github/workflows/release-tag.yml");
     const gate = workflow.indexOf(SCRIPT);
-    const push = workflow.indexOf("- name: Push tag");
+    const verdict = workflow.indexOf("- name: Report every release gate");
+    const push = workflow.indexOf("- name: Push candidate tag once");
     expect(gate).toBeGreaterThan(0);
-    expect(push).toBeGreaterThan(gate);
+    expect(verdict).toBeGreaterThan(gate);
+    expect(push).toBeGreaterThan(verdict);
   });
 
   test("a release pull request sees the same verdict before merging", () => {

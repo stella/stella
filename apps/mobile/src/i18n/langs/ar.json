@@ -8,7 +8,34 @@
   "chat": {
     "description": "أبقِ عملك الجاري في متناولك وتابعه من أي جهاز.",
     "emptyTitle": "لا توجد محادثات بعد",
-    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة."
+    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة.",
+    "noMatchesTitle": "لا توجد محادثات مطابقة",
+    "noMatchesDescription": "لا يحتوي أي عنوان محادثة أو ملف قانوني على \"{search}\".",
+    "search": "البحث في المحادثات",
+    "loadFailed": "تعذّر تحميل محادثاتك.",
+    "retry": "إعادة المحاولة",
+    "untitled": "محادثة بلا عنوان",
+    "loadMoreFailed": "تحميل المزيد",
+    "loadOlderFailed": "تحميل الرسائل السابقة",
+    "toolUsed": "تم استخدام: {tool}",
+    "threadTitle": "محادثة",
+    "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
+    "threadEmptyDescription": "لا تحتوي هذه المحادثة على رسائل بعد.",
+    "sections": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "week": "آخر 7 أيام",
+      "earlier": "سابقًا"
+    },
+    "newChat": "محادثة جديدة",
+    "composerPlaceholder": "اسأل stella",
+    "send": "إرسال",
+    "stop": "إيقاف",
+    "sendFailed": "تعذّر إرسال رسالتك. حاول مرة أخرى.",
+    "answerWorking": "جارٍ العمل…",
+    "answerStopped": "تم الإيقاف.",
+    "answerNeedsInput": "تحتاج هذه الإجابة إلى إدخالك. تابعها في stella على الويب.",
+    "answerFailed": "تعذّر إكمال الإجابة."
   },
   "tasks": {
     "description": "اطّلع على ما يحتاج إلى اهتمامك دون فتح مساحة العمل بالكامل.",

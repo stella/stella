@@ -1534,6 +1534,20 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (
+            query.includes('AS "uniquePresent"') &&
+            query.includes('AS "foreignReady"')
+          ) {
+            return [
+              {
+                indexReady: true,
+                uniquePresent: true,
+                uniqueReady: true,
+                foreignPresent: true,
+                foreignReady: true,
+              },
+            ];
+          }
           if (query.includes("pg_backend_pid() AS pid")) {
             return [{ pid: 1, database: "test" }];
           }
@@ -1609,6 +1623,12 @@ const createHarness = ({
             }
             return [{ isValidated: !pendingConstraints.has(constraintName) }];
           }
+          // This harness starts with invoice clients already backfilled.
+          if (
+            query.includes("FROM public.invoices i JOIN public.workspaces w")
+          ) {
+            return [];
+          }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
             if (timeoutRepairBatch) {
@@ -1641,6 +1661,11 @@ const createHarness = ({
           }
           // Its resource seed and its client walk: nothing stored yet, and no
           // registration to link, so both converge on the first pass.
+          // The finding decision backfill's probe: no decided finding is
+          // without history, so its completion holds.
+          if (query.includes("document_review_finding_decisions event")) {
+            return [];
+          }
           if (
             query.includes("oauth_resource") ||
             query.includes("oauth_client")

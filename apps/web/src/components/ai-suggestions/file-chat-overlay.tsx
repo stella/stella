@@ -195,7 +195,7 @@ import {
   getChatThreadKey,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
 import {
   matchReservedChatCommand,
@@ -650,10 +650,7 @@ const persistQueuedSuggestions = async ({
   });
   if (!replayResults.includes("failed")) {
     if (replayResults.includes("pending-limit")) {
-      notifyUserError(
-        undefined,
-        getTranslator()("docxReview.pendingLimitReached"),
-      );
+      notifyUserProblem(getTranslator()("docxReview.pendingLimitReached"));
     }
     return;
   }
@@ -665,7 +662,7 @@ const persistQueuedSuggestions = async ({
       scope: { type: "handler", handlerId: "persistQueuedSuggestions:Error" },
     },
   );
-  notifyUserError(undefined, getTranslator()("docxReview.persistFailed"));
+  notifyUserProblem(getTranslator()("docxReview.persistFailed"));
 };
 
 // No tools are auto-blocked when an active file is present. The
@@ -1561,6 +1558,8 @@ const FileChatOverlayInner = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -2587,6 +2586,8 @@ const FileChatOverlayInner = ({
           handleDeny,
           handleRequestSecret,
           continueRequestSecret,
+          handleConnectConnector,
+          continueConnectConnector,
           resolveSecretTarget,
           secretAvailabilityKey,
           handleRetryAfterAuthorNameSet: resendLatestMessage,

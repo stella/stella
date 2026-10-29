@@ -101,12 +101,12 @@ describe("listing matters", () => {
     ]);
 
     const refused = server(() => new Response(null, { status: 401 }));
-    expect(await outcome(refused.fetch)).toBe("MattersRequestError");
+    expect(await outcome(refused.fetch)).toBe("ApiRequestError");
     expect(refused.calls).toHaveLength(3);
   });
 
   test("a response in a shape this build cannot read is an error, not an empty list", async () => {
     const { fetch } = server(() => Response.json({ workspaces: [{ id: 7 }] }));
-    expect(await outcome(fetch)).toBe("MattersRequestError");
+    expect(await outcome(fetch)).toBe("ApiRequestError");
   });
 });
