@@ -4,6 +4,7 @@ import { panic } from "better-result";
 
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatutePath,
   createStatuteRouteParams,
@@ -327,9 +328,10 @@ export const createPublicStatuteHead = ({
     canonicalStatuteParams({ statute: header, versions }),
   );
   const canonicalUrl = createPublicLawCanonicalUrl(path);
+  const label = statuteDisplayLabel(header).text;
 
   return createPublicLawHead({
-    description: header.title,
+    description: label,
     jsonLd: createStatuteJsonLd({
       canonicalUrl,
       country: header.country,
@@ -337,11 +339,11 @@ export const createPublicStatuteHead = ({
       eli: header.eli,
       language: header.language,
       sourceUrl: header.sourceUrl,
-      title: header.title,
+      title: label,
       versionValidFrom: header.versionValidFrom,
     }),
     path,
-    title: pageTitleLiteral(header.title),
+    title: pageTitleLiteral(label),
     type: "article",
   });
 };

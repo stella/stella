@@ -39,8 +39,9 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
@@ -142,7 +143,7 @@ const CreateMatterDialogBody = ({
   const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
-  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesDataView = queryView(workspacesDataQuery);
   useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;

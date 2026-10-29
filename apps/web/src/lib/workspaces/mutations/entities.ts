@@ -9,6 +9,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { getTranslator } from "@/i18n/translator";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -60,6 +61,7 @@ export const useCreateEntities = () => {
         fingerprintKey: "useCreateEntities:failure",
         scope: { type: "handler", handlerId: "useCreateEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -96,6 +98,7 @@ export const useDeleteEntities = () => {
         fingerprintKey: "useDeleteEntities:failure",
         scope: { type: "handler", handlerId: "useDeleteEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -125,6 +128,7 @@ export const useMoveEntity = () => {
         fingerprintKey: "useMoveEntity:failure",
         scope: { type: "handler", handlerId: "useMoveEntity:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -173,6 +177,7 @@ export const useCreateFolderFromSelection = () => {
           handlerId: "entities.folder-from-selection.create",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -202,7 +207,7 @@ export const useRenameEntity = (
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const reportFailure = (
+  const notifyRenameFailure = (
     error: unknown,
     fingerprintKey: ExceptionFingerprintKey,
   ) => {
@@ -364,7 +369,7 @@ export const useRenameEntity = (
           scope: { type: "handler", handlerId: "useRenameEntity:failure-2" },
         });
       }
-      reportFailure(error, "useRenameEntity:rename");
+      notifyRenameFailure(error, "useRenameEntity:rename");
     },
     onSettled: (_data, error, { completion }, context) => {
       context?.release();
@@ -376,7 +381,7 @@ export const useRenameEntity = (
         completion?.onSuccess?.();
       });
       if (completed.isErr()) {
-        reportFailure(completed.error, "useRenameEntity:completion");
+        notifyRenameFailure(completed.error, "useRenameEntity:completion");
       }
     },
   });
@@ -408,6 +413,27 @@ type UpsertFieldVars = {
   content: UpsertFieldContent;
 };
 
+/**
+ * Write one field. The bare request, for a caller that settles a batch of
+ * writes itself (one invalidation, one toast) instead of per write.
+ */
+export const upsertFieldRequest = async ({
+  workspaceId,
+  propertyId,
+  entityId,
+  content,
+}: UpsertFieldVars) => {
+  const response = await api
+    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .post({
+      propertyId: toSafeId<"property">(propertyId),
+      entityId: toSafeId<"entity">(entityId),
+      content,
+    });
+
+  return unwrapApiResponse(response);
+};
+
 type UpdateKanbanPlacementVars = {
   workspaceId: string;
   entityId: string;
@@ -418,41 +444,25 @@ type UpdateKanbanPlacementVars = {
   }[];
 };
 
-export const useUpdateKanbanPlacement = () => {
-  const analytics = useAnalytics();
-  const t = useTranslations();
+/** Move one card to a subgroup cell: its column and lane in one request. */
+export const updateKanbanPlacementRequest = async ({
+  workspaceId,
+  entityId,
+  status,
+  fields,
+}: UpdateKanbanPlacementVars) => {
+  const response = await api
+    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["kanban-placement"].patch({
+      entityId: toSafeId<"entity">(entityId),
+      ...(status !== undefined && { status }),
+      fields: fields.map(({ propertyId, content }) => ({
+        propertyId: toSafeId<"property">(propertyId),
+        content,
+      })),
+    });
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      status,
-      fields,
-    }: UpdateKanbanPlacementVars) => {
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["kanban-placement"].patch({
-          entityId: toSafeId<"entity">(entityId),
-          ...(status !== undefined && { status }),
-          fields: fields.map(({ propertyId, content }) => ({
-            propertyId: toSafeId<"property">(propertyId),
-            content,
-          })),
-        });
-
-      return unwrapApiResponse(response);
-    },
-    onError: (error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "useUpdateKanbanPlacement:failure",
-        scope: {
-          type: "handler",
-          handlerId: "useUpdateKanbanPlacement:failure",
-        },
-      });
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
+  return unwrapApiResponse(response);
 };
 
 export const useUpsertField = () => {
@@ -460,22 +470,7 @@ export const useUpsertField = () => {
   const t = useTranslations();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      propertyId,
-      entityId,
-      content,
-    }: UpsertFieldVars) => {
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .post({
-          propertyId: toSafeId<"property">(propertyId),
-          entityId: toSafeId<"entity">(entityId),
-          content,
-        });
-
-      return unwrapApiResponse(response);
-    },
+    mutationFn: upsertFieldRequest,
 
     onError: (error) => {
       analytics.captureError(error, {

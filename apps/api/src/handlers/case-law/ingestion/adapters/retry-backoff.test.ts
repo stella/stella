@@ -210,6 +210,7 @@ describe("publisher throttling and transient failures", () => {
           status,
           stopKind: "publisher_refusal",
           cooldownUntilEpochMs: NOW + header.wait,
+          ...(header.value === null ? {} : { retryAfter: header.value }),
         });
         expect(requests).toBe(1);
         expect(gateWaits).toEqual([header.wait]);

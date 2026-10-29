@@ -19,7 +19,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   assertChatThreadScopeMatches,
@@ -45,6 +44,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
@@ -269,6 +269,7 @@ const createMessageExport = createSafeRootHandler(
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "The exported document could not be stored.",
             cause,
           }),

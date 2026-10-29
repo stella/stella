@@ -61,7 +61,29 @@ jobs:
       chain-base: ${{ steps.ancestor.outputs.chain-base }}
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
+      - name: Checkout network retry helper
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .network-retry
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      # The workflow's own helper: this job fetches before, or without, a
+      # checkout of this revision into the workspace. These two steps run
+      # only workflow-revision tooling; no candidate code runs before
+      # "Check release candidate".
+      - name: Stage network retry helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-retry"
+          cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
+
       - name: Check release candidate
+        timeout-minutes: 5
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -79,12 +101,13 @@ jobs:
           git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
-          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
+          bash "$NETWORK_RETRY_SCRIPT" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
           bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
 
@@ -118,6 +141,7 @@ jobs:
           no-cache: true
 
       - name: Reuse completed release proof
+        timeout-minutes: 5
         id: reuse
         working-directory: .release-proof
         env:
@@ -133,79 +157,6 @@ jobs:
               echo "run=true" >> "$GITHUB_OUTPUT"
             fi
           fi
-
-      # The tag takes a merge-group receipt in place of main/heavy and
-      # main/pr-depth only when the receipt covers the release history. This
-      # push already runs heavy; pr-depth is dispatched below when it does not.
-      - name: Check the version commit's merge-group receipt
-        id: receipt
-        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
-        working-directory: .release-proof
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if bash scripts/check-release-receipt-coverage.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA"; then
-            echo "covered=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "covered=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Dispatch release PR-depth checks
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && steps.reuse.outputs.run != 'false') || steps.receipt.outputs.covered == 'false' }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          SHA: ${{ inputs.sha || github.sha }}
-        with:
-          retries: 2
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
-              workflow_id: "main-pr-depth.yml",
-              ref: "main",
-              inputs: { sha: process.env.SHA },
-            });
-
-      - name: Dispatch version commit staging
-        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 2
-          script: |
-            const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              ...context.repo,
-              commit_sha: context.sha,
-              per_page: 100,
-            });
-            const releasePull = pulls.find(pull => pull.merged_at
-              && pull.merge_commit_sha === context.sha
-              && pull.title.startsWith("chore: release v")
-              && pull.head.repo?.full_name === `${context.repo.owner}/${context.repo.repo}`);
-            const headSha = releasePull?.head.sha;
-            let reuse = false;
-            if (headSha) {
-              const [{ data: head }, { data: version }, { data: statuses }] = await Promise.all([
-                github.rest.git.getCommit({ ...context.repo, commit_sha: headSha }),
-                github.rest.git.getCommit({ ...context.repo, commit_sha: context.sha }),
-                github.rest.repos.listCommitStatusesForRef({
-                  ...context.repo,
-                  ref: headSha,
-                  per_page: 100,
-                }),
-              ]);
-              const staging = statuses.find(status => status.context === "staging/verified");
-              reuse = head.tree.sha === version.tree.sha
-                && staging?.creator?.login === "github-actions[bot]"
-                && staging.state === "success";
-            }
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
-              workflow_id: "deploy-staging.yml",
-              ref: "main",
-              inputs: reuse
-                ? { proof_sha: headSha, sha: context.sha }
-                : { release_candidate: "true", sha: context.sha },
-            });
 
       - name: Select untested heavy SHA
         if: steps.reuse.outputs.run != 'false'
@@ -253,6 +204,7 @@ jobs:
           fi
 
       - name: Fetch main history
+        timeout-minutes: 5
         if: steps.selection.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -264,9 +216,10 @@ jobs:
           git -C "$RUNNER_TEMP/main-heavy-validation" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/release-proof-chain.sh > "$RUNNER_TEMP/release-proof-chain.sh"
+          git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
 
@@ -280,8 +233,12 @@ jobs:
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
           CHAIN_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false }}
         run: |
+          proof_args=()
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            proof_args+=(--allow-pr-head)
+          fi
           {
-            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"
+            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA"
             echo "sha=$SHA"
             echo "task_cache_producer=validated-main"
           } >> "$GITHUB_OUTPUT"

@@ -230,6 +230,10 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         item satisfies never;
@@ -325,12 +329,16 @@ const itemsOf = (
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content, notesAfter);
       // No line of the decision: a preserved block is opaque markup folio does
-      // not model and holds no text, and a bookmark marker is a position. This
-      // parser reads text, so it skips all three rather than round-tripping
-      // them.
+      // not model and holds no text, and a bookmark or move range marker is a
+      // position. This parser reads text, so it skips them rather than
+      // round-tripping them.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;

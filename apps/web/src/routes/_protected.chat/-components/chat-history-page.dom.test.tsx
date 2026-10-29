@@ -1,14 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  describe,
-  expect,
-  jest,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
+
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { WebApiRoutes } from "@/lib/api";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
@@ -23,7 +17,6 @@ GlobalRegistrator.register({
 // A hung test fails instead of holding the run. Assertions compare strings
 // and booleans, never DOM nodes: a failing match on a node makes the runner
 // print the whole document graph.
-setDefaultTimeout(10_000);
 
 const previousFetch = globalThis.fetch;
 const testing = await import("@testing-library/react");
@@ -546,7 +539,7 @@ describe("chat history page", () => {
         jest.advanceTimersByTime(1000);
       });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
 
     expect(inputValue(field)).toBe("claim");

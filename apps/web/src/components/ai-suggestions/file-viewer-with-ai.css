@@ -15,13 +15,26 @@
   caret-color: transparent;
 }
 
-/* The file chat and review controls float above Folio's scroll viewport.
+/* The file chat and review controls float above the viewer's scroll content.
  * Reserve enough trailing scroll space for the final page to move fully above
  * that stack; scroll-padding gives programmatic block navigation the same safe
- * edge. This belongs at the integration boundary rather than inside Folio,
- * whose standalone editors do not mount Stella's floating controls. */
-[data-file-viewer-ai] [data-folio-scroll] {
+ * edge. Folio's viewport is matched by its own attribute because the reserve
+ * belongs at the integration boundary rather than inside Folio, whose
+ * standalone editors do not mount Stella's floating controls. Every other
+ * viewer marks its content with `DOCKED_COMPOSER_CLEARANCE`. */
+[data-file-viewer-ai]
+  :is([data-folio-scroll], [data-docked-composer-clearance]) {
   padding-block-end: 10rem;
+}
+
+/* scroll-padding only acts on the scrolling element. Folio's viewport scrolls
+ * itself; marked content scrolls inside a ScrollArea viewport, which takes the
+ * inset instead. Search centring reads it back (`readScrollPaddingBlockEnd`). */
+[data-file-viewer-ai]
+  :is(
+    [data-folio-scroll],
+    [data-slot="scroll-area-viewport"]:has(> [data-docked-composer-clearance])
+  ) {
   scroll-padding-block-end: 10rem;
 }
 

@@ -24,6 +24,7 @@ import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/read
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
+import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
@@ -72,17 +73,25 @@ const decisionText = (
 
     const returnedBlocks: Block[] = [];
     let returnedChars = 0;
-    for (const block of blocks) {
+    for (const [index, block] of blocks.entries()) {
+      const served = servedBlockText(block, blocks[index - 1]);
       const separatorChars =
         returnedChars > 0 && block.plainText !== "" ? 2 : 0;
+      // Counted as the served text prints the block, with its number and
+      // note mark, so the extent agrees with `totalChars`.
       const candidateChars =
-        returnedChars + separatorChars + block.plainText.length;
+        returnedChars +
+        separatorChars +
+        (block.plainText === "" ? 0 : served.length);
       if (candidateChars > MCP_CONTENT_MAX_CHARS) {
         if (returnedChars === 0) {
+          // The number or note mark the served text prints before the block
+          // shares the window with its words.
+          const numberChars = served.length - block.plainText.length;
           const { end } = resolveTextWindowBounds({
             text: block.plainText,
             offset: 0,
-            size: MCP_CONTENT_MAX_CHARS,
+            size: MCP_CONTENT_MAX_CHARS - numberChars,
           });
           const text = block.plainText.slice(0, end);
           switch (block.type) {
@@ -110,7 +119,7 @@ const decisionText = (
               block satisfies never;
               return panic("Unhandled decision block type");
           }
-          returnedChars = text.length;
+          returnedChars = text.length + numberChars;
         }
         break;
       }
@@ -126,10 +135,20 @@ const decisionText = (
   return { status: "withheld", reason: "licence" };
 };
 
+/**
+ * A candidate's label: court, kind of decision and date. One docket can
+ * hold a judgment and the Advocate General's opinion on it, decided by the
+ * same court, so without the kind two candidates differ only by date.
+ */
+const candidateLabel = (row: DecisionIdentityRow): string =>
+  [row.court, row.decisionType, row.decisionDate ?? row.caseNumber]
+    .filter((part) => part !== null && part !== "")
+    .join(", ");
+
 const candidate = (row: DecisionIdentityRow) => ({
   decisionId: row.id,
   identifier: row.ecli ?? row.caseNumber,
-  label: `${row.court}, ${row.decisionDate ?? row.caseNumber}`,
+  label: candidateLabel(row),
   readerUrl: buildCaseLawDecisionUrl({
     caseNumber: row.caseNumber,
     country: row.country,

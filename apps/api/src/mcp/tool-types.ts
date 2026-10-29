@@ -519,6 +519,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId?: string;
 } & (
