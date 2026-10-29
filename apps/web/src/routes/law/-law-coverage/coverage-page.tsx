@@ -869,8 +869,11 @@ const SourcePublisherCensus = ({
     known: "warning",
   } as const;
   return (
-    <div className="mb-1 flex flex-col gap-0.5">
-      <ReviewStatusBadge tone={tones[type]}>
+    <div className="mb-1 flex flex-col gap-0.5 wrap-anywhere">
+      <ReviewStatusBadge
+        tone={tones[type]}
+        className="max-w-full whitespace-normal"
+      >
         {t(labels[type])}
       </ReviewStatusBadge>
       {measurement.publisher !== null && (
