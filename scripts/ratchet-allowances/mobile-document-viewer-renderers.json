@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
-  "delta": 2,
-  "reason": "The mobile app declares @stll/folio-react and pdfjs-dist for its document viewer, which shows a matter's Word documents and PDFs with the web app's own renderers so tracked changes, headers and pages read as on the web. apps/web already declares both at the same versions."
+  "delta": 16,
+  "reason": "The mobile app declares @stll/folio-react and pdfjs-dist for its document viewer, which shows a matter's Word documents and PDFs with the web app's own renderers so tracked changes, headers and pages read as on the web. apps/web already declares both at the same versions. Hosting folio, the app also declares folio's ProseMirror and Yjs peers from the catalog, as every other folio host does, so each resolves to the one pinned copy."
 }

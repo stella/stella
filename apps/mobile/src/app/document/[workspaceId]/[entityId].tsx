@@ -233,12 +233,12 @@ const OpenedDocument = ({
           dom={{ style: { flex: 1 } }}
           kind={file.viewer}
           locale={locale}
-          onFailed={async () => {
+          onFailed={() => {
             if (mounted.current) {
               setPhase({ ...phase, unrendered: true });
             }
           }}
-          onReady={async () => {
+          onReady={() => {
             if (mounted.current) {
               setReady(true);
             }

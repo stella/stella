@@ -17,9 +17,12 @@ type DocumentViewProps = {
   /** The colour around the pages, the app's background. */
   backdrop: string;
   readChunk: (offset: number, length: number) => Promise<string>;
-  /** The first page is on screen. */
-  onReady: () => Promise<void>;
-  onFailed: (message: string) => Promise<void>;
+  /**
+   * The first page is on screen. The app's handlers only set state, so the
+   * DOM side does not wait on the bridge's reply.
+   */
+  onReady: () => void;
+  onFailed: (message: string) => void;
   dom?: DOMProps;
 };
 
@@ -56,7 +59,7 @@ const DocumentView = ({
     async (offset: number, length: number) => await readChunk(offset, length),
   );
   const loadFailed = useEffectEvent((error: unknown) => {
-    void onFailed(String(error));
+    onFailed(String(error));
   });
 
   useEffect(() => {
@@ -89,10 +92,10 @@ const DocumentView = ({
   }, [size]);
 
   const ready = () => {
-    void onReady();
+    onReady();
   };
   const failed = (message: string) => {
-    void onFailed(message);
+    onFailed(message);
   };
 
   let pages = null;
