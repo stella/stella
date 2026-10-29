@@ -7,6 +7,7 @@ import {
   booleanFromString,
   numberFromString,
 } from "@stll/api-contract/http-input";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import {
   timeEntrySourceSchema,
@@ -18,6 +19,7 @@ import {
   timeEntryReadColumns,
 } from "@/api/handlers/time-entries/time-entry-columns";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { timeEntryPageMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   selectTimekeeperNames,
@@ -39,6 +41,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -171,13 +174,14 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 
 const readTimeEntries = createSafeHandler(
   {
+    moneyResponse: timeEntryPageMoneyResponse,
     contract: "patch",
     description:
       "List time entries in a matter, optionally filtered by workItemId " +
       "(the document, folder, or task providing context), userId or scope=me, " +
       "a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
       "entry's id, entity, user, date, minutes, rate (minor currency " +
-      "units), currency, narrative, and status.",
+      "units; null without billing access), currency, narrative, and status.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -328,7 +332,9 @@ const readTimeEntries = createSafeHandler(
         timezoneId: row.timezoneId,
         durationMinutes: row.durationMinutes,
         billedMinutes: row.billedMinutes,
-        rateAtEntry: row.rateAtEntry,
+        rateAtEntry: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+          ? row.rateAtEntry
+          : null,
         currency: row.currency,
         approverUserId: row.approverUserId,
         approvedByUserId: row.approvedByUserId,

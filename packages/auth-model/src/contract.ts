@@ -95,6 +95,17 @@ export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   requireEmailVerificationOnInvitation: true,
 } as const;
 
+/** Server-managed membership grant; generic member inputs cannot assign it. */
+export const BILLING_ACCESS_MEMBER_FIELDS = {
+  billingAccess: {
+    type: "boolean",
+    required: true,
+    defaultValue: false,
+    input: false,
+    fieldName: "billing_access",
+  },
+} as const;
+
 /** Adapter switches which must match in every host. */
 export const BETTER_AUTH_ADAPTER_OPTIONS = {
   camelCase: false,

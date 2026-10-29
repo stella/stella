@@ -4704,6 +4704,7 @@
       "tokenHelp": "Verfügbare Platzhalter: '{'SEQ'}' (Laufnummer), '{'YYYY'}' (Jahr), '{'YY'}' (zweistelliges Jahr), '{'MM'}' (Monat)"
     },
     "members": {
+      "billingAccess": "Zugriff auf Abrechnungsdaten",
       "changeRole": "Rolle ändern",
       "changeRoleDescription": "Rolle für {email} aktualisieren",
       "confirmRoleChangeDescription": "Die Rolle von {email} wird von {oldRole} zu {newRole} geändert.",

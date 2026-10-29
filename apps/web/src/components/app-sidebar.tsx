@@ -226,7 +226,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
-  const canReadInvoices = usePermissions({ workspace: ["read"] });
+  const canReadInvoices = usePermissions({ billing: ["read"] });
   const matterBillingLinks = getMatterBillingLinks({
     canReadInvoices,
     canReadTimeEntries,

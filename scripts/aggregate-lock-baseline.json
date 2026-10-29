@@ -3445,25 +3445,7 @@
   },
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
-    "fingerprint": "2773fc8f6099e3f0d029306911b48e1bd3b3ca5d73f6dbe198104c04eae8d164",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
-    "fingerprint": "a7c827e34f756c889e227513cea958284558b2daddcb017314e6f47731d3222b",
-    "count": 1,
-    "reason": "The key root transaction first holds the live session credential fence for issuance and hands it to the issuer; the transaction boundary, organization lock and owner predicates are unchanged."
-  },
-  {
-    "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
     "fingerprint": "ba59c9849c1f7b42515a4d446ee534601cad6cd63ed676df4736e5ed10c3ab11",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
-    "fingerprint": "db6b337e7b9f9780110b5e3fd83c24d0e7b96c3178d30c6726873258b50b05f0",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

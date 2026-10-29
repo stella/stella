@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
+
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -7,6 +9,7 @@ import {
   invoicePaymentView,
   voidInvoicePayment,
 } from "@/api/lib/billing/invoice-payments";
+import { invoicePaymentMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
@@ -17,11 +20,12 @@ const paymentParamsSchema = workspaceParams({
 
 const voidInvoicePaymentHandler = createSafeHandler(
   {
+    moneyResponse: invoicePaymentMoneyResponse,
     contract: "patch",
     description:
       "Void a mistaken invoice payment. The payment stays on record as " +
       "voided; a paid invoice it no longer covers returns to its prior status.",
-    permissions: { invoice: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

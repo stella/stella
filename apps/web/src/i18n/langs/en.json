@@ -4704,6 +4704,7 @@
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)"
     },
     "members": {
+      "billingAccess": "Billing visibility",
       "changeRole": "Change role",
       "changeRoleDescription": "Update the role for {email}",
       "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",

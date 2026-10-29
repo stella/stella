@@ -3,20 +3,23 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { readMatterInvoicePrefills } from "@/api/lib/billing/invoice-prefill-operation";
+import { clientInvoicePrefillMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const prefillClientInvoice = createSafeRootHandler(
   {
+    moneyResponse: clientInvoicePrefillMoneyResponse,
     contract: "patch",
     description:
       "Prepare grouped unbilled work for a client's accessible matters. Optional inclusive periodStart and periodEnd select work dates. At most 50 matters and 500 items per matter. Pass selected matter and entry IDs to client-invoices.create; no draft is saved by this read.",
-    permissions: { invoice: ["create"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     access: "read",

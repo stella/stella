@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { MoneyTotals, timeEntryAmount } from "@stll/money";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
@@ -231,6 +233,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 };
 
 const config = {
+  moneyResponse: moneyExportSchema,
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   featureAccess: { featureId: "time-billing", type: "required" },
@@ -239,7 +242,7 @@ const config = {
     "entry plus total hours and totals per currency. Filter by date-worked " +
     "range, status, and work item. Returns PDF bytes; use " +
     "time-entries.csv.export to get the same entries as text.",
-  permissions: { timeEntry: ["approve"] },
+  permissions: { ...BILLING_READ_PERMISSION, timeEntry: ["approve"] },
   mcp: {
     type: "capability",
     readClass: "tenant",

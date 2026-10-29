@@ -300,6 +300,8 @@ export const member = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").default("member").notNull(),
+    /** An additional monetary-visibility grant; management roles hold it independently. */
+    billingAccess: boolean("billing_access").default(false).notNull(),
     lastActiveWorkspaceId: text("last_active_workspace_id"),
     createdAt: timestamptz("created_at").notNull(),
   },

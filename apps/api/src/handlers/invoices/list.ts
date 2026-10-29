@@ -3,6 +3,7 @@ import { and, asc } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -14,6 +15,7 @@ import {
   invoiceMatterShare,
   invoiceTouchesMatter,
 } from "@/api/lib/billing/invoice-scope";
+import { invoiceListMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -51,13 +53,14 @@ const invoiceCursor = createTimestampIdCursorCodec({
 
 const readInvoices = createSafeHandler(
   {
+    moneyResponse: invoiceListMoneyResponse,
     contract: "patch",
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
       "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
       "total, and paid and outstanding amounts, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
-    permissions: { workspace: ["read"] },
+    permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "list_invoices" },

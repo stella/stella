@@ -22,6 +22,7 @@ import enrolFeature from "@/api/handlers/organization-settings/feature-enrolment
 import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
+import updateMemberBillingAccess from "@/api/handlers/organization-settings/members/billing-access/update";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
@@ -47,6 +48,7 @@ export const organizationSettingsRoute = routes(
       POST: addCorrespondenceAllowedSenderScope,
       DELETE: removeCorrespondenceAllowedSenderScope,
     },
+    "/members/:memberId/billing-access": { PUT: updateMemberBillingAccess },
     "/": { GET: readOrganizationSettings, POST: updateOrganizationSettings },
     "/business-registry-credentials": {
       GET: readBusinessRegistryCredentials,

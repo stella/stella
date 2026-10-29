@@ -2910,7 +2910,7 @@ export const lockMemberAccessRow = async ({
 }: MemberAccessRowLockOptions) =>
   (
     await tx
-      .select({ role: member.role })
+      .select({ role: member.role, billingAccess: member.billingAccess })
       .from(member)
       .where(
         and(
@@ -3110,3 +3110,33 @@ export const lockCaseLawRemovalSource = async ({
     sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
   );
 };
+
+/** Lock the actor and target together so simultaneous membership changes use one row order. */
+export const lockMemberBillingAccessRows = async ({
+  tx,
+  organizationId,
+  actorUserId,
+  targetMemberId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  targetMemberId: string;
+}) =>
+  await tx
+    .select({
+      id: member.id,
+      userId: member.userId,
+      role: member.role,
+      billingAccess: member.billingAccess,
+    })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        or(eq(member.userId, actorUserId), eq(member.id, targetMemberId)),
+      ),
+    )
+    .orderBy(member.id)
+    .limit(2)
+    .for("update");

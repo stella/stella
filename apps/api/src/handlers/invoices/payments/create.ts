@@ -6,6 +6,7 @@ import {
   INVOICE_PAYMENT_METHODS,
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -14,6 +15,7 @@ import {
   invoicePaymentView,
   recordInvoicePayment,
 } from "@/api/lib/billing/invoice-payments";
+import { invoicePaymentMoneyResponse } from "@/api/lib/billing/response-schemas";
 import {
   minorUnitAmountSchema,
   resourceIdSchema,
@@ -49,12 +51,13 @@ const recordPaymentBodySchema = v.object({
 
 const recordInvoicePaymentHandler = createSafeHandler(
   {
+    moneyResponse: invoicePaymentMoneyResponse,
     contract: "patch",
     description:
       "Record a payment on a finalized or sent invoice: amount in minor units of the " +
       "invoice currency, paidOn no later than today. Reaching the total marks " +
       "it paid; more than the outstanding amount is refused.",
-    permissions: { invoice: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

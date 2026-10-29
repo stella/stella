@@ -21,6 +21,7 @@ import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberBillingScalingScenario } from "./member-billing-access";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
@@ -43,6 +44,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   ...readScalingScenarios,
   ...writeScalingScenarios,
+  memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   clientInvoicePrefillScalingScenario,

@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
+
 import type { invoicePayments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
@@ -9,6 +11,7 @@ import {
   readInvoicePayments,
 } from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { invoicePaymentsMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -46,11 +49,12 @@ const invoiceParamsSchema = workspaceParams({
 
 const listInvoicePayments = createSafeHandler(
   {
+    moneyResponse: invoicePaymentsMoneyResponse,
     contract: "patch",
     description:
       "List an invoice's payments oldest first, voided ones included, with " +
       "its paid and outstanding amounts in minor units.",
-    permissions: { workspace: ["read"] },
+    permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

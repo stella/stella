@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
+
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
 import {
@@ -8,9 +10,11 @@ import {
   timeEntryReadColumns,
 } from "@/api/handlers/time-entries/time-entry-columns";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { timeEntryMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { canManageTimeEntry } from "@/api/lib/billing/time-entry-authorization";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const readTimeEntryByIdParamsSchema = workspaceParams({
   id: resourceIdSchema("timeEntry"),
@@ -18,13 +22,14 @@ const readTimeEntryByIdParamsSchema = workspaceParams({
 
 const readTimeEntryById = createSafeHandler(
   {
+    moneyResponse: timeEntryMoneyResponse,
     contract: "patch",
     description:
       "Read one time entry in a matter by id, with its minutes, rate, " +
       "currency, narratives, billing status, source, task and activity " +
       "codes, timer timestamps, and the timekeeper's name. A caller without " +
       "time-entry approval access can only read their own entries; another " +
-      "user's entry is reported as not found.",
+      "user's entry is reported as not found. The rate is null without billing access.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -95,6 +100,9 @@ const readTimeEntryById = createSafeHandler(
 
     return Result.ok({
       ...row,
+      rateAtEntry: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+        ? row.rateAtEntry
+        : null,
       userName,
       approvedAt: row.approvedAt?.toISOString() ?? null,
       returnedAt: row.returnedAt?.toISOString() ?? null,

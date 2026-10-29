@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyMinorUnitDigits } from "@stll/money";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -40,6 +41,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -440,7 +442,22 @@ const updateContactById = createSafeRootHandler(
     params: updateContactParamsSchema,
     body: updateContactBodySchema,
   },
-  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    params,
+    body,
+    memberRole,
+    recordAuditEvent,
+  }) {
+    if (
+      (body.defaultHourlyRate !== undefined || body.currency !== undefined) &&
+      !hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+    ) {
+      return Result.err(
+        new HandlerError({ status: 403, message: "Forbidden" }),
+      );
+    }
     return yield* updateContactHandler({
       safeDb,
       organizationId: session.activeOrganizationId,

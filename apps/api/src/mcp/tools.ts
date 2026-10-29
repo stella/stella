@@ -657,6 +657,9 @@ const dispatchMcpToolCall = async ({
               context: executionContext,
               mode,
               response,
+              outputSchema:
+                outputContract?.outputSchemaSource ??
+                panic("Static tool output contract missing"),
             },
             {
               anonymizeTextFields:

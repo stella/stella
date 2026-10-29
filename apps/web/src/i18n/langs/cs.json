@@ -4704,6 +4704,7 @@
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (pořadí), '{'YYYY'}' (rok), '{'YY'}' (dvouciferný rok), '{'MM'}' (měsíc)"
     },
     "members": {
+      "billingAccess": "Přístup k fakturačním údajům",
       "changeRole": "Změnit roli",
       "changeRoleDescription": "Aktualizovat roli pro {email}",
       "confirmRoleChangeDescription": "Role uživatele {email} se změní z {oldRole} na {newRole}.",

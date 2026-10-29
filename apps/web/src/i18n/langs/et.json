@@ -4704,6 +4704,7 @@
       "tokenHelp": "Saadaolevad märgendid: '{'SEQ'}' (järjekorranumber), '{'YYYY'}' (aasta), '{'YY'}' (2-kohaline aasta), '{'MM'}' (kuu)"
     },
     "members": {
+      "billingAccess": "Arveldusandmete vaatamine",
       "changeRole": "Muuda rolli",
       "changeRoleDescription": "Uuenda kasutaja {email} rolli",
       "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole} → {newRole}.",

@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
@@ -27,6 +28,7 @@ import {
   recalculateInvoiceTotals,
   requireDraftInvoiceForEntryChanges,
 } from "@/api/lib/billing/invoice-lines";
+import { invoiceTotalMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
@@ -302,6 +304,7 @@ const validateAttachmentInputs = async (
 
 const addEntries = createSafeHandler(
   {
+    moneyResponse: invoiceTotalMoneyResponse,
     contract: "patch",
     description:
       "Attach approved, billable, not-yet-invoiced time entries and expenses " +
@@ -313,7 +316,7 @@ const addEntries = createSafeHandler(
       "to the same entries " +
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
-    permissions: { invoice: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

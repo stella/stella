@@ -130,14 +130,18 @@ const loadOrgAIConfigMock = mock(
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
 const { serializeToolResult } = await import("@/api/mcp/tool-utils");
 const finalizeMcpEgress = async (
-  options: Parameters<typeof finalizeToolEgress>[0],
+  options: Omit<Parameters<typeof finalizeToolEgress>[0], "outputSchema">,
 ) =>
   serializeToolResult(
-    await finalizeToolEgress(options, {
-      anonymizeTextFields: anonymizeTextFieldsMock,
-      loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
-      loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
-    }),
+    await finalizeToolEgress(
+      { ...options, outputSchema: undefined },
+      {
+        anonymizeTextFields: anonymizeTextFieldsMock,
+        loadAnonymizationAllowlistCanonicalsByWorkspace:
+          emptyCatalogsByWorkspace,
+        loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
+      },
+    ),
   );
 const { ANONYMIZED_MCP_TOOL_DEFINITIONS } =
   await import("@/api/mcp/static-tool-definitions");

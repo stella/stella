@@ -7,6 +7,7 @@ import {
   booleanFromString,
   numberFromString,
 } from "@stll/api-contract/http-input";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -20,6 +21,7 @@ import {
 import { expenses } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { expenseMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   paginationCursorSchema,
@@ -60,6 +62,7 @@ const readExpensesQuerySchema = v.object({
 });
 
 const config = {
+  moneyResponse: expenseMoneyResponse,
   contract: "patch",
   description:
     "List expenses in a matter, earliest date first, with cursor pagination. " +
@@ -67,7 +70,7 @@ const config = {
     "(dateFrom/dateTo, ISO YYYY-MM-DD), status, category, and billable. Each " +
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
-  permissions: { workspace: ["read"] },
+  permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {

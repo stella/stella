@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { type InvoiceTotals, quantityText } from "@stll/invoicing";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceLines } from "@/api/db/schema";
@@ -23,6 +24,7 @@ import {
   tVatRateBps,
   tVatTreatment,
 } from "@/api/lib/billing/invoice-lines";
+import { invoiceLineMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   minorUnitAmountSchema,
@@ -75,6 +77,7 @@ const changesLineAmount = (changed: LineAmountPatch, line: StoredLineAmount) =>
 
 const updateInvoiceLine = createSafeHandler(
   {
+    moneyResponse: invoiceLineMoneyResponse,
     contract: "patch",
     description:
       "Change one line of a draft invoice and recompute its totals. Any line " +
@@ -85,7 +88,7 @@ const updateInvoiceLine = createSafeHandler(
       "snapshotted quantity, unit, and price; its description and VAT may change. Omitted fields stay " +
       "unchanged. Only drafts that have never been issued can be edited; " +
       "issued invoices require a credit note, even after reverting to draft.",
-    permissions: { invoice: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

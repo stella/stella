@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { classifyFailure } from "@stll/errors";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
@@ -72,11 +74,12 @@ const invoiceRenderRejection = ({
 };
 
 const config = {
+  moneyResponse: moneyExportSchema,
   contract: "patch",
   contentDelivery: { type: "audited" },
   description:
     "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
-  permissions: { workspace: ["read"] },
+  permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   access: "write",

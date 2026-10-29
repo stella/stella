@@ -810,6 +810,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/workspaces/:workspaceId/unarchive": "crud",
   "POST /v1/workspaces/:workspaceId/workflow/start": "crud",
   "POST /v1/workspaces/:workspaceId/workflow/target-count": "crud",
+  "PUT /v1/organization-settings/members/:memberId/billing-access": "crud",
   "PUT /v1/billing-codes/:workspaceId": "crud",
   "PUT /v1/case/research/columns/order": "crud",
   "PUT /v1/clause-categories": "crud",

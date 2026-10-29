@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { PlusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -20,6 +21,7 @@ import { cn } from "@stll/ui/utils";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { ensureMemberPermission } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
@@ -31,6 +33,10 @@ export const Route = createFileRoute(
 )({
   beforeLoad: async ({ context, params }) => {
     if (
+      !(await ensureMemberPermission({
+        queryClient: context.queryClient,
+        permissions: BILLING_READ_PERMISSION,
+      })) ||
       !(await isTimeBillingRouteEnabled(context.queryClient, {
         userId: context.user.id,
         organizationId: context.user.activeOrganizationId,

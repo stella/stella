@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { billingArrangements } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -12,6 +13,7 @@ import {
   readBillingUsage,
   recordBillingCapCrossings,
 } from "@/api/lib/billing/arrangements";
+import { updatedArrangementMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { minorUnitAmountSchema } from "@/api/lib/custom-schema";
 import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,6 +21,7 @@ import { cents } from "@/api/lib/money";
 
 const updateBillingArrangement = createSafeHandler(
   {
+    moneyResponse: updatedArrangementMoneyResponse,
     contract: "replace",
     precondition: {
       type: "deferred",
@@ -26,7 +29,7 @@ const updateBillingArrangement = createSafeHandler(
     },
     description:
       "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
-    permissions: { rate: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,

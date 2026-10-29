@@ -477,6 +477,7 @@ export const createApprovalHarness = ({
         pinServerValidatedWorkspaceId: (workspaceId) =>
           accessibleIds.has(workspaceId),
         role: authorization.role,
+        billingAccess: authorization.billingAccess,
         safeDb: asTestRaw<SafeDb>(
           createMembershipSafeDb(testDb, databaseIdentity),
         ),

@@ -3,6 +3,7 @@ import { Suspense, useState } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -13,6 +14,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { ensureMemberPermission } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import {
@@ -30,6 +32,10 @@ export const Route = createFileRoute(
 )({
   beforeLoad: async ({ context, params }) => {
     if (
+      !(await ensureMemberPermission({
+        queryClient: context.queryClient,
+        permissions: BILLING_READ_PERMISSION,
+      })) ||
       !(await isTimeBillingRouteEnabled(context.queryClient, {
         userId: context.user.id,
         organizationId: context.user.activeOrganizationId,

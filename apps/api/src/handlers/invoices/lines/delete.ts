@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { InvoiceTotals } from "@stll/invoicing";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -20,6 +21,7 @@ import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
+import { invoiceLineMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
@@ -34,13 +36,14 @@ type DeletedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
 const deleteInvoiceLine = createSafeHandler(
   {
+    moneyResponse: invoiceLineMoneyResponse,
     contract: "patch",
     description:
       "Remove one line from a draft invoice and recompute its totals. A time " +
       "entry or expense line returns its entry to approved, unbilled status, " +
       "so it can be billed again. Only never-issued drafts can be edited; " +
       "issued invoices require a credit note even after reverting to draft.",
-    permissions: { invoice: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -31,6 +32,7 @@ import {
   tVatRateBps,
   tVatTreatment,
 } from "@/api/lib/billing/invoice-lines";
+import { invoiceLineMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -189,6 +191,7 @@ const readInvoiceLineDraft = async (
 
 const createInvoiceLine = createSafeHandler(
   {
+    moneyResponse: invoiceLineMoneyResponse,
     contract: "patch",
     description:
       "Add one line to a draft invoice and recompute its totals. The source " +
@@ -198,7 +201,7 @@ const createInvoiceLine = createSafeHandler(
       "entry and marks the entry billed. Every line carries a VAT rate in " +
       "basis points and a VAT treatment. Only never-issued drafts accept lines; " +
       "issued invoices require a credit note even after reverting to draft.",
-    permissions: { invoice: ["update"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,

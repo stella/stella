@@ -4704,6 +4704,7 @@
       "tokenHelp": "الرموز المتاحة: '{'SEQ'}' (التسلسل)، '{'YYYY'}' (السنة)، '{'YY'}' (السنة بخانتين)، '{'MM'}' (الشهر)"
     },
     "members": {
+      "billingAccess": "الاطلاع على بيانات الفوترة",
       "changeRole": "تغيير الدور",
       "changeRoleDescription": "تحديث دور {email}",
       "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole} إلى {newRole}.",

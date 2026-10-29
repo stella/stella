@@ -388,6 +388,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
+| `organization-settings.members.billing-access.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings members-billing-access-update` |
 | `organization-settings.practice-jurisdictions.update` | write | stella:admin_write | — | curated tool `set_practice_jurisdictions` |
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
 | `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |

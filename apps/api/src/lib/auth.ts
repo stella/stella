@@ -32,7 +32,10 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
-import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import {
+  BETTER_AUTH_ORGANIZATION_OPTIONS,
+  BILLING_ACCESS_MEMBER_FIELDS,
+} from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { ac, assignableRoles, roles } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
@@ -71,8 +74,12 @@ import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
-import { createAuditRecorder } from "@/api/lib/audit-log";
-import type { AuditExecutionContext } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
+import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import {
   AUTH_DATABASE_ADAPTER_OPTIONS,
   AUTH_DATABASE_ID_OPTIONS,
@@ -255,7 +262,10 @@ import {
   hasAccountForProvider,
   hasCredentialAccount,
 } from "@/api/lib/db/account-row";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockMemberBillingAccessRows,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import {
   resolveWorkspaceMemberAccess,
   resolveWorkspaceMemberAuthority,
@@ -274,7 +284,7 @@ import {
 } from "@/api/lib/email/email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
@@ -314,7 +324,11 @@ import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  hasManagementPermission,
+  sessionMemberRole as memberSessionAuthority,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import {
   AUTH_FRAMEWORK_BUDGET_RULES,
   observeFrameworkAuthStorage,
@@ -1729,6 +1743,7 @@ export const createAuth = (
 
   const organizationPlugin = organization({
     ...BETTER_AUTH_ORGANIZATION_OPTIONS,
+    schema: { member: { additionalFields: BILLING_ACCESS_MEMBER_FIELDS } },
     ac,
     roles,
     organizationHooks: {
@@ -2895,6 +2910,7 @@ const getSessionAndMemberAuthorization = async ({
 
           return {
             role: authorization.role,
+            billingAccess: authorization.billingAccess,
             workspace: authorization.workspace,
             email: authorization.email,
             emailVerified: authorization.emailVerified,
@@ -3079,6 +3095,7 @@ export const resolveMemberAuthorization = async (
       .select({
         memberId: member.id,
         role: member.role,
+        billingAccess: member.billingAccess,
         email: authUser.email,
         ...featureAccessColumns(organizationId),
         ...professionalUseColumns,
@@ -3103,6 +3120,7 @@ export const resolveMemberAuthorization = async (
           memberId: row.memberId,
           email: row.email,
           role: row.role,
+          billingAccess: row.billingAccess,
           workspace: null,
           emailVerified: row.emailVerified,
           userDeleted: row.userDeleted,
@@ -3117,6 +3135,7 @@ export const resolveMemberAuthorization = async (
       memberId: member.id,
       email: authUser.email,
       role: member.role,
+      billingAccess: member.billingAccess,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
       ...featureAccessColumns(organizationId),
@@ -3160,6 +3179,7 @@ export const resolveMemberAuthorization = async (
       memberId: row.memberId,
       email: row.email,
       role: row.role,
+      billingAccess: row.billingAccess,
       workspace: null,
       ...featureFacts,
     };
@@ -3169,6 +3189,7 @@ export const resolveMemberAuthorization = async (
     memberId: row.memberId,
     email: row.email,
     role: row.role,
+    billingAccess: row.billingAccess,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
     ...featureFacts,
   };
@@ -3510,6 +3531,7 @@ type ResolvedIdentity = {
   authorization: { role: MemberRole } & Pick<
     MemberAuthorization,
     | "workspace"
+    | "billingAccess"
     | "email"
     | "emailVerified"
     | "userDeleted"
@@ -3752,7 +3774,7 @@ const resolveValidateAuth = async ({
       return panic("Unhandled professional-use state");
   }
   const { role } = authorization;
-  const memberRole = sessionMemberRole(role);
+  const memberRole = sessionMemberRole(role, authorization.billingAccess);
   // Feature access comes from the member lookup above, so gated routes and
   // handlers reuse it instead of resolving it with queries of their own.
   const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
@@ -4069,3 +4091,81 @@ export const issueDesktopAccountGrant = async (
 export const claimDesktopAccountGrant = async (
   options: Omit<ConsumeDesktopLinkGrantOptions, "db">,
 ) => await consumeDesktopLinkGrant({ ...options, db: rootDb });
+
+type SetMemberBillingAccessOptions = {
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  targetMemberId: string;
+  database?: Pick<typeof rootDb, "transaction">;
+  billingAccess: boolean;
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Membership writes use the auth owner connection; the application role cannot update this column. */
+export const setMemberBillingAccess = async ({
+  organizationId,
+  actorUserId,
+  targetMemberId,
+  database = rootDb,
+  billingAccess,
+  recordAuditEvent,
+}: SetMemberBillingAccessOptions) =>
+  (
+    await Result.tryPromise({
+      try: async () =>
+        await withAggregateTransaction(database, async (tx) => {
+          const rows = await lockMemberBillingAccessRows({
+            tx,
+            organizationId,
+            actorUserId,
+            targetMemberId,
+          });
+          const actor = rows.find((row) => row.userId === actorUserId);
+          if (
+            !actor ||
+            !isMemberRole(actor.role) ||
+            !hasManagementPermission(
+              memberSessionAuthority(actor.role, actor.billingAccess),
+              { member: ["update"] },
+            )
+          ) {
+            return Result.err(
+              new HandlerError({ status: 403, message: "Forbidden" }),
+            );
+          }
+          const target = rows.find((row) => row.id === targetMemberId);
+          if (!target) {
+            return Result.err(
+              new HandlerError({ status: 404, message: "Member not found" }),
+            );
+          }
+          if (target.billingAccess === billingAccess) {
+            return Result.ok({ memberId: target.id, billingAccess });
+          }
+          await tx
+            .update(member)
+            .set({ billingAccess })
+            .where(
+              and(
+                eq(member.id, target.id),
+                eq(member.organizationId, organizationId),
+              ),
+            );
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: organizationId,
+            changes: {
+              billingAccess: { old: target.billingAccess, new: billingAccess },
+            },
+            metadata: { field: "memberBillingAccess", memberId: target.id },
+          });
+          return Result.ok({ memberId: target.id, billingAccess });
+        }),
+      catch: (cause) =>
+        new DatabaseError({
+          message: "Unable to update member billing access",
+          cause,
+        }),
+    })
+  ).andThen((result) => result);

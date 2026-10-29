@@ -39,6 +39,7 @@ export const resolveCredentialMemberExecutionContext = async ({
     ...workspaceAccess,
     featureAccessSnapshot,
     role: authorization.role,
+    billingAccess: authorization.billingAccess,
     safeDb,
     scopedDb,
     userEmail: authorization.email,

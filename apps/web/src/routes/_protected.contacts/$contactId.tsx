@@ -121,7 +121,11 @@ function ContactDetailPage() {
   );
   const deleteContact = useDeleteContact();
   const [invoiceComposerOpen, setInvoiceComposerOpen] = useState(false);
-  const canCreateInvoice = usePermissions({ invoice: ["create"] });
+  const canCreateInvoice = usePermissions({
+    invoice: ["create"],
+    billing: ["read"],
+  });
+  const canReadBilling = usePermissions({ billing: ["read"] });
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -323,20 +327,24 @@ function ContactDetailPage() {
                 value={contact.vatId}
               />
               <VatPayerSelect contact={contact} />
-              <EditableRow
-                // A draft is typed in one currency's units; a currency change
-                // remounts the row; its commit guard discards the old draft.
-                key={`default-hourly-rate-${contact.currency ?? "none"}`}
-                contact={contact}
-                field="defaultHourlyRate"
-                label={t("contacts.fields.defaultHourlyRate")}
-              />
-              <EditableRow
-                contact={contact}
-                field="currency"
-                label={t("common.currency")}
-                value={contact.currency}
-              />
+              {canReadBilling && (
+                <EditableRow
+                  // A draft is typed in one currency's units; a currency change
+                  // remounts the row; its commit guard discards the old draft.
+                  key={`default-hourly-rate-${contact.currency ?? "none"}`}
+                  contact={contact}
+                  field="defaultHourlyRate"
+                  label={t("contacts.fields.defaultHourlyRate")}
+                />
+              )}
+              {canReadBilling && (
+                <EditableRow
+                  contact={contact}
+                  field="currency"
+                  label={t("common.currency")}
+                  value={contact.currency}
+                />
+              )}
               <EditableRow
                 contact={contact}
                 field="paymentTermDays"

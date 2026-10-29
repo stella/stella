@@ -105,7 +105,7 @@ type FetchTimeEntriesOptions = {
 };
 
 type BrowserTimeEntry = Omit<TimeEntry, "rateAtEntry"> & {
-  rateAtEntry: CentsAmount;
+  rateAtEntry: CentsAmount | null;
 };
 
 type BrowserTimeEntryListPage = Omit<TimeEntryListPage, "items"> & {
@@ -127,7 +127,10 @@ export const fetchTimeEntries = async ({
   return {
     ...page,
     items: page.items.map((entry) =>
-      Object.assign(entry, { rateAtEntry: cents(entry.rateAtEntry) }),
+      Object.assign(entry, {
+        rateAtEntry:
+          entry.rateAtEntry === null ? null : cents(entry.rateAtEntry),
+      }),
     ),
   };
 };

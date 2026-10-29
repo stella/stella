@@ -6,6 +6,10 @@ import {
 import { type GenericSchema, safeParse } from "valibot";
 
 import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
+import {
+  MONEY_SCHEMA_BRAND,
+  MONEY_SCHEMA_KEYWORD,
+} from "@stll/api-contract/billing-money";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
@@ -105,6 +109,17 @@ const uniqueItemsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
     ? { ...jsonSchema, uniqueItems: true }
     : undefined;
 
+/** Money's nominal schema action also publishes its financial classification. */
+const moneyBrandAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) =>
+  valibotAction.type === "brand" &&
+  "name" in valibotAction &&
+  valibotAction.name === MONEY_SCHEMA_BRAND
+    ? { ...jsonSchema, [MONEY_SCHEMA_KEYWORD]: true }
+    : undefined;
+
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
 export type { JsonSchema };
@@ -130,6 +145,7 @@ export const toJsonSchema = (
   convertToJsonSchema(schema, {
     ...config,
     overrideAction: (context) =>
+      moneyBrandAction(context) ??
       stripInternalMetadata(context) ??
       keepUnicodePatternSource(context) ??
       uniqueItemsAction(context) ??
@@ -279,6 +295,7 @@ export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
         return carried;
       }
       return (
+        moneyBrandAction(context) ??
         stripRouteInternalMetadata(context) ??
         keepUnicodePatternSource(context) ??
         uniqueItemsAction(context) ??

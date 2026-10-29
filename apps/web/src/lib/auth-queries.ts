@@ -5,9 +5,12 @@ import {
 } from "@tanstack/react-query";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+import { memberHasPermissions } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
 import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
+import { ensureRouteQueryData } from "@/lib/react-query";
 
 export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 
@@ -63,6 +66,47 @@ export const roleOptions = queryOptions({
   },
   staleTime: STALE_TIME.FIVE.MINUTES,
 });
+
+/** The additional membership grant is read only when role grants do not decide the operation. */
+export const activeMemberOptions = queryOptions({
+  queryKey: ["active-organization-member"],
+  retry: BOOT_QUERY_RETRY,
+  queryFn: async () => {
+    const [{ authClient }, { toAuthClientError }] = await Promise.all([
+      import("@/lib/auth-client"),
+      import("@/lib/errors/auth"),
+    ]);
+    const result = await authClient.organization.getActiveMember();
+    if (result.error) {
+      throw toAuthClientError(result.error);
+    }
+    return result.data;
+  },
+  staleTime: STALE_TIME.FIVE.MINUTES,
+});
+
+type EnsureMemberPermissionOptions = {
+  queryClient: QueryClient;
+  permissions: PermissionInput;
+};
+export const ensureMemberPermission = async ({
+  queryClient,
+  permissions,
+}: EnsureMemberPermissionOptions) => {
+  const role = await ensureRouteQueryData(queryClient, roleOptions);
+  if (memberHasPermissions({ role, billingAccess: false, permissions })) {
+    return true;
+  }
+  if (!permissions.billing?.includes("read")) {
+    return false;
+  }
+  const member = await ensureRouteQueryData(queryClient, activeMemberOptions);
+  return memberHasPermissions({
+    role: member.role,
+    billingAccess: member.billingAccess,
+    permissions,
+  });
+};
 
 /** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
 export const refreshAuthQueries = async (queryClient: QueryClient) => {

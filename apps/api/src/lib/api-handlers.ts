@@ -5,7 +5,10 @@ import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { Money } from "@stll/api-contract/billing-money";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import type { CentsAmount } from "@stll/money";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -45,6 +48,7 @@ import type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
+import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
@@ -451,6 +455,8 @@ export type HandlerConfig = InputSchema &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
+    /** Money-only response schema; the common egress checks it on every transport. */
+    moneyResponse?: AnySchema;
     permissions: PermissionInput;
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
@@ -1159,6 +1165,78 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
   : never;
 
+/** Bounded recursion keeps the handler boundary from erasing monetary result types. */
+type ContainsMoney<T, Depth extends readonly unknown[] = []> = unknown extends T
+  ? false
+  : Depth["length"] extends 8
+    ? false
+    : T extends CentsAmount | Money
+      ? true
+      : T extends
+            | string
+            | number
+            | boolean
+            | bigint
+            | null
+            | undefined
+            | Date
+            | Response
+        ? false
+        : T extends readonly (infer Item)[]
+          ? ContainsMoney<Item, [...Depth, unknown]>
+          : T extends object
+            ? {
+                [K in keyof T]: ContainsMoney<T[K], [...Depth, unknown]>;
+              }[keyof T]
+            : false;
+
+type MoneyShapeMatches<
+  T,
+  Schema,
+  Depth extends readonly unknown[] = [],
+> = Depth["length"] extends 8
+  ? true
+  : true extends ContainsMoney<T>
+    ? Schema extends { readonly wrapped: infer Wrapped }
+      ? MoneyShapeMatches<T, Wrapped, Depth>
+      : NonNullable<T> extends CentsAmount | Money
+        ? Schema extends v.GenericSchema
+          ? NonNullable<v.InferOutput<Schema>> extends Money
+            ? true
+            : false
+          : false
+        : NonNullable<T> extends readonly (infer Item)[]
+          ? Schema extends { readonly item: infer ItemSchema }
+            ? MoneyShapeMatches<Item, ItemSchema, [...Depth, unknown]>
+            : false
+          : Schema extends { readonly entries: infer Entries }
+            ? false extends {
+                [K in keyof NonNullable<T>]: true extends ContainsMoney<
+                  NonNullable<T>[K]
+                >
+                  ? K extends keyof Entries
+                    ? MoneyShapeMatches<
+                        NonNullable<T>[K],
+                        Entries[K],
+                        [...Depth, unknown]
+                      >
+                    : false
+                  : true;
+              }[keyof NonNullable<T>]
+              ? false
+              : true
+            : false
+    : true;
+
+type MoneyResponseGuard<TConfig, TResult> =
+  true extends ContainsMoney<TResult>
+    ? TConfig extends { moneyResponse: infer Schema }
+      ? MoneyShapeMatches<TResult, Schema> extends true
+        ? unknown
+        : { unclassifiedMoneyFields: never }
+      : { moneyResponseSchemaRequired: never }
+    : unknown;
+
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
   actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
 }
@@ -1636,6 +1714,15 @@ const createSafeScopedHandler = <
             // Response state belongs to the request; handler data belongs to this execution.
             await runCheckedScopedHandler(operation, usageLane, ctx.set),
         );
+        if (
+          !hasMemberPermission(memberRole, BILLING_READ_PERMISSION) &&
+          hasVisibleMoney(config.moneyResponse, result)
+        ) {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
+          });
+        }
         // The transaction has settled; realtime delivery cannot change its result.
         if (
           config.realtime !== undefined &&
@@ -2097,7 +2184,8 @@ export const createSafeRootHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
-    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+    ConfiguredFiniteHandlerGuard<TConfig, TResult> &
+    NoInfer<MoneyResponseGuard<TConfig, TResult>>,
   dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
   const core = createSafeScopedHandler("member", config, handler, dependencies);
@@ -2110,7 +2198,8 @@ export const createSafeHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
-    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+    ConfiguredFiniteHandlerGuard<TConfig, TResult> &
+    NoInfer<MoneyResponseGuard<TConfig, TResult>>,
   dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<
   TConfig,

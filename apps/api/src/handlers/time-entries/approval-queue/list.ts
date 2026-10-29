@@ -5,11 +5,13 @@ import * as v from "valibot";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { numberFromString } from "@stll/api-contract/http-input";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { parsePlainDate } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { timeEntryPageMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   selectTimekeeperNames,
@@ -32,6 +34,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type {
   UnbackedProjectionKeys,
@@ -219,6 +222,7 @@ const readQueuePage = async (
 
 const listApprovalQueue = createSafeRootHandler(
   {
+    moneyResponse: timeEntryPageMoneyResponse,
     contract: "patch",
     description:
       "List submitted time entries awaiting the signed-in user's approval, including internal work and accessible client matters; drafts a timekeeper has not submitted never appear. Owners/admins also see entries without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Each item carries the timekeeper's and matter's names, logged durationMinutes separately from adjusted billedMinutes, the rate, and the last return comment. pendingCount counts the matching entries up to 1000. Follow nextCursor for the next bounded page.",
@@ -325,7 +329,15 @@ const listApprovalQueue = createSafeRootHandler(
           }),
       ),
     );
-    return Result.ok(queue);
+    return Result.ok({
+      ...queue,
+      items: queue.items.map((item) => ({
+        ...item,
+        rateAtEntry: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+          ? item.rateAtEntry
+          : null,
+      })),
+    });
   },
 );
 export default listApprovalQueue;

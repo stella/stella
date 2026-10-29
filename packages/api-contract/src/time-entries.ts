@@ -142,7 +142,7 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
     typeof input.narrative !== "string" ||
     !isNullableString(input.narrativeLanguage) ||
     typeof input.noCharge !== "boolean" ||
-    !isInteger(input.rateAtEntry) ||
+    (input.rateAtEntry !== null && !isInteger(input.rateAtEntry)) ||
     !isNullableString(input["returnComment"]) ||
     !isTimeEntrySource(input.source) ||
     !isTimeEntryStatus(input.status) ||

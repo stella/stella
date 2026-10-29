@@ -21,6 +21,7 @@ const PERSONAL_WRITE_SCOPES = {
   workspace: ["stella:matters_write"],
   contact: ["stella:contacts_write"],
   invoice: null,
+  billing: null,
   template: null,
   styleSet: null,
   clause: ["stella:knowledge_write"],
@@ -63,11 +64,27 @@ const PERSONAL_SEARCH_HISTORY_ACTION_SCOPES = {
 const historyActionScopes = new Map(
   Object.entries(PERSONAL_SEARCH_HISTORY_ACTION_SCOPES),
 );
+const billingActionScopes = new Map(
+  Object.entries({
+    read: ["stella:read"],
+  } as const satisfies Record<
+    (typeof statements)["billing"][number],
+    readonly PersonalApiKeyScope[]
+  >),
+);
+
 const permissionScopeAllows = (
   resource: string,
   action: string,
   scopes: readonly PersonalApiKeyScope[],
 ) => {
+  if (resource === "billing") {
+    return (
+      billingActionScopes
+        .get(action)
+        ?.some((scope) => scopes.includes(scope)) ?? false
+    );
+  }
   if (resource === "searchHistory") {
     return (
       historyActionScopes

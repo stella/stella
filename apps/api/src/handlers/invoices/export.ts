@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
@@ -51,11 +53,12 @@ const exportInvoicesBody = v.object({
 export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
   createSafeHandler(
     {
+      moneyResponse: moneyExportSchema,
       contract: "patch",
       contentDelivery: { type: "audited" },
       description:
         "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC, UBL (EN 16931), Peppol BIS Billing 3.0 for Slovak sellers or Polish KSeF FA(3) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection; one export holds at most 500 invoices. Refused when a format cannot hold the data. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
-      permissions: { workspace: ["read"] },
+      permissions: { ...BILLING_READ_PERMISSION, workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       featureAccess: { featureId: "time-billing", type: "required" },
       access: "write",

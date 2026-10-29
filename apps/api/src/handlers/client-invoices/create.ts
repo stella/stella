@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, inArray, max } from "drizzle-orm";
 import * as v from "valibot";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
+
 import { resultTx } from "@/api/db/safe-db";
 import { expenses, invoices, timeEntries, workspaces } from "@/api/db/schema";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -18,6 +20,7 @@ import {
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
+import { invoiceTotalMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
@@ -34,9 +37,10 @@ import { validateClientInvoiceSelection } from "./selection";
 
 const createClientInvoice = createSafeRootHandler(
   {
+    moneyResponse: invoiceTotalMoneyResponse,
     contract: "patch",
     description: `Create one client draft from approved unbilled hourly work across selected matters. Every matter must belong to the client and be accessible. No partial invoice is returned. At most ${LIMITS.invoiceLinesPerInvoice} lines across ${LIMITS.clientInvoiceMatters} matters. Select the returned workspaceId as the matterId for invoices.get, finalize and PDF export. For line edits, use that line's workspaceId from invoices.get. Line overrides edit the invoice only, through invoices.lines.update.`,
-    permissions: { invoice: ["create"] },
+    permissions: { ...BILLING_READ_PERMISSION, invoice: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

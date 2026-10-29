@@ -227,6 +227,7 @@ describe("resolveMemberAuthorization", () => {
     );
 
     expect(authorization).toEqual({
+      billingAccess: false,
       memberId: expect.any(String),
       email: `${ownerInFull}@test.local`,
       role: "owner",
@@ -244,6 +245,7 @@ describe("resolveMemberAuthorization", () => {
       testDb,
     );
     expect(authorization).toEqual({
+      billingAccess: false,
       memberId: expect.any(String),
       email: `${loneMemberInFull}@test.local`,
       role: "member",

@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
+
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -9,10 +11,14 @@ import {
   createInvoiceInput,
   invoiceCreationError,
 } from "@/api/lib/billing/invoice-create-operation";
+import { createdInvoiceMoneyResponse } from "@/api/lib/billing/response-schemas";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const createInvoice = createSafeHandler(
   {
     contract: "patch",
+    moneyResponse: createdInvoiceMoneyResponse,
     description:
       "Create a draft invoice from approved, not-yet-invoiced client time " +
       "entries in a matter, marking them billed. Hourly invoices require " +
@@ -52,6 +58,14 @@ const createInvoice = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    if (
+      body.expectedTotalAmount !== undefined &&
+      !hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+    ) {
+      return Result.err(
+        new HandlerError({ status: 403, message: "Forbidden" }),
+      );
+    }
     const result = yield* Result.await(
       resultTx(
         safeDb,
@@ -67,7 +81,12 @@ const createInvoice = createSafeHandler(
           }),
       ).then((txResult) => txResult.mapError(invoiceCreationError)),
     );
-    return Result.ok(result);
+    return Result.ok({
+      ...result,
+      totalAmount: hasMemberPermission(memberRole, BILLING_READ_PERMISSION)
+        ? result.totalAmount
+        : null,
+    });
   },
 );
 

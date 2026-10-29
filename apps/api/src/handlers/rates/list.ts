@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -42,7 +43,7 @@ const readRateTables = createSafeHandler(
       "rate lines it holds. Use rates.entries.list for the lines themselves " +
       "and rates.resolve for the rate that actually applies to a user on a " +
       "date.",
-    permissions: { rate: ["read"] },
+    permissions: BILLING_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

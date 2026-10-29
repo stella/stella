@@ -5,12 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { tryToMinorUnits } from "@stll/money";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
   Select,
@@ -26,15 +25,13 @@ import {
   submittedRateCents,
 } from "@/components/billing/amount-input.logic";
 import { DurationInput } from "@/components/billing/duration-input";
-import {
-  DEFAULT_CURRENCY,
-  formatCurrencyAmount,
-} from "@/components/billing/format-currency";
+import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -42,6 +39,8 @@ import { queryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
+
+import { TimeEntryRateFields } from "./time-entry-rate-fields";
 
 export type TimeEntryFormValues = {
   matterId: string;
@@ -60,7 +59,9 @@ export type TimeEntryFormValues = {
 type TimeEntryFormProps = {
   workspaceId: string;
   userId: string;
-  defaultValues?: Partial<TimeEntryFormValues>;
+  defaultValues?: Partial<Omit<TimeEntryFormValues, "rateAtEntry">> & {
+    rateAtEntry?: number | null;
+  };
   onSubmit: (values: TimeEntryFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
@@ -117,16 +118,23 @@ const initialTimeEntryValues = (
 const loadedItems = <TData, TError>(view: QueryView<TData, TError>) =>
   view.type === "items" ? view.items : undefined;
 
-export const TimeEntryForm = ({
+type TimeEntryFormStateOptions = Pick<
+  TimeEntryFormProps,
+  "workspaceId" | "userId" | "onSubmit"
+> & {
+  defaultValues: TimeEntryFormProps["defaultValues"];
+  contextState: NonNullable<TimeEntryFormProps["contextState"]>;
+};
+
+const useTimeEntryFormState = ({
   workspaceId,
   userId,
   defaultValues,
   onSubmit,
-  onCancel,
-  submitLabel,
   contextState = "available",
-}: TimeEntryFormProps) => {
+}: TimeEntryFormStateOptions) => {
   const t = useTranslations();
+  const canReadBilling = usePermissions(BILLING_READ_PERMISSION);
   const [rateOverride, setRateOverride] = useState(
     () => (defaultValues?.rateAtEntry ?? 0) > 0,
   );
@@ -168,9 +176,11 @@ export const TimeEntryForm = ({
 
   const dateWorked = useSelector(form.store, (s) => s.values.dateWorked);
 
-  const resolvedQuery = useQuery(
-    resolvedRateOptions(workspaceId, userId, dateWorked),
-  );
+  const resolvedOptions = resolvedRateOptions(workspaceId, userId, dateWorked);
+  const resolvedQuery = useQuery({
+    ...resolvedOptions,
+    enabled: canReadBilling && (resolvedOptions.enabled ?? true),
+  });
   const resolvedView = queryView(resolvedQuery);
   const resolved = loadedItems(resolvedView);
 
@@ -202,6 +212,120 @@ export const TimeEntryForm = ({
       ) || rateInputValue !== initialRateInput(defaultValues),
   }));
 
+  return {
+    t,
+    canReadBilling,
+    rateOverride,
+    setRateOverride,
+    rateInputValue,
+    setRateInputValue,
+    form,
+    taskCodesView,
+    taskCodes,
+    activityCodesView,
+    activityCodes,
+    resolvedView,
+    currentRate,
+    narrativeLanguage,
+    currentCurrency,
+    formErrors,
+    dirty,
+  };
+};
+
+type BillingCodeSelectProps = {
+  codes: readonly { id: string; code: string; label: string }[];
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+const BillingCodeSelect = ({
+  codes,
+  label,
+  value,
+  onChange,
+}: BillingCodeSelectProps) => (
+  <div className="flex flex-col gap-1.5">
+    <Label>{label}</Label>
+    <Select
+      onValueChange={(nextValue) => onChange(nextValue ?? "")}
+      value={value || null}
+    >
+      <SelectTrigger size="sm">
+        <SelectValue placeholder={label} />
+      </SelectTrigger>
+      <SelectPopup>
+        {codes.map((code) => (
+          <SelectItem
+            key={code.id}
+            value={code.code}
+          >{`${code.code} — ${code.label}`}</SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  </div>
+);
+
+type TimeEntryFormActionsProps = {
+  onCancel: (() => void) | undefined;
+  label: string;
+  disabled: boolean;
+};
+const TimeEntryFormActions = ({
+  onCancel,
+  label,
+  disabled,
+}: TimeEntryFormActionsProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex justify-end gap-2">
+      {onCancel && (
+        <Button onClick={onCancel} type="button" variant="outline">
+          {t("common.cancel")}
+        </Button>
+      )}
+      <Button type="submit" disabled={disabled}>
+        {label}
+      </Button>
+    </div>
+  );
+};
+
+export const TimeEntryForm = ({
+  workspaceId,
+  userId,
+  defaultValues,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  contextState = "available",
+}: TimeEntryFormProps) => {
+  const {
+    t,
+    canReadBilling,
+    rateOverride,
+    setRateOverride,
+    rateInputValue,
+    setRateInputValue,
+    form,
+    taskCodesView,
+    taskCodes,
+    activityCodesView,
+    activityCodes,
+    resolvedView,
+    currentRate,
+    narrativeLanguage,
+    currentCurrency,
+    formErrors,
+    dirty,
+  } = useTimeEntryFormState({
+    workspaceId,
+    userId,
+    defaultValues,
+    onSubmit,
+    contextState,
+  });
   return (
     <Form
       dirty={dirty}
@@ -215,7 +339,7 @@ export const TimeEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!rateOverride && resolvedView.type !== "items") {
+        if (canReadBilling && !rateOverride && resolvedView.type !== "items") {
           return;
         }
         detached(form.handleSubmit(), "time-entry-form.submit");
@@ -223,7 +347,7 @@ export const TimeEntryForm = ({
     >
       <QueryViewFeedback view={taskCodesView} />
       <QueryViewFeedback view={activityCodesView} />
-      <QueryViewFeedback view={resolvedView} />
+      {canReadBilling && <QueryViewFeedback view={resolvedView} />}
       <div className="flex flex-col gap-1.5">
         <form.Field name="matterId">
           {(field) => (
@@ -273,65 +397,19 @@ export const TimeEntryForm = ({
         </div>
       </div>
 
-      {/* Rate display / override */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <Label>{t("billing.rates.hourlyRate")}</Label>
-          {!rateOverride && currentRate > 0 && (
-            <button
-              className="text-muted-foreground text-xs underline"
-              onClick={() => setRateOverride(true)}
-              type="button"
-            >
-              {t("billing.rates.override")}
-            </button>
-          )}
-        </div>
-        {rateOverride ? (
-          <div className="flex gap-2">
-            <Input
-              className="flex-1"
-              dir="ltr"
-              inputMode="decimal"
-              onBlur={() => {
-                // Display only: tidy the draft to the places the currency
-                // counts. The draft stays in major units, and the scaling
-                // that reaches the API waits for submit.
-                const rate = tryToMinorUnits({
-                  amount: rateInputValue,
-                  currency: currentCurrency,
-                });
-                if (rate === null) {
-                  return;
-                }
-                setRateInputValue(majorUnitInput(rate, currentCurrency));
-              }}
-              onChange={(e) => setRateInputValue(e.currentTarget.value)}
-              placeholder="350.00"
-              value={rateInputValue}
-            />
-            <form.Field name="currency">
-              {(field) => (
-                <Input
-                  className="w-20"
-                  dir="ltr"
-                  maxLength={3}
-                  onChange={(e) =>
-                    field.handleChange(e.currentTarget.value.toUpperCase())
-                  }
-                  value={field.state.value}
-                />
-              )}
-            </form.Field>
-          </div>
-        ) : (
-          <div className="text-muted-foreground text-sm">
-            {currentRate > 0
-              ? `${formatCurrencyAmount(currentRate, currentCurrency)}${t("billing.rates.perHour")}`
-              : t("billing.rates.noRateFound")}
-          </div>
-        )}
-      </div>
+      {canReadBilling && (
+        <TimeEntryRateFields
+          currency={currentCurrency}
+          rate={currentRate}
+          override={rateOverride}
+          draft={rateInputValue}
+          onOverride={() => setRateOverride(true)}
+          onDraftChange={setRateInputValue}
+          onCurrencyChange={(currency) =>
+            form.setFieldValue("currency", currency)
+          }
+        />
+      )}
 
       <form.Field name="narrative">
         {(field) => (
@@ -364,53 +442,28 @@ export const TimeEntryForm = ({
       </div>
 
       {taskCodes && taskCodes.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <Label>{t("billing.codes.taskCode")}</Label>
-          <form.Field name="taskCode">
-            {(field) => (
-              <Select
-                onValueChange={(value) => field.handleChange(value ?? "")}
-                value={field.state.value || null}
-              >
-                <SelectTrigger size="sm">
-                  <SelectValue placeholder={t("billing.codes.taskCode")} />
-                </SelectTrigger>
-                <SelectPopup>
-                  {taskCodes.map((tc) => (
-                    <SelectItem key={tc.id} value={tc.code}>
-                      {`${tc.code} — ${tc.label}`}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            )}
-          </form.Field>
-        </div>
+        <form.Field name="taskCode">
+          {(field) => (
+            <BillingCodeSelect
+              label={t("billing.codes.taskCode")}
+              codes={taskCodes}
+              value={field.state.value}
+              onChange={field.handleChange}
+            />
+          )}
+        </form.Field>
       )}
-
       {activityCodes && activityCodes.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <Label>{t("billing.codes.activityCode")}</Label>
-          <form.Field name="activityCode">
-            {(field) => (
-              <Select
-                onValueChange={(value) => field.handleChange(value ?? "")}
-                value={field.state.value || null}
-              >
-                <SelectTrigger size="sm">
-                  <SelectValue placeholder={t("billing.codes.activityCode")} />
-                </SelectTrigger>
-                <SelectPopup>
-                  {activityCodes.map((ac) => (
-                    <SelectItem key={ac.id} value={ac.code}>
-                      {`${ac.code} — ${ac.label}`}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            )}
-          </form.Field>
-        </div>
+        <form.Field name="activityCode">
+          {(field) => (
+            <BillingCodeSelect
+              label={t("billing.codes.activityCode")}
+              codes={activityCodes}
+              value={field.state.value}
+              onChange={field.handleChange}
+            />
+          )}
+        </form.Field>
       )}
 
       <form.Field name="billable">
@@ -425,19 +478,13 @@ export const TimeEntryForm = ({
         )}
       </form.Field>
 
-      <div className="flex justify-end gap-2">
-        {onCancel && (
-          <Button onClick={onCancel} type="button" variant="outline">
-            {t("common.cancel")}
-          </Button>
-        )}
-        <Button
-          type="submit"
-          disabled={!rateOverride && resolvedView.type !== "items"}
-        >
-          {submitLabel ?? t("common.save")}
-        </Button>
-      </div>
+      <TimeEntryFormActions
+        onCancel={onCancel}
+        label={submitLabel ?? t("common.save")}
+        disabled={
+          canReadBilling && !rateOverride && resolvedView.type !== "items"
+        }
+      />
     </Form>
   );
 };

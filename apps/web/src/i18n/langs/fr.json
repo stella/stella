@@ -4704,6 +4704,7 @@
       "tokenHelp": "Jetons disponibles : '{'SEQ'}' (séquence), '{'YYYY'}' (année), '{'YY'}' (année à 2 chiffres), '{'MM'}' (mois)"
     },
     "members": {
+      "billingAccess": "Accès aux données de facturation",
       "changeRole": "Modifier le rôle",
       "changeRoleDescription": "Modifier le rôle de {email}",
       "confirmRoleChangeDescription": "Le rôle de {email} passera de {oldRole} à {newRole}.",

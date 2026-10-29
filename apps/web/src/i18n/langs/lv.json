@@ -4704,6 +4704,7 @@
       "tokenHelp": "Pieejamie marķieri: '{'SEQ'}' (kārtas numurs), '{'YYYY'}' (gads), '{'YY'}' (2 ciparu gads), '{'MM'}' (mēnesis)"
     },
     "members": {
+      "billingAccess": "Piekļuve norēķinu datiem",
       "changeRole": "Mainīt lomu",
       "changeRoleDescription": "Atjaunināt lomu lietotājam {email}",
       "confirmRoleChangeDescription": "{email} loma tiks mainīta no {oldRole} uz {newRole}.",

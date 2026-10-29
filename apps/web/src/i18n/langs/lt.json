@@ -4704,6 +4704,7 @@
       "tokenHelp": "Galimos žymos: '{'SEQ'}' (eilės numeris), '{'YYYY'}' (metai), '{'YY'}' (2 skaitmenų metai), '{'MM'}' (mėnuo)"
     },
     "members": {
+      "billingAccess": "Prieiga prie atsiskaitymo duomenų",
       "changeRole": "Keisti rolę",
       "changeRoleDescription": "Atnaujinti rolę naudotojui {email}",
       "confirmRoleChangeDescription": "{email} vaidmuo bus pakeistas iš {oldRole} į {newRole}.",

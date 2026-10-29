@@ -3,10 +3,12 @@ import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { BILLING_READ_PERMISSION } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { rateEntryMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   paginationCursorSchema,
@@ -65,6 +67,7 @@ const decodeRateEntryCursor = (cursor: string): RateEntryCursor | null => {
 
 const readRateEntries = createSafeHandler(
   {
+    moneyResponse: rateEntryMoneyResponse,
     contract: "patch",
     description:
       "List the rate lines of one rate table, earliest effective-from first, " +
@@ -72,7 +75,7 @@ const readRateEntries = createSafeHandler(
       "currency units, its effective dates, and its person or organization role selector " +
       "(both null for the table fallback). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
-    permissions: { rate: ["read"] },
+    permissions: BILLING_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

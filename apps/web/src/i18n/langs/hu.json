@@ -4704,6 +4704,7 @@
       "tokenHelp": "Elérhető tokenek: '{'SEQ'}' (sorszám), '{'YYYY'}' (év), '{'YY'}' (kétjegyű év), '{'MM'}' (hónap)"
     },
     "members": {
+      "billingAccess": "Számlázási adatok megtekintése",
       "changeRole": "Szerepkör módosítása",
       "changeRoleDescription": "Szerepkör frissítése: {email}",
       "confirmRoleChangeDescription": "{email} szerepköre erről: {oldRole} erre módosul: {newRole}.",
