@@ -56,7 +56,7 @@ export const fontFacesOf = (
     const style = /font-style:\s*([\w-]+)/u.exec(body)?.[1];
     const weight = /font-weight:\s*(\d+)/u.exec(body)?.[1];
     const file = /url\(\.\/files\/([\w-]+\.woff2)\)/u.exec(body)?.[1];
-    const unicodeRange = /unicode-range:\s*([^;]+);/u.exec(body)?.[1];
+    const unicodeRange = /unicode-range:\s*([^\s;][^;]*);/u.exec(body)?.[1];
     if (
       family === undefined ||
       style === undefined ||
@@ -66,7 +66,10 @@ export const fontFacesOf = (
     ) {
       return [];
     }
-    const subset = /^[\w-]+?-((?:latin|arabic)(?:-ext)?)-\d+-/u.exec(file)?.[1];
+    // `<package>-<subset>-<weight>-<style>.woff2`
+    const subset = /^((?:latin|arabic)(?:-ext)?)-\d+-/u.exec(
+      file.slice(fontsourcePackage.length + 1),
+    )?.[1];
     if (!SUBSETS.some((wanted) => wanted === subset)) {
       return [];
     }
@@ -118,19 +121,18 @@ export const generateMobileFolioFonts = async (write: boolean) => {
     "@stll/folio-react/editor.css",
   );
   const fromEditor = createRequire(editorCss);
-  const faces: FolioFontFace[] = [];
-  for (const specifier of fontsourceImportsOf(
-    await readFile(editorCss, "utf-8"),
-  )) {
-    const fontsourcePackage = specifier.split("/")[1] ?? "";
-    faces.push(
-      ...fontFacesOf(
-        // oxlint-disable-next-line no-await-in-loop -- a handful of small stylesheets, read in editor.css's order
-        await readFile(fromEditor.resolve(specifier), "utf-8"),
-        fontsourcePackage,
+  // Read together; `Promise.all` keeps editor.css's order.
+  const faces = (
+    await Promise.all(
+      fontsourceImportsOf(await readFile(editorCss, "utf-8")).map(
+        async (specifier) =>
+          fontFacesOf(
+            await readFile(fromEditor.resolve(specifier), "utf-8"),
+            specifier.split("/")[1] ?? "",
+          ),
       ),
-    );
-  }
+    )
+  ).flat();
   return await writeOrCheckArtifacts(
     await formattedArtifactsLikeRepository([
       { path: OUTPUT, contents: renderFolioFonts(faces) },

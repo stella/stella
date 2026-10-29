@@ -86,7 +86,7 @@ const fileUrlSchema = v.object({
 });
 
 /** The document has no file: it was created empty, or its file was removed. */
-export class NoFileError extends TaggedError("NoFileError")<{
+class NoFileError extends TaggedError("NoFileError")<{
   message: string;
 }> {}
 
@@ -104,7 +104,7 @@ export type DocumentFile = {
  * The viewer for a delivered file. A password-protected file opens in Quick
  * Look, which asks for the password; neither folio nor the app can.
  */
-export const documentFileOf = (
+const documentFileOf = (
   delivered: v.InferOutput<typeof fileUrlSchema>,
 ): DocumentFile => ({
   fileName: delivered.fileName,
@@ -119,7 +119,7 @@ export const documentFileOf = (
  * answers 400 when it has nothing to show for a type, such as an image or a
  * file it has not converted yet, and Quick Look may still show the original.
  */
-export const fallsBackToDownload = (error: ApiError): boolean =>
+const fallsBackToDownload = (error: ApiError): boolean =>
   error._tag === "ApiRequestError" && error.status === 400;
 
 /** Whether a request failed before any server answered: no connection. */

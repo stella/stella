@@ -3,7 +3,7 @@
  * slices of base64, each one bridge message. A slice is a multiple of three
  * bytes, so each encodes to whole base64 groups and decodes on its own.
  */
-export const CHUNK_BYTES = 3 * 256 * 1024;
+const CHUNK_BYTES = 3 * 256 * 1024;
 
 /** The slices a file of `size` bytes is read in: `[offset, length]` each. */
 export const chunksOf = (

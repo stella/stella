@@ -8,7 +8,7 @@ import { chunksOf, decodeChunkInto } from "./chunks";
 import { DocxPages } from "./docx-pages";
 import { PdfPages } from "./pdf-pages";
 
-export type DocumentViewProps = {
+type DocumentViewProps = {
   kind: "docx" | "pdf";
   /** The file's size in bytes, which `readChunk` serves in slices. */
   size: number;
@@ -62,19 +62,23 @@ const DocumentView = ({
   useEffect(() => {
     allowZoom();
     let cancelled = false;
-    const load = async () => {
-      const target = new Uint8Array(size);
-      for (const [offset, length] of chunksOf(size)) {
-        // oxlint-disable-next-line no-await-in-loop -- one slice at a time keeps a single bridge message small
-        const slice = await read(offset, length);
-        if (cancelled) {
-          return;
-        }
-        decodeChunkInto(slice, target, offset);
+    const target = new Uint8Array(size);
+    const chunks = chunksOf(size);
+    // One slice after another, so a single bridge message stays small.
+    const load = async (index: number): Promise<void> => {
+      const chunk = chunks[index];
+      if (cancelled) {
+        return;
       }
-      setBytes(target);
+      if (chunk === undefined) {
+        setBytes(target);
+        return;
+      }
+      const [offset, length] = chunk;
+      decodeChunkInto(await read(offset, length), target, offset);
+      await load(index + 1);
     };
-    load().catch((error: unknown) => {
+    load(0).catch((error: unknown) => {
       if (!cancelled) {
         loadFailed(error);
       }
