@@ -197,11 +197,6 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
 export const isAuditAction = (value: string): value is AuditAction =>
   Object.hasOwn(AUDIT_ACTION_PROJECTIONS, value);
 
-export const isAuditResourceType = (
-  value: string,
-): value is AuditResourceType =>
-  Object.hasOwn(AUDIT_RESOURCE_PROJECTIONS, value);
-
 export const fieldLabel = (field: string) =>
   field
     .replaceAll(/([a-z0-9])([A-Z])/gu, "$1 $2")
