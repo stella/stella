@@ -483,41 +483,46 @@ export const offlineCheckStartupViolations = (
       );
     });
     const namesGuard = (node: Node): boolean => {
-      switch (node.type) {
-        case "Identifier":
-          return bindings.has(node.name);
-        case "ObjectPattern":
-          return node.properties.some((property) =>
-            property.type === "RestElement"
-              ? namesGuard(property.argument)
-              : namesGuard(property.value),
-          );
-        case "ArrayPattern":
-          return node.elements.some(
-            (element) => element !== null && namesGuard(element),
-          );
-        case "AssignmentPattern":
-          return namesGuard(node.left);
-        case "RestElement":
-          return namesGuard(node.argument);
-        default:
-          return false;
+      if (node.type === "Identifier") {
+        return bindings.has(node.name);
       }
+      if (node.type === "ObjectPattern") {
+        return node.properties.some((property) =>
+          property.type === "RestElement"
+            ? namesGuard(property.argument)
+            : namesGuard(property.value),
+        );
+      }
+      if (node.type === "ArrayPattern") {
+        return node.elements.some(
+          (element) => element !== null && namesGuard(element),
+        );
+      }
+      if (node.type === "AssignmentPattern") {
+        return namesGuard(node.left);
+      }
+      if (node.type === "RestElement") {
+        return namesGuard(node.argument);
+      }
+      return false;
     };
     const shadowsGuard = (child: Node): boolean => {
-      switch (child.type) {
-        case "VariableDeclaration":
-          return child.declarations.some(({ id }) => namesGuard(id));
-        case "FunctionDeclaration":
-        case "ClassDeclaration":
-          return child.id !== null && bindings.has(child.id.name);
-        case "TSEnumDeclaration":
-          return bindings.has(child.id.name);
-        case "TSModuleDeclaration":
-          return child.id.type === "Identifier" && bindings.has(child.id.name);
-        default:
-          return false;
+      if (child.type === "VariableDeclaration") {
+        return child.declarations.some(({ id }) => namesGuard(id));
       }
+      if (
+        child.type === "FunctionDeclaration" ||
+        child.type === "ClassDeclaration"
+      ) {
+        return child.id !== null && bindings.has(child.id.name);
+      }
+      if (child.type === "TSEnumDeclaration") {
+        return bindings.has(child.id.name);
+      }
+      if (child.type === "TSModuleDeclaration") {
+        return child.id.type === "Identifier" && bindings.has(child.id.name);
+      }
+      return false;
     };
     const calledAtStartup = parsed.program.body.some((statement) => {
       if (statement === firstExecutable && isGuardCall(statement)) {

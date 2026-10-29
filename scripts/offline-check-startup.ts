@@ -1,4 +1,1 @@
-export {
-  assertOfflineCheckPreload,
-  OfflineCheckPreloadMissing,
-} from "../packages/scripts/src/offline-check-startup";
+export { assertOfflineCheckPreload } from "../packages/scripts/src/offline-check-startup";

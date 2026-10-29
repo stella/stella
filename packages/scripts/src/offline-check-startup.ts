@@ -1,10 +1,4 @@
-import { TaggedError } from "better-result";
-
-export class OfflineCheckPreloadMissing extends TaggedError(
-  "OfflineCheckPreloadMissing",
-)<{
-  message: string;
-}> {}
+import assert from "node:assert/strict";
 
 const marker = Symbol.for("stella.offline-check-preload");
 
@@ -32,8 +26,7 @@ export const assertOfflineCheckPreload = () => {
     return;
   }
   process.exitCode = 1;
-  throw new OfflineCheckPreloadMissing({
-    message:
-      "offline check network guard is not active; run this check with `bun --preload ./scripts/offline-network-preload.ts <check> --check`",
-  });
+  assert.fail(
+    "OfflineCheckPreloadMissing: offline check network guard is not active; run this check with `bun --preload ./scripts/offline-network-preload.ts <check> --check`",
+  );
 };

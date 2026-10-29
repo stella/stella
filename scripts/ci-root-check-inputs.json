@@ -514,6 +514,7 @@
     "Test promoted release resolution": [
       "@stll/collation",
       "scripts/resolve-promoted-release*",
+      "scripts/offline-check-startup.ts",
       "scripts/promoted-release-policy.ts",
       "scripts/offline-network-preload.ts",
       "apps/landing/src/data/changelog-release-dates.json",
