@@ -32,4 +32,4 @@ export const TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION = {
       tables,
       constraints: [TIME_ENTRY_INTERNAL_SHAPE_CONSTRAINT],
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

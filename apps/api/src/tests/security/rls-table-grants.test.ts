@@ -204,6 +204,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "soft_law_document_locators",
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
+  "online_work_state",
   "case_law_sitemap_shard_counts",
   // Removal generations are owner/ingestion-only, beside shard staging counts.
   "case_law_sitemap_country_generations",

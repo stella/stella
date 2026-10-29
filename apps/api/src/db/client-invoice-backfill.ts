@@ -29,7 +29,7 @@ export const CLIENT_INVOICE_TENANT_KEY = {
         await session.run(installInvoiceTenantKey());
       },
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;
 
 const CLIENT_BACKFILL_BATCH_SIZE = 500;
 const PENDING_CLIENT_INVOICES = `SELECT i.id FROM public.invoices i JOIN public.workspaces w ON w.id=i.workspace_id AND w.organization_id=i.organization_id WHERE i.client_id IS NULL AND w.client_id IS NOT NULL`;
@@ -72,7 +72,7 @@ export const CLIENT_INVOICE_BACKFILL = {
       await connection.execute("SET statement_timeout = 0");
     }
   },
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;
 
 export const CLIENT_INVOICE_CONSTRAINTS = [
   {
@@ -125,5 +125,5 @@ export const CLIENT_INVOICE_CONSTRAINT_VALIDATIONS =
             tables,
             constraints: [constraint],
           }),
-      }) satisfies OnlineRepair,
+      } as const) satisfies OnlineRepair,
   );

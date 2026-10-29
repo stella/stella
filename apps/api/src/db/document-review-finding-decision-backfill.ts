@@ -60,4 +60,4 @@ export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
       }
     }
   },
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

@@ -1953,7 +1953,10 @@ export const buildPreparationSteps = ({
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: path.resolve(rootDir, "apps/api"),
-      env: buildApiEnv({ infraOffset, infraPorts, ports, rootDir }),
+      env: {
+        ...buildApiEnv({ infraOffset, infraPorts, ports, rootDir }),
+        STELLA_MIGRATE_ONLINE_WORK: "build_finalized",
+      },
       label: "Applying database migrations",
     });
   }

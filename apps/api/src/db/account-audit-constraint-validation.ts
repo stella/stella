@@ -22,4 +22,4 @@ export const ACCOUNT_AUDIT_CONSTRAINT_VALIDATION = {
       tables,
       constraints: [ACCOUNT_AUDIT_CONSTRAINT],
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

@@ -88,7 +88,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
   });
-  const online = await assertOnlineMigrationsApplied({
+  await assertOnlineMigrationsApplied({
     reserve: async () => {
       const connection = await rootDb.$client.reserve();
       return {
@@ -103,15 +103,4 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       };
     },
   });
-  switch (online.type) {
-    case "validated":
-      return;
-    case "migrator_active":
-      // The migrate run validates the online phase itself before it settles.
-      logger.warn("startup.online_validation_left_to_migrator");
-      return;
-    default:
-      online satisfies never;
-      return panic("Unknown online validation outcome");
-  }
 };

@@ -134,7 +134,7 @@ export const INVOICE_SENT_AT_BACKFILL = {
           },
         }),
     ),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;
 
 // The raw online connection returns unknown rows; validate the stored inputs
 // before deriving their day with the same source and Temporal helper as exports.
@@ -227,4 +227,4 @@ export const INVOICE_LEGACY_PAYMENT_BACKFILL = {
           },
         }),
     ),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

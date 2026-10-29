@@ -185,30 +185,31 @@ type RepairRuntimeOptions = {
 
 export const createDecisionDateCeilingRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
-  name: REPAIR_NAME,
-  readCompletion: async (connection) =>
-    await readConstraintCompletion({
-      connection,
-      constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
-      repairName: REPAIR_NAME,
-      backfillName: REPAIR_NAME,
-      tableName: TABLE_NAME,
-    }),
-  repair: async (connection, tables) => {
-    // Empty fresh databases have no heavy data work and no metric source yet.
-    if (
-      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
-        .length === 0
-    ) {
+) =>
+  ({
+    name: REPAIR_NAME,
+    readCompletion: async (connection) =>
+      await readConstraintCompletion({
+        connection,
+        constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+        repairName: REPAIR_NAME,
+        backfillName: REPAIR_NAME,
+        tableName: TABLE_NAME,
+      }),
+    repair: async (connection, tables) => {
+      // Empty fresh databases have no heavy data work and no metric source yet.
+      if (
+        (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+          .length === 0
+      ) {
+        return await validateConstraint(connection, tables);
+      }
+      const pass = await repairUntilEmpty(connection, options);
+      if (pass.isErr()) {
+        throw pass.error;
+      }
       return await validateConstraint(connection, tables);
-    }
-    const pass = await repairUntilEmpty(connection, options);
-    if (pass.isErr()) {
-      throw pass.error;
-    }
-    return await validateConstraint(connection, tables);
-  },
-});
+    },
+  }) as const satisfies OnlineRepair;
 
 export const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair();

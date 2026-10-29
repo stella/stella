@@ -6,6 +6,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+import type { OnlineIndexDeclaration } from "./online-ddl";
 import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -20,12 +21,13 @@ describe.skipIf(!enabled)(
       if (databaseUrl === undefined) {
         panic("DATABASE_URL is required");
       }
-      const definitions = ONLINE_MIGRATION_INDEXES.filter(
-        ({ name, tableName }) =>
-          tableName === "case_law_decisions" &&
-          name.includes("published") &&
-          name !== "case_law_decisions_republished_ruling_idx",
-      );
+      const definitions: readonly OnlineIndexDeclaration[] =
+        ONLINE_MIGRATION_INDEXES.filter(
+          ({ name, tableName }) =>
+            tableName === "case_law_decisions" &&
+            name.includes("published") &&
+            name !== "case_law_decisions_republished_ruling_idx",
+        );
       expect(definitions.length).toBeGreaterThan(0);
 
       const schemaName = `case_law_pub_idx_${Bun.randomUUIDv7().replaceAll("-", "")}`;

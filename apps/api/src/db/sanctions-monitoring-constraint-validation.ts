@@ -36,23 +36,34 @@ export const SANCTIONS_MONITORING_CONSTRAINTS = [
 
 // Defaults and widened value sets satisfy these checks; validate outside the schema transaction so the
 // scan holds no additive DDL lock. Catalog completion makes retries converge.
-export const SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS =
-  SANCTIONS_MONITORING_CONSTRAINTS.map(
-    ({ tableName, constraintName }) =>
-      ({
-        name: constraintName,
-        readCompletion: async (connection) =>
-          await readConstraintCompletion({
-            connection,
-            tableName,
-            constraintName,
-            repairName: constraintName,
-          }),
-        repair: async (connection, tables) =>
-          await validateOnlineConstraints({
-            connection,
-            tables,
-            constraints: [{ tableName, constraintName }],
-          }),
-      }) satisfies OnlineRepair,
-  );
+const createConstraintValidation = <
+  const Constraint extends OnlineConstraintValidation,
+>(
+  constraint: Constraint,
+): OnlineRepair & { readonly name: Constraint["constraintName"] } =>
+  ({
+    name: constraint.constraintName,
+    readCompletion: async (connection) =>
+      await readConstraintCompletion({
+        connection,
+        tableName: constraint.tableName,
+        constraintName: constraint.constraintName,
+        repairName: constraint.constraintName,
+      }),
+    repair: async (connection, tables) =>
+      await validateOnlineConstraints({
+        connection,
+        tables,
+        constraints: [constraint],
+      }),
+  }) as const satisfies OnlineRepair;
+
+export const SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS = [
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[0]),
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[1]),
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[2]),
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[3]),
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[4]),
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[5]),
+  createConstraintValidation(SANCTIONS_MONITORING_CONSTRAINTS[6]),
+] as const satisfies readonly OnlineRepair[];

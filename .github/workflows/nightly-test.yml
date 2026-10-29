@@ -434,6 +434,7 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         # Exercises the shipped migrate entrypoint (Bun SQL + drizzle migrator),
         # so the JSONB persistence suite runs against the real schema, including
         # the case-law ingestion role/policy migrations.

@@ -27,7 +27,7 @@ export const CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS = CONSTRAINT_NAMES.map(
   (constraintName) => ({ tableName: TABLE_NAME, constraintName }),
 ) satisfies readonly OnlineConstraintValidation[];
 
-export const CORPUS_PROJECTION_CLEANUP_STALL_REPAIR: OnlineRepair = {
+export const CORPUS_PROJECTION_CLEANUP_STALL_REPAIR = {
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     for (const constraintName of CONSTRAINT_NAMES) {
@@ -51,4 +51,4 @@ export const CORPUS_PROJECTION_CLEANUP_STALL_REPAIR: OnlineRepair = {
       tables,
       constraints: CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     }),
-};
+} as const satisfies OnlineRepair;

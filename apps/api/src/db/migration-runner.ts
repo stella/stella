@@ -29,6 +29,10 @@ import {
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
 import {
+  MIGRATE_ONLINE_WORK_MODE,
+  type MigrateOnlineWorkMode,
+} from "./migrate-online-work-mode";
+import {
   createMigrationLockTelemetry,
   observeMigrationLockAttempt,
 } from "./migration-lock-observation";
@@ -39,8 +43,17 @@ import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
-import type { OnlineMigrationConnection } from "./online-migration-connection";
-import { runOnlineMigrations } from "./online-migrations";
+import type {
+  OnlineBuildConnection,
+  OnlineMigrationConnection,
+  OnlineMigrationOutcome,
+} from "./online-migration-connection";
+import {
+  ALL_WORK_SCOPE,
+  assertOnlineMigrationsApplied,
+  FINALIZED_SCOPE,
+  runOnlineMigrations,
+} from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
@@ -644,6 +657,62 @@ const emitFailedPhase = (
   }
 };
 
+/** What each building mode walks; `verify_finalized` builds nothing. */
+const BUILD_SCOPE = {
+  [MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED]: FINALIZED_SCOPE,
+  [MIGRATE_ONLINE_WORK_MODE.BUILD_ALL]: ALL_WORK_SCOPE,
+} as const;
+
+/**
+ * The migrator's own session as the online phase's connection; terminating
+ * it marks the session so the runner never unlocks a dead one.
+ */
+const migratorOnlineConnection = (
+  connection: ReservedSQL,
+  session: { state: "open" | "terminated" },
+): OnlineBuildConnection => ({
+  terminate: async () => {
+    session.state = "terminated";
+    await terminateReserved(connection);
+  },
+  execute: async (query, params = []) => {
+    await connection.unsafe(query, [...params]);
+  },
+  query: async (query, params = []) =>
+    await connection.unsafe(query, [...params]),
+  release: (): void => undefined,
+});
+
+type OnlinePhaseOptions = {
+  mode: MigrateOnlineWorkMode;
+  pool: Parameters<typeof runOnlineMigrations>[0];
+  /** How a building mode walks; its scope comes from the mode. */
+  build: Omit<Parameters<typeof runOnlineMigrations>[1], "scope">;
+  runOnline: typeof runOnlineMigrations;
+  validateOnline: typeof assertOnlineMigrationsApplied;
+};
+
+/** The online phase of one mode: build its scope, or only verify. */
+const runOnlinePhase = async ({
+  mode,
+  pool,
+  build,
+  runOnline,
+  validateOnline,
+}: OnlinePhaseOptions): Promise<OnlineMigrationOutcome> => {
+  switch (mode) {
+    case MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED:
+    case MIGRATE_ONLINE_WORK_MODE.BUILD_ALL:
+      return await runOnline(pool, { ...build, scope: BUILD_SCOPE[mode] });
+    case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED:
+      await validateOnline(pool);
+      return { type: "complete" };
+    default:
+      mode satisfies never;
+      return panic("Unknown migrate online-work mode");
+  }
+};
+
 type RunMigrationsOptions = {
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
@@ -651,9 +720,12 @@ type RunMigrationsOptions = {
   migrationsFolder: string;
   /** Resolved before the migrator connects; a missing one never gets here. */
   ebs: ConfiguredEbsConfiguration;
+  /** Release databases verify finalized work; disposable ones build it. */
+  onlineWorkMode: MigrateOnlineWorkMode;
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
+  validateOnline?: typeof assertOnlineMigrationsApplied;
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
   lockWaitRetry?: LockWaitRetry;
@@ -706,9 +778,11 @@ export const runMigrations = async ({
   databaseUrl,
   migrationsFolder,
   ebs,
+  onlineWorkMode,
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  validateOnline = assertOnlineMigrationsApplied,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
@@ -844,26 +918,18 @@ export const runMigrations = async ({
       retriesSpent: () => lockTelemetry.retriesSpent,
     };
     clock.startedAt = timing.clock();
-    const onlineConnection: OnlineMigrationConnection = {
-      terminate: async () => {
-        session.state = "terminated";
-        await terminateReserved(connection);
-      },
-      execute: async (query, params = []) => {
-        await connection.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        await connection.unsafe(query, [...params]),
-      release: (): void => undefined,
-    };
-    const online = await runOnline(
-      { reserve: async () => await Promise.resolve(onlineConnection) },
-      {
+    const onlineConnection = migratorOnlineConnection(connection, session);
+    const online = await runOnlinePhase({
+      mode: onlineWorkMode,
+      pool: { reserve: async () => await Promise.resolve(onlineConnection) },
+      build: {
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
       },
-    );
+      runOnline,
+      validateOnline,
+    });
     clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
     clock.phase = "done";
     timing.emit({

@@ -174,31 +174,32 @@ type RepairRuntimeOptions = {
 
 export const createCorpusProjectionDeleteReceiptRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
-  name: REPAIR_NAME,
-  readCompletion: async (connection) =>
-    await readConstraintCompletion({
-      connection,
-      constraintName: CONSTRAINT_NAME,
-      repairName: REPAIR_NAME,
-      backfillName: REPAIR_NAME,
-      tableName: TABLE_NAME,
-    }),
-  repair: async (connection, tables) => {
-    // Empty fresh databases have no heavy data work and no metric source yet.
-    if (
-      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
-        .length === 0
-    ) {
+) =>
+  ({
+    name: REPAIR_NAME,
+    readCompletion: async (connection) =>
+      await readConstraintCompletion({
+        connection,
+        constraintName: CONSTRAINT_NAME,
+        repairName: REPAIR_NAME,
+        backfillName: REPAIR_NAME,
+        tableName: TABLE_NAME,
+      }),
+    repair: async (connection, tables) => {
+      // Empty fresh databases have no heavy data work and no metric source yet.
+      if (
+        (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+          .length === 0
+      ) {
+        return await validateConstraint(connection, tables);
+      }
+      const pass = await repairFrom(connection, options);
+      if (pass.isErr()) {
+        throw pass.error;
+      }
       return await validateConstraint(connection, tables);
-    }
-    const pass = await repairFrom(connection, options);
-    if (pass.isErr()) {
-      throw pass.error;
-    }
-    return await validateConstraint(connection, tables);
-  },
-});
+    },
+  }) as const satisfies OnlineRepair;
 
 export const CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR =
   createCorpusProjectionDeleteReceiptRepair();

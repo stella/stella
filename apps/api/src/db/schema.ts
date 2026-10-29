@@ -51,6 +51,7 @@ export * from "./schema/saved-searches";
 export * from "./schema/search-history";
 export * from "./schema/usage";
 export * from "./schema/professional-use";
+export * from "./schema/online-work-state";
 export * from "./schema/action-costs";
 export * from "./schema/workflow";
 export * from "./schema/signals";

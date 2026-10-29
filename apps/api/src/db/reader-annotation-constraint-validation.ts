@@ -47,5 +47,5 @@ export const READER_ANNOTATION_CONSTRAINT_VALIDATIONS =
             tables,
             constraints: [{ tableName, constraintName }],
           }),
-      }) satisfies OnlineRepair,
+      }) as const satisfies OnlineRepair,
   );

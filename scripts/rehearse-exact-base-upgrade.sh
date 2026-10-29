@@ -2,6 +2,7 @@
 # Rehearse an exact base schema before applying this checkout.
 # DATABASE_URL must point to an empty, disposable local PostgreSQL database.
 set -euo pipefail
+export STELLA_MIGRATE_ONLINE_WORK=build_finalized
 
 overall_started="$(date +%s)"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

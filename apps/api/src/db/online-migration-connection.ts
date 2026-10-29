@@ -59,6 +59,18 @@ export type OnlineMigrationPool = {
   reserve: () => Promise<OnlineMigrationConnection>;
 };
 
+/**
+ * A session that may run an index build: the gate ends it physically when
+ * cancelling the build fails, so building without `terminate` cannot compile.
+ */
+export type OnlineBuildConnection = OnlineMigrationConnection & {
+  terminate: () => Promise<void>;
+};
+
+export type OnlineBuildPool = {
+  reserve: () => Promise<OnlineBuildConnection>;
+};
+
 /** Whether a repair's postcondition already holds, and why it does not. */
 export type OnlineRepairCompletion =
   | { cause?: unknown; reason: string; type: "incomplete" }

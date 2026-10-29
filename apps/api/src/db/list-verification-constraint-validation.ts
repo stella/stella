@@ -25,4 +25,4 @@ export const LIST_VERIFICATION_CONSTRAINT_VALIDATION = {
       tables,
       constraints: LIST_VERIFICATION_CONSTRAINTS,
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

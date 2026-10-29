@@ -25,4 +25,4 @@ export const READER_ANSWER_CONSTRAINT_VALIDATION = {
       tables,
       constraints: READER_ANSWER_CONSTRAINTS,
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

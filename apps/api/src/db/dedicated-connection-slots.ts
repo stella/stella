@@ -1,6 +1,9 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 
+import type { OnlineMigrationParam } from "./online-migration-connection";
+import { forceClosePool } from "./sql-close";
+
 export const DEDICATED_CONNECTIONS_PER_PROCESS = 8;
 
 const SLOT_WEIGHTS = {
@@ -119,6 +122,7 @@ type DedicatedSqlClient = {
     params?: unknown[],
   ) => PromiseLike<readonly Record<string, unknown>[]>;
   end: () => Promise<void>;
+  close: SQL["close"];
 };
 
 type CreateDedicatedConnectionOwnerOptions<TClient extends DedicatedSqlClient> =
@@ -259,12 +263,28 @@ export const createDedicatedConnectionOwner = <
       throw opened.error;
     }
     const client = opened.value.client;
+    // One close owns the slots, released only once it succeeds; ending a
+    // terminated session waits for that close instead of closing twice.
+    let closing: Promise<void> | undefined;
+    const closeOnce = async (close: () => Promise<void>) => {
+      closing ??= close().then(releaseSlots);
+      await closing;
+    };
     return {
-      unsafe: async (statement: string, values: readonly string[] = []) =>
-        await client.unsafe(statement, [...values]),
+      unsafe: async (
+        statement: string,
+        values: readonly OnlineMigrationParam[] = [],
+      ) => await client.unsafe(statement, [...values]),
       end: async () => {
-        await client.end();
-        releaseSlots();
+        await closeOnce(async () => {
+          await client.end();
+        });
+      },
+      /** Closes the session at once; a running statement is rejected. */
+      terminate: async () => {
+        await closeOnce(async () => {
+          await forceClosePool(client);
+        });
       },
     };
   };

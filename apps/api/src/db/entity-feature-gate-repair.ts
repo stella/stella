@@ -239,7 +239,10 @@ const schemaPolicies = (): readonly PolicyDefinition[] =>
 
 export const createEntityFeatureGateRepair = ({
   readPolicies,
-}: EntityFeatureGateRepairOptions): OnlineRepair => ({
+}: EntityFeatureGateRepairOptions): OnlineRepair & {
+  // The lifecycle map keys on the literal name.
+  readonly name: typeof REPAIR_NAME;
+} => ({
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const installed = (
@@ -329,5 +332,6 @@ export const createEntityFeatureGateRepair = ({
   },
 });
 
-export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair =
-  createEntityFeatureGateRepair({ readPolicies: schemaPolicies });
+export const ENTITY_FEATURE_GATE_REPAIR = createEntityFeatureGateRepair({
+  readPolicies: schemaPolicies,
+});

@@ -76,6 +76,7 @@ jobs:
         run: bun --filter @stll/api db:migrate
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
 
       - name: Run query performance suite
         id: measurements

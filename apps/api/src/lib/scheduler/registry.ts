@@ -155,6 +155,10 @@ import {
   MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
+  ONLINE_WORK_RUNNER_TASK,
+  runPendingOnlineWork,
+} from "@/api/lib/scheduler/tasks/online-work-runner";
+import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
   recordMissingOrganizationAccessStatesTask,
 } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
@@ -288,6 +292,7 @@ const SCHEDULER_TASKS = {
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
   [RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK]:
     recordMissingOrganizationAccessStatesTask,
+  [ONLINE_WORK_RUNNER_TASK]: runPendingOnlineWork,
   [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
     reconcileOrganizationFileReservations,
   // Ungated: its time-billing sample data admits itself on the feature.

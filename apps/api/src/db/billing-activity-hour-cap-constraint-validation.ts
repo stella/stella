@@ -37,5 +37,5 @@ export const BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS =
             tables,
             constraints: [constraint],
           }),
-      }) satisfies OnlineRepair,
+      } as const) satisfies OnlineRepair,
   );

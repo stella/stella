@@ -5030,6 +5030,7 @@ const config = defineConfig({
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
               "apps/api/src/env-db-load-gate.ts",
+              "apps/api/src/env-migrate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",

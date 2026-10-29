@@ -22,7 +22,7 @@ import { resolveDatabaseUrl } from "../db-url";
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineIndexConfig } from "../env-online-index";
 import { createEbsSignalReader } from "../lib/db/ebs-signal-reader";
-import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
+import type { EbsConfiguration } from "../lib/db/ebs-signal-reader";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import type { MigrationLockTelemetry } from "./migration-lock-observation";
@@ -48,10 +48,11 @@ export const createOnlineIndexHold = (): OnlineIndexHoldRef => ({
 
 /**
  * Where the gate reads disk health: a configuration resolved at the env
- * boundary, which cannot be missing, or an injected reader.
+ * boundary, or an injected reader. A missing configuration holds every build;
+ * the migrator rejects one before it connects, background work waits on it.
  */
 export type OnlineIndexEbsSource =
-  ConfiguredEbsConfiguration | { type: "reader"; read: () => Promise<Signal> };
+  EbsConfiguration | { type: "reader"; read: () => Promise<Signal> };
 
 export type OnlineIndexGateOptions = {
   lockTelemetry?: MigrationLockTelemetry;

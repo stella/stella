@@ -1452,11 +1452,14 @@ test("code-quality pool preserves every moved check exactly once", () => {
     .parse(headJobSchema, baseJobs["code-quality-web-rest"])
     .steps.filter(({ name }) => movedNames.includes(name))
     .map(withoutPoolMetadata);
-  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
+  // Checks added to the pool later are not moved ones; a duplicate still fails.
+  const preserved = readCheckPool("code-quality-web-rest")
+    .filter(({ name }) => movedNames.includes(name))
+    .map(({ step }) => step);
 
-  expect(pooled.map(({ name }) => name)).toEqual(movedNames);
+  expect(preserved.map(({ name }) => name)).toEqual(movedNames);
   // A merge base may already carry the pool; normalize both sides alike.
-  expect(pooled.map(withoutPoolMetadata)).toEqual(
+  expect(preserved.map(withoutPoolMetadata)).toEqual(
     originals.map(withoutPoolMetadata),
   );
 });
