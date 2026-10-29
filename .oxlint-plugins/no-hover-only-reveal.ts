@@ -140,15 +140,12 @@ const hidesUntilHover = (value: string): boolean => {
   if (!revealsOnHover) {
     return false;
   }
-  const revealsOnTappableState = tokens.some(
+  const tappableStateReveals = tokens.filter(
     (token) =>
       SHOWN.has(classBaseName(token)) &&
       variantsOf(token).some(isTappableStateVariant) &&
       !variantsOf(token).some(isHoverVariant),
   );
-  if (revealsOnTappableState) {
-    return false;
-  }
   const touchDecisions = tokens.filter((token) => {
     const variants = variantsOf(token);
     return variants.length > 0 && variants.every(isCoarsePointerVariant);
@@ -161,6 +158,10 @@ const hidesUntilHover = (value: string): boolean => {
   ) {
     return false;
   }
+  const revealBases = new Set([
+    ...touchBases,
+    ...tappableStateReveals.map(classBaseName),
+  ]);
   return tokens.some((token) => {
     const base = classBaseName(token);
     if (classVariants(token) !== "" || !HIDDEN.has(base)) {
@@ -168,8 +169,8 @@ const hidesUntilHover = (value: string): boolean => {
     }
     const shown = base.startsWith("opacity-") ? "opacity-100" : "visible";
     return (
-      !touchBases.has(`${shown}!`) &&
-      (base.endsWith("!") || !touchBases.has(shown))
+      !revealBases.has(`${shown}!`) &&
+      (base.endsWith("!") || !revealBases.has(shown))
     );
   });
 };
