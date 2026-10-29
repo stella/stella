@@ -5,11 +5,12 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    "./emails/*": "./emails/*.tsx"
+    "./emails/*": "./emails/*.tsx",
+    "./render": "./render/render.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "test": "bun test emails",
+    "test": "bun test emails render",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "i18n:check": "bun ../scripts/src/i18n-typegen.ts i18n/langs --check && bun ../scripts/src/i18n-check.ts i18n/langs",
@@ -18,15 +19,17 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/transactional"
   },
   "dependencies": {
-    "@react-email/components": "^1.0.12",
     "@stll/api-contract": "workspace:*",
     "@stll/locales": "workspace:*",
+    "better-result": "catalog:",
     "react": "catalog:react19",
+    "react-dom": "catalog:react19",
     "use-intl": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:"
   }
 }

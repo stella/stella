@@ -116,7 +116,6 @@ ignorePatterns = [
   ".tailwind-cache/**",
   "**/.oxlintrc.json",
   "**/dist/**",
-  "**/.react-email/**",
   "apps/api/src/db/schema.ts",
   "packages/template-packs/content/**",
   "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",

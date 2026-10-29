@@ -1,17 +1,14 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Img } from "../components/img";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
 import { brand, BRAND_FOOTER_TEXT, ICON_URL, sharedStyles } from "./_shared";
@@ -57,8 +54,8 @@ export const Email = ({
               invitedByUsername,
             })}
           </Text>
-          <Section style={styles["buttonSection"]}>
-            <Button href={inviteLink} style={styles["button"]}>
+          <Section style={styles.buttonSection}>
+            <Button href={inviteLink} style={styles.button}>
               {t("invitation.accept")}
             </Button>
           </Section>
@@ -72,14 +69,7 @@ export const Email = ({
   );
 };
 
-Email.PreviewProps = {
-  inviteLink: "http://localhost:3000/auth/accept-invitation/xxx",
-  organizationName: "Acme Inc",
-  invitedByUsername: "Jane Doe",
-  lang: "en",
-} satisfies Props;
-
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   buttonSection: {
     margin: "24px 0",
     textAlign: "center" as const,
@@ -93,4 +83,4 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "12px 24px",
     textDecoration: "none",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

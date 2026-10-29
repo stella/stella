@@ -202,7 +202,9 @@
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]
     },
-    "packages/transactional": { "entry": ["emails/*.tsx"] },
+    "packages/transactional": {
+      "entry": ["emails/*.tsx", "render/*.test.tsx"]
+    },
     "packages/ui": {
       // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.
       "ignoreDependencies": ["tailwindcss"],

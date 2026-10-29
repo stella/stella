@@ -101,10 +101,6 @@ export const DOC_SOURCES = {
     dependencies: ["react", "react-dom", "@types/react", "@types/react-dom"],
     url: "https://react.dev/llms.txt",
   },
-  ReactEmail: {
-    dependencies: ["@react-email/components", "@react-email/render"],
-    url: "https://react.email/docs/llms.txt",
-  },
   BaseUI: {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",

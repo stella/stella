@@ -113,7 +113,6 @@
     "@modelcontextprotocol/server": "2.3.1",
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
     "@openrouter/sdk": "0.13.67",
-    "@react-email/render": "^2.1.0",
     "@silurus/ooxml": "catalog:",
     "@smithy/fetch-http-handler": "^5.8.0",
     "@stll/agent-engine": "workspace:*",
