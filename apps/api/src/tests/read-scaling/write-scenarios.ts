@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { vatRates } from "@/api/db/schema";
+import { markRlsDatabase } from "@/api/db/scoped";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -16,7 +17,10 @@ import {
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScalingTempTables } from "@/api/tests/read-scaling/entity-fixture";
@@ -73,7 +77,7 @@ const seedVatRateWriteScaling = async (db: GatedTestDb, size: number) => {
     email: `${userId}@example.test`,
   });
   await db.insert(member).values({
-    id: mintAuthProviderId<"member">(),
+    id: mintAuthProviderIdValue(),
     organizationId,
     userId,
     role: "owner",
@@ -94,7 +98,10 @@ const seedVatRateWriteScaling = async (db: GatedTestDb, size: number) => {
     organizationId,
     userId,
     safeDb,
-    scopedDb: createOrganizationScopedTestDb(db, { organizationId, userId }),
+    scopedDb: createOrganizationScopedTestDb(markRlsDatabase(db), {
+      organizationId,
+      userId,
+    }),
     cleanup: async () => {
       await db
         .delete(vatRates)

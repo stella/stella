@@ -2,7 +2,7 @@ import { panic } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
-import type { AnyDrizzle } from "@/api/db/scoped";
+import type { RlsDatabase } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   ORG_AI_CONFIG_STATUS,
@@ -27,7 +27,7 @@ type OrganizationTestPrincipal = {
 
 /** Run handler authorization against the fixture's actual scoped database. */
 export const createOrganizationScopedTestDb = (
-  database: AnyDrizzle,
+  database: RlsDatabase,
   { organizationId, userId }: OrganizationTestPrincipal,
 ) => executeRowsScopedDb(createScopedDb(database, [], organizationId, userId));
 
