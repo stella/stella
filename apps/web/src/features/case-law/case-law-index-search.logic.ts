@@ -10,7 +10,7 @@
  * link says what the reader chose, not what they accepted.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { CASE_LAW_SCOPED_FILTER_FIELDS } from "@stll/api-contract/case-law-filter-scope";
 import type { DecisionSort } from "@stll/api-contract/search";
@@ -176,17 +176,45 @@ const hasDecisionDateRange = (search: CaseLawIndexSearch): boolean => {
   return range.from !== undefined || range.to !== undefined;
 };
 
-/** Every filter unset, for a country switch and for "clear filters". */
-export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
-  Record<"from" | "to" | "year", undefined> => ({
-  court: undefined,
-  from: undefined,
-  lang: undefined,
-  sourceId: undefined,
-  to: undefined,
-  type: undefined,
-  year: undefined,
-});
+/** Remove named filters from the full search; all other keys retain their types. */
+export const dropCaseLawFilters = <
+  TSearch extends CaseLawIndexSearch,
+  TField extends CaseLawFilterKey | "from" | "to" | "year",
+>(
+  search: TSearch,
+  fields: readonly TField[],
+): Omit<TSearch, TField> & Pick<CaseLawIndexSearch, TField> => {
+  const next = { ...search };
+  for (const field of fields) {
+    switch (field) {
+      case "court":
+        delete next.court;
+        break;
+      case "lang":
+        delete next.lang;
+        break;
+      case "sourceId":
+        delete next.sourceId;
+        break;
+      case "type":
+        delete next.type;
+        break;
+      case "from":
+        delete next.from;
+        break;
+      case "to":
+        delete next.to;
+        break;
+      case "year":
+        delete next.year;
+        break;
+      default:
+        field satisfies never;
+        panic(`Unhandled case-law filter removal: ${String(field)}`);
+    }
+  }
+  return next;
+};
 
 /**
  * The URL a query edit lands on, with `strict` and `questions` dropped.

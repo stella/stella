@@ -9,10 +9,10 @@ import {
 import {
   activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
-  clearedCaseLawFilters,
   createCaseLawIndexPath,
   dateRangeYear,
   decisionDateRange,
+  dropCaseLawFilters,
   hasActiveCaseLawFilter,
   isStrictSearch,
   STRICT_SEARCH_VALUE,
@@ -149,19 +149,34 @@ describe("the filters the URL carries", () => {
     );
   });
 
-  test("clearing unsets each filter key and nothing else", () => {
-    const cleared = clearedCaseLawFilters();
-
-    // Every facet key, plus the three the date range is spelled with.
-    expect(Object.keys(cleared).toSorted()).toEqual(
-      [...CASE_LAW_FILTER_KEYS, "from", "to", "year"].toSorted(),
-    );
-    expect(Object.values(cleared)).toEqual(
-      [...CASE_LAW_FILTER_KEYS, "from", "to", "year"].map(() => undefined),
-    );
-    expect(
-      hasActiveCaseLawFilter({ country: "cz", q: "nájem", ...cleared }),
-    ).toBe(false);
+  test("dropping any filter preserves every unrelated search key and its type", () => {
+    const search = {
+      country: "cze",
+      court: "Ústavní soud",
+      lang: "cs",
+      sourceId: "00000000-0000-4000-8000-000000000001",
+      type: "judgment",
+      q: "nájem",
+      questions: ["question-fixture"],
+      rewrite: "off",
+      rewrittenFrom: "original query",
+      futureSearchKey: { retained: "by default" },
+    } as const;
+    for (const field of CASE_LAW_FILTER_KEYS) {
+      const next = dropCaseLawFilters(
+        { ...search, questions: [...search.questions] },
+        [field],
+      );
+      expect(next.futureSearchKey).toBe(search.futureSearchKey);
+      expect(Object.keys(next).toSorted()).toEqual(
+        Object.keys(search)
+          .filter((key) => key !== field)
+          .toSorted(),
+      );
+      expect(Object.entries(next)).toEqual(
+        Object.entries(search).filter(([key]) => key !== field),
+      );
+    }
   });
 
   test("each filter on its own counts as active", () => {
@@ -488,7 +503,9 @@ describe("the decision-date range", () => {
 
     expect(hasActiveCaseLawFilter(narrowed)).toBe(true);
     expect(
-      hasActiveCaseLawFilter({ ...narrowed, ...clearedCaseLawFilters() }),
+      hasActiveCaseLawFilter(
+        dropCaseLawFilters(narrowed, ["from", "to", "year"]),
+      ),
     ).toBe(false);
   });
 });

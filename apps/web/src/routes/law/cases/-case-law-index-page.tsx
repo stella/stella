@@ -44,8 +44,8 @@ import { shouldAutoRewrite } from "@/features/case-law/case-law-empty-results.lo
 import {
   activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
-  clearedCaseLawFilters,
   decisionDateRange,
+  dropCaseLawFilters,
   isStrictSearch,
   STRICT_SEARCH_VALUE,
   validDecisionDate,
@@ -154,31 +154,6 @@ const FILTER_KIND_LABEL_KEYS = {
   sourceId: "common.source",
   type: "common.type",
 } as const satisfies Record<CaseLawFilterKey, TranslationKey>;
-
-/**
- * The URL with one facet set or unset. Written out per key rather than by a
- * computed property, so a filter key that is not in the search schema cannot
- * be navigated to.
- */
-const withFilter = (
-  previous: CaseLawIndexSearch,
-  key: CaseLawFilterKey,
-  value: string | undefined,
-): CaseLawIndexSearch => {
-  switch (key) {
-    case "court":
-      return { ...previous, court: value };
-    case "lang":
-      return { ...previous, lang: value };
-    case "type":
-      return { ...previous, type: value };
-    case "sourceId":
-      return { ...previous, sourceId: value };
-    default:
-      key satisfies never;
-      return panic(`Unhandled case-law filter: ${String(key)}`);
-  }
-};
 
 /**
  * What a chip shows for a selected value. A language is a code; every other
@@ -592,7 +567,11 @@ export function PublicCaseLawIndex({
 
   const selectFacet = (key: CaseLawFilterKey, value: string | undefined) => {
     detached(
-      searchNavigation((previous) => withFilter(previous, key, value)),
+      searchNavigation((previous) =>
+        value === undefined
+          ? dropCaseLawFilters(previous, [key])
+          : { ...previous, [key]: value },
+      ),
       "cases.filter-navigate",
     );
   };
@@ -602,10 +581,9 @@ export function PublicCaseLawIndex({
   const setDateRange = (range: DecisionDateRange) => {
     detached(
       searchNavigation((previous) => ({
-        ...previous,
+        ...dropCaseLawFilters(previous, ["from", "to", "year"]),
         from: validDecisionDate(range.from),
         to: validDecisionDate(range.to),
-        year: undefined,
       })),
       "cases.date-range-navigate",
     );
@@ -866,10 +844,14 @@ export function PublicCaseLawIndex({
               // Clear the filters, not the query the reader typed into the box:
               // the box is the search, and emptying it is its own gesture.
               detached(
-                searchNavigation((previous) => ({
-                  ...previous,
-                  ...clearedCaseLawFilters(),
-                })),
+                searchNavigation((previous) =>
+                  dropCaseLawFilters(previous, [
+                    ...CASE_LAW_FILTER_KEYS,
+                    "from",
+                    "to",
+                    "year",
+                  ]),
+                ),
                 "cases.clear-filters",
               );
             }}

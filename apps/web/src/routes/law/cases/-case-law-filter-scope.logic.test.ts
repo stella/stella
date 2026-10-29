@@ -41,15 +41,14 @@ describe("case-list country filter correction", () => {
       "https://my.stll.app/law/cases?court=%C3%9Astavn%C3%BD+s%C3%BAd+SR&from=2026-01-01&to=2026-12-31&country=cze",
     );
     const search = v.parse(searchSchema, parseRouteSearch(url.search));
-    expect(
-      correctedCaseLawFilterSearch({
-        search,
-        country: "CZE",
-        validation: validate(search, "CZE"),
-      }),
-    ).toMatchObject({
+    const corrected = correctedCaseLawFilterSearch({
+      search,
+      country: "CZE",
+      validation: validate(search, "CZE"),
+    });
+    expect(corrected).not.toHaveProperty("court");
+    expect(corrected).toMatchObject({
       country: "cze",
-      court: undefined,
       from: "2026-01-01",
       to: "2026-12-31",
       filterNotice: [{ field: "court", value: SVK_COURT, countries: ["SVK"] }],
@@ -75,11 +74,11 @@ describe("case-list country filter correction", () => {
       });
       expect(corrected).toMatchObject({
         country: country.toLowerCase(),
-        court: undefined,
         q: "contract",
         page: undefined,
         filterNotice: [{ field: "court", value: court, countries: [origin] }],
       });
+      expect(corrected).not.toHaveProperty("court");
       expect(corrected).not.toBeNull();
       if (corrected === null) {
         return;
@@ -93,6 +92,36 @@ describe("case-list country filter correction", () => {
       ).toBeNull();
     },
   );
+
+  test("correction preserves additional search keys and ignores unremoved filter payloads", () => {
+    const search = {
+      ...v.parse(searchSchema, {
+        country: "cze",
+        court: SVK_COURT,
+        lang: "cs",
+        questions: ["question-fixture"],
+        rewrite: "off",
+        rewrittenFrom: "original query",
+      }),
+      futureSearchKey: { retained: "by default" },
+    };
+    const corrected = correctedCaseLawFilterSearch({
+      search,
+      country: "CZE",
+      validation: {
+        filters: {},
+        removed: [{ field: "court", value: SVK_COURT, countries: ["SVK"] }],
+      },
+    });
+    expect(corrected?.futureSearchKey).toBe(search.futureSearchKey);
+    expect(corrected).not.toHaveProperty("court");
+    expect(corrected).toMatchObject({
+      lang: search.lang,
+      questions: search.questions,
+      rewrite: search.rewrite,
+      rewrittenFrom: search.rewrittenFrom,
+    });
+  });
 
   test("retains valid Czech filters and page without a correction", () => {
     const search = v.parse(searchSchema, {
@@ -128,11 +157,11 @@ describe("case-list country filter correction", () => {
       country: "SVK",
       validation: validate(search, "SVK"),
     });
+    expect(corrected).not.toHaveProperty("lang");
+    expect(corrected).not.toHaveProperty("sourceId");
     expect(corrected).toMatchObject({
       court: SVK_COURT,
       type: "rozsudek",
-      lang: undefined,
-      sourceId: undefined,
       filterNotice: [
         { field: "lang", value: "cs", countries: ["CZE"] },
         { field: "sourceId", value: SOURCE_ID, countries: ["CZE"] },

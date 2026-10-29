@@ -167,18 +167,15 @@ export const Route = createFileRoute("/law/cases/")({
           }),
         ),
       );
-      const correctedSearch =
-        validation === null
-          ? null
-          : correctedCaseLawFilterSearch({
-              search,
-              country,
-              validation,
-            });
-      if (correctedSearch !== null) {
+      if (validation !== null && validation.removed.length > 0) {
         redirect({
           to: "/law/cases",
-          search: correctedSearch,
+          search: (previous) =>
+            correctedCaseLawFilterSearch({
+              search: previous,
+              country,
+              validation,
+            }) ?? previous,
           replace: true,
           throw: true,
         });
