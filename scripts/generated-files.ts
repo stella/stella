@@ -868,6 +868,8 @@ const GENERATOR_DECLARATIONS = [
       ".github/workflows/ci.yml",
       "scripts/generate-main-heavy-infrastructure-steps.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "bunfig.toml",
+      ".prettierrc.yml",
     ],
     write: ["bun", "scripts/generate-main-heavy-infrastructure-steps.ts"],
     check: null,

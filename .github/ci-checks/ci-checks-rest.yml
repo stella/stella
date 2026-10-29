@@ -49,7 +49,6 @@ checks:
     # Guard A registers tracked generated files; Guard B checks the
     # manifest entries with offline checks against committed outputs.
     run: |
-      bun scripts/generate-main-heavy-infrastructure-steps.ts
       bun scripts/generated-files-guard.ts --guard-a
       bun scripts/generated-files-guard.ts --guard-b
 

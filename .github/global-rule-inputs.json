@@ -300,6 +300,10 @@
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
     },
     {
+      "path": "scripts/generate-main-heavy-infrastructure-steps.ts",
+      "reason": "Runs from the generated files manifest guard; ci.yml and the generator's declared inputs select that scope."
+    },
+    {
       "path": "scripts/generate-npm-release-jobs.ts",
       "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
     }
