@@ -20,7 +20,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   HistoryIcon,
-  Minimize2Icon,
   NewChatIcon,
   PinIcon,
   PlusIcon,
@@ -65,7 +64,6 @@ import {
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -102,7 +100,6 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
-import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
@@ -126,7 +123,6 @@ import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
-import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
   staticData: { presentation: routePresentation({ type: "inherit" }) },
@@ -273,7 +269,6 @@ function ChatIndex() {
   const anonymized = useChatAnonymized(threadRef);
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
-  const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useLatestCallback(() => contextMatterIds);
   const { draftMeta: chatDraftMeta, draftMetaQueryKey } = useChatDraftMeta({
@@ -451,14 +446,6 @@ function ChatIndex() {
     controller.focus();
   };
 
-  const moveToSide = () => {
-    openInspectorChat({
-      id: threadIdRef.current ?? createChatThreadId(),
-      contextMatterIds,
-    });
-    detached(navigate({ to: "/chat" }), "chat.navigate");
-  };
-
   const handleSubmit = async (
     draft: ChatInputDraft,
   ): Promise<ChatSendOutcome> => {
@@ -612,20 +599,9 @@ function ChatIndex() {
   );
 
   return (
+    // No header actions: an empty chat has nothing to move to the side,
+    // and the "Recent chats" heading below already opens the history.
     <LandingLayout
-      actions={
-        <ChromeHeaderActions>
-          <Tooltip
-            content={t("inspector.moveToSide")}
-            render={
-              <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                <Minimize2Icon className="size-4" />
-              </Button>
-            }
-          />
-          <ChatHistoryLink />
-        </ChromeHeaderActions>
-      }
       hero={
         <>
           <LandingGreeting icon={<StellaMark className="size-7" />}>

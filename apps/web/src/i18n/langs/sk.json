@@ -2084,8 +2084,6 @@
     "clearFilters": "Vymazať filtre",
     "clearSearch": "Vymazať hľadanie",
     "close": "Zavrieť",
-    "closeAll": "Zavrieť všetko",
-    "closeOthers": "Zavrieť ostatné",
     "columns": "Stĺpce",
     "comfortable": "Pohodlné",
     "comingSoon": "Čoskoro",
@@ -3674,6 +3672,9 @@
       "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
+    "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} other {všetkých # kariet}}",
+    "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} other {# ďalších kariet}}",
+    "closeTab": "Zavrieť <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
       "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
