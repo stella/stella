@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { STELLA_REST_API_CONTRACT_VERSION } from "@stll/api-contract";
 
+import { DEPLOY_ENV_CONTRACT } from "@/api/deploy-env-contract";
 import { envBase } from "@/api/env-base";
 import type { ResponseSet } from "@/api/http/context";
 import { routes } from "@/api/http/route";
@@ -62,7 +63,13 @@ export const createHealthRoute = ({
   readDeployEnvironment = () => envBase.DEPLOY_ENVIRONMENT,
   probeReadiness = probeApiReadiness,
 }: HealthRouteOptions = {}) => {
-  const deployEnvironment = readDeployEnvironment() ?? null;
+  const readinessFields = Object.fromEntries(
+    DEPLOY_ENV_CONTRACT.flatMap(({ readinessField }) =>
+      readinessField === undefined
+        ? []
+        : [[readinessField, readDeployEnvironment() ?? null]],
+    ),
+  );
   const probeCache = createProbeCache(
     async () => await readinessOutcome(probeReadiness),
     { ttlMs: PROBE_CACHE_TTL_MS },
@@ -86,11 +93,11 @@ export const createHealthRoute = ({
       return {
         status: "error",
         message: "Required dependency unavailable",
-        deployEnvironment,
+        ...readinessFields,
         ...BUILD_METADATA,
       };
     }
-    return { status: "ok", deployEnvironment, ...BUILD_METADATA };
+    return { status: "ok", ...readinessFields, ...BUILD_METADATA };
   };
 
   const startedHandler = async ({ set }: { readonly set: ResponseSet }) => {
