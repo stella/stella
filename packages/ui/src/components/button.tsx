@@ -46,6 +46,16 @@ const BUTTON_DEFAULT_SIZE = "default";
 const buttonVariants = cva(
   "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
   {
+    // An inline button is a word in a sentence: a hover fill behind it would
+    // read as a box the line does not have. The quiet variants keep their
+    // text treatment and drop the fill.
+    compoundVariants: [
+      {
+        className: "[:hover:not([data-pressed])]:bg-transparent",
+        size: "inline",
+        variant: ["destructive-ghost", "ghost", "link", "muted"],
+      },
+    ],
     defaultVariants: {
       size: BUTTON_DEFAULT_SIZE,
       variant: "default",
@@ -65,6 +75,14 @@ const buttonVariants = cva(
           "size-11 sm:size-10 [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
         "icon-xs":
           "size-7 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
+        // A button that sits in a line of text: a "show more", a citation, an
+        // inline edit. It draws no box of its own (no height, padding or type
+        // size), takes the font of the line around it and wraps with it, so
+        // swapping a word for an action leaves the line as it was. Its
+        // variant still owns colour, focus and the selected treatment; see
+        // compoundVariants for the hover fill it does not paint.
+        inline:
+          "h-auto gap-1 rounded-sm border-0 p-0 text-start text-[length:inherit] leading-[inherit] font-normal whitespace-normal before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[length:inherit] [&_svg]:mx-0",
         lg: "h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9",
         // One row of a menu list. The metric is shared with `CommandItem`; the
         // rest undoes the base button's centred content and its icon inset, so
@@ -78,29 +96,58 @@ const buttonVariants = cva(
       },
       variant: {
         default:
-          "border-primary bg-primary text-primary-foreground shadow-primary/24 [:hover,[data-pressed]]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none",
+          "border-primary bg-primary text-primary-foreground shadow-primary/24 data-pressed:bg-primary/80 [:hover:not([data-pressed])]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none",
         destructive:
-          "border-destructive/32 bg-destructive/10 text-destructive-foreground shadow-destructive/8 [:hover,[data-pressed]]:border-destructive/40 [:hover,[data-pressed]]:bg-destructive/14 [:active,[data-pressed]]:bg-destructive/18 shadow-xs not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] [:disabled,:active,[data-pressed]]:shadow-none",
+          "border-destructive/32 bg-destructive/10 text-destructive-foreground shadow-destructive/8 data-pressed:border-destructive/56 data-pressed:bg-destructive/20 [:hover:not([data-pressed])]:border-destructive/40 [:hover:not([data-pressed])]:bg-destructive/14 active:bg-destructive/18 shadow-xs not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] [:disabled,:active,[data-pressed]]:shadow-none",
         "destructive-outline":
-          "border-input bg-popover text-destructive-foreground dark:bg-input/32 [:hover,[data-pressed]]:border-destructive/32 [:hover,[data-pressed]]:bg-destructive/4 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none",
+          "border-input bg-popover text-destructive-foreground dark:bg-input/32 data-pressed:border-destructive/56 data-pressed:bg-destructive/8 [:hover:not([data-pressed])]:border-destructive/32 [:hover:not([data-pressed])]:bg-destructive/4 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none",
         "destructive-ghost":
-          "text-destructive data-pressed:bg-destructive/10 [:hover,[data-pressed]]:bg-destructive/10 border-transparent",
+          "text-destructive data-pressed:bg-destructive/14 data-pressed:inset-ring-destructive/32 [:hover:not([data-pressed])]:bg-destructive/10 border-transparent data-pressed:inset-ring",
         ghost:
-          "text-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent border-transparent",
-        link: "border-transparent underline-offset-4 [:hover,[data-pressed]]:underline",
+          "text-foreground data-pressed:bg-accent data-pressed:inset-ring-input [:hover:not([data-pressed])]:bg-accent border-transparent data-pressed:shadow-xs/5 data-pressed:inset-ring",
+        link: "border-transparent underline-offset-4 data-pressed:underline data-pressed:decoration-2 [:hover:not([data-pressed])]:underline",
         // Quiet action: muted until hovered, then the ghost treatment.
         muted:
-          "text-muted-foreground data-pressed:bg-accent data-pressed:text-foreground [:hover,[data-pressed]]:bg-accent [:hover,[data-pressed]]:text-foreground border-transparent",
+          "text-muted-foreground data-pressed:bg-accent data-pressed:text-foreground data-pressed:inset-ring-input [:hover:not([data-pressed])]:bg-accent [:hover:not([data-pressed])]:text-foreground border-transparent data-pressed:shadow-xs/5 data-pressed:inset-ring",
         outline:
-          "border-input bg-popover text-foreground dark:bg-input/32 [:hover,[data-pressed]]:bg-accent/50 dark:[:hover,[data-pressed]]:bg-input/64 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none",
+          "border-input bg-popover text-foreground dark:bg-input/32 data-pressed:border-primary/48 data-pressed:bg-accent dark:data-pressed:bg-input/64 [:hover:not([data-pressed])]:bg-accent/50 dark:[:hover:not([data-pressed])]:bg-input/64 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none",
         secondary:
-          "bg-secondary text-secondary-foreground [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90 border-transparent",
+          "bg-secondary text-secondary-foreground data-pressed:bg-background data-pressed:inset-ring-input active:bg-secondary/80 [:hover:not([data-pressed])]:bg-secondary/90 border-transparent data-pressed:shadow-xs/5 data-pressed:inset-ring",
       },
     },
   },
 );
 
 type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
+
+/**
+ * `plain`: a click target whose look is its content (a card, a thumbnail, a
+ * cell, a passage). It bypasses `buttonVariants` and its box, border, type
+ * and press motion instead of undoing them class by class, and keeps
+ * everything else a `Button` owns: the disabled disposition, the tooltip, the
+ * focus ring. It lays out like a native button (`inline-block`, content
+ * flowing from the start), so a card's children stack as they would in a
+ * `div`; `className` places it (`w-full`, `block`). It has no radius of its
+ * own, so the focus ring follows the radius the caller gives it to match the
+ * content's shape. Like a native button it does not dim when disabled: the
+ * content says it is unavailable. A `size` does not apply to it.
+ */
+const BUTTON_PLAIN_CLASS =
+  "focus-visible:ring-ring focus-visible:ring-offset-background inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default";
+
+type ButtonVariant =
+  NonNullable<VariantProps<typeof buttonVariants>["variant"]> | "plain";
+
+/**
+ * Where the focus ring is drawn. `outside` (the default) rings the box with a
+ * gap; `inside` draws it within the box, for a target that fills a clipping
+ * container (an `overflow-hidden` card, a table cell, a thumbnail grid) where
+ * an outside ring would be cut off.
+ */
+type ButtonFocusRing = "outside" | "inside";
+
+const BUTTON_FOCUS_RING_INSIDE_CLASS =
+  "focus-visible:ring-inset focus-visible:ring-offset-0";
 
 /** What a button's box holds: a glyph alone, or a visible label. */
 const BUTTON_CONTENT = {
@@ -127,6 +174,7 @@ const BUTTON_SIZE_CONTENT = {
   "icon-sm": BUTTON_CONTENT.icon,
   "icon-xl": BUTTON_CONTENT.icon,
   "icon-xs": BUTTON_CONTENT.icon,
+  inline: BUTTON_CONTENT.text,
   lg: BUTTON_CONTENT.text,
   row: BUTTON_CONTENT.text,
   sm: BUTTON_CONTENT.text,
@@ -155,11 +203,22 @@ const implicitTooltip = (
 };
 
 type ButtonProps = {
-  variant?: VariantProps<typeof buttonVariants>["variant"];
+  variant?: ButtonVariant | null | undefined;
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
   icon?: ReactNode;
   tooltip?: ReactNode;
+  /**
+   * The current choice in a set (a picked option, the active filter tab, the
+   * open item of a list): shows the variant's selected treatment, which is
+   * distinct from its hover. The ARIA state stays the caller's
+   * (`aria-pressed`, `aria-checked`, `aria-current` or `aria-selected`),
+   * because which one is right depends on the widget the button is part of.
+   * For a set of mutually exclusive options prefer `ToggleGroup`, which owns
+   * that state.
+   */
+  selected?: boolean | undefined;
+  focusRing?: ButtonFocusRing | undefined;
   "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
@@ -173,6 +232,8 @@ function Button({
   children,
   disabled,
   tooltip,
+  selected,
+  focusRing = "outside",
   "data-accessible-disabled": accessibleDisabled,
   ...props
 }: ButtonProps) {
@@ -210,16 +271,23 @@ function Button({
       </>
     ),
     className: cn(
-      disposition === BUTTON_DISPOSITION.enabled &&
-        !isActivationPreservingDisabled &&
-        size !== "row" &&
-        variant !== "link" &&
-        buttonPressClass,
-      buttonVariants({ className, size, variant }),
+      variant === "plain"
+        ? cn(BUTTON_PLAIN_CLASS, className)
+        : cn(
+            disposition === BUTTON_DISPOSITION.enabled &&
+              !isActivationPreservingDisabled &&
+              size !== "row" &&
+              size !== "inline" &&
+              variant !== "link" &&
+              buttonPressClass,
+            buttonVariants({ className, size, variant }),
+          ),
+      focusRing === "inside" && BUTTON_FOCUS_RING_INSIDE_CLASS,
       (isAccessibleDisabled || isActivationPreservingDisabled) &&
         buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",
+    "data-pressed": selected === true ? "" : undefined,
     "aria-busy": loading || undefined,
     ...(isAccessibleDisabled || isActivationPreservingDisabled
       ? { "aria-disabled": true, "data-disabled": "", tabIndex: 0 }
@@ -251,6 +319,7 @@ function Button({
   });
 }
 
+export type { ButtonFocusRing, ButtonProps, ButtonSize, ButtonVariant };
 export {
   Button,
   BUTTON_CONTENT,

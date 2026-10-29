@@ -211,10 +211,33 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
   actions in toolbars and rows)
 - **destructive-ghost:** destructive text, transparent, tinted on hover
 - **link:** underline, no background
+- **plain:** no box at all: a click target whose look is its content
+  (a card, a thumbnail, a cell). It keeps the button's disabled
+  disposition, tooltip and focus ring, lays out like a native button
+  (`inline-block`, content from the start), takes its radius from the
+  caller so the ring follows the content's shape, and ignores `size`.
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
-`row` (a menu-list row).
+`row` (a menu-list row), `inline` (an action inside a line of text:
+no height, padding or type of its own, wraps with the line; quiet
+variants drop their hover fill).
+
+These are the only variants and sizes. A screen that seems to need
+another (a card button, a tile, a hint) composes `plain` with the
+content's own surface, or adds the variant here first.
+
+**Selected.** `selected` marks the current choice in a set (the active
+filter, a picked option) with the variant's selected treatment: an
+inset edge and a raised or stronger surface, never the hover fill
+alone, so the choice stays visible under the pointer and without it.
+The ARIA state (`aria-pressed`, `aria-current`, ...) stays the
+caller's. A row of exclusive options (filter tabs, view modes) is a
+`ToggleGroup`, which owns that state.
+
+**Focus ring.** Drawn outside the box with a gap by default;
+`focusRing="inside"` draws it within the box, for a target that fills
+an `overflow-hidden` container where an outside ring would be clipped.
 A small control renders small type itself; do not add `text-xs` to
 a `sm` button, select, or input.
 
