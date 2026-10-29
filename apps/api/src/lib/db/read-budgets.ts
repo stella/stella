@@ -35,7 +35,7 @@ export const READ_BUDGETS = {
     surface: "scheduled-job",
     pages: 20_000,
     reason:
-      "At most 64 queued pages of eight rows plus one sentinel (576 indexed row visits), three state probes of nine rows, and at most 24 fenced transitions with their aggregate locks and audits. State-leading expiry, heartbeat and queue indexes bound discovery; the 20,000-page ceiling leaves more than 30 pages per discovered row for tree depth, row locks and audit writes. Quiet, transition-heavy and queued-backlog fixtures must stay within this bound at both cardinalities.",
+      "At most 48 queued pages of eight rows plus one sentinel (432 indexed row visits), three state probes of three rows, and at most six fenced transitions with their aggregate locks and audits. State-leading expiry, heartbeat and queue indexes bound discovery; the 20,000-page ceiling leaves more than 30 pages per discovered row for tree depth, row locks and audit writes. Quiet, transition-heavy and queued-backlog fixtures must stay within this bound at both cardinalities.",
   },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",

@@ -51,7 +51,6 @@ export const seedDataExportReadScaling = async (
     userId,
   });
   const cleanup = async () => {
-    await db.delete(member).where(eq(member.id, membershipId));
     await db.delete(organization).where(eq(organization.id, organizationId));
     await db.delete(user).where(eq(user.id, userId));
   };

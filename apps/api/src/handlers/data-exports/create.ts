@@ -106,7 +106,7 @@ const createDataExport = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(createDataExport.handler, {
+declareAggregateMutation(createDataExport, {
   type: "independent",
   reason:
     "Creates an organization export job and audit event; it changes no matter or domain aggregate rows.",

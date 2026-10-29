@@ -43,12 +43,12 @@ import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 export const MAINTAIN_DATA_EXPORTS_TASK = "dataExports.maintain" as const;
 
-/** Rows handled per state per tick; a continuation takes the rest. */
-const BATCH_SIZE = 8;
+/** Two audited transitions per state leave room for queue reads under the statement ceiling. */
+const BATCH_SIZE = 2;
 const CONTINUATION_DELAY_MS = 1000;
 // One active export per organisation bounds the queued rows; past this many
 // pages a run hands the rest to its continuation.
-const MAX_HANDOFF_PAGES = 64;
+export const DATA_EXPORT_MAX_HANDOFF_PAGES = 48;
 /** A queued export older than this has lost its queue handoff. */
 const QUEUED_HANDOFF_SETTLE_MS = 5 * 60 * 1000;
 const STALE_RUN_ERROR =
@@ -57,7 +57,7 @@ const ABANDONED_ERROR =
   "The export could not be started because its requester's account no longer exists.";
 
 /** Queued exports handed to the queue per page. */
-export const DATA_EXPORT_HANDOFF_PAGE_SIZE = BATCH_SIZE;
+export const DATA_EXPORT_HANDOFF_PAGE_SIZE = 8;
 
 export type DataExportMaintenanceDependencies = {
   enqueue: typeof enqueueDataExport;
@@ -425,7 +425,7 @@ const requeueQueued = async (
   // run pages past every settled row instead of rereading the oldest page:
   // a backlog of rows already waiting in the queue never hides later ones.
   let cursor = initialCursor;
-  for (let page = 0; page < MAX_HANDOFF_PAGES; page += 1) {
+  for (let page = 0; page < DATA_EXPORT_MAX_HANDOFF_PAGES; page += 1) {
     // db-await-in-loop: keyset pages are sequential by design; each page starts after the previous page's last row
     const queuedPage = await readQueuedPage({
       db,

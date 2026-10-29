@@ -16,6 +16,7 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
   createMaintainDataExportsTask,
   DATA_EXPORT_HANDOFF_PAGE_SIZE,
+  DATA_EXPORT_MAX_HANDOFF_PAGES,
 } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -188,15 +189,20 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const now = new Date("2026-10-24T13:00:00Z");
         const userId = mintAuthProviderId<"user">();
         const jobId = `data-export-maintenance-${Bun.randomUUIDv7()}`;
-        const organizations = Array.from({ length: 513 }, (_, index) => ({
-          id: mintAuthProviderId<"organization">(),
-          name: `Export fixture ${index}`,
-          slug: `export-fixture-${Bun.randomUUIDv7()}`,
-          createdAt: now,
-        }));
+        const handoffCapacity =
+          DATA_EXPORT_HANDOFF_PAGE_SIZE * DATA_EXPORT_MAX_HANDOFF_PAGES;
+        const organizations = Array.from(
+          { length: handoffCapacity + 1 },
+          (_, index) => ({
+            id: mintAuthProviderId<"organization">(),
+            name: `Export fixture ${index}`,
+            slug: `export-fixture-${Bun.randomUUIDv7()}`,
+            createdAt: now,
+          }),
+        );
         const exportIds = organizations.map(() => createSafeId<"dataExport">());
         const lateExportId =
-          exportIds.at(512) ?? panic("Late export id fixture required");
+          exportIds.at(-1) ?? panic("Late export id fixture required");
         try {
           await client.db.insert(user).values({
             id: userId,
@@ -204,16 +210,29 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             email: `${userId}@example.test`,
           });
           await client.db.insert(organization).values(organizations);
-          await client.db.insert(organizationDataExports).values(
-            organizations.map(({ id: organizationId }, index) => ({
-              id: exportIds[index] ?? panic("Export id fixture required"),
-              organizationId,
-              requestedBy: userId,
-              versionScope: "all" as const,
-              status: "queued" as const,
-              createdAt: new Date(now.getTime() - 10 * 60_000),
-            })),
-          );
+          // Seed all tenants in one round trip under application RLS without changing shared policies.
+          await client.db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT set_config('test.export_fixture_rows', ${JSON.stringify(
+              organizations.map(({ id: organizationId }, index) => ({
+                id: exportIds[index] ?? panic("Export id fixture required"),
+                organizationId,
+              })),
+            )}, true), set_config('test.export_fixture_requester', ${userId}, true),
+              set_config('test.export_fixture_created_at', ${new Date(now.getTime() - 10 * 60_000).toISOString()}, true)`);
+            await tx.execute(sql`SET LOCAL ROLE stella`);
+            await tx.execute(sql`DO $$
+              DECLARE fixture_row record;
+              BEGIN
+                FOR fixture_row IN SELECT * FROM jsonb_to_recordset(current_setting('test.export_fixture_rows')::jsonb)
+                  AS rows(id uuid, "organizationId" text)
+                LOOP
+                  PERFORM set_config('app.organization_id', fixture_row."organizationId", true);
+                  INSERT INTO organization_data_exports (id, organization_id, requested_by, version_scope, status, created_at)
+                  VALUES (fixture_row.id, fixture_row."organizationId", current_setting('test.export_fixture_requester'),
+                    'all', 'queued', current_setting('test.export_fixture_created_at')::timestamptz);
+                END LOOP;
+              END $$`);
+          });
           await client.db
             .update(organizationDataExports)
             .set({ createdAt: sql`'2026-10-24T12:00:00.123456Z'::timestamptz` })
@@ -257,7 +276,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           };
 
           expect(await run()).toEqual(Result.ok(undefined));
-          expect(enqueued).toHaveLength(512);
+          expect(enqueued).toHaveLength(handoffCapacity);
           expect(continuations).toHaveLength(1);
           expect(await run()).toEqual(Result.ok(undefined));
           expect(enqueued).toContain(lateExportId);

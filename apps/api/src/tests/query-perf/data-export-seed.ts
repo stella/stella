@@ -23,10 +23,16 @@ export const seedDataExportScenario = async (
     SELECT md5('export-org-' || i)::uuid, 'Export measurement', 'export-measurement-' || i, now()
     FROM generate_series(1, ${rows}::integer) AS i ON CONFLICT (id) DO NOTHING`);
   await database.execute(sql`TRUNCATE organization_data_exports, audit_logs`);
-  await database.execute(sql`INSERT INTO organization_data_exports
+  // Ordered UUIDs keep both alternating stale-run outcomes in each bounded page.
+  // FORCE RLS also applies to the fixture owner; permit only seed inserts,
+  // then remove the fixture policy before any measured task runs.
+  await database.execute(sql`CREATE POLICY query_perf_export_seed ON organization_data_exports
+    FOR INSERT TO CURRENT_USER WITH CHECK (true)`);
+  try {
+    await database.execute(sql`INSERT INTO organization_data_exports
     (id, organization_id, requested_by, version_scope, status, attempt, failures,
       created_at, heartbeat_at, expires_at)
-    SELECT md5('export-' || i)::uuid, md5('export-org-' || i)::uuid,
+    SELECT ('01990000-00c1-7000-8000-' || lpad(to_hex(i), 12, '0'))::uuid, md5('export-org-' || i)::uuid,
       CASE WHEN ${cohort} = 'transitions' AND i % 3 = 2 THEN NULL ELSE ${USER_ID} END,
       'all',
       CASE WHEN ${cohort} = 'queued' THEN 'queued'
@@ -36,5 +42,10 @@ export const seedDataExportScenario = async (
       CASE WHEN ${cohort} = 'quiet' THEN '2026-01-10T12:00:00Z'::timestamptz ELSE '2026-01-01T12:00:00Z'::timestamptz END,
       CASE WHEN ${cohort} = 'quiet' THEN '2026-02-01T12:00:00Z'::timestamptz ELSE '2026-01-01T12:00:00Z'::timestamptz END
     FROM generate_series(1, ${rows}::integer) AS i`);
+  } finally {
+    await database.execute(
+      sql`DROP POLICY query_perf_export_seed ON organization_data_exports`,
+    );
+  }
   await database.execute(sql`VACUUM (ANALYZE) organization_data_exports`);
 };

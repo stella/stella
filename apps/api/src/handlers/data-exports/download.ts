@@ -194,7 +194,7 @@ const downloadDataExport = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(downloadDataExport.handler, {
+declareAggregateMutation(downloadDataExport, {
   type: "independent",
   reason:
     "Creates a temporary download link and records its audit event; it changes no matter or export source rows.",

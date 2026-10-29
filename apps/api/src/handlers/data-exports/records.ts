@@ -254,6 +254,7 @@ export const INVOICE_COLUMNS = {
   totalAmount: "export",
   notes: "export",
   paidAt: "export",
+  sentAt: "export",
   createdAt: "export",
   updatedAt: "export",
 } as const satisfies ColumnMap<typeof invoices>;

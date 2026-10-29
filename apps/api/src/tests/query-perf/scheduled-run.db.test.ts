@@ -10,6 +10,7 @@ import { auditLogs, organizationDataExports } from "@/api/db/schema";
 import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
 import {
   DATA_EXPORT_HANDOFF_PAGE_SIZE,
+  DATA_EXPORT_MAX_HANDOFF_PAGES,
   MAINTAIN_DATA_EXPORTS_TASK,
 } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
@@ -103,7 +104,9 @@ test.each(["quiet", "transitions", "queued"] as const)(
       false,
     );
     if (cohort === "queued") {
-      expect(enqueued).toBe(512);
+      expect(enqueued).toBe(
+        DATA_EXPORT_HANDOFF_PAGE_SIZE * DATA_EXPORT_MAX_HANDOFF_PAGES,
+      );
     }
     if (cohort === "quiet") {
       expect(enqueued).toBe(0);
