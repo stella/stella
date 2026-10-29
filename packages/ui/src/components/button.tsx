@@ -76,6 +76,9 @@ const buttonVariants = cva(
         xl: "h-11 px-[calc(--spacing(4)-1px)] text-lg sm:h-10 sm:text-base [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
         xs: "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-sm before:rounded-[calc(var(--radius-md)-1px)] sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
       },
+      layout: {
+        wrap: "h-auto min-h-11 items-start justify-start py-2 text-start whitespace-normal sm:h-auto",
+      },
       variant: {
         default:
           "border-primary bg-primary text-primary-foreground shadow-primary/24 [:hover,[data-pressed]]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none",
@@ -157,6 +160,7 @@ const implicitTooltip = (
 type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
+  layout?: VariantProps<typeof buttonVariants>["layout"];
   loading?: boolean;
   icon?: ReactNode;
   tooltip?: ReactNode;
@@ -168,6 +172,7 @@ function Button({
   variant,
   size,
   render,
+  layout,
   loading,
   icon,
   children,
@@ -215,7 +220,7 @@ function Button({
         size !== "row" &&
         variant !== "link" &&
         buttonPressClass,
-      buttonVariants({ className, size, variant }),
+      buttonVariants({ className, size, variant, layout }),
       (isAccessibleDisabled || isActivationPreservingDisabled) &&
         buttonAccessibleDisabledClass,
     ),

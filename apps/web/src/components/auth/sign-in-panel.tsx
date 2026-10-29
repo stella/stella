@@ -639,7 +639,8 @@ const SocialButton = ({
     {(describedBy) => (
       <Button
         aria-describedby={describedBy}
-        className="w-full min-w-0 shrink max-sm:h-auto max-sm:min-h-10 max-sm:px-2 max-sm:py-2 max-sm:text-[0.95rem] max-sm:leading-tight max-sm:whitespace-normal sm:whitespace-nowrap"
+        layout="wrap"
+        className="w-full min-w-0 shrink max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
         disabled={disabled}
         loading={loading}
         onClick={onClick}

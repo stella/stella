@@ -1228,3 +1228,58 @@ test("Contents places streamed analysis sections among the headings without movi
     viewport.remove();
   }
 });
+
+test.each(["contents", "hidden"])(
+  "%s rows let long titles grow without overlapping the following row",
+  async (surface) => {
+    const longPath = path.map((entry) => ({
+      ...entry,
+      title: `${entry.title}: Podmínky poskytování přímých plateb zemědělcům a požadavky na způsobilost žádosti`,
+    }));
+    render(
+      <IntlProvider locale="en" messages={messages}>
+        <TooltipProvider>
+          <ReaderBreadcrumb
+            activeAnchorId={longPath.at(-1)?.anchorId ?? null}
+            onJump={() => {}}
+            rows={longPath.map(({ anchorId, title }) => ({
+              type: "heading",
+              anchorId,
+              title,
+            }))}
+            trail={{ type: "document", segments: longPath }}
+          />
+        </TooltipProvider>
+      </IntlProvider>,
+    );
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name:
+            surface === "contents" ? /^Contents/u : messages.common.showMore,
+        }),
+      ),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name:
+        surface === "contents"
+          ? messages.statutes.outline
+          : messages.common.showMore,
+    });
+    const buttons = within(dialog).getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(1);
+    // Happy DOM has no layout engine. Auto height at both breakpoints, with
+    // normal wrapping and padding, lets each row reserve all its text's height.
+    for (const button of buttons) {
+      expect(button.classList.contains("h-auto")).toBe(true);
+      expect(button.classList.contains("sm:h-auto")).toBe(true);
+      expect(button.classList.contains("whitespace-normal")).toBe(true);
+      expect(button.classList.contains("py-2")).toBe(true);
+      expect(
+        [...button.classList].filter((name) =>
+          /^(?:sm:)?h-(?!auto$)/u.test(name),
+        ),
+      ).toEqual([]);
+    }
+  },
+);

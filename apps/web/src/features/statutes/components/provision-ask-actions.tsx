@@ -173,7 +173,8 @@ export const ProvisionAskActions = ({
       >
         {(capabilityProps) => (
           <Button
-            className="h-auto justify-start px-2 py-1.5 whitespace-normal"
+            layout="wrap"
+            className="px-2 py-1.5"
             onClick={summarize}
             size="sm"
             variant="outline"

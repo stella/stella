@@ -83,12 +83,10 @@ const ReaderContentsList = ({
     className?: string;
   }) => (
     <Button
+      layout="wrap"
       aria-current={anchorId === activeAnchorId ? "location" : undefined}
       aria-label={label}
-      className={cn(
-        "min-h-11 min-w-0 flex-1 justify-start text-start whitespace-normal",
-        className,
-      )}
+      className={cn("min-w-0 flex-1", className)}
       data-contents-anchor={anchorId}
       onClick={() => onSelect(anchorId)}
       // The row shows its title; a tooltip of its accessible name would open
@@ -260,8 +258,9 @@ export const ReaderBreadcrumb = ({
       {hidden.map(({ anchorId, title }) => (
         <li key={anchorId}>
           <Button
+            layout="wrap"
             aria-label={nameOf(title)}
-            className="min-h-11 w-full justify-start text-start whitespace-normal"
+            className="w-full"
             // As in Contents: the row shows its title, and a tooltip would
             // take the list's Escape.
             tooltip={false}

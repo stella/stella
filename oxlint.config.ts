@@ -1993,6 +1993,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
@@ -3628,6 +3629,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // Button's size variants set fixed heights; wrapped labels can overflow
+      // the row and overlap the next one. The wrap layout owns its height.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-button-whitespace-normal.fixture.tsx",
+      ],
+      rules: {
+        "no-button-whitespace-normal/no-button-whitespace-normal": "error",
       },
     },
     {
