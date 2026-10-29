@@ -152,34 +152,39 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
       articles: reference.articles,
       title: reference.title,
     });
-    const key = JSON.stringify(reference);
-    const firstSight = !state.seenReferences.has(key);
-    state.seenReferences.add(key);
-    if (verdict.type === "rejected") {
-      if (firstSight) {
-        state.rejectedReferences.push({
-          text: anchor.replaceAll(/\s+/gu, " ").trim(),
-          articles: reference.articles,
-          isapId: reference.isapId,
-          reason: verdict.reason,
-          outcome: "link-dropped",
-        });
-      }
-      return children();
-    }
-    if (firstSight && verdict.type === "act" && verdict.dropped !== undefined) {
-      state.rejectedReferences.push({
-        text: anchor.replaceAll(/\s+/gu, " ").trim(),
+    const shown = anchor.replaceAll(/\s+/gu, " ").trim();
+    const reject = (
+      reason: LexLinkRejection,
+      outcome: PlNcourtRejectedReference["outcome"],
+    ): void => {
+      const rejected: PlNcourtRejectedReference = {
+        text: shown,
         articles: reference.articles,
         isapId: reference.isapId,
-        reason: verdict.dropped,
-        outcome: "provision-dropped",
-      });
+        reason,
+        outcome,
+      };
+      const key = JSON.stringify(["rejected", rejected]);
+      if (!state.seenReferences.has(key)) {
+        state.seenReferences.add(key);
+        state.rejectedReferences.push(rejected);
+      }
+    };
+    if (verdict.type === "rejected") {
+      reject(verdict.reason, "link-dropped");
+      return children();
     }
-    if (firstSight) {
-      state.legalReferences.push(
-        verdict.type === "act" ? { ...reference, articles: "" } : reference,
-      );
+    if (verdict.type === "act" && verdict.dropped !== undefined) {
+      reject(verdict.dropped, "provision-dropped");
+    }
+    // Keyed on what is kept, so the verdict and the resolved provisions
+    // decide whether an occurrence is new, not the publisher's attributes.
+    const kept: PlNcourtLegalReference =
+      verdict.type === "act" ? { ...reference, articles: "" } : reference;
+    const keptKey = JSON.stringify(["kept", kept]);
+    if (!state.seenReferences.has(keptKey)) {
+      state.seenReferences.add(keptKey);
+      state.legalReferences.push(kept);
     }
     const href =
       reference.isapId.length === 0

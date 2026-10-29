@@ -49,6 +49,9 @@ const PROVISION_KINDS = new Map([
   ["lit", "lit"],
 ]);
 
+/** Outermost first: a level belongs to the nearest outer level before it. */
+const LEVELS = ["art", "par", "ust", "pkt", "lit"];
+
 const NUMBER_SOURCE = String.raw`\d+[a-z]?(?:\(\d+\))?`;
 const LIST_JOINER_SOURCE = String.raw`\s*(?:,|-|–|\bi\b|\boraz\b|\bdo\b)\s*`;
 const TOKEN_PATTERN = new RegExp(
@@ -65,37 +68,55 @@ const FOREIGN_ACT_PATTERN =
 const normalised = (text: string): string =>
   text.replaceAll(/\s+/gu, " ").replaceAll(/ \(/gu, "(").trim().toLowerCase();
 
-type ProvisionTokens = {
-  /** `kind:number` for every level named. */
-  tokens: Set<string>;
-  /** Text left once every provision token is removed. */
+type ProvisionChains = {
+  /**
+   * Every path the text prints, each with its outer prefixes: `art:1/par:2`
+   * keeps its paragraph under its article, so `art:1/par:1` is not implied
+   * by "art. 1 § 2 oraz art. 2 § 1".
+   */
+  chains: Set<string>;
+  /** The deepest path of each number listed, as printed. */
+  leaves: string[];
+  /** Text left once every provision is removed. */
   remainder: string;
 };
 
-const tokensOf = (text: string): ProvisionTokens => {
-  const tokens = new Set<string>();
+const chainsOf = (text: string): ProvisionChains => {
+  const chains = new Set<string>();
+  const leaves: string[] = [];
+  let path: string[] = [];
   const remainder = normalised(text).replaceAll(
     TOKEN_PATTERN,
     (match, word: string, numbers: string) => {
       const kind = PROVISION_KINDS.get(word);
-      if (kind === undefined) {
+      const level = kind === undefined ? -1 : LEVELS.indexOf(kind);
+      if (kind === undefined || level < 0) {
         return match;
       }
+      const outer = path.filter(
+        (step) => LEVELS.indexOf(step.slice(0, step.indexOf(":"))) < level,
+      );
+      let last = outer;
       for (const number of numbers.match(NUMBER_PATTERN) ?? []) {
-        tokens.add(`${kind}:${number}`);
+        last = [...outer, `${kind}:${number}`];
+        leaves.push(last.join("/"));
+        for (let end = 1; end <= last.length; end += 1) {
+          chains.add(last.slice(0, end).join("/"));
+        }
       }
+      path = last;
       return "";
     },
   );
-  return { tokens, remainder: remainder.replaceAll(/\s+/gu, "") };
+  return { chains, leaves, remainder: remainder.replaceAll(/\s+/gu, "") };
 };
 
-const hasArticle = (tokens: Set<string>): boolean =>
-  [...tokens].some((token) => token.startsWith("art:"));
+const hasArticle = ({ chains }: ProvisionChains): boolean =>
+  [...chains].some((chain) => chain.startsWith("art:"));
 
-/** Every provision a claim names is printed in the anchor. */
+/** Every provision a claim names is printed in the anchor, under the same outer levels. */
 const claimFollowsAnchor = (
-  anchor: ProvisionTokens,
+  anchor: ProvisionChains,
   claim: string,
 ): boolean => {
   const entries = claim
@@ -103,11 +124,12 @@ const claimFollowsAnchor = (
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
   return entries.every((entry) => {
-    const named = tokensOf(entry);
+    const named = chainsOf(entry);
     return (
-      hasArticle(named.tokens) &&
+      named.leaves.length > 0 &&
+      named.leaves.every((leaf) => leaf.startsWith("art:")) &&
       named.remainder.length === 0 &&
-      [...named.tokens].every((token) => anchor.tokens.has(token))
+      named.leaves.every((leaf) => anchor.chains.has(leaf))
     );
   });
 };
@@ -128,9 +150,9 @@ export const judgeLexLink = (link: LexLinkClaim): LexLinkVerdict => {
   if (namesForeignAct(link)) {
     return { type: "rejected", reason: LEXLINK_REJECTION.FOREIGN_ACT };
   }
-  const anchor = tokensOf(link.anchor);
+  const anchor = chainsOf(link.anchor);
   const claimed = link.articles.trim().length > 0;
-  if (anchor.tokens.size > 0 && !hasArticle(anchor.tokens)) {
+  if (anchor.chains.size > 0 && !hasArticle(anchor)) {
     return { type: "rejected", reason: LEXLINK_REJECTION.BARE_PROVISION };
   }
   if (!claimed) {
