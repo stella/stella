@@ -44,7 +44,10 @@ describe("mobile catalogues", () => {
       );
       for (const [path, message] of translated) {
         const source = english.get(path) ?? "";
-        // Parsed as ICU, so words inside plural branches are not arguments.
+        expect({ path, error: findIcuError(source) }).toEqual({
+          path,
+          error: null,
+        });
         expect({ path, error: findIcuError(message) }).toEqual({
           path,
           error: null,
@@ -60,4 +63,23 @@ describe("mobile catalogues", () => {
       }
     },
   );
+
+  test("plural branch text is literal and repeated nested arguments count once", () => {
+    const source =
+      "{count, plural, one {and another for {name}} other {and # more for {name}}}";
+    const translated =
+      "{count, plural, one {a další pro {name}} few {a další # pro {name}} other {a dalších # pro {name}}}";
+    expect(findIcuError(source)).toBeNull();
+    expect(findIcuError(translated)).toBeNull();
+    expect(findPlaceholderMismatch(source, translated)).toBeNull();
+    expect(
+      findPlaceholderMismatch(
+        source,
+        translated.replaceAll("{name}", "{recipient}"),
+      ),
+    ).toEqual({
+      missing: ["name"],
+      extra: ["recipient"],
+    });
+  });
 });
