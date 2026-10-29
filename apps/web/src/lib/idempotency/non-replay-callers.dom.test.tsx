@@ -5,7 +5,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { SampleCaseLoad } from "@/features/avt/types";
-import { APIError } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -24,6 +24,7 @@ const { roleOptions } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { viewsOptions } = await import("@/lib/workspaces/queries/views");
+const { api } = await import("@/lib/api");
 const { createMemory } = await import("@/lib/memory-api");
 const { useCreateWorkspace } = await import("@/lib/workspaces/mutations");
 const { useIdempotentSubmit } =
@@ -47,31 +48,28 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   </IntlProvider>
 );
 
-test("a single-request memory intent keeps its key after a lost response and changes it after success", async () => {
+test("a replay-enabled create retains its key after a lost response and changes it after success", async () => {
   const requests: Request[] = [];
-  const memoryId = "00000000-0000-4000-8000-000000000031";
+  const documentTypeId = "00000000-0000-4000-8000-000000000031";
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
       requests.push(request);
       if (requests.length === 1) {
-        throw new TypeError("Response lost after memory creation");
+        throw new TypeError("Response lost after document type creation");
       }
-      return Response.json({ id: memoryId });
+      return Response.json({ id: documentTypeId });
     },
     { preconnect: originalFetch.preconnect },
   );
   const { result } = renderHook(useIdempotentSubmit);
-  const body = {
-    content: "Use numbered paragraphs.",
-    kind: "preference",
-    scope: "user",
-  } satisfies Parameters<typeof createMemory>[0];
+  const body = { label: "Review document" };
   const submit = async () =>
     await result.current.run({
       body,
-      operation: "memory.create",
-      send: createMemory,
+      operation: "document-types.create",
+      send: async (values, request) =>
+        unwrapApiResponse(await api["document-types"].post(values, request)),
     });
   const failed = await submit().then(
     () => null,
@@ -79,18 +77,42 @@ test("a single-request memory intent keeps its key after a lost response and cha
   );
   expect(failed).toBeInstanceOf(APIError);
   expect(failed).toMatchObject({ status: 0, transportKind: "network" });
-  expect(await submit()).toMatchObject({ id: memoryId });
+  expect(await submit()).toMatchObject({ id: documentTypeId });
   const keys = requests.map((request) =>
     request.headers.get("Idempotency-Key"),
   );
   expect(keys.at(0)).toBeString();
   expect(keys.at(1)).toBe(keys.at(0));
   expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
-    "/v1/memories",
-    "/v1/memories",
+    "/v1/document-types",
+    "/v1/document-types",
   ]);
-  expect(await submit()).toMatchObject({ id: memoryId });
+  expect(await submit()).toMatchObject({ id: documentTypeId });
   expect(requests.at(2)?.headers.get("Idempotency-Key")).not.toBe(keys.at(0));
+});
+
+test("memory creation omits the replay key", async () => {
+  const requests: Request[] = [];
+  const memoryId = "00000000-0000-4000-8000-000000000032";
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return Response.json({ id: memoryId });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+
+  expect(
+    await createMemory({
+      content: "Use numbered paragraphs.",
+      kind: "preference",
+      scope: "user",
+    }),
+  ).toMatchObject({ id: memoryId });
+  expect(requests).toHaveLength(1);
+  expect(new URL(requests.at(0)?.url ?? "").pathname).toBe("/v1/memories");
+  expect(requests.at(0)?.headers.get("Idempotency-Key")).toBeNull();
 });
 
 test("a matter creation caller with a generated identity sends no replay key", async () => {
