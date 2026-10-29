@@ -3804,6 +3804,7 @@ export const euEcjAdapter = defineSourceAdapter({
         // the same day on the next run instead of skipping it.
         if (abortSignal.aborted) {
           return {
+            observations: [],
             decisions,
             nextCursor: dateFrom,
             itemBuildFailures: { type: "item_build_failed", count: failed },
@@ -3820,6 +3821,7 @@ export const euEcjAdapter = defineSourceAdapter({
         const nextCursor = nextDate <= today ? nextDate : today;
 
         return {
+          observations: [],
           decisions,
           nextCursor,
           itemBuildFailures: { type: "item_build_failed", count: failed },

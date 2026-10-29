@@ -411,7 +411,7 @@ const plKioQuarantineRepairIds = (item: PlKioListingItem): RepairAlias[] => {
   const canonicalAlias = repairAliasesForStableFields({
     namespace: LEGACY_REPAIR_NAMESPACE.PL_KIO,
     sourceDocumentIds: [canonicalId],
-    stableFields: { signature: item.signature },
+    stableFields: { signature: item.signature, court: item.court },
   });
   if (item.html === undefined) {
     return canonicalAlias;
@@ -431,7 +431,7 @@ const plKioQuarantineRepairIds = (item: PlKioListingItem): RepairAlias[] => {
   const legacyAlias = repairAliasesForStableFields({
     namespace: LEGACY_REPAIR_NAMESPACE.PL_KIO,
     sourceDocumentIds: [legacyId],
-    stableFields: { signature: legacyItem.signature },
+    stableFields: { signature: legacyItem.signature, court: legacyItem.court },
   });
   return [...new Set([...canonicalAlias, ...legacyAlias])];
 };

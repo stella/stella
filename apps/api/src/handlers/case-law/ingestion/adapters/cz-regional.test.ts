@@ -670,7 +670,7 @@ describe("a court's record with no usable identity is quarantined", () => {
     });
   });
 
-  test("a keyed observation repairs only forms that retain its docket", async () => {
+  test("a keyed observation withholds repair forms missing its court or docket", async () => {
     const item = await district();
     const built = assembleCzRegionalDecision({
       item,
@@ -681,9 +681,7 @@ describe("a court's record with no usable identity is quarantined", () => {
       built.type === "built" ? built.decision : panic("district did not build");
 
     expect(decision.sourceDocumentId).not.toMatch(QUARANTINE_ID);
-    expect(decision.sourceDocumentIdRepairAliases?.toSorted()).toEqual(
-      [quarantineIdOf({ ...item, soud: null })].toSorted(),
-    );
+    expect(decision.sourceDocumentIdRepairAliases).toBeUndefined();
     // A row keyed on its docket states no publisher id, and the pipeline
     // adopts by repair alias only for one that does.
     const docketKeyed = assembleCzRegionalDecision({
@@ -717,8 +715,15 @@ describe("a court's record with no usable identity is quarantined", () => {
     };
     const firstAliases = aliasesOf(first);
     const secondAliases = aliasesOf(second);
-    expect(firstAliases).toContain(quarantineIdOf({ ...first, soud: null }));
-    expect(secondAliases).toContain(quarantineIdOf({ ...second, soud: null }));
+    expect(firstAliases).not.toContain(
+      quarantineIdOf({ ...first, soud: null }),
+    );
+    expect(secondAliases).not.toContain(
+      quarantineIdOf({ ...second, soud: null }),
+    );
+    expect(quarantineIdOf({ ...first, soud: null })).not.toBe(
+      quarantineIdOf({ ...second, soud: null }),
+    );
     expect(
       firstAliases.filter((alias) => secondAliases.includes(alias)),
     ).toEqual([]);

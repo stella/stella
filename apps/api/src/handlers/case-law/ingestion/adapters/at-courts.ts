@@ -838,6 +838,7 @@ const identityOf = (
     panic("RIS quarantine identity construction failed");
   }
   const sourceDocumentId = sourceDocumentIdOf(item);
+  const data = readDecisionMetadata(source, item);
   return sourceDocumentId === undefined
     ? {
         sourceDocumentId: quarantineId,
@@ -850,9 +851,10 @@ const identityOf = (
           namespace: LEGACY_REPAIR_NAMESPACE.AT_COURTS,
           sourceDocumentIds: quarantineIds,
           stableFields: {
-            caseNumbers: readDecisionMetadata(source, item).caseNumbers.join(
-              " | ",
-            ),
+            court:
+              optionalString(data.sourceMetadata?.["Gericht"]) ??
+              optionalString(data.sourceMetadata?.["EntscheidendeBehoerde"]),
+            caseNumbers: data.caseNumbers.join(" | "),
           },
         }),
         type: "publisher",

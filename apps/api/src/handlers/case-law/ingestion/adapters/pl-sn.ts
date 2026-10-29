@@ -1659,6 +1659,7 @@ const plSnFetchPage = async (
     // next cycle rather than checkpointing past them; what was stored is
     // re-stored under the same hash, and skipping them would be permanent.
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1678,6 +1679,7 @@ const plSnFetchPage = async (
   // reading it as the month's last one would leave the rest unvisited.
   if (window.full) {
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1697,6 +1699,7 @@ const plSnFetchPage = async (
 
   const next = monthAfter(window.month);
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}

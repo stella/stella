@@ -7,12 +7,14 @@ import {
 import {
   isQuarantineListingIdentity,
   isQuarantineSourceDocumentId,
+  LEGACY_REPAIR_NAMESPACE,
   LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
   quarantinedListingObservation,
   quarantineIdentity,
   quarantineSourceDocumentId,
   type RepairAlias,
+  repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 
 describe("repair alias qualification", () => {
@@ -36,7 +38,11 @@ describe("repair alias qualification", () => {
   );
 
   test("only the discriminator stated by that fingerprint qualifies it", () => {
-    const shared = { decisionDate: "2026-01-12", subject: "Published subject" };
+    const shared = {
+      court: "Published court",
+      decisionDate: "2026-01-12",
+      subject: "Published subject",
+    };
     const first = quarantineIdentity({
       namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
       stableFields: { docket: "18 C 130/2024", ...shared },
@@ -212,5 +218,96 @@ describe("noncanonical listing observations", () => {
       }).identity;
     expect(identity(null)).not.toEqual(identity({}));
     expect(identity({ text: "A" })).not.toEqual(identity({ text: "B" }));
+  });
+});
+
+describe("court provenance of repair forms", () => {
+  test.each([
+    {
+      form: "CZ regional docket without court",
+      namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+      fields: { docket: "18 C 130/2024" },
+      courtField: "court",
+    },
+    {
+      form: "SK courts with both court fields absent",
+      namespace: QUARANTINE_NAMESPACE.SK_COURTS,
+      fields: { spisovaZnacka: "1 C 12/2024" },
+      courtField: "sud",
+    },
+    {
+      form: "HU docket without court",
+      namespace: QUARANTINE_NAMESPACE.HU_BHGY,
+      fields: { docket: "Pfv.20.123/2024" },
+      courtField: "court",
+    },
+    {
+      form: "KIO signature without court",
+      namespace: LEGACY_REPAIR_NAMESPACE.PL_KIO,
+      fields: { signature: "KIO 12/24" },
+      courtField: "court",
+    },
+    {
+      form: "NSA docket without court",
+      namespace: LEGACY_REPAIR_NAMESPACE.PL_NSA,
+      fields: { docket_number: "II SA 12/24" },
+      courtField: "court_name",
+    },
+    {
+      form: "NSS reference without court",
+      namespace: QUARANTINE_NAMESPACE.CZ_NSS,
+      fields: { reference: "1 As 12/2024-10" },
+      courtField: "court",
+    },
+    {
+      form: "national court listed signature without court",
+      namespace: LEGACY_REPAIR_NAMESPACE.PL_NCOURT_LISTED,
+      fields: { signature: "II Ca 236/18" },
+      courtField: "courtId",
+    },
+  ])(
+    "$form stays stored but cannot adopt another row",
+    ({ namespace, fields, courtField }) => {
+      const sourceDocumentIds = ["captured-quarantine-row"];
+      expect(
+        repairAliasesForStableFields({
+          namespace,
+          sourceDocumentIds,
+          stableFields: fields,
+        }),
+      ).toEqual([]);
+      expect(
+        repairAliasesForStableFields({
+          namespace,
+          sourceDocumentIds,
+          stableFields: { ...fields, [courtField]: "Published court" },
+        }),
+      ).toEqual(sourceDocumentIds);
+    },
+  );
+
+  test("national court thesis/date form stays stored without becoming a repair alias", () => {
+    const identity = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
+      stableFields: {
+        publicationDate: "2024-01-04",
+        thesis: "Published thesis",
+      },
+    });
+    expect(identity.sourceDocumentId).toStartWith("pl-ncourt-quarantine:");
+    expect(identity.repairAliases).toEqual([]);
+  });
+
+  test("court category and division do not qualify a historical PL courts fingerprint", () => {
+    const identity = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.PL_COURTS,
+      stableFields: {
+        docket: "II Ca 236/18",
+        courtType: "COMMON",
+        divisionId: "12",
+      },
+    });
+    expect(identity.sourceDocumentId).toStartWith("pl-courts-quarantine:");
+    expect(identity.repairAliases).toEqual([]);
   });
 });

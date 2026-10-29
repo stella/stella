@@ -78,8 +78,10 @@ import type {
 } from "@/api/lib/legal-search/cycle-deadline";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
+  type CollisionFilteredDecisions,
+  type CollisionFilterProof,
   countQuarantineCollisions,
-  quarantinePeerCollisions,
+  filterQuarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
@@ -499,10 +501,10 @@ const runScopedIngestionPipeline = async ({
    * write-failure count.
    */
   const applyPageDecisions = async ({
-    decisions,
+    decisions: { decisions },
     observation,
   }: {
-    decisions: SyncPage["decisions"];
+    decisions: CollisionFilteredDecisions;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
@@ -662,8 +664,10 @@ const runScopedIngestionPipeline = async ({
   const settlePageUnreadItems = async ({
     unreadItems,
     observation,
+    proof,
   }: {
     unreadItems: SyncPage["unreadItems"];
+    proof: CollisionFilterProof;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     if (
@@ -676,7 +680,7 @@ const runScopedIngestionPipeline = async ({
     if (plan.terminal.length > 0) {
       const s3FailuresBefore = s3UploadFailures;
       const halted = await applyPageDecisions({
-        decisions: plan.terminal,
+        decisions: reportPageQuarantineCollisions(plan.terminal, proof),
         observation,
       });
       if (halted !== null) {
@@ -725,7 +729,8 @@ const runScopedIngestionPipeline = async ({
    */
   const reportPageQuarantineCollisions = (
     decisions: SyncPage["decisions"],
-  ): SyncPage["decisions"] => {
+    proof: CollisionFilterProof,
+  ): CollisionFilteredDecisions => {
     const collisions = countQuarantineCollisions(
       decisions.flatMap(({ sourceDocumentId, rawHash }) =>
         sourceDocumentId === undefined
@@ -744,33 +749,15 @@ const runScopedIngestionPipeline = async ({
     // A keyed record whose repair alias is a quarantine id the same page
     // also stores: two records the fingerprint cannot tell apart, and the
     // alias would merge them.
-    const peers = new Set(
-      quarantinePeerCollisions(
-        decisions.map((decision) => ({
-          sourceDocumentId: decision.sourceDocumentId ?? "",
-          quarantinePeers: decision.sourceDocumentIdRepairAliases,
-        })),
-      ),
-    );
-    for (const peer of peers) {
+    const filtered = filterQuarantinePeerCollisions({ decisions, proof });
+    for (const peer of filtered.collidingIds) {
       logger.warn("case_law.ingestion.quarantine_peer_collision", {
         adapterKey: adapter.key,
         cursor,
         sourceDocumentId: peer,
       });
     }
-    if (peers.size === 0) {
-      return decisions;
-    }
-    // Keep the captured page intact; only the identity-resolution input loses
-    // candidates that would adopt a different record listed on this same page.
-    return decisions.map((decision) => ({
-      ...decision,
-      sourceDocumentIdRepairAliases:
-        decision.sourceDocumentIdRepairAliases?.filter(
-          (alias) => !peers.has(alias),
-        ),
-    }));
+    return filtered;
   };
 
   /**
@@ -793,8 +780,19 @@ const runScopedIngestionPipeline = async ({
         observations: page.observations,
       });
     }
+    const proof = {
+      type: "complete-listing",
+      listedIdentities: [
+        ...page.decisions,
+        ...(page.unreadItems?.map(({ listing }) => listing) ?? []),
+      ].flatMap(({ sourceDocumentId }) =>
+        sourceDocumentId === undefined
+          ? []
+          : [{ type: "document" as const, sourceDocumentId }],
+      ),
+    } as const satisfies CollisionFilterProof;
     const s3FailuresBefore = s3UploadFailures;
-    const decisions = reportPageQuarantineCollisions(page.decisions);
+    const decisions = reportPageQuarantineCollisions(page.decisions, proof);
     const halted = await applyPageDecisions({
       decisions,
       observation,
@@ -812,6 +810,7 @@ const runScopedIngestionPipeline = async ({
     return await settlePageUnreadItems({
       unreadItems: page.unreadItems,
       observation,
+      proof,
     });
   };
 

@@ -2729,3 +2729,194 @@ test("reconciliation persists registered root and nested URLs without caller sch
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
   }
 });
+
+const quarantineRecoveryFixture = () => {
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.PL_SN,
+    stableFields: { docket: "II CSK 12/24", date: "2024-01-04" },
+  });
+  const peer = "publisher-document-42";
+  return {
+    quarantine,
+    peer,
+    decision: {
+      ...plainDecision(peer),
+      caseNumber: "II CSK 12/24",
+      sourceDocumentIdRepairAliases: quarantine.repairAliases,
+    },
+  };
+};
+
+const seedQuarantineListingOnlyDecision = async (
+  sourceId: SafeId<"caseLawSource">,
+  sourceDocumentId: string,
+) => {
+  await seedDecision({
+    sourceId,
+    caseNumber: "II CSK 12/24",
+    sourceDocumentId,
+    isListingOnly: true,
+  });
+  const row = (
+    await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return row?.id ?? panic("Expected the seeded quarantine row");
+};
+
+const decisionsForSource = async (sourceId: SafeId<"caseLawSource">) =>
+  await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+
+test("a fresh listing that proves a quarantine peer collision preserves both rows", async () => {
+  const { quarantine, peer, decision } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const quarantinedRowId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async () =>
+      await Promise.resolve({
+        observations: [],
+        items: [
+          {
+            identity: {
+              type: "document",
+              sourceDocumentId: quarantine.sourceDocumentId,
+            },
+            payload: { refid: quarantine.sourceDocumentId },
+          },
+          {
+            identity: { type: "document", sourceDocumentId: peer },
+            payload: { refid: peer },
+            quarantinePeers: quarantine.repairAliases,
+          },
+        ],
+        totalPages: 1,
+      }),
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({ type: "built", decision, companions: [] });
+    },
+    heldRequiresDetail: true,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, written: 1 },
+  });
+  expect(builds).toEqual([{ refid: peer }]);
+  const rows = await decisionsForSource(sourceId);
+  expect(rows).toHaveLength(2);
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      {
+        id: quarantinedRowId,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: peer }),
+    ]),
+  );
+});
+
+test("a due retry without a fresh listing cannot adopt its quarantine repair alias", async () => {
+  const { quarantine, peer, decision } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  const quarantinedRowId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+  await seedFreshTip(sourceId);
+  await seedItem(
+    sourceId,
+    listingIdentityKey({ type: "document", sourceDocumentId: peer }),
+    {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 1,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: { refid: peer },
+    },
+  );
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({ type: "built", decision, companions: [] });
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 1, written: 1 },
+  });
+  expect(listed).toEqual([]);
+  expect(builds).toEqual([{ refid: peer }]);
+  const rows = await decisionsForSource(sourceId);
+  expect(rows).toHaveLength(2);
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      {
+        id: quarantinedRowId,
+        sourceDocumentId: quarantine.sourceDocumentId,
+      },
+      expect.objectContaining({ sourceDocumentId: peer }),
+    ]),
+  );
+});
+
+test("a fresh listing with only the recovered keyed peer adopts its repair alias", async () => {
+  const { quarantine, peer, decision } = quarantineRecoveryFixture();
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const quarantinedRowId = await seedQuarantineListingOnlyDecision(
+    sourceId,
+    quarantine.sourceDocumentId,
+  );
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async () =>
+      await Promise.resolve({
+        observations: [],
+        items: [
+          {
+            identity: { type: "document", sourceDocumentId: peer },
+            payload: { refid: peer },
+            quarantinePeers: quarantine.repairAliases,
+          },
+        ],
+        totalPages: 1,
+      }),
+    buildDecision: async (payload) => {
+      builds.push(payload);
+      return await Promise.resolve({ type: "built", decision, companions: [] });
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 1, written: 1 },
+  });
+  expect(builds).toEqual([{ refid: peer }]);
+  expect(await decisionsForSource(sourceId)).toEqual([
+    { id: quarantinedRowId, sourceDocumentId: peer },
+  ]);
+});

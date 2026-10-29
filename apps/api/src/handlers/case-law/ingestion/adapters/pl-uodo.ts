@@ -1290,7 +1290,14 @@ const repairAliasesOf = (
         sourceDocumentIdRepairAliases: repairAliasesForStableFields({
           namespace: QUARANTINE_NAMESPACE.PL_UODO,
           sourceDocumentIds: [quarantineId],
-          stableFields: { refname: row.refname },
+          stableFields: {
+            refname: row.refname,
+            name: rulingCourtOf(row) === null ? undefined : row.name,
+            subtype:
+              classifyPlUodoRow(row).type === "authority-decision"
+                ? row.publicator.subtype
+                : undefined,
+          },
         }),
       };
 };
@@ -2447,6 +2454,7 @@ const plUodoFetchPage = async (
       // the records it never reached; the page is read again next cycle, and
       // what was stored is stored again under the same hash.
       return Result.ok({
+        observations: [],
         decisions,
         ...(itemBuildFailures === 0
           ? {}
@@ -2527,6 +2535,7 @@ const plUodoFetchPage = async (
   // A short page is the tip: the crawl parks there until today has closed.
   const reachedTip = listing.length < CRAWL_PAGE_SIZE;
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}

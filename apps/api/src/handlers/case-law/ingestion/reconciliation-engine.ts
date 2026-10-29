@@ -119,7 +119,12 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import { isQuarantineListingIdentity } from "@/api/lib/legal-search/quarantine-identity";
+import {
+  type CollisionFilteredDecisions,
+  type CollisionFilterProof,
+  filterQuarantinePeerCollisions,
+  isQuarantineListingIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
@@ -1220,21 +1225,25 @@ type Processed = Awaited<ReturnType<typeof processDecision>>;
  * the writes cannot be batched.
  */
 const writeInOrder = async (
-  rows: readonly IngestionResult[],
+  rows: CollisionFilteredDecisions,
   write: (row: IngestionResult) => Promise<Processed>,
 ): Promise<Processed> => {
-  const [first, ...rest] = rows;
+  const [first, ...rest] = rows.decisions;
   if (first === undefined) {
     return panic("writeInOrder needs a row to write");
   }
-  const processed = await write(first);
-  return processed.status === PROCESS_DECISION_STATUS.RETRYABLE ||
-    rest.length === 0
-    ? processed
-    : await writeInOrder(rest, write);
+  let processed = await write(first);
+  for (const row of rest) {
+    if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+      return processed;
+    }
+    processed = await write(row);
+  }
+  return processed;
 };
 
 type IngestItemOptions = {
+  collisionProof: CollisionFilterProof;
   adapterKey: string;
   item: KeyedListingItem;
   lease: CaseLawSourceIngestionLease;
@@ -1260,6 +1269,7 @@ type IngestItemOptions = {
  * same schedule an unavailable document gets.
  */
 const ingestListedItem = async ({
+  collisionProof,
   adapterKey,
   item,
   lease,
@@ -1367,9 +1377,10 @@ const ingestListedItem = async ({
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
         const processed = await writeInOrder(
-          built.companions === undefined
-            ? [built.decision]
-            : [built.decision, ...built.companions],
+          filterQuarantinePeerCollisions({
+            decisions: [built.decision, ...(built.companions ?? [])],
+            proof: collisionProof,
+          }),
           write,
         );
         if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
@@ -1603,6 +1614,10 @@ const walkSlice = async ({
 
   const buildDecision =
     reconciliation.createSliceBuildDecision?.() ?? reconciliation.buildDecision;
+  const collisionProof = {
+    type: "complete-listing",
+    listedIdentities: items.map(({ identity }) => identity),
+  } as const satisfies CollisionFilterProof;
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
@@ -1621,6 +1636,7 @@ const walkSlice = async ({
     }
     // db-await-in-loop: paced publisher fetch per item, under a lease and a wall-clock budget
     await ingestListedItem({
+      collisionProof,
       adapterKey,
       item,
       lease,
@@ -1811,6 +1827,7 @@ const recheckTextlessHeldRows = async ({
     };
     // db-await-in-loop: ingest after each paced publisher fetch; bounded to 200 rows under the source lease
     await ingestListedItem({
+      collisionProof: { type: "no-listing-proof" },
       adapterKey,
       item,
       lease,
@@ -1967,6 +1984,7 @@ const retryParkedItems = async ({
     fetched += 1;
     // db-await-in-loop: paced publisher fetch per due item, under a lease and a clock budget
     await ingestListedItem({
+      collisionProof: { type: "no-listing-proof" },
       adapterKey,
       item,
       lease,

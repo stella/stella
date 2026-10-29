@@ -510,6 +510,8 @@ export type ParsedRow = {
   publishedCaseNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
+  /** The court the results table states; absent on rows parked by older parsers. */
+  court?: string | undefined;
   outcome: string | undefined;
   documentUrl: string | undefined;
   /** Numeric document ID for fetching fulltext via /DokumentOriginal/Text/{id}. */
@@ -541,18 +543,17 @@ const CZ_NSS_QUARANTINE_REASON = "missing-record-identity";
  * stating no reference.
  *
  * The reference as published (docket with its sheet number, which tells two
- * rulings of one file apart), the decision date and the decision type: the
- * columns the portal states for the document itself. The row index and the
- * hidden form binding are position, the detail and document links are the
- * id that is missing, and the court column is not kept on the parsed row,
- * so a keyed row could not reproduce a fingerprint over it. Without a
- * reference the date and type name a day's worth of decisions, not one, so
- * they are never a fingerprint on their own.
+ * rulings of one file apart), the decision date, decision type and court: the
+ * columns the portal states for the document itself. The row index and hidden
+ * form binding are position, and the detail and document links are the id that
+ * is missing. Without a reference the date, type and court name a day's worth
+ * of decisions, not one, so they are never a fingerprint on their own.
  */
 const czNssRowQuarantine = ({
   publishedCaseNumber,
   decisionDate,
   decisionType,
+  court,
 }: ParsedRow) =>
   publishedCaseNumber === undefined || publishedCaseNumber.length === 0
     ? undefined
@@ -562,6 +563,7 @@ const czNssRowQuarantine = ({
           reference: publishedCaseNumber,
           decisionDate,
           decisionType,
+          court,
         },
       });
 
@@ -617,6 +619,7 @@ const CZ_NSS_RESULT_CELL = {
   CASE_REFERENCE: 3,
   DECISION_DATE: 2,
   DECISION_TYPE: 5,
+  COURT: 4,
 } as const;
 
 const CZ_NSS_CASE_REFERENCE_MAX_LENGTH = 100;
@@ -739,12 +742,16 @@ export const parseResultPage = (
       decisionTypeCell.length < CZ_NSS_DECISION_TYPE_MAX_LENGTH
         ? statedDecisionType(decisionTypeCell)
         : undefined;
+    const courtCell = cells.at(CZ_NSS_RESULT_CELL.COURT);
+    const court =
+      courtCell === undefined || courtCell.length === 0 ? undefined : courtCell;
 
     rows.push({
       caseNumber,
       publishedCaseNumber,
       decisionDate,
       decisionType,
+      court,
       outcome: undefined,
       documentUrl,
       documentId,
@@ -2004,6 +2011,7 @@ const storedListingRow = ({
   publishedCaseNumber,
   decisionDate,
   decisionType,
+  court,
   outcome,
   documentUrl,
   documentId,
@@ -2013,6 +2021,7 @@ const storedListingRow = ({
     publishedCaseNumber,
     decisionDate,
     decisionType,
+    court,
     outcome,
     documentUrl,
     documentId,
@@ -3285,6 +3294,7 @@ const isCzNssListingRow = (value: unknown): value is ParsedRow =>
   isOptionalString(value["publishedCaseNumber"]) &&
   isOptionalString(value["decisionDate"]) &&
   isOptionalString(value["decisionType"]) &&
+  isOptionalString(value["court"]) &&
   isOptionalString(value["outcome"]) &&
   isOptionalString(value["documentUrl"]) &&
   isOptionalString(value["documentId"]);
@@ -3545,6 +3555,7 @@ export const czNssAdapter = defineSourceAdapter({
             publishedCaseNumber: payload["publishedCaseNumber"],
             decisionDate: payload["decisionDate"],
             decisionType: payload["decisionType"],
+            court: payload["court"],
             outcome: payload["outcome"],
             documentUrl: payload["documentUrl"],
             documentId: payload["documentId"],

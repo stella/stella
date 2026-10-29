@@ -1899,6 +1899,7 @@ export const czNsAdapter = defineSourceAdapter({
             // Caller cancelled: return partial results
             if (error instanceof DOMException && error.name === "AbortError") {
               return {
+                observations: [],
                 decisions,
                 itemBuildFailures: {
                   type: "item_build_failed",
@@ -1917,6 +1918,7 @@ export const czNsAdapter = defineSourceAdapter({
               signal?.aborted
             ) {
               return {
+                observations: [],
                 decisions,
                 itemBuildFailures: {
                   type: "item_build_failed",
@@ -1942,6 +1944,7 @@ export const czNsAdapter = defineSourceAdapter({
         const nextCursor = String(start + entries.length);
 
         return {
+          observations: [],
           decisions,
           nextCursor,
           sourceUrl: listPage.url,

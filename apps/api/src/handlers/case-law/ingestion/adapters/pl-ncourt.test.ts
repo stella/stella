@@ -2061,10 +2061,10 @@ describe("the walk", () => {
       }),
     );
     expect(recovered.sourceDocumentId).toBe(PAIR);
-    expect(recovered.sourceDocumentIdRepairAliases).toContain(ids[0]);
+    expect(recovered.sourceDocumentIdRepairAliases ?? []).not.toContain(ids[0]);
   });
 
-  test("a row that recovers fields as well as its id names every form it was stored under", async () => {
+  test("a recovered row names only earlier forms carrying its court", async () => {
     const stated = {
       publicationDate: "2019-02-28 18:26:16.0 CET",
       thesis: "Teza o czymś.",
@@ -2087,13 +2087,13 @@ describe("the walk", () => {
     const published = unkeyed(stated).sourceDocumentId ?? "";
     expect(published).toMatch(/^pl-ncourt-quarantine:[0-9a-f]{64}$/u);
 
-    // Then with its signature but still no id: a new form, naming the first.
+    // A signature and court qualify the listed form; the earlier courtless form stays separate.
     const listedRow = unkeyed({ ...listedFields, ...stated });
     const listed = listedRow.sourceDocumentId ?? "";
     expect(listed).toStartWith("ncourt-listed:");
-    expect(listedRow.sourceDocumentIdRepairAliases).toEqual([published]);
+    expect(listedRow.sourceDocumentIdRepairAliases).toBeUndefined();
 
-    // Then keyed: both earlier forms, each once.
+    // Then keyed: only the court-qualified listed form can be adopted.
     const recovered = built(
       assemblePlNcourtDecision({
         listingXml: rowXml({ id: PAIR, ...listedFields, ...stated }),
@@ -2103,7 +2103,7 @@ describe("the walk", () => {
     );
     expect(recovered.sourceDocumentId).toBe(PAIR);
     expect(recovered.sourceDocumentIdRepairAliases?.toSorted()).toEqual(
-      [listed, published].toSorted(),
+      [listed].toSorted(),
     );
   });
 

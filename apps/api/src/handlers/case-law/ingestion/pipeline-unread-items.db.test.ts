@@ -442,7 +442,7 @@ test("a quarantined record followed by its keyed peer survives as two database r
   const sourceId = await crawlSource();
   const quarantine = quarantineIdentity({
     namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
-    stableFields: { docket: "21 Cdo 130/2024" },
+    stableFields: { docket: "21 Cdo 130/2024", court: BASE.court },
   });
   const quarantined = {
     ...fullDecision("130"),

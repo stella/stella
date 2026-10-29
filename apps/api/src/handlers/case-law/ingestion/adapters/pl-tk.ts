@@ -1708,6 +1708,7 @@ const plTkFetchPage = async (
   }
 
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}

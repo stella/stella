@@ -985,6 +985,7 @@ const quarantined = ({
               stableFields: {
                 docket_number:
                   normalizePlNsaRow(source).docket_number ?? undefined,
+                court_name: normalizePlNsaRow(source).court_name ?? undefined,
               },
             }),
           }),
@@ -1166,6 +1167,7 @@ export const assemblePlNsaDecision = ({
               stableFields: {
                 docket_number:
                   normalizePlNsaRow(source).docket_number ?? undefined,
+                court_name: normalizePlNsaRow(source).court_name ?? undefined,
               },
             }),
           }),

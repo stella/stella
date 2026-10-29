@@ -583,6 +583,7 @@ describe("cz-nss listing rows", () => {
     );
     expect(rows.at(0)?.decisionDate).toBe("10.06.2026");
     expect(rows.at(0)?.decisionType).toBe("Rozsudek");
+    expect(rows.at(0)?.court).toBe("Městský soud v Praze");
   });
 
   test("normalizes non-breaking spaces in the visible reference", () => {
@@ -606,6 +607,7 @@ describe("cz-nss listing rows", () => {
           publishedCaseNumber: undefined,
           decisionDate: OPTIONAL_CITATION_ROW.date,
           decisionType: "Rozsudek",
+          court: "Syntetický soud",
           outcome: undefined,
           documentUrl: `${BASE_URL}/DokumentDetail/Index/${OPTIONAL_CITATION_ROW.documentId}`,
           documentId: OPTIONAL_CITATION_ROW.documentId,
@@ -794,6 +796,55 @@ describe("cz-nss listing rows", () => {
     expect(regional.caseNumber).toBe(municipal.caseNumber);
     expect(czNssListingIdentity(regional)).not.toEqual(
       czNssListingIdentity(municipal),
+    );
+  });
+
+  test("court distinguishes quarantined rows and their recovery aliases", async () => {
+    const idLessMunicipal = { ...MUNICIPAL_ROW, documentId: "" } as const;
+    const idLessRegional = {
+      ...REGIONAL_ROW,
+      documentId: "",
+      citedCaseNumber: MUNICIPAL_ROW.citedCaseNumber,
+      displayedCaseNumber: MUNICIPAL_ROW.displayedCaseNumber,
+      date: MUNICIPAL_ROW.date,
+    } as const;
+    const keyedMunicipal = {
+      ...MUNICIPAL_ROW,
+      index: 2,
+      documentId: "784239",
+    } as const;
+    const rowOf = (fixture: RowFixture) =>
+      parseResultRows(rowBlock(fixture)).at(0) ?? panic("row");
+    const municipalId = czNssListingIdentity(rowOf(idLessMunicipal));
+    const regionalId = czNssListingIdentity(rowOf(idLessRegional));
+    expect(municipalId).not.toBeNull();
+    expect(regionalId).not.toBeNull();
+    if (municipalId === null || regionalId === null) {
+      return;
+    }
+    expect(municipalId.sourceDocumentId).not.toBe(regionalId.sourceDocumentId);
+
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 3,
+            rows: [idLessMunicipal, idLessRegional, keyedMunicipal],
+          }),
+        ),
+      ],
+    });
+    const page = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+    const recovered =
+      page.decisions.find(
+        ({ sourceDocumentId }) =>
+          sourceDocumentId === keyedMunicipal.documentId,
+      ) ?? panic("recovered municipal decision");
+    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+      municipalId.sourceDocumentId,
+    ]);
+    expect(recovered.sourceDocumentIdRepairAliases).not.toContain(
+      regionalId.sourceDocumentId,
     );
   });
 
@@ -987,6 +1038,7 @@ describe("cz-nss listSlicePage", () => {
       publishedCaseNumber: "1 Az 4/2026 - 79",
       decisionDate: "10.06.2026",
       decisionType: "Rozsudek",
+      court: "Městský soud v Praze",
       documentUrl: `${BASE_URL}/DokumentDetail/Index/784237`,
       documentId: "784237",
     });

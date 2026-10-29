@@ -935,7 +935,7 @@ const quarantinedSkCourtsDecision = (
           sourceDocumentIdRepairAliases: repairAliasesForStableFields({
             namespace: LEGACY_REPAIR_NAMESPACE.SK_COURTS_PLAINTEXT,
             sourceDocumentIds: [legacyId],
-            stableFields: { caseNumber: statedCaseNumber },
+            stableFields: { caseNumber: statedCaseNumber, sud: statedCourt },
           }),
         }),
     court: statedCourt ?? "",
@@ -2196,6 +2196,7 @@ const collectFrontierPage = async (
 
   const nextPage = frontier.page + 1;
   return Result.ok({
+    observations: [],
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     ...(unreadItems.length === 0 ? {} : { unreadItems }),

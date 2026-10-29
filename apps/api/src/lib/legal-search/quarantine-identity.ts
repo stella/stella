@@ -18,11 +18,16 @@
  * stable fields: each one moves while the record does not.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  ListingIdentity,
+} from "@/api/lib/legal-search/ingestion-types";
 import type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 
@@ -115,6 +120,70 @@ const REPAIR_DISCRIMINATORS = {
   "sk-courts-plaintext": ["caseNumber"],
 } as const satisfies Record<RepairNamespace, readonly string[]>;
 
+type CourtProvenancePolicy =
+  | { readonly type: "single-court" | "single-authority" }
+  | { readonly type: "multi-court"; readonly fields: readonly string[] };
+
+/** Fields must belong to the captured fingerprint, never a recovered detail. */
+const REPAIR_COURT_PROVENANCE = {
+  "cz-ns": { type: "single-court" },
+  "cz-nss": { type: "multi-court", fields: ["court"] },
+  "cz-regional": { type: "multi-court", fields: ["court"] },
+  "cz-us": { type: "single-court" },
+  "cz-uohs": { type: "single-authority" },
+  "sk-courts": { type: "multi-court", fields: ["sud", "sudRegistreGuid"] },
+  "sk-us": { type: "single-court" },
+  "pl-courts": { type: "multi-court", fields: ["court"] },
+  "pl-sn": { type: "single-court" },
+  "pl-kio": { type: "multi-court", fields: ["court"] },
+  "pl-tk": { type: "single-court" },
+  "pl-nsa": { type: "multi-court", fields: ["court_name"] },
+  "pl-ncourt": { type: "multi-court", fields: ["courtId"] },
+  "at-courts": { type: "multi-court", fields: ["court"] },
+  "at-vfgh": { type: "single-court" },
+  "at-vwgh": { type: "single-court" },
+  "at-bvwg": { type: "single-court" },
+  "at-lvwg": { type: "multi-court", fields: ["court"] },
+  "at-asylgh": { type: "single-court" },
+  "at-ubas": { type: "single-court" },
+  "at-uvs": { type: "multi-court", fields: ["court"] },
+  "at-verg": { type: "multi-court", fields: ["court"] },
+  "at-umse": { type: "single-court" },
+  "at-bks": { type: "single-court" },
+  "at-findok": { type: "multi-court", fields: ["behoerde"] },
+  "eu-ecj": { type: "multi-court", fields: ["ecli"] },
+  "hu-bhgy": { type: "multi-court", fields: ["court"] },
+  "uk-fcl": { type: "multi-court", fields: ["court"] },
+  "pl-kis": { type: "single-authority" },
+  "pl-uodo": { type: "multi-court", fields: ["name", "subtype"] },
+  "pl-uokik": { type: "single-authority" },
+} as const satisfies Record<AdapterKey, CourtProvenancePolicy>;
+
+const REPAIR_ADAPTERS = {
+  "cz-ns": "cz-ns",
+  "cz-nss": "cz-nss",
+  "cz-regional": "cz-regional",
+  "cz-uohs": "cz-uohs",
+  nalus: "cz-us",
+  "eu-ecj": "eu-ecj",
+  "hu-bhgy": "hu-bhgy",
+  "pl-courts": "pl-courts",
+  "pl-ncourt": "pl-ncourt",
+  "pl-sn": "pl-sn",
+  "pl-tk": "pl-tk",
+  "pl-uodo": "pl-uodo",
+  "pl-uokik": "pl-uokik",
+  "sk-courts": "sk-courts",
+  "sk-us": "sk-us",
+  ris: "at-courts",
+  findok: "at-findok",
+  "pl-kio": "pl-kio",
+  "pl-kis": "pl-kis",
+  "pl-nsa": "pl-nsa",
+  "ncourt-listed": "pl-ncourt",
+  "sk-courts-plaintext": "sk-courts",
+} as const satisfies Record<RepairNamespace, AdapterKey>;
+
 type RepairAliasesForStableFieldsOptions = {
   namespace: RepairNamespace;
   sourceDocumentIds: readonly string[];
@@ -126,12 +195,17 @@ export const repairAliasesForStableFields = ({
   namespace,
   sourceDocumentIds,
   stableFields,
-}: RepairAliasesForStableFieldsOptions): RepairAlias[] =>
-  REPAIR_DISCRIMINATORS[namespace].some(
-    (field) => (stableFields[field]?.trim().length ?? 0) > 0,
-  )
+}: RepairAliasesForStableFieldsOptions): RepairAlias[] => {
+  const stated = (field: string): boolean =>
+    (stableFields[field]?.trim().length ?? 0) > 0;
+  const policy = REPAIR_COURT_PROVENANCE[REPAIR_ADAPTERS[namespace]];
+  if (policy.type === "multi-court" && !policy.fields.some(stated)) {
+    return [];
+  }
+  return REPAIR_DISCRIMINATORS[namespace].some(stated)
     ? sourceDocumentIds.map((identity) => v.parse(repairAliasSchema, identity))
     : [];
+};
 
 export type QuarantineIdentity = {
   /** The bare SHA-256 hex digest, for labels and URL fragments. */
@@ -300,6 +374,77 @@ export const isQuarantineListingIdentity = (
   QUARANTINE_PREFIXES.some((prefix) =>
     identity.sourceDocumentId.startsWith(prefix),
   );
+
+export type CollisionFilterProof =
+  | {
+      readonly type: "complete-listing";
+      readonly listedIdentities: readonly ListingIdentity[];
+    }
+  | { readonly type: "no-listing-proof" };
+
+const collisionFilteredDecisionsBrand = Symbol("CollisionFilteredDecisions");
+
+/** Only this owner can construct the decisions accepted by page apply paths. */
+export type CollisionFilteredDecisions = {
+  readonly [collisionFilteredDecisionsBrand]: true;
+  readonly decisions: readonly IngestionResult[];
+  readonly collidingIds: readonly string[];
+};
+
+type FilterQuarantinePeerCollisionsOptions = {
+  decisions: readonly IngestionResult[];
+  proof: CollisionFilterProof;
+};
+
+/** A captured peer remains a separate record; absent listing proof cannot authorize adoption. */
+export const filterQuarantinePeerCollisions = ({
+  decisions,
+  proof,
+}: FilterQuarantinePeerCollisionsOptions): CollisionFilteredDecisions => {
+  switch (proof.type) {
+    case "complete-listing": {
+      const collidingIds = quarantinePeerCollisions([
+        ...proof.listedIdentities.flatMap((identity) =>
+          identity.type === "document"
+            ? [{ sourceDocumentId: identity.sourceDocumentId }]
+            : [],
+        ),
+        ...decisions.map((decision) => ({
+          sourceDocumentId: decision.sourceDocumentId ?? "",
+          quarantinePeers: decision.sourceDocumentIdRepairAliases,
+        })),
+      ]);
+      const colliding = new Set(collidingIds);
+      return {
+        [collisionFilteredDecisionsBrand]: true,
+        decisions:
+          colliding.size === 0
+            ? decisions
+            : decisions.map((decision) => ({
+                ...decision,
+                sourceDocumentIdRepairAliases:
+                  decision.sourceDocumentIdRepairAliases?.filter(
+                    (alias) => !colliding.has(alias),
+                  ),
+              })),
+        collidingIds,
+      };
+    }
+    case "no-listing-proof":
+      return {
+        [collisionFilteredDecisionsBrand]: true,
+        decisions: decisions.map((decision) => ({
+          ...decision,
+          sourceDocumentIdRepairAliases: [],
+        })),
+        collidingIds: [],
+      };
+    default: {
+      proof satisfies never;
+      return panic("Unknown listing proof");
+    }
+  }
+};
 
 /** A captured listing is evidence, never a canonical decision identity. */
 const listingObservationIdentitySchema = v.pipe(

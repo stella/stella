@@ -295,6 +295,7 @@ const manifestItem = (value: unknown): FindokDocumentItem | undefined => {
             namespace: LEGACY_REPAIR_NAMESPACE.AT_FINDOK,
             sourceDocumentIds: [quarantineId],
             stableFields: {
+              behoerde: item.behoerde,
               stammNr: String(stammNr),
               pathPdf: item.pathPdf,
               pathZip: item.pathZip,

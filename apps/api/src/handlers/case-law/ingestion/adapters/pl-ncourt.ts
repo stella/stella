@@ -1354,7 +1354,11 @@ const plNcourtRowRepairAliases = (
       : repairAliasesForStableFields({
           namespace: LEGACY_REPAIR_NAMESPACE.PL_NCOURT_LISTED,
           sourceDocumentIds: [listedId],
-          stableFields: { signature: row.signature, excerpt: row.excerpt },
+          stableFields: {
+            signature: row.signature,
+            excerpt: row.excerpt,
+            courtId: row.courtId,
+          },
         });
   const publishedId = publishedFingerprintOf(row);
   const publishedAliases =
