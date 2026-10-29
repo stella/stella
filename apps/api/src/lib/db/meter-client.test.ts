@@ -59,6 +59,42 @@ describe("request read work", () => {
       );
     },
   );
+  test.each(["successful", "failed"] as const)(
+    "an asynchronous finalizer failure replaces a %s query outcome",
+    async (outcome) => {
+      await withGatedTestClients(
+        "sqlite://:memory:",
+        async ({ openClient }) => {
+          const client = meterSqlClient(openClient().sql);
+          const cleanupFailure = new Error("Asynchronous SQL cleanup failed");
+          await runWithQueryCounter(async () => {
+            const pending = client.unsafe(
+              outcome === "successful"
+                ? "select 'text' as content"
+                : "select * from missing_cleanup_fixture",
+            );
+            // Promise.finally awaits thenables although its callback is typed void.
+            const finalize: unknown = Reflect.get(pending, "finally");
+            if (typeof finalize !== "function") {
+              panic("Native SQL query needs a finalizer");
+            }
+            const finalized: unknown = Reflect.apply(finalize, pending, [
+              async () => {
+                await Promise.resolve();
+                throw cleanupFailure;
+              },
+            ]);
+            expect(await rejectionOf(Promise.resolve(finalized))).toBe(
+              cleanupFailure,
+            );
+            expect(currentReadWork()?.dbResultBytes).toBe(
+              outcome === "successful" ? 20 : 0,
+            );
+          });
+        },
+      );
+    },
+  );
   test("stream consumption remains attributed to the request that opened it", async () => {
     const opened = runWithQueryCounter((counter) => {
       const stream = new ReadableStream<Uint8Array>({

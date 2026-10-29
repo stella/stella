@@ -313,15 +313,14 @@ const readDecisionTextGroup = async ({
   };
   const readAst = payloadBatch("documentAst");
   const readSections = payloadBatch("sections");
-  const changed: SafeId<"caseLawDecision">[] = [];
+  const changed = new Set<SafeId<"caseLawDecision">>();
   const entries = await Promise.all(
     pointers.map(async (pointer) => {
       if (pointer.textWithheldReason !== null) {
         return null;
       }
-      const versionState = { changed: false };
       const onVersionChanged = () => {
-        versionState.changed = true;
+        changed.add(pointer.id);
       };
       const key = decisionPayloadKey(pointer);
       const read = await Result.tryPromise(async () => {
@@ -341,7 +340,7 @@ const readDecisionTextGroup = async ({
               },
             }),
         );
-        if (versionState.changed || ast === null) {
+        if (changed.has(pointer.id) || ast === null) {
           return null;
         }
         const sections = await readDecisionSectionIndex({
@@ -355,13 +354,10 @@ const readDecisionTextGroup = async ({
               : result.value;
           },
         });
-        return versionState.changed
+        return changed.has(pointer.id)
           ? null
           : { id: pointer.id, text: { ast, sections } };
       });
-      if (versionState.changed) {
-        changed.push(pointer.id);
-      }
       if (Result.isError(read)) {
         logger.warn("case_law.citation_passage.ast_unavailable", {
           "error.type": errorTag(read.error),
@@ -379,11 +375,11 @@ const readDecisionTextGroup = async ({
       textByDecision.set(entry.id, entry.text);
     }
   }
-  if (changed.length === 0 || attempt >= PASSAGE_VERSION_ATTEMPTS) {
+  if (changed.size === 0 || attempt >= PASSAGE_VERSION_ATTEMPTS) {
     return textByDecision;
   }
   const fresh = await caseLawDb(
-    async (tx) => await readPassageSourcePointers(tx, changed),
+    async (tx) => await readPassageSourcePointers(tx, [...changed]),
   );
   // Reapply source policy before any refreshed payload enters a cache or reply.
   const retried = await readDecisionTextGroup({

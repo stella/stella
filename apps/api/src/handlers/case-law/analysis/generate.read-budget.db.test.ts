@@ -329,7 +329,7 @@ describe("answering a stored or in-flight analysis", () => {
       })
       .returning({ id: caseLawDecisions.id });
     if (!row) {
-      return panic("Expected a decision row");
+      panic("Expected a decision row");
     }
     const baseScopedDb = scopedDbOf(db);
     let reads = 0;
@@ -350,7 +350,7 @@ describe("answering a stored or in-flight analysis", () => {
     });
     expect(Result.isError(resolution)).toBe(true);
     if (Result.isOk(resolution)) {
-      return panic("Changing input must report its retry exhaustion");
+      panic("Changing input must report its retry exhaustion");
     }
     expect(resolution.error).toMatchObject({
       _tag: "AnalysisInputVersionChangedError",
@@ -374,7 +374,7 @@ describe("answering a stored or in-flight analysis", () => {
     });
     expect(Result.isError(generated)).toBe(true);
     if (Result.isOk(generated)) {
-      return panic("Changing input must reach the caller as a failure");
+      panic("Changing input must reach the caller as a failure");
     }
     expect(generated.error).toMatchObject({
       status: 409,

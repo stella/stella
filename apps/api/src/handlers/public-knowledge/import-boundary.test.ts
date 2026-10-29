@@ -259,7 +259,6 @@ test("public Knowledge runtime graph is limited to static readers and parsers", 
     "./content-identity",
     "./packs.gen",
     "better-result",
-    "node:async_hooks",
     "node:fs",
     "node:path",
   ]);

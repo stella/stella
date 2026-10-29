@@ -45,7 +45,7 @@ type DecisionAnalysisRow = NonNullable<
 
 const ANALYSIS_INPUT_VERSION_ATTEMPTS = 3;
 
-export class AnalysisInputVersionChangedError extends TaggedError(
+class AnalysisInputVersionChangedError extends TaggedError(
   "AnalysisInputVersionChangedError",
 )<{
   message: string;

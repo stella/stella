@@ -39,9 +39,7 @@ const meterPendingQuery = (value: unknown): unknown => {
         return async (settled: unknown) =>
           await Promise.resolve(query).finally(
             isCallable(settled)
-              ? async () => {
-                  await Reflect.apply(settled, undefined, []);
-                }
+              ? () => Reflect.apply(settled, undefined, [])
               : undefined,
           );
       }
