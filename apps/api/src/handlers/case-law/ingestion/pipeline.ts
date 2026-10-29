@@ -153,6 +153,8 @@ const failureLedgerHaltReason = (write: FailureLedgerWrite): string | null => {
 };
 
 const RETRY_HALT_REASON = {
+  [PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY]:
+    "Fallback decision identity unavailable; cursor held for retry",
   [PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE]:
     "1 corpus write failure(s); cursor held for retry",
   [PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE]:

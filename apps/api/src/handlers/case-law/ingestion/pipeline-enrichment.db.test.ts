@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -86,9 +87,15 @@ test("weak publication enrichment preserves its row and distinguishes full cohor
     await ingest(publication(""));
     const before = await stored();
     expect(before).toHaveLength(1);
+    const original =
+      before.at(0) ?? panic("Metadata observation must be stored");
     await ingest(publication("Prvé uznesenie."));
     expect(await stored()).toEqual([
-      { ...before.at(0), text: "Prvé uznesenie." },
+      {
+        id: original.id,
+        publicationHash: original.publicationHash,
+        text: "Prvé uznesenie.",
+      },
     ]);
     await ingest(publication("Prvé uznesenie."));
     expect(await stored()).toHaveLength(1);

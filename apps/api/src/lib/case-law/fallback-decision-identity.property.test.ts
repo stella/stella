@@ -238,14 +238,18 @@ test("publication identity remains stable across document enrichment", () => {
 });
 
 test("textless same-cohort publications retain distinct stated metadata", () => {
-  const first = decisionStorageIdentity({
-    ...publishedDecision(""),
-    metadata: { record: "first" },
-  });
-  const second = decisionStorageIdentity({
-    ...publishedDecision(""),
-    metadata: { record: "second" },
-  });
+  const first = decisionStorageIdentity(
+    plainTextIngestionResult({
+      ...publishedDecision(""),
+      metadata: { record: "first" },
+    }),
+  );
+  const second = decisionStorageIdentity(
+    plainTextIngestionResult({
+      ...publishedDecision(""),
+      metadata: { record: "second" },
+    }),
+  );
   if (first.type !== "content" || second.type !== "content") {
     return expect.unreachable("Expected weak records");
   }
