@@ -1105,6 +1105,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:node:net"],
   },
   {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",
     class: "third-party",
     reason:
