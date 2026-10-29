@@ -687,7 +687,6 @@ test("legacy draft time reservations are counted once before and after line mate
     billedMinutes: "0",
     totalMinutes: "0",
   });
-  await db.delete(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId));
   await db
     .update(invoices)
     .set({
@@ -700,6 +699,12 @@ test("legacy draft time reservations are counted once before and after line mate
     .update(timeEntries)
     .set({ invoiceAttachment: "covered" })
     .where(eq(timeEntries.id, entryId));
+  expect(
+    await db
+      .select({ id: invoiceLines.id })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, invoiceId)),
+  ).toHaveLength(1);
   expect(await summary()).toMatchObject({
     billedAmount: "0",
     totalAmount: "0",

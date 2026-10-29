@@ -1434,7 +1434,7 @@ export const installPgliteInvoiceObjects = async (
   ]
     .map(executableSql)
     .filter((statement) =>
-      /^(?:CREATE FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
+      /^(?:CREATE (?:OR REPLACE )?FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
         statement,
       ),
     );

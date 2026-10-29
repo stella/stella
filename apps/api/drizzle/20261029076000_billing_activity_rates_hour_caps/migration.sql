@@ -19,10 +19,12 @@ ALTER TABLE billing_arrangements ADD CONSTRAINT billing_arrangements_minute_cros
  (minute_threshold_state IS NULL OR minute_threshold_state IN ('below','above'))
  AND (minute_cap_state IS NULL OR minute_cap_state IN ('below','above'))
 ) NOT VALID;--> statement-breakpoint
--- stella-migration-safety: reviewed security-definer - Returns only reserved billable minutes for a tenant-authorized matter; fixed search path and actor authorization prevent access to hidden invoice details.
-CREATE FUNCTION public.stella_matter_reserved_minutes(matter_id uuid, excluded_invoice_id uuid)
-RETURNS bigint LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-DECLARE minutes bigint;
+-- Active time-entry lines must retain their source entry (invoice_lines_source_reference_check).
+-- Classify the source once so line snapshots and legacy attachments share both cap measures.
+-- stella-migration-safety: reviewed security-definer - The private aggregate owner authorizes the tenant matter before reading charges, exposes no invoice identifiers, and is called only by the existing aggregate wrappers with a fixed search path.
+CREATE FUNCTION public.stella_matter_reserved_time(matter_id uuid, invoice_currency text, excluded_invoice_id uuid)
+RETURNS TABLE(amount numeric, mismatches bigint, minutes bigint)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 BEGIN
  IF NOT EXISTS (
   SELECT 1 FROM public.workspaces w WHERE w.id = matter_id
@@ -31,23 +33,49 @@ BEGIN
  ) THEN
   RAISE EXCEPTION 'Matter billing access denied' USING ERRCODE = '42501';
  END IF;
- SELECT COALESCE(SUM(reservations.minutes),0)::bigint INTO minutes FROM (
-  SELECT ROUND(l.quantity * 60)::bigint AS minutes
-  FROM public.invoice_lines l JOIN public.invoices i ON i.id = l.invoice_id AND i.organization_id = l.organization_id
-  JOIN public.workspaces w ON w.id = l.workspace_id AND w.organization_id = l.organization_id
-  WHERE l.workspace_id = matter_id AND l.source = 'time_entry' AND l.released_at IS NULL
-   AND i.status <> 'void' AND i.original_invoice_id IS NULL
-   AND (excluded_invoice_id IS NULL OR i.id <> excluded_invoice_id)
-  UNION ALL
-  SELECT e.billed_minutes::bigint
-  FROM public.time_entries e JOIN public.invoices i ON i.id = e.invoice_id AND i.organization_id = e.organization_id
+ RETURN QUERY
+ WITH charged_time AS MATERIALIZED (
+  SELECT e.id, e.invoice_id, e.organization_id, e.workspace_id,
+   e.rate_at_entry, e.billed_minutes, i.currency
+  FROM public.time_entries e
+  JOIN public.invoices i ON i.id = e.invoice_id AND i.organization_id = e.organization_id
   JOIN public.workspaces w ON w.id = e.workspace_id AND w.organization_id = e.organization_id
   WHERE e.workspace_id = matter_id AND e.activity_group = 'client' AND e.invoice_attachment = 'charged'
    AND i.status <> 'void' AND i.original_invoice_id IS NULL
    AND (excluded_invoice_id IS NULL OR i.id <> excluded_invoice_id)
-   AND NOT EXISTS (SELECT 1 FROM public.invoice_lines l WHERE l.invoice_id = i.id AND l.time_entry_id = e.id AND l.source = 'time_entry' AND l.released_at IS NULL)
- ) reservations;
- RETURN minutes;
+ ), charges AS (
+  SELECT l.net_amount::numeric AS net_amount, t.currency, ROUND(l.quantity * 60)::bigint AS minutes
+  FROM charged_time t JOIN public.invoice_lines l
+   ON l.time_entry_id = t.id AND l.invoice_id = t.invoice_id
+   AND l.organization_id = t.organization_id AND l.workspace_id = t.workspace_id
+  WHERE l.source = 'time_entry' AND l.released_at IS NULL
+  UNION ALL
+  SELECT FLOOR((t.rate_at_entry::numeric * t.billed_minutes + 30) / 60), t.currency, t.billed_minutes::bigint
+  FROM charged_time t
+  WHERE NOT EXISTS (
+   SELECT 1 FROM public.invoice_lines l
+   WHERE l.invoice_id = t.invoice_id AND l.time_entry_id = t.id
+    AND l.source = 'time_entry' AND l.released_at IS NULL
+  )
+ )
+ SELECT COALESCE(SUM(charges.net_amount) FILTER (WHERE charges.currency = invoice_currency),0),
+  COUNT(*) FILTER (WHERE charges.currency <> invoice_currency),
+  COALESCE(SUM(charges.minutes),0)::bigint
+ FROM charges;
 END $$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.stella_matter_reserved_time(uuid,text,uuid) FROM PUBLIC;--> statement-breakpoint
+-- stella-migration-safety: reviewed security-definer - Preserves the authorized aggregate-only amount interface and its existing ACL while delegating charged-time classification to the private tenant-authorizing owner.
+CREATE OR REPLACE FUNCTION public.stella_matter_reserved_charges(matter_id uuid, invoice_currency text, excluded_invoice_id uuid)
+RETURNS TABLE(amount numeric, mismatches bigint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+ SELECT usage.amount, usage.mismatches
+ FROM public.stella_matter_reserved_time(matter_id, invoice_currency, excluded_invoice_id) usage;
+$$;--> statement-breakpoint
+-- stella-migration-safety: reviewed security-definer - Returns only the minute aggregate from the private tenant-authorizing charged-time owner and retains the fixed search path and aggregate-only application grant.
+CREATE FUNCTION public.stella_matter_reserved_minutes(matter_id uuid, excluded_invoice_id uuid)
+RETURNS bigint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+ SELECT usage.minutes
+ FROM public.stella_matter_reserved_time(matter_id, NULL::text, excluded_invoice_id) usage;
+$$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.stella_matter_reserved_minutes(uuid,uuid) FROM PUBLIC;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.stella_matter_reserved_minutes(uuid,uuid) TO stella;

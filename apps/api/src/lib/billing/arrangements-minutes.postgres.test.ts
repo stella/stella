@@ -6,13 +6,15 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
   billingArrangements,
+  invoiceLines,
+  invoices,
   timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
@@ -21,7 +23,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 
-import { recordBillingCapCrossings } from "./arrangements";
+import { readBillingUsage, recordBillingCapCrossings } from "./arrangements";
 
 const databaseUrl = process.env["DATABASE_URL"];
 if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
@@ -93,8 +95,12 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
   beforeEach(async () => {
     await db.delete(auditLogs).where(eq(auditLogs.workspaceId, workspaceId));
     await db
+      .delete(invoiceLines)
+      .where(eq(invoiceLines.workspaceId, workspaceId));
+    await db
       .delete(timeEntries)
       .where(eq(timeEntries.workspaceId, workspaceId));
+    await db.delete(invoices).where(eq(invoices.workspaceId, workspaceId));
     await scoped(
       async (tx) =>
         await tx
@@ -334,6 +340,197 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(isPgError(result.error, "23514")).toBe(true);
+    }
+  });
+  const reservedUsage = async () =>
+    (
+      await safeDb(
+        async (tx) =>
+          await readBillingUsage(tx, { workspaceId, currency: "USD" }),
+      )
+    ).unwrap();
+  const attachInvoice = async ({
+    attachment,
+    billingMode,
+  }: {
+    attachment: "charged" | "covered";
+    billingMode: "hourly" | "flat_fee";
+  }) => {
+    const invoiceId = createSafeId<"invoice">();
+    await db.insert(invoices).values({
+      id: invoiceId,
+      workspaceId,
+      organizationId,
+      invoiceDate: "2026-10-04",
+      currency: "USD",
+      status: "draft",
+      billingMode,
+      flatFeeAmount: billingMode === "flat_fee" ? cents(1000) : null,
+    });
+    await db
+      .update(timeEntries)
+      .set({ invoiceId, status: "billed", invoiceAttachment: attachment })
+      .where(eq(timeEntries.id, entryId));
+    return invoiceId;
+  };
+  const materializeReservation = async (invoiceId: SafeId<"invoice">) => {
+    const lineId = createSafeId<"invoiceLine">();
+    await db.insert(invoiceLines).values({
+      id: lineId,
+      invoiceId,
+      workspaceId,
+      organizationId,
+      position: 0,
+      description: "Client work",
+      quantity: "1.0000",
+      unitPrice: cents(1000),
+      netAmount: cents(1000),
+      vatAmount: cents(0),
+      grossAmount: cents(1000),
+      vatRateBps: 0,
+      vatTreatment: "not_vat_payer",
+      source: "time_entry",
+      timeEntryId: entryId,
+    });
+    return lineId;
+  };
+
+  test("covered materialized time remains outside later hourly caps and charged snapshots count", async () => {
+    await seed({ minutes: 60 });
+    await scoped(
+      async (tx) =>
+        await tx
+          .update(billingArrangements)
+          .set({
+            mode: "flat_fee",
+            flatFeeAmount: cents(1000),
+            capMinutes: null,
+            alertThresholdBps: null,
+          })
+          .where(eq(billingArrangements.workspaceId, workspaceId)),
+    );
+    const invoiceId = await attachInvoice({
+      attachment: "covered",
+      billingMode: "flat_fee",
+    });
+    const lineId = await materializeReservation(invoiceId);
+    await db
+      .update(invoiceLines)
+      .set({
+        quantity: "2.0000",
+        unitPrice: cents(2500),
+        netAmount: cents(5000),
+        grossAmount: cents(5000),
+      })
+      .where(eq(invoiceLines.id, lineId));
+    await scoped(
+      async (tx) =>
+        await tx
+          .update(billingArrangements)
+          .set({
+            mode: "hourly",
+            flatFeeAmount: null,
+            capMinutes: 100,
+            capAmount: cents(10_000),
+            alertThresholdBps: 8000,
+          })
+          .where(eq(billingArrangements.workspaceId, workspaceId)),
+    );
+    expect(await reservedUsage()).toMatchObject({
+      billedAmount: 0n,
+      billedMinutes: 0n,
+      mismatchCount: 0n,
+    });
+    await refresh();
+    expect(await crossings()).toHaveLength(0);
+    await db
+      .update(invoices)
+      .set({ billingMode: "hourly", flatFeeAmount: null })
+      .where(eq(invoices.id, invoiceId));
+    await db
+      .update(timeEntries)
+      .set({ invoiceAttachment: "charged" })
+      .where(eq(timeEntries.id, entryId));
+    expect(await reservedUsage()).toMatchObject({
+      billedAmount: 5000n,
+      billedMinutes: 120n,
+    });
+    await refresh();
+    expect(await crossings()).toHaveLength(2);
+  });
+
+  test("legacy and materialized charged reservations agree while snapshots own adjusted amounts and minutes", async () => {
+    await seed({ minutes: 60 });
+    const invoiceId = await attachInvoice({
+      attachment: "charged",
+      billingMode: "hourly",
+    });
+    const legacy = await reservedUsage();
+    expect(legacy).toMatchObject({ billedAmount: 1000n, billedMinutes: 60n });
+    const lineId = await materializeReservation(invoiceId);
+    expect(await reservedUsage()).toEqual(legacy);
+    await db
+      .update(invoiceLines)
+      .set({
+        quantity: "1.5000",
+        unitPrice: cents(2000),
+        netAmount: cents(3000),
+        grossAmount: cents(3000),
+      })
+      .where(eq(invoiceLines.id, lineId));
+    expect(await reservedUsage()).toMatchObject({
+      billedAmount: 3000n,
+      billedMinutes: 90n,
+    });
+    await db
+      .update(invoices)
+      .set({ status: "void" })
+      .where(eq(invoices.id, invoiceId));
+    expect(await reservedUsage()).toMatchObject({
+      billedAmount: 0n,
+      billedMinutes: 0n,
+    });
+    await db
+      .update(invoices)
+      .set({ status: "draft" })
+      .where(eq(invoices.id, invoiceId));
+    expect(await reservedUsage()).toMatchObject({
+      billedAmount: 3000n,
+      billedMinutes: 90n,
+    });
+    await db
+      .update(invoiceLines)
+      .set({ releasedAt: new Date() })
+      .where(eq(invoiceLines.id, lineId));
+    await db
+      .update(timeEntries)
+      .set({
+        invoiceId: null,
+        invoiceAttachment: "charged",
+        status: "approved",
+      })
+      .where(eq(timeEntries.id, entryId));
+    expect(await reservedUsage()).toMatchObject({
+      billedAmount: 0n,
+      billedMinutes: 0n,
+      approvedAmount: 1000n,
+      approvedMinutes: 60n,
+    });
+  });
+
+  test("the application role cannot directly execute the private reserved-time aggregate", async () => {
+    const result = await Result.tryPromise(
+      async () =>
+        await scoped(
+          async (tx) =>
+            await tx.execute(
+              sql`SELECT * FROM public.stella_matter_reserved_time(${workspaceId}, 'USD', NULL)`,
+            ),
+        ),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(isPgError(result.error, "42501")).toBe(true);
     }
   });
 }
