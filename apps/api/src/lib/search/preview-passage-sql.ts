@@ -10,11 +10,7 @@ import {
 } from "@/api/lib/search/preview-passage-scope-sql";
 
 type PreviewPassageTable =
-  | "case-law"
-  | "chat"
-  | "contact"
-  | "document"
-  | "matter";
+  "case-law" | "chat" | "contact" | "document" | "matter";
 
 type CommonPreviewPassageJoinOptions = {
   generation: SQL;

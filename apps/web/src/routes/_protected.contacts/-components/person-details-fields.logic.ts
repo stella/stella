@@ -1,5 +1,6 @@
-import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 
@@ -33,8 +34,11 @@ export const parseBirthDateDraft = (
   if (!/^\d{4}$/u.test(value.year)) {
     return null;
   }
-  const year = Number(value.year);
-  if (year < 1000) {
+  const year = parseIntegerToken(value.year, {
+    sign: "unsigned",
+    min: 1000,
+  }).unwrapOr(null);
+  if (year === null) {
     return null;
   }
   if (value.precision === "year") {
@@ -43,8 +47,10 @@ export const parseBirthDateDraft = (
   if (!/^\d{1,2}$/u.test(value.month)) {
     return null;
   }
-  const month = Number(value.month);
-  if (month < 1 || month > 12) {
+  const month = parseIntegerToken(value.month, {
+    sign: "unsigned",
+  }).unwrapOr(null);
+  if (month === null || month < 1 || month > 12) {
     return null;
   }
   if (value.precision === "month") {
@@ -53,7 +59,12 @@ export const parseBirthDateDraft = (
   if (!/^\d{1,2}$/u.test(value.day)) {
     return null;
   }
-  const day = Number(value.day);
+  const day = parseIntegerToken(value.day, {
+    sign: "unsigned",
+  }).unwrapOr(null);
+  if (day === null) {
+    return null;
+  }
   const leapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
   let lastDay = 31;
   if (month === 2) {
@@ -70,22 +81,17 @@ export const parseBirthDateDraft = (
 type FilterNationalityOptionsArgs<T> = {
   countries: readonly T[];
   query: string;
-  locale: string;
 };
 
-/** Locale-aware nationality filtering; accents and field boundaries stay significant. */
+/** Nationalities whose localized name or code matches the query, in order. */
 export const filterNationalityOptions = <
   T extends { name: string; code: string },
 >({
   countries,
   query,
-  locale,
-}: FilterNationalityOptionsArgs<T>): T[] => {
-  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-  return countries.filter(
-    ({ name, code }) =>
-      !normalizedQuery ||
-      containsSearchMatchKey(name.toLocaleLowerCase(locale), normalizedQuery) ||
-      containsSearchMatchKey(code.toLocaleLowerCase(locale), normalizedQuery),
-  );
-};
+}: FilterNationalityOptionsArgs<T>): T[] =>
+  filterBySearchQuery({
+    items: countries,
+    query,
+    fields: ({ code, name }) => [name, code],
+  });

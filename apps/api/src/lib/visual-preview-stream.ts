@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import {
   VISUAL_PREVIEW_TOOL_NAME,
-  visualPreviewToolOutputSchema,
   type VisualPreviewToolOutput,
+  visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
 
 import {

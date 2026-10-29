@@ -24,6 +24,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const original = {
   requirePersonalKey: env.REQUIRE_PERSONAL_AI_KEY,
@@ -216,7 +217,7 @@ describe("OpenAI decision credentials", () => {
         modelId: "gpt-6-luna",
         region: "eu",
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       createClient: (config) =>
         createOpenAIDecisionsClient({
           apiKey: config.apiKey,
@@ -339,7 +340,7 @@ describe("OpenAI decision credentials", () => {
           modelId: "gpt-6-luna",
           region: "eu",
         },
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         createClient: (config) =>
           createOpenAIDecisionsClient({
             apiKey: config.apiKey,

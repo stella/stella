@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -9,10 +9,10 @@ import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
 
 import {
-  NON_CONTENT_TABLES,
   checkSeal,
   classifySealTable,
   isSeal,
+  NON_CONTENT_TABLES,
   parseStoredSeal,
   readTableDigests,
 } from "./seed-seal";

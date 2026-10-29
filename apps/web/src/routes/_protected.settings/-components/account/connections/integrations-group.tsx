@@ -46,23 +46,23 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
   canApproveIntegrationAuthorization,
-  integrationStatus,
-  matchesConnectionQuery,
   type IntegrationAuthorizationStatus,
   type IntegrationConnection,
+  integrationStatus,
+  matchesConnectionQuery,
 } from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  isEffectivelyInstalled,
   type CatalogueMcp,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 import {
-  mcpConnectorsOptions,
   mcpConnectionsOptions,
+  mcpConnectorsOptions,
   type McpConnectorsResponse,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
@@ -277,7 +277,7 @@ const ApproveAuthorizationButton = ({
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const approve = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.mcp
           .connectors({ slug: connectorSlug })
           ["approve-authorization"].post({
@@ -298,7 +298,13 @@ const ApproveAuthorizationButton = ({
       setOpen(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ApproveAuthorizationButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ApproveAuthorizationButton:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

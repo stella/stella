@@ -50,11 +50,13 @@
     "workspaces.views.filter"
   ],
   "duplicateValues": [
+    "account.sessions.activeNow",
     "account.sessions.currentSession",
     "agentClaim.error",
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.verification.documentView.original",
     "billing.codes.activity",
     "billing.codes.codeLabelField",
     "billing.codes.task",
@@ -92,8 +94,8 @@
     "chat.stopResponse",
     "chat.suggestionStatus.rejected",
     "chat.tool.delete_clause",
+    "chat.tool.delete_contact",
     "chat.tool.delete_matter",
-    "chat.tool.docxReplaceSummary",
     "chat.tool.run_playbook",
     "chat.toolCall.field",
     "clauses.body",
@@ -101,13 +103,14 @@
     "clauses.titleLabel",
     "clauses.versionRestored",
     "consent.error",
+    "contacts.deleteContact",
     "contacts.emailTypes.other",
     "contacts.emailTypes.personal",
+    "contacts.fields.vatPayerUnknown",
     "contacts.phoneTypes.other",
     "contacts.search",
     "docxReview.applyTracked",
     "docxReview.reject",
-    "docxReview.summary.replaceInBlock",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
     "fileDetail.current",
@@ -128,9 +131,12 @@
     "flows.status.skipped",
     "flows.steps.createDocument",
     "flows.trigger.manual",
+    "folio.comments.unknownAuthor",
     "folio.comments.visibility",
     "folio.deleted",
+    "folio.markupView.original",
     "guides.status.skipped",
+    "inbox.evidence.current",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
     "inspector.anonymization.labelPickerAriaLabel",
@@ -182,7 +188,6 @@
     "organization.aiConfig.defaultModelOption",
     "organization.aiConfig.roles.chat",
     "organization.aiConfig.roles.reasoning",
-    "organization.aiConfig.title",
     "organization.invitations.statuses.accepted",
     "organization.invitations.statuses.pending",
     "organization.invitations.statuses.rejected",
@@ -203,7 +208,6 @@
     "search.updatedWithinOptions.week",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
-    "settings.organization.ai",
     "settings.organization.anonymization.deleteAction",
     "settings.organization.anonymization.labelPickerAriaLabel",
     "settings.organization.anonymization.labelPickerEmpty",
@@ -220,7 +224,6 @@
     "skillHistory.statusProposed",
     "skillHistory.statusRejected",
     "styleSets.defaultBadge",
-    "styleSets.newDocument",
     "success.documentCreated",
     "tasks.activity",
     "tasks.dueDate",
@@ -254,7 +257,6 @@
     "workspaces.filters.noMatches",
     "workspaces.filters.to",
     "workspaces.members.noMembersFound",
-    "workspaces.newDocument",
     "workspaces.newFolder",
     "workspaces.overview.activity.actorActions.cancelled",
     "workspaces.overview.activity.actorActions.created",
@@ -317,6 +319,12 @@
     ],
     "avt.claimDetail.sourceCount": [
       "fr"
+    ],
+    "avt.verification.documentView.original": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
     ],
     "billing.codes.codeLabel": [
       "de",
@@ -417,9 +425,6 @@
     ],
     "common.documents": [
       "fr"
-    ],
-    "common.error": [
-      "es"
     ],
     "common.filter": [
       "et"
@@ -924,6 +929,12 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.pdf.selection.pageLocator": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -945,6 +956,18 @@
       "de",
       "fr",
       "pl"
+    ],
+    "workspaces.properties.sortAscendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "workspaces.properties.sortDescendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
     ],
     "workspaces.properties.text": [
       "cs",
@@ -1185,7 +1208,6 @@
     "workspaces.infosoud.statusDate",
     "workspaces.infosoud.validTo",
     "workspaces.lockMatter",
-    "workspaces.mattersCount",
     "workspaces.members.alreadyMember",
     "workspaces.members.cannotRemoveLast",
     "workspaces.noMatters",

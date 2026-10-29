@@ -1,14 +1,18 @@
-// parser-output-unchanged: transport timeout policies do not change parsed output.
+// parser-output-unchanged: transport timeout fields on the fetcher type do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
+
+export type FetchTimeout =
+  { type: "headers"; ms: number } | { type: "idle"; ms: number };
+
+export type TransportRequestInit = RequestInit & {
+  timeout?: FetchTimeout;
+  timeoutMs?: number;
+};
 
 export type Fetcher = (
   input: string | URL | Request,
-  init?: RequestInit,
+  init?: TransportRequestInit,
 ) => Promise<Response>;
-
-export type FetchTimeout =
-  | { type: "headers"; ms: number }
-  | { type: "idle"; ms: number };
 
 export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
   signal?: AbortSignal | undefined;

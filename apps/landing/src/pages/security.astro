@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import LandingFooter from "../components/LandingFooter.astro";
+import Prose from "../components/Prose.astro";
 import { securityControls } from "../data/security-controls";
 
 const repositoryUrl = "https://github.com/stella/stella";
@@ -20,12 +21,12 @@ const repositoryUrl = "https://github.com/stella/stella";
             <h1 class="font-display text-4xl font-medium tracking-tight sm:text-5xl">
               Security at stella
             </h1>
-            <p class="mt-6 text-lg leading-[1.8]" style="color: var(--muted-foreground)">
+            <Prose class="mt-6 text-lg leading-[1.8]" style="color: var(--muted-foreground)">
               stella handles privileged legal data. Security is a core design
               constraint across the product. The controls below are linked to
               executable evidence in the public repository, so they change with
               the implementation rather than relying on an unchecked checklist.
-            </p>
+            </Prose>
             <a
               href="mailto:security@stll.app"
               class="mt-6 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
@@ -40,14 +41,14 @@ const repositoryUrl = "https://github.com/stella/stella";
               <p class="font-display text-xl font-medium tracking-tight">
                 Our hosted cloud is currently in beta and developing quickly.
               </p>
-              <p class="mt-2 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
+              <Prose class="mt-2 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
                 Self-hosted deployments run on your own infrastructure under
                 the open-source license. See our <a
                   href="/terms/"
                   class="underline underline-offset-2"
                   style="color: var(--foreground)">Terms</a
                 >.
-              </p>
+              </Prose>
             </div>
           </div>
         </div>
@@ -60,18 +61,18 @@ const repositoryUrl = "https://github.com/stella/stella";
             <h2 class="font-display text-3xl font-medium tracking-tight">
               Controls you can inspect
             </h2>
-            <p class="mt-3 text-base leading-[1.8]" style="color: var(--muted-foreground)">
+            <Prose class="mt-3 text-base leading-[1.8]" style="color: var(--muted-foreground)">
               Each statement maps to a policy control whose file paths and
               expected implementation markers are checked in CI.
-            </p>
+            </Prose>
           </div>
           <div class="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border md:grid-cols-2" style="background: var(--border); border-color: var(--border)">
             {securityControls.map((control) => (
               <article class="p-7" style="background: var(--background)">
                 <h3 class="font-display text-lg font-medium">{control.title}</h3>
-                <p class="mt-2 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+                <Prose class="mt-2 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
                   {control.body}
-                </p>
+                </Prose>
                 <a
                   class="mt-5 inline-flex text-sm font-medium transition-opacity hover:opacity-70"
                   href={`${repositoryUrl}/blob/main/${control.policyPath}`}
@@ -92,10 +93,10 @@ const repositoryUrl = "https://github.com/stella/stella";
             <h2 class="font-display text-3xl font-medium tracking-tight">
               Report a vulnerability
             </h2>
-            <p class="mt-3 text-base leading-[1.8]" style="color: var(--muted-foreground)">
+            <Prose class="mt-3 text-base leading-[1.8]" style="color: var(--muted-foreground)">
               Please send security reports privately. Our disclosure policy
               documents what to include and how we handle a report.
-            </p>
+            </Prose>
           </div>
           <div class="flex flex-wrap gap-3">
             <a

@@ -21,9 +21,9 @@ import {
 
 import {
   type RecordSourceTotalOptions,
+  runSourceTotalPoll,
   type SourceTotalPollSummary,
   type SourceTotalPollTiming,
-  runSourceTotalPoll,
 } from "./source-total-poll";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;

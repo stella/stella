@@ -20,6 +20,7 @@ export const createPlaygroundChatApproval = (
   activeOrganizationId,
   alwaysApprovedTools: new Set(),
   conversationApprovedTools: new Set(),
+  confirmStoredApprovalGrant: async () => await Promise.resolve(false),
   handleAllowInConversation: noop,
   handleAlwaysAllow: noop,
   handleApprove: noop,
@@ -27,6 +28,11 @@ export const createPlaygroundChatApproval = (
   continueRequestSecret: async () => {
     /* no-op in playground */
   },
+  continueConnectConnector: async () => {
+    /* no-op in playground */
+  },
+  handleConnectConnector: async () =>
+    await Promise.resolve({ status: "declined", connectorSlug: "playground" }),
   handleRequestSecret: async () =>
     await Promise.resolve({
       status: "declined",

@@ -1,11 +1,11 @@
 import { Result, TaggedError } from "better-result";
-import type { PreContext } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import type { Middleware } from "@/api/http/route";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   MACHINE_API_KEY_LENGTH,
@@ -16,10 +16,6 @@ import { getRequestId } from "@/api/lib/observability/request-context";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 
 const BEARER_SCHEME = "bearer";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/u;
@@ -64,7 +60,7 @@ type SecurityCanaryTrigger =
       error: unknown;
     };
 
-type SecurityCanaryInterceptorOptions = {
+type SecurityCanaryOptions = {
   getConfiguredDigest: () => string | undefined;
   getCorrelationId: (request: Request) => string | undefined;
   claimAlert: () => Promise<SecurityCanaryAlertDecision>;
@@ -85,8 +81,7 @@ class SecurityCanaryRedisReplyError extends TaggedError(
 }> {}
 
 type SecurityCanaryRedisClaim =
-  | { status: "claimed"; ttlMs: number }
-  | { status: "duplicate"; ttlMs: number };
+  { status: "claimed"; ttlMs: number } | { status: "duplicate"; ttlMs: number };
 
 const parseRedisClaim = (reply: unknown): SecurityCanaryRedisClaim => {
   if (!Array.isArray(reply) || reply.length !== 2) {
@@ -226,21 +221,25 @@ const matchesConfiguredCanary = ({
   return timingSafeEqual(presentedDigest, expectedDigest);
 };
 
-export const createSecurityCanaryInterceptor =
+/**
+ * Refuses a request that presents the decoy machine credential, before any
+ * route reads it, and reports it once per deduplication window.
+ */
+export const createSecurityCanary =
   ({
     getConfiguredDigest,
     getCorrelationId,
     claimAlert,
     onTriggered,
-  }: SecurityCanaryInterceptorOptions) =>
-  async ({ request, set }: PreContext) => {
+  }: SecurityCanaryOptions): Middleware =>
+  async ({ request }, inner) => {
     if (
       !matchesConfiguredCanary({
         authorizationHeader: request.headers.get("authorization"),
         configuredDigest: getConfiguredDigest(),
       })
     ) {
-      return undefined;
+      return await inner();
     }
 
     const alertDecision = await claimAlert();
@@ -257,15 +256,18 @@ export const createSecurityCanaryInterceptor =
       );
     }
 
-    set.status = 403;
-    set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
-    set.headers[SECURITY_CANARY_WARNING_HEADER] = SECURITY_CANARY_WARNING;
-    return { message: SECURITY_CANARY_WARNING };
+    return Response.json(
+      { message: SECURITY_CANARY_WARNING },
+      {
+        status: 403,
+        headers: { [SECURITY_CANARY_WARNING_HEADER]: SECURITY_CANARY_WARNING },
+      },
+    );
   };
 
 const claimSecurityCanaryAlert = createSecurityCanaryAlertDeduplicator();
 
-export const securityCanaryInterceptor = createSecurityCanaryInterceptor({
+export const securityCanary = createSecurityCanary({
   getConfiguredDigest: () => env.SECURITY_CANARY_API_KEY_SHA256,
   getCorrelationId: getRequestId,
   claimAlert: claimSecurityCanaryAlert,

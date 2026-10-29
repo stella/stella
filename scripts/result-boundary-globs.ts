@@ -28,11 +28,21 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/playwright-tools/src/**/*.ts",
+  "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
+  "apps/api/src/handlers/mobile-updates/**/*.ts",
+  "apps/mobile/src/app/matter/**/*.{ts,tsx}",
+  "apps/mobile/src/connection/**/*.{ts,tsx}",
+  "apps/mobile/src/i18n/**/*.{ts,tsx}",
+  "apps/mobile/src/state/**/*.{ts,tsx}",
+  "apps/mobile/src/app/thread/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
+  "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
@@ -43,6 +53,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
@@ -99,13 +110,16 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
   "apps/api/src/lib/feature-access/**/*.ts",
+  "apps/api/src/lib/kill-switches/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
+  "apps/api/src/lib/load/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
+  "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
@@ -124,6 +138,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
+  "apps/api/src/lib/write-contract/**/*.ts",
+  "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
@@ -142,6 +158,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
+  "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
+  "apps/web/src/components/settings-shell/**/*.{ts,tsx}",
+  "apps/web/src/components/sidebar/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
@@ -149,13 +168,18 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
+  "apps/web/src/features/my-week/**/*.{ts,tsx}",
+  "apps/web/src/features/time-review/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
+  "apps/web/src/lib/capabilities/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/legal/**/*.{ts,tsx}",
+  "apps/web/src/lib/persisted-state/**/*.ts",
+  "apps/web/src/lib/platform/**/*.ts",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
@@ -196,9 +220,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
-  "packages/test-kit/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
-  "packages/time/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
@@ -207,22 +229,36 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 export const RESULT_BOUNDARY_GLOBS = [
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
+  // The tools/call callback observer preserves the SDK's result/rejection contract;
+  // it records thrown failures and rethrows the original value to the protocol owner.
+  "apps/api/src/mcp/observe-tool-call.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
-  // Elysia consumes prevalidation feature denials through its error pipeline.
+  // The HTTP core turns thrown pipeline failures (a malformed body, an unknown
+  // route, a hidden feature) into sanitized answers at its error boundary.
+  "apps/api/src/http/**/*.ts",
+  "apps/api/src/lib/observability/request-lifecycle.ts",
+  // A rate-limit stage refunds its charges when a later stage throws.
+  "apps/api/src/lib/rate-limit/rate-limit.ts",
   "apps/api/src/lib/auth/feature-access/route.ts",
+  "apps/api/src/lib/deployment-feature-route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
+  // Browser startup captures detector installation failures in its outer Result.
+  "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
+  // The OAuth provider consumes a client discovery's refusal as a rejected
+  // APIError, which the stale-if-error wrapper passes through unchanged.
+  "apps/api/src/lib/auth/cimd-stale-if-error.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -243,6 +279,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/email/inbound/upload-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
+  // All model engines consume this dispatch proof through a signal or rejection.
+  "apps/api/src/lib/rate-limit/model-dispatch-admission.ts",
+  // Credential SDKs accept a typed rejection when issuance is unavailable.
+  "apps/api/src/lib/synthetic-principal/credential-policy.ts",
   // TanStack consumes this adapter through its Promise rejection contract;
   // structuredOutput cannot return a Result to the SDK.
   "apps/api/src/lib/stella-openrouter-text-adapter.ts",
@@ -303,10 +343,6 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
-  // The test kit reports a hung wait or a refused connection to the test
-  // runner, and stands in for the platform's throwing socket API.
-  "packages/test-kit/src/network.ts",
-  "packages/test-kit/src/wait.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.

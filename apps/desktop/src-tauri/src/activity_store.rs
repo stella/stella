@@ -1053,6 +1053,7 @@ mod tests {
       window_title: Some("Confidential draft".to_string()),
       document: Some("/private/draft.docx".to_string()),
       matter_id: None,
+      call: false,
       start: Utc.with_ymd_and_hms(2026, 3, 1, 9, 0, 0).unwrap(),
       end: Utc.with_ymd_and_hms(2026, 3, 1, 9, 30, 0).unwrap(),
     }

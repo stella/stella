@@ -9,8 +9,8 @@ import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import {
-  auditChangesForResource,
   AUDIT_DETAIL_POLICY,
+  auditChangesForResource,
   auditReadChangesSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
@@ -106,7 +106,9 @@ testState.beforeAll(async () => {
       if (
         resourceType === AUDIT_RESOURCE_TYPE.CHAT_THREAD ||
         resourceType === AUDIT_RESOURCE_TYPE.CHAT_MESSAGE ||
-        resourceType === AUDIT_RESOURCE_TYPE.CHAT_FILE
+        resourceType === AUDIT_RESOURCE_TYPE.CHAT_FILE ||
+        resourceType === AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION ||
+        resourceType === AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT
       ) {
         await recordAuditEvent(tx, {
           ...event,

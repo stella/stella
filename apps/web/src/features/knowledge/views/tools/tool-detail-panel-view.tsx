@@ -12,10 +12,10 @@ import {
   FileBadgeIcon,
   KeyRoundIcon,
   LinkIcon,
+  type LucideIcon,
   TagIcon,
   UserIcon,
   XIcon,
-  type LucideIcon,
 } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 

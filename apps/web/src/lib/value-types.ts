@@ -24,13 +24,7 @@ import type { LucideIcon } from "@stll/ui/icons";
 import type { TranslationKey } from "@/i18n/types";
 
 export type ValueTypeKind =
-  | "text"
-  | "number"
-  | "boolean"
-  | "date"
-  | "select"
-  | "multiSelect"
-  | "company";
+  "text" | "number" | "boolean" | "date" | "select" | "multiSelect" | "company";
 
 export type ValueTypeMeta = {
   icon: LucideIcon;

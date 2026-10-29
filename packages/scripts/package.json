@@ -10,14 +10,16 @@
     "i18n-typegen": "src/i18n-typegen.ts"
   },
   "type": "module",
+  "exports": {
+    "./src/*": "./src/*.ts"
+  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/scripts",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts"
   },
   "dependencies": {
     "@formatjs/icu-messageformat-parser": "3.5.20",
@@ -30,16 +32,15 @@
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
-    "oxfmt": "catalog:",
-    "typescript": "catalog:"
+    "oxc-parser": "catalog:",
+    "oxc-transform-react": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:",
-    "oxc-transform-react": "catalog:"
+    "fast-check": "catalog:"
   }
 }

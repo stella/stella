@@ -12,6 +12,7 @@ import JSZip from "jszip";
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import { writeZipEntry } from "@stll/docx-utils";
 
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import {
   FileScanFailedError,
@@ -19,6 +20,7 @@ import {
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { yaraScanner, yaraWindowedRules } from "@/api/lib/file-scan/yara";
 import {
   DOCX_MIME_TYPE,
   PPTX_MIME_TYPE,
@@ -57,6 +59,122 @@ const attachedTemplateDocx = async (): Promise<Uint8Array> => {
 
 // The large fixtures are generated and inflated in full.
 setDefaultTimeout(120_000);
+
+describe("shared upload bytes", () => {
+  test("native scan views respect subrange boundaries and preserve the backing bytes", async () => {
+    const content = new TextEncoder().encode("AutoOpen CreateObject");
+    const backing = new Uint8Array(content.length + 26);
+    backing.set(content, 13);
+    const before = new Uint8Array(backing);
+    const view = backing.subarray(13, 13 + content.length);
+    const expected = await yaraScanner.scan(content);
+    expect(
+      expected.some(({ rule }) => rule === "office_macro_suspicious_words"),
+    ).toBe(true);
+    expect(await yaraScanner.scan(view)).toEqual(expected);
+    expect(await yaraScanner.scan(view.subarray(0, 8))).toEqual([]);
+    expect(yaraWindowedRules.occurrences(view)).toEqual(
+      yaraWindowedRules.occurrences(content),
+    );
+    expect(
+      yaraWindowedRules.evaluate("office_macro_suspicious_words", view),
+    ).toEqual(
+      yaraWindowedRules.evaluate("office_macro_suspicious_words", content),
+    );
+    expect(backing).toEqual(before);
+  });
+
+  test("transfers owned bytes and detaches caller aliases before scanning", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const alias = bytes.subarray(1);
+    const result = Result.unwrap(
+      await scanUpload(
+        {
+          bytes,
+          ownership: "transfer",
+          declaredMimeType: "text/plain",
+          fileName: "sample.txt",
+        },
+        async ({ buffer }) => {
+          expect(bytes.byteLength).toBe(0);
+          expect(alias.byteLength).toBe(0);
+          expect([...buffer]).toEqual([1, 2, 3]);
+          return await Promise.resolve(
+            Result.ok({ verdict: "pass", findings: [] }),
+          );
+        },
+      ),
+    );
+    expect([...new Uint8Array(result.bytes)]).toEqual([1, 2, 3]);
+  });
+
+  test.each(["copy", "transfer"] as const)(
+    "%s isolates subranges from caller mutations",
+    async (ownership) => {
+      const bytes = new Uint8Array([9, 1, 2, 3, 9]);
+      const result = Result.unwrap(
+        await scanUpload(
+          {
+            bytes: bytes.subarray(1, 4),
+            ownership,
+            declaredMimeType: "text/plain",
+            fileName: "sample.txt",
+          },
+          async ({ buffer }) => {
+            bytes.fill(0);
+            expect([...buffer]).toEqual([1, 2, 3]);
+            return await Promise.resolve(
+              Result.ok({ verdict: "pass", findings: [] }),
+            );
+          },
+        ),
+      );
+      expect([...new Uint8Array(result.bytes)]).toEqual([1, 2, 3]);
+    },
+  );
+
+  test.each([false, true])(
+    "preserves bytes and verdicts through shared scanners (flagged: %s)",
+    async (flagged) => {
+      const bytes = flagged
+        ? await attachedTemplateDocx()
+        : new TextEncoder().encode("Ordinary document text");
+      const declaredMimeType = flagged ? DOCX_MIME_TYPE : "text/plain";
+      const fileName = flagged ? "linked.docx" : "clean.txt";
+      const original = new Uint8Array(bytes);
+      const expected = Result.unwrap(
+        await scanFile({ buffer: bytes, declaredMimeType, fileName }),
+      );
+      // Composed scanners borrow the same bytes read-only, including native YARA.
+      expect(bytes).toEqual(original);
+      expect(expected.verdict).toBe(flagged ? "reject" : "pass");
+      const result = await scanUpload({
+        bytes,
+        ownership: "transfer",
+        declaredMimeType,
+        fileName,
+      });
+      if (Result.isError(result)) {
+        expect(flagged).toBe(true);
+        if (!FileScanRejectedError.is(result.error)) {
+          throw new TypeError("expected a rejecting verdict");
+        }
+        const rejection = fileSecurityRejection(expected);
+        if (rejection === null) {
+          throw new TypeError("expected a rejecting finding");
+        }
+        expect(result.error.rejection).toEqual(rejection);
+        return;
+      }
+      expect(flagged).toBe(false);
+      expect(result.value.source).toMatchObject({
+        type: "scan",
+        scan: expected,
+      });
+      expect(new Uint8Array(result.value.bytes)).toEqual(original);
+    },
+  );
+});
 
 describe("scanUploadForHandler", () => {
   test("answers a rejected file with the structured 422", async () => {

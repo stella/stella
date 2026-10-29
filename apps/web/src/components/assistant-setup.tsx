@@ -1,24 +1,15 @@
 import type * as React from "react";
-import { useState } from "react";
 
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { Button } from "@stll/ui/button";
-import { CheckIcon, CopyIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { CopyActionButton } from "@/components/copy-action-button";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { CONNECT_AI_ASSISTANT_DOCS_URL } from "@/lib/consts";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 
-const COPIED_FEEDBACK_MS = 1600;
 /** Heading anchors on the setup guide, the single source of the steps. */
 const GUIDE_ANCHOR = {
   agent: "#instructions-for-ai-agents",
@@ -79,22 +70,18 @@ export const AssistantSetup = ({
           >
             {mcpUrl}
           </code>
-          <CopyTextButton
-            label={t("common.copy")}
-            text={mcpUrl}
-            toast={t("common.copied")}
-            variant="default"
-          />
+          <CopyActionButton size="sm" text={mcpUrl} variant="default" />
         </div>
       </div>
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span>{t("agentSetup.selfSetupHint")}</span>
-        <CopyTextButton
+        <CopyActionButton
           label={t("agentSetup.copy")}
+          size="xs"
           text={instructions}
-          toast={t("agentSetup.copiedToast")}
           variant="link"
         />
+        <span>{t("agentSetup.pasteHint")}</span>
       </div>
     </div>
   );
@@ -136,47 +123,3 @@ const GuideTile = ({
     {name}
   </a>
 );
-
-/** Copies `text`, confirms in place (copy → check) and with a toast. */
-const CopyTextButton = ({
-  text,
-  label,
-  toast,
-  variant,
-}: {
-  text: string;
-  label: string;
-  toast: string;
-  variant: "default" | "link";
-}) => {
-  const t = useTranslations();
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    const result = await copyToClipboard(text);
-    if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
-      notifyUserError(result.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: toast, type: "success" });
-    setCopied(true);
-    setTimeout(() => {
-      setCopied(false);
-    }, COPIED_FEEDBACK_MS);
-  };
-
-  return (
-    <Button
-      onClick={() => {
-        detached(copy(), "assistant-setup.copy");
-      }}
-      size={variant === "link" ? "xs" : "sm"}
-      type="button"
-      variant={variant}
-    >
-      {variant === "default" && (copied ? <CheckIcon /> : <CopyIcon />)}
-      {label}
-    </Button>
-  );
-};

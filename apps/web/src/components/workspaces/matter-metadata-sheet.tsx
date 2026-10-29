@@ -19,7 +19,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { CopyIcon, CopyPlusIcon, TrashIcon } from "@stll/ui/icons";
+import { CopyPlusIcon, DuplicateIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -247,7 +247,6 @@ export const MatterMetadataPanel = ({
     const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     await deleteWorkspace.mutateAsync(
@@ -285,7 +284,6 @@ export const MatterMetadataPanel = ({
     const toastId = stellaToast.add({
       title: t("workspaces.duplicatingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     duplicateWorkspace.mutate(
@@ -447,7 +445,7 @@ export const MatterMetadataPanel = ({
                 variant="ghost"
               >
                 <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-                  <CopyIcon className="size-4" />
+                  <DuplicateIcon className="size-4" />
                 </span>
                 {t("common.duplicate")}
               </Button>

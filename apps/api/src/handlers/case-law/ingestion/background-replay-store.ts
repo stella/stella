@@ -7,18 +7,19 @@ import {
   isNotNull,
   isNull,
   lt,
-  ne,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
-  initialBatchState,
   type BatchState,
+  initialBatchState,
   type Verdict,
 } from "@stll/db-load-gate/health";
+import { sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
@@ -26,14 +27,14 @@ import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawSources,
+  caseLawReplayAuditEvents,
   caseLawReplayBatches,
   caseLawReplayBlocked,
   caseLawReplayDailyRows,
   caseLawReplaySourceProgress,
-  caseLawReplayAuditEvents,
-  type ReplayMaintenanceAuditDetails,
+  caseLawSources,
   databaseBackfillStates,
+  type ReplayMaintenanceAuditDetails,
 } from "@/api/db/schema";
 import {
   setSharedLockTimeout,
@@ -41,6 +42,14 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import {
+  buildCaseLawReplayCompactionQuery,
+  lockCaseLawDecisionRows,
+  lockCaseLawReplayBatch,
+  lockCaseLawReplayPendingBatch,
+} from "@/api/lib/db/aggregate-lock";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionLifecycle } from "@/api/lib/db/transitions";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
 import {
@@ -53,32 +62,37 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { getAdapter } from "./adapters/adapter-registry";
 import type {
   BackgroundReplayBatch,
-  BackgroundReplaySource,
   BackgroundReplayReservation,
+  BackgroundReplaySource,
   BackgroundReplayTickReport,
 } from "./background-replay";
 import {
-  CASE_LAW_REPLAY_SCOPE,
   BACKGROUND_REPLAY_PREVIEW_SUFFIX,
   buildBackgroundReplayProbe,
+  canReadmitReplayBatch,
+  CASE_LAW_REPLAY_SCOPE,
+  parsedReplayInputPredicate,
   REPLAY_ROW_OUTCOME,
+  replayBatchReadmissionPredicate,
   replayCapability,
+  type ReplayDecisionRow,
+  replayReadmissionInputPredicate,
+  type ReplayRowReport,
+  type ReplayRowResult,
   replayRowResult,
   selectReplayPage,
   selectScopeEnd,
-  type ReplayRowReport,
-  type ReplayRowResult,
 } from "./replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
-  validateReplayEnrolment,
   type ReplayEnrolment,
+  validateReplayEnrolment,
 } from "./replay-enrolment";
 import {
   REPLAY_PREVIEW_FAILURE,
-  replayFailure,
   type ReplayFailure,
+  replayFailure,
 } from "./replay-failure";
 
 const withReplayTransaction = async <T>(
@@ -107,7 +121,58 @@ const reservationBatch = (
   decisionId: row.firstDecisionId,
   parserVersionFrom: row.parserVersionFrom,
   targetParserVersion: row.parserVersionTo,
+  sourceRawS3Key: row.sourceRawS3Key,
+  claimReadmission: row.readmissions,
 });
+
+const replayReservationPredicate = (batch: BackgroundReplayBatch) =>
+  and(
+    eq(caseLawReplayBatches.id, batch.id),
+    eq(caseLawReplayBatches.sourceId, batch.source.id),
+    eq(caseLawReplayBatches.readmissions, batch.claimReadmission),
+    batch.sourceRawS3Key === null
+      ? isNull(caseLawReplayBatches.sourceRawS3Key)
+      : eq(caseLawReplayBatches.sourceRawS3Key, batch.sourceRawS3Key),
+  );
+
+const generationBatchId = (
+  source: BackgroundReplaySource,
+  row: Pick<ReplayDecisionRow, "id" | "sourceRawS3Key">,
+) =>
+  `${source.id}:${source.currentParserVersion}:${row.id}:${sha256Hex(row.sourceRawS3Key)}`;
+
+const lockReplayDecisionInput = async (
+  tx: Transaction,
+  batch: Pick<
+    BackgroundReplayBatch,
+    "decisionId" | "source" | "targetParserVersion"
+  >,
+) => {
+  await lockCaseLawDecisionRows({ tx, decisionIds: [batch.decisionId] });
+  return (
+    await tx
+      .select({
+        parserVersion: caseLawDecisions.parserVersion,
+        sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+        redactedAt: caseLawDecisions.redactedAt,
+        corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
+        parsedInputCurrent: parsedReplayInputPredicate(
+          batch.targetParserVersion,
+        ),
+        readmissionEligible: replayReadmissionInputPredicate(
+          batch.targetParserVersion,
+        ),
+      })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.id, batch.decisionId),
+          eq(caseLawDecisions.sourceId, batch.source.id),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+};
 
 type ReplayStoreOptions = {
   db: CaseLawRootHandle;
@@ -170,6 +235,18 @@ const hasDailyAllowance = async ({
         caseLawReplayDailyRows,
         eq(caseLawReplayBatches.id, caseLawReplayDailyRows.batchId),
       )
+      .leftJoin(
+        caseLawDecisions,
+        and(
+          eq(caseLawDecisions.id, caseLawReplayBatches.firstDecisionId),
+          eq(caseLawDecisions.sourceId, source.id),
+          eq(
+            caseLawDecisions.sourceRawS3Key,
+            caseLawReplayBatches.sourceRawS3Key,
+          ),
+          replayReadmissionInputPredicate(source.currentParserVersion),
+        ),
+      )
       .where(
         and(
           eq(caseLawReplayBatches.sourceId, source.id),
@@ -186,10 +263,20 @@ const hasDailyAllowance = async ({
                 ),
                 sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
               )
-            : inArray(caseLawReplayBatches.status, [
-                "reserved",
-                "retry-exhausted",
-              ]),
+            : or(
+                inArray(caseLawReplayBatches.status, [
+                  "reserved",
+                  "retry-exhausted",
+                ]),
+                and(
+                  replayBatchReadmissionPredicate(),
+                  lt(
+                    caseLawReplayBatches.readmissions,
+                    BACKGROUND_REPLAY_LIMITS.maxRowReadmissions,
+                  ),
+                  isNotNull(caseLawDecisions.id),
+                ),
+              ),
           or(
             isNull(caseLawReplayBatches.retryAt),
             lte(
@@ -350,6 +437,7 @@ const chooseSource = async (
             (
               await buildBackgroundReplayProbe(tx, {
                 sourceId: candidate.id,
+                adapterKey: candidate.adapterKey,
                 currentParserVersion: candidate.currentParserVersion,
                 mode: candidate.mode,
               })
@@ -420,6 +508,7 @@ const selectNext = async (
     await work(tx);
   const selection = {
     type: "background",
+    adapterKey: source.adapterKey,
     currentParserVersion: source.currentParserVersion,
     mode: source.mode,
   } as const;
@@ -486,7 +575,7 @@ const previewBatch = async (
       return { type: "empty" };
     }
     const utcDay = new Date(now()).toISOString().slice(0, 10);
-    const id = `${source.id}:${source.currentParserVersion}:${row.id}${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`;
+    const id = `${generationBatchId(source, row)}${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`;
     const receipt = (
       await tx
         .select()
@@ -548,6 +637,7 @@ const previewBatch = async (
         lastDecisionId: row.id,
         parserVersionFrom: row.parserVersion,
         parserVersionTo: source.currentParserVersion,
+        sourceRawS3Key: row.sourceRawS3Key,
         budgetDay: utcDay,
         status: "completed",
         attempted: 1,
@@ -590,6 +680,8 @@ const previewBatch = async (
         decisionId: row.id,
         parserVersionFrom: row.parserVersion,
         targetParserVersion: source.currentParserVersion,
+        sourceRawS3Key: row.sourceRawS3Key,
+        claimReadmission: receipt?.readmissions ?? 0,
       },
     };
   });
@@ -658,34 +750,12 @@ const pendingInTransaction = async (
   tx: Transaction,
   { source, utcDay, now, cursor }: PendingInTransactionOptions,
 ) => {
-  const row = (
-    await tx
-      .select()
-      .from(caseLawReplayBatches)
-      .where(
-        and(
-          eq(caseLawReplayBatches.sourceId, source.id),
-          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
-          or(
-            isNull(caseLawReplayBatches.retryAt),
-            lte(
-              caseLawReplayBatches.retryAt,
-              sql`${new Date(now)}::timestamptz`,
-            ),
-          ),
-        ),
-      )
-      .orderBy(
-        ...(cursor === null
-          ? []
-          : [
-              sql`CASE WHEN ${caseLawReplayBatches.firstDecisionId} > ${cursor}::uuid THEN 0 ELSE 1 END`,
-            ]),
-        asc(caseLawReplayBatches.firstDecisionId),
-        asc(caseLawReplayBatches.id),
-      )
-      .limit(1)
-  ).at(0);
+  const row = await lockCaseLawReplayPendingBatch({
+    tx,
+    sourceId: source.id,
+    now: new Date(now),
+    cursor,
+  });
   if (!row) {
     return { type: "empty" } as const;
   }
@@ -712,8 +782,21 @@ const pendingInTransaction = async (
   if (row.parserVersionTo > source.currentParserVersion) {
     panic("Pending replay targets a newer parser; this worker must stop");
   }
-  if (row.parserVersionTo < source.currentParserVersion) {
-    // preserves the superseded reservation before current-parser work
+  const decision = await lockReplayDecisionInput(
+    tx,
+    reservationBatch(source, row),
+  );
+  if (
+    row.parserVersionTo < source.currentParserVersion ||
+    row.sourceRawS3Key === null ||
+    decision === undefined ||
+    decision.redactedAt !== null ||
+    (decision.parserVersion !== null &&
+      decision.parserVersion > row.parserVersionTo &&
+      !decision.parsedInputCurrent) ||
+    decision.sourceRawS3Key !== row.sourceRawS3Key
+  ) {
+    // Unknown or replaced inputs cannot borrow the current input's completion.
     await tx
       .update(caseLawReplayBatches)
       .set({ status: "superseded", completedAt: sql`now()` })
@@ -730,22 +813,30 @@ const pendingInTransaction = async (
   if (!(await admitDailyRow(tx, { source, batchId: row.id, utcDay }))) {
     return { type: "budget-exhausted" } as const;
   }
+  let reserved = row;
   if (row.status === "retry-exhausted") {
     // The checkpoint lock serializes readmission and daily budget admission.
-    await tx
-      .update(caseLawReplayBatches)
-      .set({
-        status: "reserved",
-        readmissions: row.readmissions + 1,
-        attempts: 0,
-        systemicFailures: 0,
-        systemicProgress: 0,
-        attemptState: "idle",
-        failed: 0,
-        retryAt: null,
-        completedAt: null,
-      })
-      .where(eq(caseLawReplayBatches.id, row.id));
+    const updated = (
+      await tx
+        .update(caseLawReplayBatches)
+        .set({
+          status: "reserved",
+          readmissions: row.readmissions + 1,
+          attempts: 0,
+          systemicFailures: 0,
+          systemicProgress: 0,
+          attemptState: "idle",
+          failed: 0,
+          retryAt: null,
+          completedAt: null,
+        })
+        .where(eq(caseLawReplayBatches.id, row.id))
+        .returning()
+    ).at(0);
+    if (updated === undefined) {
+      panic("The locked replay reservation disappeared during readmission");
+    }
+    reserved = updated;
     await recordReplayMaintenanceAuditEvent(tx, {
       sourceId: source.id,
       action: "receipt-reserved",
@@ -758,7 +849,10 @@ const pendingInTransaction = async (
       createdAt: new Date(now),
     });
   }
-  return { type: "reserved", batch: reservationBatch(source, row) } as const;
+  return {
+    type: "reserved",
+    batch: reservationBatch(source, reserved),
+  } as const;
 };
 const lockCheckpoint = async (
   tx: Transaction,
@@ -856,6 +950,114 @@ const saveGateState = async (
   });
 type ReserveBatchOptions = PendingBatchOptions & { verdict: Verdict };
 
+type ReadmitReplayBatchOptions = {
+  source: BackgroundReplaySource;
+  previous: typeof caseLawReplayBatches.$inferSelect;
+  utcDay: string;
+  now: () => number;
+};
+
+// The caller retains checkpoint, reservation and input locks through readmission.
+const readmitReplayBatch = async (
+  tx: Transaction,
+  { source, previous, utcDay, now }: ReadmitReplayBatchOptions,
+) => {
+  const id = previous.id;
+  if (previous.readmissions >= BACKGROUND_REPLAY_LIMITS.maxRowReadmissions) {
+    const transition = await transitionLifecycle({
+      tx,
+      spec: TRANSITIONS.caseLawReplayBatches,
+      id,
+      moves: {
+        status: { from: ["completed", "superseded"], to: "retry-terminal" },
+        attemptState: { from: [previous.attemptState], to: "idle" },
+      },
+      set: {
+        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+        applied: 0,
+        blocked: 0,
+        failed: 1,
+        failureCode: "writer-retryable",
+        failureMessageClass: replayFailure("writer-retryable").messageClass,
+        retryAt: null,
+        completedAt: new Date(now()),
+      },
+      recordTransitionAuditEvent: async (auditTx) =>
+        await recordReplayMaintenanceAuditEvent(auditTx, {
+          sourceId: source.id,
+          action: "receipt-failed",
+          resourceId: id,
+          details: {
+            status: "retry-terminal",
+            readmissions: previous.readmissions,
+          },
+          createdAt: new Date(now()),
+        }),
+    });
+    switch (transition.type) {
+      case "transitioned":
+        break;
+      case "stale":
+        return panic(
+          "The locked replay reservation changed before terminal readmission",
+        );
+      default:
+        transition satisfies never;
+        return panic("Unhandled replay batch transition");
+    }
+    return { type: "empty" } as const;
+  }
+  if (!(await admitDailyRow(tx, { source, batchId: id, utcDay }))) {
+    return { type: "budget-exhausted" } as const;
+  }
+  const readmissions = previous.readmissions + 1;
+  const transition = await transitionLifecycle({
+    tx,
+    spec: TRANSITIONS.caseLawReplayBatches,
+    id,
+    moves: {
+      status: { from: ["completed", "superseded"], to: "reserved" },
+      attemptState: { from: [previous.attemptState], to: "idle" },
+    },
+    set: {
+      outcome: null,
+      readmissions,
+      attempts: 0,
+      systemicFailures: 0,
+      systemicProgress: 0,
+      applied: 0,
+      blocked: 0,
+      failed: 0,
+      retryAt: null,
+      completedAt: null,
+    },
+    recordTransitionAuditEvent: async (auditTx) =>
+      await recordReplayMaintenanceAuditEvent(auditTx, {
+        sourceId: source.id,
+        action: "receipt-reserved",
+        resourceId: id,
+        details: { readmissions },
+        createdAt: new Date(now()),
+      }),
+  });
+  switch (transition.type) {
+    case "transitioned":
+      break;
+    case "stale":
+      return panic("The locked replay reservation changed before readmission");
+    default:
+      transition satisfies never;
+      return panic("Unhandled replay batch transition");
+  }
+  return {
+    type: "reserved",
+    batch: {
+      ...reservationBatch(source, previous),
+      claimReadmission: readmissions,
+    },
+  } as const;
+};
+
 const reserveBatch = async (
   { db, now }: ReplayStoreContext,
   { source, utcDay, verdict }: ReserveBatchOptions,
@@ -883,9 +1085,6 @@ const reserveBatch = async (
             ),
           )
       ).at(0)?.count ?? 0;
-    if (usage >= source.dailyBudget) {
-      return { type: "budget-exhausted" } as const;
-    }
     const after = state.cursor;
     // Cursor strings originate from branded database IDs, never external input.
     const cursorRow =
@@ -905,7 +1104,29 @@ const reserveBatch = async (
     if (!row) {
       return { type: "empty" } as const;
     }
-    const id = `${source.id}:${source.currentParserVersion}:${row.id}`;
+    const id = generationBatchId(source, row);
+    const previous = await lockCaseLawReplayBatch({
+      tx,
+      id,
+      predicate: undefined,
+    });
+    if (previous !== undefined) {
+      const batch = reservationBatch(source, previous);
+      const current = await lockReplayDecisionInput(tx, batch);
+      if (
+        !canReadmitReplayBatch(previous) ||
+        previous.sourceRawS3Key !== row.sourceRawS3Key ||
+        current === undefined ||
+        current.sourceRawS3Key !== row.sourceRawS3Key ||
+        !current.readmissionEligible
+      ) {
+        return { type: "empty" } as const;
+      }
+      return await readmitReplayBatch(tx, { source, previous, utcDay, now });
+    }
+    if (usage >= source.dailyBudget) {
+      return { type: "budget-exhausted" } as const;
+    }
     // deterministic maintenance reservation and daily budget charge
     const reserved = (
       await tx
@@ -917,6 +1138,7 @@ const reserveBatch = async (
           lastDecisionId: row.id,
           parserVersionFrom: row.parserVersion,
           parserVersionTo: source.currentParserVersion,
+          sourceRawS3Key: row.sourceRawS3Key,
           budgetDay: utcDay,
           status: "reserved",
           attempted: 1,
@@ -928,6 +1150,31 @@ const reserveBatch = async (
     if (!reserved) {
       logger.warn("case_law_replay.reservation_contended", {
         adapterKey: source.adapterKey,
+      });
+      return { type: "empty" } as const;
+    }
+    const current = await lockReplayDecisionInput(
+      tx,
+      reservationBatch(source, reserved),
+    );
+    if (
+      current === undefined ||
+      current.redactedAt !== null ||
+      current.sourceRawS3Key !== reserved.sourceRawS3Key
+    ) {
+      await tx
+        .update(caseLawReplayBatches)
+        .set({
+          status: "superseded",
+          completedAt: new Date(now()),
+        })
+        .where(eq(caseLawReplayBatches.id, id));
+      await recordReplayMaintenanceAuditEvent(tx, {
+        sourceId: source.id,
+        action: "receipt-superseded",
+        resourceId: id,
+        details: { parserVersion: source.currentParserVersion },
+        createdAt: new Date(now()),
       });
       return { type: "empty" } as const;
     }
@@ -970,15 +1217,14 @@ const pickUpBatch = async (
 ): Promise<"ready" | "retry-exhausted" | "retry-terminal" | "waiting"> =>
   await withReplayTransaction(db, async (tx) => {
     await lockCheckpoint(tx, batch.source);
-    const receipt =
-      (
-        await tx
-          .select()
-          .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.id, batch.id))
-          .for("update")
-          .limit(1)
-      ).at(0) ?? panic("Replay pickup has no reservation");
+    const receipt = await lockCaseLawReplayBatch({
+      tx,
+      id: batch.id,
+      predicate: replayReservationPredicate(batch),
+    });
+    if (receipt === undefined) {
+      return "waiting";
+    }
     if (
       receipt.status !== "reserved" ||
       (receipt.retryAt !== null && receipt.retryAt.getTime() > now())
@@ -986,16 +1232,15 @@ const pickUpBatch = async (
       return "waiting";
     }
     if (receipt.attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts) {
-      const decision = (
-        await tx
-          .select({ parserVersion: caseLawDecisions.parserVersion })
-          .from(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, batch.decisionId))
-          .limit(1)
-      ).at(0);
-      // A written row can still need its canonical mirror repaired. Recovery
-      // verifies completion without spending another row-specific attempt.
-      if ((decision?.parserVersion ?? -1) >= batch.targetParserVersion) {
+      const decision = await lockReplayDecisionInput(tx, batch);
+      // Only this reservation's completely parsed input can recover a write.
+      if (
+        decision?.redactedAt === null &&
+        batch.sourceRawS3Key !== null &&
+        decision.sourceRawS3Key === batch.sourceRawS3Key &&
+        decision.parsedInputCurrent &&
+        decision.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
+      ) {
         return "ready";
       }
       const retryState = exhaustedRetryState({
@@ -1011,7 +1256,7 @@ const pickUpBatch = async (
           failureCode,
           failed: 1,
         })
-        .where(eq(caseLawReplayBatches.id, batch.id));
+        .where(replayReservationPredicate(batch));
 
       const { status } = retryState;
       await recordReplayMaintenanceAuditEvent(tx, {
@@ -1045,7 +1290,7 @@ const pickUpBatch = async (
         attemptState: "picked-up",
         retryAt: new Date(now() + delay),
       })
-      .where(eq(caseLawReplayBatches.id, batch.id));
+      .where(replayReservationPredicate(batch));
     return "ready";
   });
 
@@ -1055,6 +1300,34 @@ type CompleteBatchOptions = {
   durationMs: number;
   verdict: Verdict;
   healthyEvidence?: "adjacent-row" | "none";
+};
+
+type ReplayBlockedReceipt = typeof caseLawReplayBlocked.$inferInsert;
+
+/** Writes the generation-specific terminal receipt inside its caller's transaction. */
+const recordReplayBlockedReceipt = async (
+  tx: Pick<Transaction, "insert">,
+  receipt: ReplayBlockedReceipt,
+) => {
+  if (receipt.sourceRawS3Key === null || receipt.sourceRawS3Key === undefined) {
+    return;
+  }
+  await tx
+    .insert(caseLawReplayBlocked)
+    .values(receipt)
+    .onConflictDoUpdate({
+      target: [
+        caseLawReplayBlocked.decisionId,
+        caseLawReplayBlocked.parserVersionTo,
+      ],
+      set: {
+        sourceRawS3Key: receipt.sourceRawS3Key,
+        parserVersionFrom: receipt.parserVersionFrom,
+        outcome: receipt.outcome,
+        reason: receipt.reason,
+        detail: receipt.detail,
+      },
+    });
 };
 
 type VerifiedProgressOptions = {
@@ -1099,6 +1372,7 @@ type ReplayFailureOptions = {
   haltReason?: string;
   durationMs: number;
   verdict: Verdict;
+  replayedSourceRawS3Key?: string;
 };
 
 type ClassifyReplayFailureOptions = {
@@ -1230,15 +1504,14 @@ const recordFailure = async (
   await beforeComplete?.();
   return await withReplayTransaction(db, async (tx) => {
     const checkpoint = await lockCheckpoint(tx, batch.source);
-    const receipt =
-      (
-        await tx
-          .select()
-          .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.id, batch.id))
-          .for("update")
-          .limit(1)
-      ).at(0) ?? panic("Replay failure has no reservation");
+    const receipt = await lockCaseLawReplayBatch({
+      tx,
+      id: batch.id,
+      predicate: replayReservationPredicate(batch),
+    });
+    if (receipt === undefined) {
+      return "retryable";
+    }
     if (receipt.status !== "reserved") {
       return receipt.applied > 0 ? "applied" : "failed";
     }
@@ -1257,33 +1530,29 @@ const recordFailure = async (
       systemicFailures,
       systemicProgress,
     } = classifyReplayFailure({ receipt, failure, progress });
-    const decision = (
-      await tx
-        .select({
-          parserVersion: caseLawDecisions.parserVersion,
-          redactedAt: caseLawDecisions.redactedAt,
-          corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
-        })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, batch.decisionId))
-        .for("update")
-        .limit(1)
-    ).at(0);
+    const decision = await lockReplayDecisionInput(tx, batch);
     if (
       decision?.redactedAt === null &&
+      batch.sourceRawS3Key !== null &&
+      decision.sourceRawS3Key === batch.sourceRawS3Key &&
+      decision.parsedInputCurrent &&
       decision.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
-      (decision.parserVersion ?? -1) >= batch.targetParserVersion
+      (failure.replayedSourceRawS3Key === undefined ||
+        failure.replayedSourceRawS3Key === batch.sourceRawS3Key)
     ) {
       // A failed receipt write can follow a successful canonical decision write.
       // The database stamp wins over retry exhaustion, including the last attempt.
-      // verifies the applied maintenance receipt after a post-write failure
-      await tx
-        .update(caseLawReplayBatches)
-        .set({
-          status: "completed",
+      const transition = await transitionLifecycle({
+        tx,
+        spec: TRANSITIONS.caseLawReplayBatches,
+        id: batch.id,
+        moves: {
+          status: { from: ["reserved"], to: "completed" },
+          attemptState: { from: [receipt.attemptState], to: "idle" },
+        },
+        set: {
           outcome: REPLAY_ROW_OUTCOME.APPLIED,
           attempts,
-          attemptState: "idle",
           applied: 1,
           blocked: 0,
           failed: 0,
@@ -1293,19 +1562,38 @@ const recordFailure = async (
           durationMs: Math.ceil(failure.durationMs),
           gateVerdict: failure.verdict,
           completedAt: new Date(now()),
-        })
-        .where(eq(caseLawReplayBatches.id, batch.id));
-      await tx
-        .insert(caseLawReplayBlocked)
-        .values({
-          sourceId: batch.source.id,
-          decisionId: batch.decisionId,
-          parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: batch.targetParserVersion,
-          outcome: "changed",
-          reason: null,
-        })
-        .onConflictDoNothing();
+        },
+        recordTransitionAuditEvent: async (auditTx) =>
+          await recordReplayMaintenanceAuditEvent(auditTx, {
+            sourceId: batch.source.id,
+            action: "receipt-applied",
+            resourceId: batch.id,
+            details: {
+              attempts,
+              status: "completed",
+              failureCode: failure.code,
+            },
+            createdAt: new Date(now()),
+          }),
+      });
+      switch (transition.type) {
+        case "transitioned":
+          break;
+        case "stale":
+          return panic("The locked replay reservation changed before recovery");
+        default:
+          transition satisfies never;
+          return panic("Unhandled replay batch transition");
+      }
+      await recordReplayBlockedReceipt(tx, {
+        sourceId: batch.source.id,
+        decisionId: batch.decisionId,
+        sourceRawS3Key: batch.sourceRawS3Key,
+        parserVersionFrom: batch.parserVersionFrom,
+        parserVersionTo: batch.targetParserVersion,
+        outcome: "changed",
+        reason: null,
+      });
       await recordVerifiedProgress(tx, {
         sourceId: batch.source.id,
         completedAt: new Date(now()),
@@ -1315,13 +1603,6 @@ const recordFailure = async (
         .update(databaseBackfillStates)
         .set({ cursor: batch.decisionId, updatedAt: new Date(now()) })
         .where(eq(databaseBackfillStates.name, checkpointName(batch.source)));
-      await recordReplayMaintenanceAuditEvent(tx, {
-        sourceId: batch.source.id,
-        action: "receipt-applied",
-        resourceId: batch.id,
-        details: { attempts, status: "completed", failureCode: failure.code },
-        createdAt: new Date(now()),
-      });
       return "applied";
     }
     const exhausted =
@@ -1354,7 +1635,7 @@ const recordFailure = async (
         durationMs: Math.ceil(failure.durationMs),
         gateVerdict: failure.verdict,
       })
-      .where(eq(caseLawReplayBatches.id, batch.id));
+      .where(replayReservationPredicate(batch));
     const systemicHoldCount = checkpoint.batch.holdCount + 1;
     const sourceDelay = backoffDelay(Math.min(16, systemicHoldCount - 1), {
       baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
@@ -1415,39 +1696,30 @@ type CheckedReplayCompletion =
 type CheckReplayCompletionOptions = {
   batch: BackgroundReplayBatch;
   report: ReplayRowReport;
-  decision:
-    | (Pick<
-        typeof caseLawDecisions.$inferSelect,
-        "parserVersion" | "redactedAt" | "corpusMirrorStatus"
-      > & { updateToken: string })
-    | undefined;
+  decision: Awaited<ReturnType<typeof lockReplayDecisionInput>>;
 };
 const checkReplayCompletion = ({
   batch,
   report,
   decision,
 }: CheckReplayCompletionOptions): CheckedReplayCompletion => {
-  if (decision?.redactedAt !== null) {
+  if (decision === undefined || decision.redactedAt !== null) {
     return { type: "blocked" };
   }
-  const moved = (decision.parserVersion ?? -1) >= batch.targetParserVersion;
-  const receipt = replayRowResult(
-    moved ? { ...report, outcome: REPLAY_ROW_OUTCOME.APPLIED } : report,
-    batch.targetParserVersion,
-  );
+  if (
+    batch.sourceRawS3Key === null ||
+    decision.sourceRawS3Key !== batch.sourceRawS3Key ||
+    report.replayedSourceRawS3Key !== batch.sourceRawS3Key
+  ) {
+    return { type: "retryable" };
+  }
+  const moved = decision.parsedInputCurrent;
+  const receipt = replayRowResult(report, batch.targetParserVersion);
   if (receipt === null) {
     return { type: "retryable" };
   }
-  // A changed receipt is terminal only once the row reached the target version.
-  if (receipt.outcome === "changed" && !moved) {
-    return { type: "retryable" };
-  }
-  if (
-    receipt.outcome === "unchanged" &&
-    (decision.parserVersion !== batch.parserVersionFrom ||
-      report.checkedUpdateToken === undefined ||
-      decision.updateToken !== report.checkedUpdateToken)
-  ) {
+  // A success requires the complete parsed-input proof, including equal output.
+  if (receipt.outcome !== "rejected" && !moved) {
     return { type: "retryable" };
   }
   if (
@@ -1457,6 +1729,36 @@ const checkReplayCompletion = ({
     return { type: "retryable" };
   }
   return { type: "terminal", receipt };
+};
+
+type CompleteReplayReceiptOptions = CheckReplayCompletionOptions & {
+  recordReceipt: (receipt: ReplayBlockedReceipt) => Promise<void>;
+};
+
+/** Checks and records one terminal receipt against the raw generation replayed. */
+export const completeReplayReceipt = async ({
+  recordReceipt,
+  batch,
+  report,
+  decision,
+}: CompleteReplayReceiptOptions): Promise<CheckedReplayCompletion> => {
+  const completion = checkReplayCompletion({ batch, report, decision });
+  const terminal = completion.type === "terminal" ? completion.receipt : null;
+  if (terminal === null) {
+    return completion;
+  }
+  const reason = terminal.outcome === "rejected" ? terminal.reason : null;
+  await recordReceipt({
+    sourceId: batch.source.id,
+    decisionId: terminal.decisionId,
+    sourceRawS3Key: report.replayedSourceRawS3Key ?? null,
+    parserVersionFrom: batch.parserVersionFrom,
+    parserVersionTo: terminal.targetParserVersion,
+    outcome: terminal.outcome,
+    reason,
+    detail: reason,
+  });
+  return completion;
 };
 const completionDisposition = (receipt: ReplayRowResult | null) => {
   switch (receipt?.outcome) {
@@ -1524,59 +1826,35 @@ const completeBatch = async (
   await beforeComplete?.();
   const disposition = await withReplayTransaction(db, async (tx) => {
     await lockCheckpoint(tx, batch.source);
-    const receipt =
-      (
-        await tx
-          .select()
-          .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.id, batch.id))
-          .for("update")
-          .limit(1)
-      ).at(0) ?? panic("Replay completion has no reservation");
+    const receipt = await lockCaseLawReplayBatch({
+      tx,
+      id: batch.id,
+      predicate: replayReservationPredicate(batch),
+    });
+    if (receipt === undefined) {
+      return "retryable-completion";
+    }
     if (receipt.status !== "reserved") {
       if (receipt.outcome === REPLAY_ROW_OUTCOME.UNCHANGED) {
         return "unchanged";
       }
       return receipt.applied > 0 ? "applied" : "blocked";
     }
-    const decision = (
-      await tx
-        .select({
-          parserVersion: caseLawDecisions.parserVersion,
-          updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
-          redactedAt: caseLawDecisions.redactedAt,
-          corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
-        })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, batch.decisionId))
-        .for("update")
-        .limit(1)
-    ).at(0);
-    const completion = checkReplayCompletion({ batch, report, decision });
+    const decision = await lockReplayDecisionInput(tx, batch);
+    const completion = await completeReplayReceipt({
+      recordReceipt: async (blocked) =>
+        await recordReplayBlockedReceipt(tx, blocked),
+      batch,
+      report,
+      decision,
+    });
     if (completion.type === "retryable") {
       return "retryable-completion";
     }
     const terminal = completion.type === "terminal" ? completion.receipt : null;
-    if (terminal !== null) {
-      const reason = terminal.outcome === "rejected" ? terminal.reason : null;
-      await tx
-        .insert(caseLawReplayBlocked)
-        .values({
-          sourceId: batch.source.id,
-          decisionId: terminal.decisionId,
-          parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: terminal.targetParserVersion,
-          outcome: terminal.outcome,
-          reason,
-          detail: reason,
-        })
-        .onConflictDoNothing();
-    }
     const rowDisposition = completionDisposition(terminal);
     const successful = rowDisposition !== "blocked";
-    // A recovered write is applied even when the replay reports unchanged.
-    // Changed rows require the parser stamp; unchanged rows retain their stamp
-    // and are fenced by the exact checked input token. Both settle the receipt.
+    // Both changed and equal-output parses require the current-input stamp.
     await tx
       .update(caseLawReplayBatches)
       .set({
@@ -1592,7 +1870,7 @@ const completeBatch = async (
         gateVerdict: verdict,
         completedAt: new Date(now()),
       })
-      .where(eq(caseLawReplayBatches.id, batch.id));
+      .where(replayReservationPredicate(batch));
     if (successful) {
       await recordVerifiedProgress(tx, {
         sourceId: batch.source.id,
@@ -1726,32 +2004,6 @@ const resetDryRunCursor = async (
     });
   });
 
-type ReplayCompactionQueryOptions = { cutoff: Date; limit: number };
-export const buildReplayCompactionQuery = (
-  tx: Transaction,
-  { cutoff, limit }: ReplayCompactionQueryOptions,
-) =>
-  tx
-    .select({
-      id: caseLawReplayBatches.id,
-      sourceId: caseLawReplayBatches.sourceId,
-      decisionId: caseLawReplayBatches.firstDecisionId,
-      parserVersionTo: caseLawReplayBatches.parserVersionTo,
-    })
-    .from(caseLawReplayBatches)
-    .where(
-      and(
-        isNotNull(caseLawReplayBatches.supersededAt),
-        lte(caseLawReplayBatches.supersededAt, sql`${cutoff}::timestamptz`),
-      ),
-    )
-    .orderBy(
-      asc(caseLawReplayBatches.supersededAt),
-      asc(caseLawReplayBatches.id),
-    )
-    .limit(limit)
-    .for("update");
-
 export const buildReplayRetirementQuery = (tx: Transaction, limit: number) => {
   const staleReceipts = tx
     .select({ id: caseLawReplayBatches.id })
@@ -1813,7 +2065,7 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
         supersededAt: sql`coalesce(${caseLawReplayBatches.completedAt}, now())`,
       })
       .where(inArray(caseLawReplayBatches.id, stale));
-    const old = await buildReplayCompactionQuery(tx, {
+    const old = await buildCaseLawReplayCompactionQuery(tx, {
       cutoff: new Date(
         now() - BACKGROUND_REPLAY_LIMITS.receiptRetentionDays * DAY_IN_MS,
       ),
@@ -1862,17 +2114,7 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     await tx
       .delete(caseLawReplayDailyRows)
       .where(inArray(caseLawReplayDailyRows.batchId, ids));
-    // tuple membership is bounded by the locked compaction page
-    await tx.delete(caseLawReplayBlocked).where(
-      sql`(${caseLawReplayBlocked.sourceId}, ${caseLawReplayBlocked.decisionId}, ${caseLawReplayBlocked.parserVersionTo}) IN (${sql.join(
-        old.map(
-          (row) =>
-            sql`(${row.sourceId}::uuid, ${row.decisionId}::uuid, ${row.parserVersionTo}::int)`,
-        ),
-        sql`, `,
-      )})`,
-    );
-    // bounded superseded receipt retention, latest receipt preserved
+    // Compact bounded batch history, never the current decision/parser receipt.
     const compacted = (
       await tx
         .delete(caseLawReplayBatches)

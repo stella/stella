@@ -40,6 +40,7 @@ const catalogEntrySchema = v.object({
   handlerKind: v.picklist(["workspace", "root", "session"]),
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
+  confirmation: v.optional(v.literal("required")),
   scope: v.string(),
   additionalScopes: v.optional(v.array(v.string())),
   requestTimeoutMs: v.optional(
@@ -144,6 +145,9 @@ export const parseCapabilityCatalog = (
       inputSchema: parts,
       transport: projectTransport(entry.transport),
     };
+    if (entry.confirmation !== undefined) {
+      projected.confirmation = entry.confirmation;
+    }
     if (entry.feature !== undefined) {
       projected.feature = entry.feature;
     }
@@ -172,8 +176,7 @@ export const parseCapabilityCatalog = (
  * missing/corrupt shards so runtime can fall back to the baked-in route tree.
  */
 export const loadBakedCapabilityCatalog = ():
-  | CapabilityCatalogEntry[]
-  | null => {
+  CapabilityCatalogEntry[] | null => {
   const parsed = Result.try({
     try: () => readCapabilityCatalog(),
     catch: (cause) => cause,

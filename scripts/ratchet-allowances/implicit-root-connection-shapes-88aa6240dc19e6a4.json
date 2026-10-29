@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/auth/sse-session-liveness-reader.ts",
+  "delta": 1,
+  "reason": "Event streams re-check that the session that opened them is still live. Session revocation is a credential check that must see every session regardless of matter access, so this one reader uses the root connection; it reads session liveness only and returns no tenant data."
+}

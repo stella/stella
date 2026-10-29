@@ -1,16 +1,25 @@
 import { panic, Result } from "better-result";
-import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisionSourceIdentities,
   caseLawDecisionAliases,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
@@ -22,10 +31,10 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
@@ -34,6 +43,11 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -271,17 +285,15 @@ if (!databaseUrl || !runPostgresTests) {
           // The alias is still uncommitted. The insert must wait on the
           // graph lock before checking it, rather than pass the guard and
           // wait on the deleted row's unique-index transaction lock.
-          const deadline = Date.now() + 3000;
-          let waitingLock: unknown;
-          while (waitingLock === undefined && Date.now() < deadline) {
-            const locks =
-              await session`SELECT locktype, classid::int AS classid, objid::int AS objid
-              FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`;
-            waitingLock = locks.at(0);
-            if (waitingLock === undefined) {
-              await Bun.sleep(10);
-            }
-          }
+          const waitingLock = await waitForExternalState({
+            description: `writer ${String(writerPid)} waits on a lock`,
+            timeoutMs: 3000,
+            read: async () =>
+              (
+                await session`SELECT locktype, classid::int AS classid, objid::int AS objid
+                FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`
+              ).at(0),
+          });
           expect(waitingLock).toMatchObject({
             locktype: "advisory",
             classid: 732_104,
@@ -713,6 +725,101 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await docketRows(caseNumber)).toEqual([
         { id: legacyRow.id, sourceDocumentId: "nalus-record:uncounted" },
       ]);
+    });
+
+    test("adopts a legacy row stored under the docket an earlier release derived", async () => {
+      // An earlier release read the docket off the CELEX and gave a case
+      // numbered before 1989 a court letter; the publisher states it without.
+      const cjeuDecision = (
+        caseNumber: string,
+        sourceDocumentId: string | undefined,
+      ) => ({
+        ...decisionAt("Court of Justice", sourceDocumentId),
+        caseNumber,
+        country: "EU",
+        language: "en",
+        decisionDate: "1979-02-20",
+        decisionType: "judgment",
+        ecli: "ECLI:EU:C:1979:42",
+      });
+      await processDecision({
+        input: plainTextIngestionResult(cjeuDecision("C-120/78", undefined)),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [legacyRow] = await docketRows("C-120/78");
+      expect(legacyRow?.sourceDocumentId).toBeNull();
+
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...cjeuDecision("120/78", "61978CJ0120:en"),
+          legacyCaseNumber: "C-120/78",
+          rawHash: "hash-cjeu-stated-docket",
+        }),
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows("C-120/78")).toEqual([]);
+      expect(await docketRows("120/78")).toEqual([
+        {
+          id: legacyRow?.id ?? expect.unreachable(),
+          sourceDocumentId: "61978CJ0120:en",
+        },
+      ]);
+    });
+
+    test("never adopts a legacy row under a derived docket without proof", async () => {
+      // A former spelling only widens where the legacy row is looked for;
+      // the row is still adopted only on its ECLI or source URL.
+      const decision = (
+        caseNumber: string,
+        sourceDocumentId: string | undefined,
+        ecli: string,
+      ) => ({
+        ...decisionAt("Court of Justice", sourceDocumentId),
+        caseNumber,
+        country: "EU",
+        language: "en",
+        decisionDate: "1979-02-20",
+        decisionType: "judgment",
+        ecli,
+      });
+      await processDecision({
+        input: plainTextIngestionResult(
+          decision("C-121/78", undefined, "ECLI:EU:C:1979:43"),
+        ),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [legacyRow] = await docketRows("C-121/78");
+
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...decision("121/78", "61978CJ0121:en", "ECLI:EU:C:1979:44"),
+          legacyCaseNumber: "C-121/78",
+          rawHash: "hash-cjeu-unproved",
+        }),
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows("C-121/78")).toEqual([
+        { id: legacyRow?.id ?? expect.unreachable(), sourceDocumentId: null },
+      ]);
+      expect(
+        (await docketRows("121/78")).map(
+          ({ sourceDocumentId }) => sourceDocumentId,
+        ),
+      ).toEqual(["61978CJ0121:en"]);
     });
 
     test("stores a keyed row under its docket without a trailing part marker", async () => {
@@ -2192,7 +2299,7 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
-    test("Postgres aliases preserve identity across replay, flattening and retirement", async () => {
+    test("Postgres aliases preserve single-hop identity across replay and retirement", async () => {
       const first = createSafeId<"caseLawDecision">();
       const middle = createSafeId<"caseLawDecision">();
       const terminal = createSafeId<"caseLawDecision">();
@@ -2236,11 +2343,23 @@ if (!databaseUrl || !runPostgresTests) {
         await rejectionOf(
           db
             .insert(caseLawDecisionAliases)
-            .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+            .values({ retiredDecisionId: later, canonicalDecisionId: later })
             .execute(),
         ),
       ).toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
+      });
+      expect(
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: first })
+            .execute(),
+        ),
+      ).toMatchObject({
+        cause: {
+          message: expect.stringContaining("Decision alias target is retired"),
+        },
       });
       expect(
         await rejectionOf(
@@ -2287,9 +2406,7 @@ if (!databaseUrl || !runPostgresTests) {
         ).toMatchObject({
           cause: {
             message: expect.stringContaining(
-              "canonicalDecisionId" in patch
-                ? "Conflicting decision alias target"
-                : "Decision alias identity is immutable",
+              "Decision alias identity is immutable",
             ),
           },
         });
@@ -2310,13 +2427,7 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         },
       });
-      await db.insert(caseLawDecisionAliases).values({
-        retiredDecisionId: middle,
-        canonicalDecisionId: terminal,
-      });
-      await db
-        .delete(caseLawDecisions)
-        .where(inArray(caseLawDecisions.id, [first, middle]));
+      await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, first));
       await db
         .insert(caseLawDecisionAliases)
         .values(alias)
@@ -2324,43 +2435,24 @@ if (!databaseUrl || !runPostgresTests) {
           target: caseLawDecisionAliases.retiredDecisionId,
           set: { canonicalDecisionId: middle },
         });
-      await db.insert(caseLawDecisionAliases).values({
-        retiredDecisionId: later,
-        canonicalDecisionId: first,
-      });
-      const rows = await db
-        .select({
-          retired: caseLawDecisionAliases.retiredDecisionId,
-          target: caseLawDecisionAliases.canonicalDecisionId,
-        })
-        .from(caseLawDecisionAliases)
-        .where(
-          inArray(caseLawDecisionAliases.retiredDecisionId, [
-            first,
-            middle,
-            later,
-          ]),
-        );
-      expect(rows).toHaveLength(3);
-      for (const retired of [first, middle, later]) {
-        expect(rows).toContainEqual({ retired, target: terminal });
-      }
       expect(
         await rejectionOf(
           db
-            .delete(caseLawDecisions)
-            .where(eq(caseLawDecisions.id, terminal))
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: first })
             .execute(),
         ),
       ).toMatchObject({
         cause: {
-          code: "ERR_POSTGRES_SERVER_ERROR",
-          errno: "23001",
-          message: expect.stringContaining(
-            "case_law_decision_aliases_canonical_fk",
-          ),
+          message: expect.stringContaining("Decision alias target is retired"),
         },
       });
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisionAliases)
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+      ).toEqual(initial);
       expect(
         await rejectionOf(
           db

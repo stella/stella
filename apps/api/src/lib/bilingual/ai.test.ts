@@ -10,8 +10,8 @@ import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import {
   buildBilingualDocumentRequest,
   SOURCE_DOCUMENT_CACHE_CHARS_MAX,
-  translationLanguageInstruction,
   translateFormattedBatch,
+  translationLanguageInstruction,
 } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -20,6 +20,10 @@ import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+beforeEach(() => {
+  generateObjectMock.mockClear();
+});
 
 type GenerateOptions = {
   analytics: TanStackAIAnalyticsCallbacks;

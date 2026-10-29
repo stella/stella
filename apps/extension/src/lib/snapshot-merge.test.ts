@@ -1,8 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
-import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_LIMITS,
+  BROWSER_CONTROL_TARGET_METADATA,
+} from "@stll/api-contract/browser-control";
 
-import { mergeFrameSnapshots, type FrameSnapshot } from "./snapshot-merge";
+import { type FrameSnapshot, mergeFrameSnapshots } from "./snapshot-merge";
+
+const ABSENT_TARGET_METADATA = {
+  type: BROWSER_CONTROL_TARGET_METADATA.absent,
+} as const;
+
+const element = (
+  value: Omit<FrameSnapshot["elements"][number], "context" | "href"> &
+    Partial<Pick<FrameSnapshot["elements"][number], "context" | "href">>,
+): FrameSnapshot["elements"][number] => ({
+  context: ABSENT_TARGET_METADATA,
+  href: ABSENT_TARGET_METADATA,
+  ...value,
+});
 
 const frame = (overrides: Partial<FrameSnapshot>): FrameSnapshot => ({
   elements: [],
@@ -20,7 +36,7 @@ describe("frame snapshot merge", () => {
         {
           frameId: 3,
           snapshot: frame({
-            elements: [{ name: "Inner", path: "0.1", role: "button" }],
+            elements: [element({ name: "Inner", path: "0.1", role: "button" })],
             text: "inner text",
           }),
         },
@@ -28,12 +44,15 @@ describe("frame snapshot merge", () => {
           frameId: 0,
           snapshot: frame({
             elements: [
-              {
-                href: "https://example.com/a",
+              element({
+                href: {
+                  type: BROWSER_CONTROL_TARGET_METADATA.present,
+                  value: "https://example.com/a",
+                },
                 name: "A",
                 path: "1.s.0",
                 role: "link",
-              },
+              }),
             ],
             text: "outer text",
             title: "Outer",
@@ -46,12 +65,22 @@ describe("frame snapshot merge", () => {
     expect(merged).toEqual({
       elements: [
         {
-          href: "https://example.com/a",
+          context: ABSENT_TARGET_METADATA,
+          href: {
+            type: BROWSER_CONTROL_TARGET_METADATA.present,
+            value: "https://example.com/a",
+          },
           name: "A",
           ref: "e:0:1.s.0",
           role: "link",
         },
-        { name: "Inner", ref: "e:3:0.1", role: "button" },
+        {
+          context: ABSENT_TARGET_METADATA,
+          href: ABSENT_TARGET_METADATA,
+          name: "Inner",
+          ref: "e:3:0.1",
+          role: "button",
+        },
       ],
       text: "outer text\n\ninner text",
       textOffset: 0,
@@ -79,11 +108,13 @@ describe("frame snapshot merge", () => {
   });
 
   test("caps elements across frames and requires a top frame", () => {
-    const elements = Array.from({ length: 250 }, (_, index) => ({
-      name: `Button ${index}`,
-      path: String(index),
-      role: "button",
-    }));
+    const elements = Array.from({ length: 250 }, (_, index) =>
+      element({
+        name: `Button ${index}`,
+        path: String(index),
+        role: "button",
+      }),
+    );
     const merged = mergeFrameSnapshots({
       frames: [
         { frameId: 0, snapshot: frame({ elements }) },
@@ -107,7 +138,9 @@ describe("frame snapshot merge", () => {
         {
           frameId: 1,
           snapshot: frame({
-            elements: [{ name: "Router admin", path: "0", role: "button" }],
+            elements: [
+              element({ name: "Router admin", path: "0", role: "button" }),
+            ],
             origin: "https://192.168.1.1",
             text: "router settings",
             url: "https://192.168.1.1/",

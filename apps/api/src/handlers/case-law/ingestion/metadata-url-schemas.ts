@@ -1,4 +1,6 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/at-courts.metadata-urls";
+import { CZ_UOHS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs.metadata-urls";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { PL_KIS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-kis.metadata-urls";
@@ -8,8 +10,8 @@ import { PL_UOKIK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
@@ -48,9 +50,11 @@ export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.AT_FINDOK]: undefined,
   [ADAPTER_KEYS.EU_ECJ]: EU_ECJ_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.HU_BHGY]: undefined,
+  [ADAPTER_KEYS.UK_FCL]: undefined,
   [ADAPTER_KEYS.PL_KIS]: PL_KIS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.PL_UODO]: undefined,
   [ADAPTER_KEYS.PL_UOKIK]: PL_UOKIK_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.CZ_UOHS]: CZ_UOHS_METADATA_URL_SCHEMA,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: undefined,
 } as const satisfies Record<AdapterKey | ImportSourceKey, unknown>;
 

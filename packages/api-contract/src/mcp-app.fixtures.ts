@@ -50,6 +50,7 @@ export const APP_SEARCH_FIXTURE = {
       language: "cs",
       matchedQueries: [0],
       matchingPassages: 1,
+      match: "all_terms" as const,
       sourceUrl: "https://example.test/decision",
       snippet: "Náhrada škody: <b>právní jistota</b>.",
       keywords: {

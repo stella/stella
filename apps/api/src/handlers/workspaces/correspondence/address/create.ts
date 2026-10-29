@@ -25,11 +25,15 @@ const createMatterInboundAddress = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Inbound mail domain is not configured",
         }),
       );
     }
-    const token = generateInboundAddressToken();
+    const token = generateInboundAddressToken({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     yield* Result.await(
       safeDb(async (tx) => {
         await tx

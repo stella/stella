@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts",
+  "delta": 1,
+  "reason": "A stale stored-source read is optional change-detection evidence; log its failure before safely writing the valid incoming decision."
+}

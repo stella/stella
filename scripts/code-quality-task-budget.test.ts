@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtemp,
   mkdir,
+  mkdtemp,
   readFile,
-  writeFile,
   rm,
   symlink,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -25,6 +25,7 @@ import {
   ownedProcessTreeRows,
   parseTaskBudgets,
   parseTurboRunSummary,
+  processCpuSnapshot,
   runBudgetedCheck,
   TaskBudgetInputError,
 } from "./code-quality-task-budget";
@@ -284,6 +285,7 @@ test("every API code-quality graph task has an explicit budget entry", async () 
   const plan = planCheck({
     changedPaths,
     presentChangedPaths: changedPaths,
+    repositoryPaths: changedPaths,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
   });
@@ -521,6 +523,59 @@ test("silent task hangs warn then kill exactly once at the stall threshold", () 
   expect(watchdog.wasStalled()).toBe(true);
 });
 
+test("continuous progress cannot outlast the deadline, which fires exactly once", () => {
+  let now = 0;
+  const events: string[] = [];
+  const deadlined = createTaskProgressWatchdog({
+    budgetMs: 90,
+    stallMs: 120,
+    now: () => now,
+    warn: () => {
+      events.push("warning");
+    },
+    kill: () => {
+      events.push("stall");
+    },
+    deadline: {
+      ms: 180,
+      overrun: () => {
+        events.push("overrun");
+      },
+    },
+  });
+  // A spinning leftover: CPU time advances on every probe, so it never stalls.
+  for (now = 50; now <= 175; now += 25) {
+    deadlined.progress();
+    deadlined.tick();
+  }
+  expect(events).toEqual(["warning"]);
+  for (now = 180; now <= 400; now += 20) {
+    deadlined.progress();
+    deadlined.tick();
+  }
+  expect(events).toEqual(["warning", "overrun"]);
+  expect(deadlined.wasStalled()).toBe(true);
+
+  // Without a deadline the same progress runs on (diagnostics have none).
+  const unbounded: string[] = [];
+  const open = createTaskProgressWatchdog({
+    budgetMs: 90,
+    stallMs: 120,
+    now: () => now,
+    warn: () => {
+      unbounded.push("warning");
+    },
+    kill: () => {
+      unbounded.push("stall");
+    },
+  });
+  for (now = 400; now <= 2000; now += 50) {
+    open.progress();
+    open.tick();
+  }
+  expect(unbounded).toEqual(["warning"]);
+});
+
 test.each([0, 7])(
   "progressing tasks preserve exit %i after their warning budget",
   async (exitCode) => {
@@ -530,11 +585,13 @@ test.each([0, 7])(
         [
           process.execPath,
           "-e",
-          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 100);`,
+          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 4000);`,
         ],
         cwd,
-        10,
-        1000,
+        // A second past the 3 s warning budget; output every 10 ms keeps the
+        // 2 s stall window from firing, which is half the run.
+        3000,
+        2000,
       );
       const result = await check.result;
       expect(result.exitCode, result.output).toBe(exitCode);
@@ -545,6 +602,7 @@ test.each([0, 7])(
       await rm(cwd, { recursive: true, force: true });
     }
   },
+  15_000,
 );
 
 test.skipIf(process.platform === "win32")(
@@ -560,9 +618,12 @@ test.skipIf(process.platform === "win32")(
           `const fs = require("node:fs"); const end = Date.now() + 6000; while (Date.now() < end) {} const cpu = process.cpuUsage(); fs.writeFileSync("cpu-ms", String((cpu.user + cpu.system) / 1000));`,
         ],
         cwd,
-        timeoutMs: 20,
+        // The 6 s compile outlasts both the 5 s warning budget and the stall
+        // window; only advancing CPU time keeps it alive.
+        timeoutMs: 5000,
         stallMs: 4000,
         graceMs: 200,
+        deadline: "none",
         summary: "none",
         writeStdout: (text) => {
           stdout.push(text);
@@ -579,6 +640,75 @@ test.skipIf(process.platform === "win32")(
       expect(
         Number(await readFile(path.join(cwd, "cpu-ms"), "utf-8")),
       ).toBeGreaterThan(1000);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "a silent process spinning past twice its budget fails closed",
+  async () => {
+    const cwd = await scratch();
+    try {
+      const started = Date.now();
+      const result = await runBudgetedCheck({
+        command: [process.execPath, "-e", "while (true) {}"],
+        cwd,
+        timeoutMs: 500,
+        stallMs: 10_000,
+        graceMs: 200,
+        summary: "none",
+        writeStdout: () => {},
+        writeStderr: () => {},
+        writeSummary: () => {},
+      });
+      expect(result.exitCode, result.output).toBe(124);
+      expect(result.outcome).toBe("stalled");
+      expect(result.output).toContain("class=task-overrun");
+      expect(result.output).not.toContain("class=task-stall");
+      // Killed at the deadline, well before the stall window could end it.
+      expect(Date.now() - started).toBeLessThan(8000);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "the deadline applies by default and only an explicit opt-out removes it",
+  async () => {
+    const cwd = await scratch();
+    try {
+      const check = async (deadline: "twice-budget" | "none" | undefined) =>
+        runBudgetedCheck({
+          // Spins well past twice the 200 ms budget, then exits cleanly.
+          command: [
+            process.execPath,
+            "-e",
+            "const end = Date.now() + 1500; while (Date.now() < end) {}",
+          ],
+          cwd,
+          timeoutMs: 200,
+          stallMs: 10_000,
+          graceMs: 200,
+          ...(deadline === undefined ? {} : { deadline }),
+          summary: "none",
+          writeStdout: () => {},
+          writeStderr: () => {},
+          writeSummary: () => {},
+        });
+      for (const deadline of [undefined, "twice-budget"] as const) {
+        const result = await check(deadline);
+        expect(result.outcome, result.output).toBe("stalled");
+        expect(result.output).toContain("class=task-overrun");
+      }
+      const exempt = await check("none");
+      expect(exempt.exitCode, exempt.output).toBe(0);
+      expect(exempt.outcome).toBe("completed");
+      expect(exempt.output).not.toContain("class=task-overrun");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -603,6 +733,7 @@ const run = (
       timeoutMs,
       stallMs,
       graceMs: 200,
+      deadline: "none",
       writeStdout: () => {},
       writeStderr: (text) => {
         stderr.push(text);
@@ -704,7 +835,7 @@ test("a delegated fallback cannot orphan a TERM-resistant descendant after the o
         import { runBudgetedCheck } from ${JSON.stringify(module)};
         const result = await runBudgetedCheck({
           command: [process.execPath, '-e', ${JSON.stringify(descendant)}],
-          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200,
+          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200, deadline: "none",
           writeStdout: text => process.stdout.write(text),
           writeStderr: text => process.stderr.write(text), writeSummary: () => {},
         });
@@ -759,7 +890,7 @@ test("external SIGTERM reports started tasks and terminates the supervised comma
       import { runBudgetedCheck } from ${JSON.stringify(module)};
       const result = await runBudgetedCheck({
         command: [process.execPath, '-e', ${JSON.stringify(childScript)}],
-        cwd: ${JSON.stringify(cwd)}, timeoutMs: 3000, graceMs: 200,
+        cwd: ${JSON.stringify(cwd)}, timeoutMs: 3000, graceMs: 200, deadline: "none",
         writeStdout: text => process.stdout.write(text),
         writeStderr: text => process.stdout.write(text), writeSummary: () => {},
       });
@@ -870,6 +1001,7 @@ test("leader exit lets a short-lived descendant finish without a cleanup diagnos
       cwd,
       timeoutMs: 5000,
       graceMs: 500,
+      deadline: "none",
       writeStdout: () => {},
       writeStderr: () => {},
       writeSummary: () => {},
@@ -930,20 +1062,21 @@ test("successful leader exit cleans its inherited-pipe descendants without waiti
 test("a progress stall interrupts a longer group drain window", async () => {
   const cwd = await scratch();
   try {
-    const descendant =
-      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),5000)";
+    const completion = path.join(cwd, "descendant-completion");
+    // Kernel sleep keeps this quiescence fixture independent of JS runtime CPU work.
+    const descendant = `trap 'printf interrupted > "$1"; exit 0' TERM; printf ready; sleep 5; printf completed > "$1"`;
     const leader = `
       const {spawn}=require('child_process');
-      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      const nested=spawn('/bin/sh',['-c',${JSON.stringify(descendant)},'descendant',${JSON.stringify(completion)}],{stdio:['ignore','pipe','inherit']});
       nested.stdout.once('data',()=>process.exit(0));
     `;
-    const started = Date.now();
     const result = await runBudgetedCheck({
       command: [process.execPath, "-e", leader],
       cwd,
       timeoutMs: 1000,
       stallMs: 1000,
       graceMs: 2000,
+      deadline: "none",
       writeStdout: () => {},
       writeStderr: () => {},
       writeSummary: () => {},
@@ -951,7 +1084,10 @@ test("a progress stall interrupts a longer group drain window", async () => {
     expect(result.exitCode).toBe(124);
     expect(result.outcome).toBe("stalled");
     expect(result.output).toContain("class=task-stall");
-    expect(Date.now() - started).toBeLessThan(3800);
+    expect(await Bun.file(completion).text()).toBe("interrupted");
+    expect(result.output).not.toContain(
+      "Notice: Terminating owned process after leader exit:",
+    );
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
@@ -966,6 +1102,7 @@ test("an empty group skips the drain window", async () => {
       cwd,
       timeoutMs: 5000,
       graceMs: 3000,
+      deadline: "none",
       writeStdout: () => {},
       writeStderr: () => {},
       writeSummary: () => {},
@@ -1002,7 +1139,7 @@ test("owned group inspection errors fail closed", async () => {
         import { runBudgetedCheck } from ${JSON.stringify(module)};
         const result = await runBudgetedCheck({
           command: [process.execPath, '-e', 'process.exit(0)'],
-          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200,
+          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200, deadline: "none",
           writeStdout: () => {}, writeStderr: text => process.stdout.write(text),
           writeSummary: () => {},
         });
@@ -1031,6 +1168,19 @@ test("termination diagnostics retain tree ancestry, group members and process st
     "102 101 102 S worker",
     "103 1 100 Z exited",
   ]);
+});
+
+test("a runnable owned process is progress between CPU clock ticks", () => {
+  const runnable = "100 1 100 R 00:00:01 compiler\n";
+  const waiting = "100 1 100 S 00:00:01 compiler\n";
+  expect(processCpuSnapshot(runnable, 100)).toEqual({
+    activity: "runnable",
+    cpu: "100:00:00:01",
+  });
+  expect(processCpuSnapshot(waiting, 100)).toEqual({
+    activity: "waiting",
+    cpu: "100:00:00:01",
+  });
 });
 
 test("owned process audits retain live descendants and ignore unrelated groups or exited zombies", () => {

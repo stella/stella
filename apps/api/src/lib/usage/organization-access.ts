@@ -33,8 +33,7 @@ export type FreeTierPolicy = { serviceActionsPerPeriod: number };
  * never a silent default.
  */
 export type FreeTier =
-  | { status: "off" }
-  | { status: "on"; policy: FreeTierPolicy | undefined };
+  { status: "off" } | { status: "on"; policy: FreeTierPolicy | undefined };
 
 export const FREE_TIER_OFF = { status: "off" } as const satisfies FreeTier;
 

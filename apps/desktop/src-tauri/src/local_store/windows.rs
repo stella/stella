@@ -67,6 +67,14 @@ impl Parent {
     fs::rename(&self.path, &destination.path)
   }
 
+  pub(super) fn rename_to_with(
+    &self,
+    destination: &Self,
+    _sync: &impl Fn(&fs::File) -> io::Result<()>,
+  ) -> io::Result<()> {
+    self.rename_to(destination)
+  }
+
   pub(super) fn link_to(&self, destination: &Self) -> io::Result<()> {
     fs::hard_link(&self.path, &destination.path)
   }

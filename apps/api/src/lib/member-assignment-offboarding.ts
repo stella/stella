@@ -20,32 +20,34 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  chatToolGrants,
+  contacts,
   correspondence,
   desktopEditHandoffs,
-  folioCollabRoomTokens,
-  entities,
-  pdfSigningSessions,
-  timeEntries,
   desktopEditSessions,
   desktopPresence,
-  flowRuns,
+  entities,
   flowDefinitions,
+  flowRuns,
   flowRunSteps,
-  mcpUserConnections,
-  sharepointConnections,
-  sharepointOAuthState,
+  folioCollabRoomTokens,
   mcpOAuthState,
-  contacts,
+  mcpUserConnections,
+  mcpWebHandoff,
+  pdfSigningSessions,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
+  sharepointConnections,
+  sharepointOAuthState,
   taskAssignees,
+  timeEntries,
+  WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_STATUS,
+  workObligationEvents,
+  workObligations,
   workspaceMembers,
   workspaces,
-  workObligations,
-  workObligationEvents,
-  WORK_OBLIGATION_STATUS,
-  WORK_OBLIGATION_EVENT_TYPE,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
@@ -59,6 +61,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockChatOwnerStoredContentTransitionOnTx,
+  tryLockAccountChatOwnerStoredContentTransitionsOnTx,
+} from "@/api/lib/chat/thread-stored-content-egress";
 import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
@@ -1044,16 +1050,25 @@ export const selectMemberCleanupWorkspaceIds = async ({
 };
 
 /**
- * Account erasure holds the user's organization memberships first, as it
- * always has, then every matter it changes without waiting: organization
- * removal and grants take a matter before a membership, so a busy matter is a
- * typed retryable refusal rather than an inverted wait. Re-entrant: a caller
- * that already holds the prefix takes nothing new.
+ * Account erasure tries the account's chat egress fences, then holds the
+ * user's organization memberships, then every matter it changes without
+ * waiting: organization removal and grants take a matter before a membership,
+ * so a busy fence or matter is a typed retryable refusal rather than an
+ * inverted wait. Re-entrant: a caller that already holds the prefix takes
+ * nothing new.
  */
 export const tryLockAccountMemberCleanup = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ) => {
+  // Chat egress fences precede every membership row lock; a compaction in
+  // flight for any of the account's organizations is a busy refusal.
+  if (
+    (await tryLockAccountChatOwnerStoredContentTransitionsOnTx(tx, userId)) ===
+    "busy"
+  ) {
+    abortTransaction(removalBusy());
+  }
   await tx
     .select({ id: member.id })
     .from(member)
@@ -1450,6 +1465,10 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ) => {
+  await lockChatOwnerStoredContentTransitionOnTx(tx, {
+    organizationId,
+    userId,
+  });
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,
@@ -1572,6 +1591,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(chatToolGrants)
+    .where(
+      and(
+        eq(chatToolGrants.organizationId, organizationId),
+        eq(chatToolGrants.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpOAuthState)
     .where(
       and(
@@ -1663,6 +1690,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpOAuthState.userId, "cleared"],
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
+  [chatToolGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.
@@ -1671,6 +1699,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [oauthAccessToken.userId, "cleared"],
   [oauthRefreshToken.userId, "cleared"],
   [oauthConsent.userId, "cleared"],
+  [mcpWebHandoff.userId, "cleared"],
   [agentRegistration.boundUserId, "cleared"],
   [agentDelegation.userId, "cleared"],
   [folioCollabRoomTokens.userId, "cleared"],

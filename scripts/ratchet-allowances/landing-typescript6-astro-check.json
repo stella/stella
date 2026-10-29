@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "apps/landing declares its own TypeScript 6 through the ts6 catalog because Astro's checker supports TypeScript 5 and 6 only, while the root typescript is now TypeScript 7. Before, the landing app read the root TypeScript 6 without declaring it."
+}

@@ -1,6 +1,6 @@
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   memo,
   useEffect,
   useEffectEvent,
@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -21,6 +22,7 @@ import {
   UnderlineIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
@@ -33,22 +35,32 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
   clipboardSourceLabel,
   clipboardSourceTitle,
+  clipboardUntitledName,
   hasClipboardPrimaryModifier,
+  MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
+  refreshClipboardEditorName,
 } from "./clipboard-logic";
+import type { ClipboardEditorNameDraft } from "./clipboard-logic";
 import {
+  CLIPBOARD_EDITOR_SESSION_EVENT,
+  CLIPBOARD_HISTORY_CHANGED_EVENT,
   isClipboardEditorContext,
+  isClipboardEditorSession,
   isClipboardSnapshot,
 } from "./clipboard-types";
-import type { ClipboardEditorContext } from "./clipboard-types";
+import type {
+  ClipboardEditorContext,
+  ClipboardEditorSession,
+} from "./clipboard-types";
 import {
   ClipboardGroupFields,
   nextClipboardGroupColor,
@@ -58,14 +70,11 @@ import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 
 type SaveState =
-  | { type: "idle" }
-  | { type: "saving" }
-  | { message: string; type: "error" };
+  { type: "idle" } | { type: "saving" } | { message: string; type: "error" };
 
 /** The inline "New group…" panel: closed, or holding the group being created. */
 type GroupDraftState =
-  | { type: "closed" }
-  | (ClipboardGroupDraft & { type: "open" });
+  { type: "closed" } | (ClipboardGroupDraft & { type: "open" });
 
 /** Picking it in the group select opens the draft instead of choosing a group. */
 const NEW_GROUP_OPTION_VALUE = "new-group";
@@ -81,6 +90,8 @@ type EditorState =
       context: ClipboardEditorContext;
       groupDraft: GroupDraftState;
       groupId: string | null;
+      /** The name field's draft; empty saves the clip unnamed. */
+      name: ClipboardEditorNameDraft;
       save: SaveState;
       type: "ready";
     };
@@ -88,6 +99,10 @@ type EditorState =
 const closeEditor = async () => {
   await invoke("clipboard_close_editor");
 };
+
+const blankEditor = (
+  <main className="clipboard-editor-window bg-background min-h-dvh" />
+);
 
 type FormatCommand =
   | "bold"
@@ -539,8 +554,14 @@ const RichTextArea = memo(
 
 RichTextArea.displayName = "RichTextArea";
 
-const ClipboardEditor = () => {
+type ClipboardEditorProps = {
+  /** No clip is open: the window was prewarmed, or the session ended. */
+  onIdle: () => void;
+};
+
+const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const t = useTranslations("clipboard");
+  const reportIdle = useEffectEvent(onIdle);
   const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
   // Text and HTML are regenerated from the DOM on save and never round-trip
@@ -565,6 +586,7 @@ const ClipboardEditor = () => {
           context: current.context,
           groupDraft: current.groupDraft,
           groupId: current.groupId,
+          name: current.name,
           save: { message: t("errorUpdateHistory"), type: "error" },
           type: "ready",
         };
@@ -578,6 +600,10 @@ const ClipboardEditor = () => {
       void invoke<unknown>("clipboard_get_editor_context")
         .then((value) => {
           if (disposed) {
+            return undefined;
+          }
+          if (value === null) {
+            reportIdle();
             return undefined;
           }
           if (!isClipboardEditorContext(value)) {
@@ -595,17 +621,19 @@ const ClipboardEditor = () => {
                 context: value,
                 groupDraft: { type: "closed" },
                 groupId: value.item.groupId,
+                name: { type: "unchanged", value: value.item.name ?? "" },
                 save: { type: "idle" },
                 type: "ready",
               };
             }
-            // A refresh must not touch the text being edited or the user's
-            // group choice; it only takes what resolves underneath an open
-            // editor.
+            // History owns untouched names; text and explicit name/group edits
+            // stay with this editor until Save.
             return {
               ...current,
+              name: refreshClipboardEditorName(current.name, value.item.name),
               context: {
                 ...current.context,
+                item: { ...current.context.item, name: value.item.name },
                 groups: value.groups,
                 sourceAppVisual: value.sourceAppVisual,
               },
@@ -630,7 +658,7 @@ const ClipboardEditor = () => {
     // The source visual can resolve after the editor opened (a favicon fetched
     // in the background); the history event announces it.
     const stopListening = subscribeDesktopEvent({
-      event: "clipboard-history-changed",
+      event: CLIPBOARD_HISTORY_CHANGED_EVENT,
       handler: loadContext,
       onError: () => {
         reportDesktopError({
@@ -658,62 +686,42 @@ const ClipboardEditor = () => {
       return;
     }
     const { item } = state.context;
-    if (item.type === "image") {
-      setState({
-        context: state.context,
-        groupDraft: state.groupDraft,
-        groupId: state.groupId,
-        save: { type: "saving" },
-        type: "ready",
-      });
-      void invoke("clipboard_set_item_group", {
-        groupId: state.groupId,
-        id: item.id,
-      })
-        .then(closeEditor)
-        .catch((error: unknown) => {
-          reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-            detail: describeError(error),
-            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorSave,
-            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
-          });
-          setState({
-            context: state.context,
-            groupDraft: state.groupDraft,
-            groupId: state.groupId,
-            save: { message: t("errorUpdateHistory"), type: "error" },
-            type: "ready",
-          });
-        });
-      return;
-    }
-    const editor = editorRef.current;
-    if (!editor) {
-      return;
-    }
-    const plainText = editedRef.current
-      ? editorPlainText(editor)
-      : item.plainText;
-    if (!plainText.trim()) {
-      return;
-    }
-    let html: string | null = item.type === "formattedText" ? item.html : null;
-    if (editedRef.current) {
-      html = editor.innerHTML;
+    // An image has no text to edit; it saves its name and group alone.
+    let text: { html: string | null; plainText: string } | null = null;
+    if (item.type !== "image") {
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+      const plainText = editedRef.current
+        ? editorPlainText(editor)
+        : item.plainText;
+      if (!plainText.trim()) {
+        return;
+      }
+      let html: string | null =
+        item.type === "formattedText" ? item.html : null;
+      if (editedRef.current) {
+        html = editor.innerHTML;
+      }
+      text = { html, plainText };
     }
     setState({
       context: state.context,
       groupDraft: state.groupDraft,
       groupId: state.groupId,
+      name: state.name,
       save: { type: "saving" },
       type: "ready",
     });
     void invoke("clipboard_save_editor_item", {
       groupId: state.groupId,
-      html,
-      id: state.context.item.id,
-      plainText,
+      id: item.id,
+      name:
+        state.name.type === "edited"
+          ? { type: "set", value: state.name.value }
+          : { type: "preserve" },
+      text,
     })
       .then(closeEditor)
       .catch((error: unknown) => {
@@ -727,6 +735,7 @@ const ClipboardEditor = () => {
           context: state.context,
           groupDraft: state.groupDraft,
           groupId: state.groupId,
+          name: state.name,
           save: { message: t("errorUpdateHistory"), type: "error" },
           type: "ready",
         });
@@ -743,6 +752,7 @@ const ClipboardEditor = () => {
       context: state.context,
       groupDraft,
       groupId: state.groupId,
+      name: state.name,
       save: { type: "idle" },
       type: "ready",
     });
@@ -767,6 +777,7 @@ const ClipboardEditor = () => {
       context,
       groupDraft: state.groupDraft,
       groupId,
+      name: state.name,
       save: { type: "saving" },
       type: "ready",
     });
@@ -803,7 +814,7 @@ const ClipboardEditor = () => {
           return undefined;
         }
         // `itemId` moved the clip into the new group natively, so the select
-        // only has to follow; the text being edited stays as it is.
+        // only has to follow; the text and name being edited stay as they are.
         setState((current) => {
           if (current.type !== "ready") {
             return current;
@@ -812,6 +823,7 @@ const ClipboardEditor = () => {
             context: { ...current.context, groups },
             groupDraft: { type: "closed" },
             groupId: created.id,
+            name: current.name,
             save: { type: "idle" },
             type: "ready",
           };
@@ -866,7 +878,7 @@ const ClipboardEditor = () => {
   }, []);
 
   if (state.type === "loading") {
-    return <main className="clipboard-editor-window bg-background min-h-dvh" />;
+    return blankEditor;
   }
 
   if (state.type === "error") {
@@ -957,6 +969,48 @@ const ClipboardEditor = () => {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
+        <label className="flex shrink-0 items-center gap-3">
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {t("clipName")}
+          </span>
+          <Input
+            className="h-10 min-w-0 flex-1 rounded-xl"
+            data-clipboard-editor-name=""
+            disabled={state.save.type === "saving"}
+            maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
+            onChange={(event) => {
+              setState({
+                context: state.context,
+                groupDraft: state.groupDraft,
+                groupId: state.groupId,
+                name: { type: "edited", value: event.target.value },
+                save: state.save,
+                type: "ready",
+              });
+            }}
+            onKeyDown={(event) => {
+              // A single-line field submits on Enter, as a form would.
+              if (
+                event.key === "Enter" &&
+                !event.nativeEvent.isComposing &&
+                !hasClipboardPrimaryModifier({
+                  altGraphKey: event.getModifierState("AltGraph"),
+                  altKey: event.altKey,
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                })
+              ) {
+                event.preventDefault();
+                save();
+              }
+            }}
+            placeholder={clipboardUntitledName(item, {
+              image: t("image"),
+              text: t("unnamedClip"),
+            })}
+            value={state.name.value}
+          />
+        </label>
         {item.type === "image" ? (
           <div className="bg-card ring-border flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[22px] p-5 ring-1 ring-inset">
             <div className="min-h-0 min-w-0 flex-1 self-stretch">
@@ -1038,6 +1092,7 @@ const ClipboardEditor = () => {
                   context: state.context,
                   groupDraft: { type: "closed" },
                   groupId: value || null,
+                  name: state.name,
                   save: { type: "idle" },
                   type: "ready",
                 });
@@ -1137,4 +1192,59 @@ const ClipboardEditor = () => {
   );
 };
 
-export default ClipboardEditor;
+/**
+ * The editor window outlives each edit. Every open session remounts the editor
+ * (a fresh draft and state machine), and an idle window renders nothing.
+ */
+const ClipboardEditorWindow = () => {
+  // Session 0 is "whatever is open at mount": a window created for an open
+  // reads its clip directly, before any session event could reach it.
+  const [session, setSession] = useState<ClipboardEditorSession>({
+    session: 0,
+    type: "open",
+  });
+
+  useEffect(
+    () =>
+      subscribeDesktopEvent<unknown>({
+        event: CLIPBOARD_EDITOR_SESSION_EVENT,
+        handler: ({ payload }) => {
+          if (!isClipboardEditorSession(payload)) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+            return;
+          }
+          setSession(payload);
+        },
+        onError: () => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+          });
+        },
+      }),
+    [],
+  );
+
+  switch (session.type) {
+    case "idle":
+      return blankEditor;
+    case "open":
+      return (
+        <ClipboardEditor
+          key={session.session}
+          onIdle={() => setSession({ type: "idle" })}
+        />
+      );
+    default: {
+      session satisfies never;
+      return panic(`Unhandled editor session: ${String(session)}`);
+    }
+  }
+};
+
+export default ClipboardEditorWindow;

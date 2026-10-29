@@ -9,10 +9,10 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  pendingDocumentPredicate,
   remainingDocumentCandidateQuery,
   remainingDocumentOrder,
   remainingDocumentPredicate,
-  pendingDocumentPredicate,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { RemainingDocumentCursor } from "@/api/lib/legal-search/sk-document-backfill";
 import {

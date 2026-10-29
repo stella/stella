@@ -3,10 +3,10 @@ import { panic } from "better-result";
 import {
   type ConditionNode,
   type ConditionValue,
-  type OperandResolver,
-  type RefOperand,
   evaluateCondition as evaluateConditionNode,
+  type OperandResolver,
   pruneIncomplete,
+  type RefOperand,
 } from "@stll/conditions";
 
 import type { FieldContent } from "@/api/db/schema-validators";

@@ -9,8 +9,8 @@ import {
   expectRegistryResponse,
   forEachRegistryMutation,
   mutatedRegistryPayload,
-  registryMutation,
   nullableRegistryString,
+  registryMutation,
   registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupBySiren, lookupBySiret } from "./client.js";
@@ -22,8 +22,8 @@ import {
 } from "./parse.js";
 import type {
   RechercheEntreprisesCompany,
-  RechercheEntreprisesRawEtablissement,
   RechercheEntreprisesRawDirigeant,
+  RechercheEntreprisesRawEtablissement,
   RechercheEntreprisesRawUniteLegale,
 } from "./types.js";
 

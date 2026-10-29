@@ -3,15 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "@stll/money";
 
 import { INVOICE_ATTACHMENT } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
-
 import {
   ATTACHED_ENTRY_LINE_VAT,
+  attachedEntryLineDrafts,
   hoursQuantity,
   readInvoiceDocumentLines,
   readInvoiceTotals,
   timeEntryLineDraft,
-} from "./invoice-lines";
+} from "@/api/lib/billing/invoice-lines";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 
 describe("hoursQuantity", () => {
   test.each([
@@ -56,8 +56,52 @@ test("legacy invoice totals and entry line drafts use the same no-charge disposi
         { ...entry, id: createSafeId<"timeEntry">(), noCharge: false },
       ],
       expenses: [],
-    }).unwrap(),
+    }),
   ).toMatchObject({ netAmountMinor: 10_000, grossAmountMinor: 10_000 });
+});
+
+describe("attachedEntryLineDrafts", () => {
+  const entry = (id: string, dateWorked: string) => ({
+    id: toSafeId<"timeEntry">(id),
+    dateWorked,
+    billedMinutes: 60,
+    rateAtEntry: cents(10_000),
+    narrative: id,
+    invoiceNarrative: null,
+    noCharge: false,
+  });
+  const expense = (id: string, dateIncurred: string) => ({
+    id: toSafeId<"expense">(id),
+    dateIncurred,
+    amount: cents(5000),
+    markup: 0,
+    description: id,
+    invoiceDescription: null,
+  });
+
+  test("orders time entries then expenses by date, ties by id, whatever the input order", () => {
+    const drafts = attachedEntryLineDrafts({
+      timeEntryRows: [
+        entry("00000000-0000-7000-8000-000000000003", "2025-02-12"),
+        entry("00000000-0000-7000-8000-000000000002", "2025-02-03"),
+        entry("00000000-0000-7000-8000-000000000004", "2024-12-31"),
+        entry("00000000-0000-7000-8000-000000000001", "2025-02-03"),
+      ],
+      expenseRows: [
+        expense("00000000-0000-7000-8000-00000000000b", "2025-02-10"),
+        expense("00000000-0000-7000-8000-00000000000a", "2025-01-15"),
+      ],
+      vat: ATTACHED_ENTRY_LINE_VAT,
+    });
+    expect(drafts.map(({ description }) => description)).toEqual([
+      "00000000-0000-7000-8000-000000000004",
+      "00000000-0000-7000-8000-000000000001",
+      "00000000-0000-7000-8000-000000000002",
+      "00000000-0000-7000-8000-000000000003",
+      "00000000-0000-7000-8000-00000000000a",
+      "00000000-0000-7000-8000-00000000000b",
+    ]);
+  });
 });
 
 const storedLine = {
@@ -96,7 +140,7 @@ describe("readInvoiceDocumentLines", () => {
     const document = readInvoiceDocumentLines({
       ...invoice,
       lines: [storedLine, fixedFee],
-    }).unwrap();
+    });
     expect(document.lines).toEqual([
       {
         description: "Drafting",
@@ -108,6 +152,7 @@ describe("readInvoiceDocumentLines", () => {
         grossAmountMinor: cents(605_000),
         vatRateBps: 2100,
         vatTreatment: "domestic_vat",
+        exemptionReason: null,
         timeEntryId: null,
         expenseId: null,
       },
@@ -121,12 +166,13 @@ describe("readInvoiceDocumentLines", () => {
         grossAmountMinor: cents(30_000),
         vatRateBps: 0,
         vatTreatment: "domestic_vat",
+        exemptionReason: null,
         timeEntryId: null,
         expenseId: null,
       },
     ]);
     expect(document.totals).toEqual(
-      readInvoiceTotals({ ...invoice, lines: [storedLine, fixedFee] }).unwrap(),
+      readInvoiceTotals({ ...invoice, lines: [storedLine, fixedFee] }),
     );
   });
 
@@ -168,7 +214,7 @@ describe("readInvoiceDocumentLines", () => {
         },
       ],
     };
-    const document = readInvoiceDocumentLines(legacy).unwrap();
+    const document = readInvoiceDocumentLines(legacy);
     expect(
       document.lines.map(({ description, quantity, unit, unitPrice }) => ({
         description,
@@ -209,7 +255,7 @@ describe("readInvoiceDocumentLines", () => {
       [timeEntryId, null],
       [null, expenseId],
     ]);
-    expect(document.totals).toEqual(readInvoiceTotals(legacy).unwrap());
+    expect(document.totals).toEqual(readInvoiceTotals(legacy));
   });
 
   test("prints a stored total without lines as one line with no quantity or unit price", () => {
@@ -218,7 +264,7 @@ describe("readInvoiceDocumentLines", () => {
       netAmount: null,
       totalAmount: cents(12_345),
       lines: [],
-    }).unwrap();
+    });
     expect(document.lines).toEqual([
       {
         description: "-",
@@ -230,6 +276,7 @@ describe("readInvoiceDocumentLines", () => {
         grossAmountMinor: cents(12_345),
         vatRateBps: 0,
         vatTreatment: "domestic_vat",
+        exemptionReason: null,
         timeEntryId: null,
         expenseId: null,
       },
@@ -242,7 +289,7 @@ describe("readInvoiceDocumentLines", () => {
       netAmount: null,
       totalAmount: cents(0),
       lines: [],
-    }).unwrap();
+    });
     expect(document.lines).toEqual([]);
   });
 
@@ -258,7 +305,7 @@ describe("readInvoiceDocumentLines", () => {
             netAmount: cents(sign * 500_000),
           },
         ],
-      }).unwrap();
+      });
       expect(document.lines).toMatchObject([
         {
           quantity: "2.5000",
@@ -276,7 +323,7 @@ describe("readInvoiceDocumentLines", () => {
       ...invoice,
       documentType: "credit_note",
       lines: [{ ...storedLine, unitPrice: cents(0), netAmount: cents(0) }],
-    }).unwrap();
+    });
     expect(Object.is(document.lines.at(0)?.unitPrice, 0)).toBe(true);
   });
 });

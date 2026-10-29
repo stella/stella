@@ -7,6 +7,7 @@ import { isTransientRedisConnectionError } from "@/api/lib/redis-client";
 import {
   createWorkflowReconcileRunner,
   handleWorkflowReconcileFailure,
+  settlePendingCellRecoveryStart,
 } from "@/api/lib/workflow-queue";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import {
@@ -128,36 +129,72 @@ describe("workflow reconcile failures", () => {
     expect(logs.at("WARN")).toHaveLength(1);
   });
 
-  test("keeps the pending-cell sweep owed until a tick completes", async () => {
-    const scans: boolean[] = [];
+  test("runs the bounded pending-cell scan on every tick", async () => {
+    let scans = 0;
     let disrupted = true;
-    const runReconcile = createWorkflowReconcileRunner(
-      async ({ scanPendingCells }) => {
-        scans.push(scanPendingCells);
-        await (disrupted
-          ? Promise.reject(
-              Object.assign(new Error("Connection closed"), {
-                code: "ERR_REDIS_CONNECTION_CLOSED",
-              }),
-            )
-          : Promise.resolve());
-      },
-    );
+    const runReconcile = createWorkflowReconcileRunner(async () => {
+      scans += 1;
+      await (disrupted
+        ? Promise.reject(
+            Object.assign(new Error("Connection closed"), {
+              code: "ERR_REDIS_CONNECTION_CLOSED",
+            }),
+          )
+        : Promise.resolve());
+    });
 
     runReconcile();
     await settle();
     // The disrupted tick never swept, so the next one must sweep again.
-    expect(scans).toEqual([true]);
+    expect(scans).toBe(1);
 
     disrupted = false;
     runReconcile();
     await settle();
-    expect(scans).toEqual([true, true]);
+    expect(scans).toBe(2);
 
-    // One completed sweep discharges it; later ticks stay on the bounded scan.
+    // A completed tick does not disable later cell scans.
     runReconcile();
     await settle();
-    expect(scans).toEqual([true, true, false]);
+    expect(scans).toBe(3);
     expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("skips an overlapping tick until the active scan settles", async () => {
+    let scans = 0;
+    let finishScan: (() => void) | undefined;
+    const scan = new Promise<void>((resolve) => {
+      finishScan = resolve;
+    });
+    const runReconcile = createWorkflowReconcileRunner(async () => {
+      scans += 1;
+      await scan;
+    });
+
+    runReconcile();
+    runReconcile();
+    await settle();
+    expect(scans).toBe(1);
+
+    finishScan?.();
+    await settle();
+    runReconcile();
+    await settle();
+    expect(scans).toBe(2);
+  });
+
+  test("leaves sibling cells pending when one recovery owns the workspace", async () => {
+    const states = ["pending", "pending"];
+    const error = (index: number) => async (): Promise<void> => {
+      states[index] = "error";
+    };
+
+    await settlePendingCellRecoveryStart({ status: "started" }, error(0));
+    await settlePendingCellRecoveryStart(
+      { status: "already-running" },
+      error(1),
+    );
+
+    expect(states).toEqual(["pending", "pending"]);
   });
 });

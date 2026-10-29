@@ -12,8 +12,8 @@ import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 
 import {
-  type StableStringifyInput,
   stableStringify,
+  type StableStringifyInput,
 } from "@stll/stable-stringify";
 
 import type { JsonSchema, RegistryToolListing } from "./route-types.js";
@@ -21,7 +21,7 @@ import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 // Version 5 accepts only deployment metadata; caller listings and credential
 // identities from earlier files cannot participate in command resolution.
-export const CACHE_SCHEMA_VERSION = 5;
+export const CACHE_SCHEMA_VERSION = 6;
 /** Default time-to-live before deployment metadata is refreshed (spec S5.3). */
 export const DEFAULT_TTL_SECONDS = 86_400;
 
@@ -44,6 +44,8 @@ export type RegistryCacheFile = {
   featureOmittedCapabilities?: readonly string[];
   /** The latest CLI version we last nudged about (update-nudge anti-nag key). */
   lastNudgedVersion?: string;
+  cliMinimum?: string;
+  cliLatest?: string;
 };
 
 /** The environment slice the cache directory resolution needs. */
@@ -247,6 +249,8 @@ export const readCacheFile = async (
     return undefined;
   }
   const lastNudgedVersion = value["lastNudgedVersion"];
+  const cliMinimum = value["cliMinimum"];
+  const cliLatest = value["cliLatest"];
   return {
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
@@ -259,6 +263,8 @@ export const readCacheFile = async (
       ? { featureOmittedCapabilities: featureOmittedCapabilities.names }
       : {}),
     ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
+    ...(typeof cliMinimum === "string" ? { cliMinimum } : {}),
+    ...(typeof cliLatest === "string" ? { cliLatest } : {}),
   };
 };
 
@@ -284,6 +290,8 @@ export const writeCacheFile = async (
     ...(file.lastNudgedVersion === undefined
       ? {}
       : { lastNudgedVersion: file.lastNudgedVersion }),
+    ...(file.cliMinimum === undefined ? {} : { cliMinimum: file.cliMinimum }),
+    ...(file.cliLatest === undefined ? {} : { cliLatest: file.cliLatest }),
   };
   await writeFile(filePath, `${JSON.stringify(metadata, null, 2)}\n`);
 };

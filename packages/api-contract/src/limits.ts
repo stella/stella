@@ -9,12 +9,21 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+/** Bun's 128 MiB default ingress ceiling, shared with request schemas. */
+export const HTTP_REQUEST_BODY_MAX_BYTES = 128 * 1024 * 1024;
+
 /**
  * Max length of a short required text field such as a matter or contact
  * name. The API schema rejects longer input, and inputs bound to those
  * fields cap typing at the same length.
  */
 export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
+
+/**
+ * Max time entries one approval request may name. The approver's selection is
+ * sent in batches of at most this many entries.
+ */
+export const TIME_ENTRIES_APPROVAL_BATCH_MAX = 200;
 
 /** Max input documents a single flow run may be launched against. */
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
@@ -158,3 +167,23 @@ export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
 export const READER_PAGE_MAX_CHARS = 60_000;
 export const READER_PROVISION_ANCHOR_MIN_CHARS = 1;
 export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
+
+/**
+ * Smallest file a presigned upload may declare, single or in a dropped folder.
+ * An empty document is never a legitimate upload, so the API refuses it before
+ * minting a URL, and a folder drop sends empty files down the single-file path
+ * where the user sees that refusal for the file alone.
+ */
+export const UPLOAD_FILE_MIN_BYTES = 1;
+
+/**
+ * Size bounds, in PDF points, of a visible signature stamp: legible, and never
+ * a page-covering box. The browser keeps a drawn stamp inside them and the
+ * API refuses a stamp outside them.
+ */
+export const PDF_SIGNING_STAMP_SIZE_LIMITS_PT = {
+  maxHeight: 200,
+  maxWidth: 400,
+  minHeight: 24,
+  minWidth: 72,
+} as const;

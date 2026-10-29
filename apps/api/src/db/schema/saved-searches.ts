@@ -7,8 +7,8 @@ import {
   safeOrganizationId,
   savedSearchPolicies,
   sql,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const savedSearches = p.pgTable(

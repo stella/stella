@@ -29,7 +29,7 @@ permissions: {}
 
 jobs:
   model-catalog-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -63,7 +63,7 @@ jobs:
           ref: ${{ github.ref == 'refs/heads/main' && github.event.repository.default_branch || github.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -121,11 +121,12 @@ jobs:
           fi
           # The refresh owns this path and replaces only the two changesets it
           # writes itself; a hand-written note must move to its own file first.
+          # Blank lines do not count: the formatter owns the file's layout.
           refresh_summary='Refresh upstream model rates and request capabilities.'
           empty_changeset_text=$'---\n---'
-          patch_changeset_text=$'---\n"@stll/ai-catalog": patch\n---\n\n'"$refresh_summary"
+          patch_changeset_text=$'---\n"@stll/ai-catalog": patch\n---\n'"$refresh_summary"
           if [[ -e "$REFRESH_CHANGESET" ]]; then
-            existing="$(tr -d '\r' < "$REFRESH_CHANGESET")"
+            existing="$(tr -d '\r' < "$REFRESH_CHANGESET" | sed '/^[[:space:]]*$/d')"
             if [[ "$existing" != "$empty_changeset_text" && "$existing" != "$patch_changeset_text" ]]; then
               echo "::error file=$REFRESH_CHANGESET::$REFRESH_CHANGESET holds a changeset the refresh did not write; move it to its own changeset file."
               exit 1
@@ -133,10 +134,7 @@ jobs:
           fi
           runtime_changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
           if [[ -z "$runtime_changed" ]]; then
-            bun run changeset --empty
-            empty_changeset="$(git ls-files --others --exclude-standard -- '.changeset/*.md')"
-            test -f "$empty_changeset"
-            mv "$empty_changeset" "$REFRESH_CHANGESET"
+            printf '%s\n' '---' '---' > "$REFRESH_CHANGESET"
           else
             cat > "$REFRESH_CHANGESET" <<CHANGESET
           ---
@@ -146,6 +144,9 @@ jobs:
           $refresh_summary
           CHANGESET
           fi
+          # Formatted as the repository's format check expects, so the
+          # proposal never fails on its own changeset.
+          bun fmt "$REFRESH_CHANGESET"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Discover models and validate IDs, rates, and capabilities
@@ -167,7 +168,7 @@ jobs:
 
       - name: Save scheduled benchmark state
         if: ${{ !cancelled() && github.event_name == 'schedule' && steps.benchmarks.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: model-catalog-benchmark-state-v2
           path: .benchmark-state/state.json
@@ -177,7 +178,7 @@ jobs:
       - name: Mint app token
         if: ${{ !cancelled() && github.repository == 'stella/stella' && github.ref == 'refs/heads/main' && steps.refresh.outcome == 'success' }}
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
@@ -191,7 +192,7 @@ jobs:
       # with no changes closes a proposal that no longer differs from main.
       - name: Open or update the refresh PR
         if: ${{ !cancelled() && steps.app-token.outcome == 'success' }}
-        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

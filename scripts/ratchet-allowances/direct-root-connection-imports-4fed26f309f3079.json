@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/scripts/backfill-document-extraction-sources.ts",
+  "delta": 1,
+  "reason": "An operator-run maintenance script that inspects documents across every organization to report (dry run by default) and repair missing extraction sources; cross-organization reads require the root connection, and repairs go through the extraction-source owner, never raw writes."
+}

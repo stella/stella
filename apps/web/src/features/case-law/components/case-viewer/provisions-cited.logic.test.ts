@@ -6,8 +6,8 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   groupProvisionsByWork,
-  workTitle,
   type ProvisionRow,
+  workTitle,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 
 const row = (overrides: Partial<ProvisionRow> = {}): ProvisionRow => ({

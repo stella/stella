@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -13,7 +13,7 @@ import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
@@ -97,7 +97,7 @@ export const useMarkdownFileDraft = ({
           file,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (response, variables) => {
       replaceFileFieldId(variables.fieldId, {
@@ -118,12 +118,16 @@ export const useMarkdownFileDraft = ({
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMarkdownFileDraft:failure",
+        scope: { type: "handler", handlerId: "useMarkdownFileDraft:failure" },
+      });
       notifyUserError(error, t("workspaces.files.versionUploadFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });
     },
   });
+  const { isPending: isSaving, mutate: saveDraft } = saveMutation;
 
   const syncInput = {
     fieldId: tab.id,
@@ -147,15 +151,15 @@ export const useMarkdownFileDraft = ({
     }
   }
 
-  const discard = () => {
-    if (saveMutation.isPending) {
+  const discard = useCallback(() => {
+    if (isSaving) {
       return;
     }
     editorRef.current?.resetMarkdown(text);
     setDraft(text);
-  };
-  const save = () => {
-    if (saveMutation.isPending) {
+  }, [isSaving, text]);
+  const save = useCallback(() => {
+    if (isSaving) {
       return;
     }
     const currentTab = useInspectorTabsStore
@@ -169,7 +173,7 @@ export const useMarkdownFileDraft = ({
     if (currentTab?.type !== "pdf") {
       panic("Markdown publication requires a mounted file tab");
     }
-    saveMutation.mutate({
+    saveDraft({
       entityId: tab.entityId,
       fieldId: tab.id,
       fileName: currentTab.fileName,
@@ -180,18 +184,29 @@ export const useMarkdownFileDraft = ({
       text: editorRef.current?.captureForSave() ?? draft,
       workspaceId: tab.workspaceId,
     });
-  };
+  }, [draft, filePropertyId, isSaving, saveDraft, tab]);
+  const textQueryState = useMemo(
+    () => ({
+      error: textQuery.error,
+      isPending: textQuery.isPending,
+      refetch: textQuery.refetch,
+    }),
+    [textQuery.error, textQuery.isPending, textQuery.refetch],
+  );
 
-  return {
-    discard,
-    editorRef,
-    isDirty,
-    isSaving: saveMutation.isPending,
-    save,
-    setDraft,
-    text,
-    textQuery,
-  };
+  return useMemo(
+    () => ({
+      discard,
+      editorRef,
+      isDirty,
+      isSaving,
+      save,
+      setDraft,
+      text,
+      textQuery: textQueryState,
+    }),
+    [discard, isDirty, isSaving, save, text, textQueryState],
+  );
 };
 
 export type MarkdownFileDraft = ReturnType<typeof useMarkdownFileDraft>;

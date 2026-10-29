@@ -321,6 +321,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
       modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
     });
     const model = await resolveTanStackTextModel({
+      userId: null,
       modelId: overrideModel,
       orgAIConfig: null,
       dataClass: "public_corpus",
@@ -341,6 +342,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
   });
   const model = await resolveTanStackTextModel({
+    userId: null,
     task: "short-text",
     orgAIConfig: null,
     dataClass: "public_corpus",

@@ -1,5 +1,9 @@
 {
-  "extends": ["./tsconfig.json", "./.cache/typecheck-declarations/tests.json"],
+  "extends": [
+    "./tsconfig.json",
+    "./typecheck-required/tests.json",
+    "./.cache/typecheck-declarations/tests.json"
+  ],
   "compilerOptions": {
     "disableSourceOfProjectReferenceRedirect": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.tests.json"

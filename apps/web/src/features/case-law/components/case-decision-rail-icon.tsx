@@ -5,7 +5,8 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { InspectorRailIconProps } from "@/components/inspector/view-registry";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The court's chip stands for the tab, the way it stands beside the court in
@@ -18,8 +19,8 @@ export const CaseDecisionRailIcon = ({
   tab,
 }: InspectorRailIconProps<CaseDecisionViewPayload>) => {
   const decisionQuery = useQuery(decisionOptions(tab.payload.decisionId));
-  const decisionView = useQueryView(decisionQuery);
-  useQueryViewError(decisionView);
+  const decisionView = queryView(decisionQuery);
+  useQueryViewError(decisionView, "CaseDecisionRailIcon:query");
   const decision =
     decisionView.type === "items" ? decisionView.items : undefined;
   return (

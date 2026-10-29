@@ -9,26 +9,29 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
+import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
-  component: ThreadRoute,
-  pendingComponent: ChatThreadPending,
-  // Most threads load instantly from cache, so hold the skeleton back for
-  // 1s — it only appears when the load actually stalls, avoiding a flash
-  // between two consecutive chats.
-  pendingMs: 1000,
   loader: async ({ context, params }) => {
     const { queryClient } = context;
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.threadId.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/$threadId",
+        },
+      });
     };
     const prefetchManagerEntitlement = async () => {
       // Parent and child loaders can run together; share the role query
@@ -95,6 +98,16 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     }
     await ensureRouteQueryData(context.queryClient, threadQueryOptions);
   },
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "chat" }),
+  },
+  component: ThreadRoute,
+  pendingComponent: ChatThreadPending,
+  // Most threads load instantly from cache, so hold the skeleton back for
+  // 1s — it only appears when the load actually stalls, avoiding a flash
+  // between two consecutive chats.
+  pendingMs: 1000,
+  head: () => ({ meta: [{ title: pageTitle("navigation.chat") }] }),
 });
 
 function ThreadRoute() {

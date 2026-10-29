@@ -1,4 +1,8 @@
 export const AUDIT_ACTION = {
+  MCP_WEB_HANDOFF_CONFIRMATION_SHOWN: "mcp_web_handoff.confirmation_shown",
+  MCP_WEB_HANDOFF_ISSUED: "mcp_web_handoff.issued",
+  MCP_WEB_HANDOFF_REDEEMED: "mcp_web_handoff.redeemed",
+  MCP_WEB_HANDOFF_REFUSED: "mcp_web_handoff.refused",
   CREATE: "create",
   UPDATE: "update",
   DELETE: "delete",
@@ -7,11 +11,13 @@ export const AUDIT_ACTION = {
   ACCESS: "access",
   CANCEL: "cancel",
   REVIEW: "review",
+  SYNTHETIC_SESSION_MINTED: "synthetic.session_minted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  MCP_WEB_HANDOFF: "mcp_web_handoff",
   SERVICE_OAUTH_CLIENT: "service_oauth_client",
   LEGAL_RESOLVE: "legal_resolve",
   AUDIT_LOG: "audit_log",
@@ -28,6 +34,8 @@ export const AUDIT_RESOURCE_TYPE = {
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",
+  CHAT_TOOL_EXECUTION: "chat_tool_execution",
+  CHAT_TOOL_GRANT: "chat_tool_grant",
   CLAUSE: "clause",
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",
@@ -35,6 +43,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CONTACT: "contact",
   CONTACT_DIRECTORY: "contact_directory",
   CORRESPONDENCE: "correspondence",
+  DOCUMENT_ANNOTATION: "document_annotation",
   DOCUMENT_TYPE: "document_type",
   USAGE_ALLOCATION: "usage_allocation",
   USAGE_ENTITLEMENT: "usage_entitlement",
@@ -61,7 +70,9 @@ export const AUDIT_RESOURCE_TYPE = {
   LEGAL_LIST_GENERATION: "legal_list_generation",
   LEGAL_LIST_ITEM: "legal_list_item",
   LEGAL_LIST_VERIFICATION: "legal_list_verification",
+  MCP_CONNECTION: "mcp_connection",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
+  ORGANIZATION_ACCESS_STATE: "organization_access_state",
   ORGANIZATION_SETTINGS: "organization_settings",
   PDF_SIGNING_SESSION: "pdf_signing_session",
   PLAYBOOK: "playbook",

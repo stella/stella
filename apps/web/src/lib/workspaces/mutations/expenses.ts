@@ -2,9 +2,11 @@ import { useMutation } from "@tanstack/react-query";
 
 import type { ExpenseCategory } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -34,10 +36,14 @@ export const useCreateExpense = () => {
           matterId: toSafeId<"entity">(body.matterId),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateExpense:failure",
+        scope: { type: "handler", handlerId: "useCreateExpense:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -74,10 +80,14 @@ export const useUpdateExpense = () => {
           }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateExpense:failure",
+        scope: { type: "handler", handlerId: "useUpdateExpense:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -98,10 +108,14 @@ export const useDeleteExpense = () => {
           id: toSafeId<"expense">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteExpense:failure",
+        scope: { type: "handler", handlerId: "useDeleteExpense:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

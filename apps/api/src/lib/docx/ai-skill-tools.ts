@@ -19,6 +19,7 @@ import { Result } from "better-result";
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import { filterSkillsWithAvailableTools } from "@/api/lib/agent-skills/required-tools";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
@@ -26,10 +27,10 @@ import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  chatToolMapToArray,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
-import { failureSink, type FailureSink } from "@/api/lib/observability/failure";
+import { type FailureSink, failureSink } from "@/api/lib/observability/failure";
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {
@@ -58,7 +59,11 @@ export const maybeSkillTools = async (
   if (referencedSlugs.size === 0) {
     return Result.ok(undefined);
   }
-  const listed = await listAvailableChatSkillMetadata(ctx);
+  // A field generator has no conversation matter: unbound skills only.
+  const listed = await listAvailableChatSkillMetadata({
+    ...ctx,
+    bindingScope: NO_SKILL_BINDING_SCOPE,
+  });
   if (Result.isError(listed)) {
     return Result.err(listed.error);
   }
@@ -78,6 +83,7 @@ export const maybeSkillTools = async (
   }
   return Result.ok(
     createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ctx.organizationId,
       safeDb: ctx.safeDb,
       skills,

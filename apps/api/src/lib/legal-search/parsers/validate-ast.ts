@@ -1,6 +1,8 @@
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
-// parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
+// parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
+// parser-output-unchanged: Paragraph input is a new optional entry point used only by cz-us; the HTML path and its results are unchanged for every other caller.
+// parser-output-unchanged: Text helpers are exported under descriptive names for the verdict golden and profiling script; their bodies and validation results are unchanged.
 /**
  * AST sanity checker.
  *
@@ -16,10 +18,11 @@ import { type AnyNode, isTag } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
+
+import { visibleHtmlText } from "./visible-html-text";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -63,6 +66,10 @@ export type ValidationResult = {
   };
 };
 
+/** Source text accepted by validation without requiring structured parsers to serialize HTML. */
+export type ValidationSource =
+  string | { type: "paragraphs"; paragraphs: readonly string[] };
+
 /** Explicit publisher policy; other sources keep the shared validation semantics. */
 export type ValidationSourcePolicy = {
   source: "courtlistener";
@@ -76,7 +83,7 @@ type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
 // ── Helpers ────────────────────────────────────────────────
 
-const normalize = (text: string): string =>
+export const normalizeValidationText = (text: string): string =>
   text
     .replace(/\s+/gu, " ")
     .replace(/\u00a0/gu, " ")
@@ -129,7 +136,7 @@ const trimNonLetters = (word: string): string => {
 // and stays there), and a court document is exactly the oversized input
 // that turns the backtracking into blocking CPU. Both indexOf cursors
 // only ever advance, so this is one pass over the text.
-const separateSkipMarkers = (text: string): string => {
+export const separateValidationSkipMarkers = (text: string): string => {
   let separated = "";
   let index = 0;
   while (index < text.length) {
@@ -155,9 +162,9 @@ const separateSkipMarkers = (text: string): string => {
 const isMeaningfulWord = (clean: string): boolean =>
   clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
 
-const extractWords = (text: string): Set<string> => {
+export const extractValidationWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
+  for (const w of separateValidationSkipMarkers(text).split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
@@ -209,8 +216,8 @@ const peelDecorativeMarkers = (word: string): string => {
 // source whose text is entirely numeric. Only a token that peels away to
 // nothing, or to a skip word, counts as decoration.
 const CONTENT_CHAR = /[\p{L}\p{N}]/u;
-const holdsOnlyDecoration = (text: string): boolean =>
-  separateSkipMarkers(text)
+export const validationTextHoldsOnlyDecoration = (text: string): boolean =>
+  separateValidationSkipMarkers(text)
     .split(/\s+/u)
     .every((word) => {
       const bare = word.replace(/[[\]]/gu, "").toLowerCase();
@@ -249,7 +256,7 @@ const hasContentDescendant = (nodes: readonly AnyNode[]): boolean => {
 };
 
 /** Flatten inline nodes to text (line-break → space). */
-const inlineText = (inlines: readonly Inline[]): string => {
+export const validationInlineText = (inlines: readonly Inline[]): string => {
   let text = "";
   for (const node of inlines) {
     if (node.type === "text") {
@@ -260,13 +267,13 @@ const inlineText = (inlines: readonly Inline[]): string => {
       // Typography, not content — no characters.
     } else {
       // Every remaining kind is a container: its text is its children's.
-      text += inlineText(node.children);
+      text += validationInlineText(node.children);
     }
   }
   return text;
 };
 
-const collapseWhitespace = (text: string): string =>
+export const collapseValidationWhitespace = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();
 
 /** Issue code for source markup found in a block's text. */
@@ -276,7 +283,7 @@ const BOUNDARY_WHITESPACE = "BOUNDARY_WHITESPACE";
 // ── Validator ──────────────────────────────────────────────
 
 export const validateAst = (
-  html: string,
+  source: ValidationSource,
   blocks: Block[],
   options?: {
     minRetainedPct?: number;
@@ -284,6 +291,8 @@ export const validateAst = (
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
     sourcePolicy?: ValidationSourcePolicy;
+    /** Already-parsed source document; subtree sources must omit this. */
+    document?: cheerio.CheerioAPI;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -292,100 +301,116 @@ export const validateAst = (
 
   // ── 1. Content completeness ────────────────────────────
 
-  const $ = cheerio.load(html);
-  $("div[style*='-aw-headerfooter-type']").remove();
-  // <br> is a word boundary in the rendered document, but cheerio's
-  // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
-  // "wrazz") and producing phantom MISSING_WORDS reports against a
-  // correct AST. Make it a space before extracting reference text.
-  $("br").replaceWith(" ");
-
-  // Extract text from content elements, but skip nested
-  // elements whose text is already included by a parent
-  // (e.g., <td> inside <td> in NALUS HTML).
   const seen = new Set<string>();
   const originalParts: string[] = [];
-  // Stringifying a node visits its whole subtree, and the ancestor check
-  // below runs it for every ancestor of every content element — quadratic
-  // on flat many-paragraph documents. Each node's normalized text is
-  // computed once and reused.
-  const normalizedTextCache = new WeakMap<object, string>();
   const work = { textComputations: 0, textCharacters: 0, ancestorChecks: 0 };
-  const normalizedText = (el: Parameters<typeof $>[0] & object): string => {
-    const cached = normalizedTextCache.get(el);
-    if (cached !== undefined) {
-      return cached;
-    }
-    work.textComputations += 1;
-    const sourceText = visibleHtmlText($(el));
-    const value = (
-      options?.sourcePolicy
-        ? options.sourcePolicy.projectSourceText(sourceText)
-        : sourceText
-    )
-      .replace(/\s+/gu, " ")
-      .trim();
-    work.textCharacters += value.length;
-    normalizedTextCache.set(el, value);
-    return value;
-  };
-  // Queried from the document root, never as `.find()` on a node: cheerio
-  // dedupes a `.find()` context of N children pairwise, which is quadratic on
-  // a body or wrapper holding tens of thousands of paragraphs.
-  $(`body :is(${CONTENT_SELECTOR})`).each((_, el) => {
-    const $el = $(el);
 
-    // Skip <div> wrappers that contain child content
-    // elements — those children are matched separately.
-    if (el.name === "div" && hasContentDescendant(el.children)) {
-      return;
+  if (typeof source !== "string") {
+    for (const paragraph of source.paragraphs) {
+      const text = paragraph.replace(/\s+/gu, " ").trim();
+      if (!text) {
+        continue;
+      }
+      work.textComputations += 1;
+      work.textCharacters += text.length;
+      if (!seen.has(text)) {
+        seen.add(text);
+        originalParts.push(text);
+      }
     }
+  } else {
+    const $ = options?.document ?? cheerio.load(source);
+    $("div[style*='-aw-headerfooter-type']").remove();
+    // <br> is a word boundary in the rendered document, but cheerio's
+    // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
+    // "wrazz") and producing phantom MISSING_WORDS reports against a
+    // correct AST. Make it a space before extracting reference text.
+    $("br").replaceWith(" ");
 
-    // Skip if any ancestor in our selector already captured this
-    // text. Checking every ancestor rather than just the nearest one
-    // matters for sources that nest content two or more levels deep
-    // (Cellar quotes legislation as a table inside the cell of the
-    // numbered paragraph that introduces it): with only the nearest
-    // ancestor checked, the inner text is counted once inside the
-    // outer cell and again on its own, and the inflated original
-    // length reads as content loss in an otherwise complete AST.
-    const capturedByAncestor = $el
-      .parents(CONTENT_SELECTOR)
-      .toArray()
-      .some((ancestor) => {
-        work.ancestorChecks += 1;
-        return seen.has(normalizedText(ancestor));
-      });
-    if (capturedByAncestor) {
-      return;
-    }
-    const text = normalizedText(el);
-    if (text && !seen.has(text)) {
-      seen.add(text);
-      originalParts.push(text);
-    }
-  });
+    // Extract text from content elements, but skip nested
+    // elements whose text is already included by a parent
+    // (e.g., <td> inside <td> in NALUS HTML).
+    // Stringifying a node visits its whole subtree, and the ancestor check
+    // below runs it for every ancestor of every content element — quadratic
+    // on flat many-paragraph documents. Each node's normalized text is
+    // computed once and reused.
+    const normalizedTextCache = new WeakMap<object, string>();
+    const normalizedText = (el: Parameters<typeof $>[0] & object): string => {
+      const cached = normalizedTextCache.get(el);
+      if (cached !== undefined) {
+        return cached;
+      }
+      work.textComputations += 1;
+      const sourceText = visibleHtmlText($(el));
+      const value = (
+        options?.sourcePolicy
+          ? options.sourcePolicy.projectSourceText(sourceText)
+          : sourceText
+      )
+        .replace(/\s+/gu, " ")
+        .trim();
+      work.textCharacters += value.length;
+      normalizedTextCache.set(el, value);
+      return value;
+    };
+    // Queried from the document root, never as `.find()` on a node: cheerio
+    // dedupes a `.find()` context of N children pairwise, which is quadratic on
+    // a body or wrapper holding tens of thousands of paragraphs.
+    $(`body :is(${CONTENT_SELECTOR})`).each((_, el) => {
+      const $el = $(el);
 
-  // Also collect <img> alt text (some courts embed
-  // meaningful text in alt attributes).
-  $("body img[alt]").each((_, el) => {
-    const alt = $(el).attr("alt")?.trim();
-    if (alt && !seen.has(alt)) {
-      seen.add(alt);
-      originalParts.push(alt);
-    }
-  });
+      // Skip <div> wrappers that contain child content
+      // elements — those children are matched separately.
+      if (el.name === "div" && hasContentDescendant(el.children)) {
+        return;
+      }
 
-  const originalText = normalize(originalParts.join(" "));
+      // Skip if any ancestor in our selector already captured this
+      // text. Checking every ancestor rather than just the nearest one
+      // matters for sources that nest content two or more levels deep
+      // (Cellar quotes legislation as a table inside the cell of the
+      // numbered paragraph that introduces it): with only the nearest
+      // ancestor checked, the inner text is counted once inside the
+      // outer cell and again on its own, and the inflated original
+      // length reads as content loss in an otherwise complete AST.
+      const capturedByAncestor = $el
+        .parents(CONTENT_SELECTOR)
+        .toArray()
+        .some((ancestor) => {
+          work.ancestorChecks += 1;
+          return seen.has(normalizedText(ancestor));
+        });
+      if (capturedByAncestor) {
+        return;
+      }
+      const text = normalizedText(el);
+      if (text && !seen.has(text)) {
+        seen.add(text);
+        originalParts.push(text);
+      }
+    });
 
-  const astText = normalize(
+    // Also collect <img> alt text (some courts embed
+    // meaningful text in alt attributes).
+    $("body img[alt]").each((_, el) => {
+      const alt = $(el).attr("alt")?.trim();
+      if (alt && !seen.has(alt)) {
+        seen.add(alt);
+        originalParts.push(alt);
+      }
+    });
+  }
+
+  const originalText = normalizeValidationText(originalParts.join(" "));
+
+  const astText = normalizeValidationText(
     blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
   );
 
-  const originalWords = extractWords(originalText);
-  const astWords = extractWords(astText);
+  const originalWords = extractValidationWords(originalText);
+  const astWords = extractValidationWords(astText);
 
-  const sourceHasContent = !holdsOnlyDecoration(originalText);
+  const sourceHasContent = !validationTextHoldsOnlyDecoration(originalText);
 
   const retainedPct = sourceHasContent
     ? (astText.length / originalText.length) * 100
@@ -411,10 +436,10 @@ export const validateAst = (
   const wordComparisonText = options?.wordComparisonText;
   const comparisonWords =
     wordComparisonText === undefined ||
-    normalize(wordComparisonText).replace(/\s+/gu, "") !==
+    normalizeValidationText(wordComparisonText).replace(/\s+/gu, "") !==
       originalText.replace(/\s+/gu, "")
       ? originalWords
-      : extractWords(normalize(wordComparisonText));
+      : extractValidationWords(normalizeValidationText(wordComparisonText));
   const missingWords = missingFrom(comparisonWords);
   const boundaryWhitespaceWords =
     comparisonWords === originalWords
@@ -538,9 +563,9 @@ export const validateAst = (
       const inlineLen = (
         options?.sourcePolicy
           ? options.sourcePolicy.projectInlineText(block.inlines)
-          : collapseWhitespace(inlineText(block.inlines))
+          : collapseValidationWhitespace(validationInlineText(block.inlines))
       ).length;
-      const plainLen = collapseWhitespace(block.plainText).length;
+      const plainLen = collapseValidationWhitespace(block.plainText).length;
       // Allow some tolerance for whitespace differences
       if (
         Math.abs(inlineLen - plainLen) > 5 &&
@@ -741,11 +766,11 @@ export const validationSignal = (
 
 export const validateAndLog = (
   subject: ValidationSubject,
-  html: string,
+  source: ValidationSource,
   blocks: Block[],
   options?: Parameters<typeof validateAst>[2],
 ): ValidationResult => {
-  const result = validateAst(html, blocks, options);
+  const result = validateAst(source, blocks, options);
   const subjectFields = {
     parser: subject.parser,
     caseNumber: subject.caseNumber,

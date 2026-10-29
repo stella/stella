@@ -12,6 +12,11 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:monitoring-session-revoke": [
+    "revokedControls",
+    "deletedSessions",
+    "deletedRoomTokens",
+  ],
   "system:operator-activity": ["reads"],
   "system:sanctions-monitoring-fanout": [
     "freshnessQueued",
@@ -33,6 +38,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   ],
   "system:case-law-sitemap-refresh": ["shards", "pages"],
   "system:statute-sitemap-refresh": ["shards"],
+  "system:case-law-coverage-refresh": ["summaries", "countries"],
   "system:case-law-browse-facet-refresh": ["buckets"],
   "system:legislation-facet-refresh": ["buckets"],
   "system:case-law-source-arrivals-refresh": ["sources"],
@@ -43,6 +49,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "queuedSweeps",
   ],
   "system:registration-retention": [
+    "handoffs",
     "verifications",
     "assertions",
     "replays",
@@ -90,6 +97,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   ],
   "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
+  "system:partner-client-operator": ["created", "rotated", "disabled"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
 export type SystemRunActor = keyof typeof SYSTEM_RUN_ACTOR_COUNTS;

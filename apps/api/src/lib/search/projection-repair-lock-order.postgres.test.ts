@@ -7,24 +7,24 @@ import { withTimeout } from "@stll/concurrency/with-timeout";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  contactSearchDocuments,
   contacts,
+  contactSearchDocuments,
   entities,
   entityVersions,
   extractedContent,
   fields,
   properties,
   searchDocuments,
-  workspaceSearchDocuments,
   workspaces,
+  workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   upsertContactSearchDocument,
-  upsertWorkspaceSearchDocuments,
   upsertWorkspaceSearchDocument,
+  upsertWorkspaceSearchDocuments,
 } from "@/api/lib/search/index-global";
 import { persistNativeExtractionProjection } from "@/api/lib/search/process-extraction";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

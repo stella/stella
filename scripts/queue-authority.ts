@@ -46,7 +46,6 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -62,6 +61,21 @@ import {
   SCHEDULER_TASK_AUTHORITY,
 } from "../apps/api/src/lib/scheduler/task-authority.ts";
 import type { SchedulerTaskAuthorityEntry } from "../apps/api/src/lib/scheduler/task-authority.ts";
+import {
+  type ArrowFunctionExpression,
+  type CallExpression,
+  type Expression,
+  type Function as SyntaxFunction,
+  type ImportExpression,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource as parseSyntax,
+  type Program,
+  type SpreadElement,
+  staticPropertyName,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
 import { OWNERSHIP } from "./ownership.ts";
@@ -183,56 +197,86 @@ const auditRegistry = (input: AuditInput, errors: string[]) => {
   }
 };
 
-const unwrap = (node: ts.Expression): ts.Expression =>
-  ts.isSatisfiesExpression(node) ||
-  ts.isAsExpression(node) ||
-  ts.isParenthesizedExpression(node)
+const unwrap = (node: Expression): Expression =>
+  node.type === "TSSatisfiesExpression" ||
+  node.type === "TSAsExpression" ||
+  node.type === "ParenthesizedExpression"
     ? unwrap(node.expression)
     : node;
-
-const propertyName = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
-
-const parseSource = (name: string, source: string): ts.SourceFile =>
-  ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true);
-
-const findNodes = <T extends ts.Node>(
-  root: ts.Node,
-  guard: (node: ts.Node) => node is T,
-): T[] => {
-  const found: T[] = [];
-  const visit = (node: ts.Node) => {
-    if (guard(node)) {
+const propertyName = (name: Node): string | null => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  return name.type === "Literal" && typeof name.value === "string"
+    ? name.value
+    : null;
+};
+const isPropertyAssignment = (
+  node: ObjectProperty | SpreadElement,
+): node is ObjectProperty =>
+  node.type === "Property" &&
+  !node.shorthand &&
+  !node.method &&
+  node.kind === "init";
+const literalString = (node: Node | null | undefined): string | undefined => {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+const parents = new WeakMap<Node, Node>();
+const sourceTexts = new WeakMap<Node, string>();
+const parseSource = (name: string, source: string): Program => {
+  const parsed = parseSyntax(name, source);
+  walk(parsed.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parents.set(node, parent);
+    }
+    sourceTexts.set(node, source.slice(node.start, node.end));
+  });
+  return parsed.program;
+};
+const hasNodeType = <T extends Node["type"]>(
+  node: Node,
+  type: T,
+): node is Extract<Node, { type: T }> => node.type === type;
+const findNodes = <T extends Node["type"]>(
+  root: Node,
+  type: T,
+): Extract<Node, { type: T }>[] => {
+  const found: Extract<Node, { type: T }>[] = [];
+  walk(root, (node) => {
+    if (hasNodeType(node, type)) {
       found.push(node);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(root);
+  });
   return found;
 };
 
 type ImportBinding = { module: string; imported: string };
 
 /** Value (not type-only) named imports, keyed by local name. */
-const importBindings = (file: ts.SourceFile): Map<string, ImportBinding> => {
+const importBindings = (file: Program): Map<string, ImportBinding> => {
   const bindings = new Map<string, ImportBinding>();
-  for (const statement of file.statements) {
+  for (const statement of file.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
     ) {
       continue;
     }
-    const named = statement.importClause?.namedBindings;
-    if (named === undefined || !ts.isNamedImports(named)) {
-      continue;
-    }
-    for (const element of named.elements) {
-      if (!element.isTypeOnly) {
-        bindings.set(element.name.text, {
-          module: statement.moduleSpecifier.text,
-          imported: (element.propertyName ?? element.name).text,
+    for (const element of statement.specifiers) {
+      if (element.type === "ImportSpecifier" && element.importKind !== "type") {
+        bindings.set(element.local.name, {
+          module: statement.source.value,
+          imported:
+            element.imported.type === "Identifier"
+              ? element.imported.name
+              : element.imported.value,
         });
       }
     }
@@ -242,7 +286,7 @@ const importBindings = (file: ts.SourceFile): Map<string, ImportBinding> => {
 
 /** Local names bound to `imported` from `module`. */
 const importedAs = (
-  file: ts.SourceFile,
+  file: Program,
   module: string,
   imported: string,
 ): Set<string> =>
@@ -259,9 +303,8 @@ const importedAs = (
 const callsRunActor = (source: string): boolean => {
   const file = parseSource("worker.ts", source);
   const locals = importedAs(file, RUN_ACTOR_MODULE, RUN_ACTOR);
-  return findNodes(file, ts.isCallExpression).some(
-    (call) =>
-      ts.isIdentifier(call.expression) && locals.has(call.expression.text),
+  return findNodes(file, "CallExpression").some(
+    (call) => call.callee.type === "Identifier" && locals.has(call.callee.name),
   );
 };
 
@@ -275,21 +318,24 @@ const INACTIVE_MODIFIERS = new Set([
 ]);
 
 /** Whether `node` sits inside a skipped, conditional or todo suite or test. */
-const insideInactiveBlock = (node: ts.Node): boolean => {
-  let current = node.parent;
-  while (!ts.isSourceFile(current)) {
-    if (ts.isCallExpression(current)) {
-      const callee = ts.isCallExpression(current.expression)
-        ? current.expression.expression
-        : current.expression;
+const insideInactiveBlock = (node: Node): boolean => {
+  let current = parents.get(node);
+  while (current && current.type !== "Program") {
+    if (current.type === "CallExpression") {
+      const callee =
+        current.callee.type === "CallExpression"
+          ? current.callee.callee
+          : current.callee;
       if (
-        ts.isPropertyAccessExpression(callee) &&
-        INACTIVE_MODIFIERS.has(callee.name.text)
+        callee.type === "MemberExpression" &&
+        !callee.computed &&
+        callee.property.type === "Identifier" &&
+        INACTIVE_MODIFIERS.has(callee.property.name)
       ) {
         return true;
       }
     }
-    current = current.parent;
+    current = parents.get(current);
   }
   return false;
 };
@@ -306,18 +352,22 @@ const activeTestTitles = (source: string): Set<string> => {
     ...importedAs(file, "bun:test", "it"),
   ]);
   const titles = new Set<string>();
-  for (const call of findNodes(file, ts.isCallExpression)) {
+  for (const call of findNodes(file, "CallExpression")) {
     const [title, body] = call.arguments;
     if (
-      ts.isIdentifier(call.expression) &&
-      runners.has(call.expression.text) &&
+      call.callee.type === "Identifier" &&
+      runners.has(call.callee.name) &&
       title !== undefined &&
-      ts.isStringLiteralLike(title) &&
+      literalString(title) !== undefined &&
       body !== undefined &&
-      (ts.isArrowFunction(body) || ts.isFunctionExpression(body)) &&
+      (body.type === "ArrowFunctionExpression" ||
+        body.type === "FunctionExpression") &&
       !insideInactiveBlock(call)
     ) {
-      titles.add(title.text);
+      const titleText = literalString(title);
+      if (titleText !== undefined) {
+        titles.add(titleText);
+      }
     }
   }
   return titles;
@@ -339,17 +389,17 @@ const resolveModulePath = (from: string, specifier: string): string | null => {
 };
 
 const declarationInitializer = (
-  file: ts.SourceFile,
+  file: Program,
   name: string,
-): ts.Expression | undefined =>
-  findNodes(file, ts.isVariableDeclaration).find(
+): Expression | undefined =>
+  findNodes(file, "VariableDeclarator").find(
     (declaration) =>
-      ts.isIdentifier(declaration.name) && declaration.name.text === name,
-  )?.initializer;
+      declaration.id.type === "Identifier" && declaration.id.name === name,
+  )?.init ?? undefined;
 
 type ResolveContext = {
   relativePath: string;
-  file: ts.SourceFile;
+  file: Program;
   readFile: AuditInput["readFile"];
   depth: number;
 };
@@ -360,25 +410,26 @@ type ResolveContext = {
  * object literal and its values. `null` when any step is not a literal.
  */
 const resolveStrings = (
-  expression: ts.Expression,
+  expression: Expression,
   context: ResolveContext,
 ): string[] | null => {
   const node = unwrap(expression);
-  if (ts.isStringLiteralLike(node)) {
-    return [node.text];
+  const text = literalString(node);
+  if (text !== undefined) {
+    return [text];
   }
   if (context.depth > MAX_RESOLVE_DEPTH) {
     return null;
   }
   const deeper = { ...context, depth: context.depth + 1 };
-  if (ts.isElementAccessExpression(node)) {
-    return resolveStrings(node.expression, deeper);
+  if (node.type === "MemberExpression" && node.computed) {
+    return resolveStrings(node.object, deeper);
   }
-  if (ts.isObjectLiteralExpression(node)) {
+  if (node.type === "ObjectExpression") {
     const values: string[] = [];
     for (const property of node.properties) {
-      const resolved = ts.isPropertyAssignment(property)
-        ? resolveStrings(property.initializer, deeper)
+      const resolved = isPropertyAssignment(property)
+        ? resolveStrings(property.value, deeper)
         : null;
       if (resolved === null) {
         return null;
@@ -387,14 +438,14 @@ const resolveStrings = (
     }
     return values;
   }
-  if (!ts.isIdentifier(node)) {
+  if (node.type !== "Identifier") {
     return null;
   }
-  const local = declarationInitializer(context.file, node.text);
+  const local = declarationInitializer(context.file, node.name);
   if (local !== undefined) {
     return resolveStrings(local, deeper);
   }
-  const binding = importBindings(context.file).get(node.text);
+  const binding = importBindings(context.file).get(node.name);
   const target =
     binding === undefined
       ? null
@@ -410,17 +461,14 @@ const resolveStrings = (
     : resolveStrings(exported, { ...deeper, relativePath: target, file });
 };
 
-const accessedMemberName = (node: ts.Node): string | null => {
-  if (ts.isPropertyAccessExpression(node)) {
-    return node.name.text;
+const accessedMemberName = (node: Node | undefined): string | null => {
+  if (node?.type !== "MemberExpression") {
+    return null;
   }
-  if (
-    ts.isElementAccessExpression(node) &&
-    ts.isStringLiteralLike(node.argumentExpression)
-  ) {
-    return node.argumentExpression.text;
+  if (node.computed) {
+    return literalString(node.property) ?? null;
   }
-  return null;
+  return node.property.type === "Identifier" ? node.property.name : null;
 };
 
 /**
@@ -439,46 +487,40 @@ const workerQueueNames = (
   const file = parseSource(relativePath, source);
   const bindings = importBindings(file);
   const namespaces = new Map<string, string>();
-  for (const statement of file.statements) {
+  for (const statement of file.body) {
     if (
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
-      statement.importClause?.namedBindings !== undefined &&
-      ts.isNamespaceImport(statement.importClause.namedBindings)
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
     ) {
-      namespaces.set(
-        statement.importClause.namedBindings.name.text,
-        statement.moduleSpecifier.text,
-      );
+      continue;
+    }
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.set(specifier.local.name, statement.source.value);
+      }
     }
   }
-  const isOwnedConstructor = (
-    expression: ts.Expression,
-    depth = 0,
-  ): boolean => {
+  const isOwnedConstructor = (expression: Expression, depth = 0): boolean => {
     if (depth > MAX_RESOLVE_DEPTH) {
       return false;
     }
     const node = unwrap(expression);
-    if (ts.isIdentifier(node)) {
-      const binding = bindings.get(node.text);
+    if (node.type === "Identifier") {
+      const binding = bindings.get(node.name);
       if (binding !== undefined) {
         return (
           binding.imported === WORKER_CONSTRUCTOR &&
           resolveModulePath(relativePath, binding.module) === HOST_TABLE_FILE
         );
       }
-      const initializer = declarationInitializer(file, node.text);
+      const initializer = declarationInitializer(file, node.name);
       return (
         initializer !== undefined && isOwnedConstructor(initializer, depth + 1)
       );
     }
     const namespace =
-      (ts.isPropertyAccessExpression(node) ||
-        ts.isElementAccessExpression(node)) &&
-      ts.isIdentifier(node.expression)
-        ? namespaces.get(node.expression.text)
+      node.type === "MemberExpression" && node.object.type === "Identifier"
+        ? namespaces.get(node.object.name)
         : undefined;
     const member = accessedMemberName(node);
     return (
@@ -487,17 +529,17 @@ const workerQueueNames = (
       resolveModulePath(relativePath, namespace) === HOST_TABLE_FILE
     );
   };
-  const constructions = findNodes(file, ts.isNewExpression).filter((node) =>
-    isOwnedConstructor(node.expression),
+  const constructions = findNodes(file, "NewExpression").filter((node) =>
+    isOwnedConstructor(node.callee),
   );
   if (constructions.length === 0) {
     return undefined;
   }
   const queues = new Set<string>();
   for (const construction of constructions) {
-    const first = construction.arguments?.at(0);
+    const first = construction.arguments.at(0);
     const names =
-      first === undefined
+      first === undefined || first.type === "SpreadElement"
         ? null
         : resolveStrings(first, { relativePath, file, readFile, depth: 0 });
     if (names === null) {
@@ -510,101 +552,105 @@ const workerQueueNames = (
   return [...queues].toSorted();
 };
 
-const bindingLeavesWorkerUnavailable = (
-  element: ts.BindingElement,
+const dynamicBullMqImportReachesWorker = (
+  call: CallExpression | ImportExpression,
 ): boolean => {
-  if (element.dotDotDotToken !== undefined) {
-    return false;
-  }
-  if (element.propertyName !== undefined) {
-    const name = propertyName(element.propertyName);
-    return name !== null && name !== "Worker";
-  }
-  return ts.isIdentifier(element.name) && element.name.text !== "Worker";
-};
-
-const dynamicBullMqImportReachesWorker = (call: ts.CallExpression): boolean => {
-  const specifier = call.arguments.at(0);
+  const specifier =
+    call.type === "ImportExpression" ? call.source : call.arguments.at(0);
   if (
-    (call.expression.kind !== ts.SyntaxKind.ImportKeyword &&
-      !(
-        ts.isIdentifier(call.expression) && call.expression.text === "require"
-      )) ||
-    specifier === undefined ||
-    !ts.isStringLiteral(specifier) ||
-    !(specifier.text === "bullmq" || specifier.text.startsWith("bullmq/"))
+    (call.type === "CallExpression" &&
+      !(call.callee.type === "Identifier" && call.callee.name === "require")) ||
+    specifier?.type !== "Literal" ||
+    typeof specifier.value !== "string" ||
+    !(specifier.value === "bullmq" || specifier.value.startsWith("bullmq/"))
   ) {
     return false;
   }
-  let parent = call.parent;
+  let parent = parents.get(call);
   while (
-    ts.isAwaitExpression(parent) ||
-    ts.isParenthesizedExpression(parent) ||
-    ts.isAsExpression(parent) ||
-    ts.isSatisfiesExpression(parent)
+    parent &&
+    [
+      "AwaitExpression",
+      "ParenthesizedExpression",
+      "TSAsExpression",
+      "TSSatisfiesExpression",
+    ].includes(parent.type)
   ) {
-    parent = parent.parent;
+    parent = parents.get(parent);
   }
   const member = accessedMemberName(parent);
   if (member !== null && member !== "Worker") {
     return false;
   }
   if (
-    ts.isVariableDeclaration(parent) &&
-    ts.isObjectBindingPattern(parent.name)
+    parent?.type === "VariableDeclarator" &&
+    parent.id.type === "ObjectPattern"
   ) {
-    return !parent.name.elements.every(bindingLeavesWorkerUnavailable);
+    return !parent.id.properties.every((element) => {
+      if (element.type !== "Property") {
+        return false;
+      }
+      const name = staticPropertyName(element);
+      return name !== undefined && name !== "Worker";
+    });
   }
   return true;
 };
-
 const rawWorkerImports = (relativePath: string, source: string): string[] => {
   if (relativePath === HOST_TABLE_FILE || !source.includes("bullmq")) {
     return [];
   }
   const file = parseSource(relativePath, source);
   const violations: string[] = [];
-  for (const statement of file.statements) {
+  for (const statement of file.body) {
     if (
-      !ts.isImportDeclaration(statement) &&
-      !ts.isExportDeclaration(statement)
+      statement.type !== "ImportDeclaration" &&
+      statement.type !== "ExportNamedDeclaration" &&
+      statement.type !== "ExportAllDeclaration"
     ) {
       continue;
     }
-    const specifier = statement.moduleSpecifier;
+    const moduleName = statement.source?.value;
     if (
-      specifier === undefined ||
-      !ts.isStringLiteral(specifier) ||
-      !(specifier.text === "bullmq" || specifier.text.startsWith("bullmq/"))
+      moduleName === undefined ||
+      !(moduleName === "bullmq" || moduleName.startsWith("bullmq/"))
     ) {
       continue;
     }
-    const names = ts.isImportDeclaration(statement)
-      ? statement.importClause?.namedBindings
-      : statement.exportClause;
-    const reachesWorker =
-      names === undefined
-        ? ts.isExportDeclaration(statement)
-        : ts.isNamespaceImport(names) ||
-          ts.isNamespaceExport(names) ||
-          names.elements.some(
-            (element) =>
-              (element.propertyName ?? element.name).text === "Worker",
-          );
+    let reachesWorker = statement.type === "ExportAllDeclaration";
+    if (statement.type === "ImportDeclaration") {
+      reachesWorker = statement.specifiers.some(
+        (specifier) =>
+          specifier.type === "ImportNamespaceSpecifier" ||
+          (specifier.type === "ImportSpecifier" &&
+            (specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : specifier.imported.value) === "Worker"),
+      );
+    } else if (statement.type === "ExportNamedDeclaration") {
+      reachesWorker = statement.specifiers.some(
+        (specifier) =>
+          (specifier.local.type === "Identifier"
+            ? specifier.local.name
+            : specifier.local.value) === "Worker",
+      );
+    }
     if (reachesWorker) {
       violations.push(
         `BullMQ Worker imports use ${HOST_TABLE_FILE}: ${relativePath}`,
       );
     }
   }
-  for (const call of findNodes(file, ts.isCallExpression)) {
-    if (!dynamicBullMqImportReachesWorker(call)) {
-      continue;
+  walk(file, (call) => {
+    if (
+      (call.type === "CallExpression" || call.type === "ImportExpression") &&
+      dynamicBullMqImportReachesWorker(call)
+    ) {
+      violations.push(
+        `BullMQ Worker imports use ${HOST_TABLE_FILE}: ${relativePath}`,
+      );
     }
-    violations.push(
-      `BullMQ Worker imports use ${HOST_TABLE_FILE}: ${relativePath}`,
-    );
-  }
+  });
   return violations;
 };
 
@@ -664,24 +710,30 @@ const auditQueueAuthority = (input: AuditInput): Audit => {
 
 /** Keys of the object literal assigned to `name` in `source`. */
 const objectKeys = (source: string, name: string): string[] | null => {
-  const file = ts.createSourceFile("host.ts", source, ts.ScriptTarget.Latest);
-  for (const statement of file.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  const file = parseSource("host.ts", source);
+  for (const entry of file.body) {
+    const statement =
+      entry.type === "ExportNamedDeclaration" && entry.declaration
+        ? entry.declaration
+        : entry;
+    if (statement.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.name.text === name &&
-        declaration.initializer !== undefined
+        declaration.id.type === "Identifier" &&
+        declaration.id.name === name &&
+        declaration.init !== null
       ) {
-        const value = unwrap(declaration.initializer);
-        if (!ts.isObjectLiteralExpression(value)) {
+        const value = unwrap(declaration.init);
+        if (value.type !== "ObjectExpression") {
           return null;
         }
         return value.properties.flatMap((property) => {
           const key =
-            ts.isPropertyAssignment(property) && propertyName(property.name);
+            isPropertyAssignment(property) &&
+            !property.computed &&
+            propertyName(property.key);
           return typeof key === "string" ? [key] : [];
         });
       }
@@ -694,7 +746,7 @@ type RegisteredTask = { name: string; module: string };
 
 /** Value imports of `file` resolved to repository-relative modules. */
 const namedImports = (
-  file: ts.SourceFile,
+  file: Program,
   relativePath: string,
 ): Map<string, string> => {
   const imports = new Map<string, string>();
@@ -714,9 +766,7 @@ const constantString = (source: string, name: string): string | null => {
     name,
   );
   const value = initializer === undefined ? undefined : unwrap(initializer);
-  return value !== undefined && ts.isStringLiteralLike(value)
-    ? value.text
-    : null;
+  return literalString(value) ?? null;
 };
 
 /** Whether `source` calls the `resolver` it imports. */
@@ -727,9 +777,8 @@ const callsImported = (source: string, resolver: string): boolean => {
       .filter(([, binding]) => binding.imported === resolver)
       .map(([local]) => local),
   );
-  return findNodes(file, ts.isCallExpression).some(
-    (call) =>
-      ts.isIdentifier(call.expression) && locals.has(call.expression.text),
+  return findNodes(file, "CallExpression").some(
+    (call) => call.callee.type === "Identifier" && locals.has(call.callee.name),
   );
 };
 
@@ -737,34 +786,40 @@ const callsImported = (source: string, resolver: string): boolean => {
 const callsInto = (from: string, source: string, target: string): boolean => {
   const file = parseSource(from, source);
   const imports = namedImports(file, from);
-  return findNodes(file, ts.isCallExpression).some(
+  return findNodes(file, "CallExpression").some(
     (call) =>
-      ts.isIdentifier(call.expression) &&
-      imports.get(call.expression.text) === target,
+      call.callee.type === "Identifier" &&
+      imports.get(call.callee.name) === target,
   );
 };
 
 /** Object literals of the registry's task tables. */
-const registryTables = (file: ts.SourceFile): ts.ObjectLiteralExpression[] => {
-  const tables: ts.ObjectLiteralExpression[] = [];
-  const collect = (node: ts.Node) => {
-    if (ts.isObjectLiteralExpression(node)) {
-      tables.push(node);
-      return;
-    }
-    ts.forEachChild(node, collect);
+const registryTables = (file: Program): ObjectExpression[] => {
+  const tables: ObjectExpression[] = [];
+  const collect = (root: Node) => {
+    walk(root, (node) => {
+      if (node.type === "ObjectExpression") {
+        tables.push(node);
+        return "skip-children";
+      }
+      return undefined;
+    });
   };
-  for (const statement of file.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  for (const entry of file.body) {
+    const statement =
+      entry.type === "ExportNamedDeclaration" && entry.declaration
+        ? entry.declaration
+        : entry;
+    if (statement.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        ts.isIdentifier(declaration.name) &&
-        SCHEDULER_REGISTRY_TABLES.includes(declaration.name.text) &&
-        declaration.initializer !== undefined
+        declaration.id.type === "Identifier" &&
+        SCHEDULER_REGISTRY_TABLES.includes(declaration.id.name) &&
+        declaration.init !== null
       ) {
-        collect(declaration.initializer);
+        collect(declaration.init);
       }
     }
   }
@@ -772,45 +827,49 @@ const registryTables = (file: ts.SourceFile): ts.ObjectLiteralExpression[] => {
 };
 
 /** The identifier a registry value names: `task` or `createTask()`. */
-const valueIdentifier = (value: ts.Expression): string | null => {
+const valueIdentifier = (value: Expression): string | null => {
   const inner = unwrap(value);
-  if (ts.isIdentifier(inner)) {
-    return inner.text;
+  if (inner.type === "Identifier") {
+    return inner.name;
   }
-  return ts.isCallExpression(inner) && ts.isIdentifier(inner.expression)
-    ? inner.expression.text
+  return inner.type === "CallExpression" && inner.callee.type === "Identifier"
+    ? inner.callee.name
     : null;
 };
 
 type FunctionLike =
-  | ts.ArrowFunction
-  | ts.FunctionExpression
-  | ts.FunctionDeclaration;
-
-const isFunctionLike = (node: ts.Node): node is FunctionLike =>
-  ts.isArrowFunction(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isFunctionDeclaration(node);
-
-const enclosingFunction = (node: ts.Node): FunctionLike | undefined =>
-  ts.findAncestor(node.parent, isFunctionLike);
-
-/** The name a function is declared under, `const f = () => …` included. */
-const functionName = (fn: FunctionLike): string | null => {
-  if (ts.isFunctionDeclaration(fn)) {
-    return fn.name?.text ?? null;
+  | ArrowFunctionExpression
+  | (SyntaxFunction & { type: "FunctionDeclaration" | "FunctionExpression" });
+const isFunctionLike = (node: Node): node is FunctionLike =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionExpression" ||
+  node.type === "FunctionDeclaration";
+const enclosingFunction = (node: Node): FunctionLike | undefined => {
+  let parent = parents.get(node);
+  while (parent) {
+    if (isFunctionLike(parent)) {
+      return parent;
+    }
+    parent = parents.get(parent);
   }
-  return ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name)
-    ? fn.parent.name.text
+  return undefined;
+};
+const functionName = (fn: FunctionLike): string | null => {
+  if (fn.type === "FunctionDeclaration") {
+    return fn.id?.name ?? null;
+  }
+  const parent = parents.get(fn);
+  return parent?.type === "VariableDeclarator" &&
+    parent.id.type === "Identifier"
+    ? parent.id.name
     : null;
 };
-
 const parameterIndex = (fn: FunctionLike | undefined, name: string): number =>
   fn === undefined
     ? -1
-    : fn.parameters.findIndex(
+    : fn.params.findIndex(
         (parameter) =>
-          ts.isIdentifier(parameter.name) && parameter.name.text === name,
+          parameter.type === "Identifier" && parameter.name === name,
       );
 
 /**
@@ -821,9 +880,9 @@ const parameterIndex = (fn: FunctionLike | undefined, name: string): number =>
  * every boot call resolves to the same single module.
  */
 const injectedTaskModule = (
-  property: ts.PropertyAssignment,
+  property: ObjectProperty,
   value: string,
-  registry: { file: ts.SourceFile; path: string },
+  registry: { file: Program; path: string },
   readFile: AuditInput["readFile"],
 ): string | null => {
   const table = enclosingFunction(property);
@@ -833,19 +892,18 @@ const injectedTaskModule = (
     return null;
   }
   const factories: { name: string; position: number }[] = [];
-  for (const call of findNodes(registry.file, ts.isCallExpression)) {
+  for (const call of findNodes(registry.file, "CallExpression")) {
     const argument = call.arguments[position];
     if (
-      !ts.isIdentifier(call.expression) ||
-      call.expression.text !== tableName ||
-      argument === undefined ||
-      !ts.isIdentifier(argument)
+      call.callee.type !== "Identifier" ||
+      call.callee.name !== tableName ||
+      argument?.type !== "Identifier"
     ) {
       continue;
     }
     const caller = enclosingFunction(call);
     const callerName = caller === undefined ? null : functionName(caller);
-    const forwarded = parameterIndex(caller, argument.text);
+    const forwarded = parameterIndex(caller, argument.name);
     if (callerName !== null && forwarded >= 0) {
       factories.push({ name: callerName, position: forwarded });
     }
@@ -858,20 +916,23 @@ const injectedTaskModule = (
   const bootImports = namedImports(boot, SCHEDULER_BOOT_FILE);
   const bindings = importBindings(boot);
   const modules = new Set<string>();
-  for (const call of findNodes(boot, ts.isCallExpression)) {
+  for (const call of findNodes(boot, "CallExpression")) {
     if (
-      !ts.isIdentifier(call.expression) ||
-      bootImports.get(call.expression.text) !== registry.path
+      call.callee.type !== "Identifier" ||
+      bootImports.get(call.callee.name) !== registry.path
     ) {
       continue;
     }
-    const imported = bindings.get(call.expression.text)?.imported;
+    const imported = bindings.get(call.callee.name)?.imported;
     const factory = factories.find(({ name }) => name === imported);
     if (factory === undefined) {
       continue;
     }
     const argument = call.arguments[factory.position];
-    const supplied = argument === undefined ? null : valueIdentifier(argument);
+    const supplied =
+      argument === undefined || argument.type === "SpreadElement"
+        ? null
+        : valueIdentifier(argument);
     modules.add(
       (supplied === null ? undefined : bootImports.get(supplied)) ??
         SCHEDULER_BOOT_FILE,
@@ -904,14 +965,13 @@ const registeredTasks = (
   const errors: string[] = [];
   for (const table of registryTables(file)) {
     for (const property of table.properties) {
-      if (!ts.isPropertyAssignment(property)) {
+      if (!isPropertyAssignment(property)) {
         continue;
       }
-      const literal = propertyName(property.name);
+      const literal = property.computed ? null : propertyName(property.key);
       const keyConstant =
-        ts.isComputedPropertyName(property.name) &&
-        ts.isIdentifier(property.name.expression)
-          ? property.name.expression.text
+        property.computed && property.key.type === "Identifier"
+          ? property.key.name
           : null;
       const keyModule =
         keyConstant === null ? registryFile : imports.get(keyConstant);
@@ -922,32 +982,25 @@ const registeredTasks = (
           : constantString(readFile(keyModule) ?? "", keyConstant));
       if (name === null || keyModule === undefined) {
         errors.push(
-          `Scheduler registry key not resolvable to a task name: ${property.name.getText(file)}`,
+          `Scheduler registry key not resolvable to a task name: ${sourceTexts.get(property.key) ?? panic("Parsed property must have source text")}`,
         );
         continue;
       }
-      const initializer = unwrap(property.initializer);
-      const typedEntry = ts.isObjectLiteralExpression(initializer);
-      let value = valueIdentifier(property.initializer);
+      const initializer = unwrap(property.value);
+      const typedEntry = initializer.type === "ObjectExpression";
+      let value = valueIdentifier(property.value);
       if (typedEntry) {
         const taskProperty = initializer.properties.find(
           (entry) =>
-            (ts.isPropertyAssignment(entry) ||
-              ts.isShorthandPropertyAssignment(entry)) &&
-            propertyName(entry.name) === "task",
+            entry.type === "Property" &&
+            !entry.computed &&
+            !entry.method &&
+            entry.kind === "init" &&
+            propertyName(entry.key) === "task",
         );
         value = null;
-        if (
-          taskProperty !== undefined &&
-          ts.isPropertyAssignment(taskProperty)
-        ) {
-          value = valueIdentifier(taskProperty.initializer);
-        }
-        if (
-          taskProperty !== undefined &&
-          ts.isShorthandPropertyAssignment(taskProperty)
-        ) {
-          value = valueIdentifier(taskProperty.name);
+        if (taskProperty?.type === "Property") {
+          value = valueIdentifier(taskProperty.value);
         }
       }
       const imported = value === null ? undefined : imports.get(value);
@@ -1654,6 +1707,7 @@ const selfTestWorkerConstructors = (): string[] => {
     'const { Worker: RawWorker } = await import("bullmq"); new RawWorker("q", async () => {});',
     'const queues = await import("bullmq"); new queues.Worker("q", async () => {});',
     'const { Worker: RawWorker } = require("bullmq"); new RawWorker("q", async () => {});',
+    'const key = "Worker"; const { [key]: RawWorker } = await import("bullmq");',
   ]) {
     const errors = rawWorkerImports("apps/api/src/lib/w.ts", source);
     if (errors.length !== 1) {

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
 
@@ -41,6 +42,12 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  */
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
+  "bfdi-de": {
+    publisher: "BfDI",
+    intervalMs: 30_000,
+    hosts: ["www.bfdi.bund.de"],
+  },
+  "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
   "edpb-eu": {
     publisher: "European Data Protection Board",
     intervalMs: 1000,
@@ -188,6 +195,11 @@ export const PUBLISHER_GATES = {
     publisher: "Prezes UOKiK",
     intervalMs: 2000,
     hosts: ["decyzje.uokik.gov.pl"],
+  },
+  "fcl-uk": {
+    publisher: "Find Case Law",
+    intervalMs: 500,
+    hosts: ["caselaw.nationalarchives.gov.uk"],
   },
   /** eakta.birosag.hu. */
   "birosag-hu": {

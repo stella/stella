@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 import type { LoadedCatalogueResource } from "@stll/catalogue/install-payloads";
 import {
   hashSkillPackage,
-  validateSkillPackage,
   type SkillPackageDiagnostic,
+  validateSkillPackage,
 } from "@stll/skills";
 
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";

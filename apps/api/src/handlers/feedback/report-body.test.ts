@@ -4,16 +4,16 @@ import fc from "fast-check";
 import { FEEDBACK_AREAS, FEEDBACK_KINDS } from "@stll/api-contract/feedback";
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import { assertProperty } from "@stll/property-testing";
+import {
+  markdownLines,
+  readCodeSpans,
+  readFencedBlockAt,
+} from "@stll/property-testing/commonmark-code-oracle";
 
 import {
   composeGithubIssueBody,
   composeGithubIssueTitle,
 } from "@/api/handlers/feedback/report-body";
-import {
-  markdownLines,
-  readCodeSpans,
-  readFencedBlockAt,
-} from "@/api/tests/helpers/commonmark-code-oracle";
 
 const LINE_BREAK = /\r\n|\r|\n/gu;
 

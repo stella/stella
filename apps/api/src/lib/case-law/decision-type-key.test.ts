@@ -110,7 +110,7 @@ test("odd stored values from production read as their kind or, with a reason, th
     "wyciąg z protokołu": "minutes_extract",
     none: "other",
     jinak: "other",
-    "rozs.uzn": "other",
+    "rozs.uzn": "judgment",
     // A comma inside a listed type is not a joined list.
     "průzkum, rozbor a jiné materiály": "other",
   } as const;

@@ -12,6 +12,8 @@ const absentText = {
 const decision = {
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  caseFile: { items: [], nextCursor: null, limit: 50 },
+  citationCount: 0,
   citationsFrom: [],
   citationsNextCursor: null,
   citationsTo: [],

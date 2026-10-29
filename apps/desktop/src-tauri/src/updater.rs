@@ -1,8 +1,7 @@
 // Auto-updater wiring.
 //
-// The Tauri updater plugin only fetches `latest.json` and verifies
-// signatures; it doesn't decide *when* to check or *how* to surface
-// the result. This module owns those decisions:
+// The Tauri updater plugin fetches `latest.json`; this module owns bounded
+// package download, signature verification, scheduling, and user feedback:
 //
 // - On startup, run a delayed background check (so the launch path
 //   isn't blocked by network I/O).
@@ -14,20 +13,28 @@
 //   active, download + install + relaunch. The installer handles
 //   the binary swap; `crate::relaunch` owns the hand-over to the
 //   new binary.
+// - When an administrator set `DisableUpdates`, nothing checks: the
+//   organization deploys new versions itself.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
+use futures_util::StreamExt;
+use minisign_verify::{PublicKey, Signature};
+use reqwest::header::{ACCEPT, HeaderValue};
 use tauri::{AppHandle, async_runtime};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::Mutex;
 
+use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::session_manager::SessionManager;
 
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
 const WAKE_CHECK_TICK: Duration = Duration::from_secs(30);
+const MAX_UPDATE_PACKAGE_BYTES: usize = 256 * 1024 * 1024;
 static LAST_CHECK: AtomicU64 = AtomicU64::new(0);
 static CHECK_LOCK: Mutex<()> = Mutex::const_new(());
 
@@ -35,15 +42,21 @@ const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 // `Installed` means the exit of this process has been requested and
 // the relaunch is under way; callers must not schedule further work.
+// `Disabled` means managed policy turned in-app updates off.
 #[derive(Debug)]
 pub enum CheckOutcome {
   Deferred { version: String },
   UpToDate,
   Installed { version: String },
   Failed(String),
+  Disabled,
 }
 
 pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManager>>) {
+  if crate::managed_policy::current().updates_disabled {
+    tracing::info!("in-app updates are turned off by managed policy");
+    return;
+  }
   if let Some(path) = last_check_path() {
     match std::fs::read_to_string(path) {
       Ok(value) => match value.trim().parse() {
@@ -86,6 +99,7 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
         CheckOutcome::Failed(err) => {
           tracing::warn!(error = %err, "background updater check failed");
         }
+        CheckOutcome::Disabled => return,
       }
 
       tokio::time::sleep(WAKE_CHECK_TICK).await;
@@ -147,11 +161,16 @@ pub async fn check_on_handoff(
       tracing::warn!(%error, "handoff updater check failed");
       false
     }
-    CheckOutcome::Deferred { .. } | CheckOutcome::UpToDate => false,
+    CheckOutcome::Deferred { .. } | CheckOutcome::UpToDate | CheckOutcome::Disabled => {
+      false
+    }
   }
 }
 
 pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckOutcome {
+  if crate::managed_policy::current().updates_disabled {
+    return CheckOutcome::Disabled;
+  }
   // Startup, handoffs and tray actions cannot run installers concurrently.
   let _check = CHECK_LOCK.lock().await;
   record_check(unix_seconds(SystemTime::now()));
@@ -190,7 +209,17 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     &format!("Installing v{version}…"),
   );
 
-  if let Err(err) = crate::local_store::install_update(&update).await {
+  let package = match download_update_package(&update).await {
+    Ok(package) => package,
+    Err(err) => {
+      #[cfg(windows)]
+      crate::desktop_crash::resume_after_failed_update(handle);
+      notify(handle, "Stella update failed", &err);
+      return CheckOutcome::Failed(err);
+    }
+  };
+
+  if let Err(err) = crate::local_store::install_update(&update, &package) {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
     notify(handle, "Stella update failed", &err);
@@ -213,6 +242,124 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   CheckOutcome::Installed { version }
 }
 
+fn updater_public_key() -> Result<String, String> {
+  let config: serde_json::Value =
+    serde_json::from_str(include_str!("../tauri.conf.json"))
+      .map_err(|error| format!("Updater configuration is invalid: {error}"))?;
+  config
+    .pointer("/plugins/updater/pubkey")
+    .and_then(serde_json::Value::as_str)
+    .map(str::to_owned)
+    .ok_or_else(|| "Updater public key is missing".to_string())
+}
+
+fn decode_base64_text(value: &str) -> Result<String, String> {
+  let decoded = base64::engine::general_purpose::STANDARD
+    .decode(value)
+    .map_err(|error| format!("Updater signature encoding is invalid: {error}"))?;
+  String::from_utf8(decoded)
+    .map_err(|error| format!("Updater signature encoding is not UTF-8: {error}"))
+}
+
+fn signed_version(trusted_comment: &str) -> Option<&str> {
+  trusted_comment
+    .split('\t')
+    .find_map(|field| field.strip_prefix("version:"))
+}
+
+fn verify_update_package(
+  package: &[u8],
+  signature: &str,
+  announced_version: &str,
+) -> Result<(), String> {
+  verify_signed_package(
+    &updater_public_key()?,
+    package,
+    signature,
+    announced_version,
+  )
+}
+
+/// Verifies `package` against `public_key` and requires the signature's
+/// trusted comment to bind `announced_version`.
+fn verify_signed_package(
+  public_key: &str,
+  package: &[u8],
+  signature: &str,
+  announced_version: &str,
+) -> Result<(), String> {
+  let public_key = PublicKey::decode(&decode_base64_text(public_key)?)
+    .map_err(|error| format!("Updater public key is invalid: {error}"))?;
+  let signature = Signature::decode(&decode_base64_text(signature)?)
+    .map_err(|error| format!("Updater signature is invalid: {error}"))?;
+  public_key
+    .verify(package, &signature, true)
+    .map_err(|error| format!("Updater signature verification failed: {error}"))?;
+  let signed = signed_version(signature.trusted_comment())
+    .ok_or_else(|| "Updater signature does not bind a release version".to_string())?;
+  if signed.trim_start_matches('v') != announced_version.trim_start_matches('v') {
+    return Err(
+      "Updater signature version does not match the announced release".to_string(),
+    );
+  }
+  Ok(())
+}
+
+fn checked_update_size(current: usize, chunk: usize) -> Result<usize, String> {
+  let next = current
+    .checked_add(chunk)
+    .ok_or_else(|| "Update package size overflowed".to_string())?;
+  if next > MAX_UPDATE_PACKAGE_BYTES {
+    return Err(format!(
+      "Update package exceeds the {MAX_UPDATE_PACKAGE_BYTES} byte limit"
+    ));
+  }
+  Ok(next)
+}
+
+async fn download_update_package(
+  update: &tauri_plugin_updater::Update,
+) -> Result<Vec<u8>, String> {
+  let mut headers = update.headers.clone();
+  if !headers.contains_key(ACCEPT) {
+    headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
+  }
+  let client = DesktopHttpClient::new(HttpClientOptions {
+    timeout: update.timeout,
+    redirect: reqwest::redirect::Policy::default(),
+  })
+  .map_err(|error| format!("Updater client failed: {error}"))?;
+  let response = client
+    .get(update.download_url.clone())
+    .headers(headers)
+    .send()
+    .await
+    .map_err(|error| format!("Update download failed: {error}"))?;
+  if !response.status().is_success() {
+    return Err(format!(
+      "Update download returned HTTP {}",
+      response.status().as_u16()
+    ));
+  }
+  if let Some(content_length) = response.content_length()
+    && content_length > MAX_UPDATE_PACKAGE_BYTES as u64
+  {
+    return Err(format!(
+      "Update package exceeds the {MAX_UPDATE_PACKAGE_BYTES} byte limit"
+    ));
+  }
+
+  let mut package = Vec::new();
+  let mut stream = response.bytes_stream();
+  while let Some(chunk) = stream.next().await {
+    let chunk = chunk.map_err(|error| format!("Update download failed: {error}"))?;
+    checked_update_size(package.len(), chunk.len())?;
+    package.extend_from_slice(&chunk);
+  }
+  verify_update_package(&package, &update.signature, &update.version)?;
+  Ok(package)
+}
+
 fn notify(handle: &AppHandle, title: &str, body: &str) {
   if let Err(err) = handle
     .notification()
@@ -228,6 +375,86 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn update_package_limit_accepts_the_boundary_and_rejects_one_more_byte() {
+    assert_eq!(
+      checked_update_size(0, MAX_UPDATE_PACKAGE_BYTES),
+      Ok(MAX_UPDATE_PACKAGE_BYTES)
+    );
+    assert!(checked_update_size(MAX_UPDATE_PACKAGE_BYTES, 1).is_err());
+    assert!(checked_update_size(usize::MAX, 1).is_err());
+  }
+
+  // A throwaway test key (its private half was never kept) and the package it
+  // signed with `tauri signer sign --app-version 1.2.3`, as releases sign.
+  const FIXTURE_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUzRDQ5QjAyMDBEQTQ3NUMKUldSY1I5b0FBcHZVNDg0WW9OemxmZXo5ZGpFbm9KNkRiaDF0MWhNNmxBaG5abVBUNEN4d1BPQTUK";
+  const FIXTURE_PACKAGE: &[u8] = b"stella updater fixture package";
+  const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSY1I5b0FBcHZVNDMyZER3QWpQaDE5OU5YZHZuTk9QRC91ajVKTVY4UmlKbzJzSWhNVk1sRjBTNlFUN0NDUHhEMnBIWENrY1V3aGxMT3RMMHA5ang0RnIvaWlZeVdkOGdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyOTE4MzMxCWZpbGU6cGFja2FnZS5iaW4JdmVyc2lvbjoxLjIuMwp1ZzZySHRaa0Q3UzlwYlRVd0w2RnFxRmRZMnNxL2o5SUpKRmg5dFc1dVA3VzJSQ0w0VlBZTjBqbS9LUHdoVUk3OWZacDRBRnJHYjNSbStDNWk2UktBZz09Cg==";
+
+  #[test]
+  fn a_package_signed_for_the_announced_version_verifies() {
+    assert_eq!(
+      verify_signed_package(
+        FIXTURE_PUBLIC_KEY,
+        FIXTURE_PACKAGE,
+        FIXTURE_SIGNATURE,
+        "1.2.3"
+      ),
+      Ok(())
+    );
+    assert_eq!(
+      verify_signed_package(
+        FIXTURE_PUBLIC_KEY,
+        FIXTURE_PACKAGE,
+        FIXTURE_SIGNATURE,
+        "v1.2.3"
+      ),
+      Ok(())
+    );
+  }
+
+  #[test]
+  fn a_package_changed_after_signing_is_refused() {
+    let mut tampered = FIXTURE_PACKAGE.to_vec();
+    tampered[0] ^= 1;
+    let refused =
+      verify_signed_package(FIXTURE_PUBLIC_KEY, &tampered, FIXTURE_SIGNATURE, "1.2.3");
+    assert!(
+      refused
+        .as_ref()
+        .is_err_and(|error| error.starts_with("Updater signature verification failed")),
+      "{refused:?}"
+    );
+  }
+
+  #[test]
+  fn a_signature_for_another_version_is_refused() {
+    assert_eq!(
+      verify_signed_package(
+        FIXTURE_PUBLIC_KEY,
+        FIXTURE_PACKAGE,
+        FIXTURE_SIGNATURE,
+        "1.2.4"
+      ),
+      Err("Updater signature version does not match the announced release".to_string())
+    );
+  }
+
+  #[test]
+  fn the_release_public_key_is_configured_and_decodes() {
+    let key = updater_public_key().expect("updater public key");
+    assert!(PublicKey::decode(&decode_base64_text(&key).expect("base64 key")).is_ok());
+  }
+
+  #[test]
+  fn signed_version_requires_an_explicit_version_field() {
+    assert_eq!(
+      signed_version("timestamp:1\tversion:v1.2.3"),
+      Some("v1.2.3")
+    );
+    assert_eq!(signed_version("timestamp:1"), None);
+  }
 
   #[test]
   fn presence_task_is_started_independently_of_updater_work() {

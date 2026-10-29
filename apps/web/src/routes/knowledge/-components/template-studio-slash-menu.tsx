@@ -20,7 +20,6 @@ import {
   getTemplateSlashMenu,
   resetTemplateSlashQuery,
 } from "@stll/folio-react";
-import { isSafeFieldPath } from "@stll/template-conditions";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
@@ -45,22 +44,25 @@ import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
-  conditionOpenTag,
   CONDITION_CLOSE_TAG,
+  conditionOpenTag,
   fieldMarker,
 } from "@/routes/knowledge/-components/template-markers";
+import { slugify } from "@/routes/knowledge/-components/template-studio-model";
 import {
-  sanitizeFieldPath,
-  slugify,
-} from "@/routes/knowledge/-components/template-studio-model";
+  buildSlashRootItems,
+  matchingSlashFields,
+  type SlashRootItem,
+} from "@/routes/knowledge/-components/template-studio-search.logic";
 import {
-  useTemplateStudioStore,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 
 // Marker shapes the menu shows as a hint badge or a preview: document
@@ -153,7 +155,6 @@ const SLASH_MENU_PREVIEW_WIDTH_PX = 256 + 9;
 const SLASH_MENU_WIDTH_PX =
   SLASH_MENU_LIST_WIDTH_PX + SLASH_MENU_PREVIEW_WIDTH_PX;
 const SLASH_MENU_PREVIEW_BREAKPOINT_PX = 640;
-const SLASH_MENU_MAX_FIELDS = 50;
 const SLASH_MENU_CLAUSE_LIMIT = 50;
 
 /** Frames to wait for the browser to lay out a freshly moved caret. */
@@ -194,13 +195,6 @@ type SlashMenu = {
 
 type SlashView = "root" | "fields" | "clauses";
 
-type SlashRootItem =
-  | { kind: "create-field"; path: string }
-  | { kind: "create-condition" }
-  | { kind: "field"; path: string; label: string }
-  | { kind: "open-fields" }
-  | { kind: "open-clauses" };
-
 type SlashClause = {
   id: string;
   title: string;
@@ -212,85 +206,6 @@ type SlashRows =
   | { view: "root"; items: SlashRootItem[] }
   | { view: "fields"; items: StudioField[] }
   | { view: "clauses"; items: SlashClause[] };
-
-const createFieldPathFromQuery = (trimmed: string): string => {
-  if (trimmed === "") {
-    return "field";
-  }
-  if (isSafeFieldPath(trimmed)) {
-    return trimmed;
-  }
-  const sanitized = sanitizeFieldPath(trimmed);
-  return isSafeFieldPath(sanitized) ? sanitized : "field";
-};
-
-const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
-  let path = base;
-  for (let n = 2; fields.some((field) => field.path === path); n++) {
-    path = `${base}_${n}`;
-  }
-  return path;
-};
-
-const buildSlashRootItems = (
-  query: string,
-  fields: StudioField[],
-): SlashRootItem[] => {
-  const trimmed = query.trim();
-  const needle = trimmed.toLowerCase();
-  const matches = (...keywords: string[]): boolean =>
-    keywords.some((keyword) => keyword.includes(needle));
-
-  if (trimmed === "") {
-    const items: SlashRootItem[] = [
-      { kind: "create-field", path: uniqueFieldPath("field", fields) },
-      { kind: "create-condition" },
-    ];
-    if (fields.length > 0) {
-      items.push({ kind: "open-fields" });
-    }
-    items.push({ kind: "open-clauses" });
-    return items;
-  }
-
-  const createPath = createFieldPathFromQuery(trimmed);
-  const reuseExact = fields.some((field) => field.path === createPath);
-  const items: SlashRootItem[] = matchingSlashFields(query, fields).map(
-    (field) => ({
-      kind: "field" as const,
-      path: field.path,
-      label: field.label === "" ? field.path : field.label,
-    }),
-  );
-  if (matches("clause")) {
-    items.push({ kind: "open-clauses" });
-  }
-  if (matches("condition", "if")) {
-    items.push({ kind: "create-condition" });
-  }
-  if (!reuseExact) {
-    items.push({ kind: "create-field", path: createPath });
-  }
-  return items;
-};
-
-const matchingSlashFields = (
-  query: string,
-  fields: StudioField[],
-): StudioField[] => {
-  const needle = query.trim().toLowerCase();
-  const matches = (field: StudioField): boolean => {
-    if (needle === "") {
-      return true;
-    }
-    const label = field.label === "" ? field.path : field.label;
-    return (
-      field.path.toLowerCase().includes(needle) ||
-      label.toLowerCase().includes(needle)
-    );
-  };
-  return fields.filter(matches).slice(0, SLASH_MENU_MAX_FIELDS);
-};
 
 const slashRowCount = (
   view: SlashView,
@@ -357,8 +272,8 @@ export const useTemplateStudioSlashMenu = ({
     }),
     enabled: slashClausesEnabled,
   });
-  const slashClauseDataView = useQueryView(slashClauseDataQuery);
-  useQueryViewError(slashClauseDataView);
+  const slashClauseDataView = queryView(slashClauseDataQuery);
+  useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
   const slashClauseData =
     slashClauseDataView.type === "items"
       ? slashClauseDataView.items

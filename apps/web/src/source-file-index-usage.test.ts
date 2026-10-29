@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import * as ts from "typescript";
 
 import {
   containsJsxTag,
   sourceFileIndex,
 } from "@stll/scripts/src/source-file-index";
+import { walk } from "@stll/scripts/src/syntax-tree";
 
 const SOURCE_ROOT = import.meta.dirname;
 const DIRECT_GLOB = ["new Bun.", "Glob"].join("");
@@ -37,14 +37,13 @@ test("repository inventory JSX prefilters accept every file containing JSX", () 
   }
 
   let containsJsxElement = false;
-  const visit = (node: ts.Node) => {
-    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+  walk(fixture.sourceFile().program, (node) => {
+    if (node.type === "JSXElement") {
       containsJsxElement = true;
-      return;
+      return "skip-children";
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(fixture.sourceFile(false));
+    return undefined;
+  });
 
   expect(containsJsxElement).toBe(true);
   expect(fixture.sourceText).not.toMatch(/<[A-Za-z_$]/u);

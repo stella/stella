@@ -1,9 +1,6 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
-import { entities, extractedContent, workspaces } from "@/api/db/schema";
 import {
   buildPrefillTargets,
   mapPrefillResults,
@@ -13,7 +10,9 @@ import type {
   PrefillSuggestion,
   PrefillTarget,
 } from "@/api/handlers/templates/prefill-fields";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -23,15 +22,15 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { decryptContent } from "@/api/lib/content-encryption";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
+import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -42,6 +41,7 @@ import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_PASTED_TEXT_CHARS = 100_000;
@@ -50,23 +50,15 @@ const MAX_CHARS_PER_SOURCE = 30_000;
 const MAX_TOTAL_SOURCE_CHARS = 90_000;
 const PREFILL_TIMEOUT_MS = 60_000;
 
-const prefillParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const prefillParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
-const prefillBodySchema = t.Object({
-  /** One uploaded source document (DOCX or PDF); the server extracts the
-   *  text — clients never extract anything. */
-  file: t.Optional(t.File({ maxSize: FILE_SIZE_LIMITS.document })),
-  /** Pasted source text. */
-  text: t.Optional(t.String({ maxLength: MAX_PASTED_TEXT_CHARS })),
-  /** JSON-encoded array of entity ids whose stored extracted text should be
-   *  used as sources (documents picked from a matter). String-encoded
-   *  because the body is multipart when a file is attached. */
-  entityIds: t.Optional(t.String({ maxLength: 2000 })),
-  /** Caller's IANA time zone, used to anchor "today" in the prompt to the
-   *  user's calendar day rather than the server's UTC day. */
-  timezone: t.Optional(t.String({ maxLength: 64 })),
+const prefillBodySchema = v.object({
+  file: v.optional(fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document })),
+  text: v.optional(v.pipe(v.string(), v.maxLength(MAX_PASTED_TEXT_CHARS))),
+  entityIds: v.optional(v.pipe(v.string(), v.maxLength(2000))),
+  timezone: v.optional(v.pipe(v.string(), v.maxLength(64))),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output
@@ -148,6 +140,7 @@ const extractFieldValues = async ({
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
   const { fields } = await generateTanStackObjectForTask({
+    userId: admission.userId,
     dataClass: "customer",
     admission,
     task: "short-text",
@@ -237,8 +230,13 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
+    getActiveWorkspaceIds,
     user,
   } = ctx;
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError(undefined));
+  }
+
   const organizationId = session.activeOrganizationId;
 
   yield* requireTanStackAIAvailableForTask({
@@ -328,64 +326,28 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     }
 
     if (entityIds.length > 0) {
-      // Stored extracted text (the search pipeline's output), scoped to the
-      // caller's organization and accessible workspaces — the same gate the
-      // chat document tools apply.
-      const contentRows = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({
-              ciphertext: extractedContent.ciphertext,
-              iv: extractedContent.iv,
-              name: entities.name,
-            })
-            .from(extractedContent)
-            .innerJoin(
-              entities,
-              and(
-                eq(entities.id, extractedContent.entityId),
-                eq(entities.workspaceId, extractedContent.workspaceId),
-              ),
-            )
-            .innerJoin(
-              workspaces,
-              eq(workspaces.id, extractedContent.workspaceId),
-            )
-            .where(
-              and(
-                inArray(extractedContent.entityId, entityIds),
-                eq(extractedContent.organizationId, organizationId),
-                ne(workspaces.status, "deleting"),
-              ),
-            )
-            // One extractedContent row per entity, and entityIds is capped at
-            // MAX_PICKED_ENTITIES above, so the result set stays bounded.
-            .limit(MAX_PICKED_ENTITIES),
-        ),
+      const workspaceIds = yield* Result.await(
+        Result.tryPromise(async () => await getActiveWorkspaceIds()),
       );
-
-      const decrypted = yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await Promise.all(
-              contentRows.map(async (row) => ({
-                label: row.name,
-                text: await decryptContent(
-                  organizationId,
-                  row.ciphertext,
-                  row.iv,
-                ),
-              })),
-            ),
-          catch: (cause) =>
-            new HandlerError({
-              status: 500,
-              message: "Failed to read the selected documents",
-              cause,
-            }),
+      const contentRows = yield* Result.await(
+        safeDb(async (tx) => {
+          const permittedWorkspaceIds = (
+            await authorizedWorkspaceIds(tx, {
+              organizationId,
+              workspaceIds,
+            })
+          ).unwrap("The scoped workspace authorization read must succeed");
+          return await loadCurrentExtractedContents(tx, {
+            entityIds,
+            organizationId,
+            workspaceIds: permittedWorkspaceIds,
+          });
         }),
       );
-      sources.push(...decrypted);
+
+      sources.push(
+        ...contentRows.map((row) => ({ label: row.name, text: row.text })),
+      );
     }
   }
 

@@ -54,6 +54,7 @@ const coordination = ({
         acquisitions += 1;
         throw new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Coordination offline",
         });
       }
@@ -65,7 +66,7 @@ const coordination = ({
           acquisitions += 1;
         }
         if (acquire && (mode === "busy" || active.size >= userConcurrency)) {
-          return 0;
+          return [0, 1000];
         }
         const counted = args.at(1) === "3";
         if (counted) {
@@ -148,7 +149,11 @@ describe("chat execution admission owns settlement independently of transport re
       daily_exhausted: "daily_exhausted",
       not_enabled: "not_enabled",
       not_on_plan: "not_on_plan",
-      unavailable: "unavailable",
+      store_unavailable: "store_unavailable",
+      configuration_incomplete: "configuration_incomplete",
+      organization_state_unreadable: "organization_state_unreadable",
+      lease_lost: "lease_lost",
+      feature_disabled: "feature_disabled",
     } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
     const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
     try {
@@ -493,7 +498,7 @@ describe("chat execution admission owns settlement independently of transport re
         const code =
           mode === "busy"
             ? ACTION_ADMISSION_CODES.concurrencyBusy
-            : ACTION_ADMISSION_CODES.admissionUnavailable;
+            : ACTION_ADMISSION_CODES.storeUnavailable;
         const refusal = ACTION_ADMISSION_REFUSALS[code];
         expect(acquired.error).toMatchObject({
           code,

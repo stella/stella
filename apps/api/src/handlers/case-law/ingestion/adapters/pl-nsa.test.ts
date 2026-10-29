@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 /**
  * pl-nsa against rows the dataset serves.
@@ -25,6 +33,7 @@ import {
   encodePlNsaCursor,
   normalizePlNsaRow,
   parsePlNsaCursor,
+  PL_NSA_UNSTATED_COURT,
   plNsaAdapter,
   plNsaCourt,
   plNsaDecisionKind,
@@ -32,7 +41,6 @@ import {
   plNsaDocketRangeMembers,
   plNsaIdentityOf,
   plNsaQuarantineId,
-  PL_NSA_UNSTATED_COURT,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import type { PlNsaDecisionKind } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import {
@@ -191,6 +199,11 @@ type ExpectedClassification = {
   branch?: string;
   finality?: string;
 };
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("the recorded dataset rows", () => {
   test("every row builds, keyed by the portal's own document id", async () => {

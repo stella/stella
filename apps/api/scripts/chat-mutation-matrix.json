@@ -35,7 +35,7 @@
       "id": "unknown-activities-are-observed",
       "behaviour": "Unknown activity renderers report one structural client telemetry error without displaying internal data.",
       "file": "../web/src/components/chat/chat-thread-messages.tsx",
-      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n    );",
+      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n      {\n        fingerprintKey: \"UnknownChatActivity:ClientTelemetryError\",\n        scope: {\n          type: \"handler\",\n          handlerId: \"UnknownChatActivity:ClientTelemetryError\",\n        },\n      },\n    );",
       "replace": "    return;",
       "scenario": {
         "file": "../web/src/components/chat/chat-activity-part.dom.test.tsx",
@@ -1206,6 +1206,20 @@
         "test": "keeps a completed turn completed when a follow-up throws"
       },
       "oracle": "chat.persisted.turn-outcome"
+    },
+    {
+      "id": "cut-off-call-reaches-engine-with-object-arguments",
+      "fix": "maintenance",
+      "behaviour": "A call stopped while its input streamed is handed to the provider on later requests with a JSON object as its arguments, never the partial text that had arrived.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    ).map(withEngineArguments);",
+      "replace": "    );",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-transcripts.integration.test.ts",
+        "test": "openai: interrupt-mid-tool"
+      },
+      "oracle": "chat.provider-wire.outbound"
     }
   ]
 }

@@ -47,8 +47,8 @@ import type {
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -218,6 +218,7 @@ const buildProposalRequest = ({
   return {
     analytics,
     options: {
+      userId: admission.userId,
       dataClass: "customer" as const,
       task: MODEL_TASK,
       orgAIConfig,

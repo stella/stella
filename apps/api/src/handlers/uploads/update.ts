@@ -1,3 +1,29 @@
+import { panic, Result } from "better-result";
+import type { Err } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { sha256Base64ToHex } from "@stll/sha256";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { pendingUploads } from "@/api/db/schema";
+import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
+import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
+import {
+  authorizeUploadConsent,
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
+import { captureError } from "@/api/lib/analytics/capture";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 /**
  * Finalize a presigned upload. Runs the claim FSM, verifies what
  * the client uploaded against what they declared, scans the bytes,
@@ -17,31 +43,7 @@
  * can re-claim it because both `claimed_at` and the row's status
  * are atomically compared in the WHERE.
  */
-import { Result, panic } from "better-result";
-import type { Err } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
-
-import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
-import { sha256Base64ToHex } from "@stll/sha256";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
-
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { pendingUploads } from "@/api/db/schema";
-import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
-import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
-import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
-import { captureError } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
@@ -50,11 +52,12 @@ import {
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
-import { headObject } from "@/api/lib/s3-presign";
+import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
@@ -67,7 +70,7 @@ import {
 } from "@/api/lib/uploads/runtime";
 
 const finalizeParamsSchema = workspaceParams({
-  uploadId: tSafeId("pendingUpload"),
+  uploadId: resourceIdSchema("pendingUpload"),
 });
 
 const config = {
@@ -98,6 +101,8 @@ const config = {
 } satisfies WorkspaceHandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
+
+const UPLOAD_FINALIZE_DEADLINE_PASSED = "Upload finalize deadline passed";
 
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
@@ -189,6 +194,13 @@ const finalizeUpload = createSafeHandler(
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
+    }
+    const consent = authorizeUploadConsent({
+      grantedScopes: session.grantedScopes,
+      purpose: pending.purpose,
+    });
+    if (Result.isError(consent)) {
+      return Result.err(consent.error);
     }
     // A finished upload answers with its stored result at once; only work
     // that still has to read the file waits for capacity.
@@ -326,7 +338,7 @@ const claimAndFinalize = async function* ({
           .update(pendingUploads)
           .set({
             status: "rejected",
-            rejectReason: "Upload URL expired",
+            rejectReason: UPLOAD_FINALIZE_DEADLINE_PASSED,
             finalizedAt: new Date(),
           })
           .where(
@@ -347,7 +359,10 @@ const claimAndFinalize = async function* ({
     );
     if (expiredRows.at(0)) {
       return Result.err(
-        new HandlerError({ status: 422, message: "Upload URL expired" }),
+        new HandlerError({
+          status: 422,
+          message: UPLOAD_FINALIZE_DEADLINE_PASSED,
+        }),
       );
     }
     return Result.err(
@@ -458,17 +473,25 @@ type StagedUploadObject = {
   tmpKey: string;
 };
 
+/**
+ * The staged object under its scoped key, else under the legacy key. Absent
+ * only when the store confirms both keys are empty: a store that failed to
+ * answer for either key leaves the question open.
+ */
 const resolveStagedUploadObject = async ({
   organizationId,
   uploadId,
   workspaceId,
 }: StagedUploadKeyProps): Promise<
-  Result<StagedUploadObject, S3PresignError>
+  Result<StagedUploadObject, S3ObjectMissingError | S3PresignError>
 > => {
   const scopedTmpKey = tmpUploadKey({ organizationId, uploadId, workspaceId });
   const scopedHead = await headObject(scopedTmpKey);
   if (Result.isOk(scopedHead)) {
     return Result.ok({ head: scopedHead.value, tmpKey: scopedTmpKey });
+  }
+  if (!S3ObjectMissingError.is(scopedHead.error)) {
+    return Result.err(scopedHead.error);
   }
 
   const legacyTmpKey = legacyTmpUploadKey(uploadId);
@@ -476,8 +499,7 @@ const resolveStagedUploadObject = async ({
   if (Result.isOk(legacyHead)) {
     return Result.ok({ head: legacyHead.value, tmpKey: legacyTmpKey });
   }
-
-  return Result.err(scopedHead.error);
+  return Result.err(legacyHead.error);
 };
 
 const deleteStagedUploadObjects = async ({
@@ -485,13 +507,39 @@ const deleteStagedUploadObjects = async ({
   stage,
   uploadId,
   workspaceId,
-}: StagedUploadKeyProps & { stage: string }) => {
+}: StagedUploadKeyProps & { stage: "tmp-cleanup-after-reject" }) => {
   for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>
-        captureError(deleteError, { key, stage, uploadId }),
+        captureError(
+          deleteError,
+          handlerErrorContext(`uploads.cleanup.${stage}`, {
+            key,
+            stage,
+            uploadId,
+          }),
+        ),
       );
+  }
+};
+
+const observePostPromotion = async (
+  afterPromote: () => void,
+  uploadId: SafeId<"pendingUpload">,
+) => {
+  const postPromoteResult = await Result.tryPromise(async () => {
+    afterPromote();
+    await Promise.resolve();
+  });
+  if (Result.isError(postPromoteResult)) {
+    captureError(
+      postPromoteResult.error,
+      handlerErrorContext("uploads.runFinalize.postPromoteResult_error", {
+        uploadId,
+        stage: "post-promote",
+      }),
+    );
   }
 };
 
@@ -526,12 +574,21 @@ const runFinalize = async function* ({
     workspaceId,
   });
   if (Result.isError(stagedObject)) {
+    // Only a confirmed absence is terminal. Any other storage failure keeps
+    // the row retryable (status 500 marks it `failed`) and the staged bytes
+    // in place, so the next finalize after the claim cool-down reads them.
     return Result.err(
-      new UploadFinalizeError({
-        status: 404,
-        message: "Upload not found in staging — URL likely expired",
-        rejectReason: "tmp-head-failed",
-      }),
+      S3ObjectMissingError.is(stagedObject.error)
+        ? new UploadFinalizeError({
+            status: 404,
+            message: "Upload not found in staging",
+            rejectReason: "tmp-missing",
+          })
+        : new UploadFinalizeError({
+            status: 500,
+            message: "Upload storage is unavailable; retry shortly",
+            rejectReason: "tmp-head-failed",
+          }),
     );
   }
   const { head, tmpKey } = stagedObject.value;
@@ -558,9 +615,14 @@ const runFinalize = async function* ({
   }
 
   // 3. Download for scan.
-  const fileBuffer = await readS3ArrayBuffer(tmpKey);
+  const uploadBytes = await readS3ObjectBounded({
+    bucket: envBase.S3_BUCKET,
+    key: tmpKey,
+    maxBytes: claimed.declaredSize,
+    signal: AbortSignal.timeout(FINALIZE_CLAIM_TIMEOUT_MS),
+  });
   if (!head.checksumSHA256) {
-    const uploadedSha256 = hashSha256Hex(new Uint8Array(fileBuffer));
+    const uploadedSha256 = hashSha256Hex(uploadBytes);
     if (uploadedSha256 !== claimed.declaredSha256) {
       return Result.err(
         new UploadFinalizeError({
@@ -574,7 +636,8 @@ const runFinalize = async function* ({
 
   // 4. Scan — same pipeline the legacy upload handler ran inline.
   const scanResult = await scanUpload({
-    bytes: fileBuffer,
+    bytes: uploadBytes,
+    ownership: "transfer",
     declaredMimeType: claimed.declaredMime,
     fileName: claimed.declaredName,
   });
@@ -596,6 +659,7 @@ const runFinalize = async function* ({
     );
   }
   const scanned = scanResult.value;
+  const fileBuffer = scanned.bytes;
   const scanWarnings = scanned.scanWarnings ?? undefined;
 
   // 4b. Reference removal, after the scan judged what the client actually
@@ -690,26 +754,20 @@ const runFinalize = async function* ({
 
   const afterPromote = purposeOk.value.afterPromote;
   if (afterPromote) {
-    const postPromoteResult = await Result.tryPromise(async () => {
-      afterPromote();
-      await Promise.resolve();
-    });
-    if (Result.isError(postPromoteResult)) {
-      captureError(postPromoteResult.error, {
-        uploadId: claimed.id,
-        stage: "post-promote",
-      });
-    }
+    await observePostPromotion(afterPromote, claimed.id);
   }
 
   // 6. Tmp cleanup. Bucket lifecycle catches anything we miss.
   await getS3()
     .delete(tmpKey)
     .catch((deleteError: unknown) =>
-      captureError(deleteError, {
-        uploadId: claimed.id,
-        stage: "tmp-cleanup-after-promote",
-      }),
+      captureError(
+        deleteError,
+        handlerErrorContext("uploads.runFinalize.deleteError", {
+          uploadId: claimed.id,
+          stage: "tmp-cleanup-after-promote",
+        }),
+      ),
     );
 
   return Result.ok({ finalizedResult: purposeOk.value.finalizedResult });

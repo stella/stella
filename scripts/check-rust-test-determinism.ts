@@ -19,8 +19,8 @@ import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 import { isRecord, matches } from "./oxlint-config-scopes.ts";
 import {
   findRustExternalModules,
-  scanRustTestDeterminism,
   type RustTestDeterminismHit,
+  scanRustTestDeterminism,
 } from "./rust-test-determinism-scan.ts";
 
 export const RUST_TEST_DISCOVERY_INPUTS = {

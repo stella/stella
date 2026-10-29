@@ -9,6 +9,7 @@
 use std::time::Duration;
 
 const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
+const LOCAL_CLIENT_IDENTITY_HEADER: &str = "x-stella-local-client";
 
 #[derive(Default)]
 pub struct HttpClientOptions {
@@ -29,6 +30,13 @@ impl DesktopHttpClient {
     )]
     let mut builder = reqwest::Client::builder()
       .user_agent(DESKTOP_HTTP_USER_AGENT)
+      .default_headers(reqwest::header::HeaderMap::from_iter([(
+        reqwest::header::HeaderName::from_static(LOCAL_CLIENT_IDENTITY_HEADER),
+        reqwest::header::HeaderValue::from_static(concat!(
+          "desktop/",
+          env!("CARGO_PKG_VERSION")
+        )),
+      )]))
       .redirect(options.redirect)
       // Application retry owners rebuild possession proofs for each attempt.
       .retry(reqwest::retry::never());
@@ -87,13 +95,15 @@ pub(crate) fn device_proof_request(
     None => builder,
   };
   let (client, request) = builder.build_split();
-  let mut request = request.map_err(|_| "Could not build desktop account request")?;
+  let mut request = request.map_err(crate::logging::request_cause_logged(
+    "Could not build desktop account request",
+  ))?;
   let proof = key.proof(&request, bearer, nonce)?;
   request.headers_mut().insert(
     "DPoP",
-    proof
-      .parse()
-      .map_err(|_| "Could not encode desktop device proof")?,
+    proof.parse().map_err(crate::logging::with_cause_logged(
+      "Could not encode desktop device proof",
+    ))?,
   );
   Ok(DeviceProofRequest { client, request })
 }
@@ -104,7 +114,9 @@ pub(crate) fn unsigned_request(
   let (client, request) = builder.build_split();
   Ok(DeviceProofRequest {
     client,
-    request: request.map_err(|_| "Could not build desktop request")?,
+    request: request.map_err(crate::logging::request_cause_logged(
+      "Could not build desktop request",
+    ))?,
   })
 }
 

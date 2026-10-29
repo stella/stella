@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
+import { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -21,7 +22,6 @@ import type {
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import {
-  SELLER_PROFILE_FIELDS,
   SELLER_PROFILE_LIMITS,
   sellerProfileFormSchema,
 } from "./seller-profile-form.logic";
@@ -29,7 +29,10 @@ import {
 const FIELD_LABELS = {
   legalName: "billing.sellerProfiles.legalName",
   registrationId: "billing.sellerProfiles.registrationId",
-  vatId: "billing.sellerProfiles.vatId",
+  taxId: "common.taxId",
+  vatId: "common.vatId",
+  registerEntry: "billing.sellerProfiles.registerEntry",
+  barRegistration: "billing.sellerProfiles.barRegistration",
   addressLine1: "contacts.importStudio.fields.address_line_1",
   addressLine2: "contacts.importStudio.fields.address_line_2",
   city: "contacts.fields.billingAddressCity",
@@ -72,22 +75,7 @@ export const SellerProfileForm = ({
     schemaFormOptions({
       schema,
       submitValues: "schema-output",
-      defaultValues: {
-        legalName: profile?.legalName ?? "",
-        registrationId: profile?.registrationId ?? "",
-        vatId: profile?.vatId ?? "",
-        vatPayer: profile?.vatPayer ?? false,
-        addressLine1: profile?.addressLine1 ?? "",
-        addressLine2: profile?.addressLine2 ?? "",
-        city: profile?.city ?? "",
-        postalCode: profile?.postalCode ?? "",
-        country: profile?.country ?? "",
-        iban: profile?.iban ?? "",
-        bic: profile?.bic ?? "",
-        accountNumber: profile?.accountNumber ?? "",
-        defaultCurrency: profile?.defaultCurrency ?? DEFAULT_CURRENCY,
-        footerNotes: profile?.footerNotes ?? "",
-      },
+      defaultValues: sellerProfileDefaults(profile),
       onSubmit: async ({ value }) => {
         if (pending) {
           return;
@@ -122,7 +110,7 @@ export const SellerProfileForm = ({
           className="grid min-w-0 gap-4 sm:grid-cols-2"
           disabled={disabled}
         >
-          {SELLER_PROFILE_FIELDS.map((name) => (
+          {SELLER_PROFILE_TEXT_FIELDS.map((name) => (
             <form.Field key={name} name={name}>
               {(field) => (
                 <Field
@@ -182,7 +170,7 @@ export const SellerProfileForm = ({
                   />
                   <div className="flex flex-col gap-0.5">
                     <FieldLabel htmlFor={`${id}-vatPayer`}>
-                      {t("billing.sellerProfiles.vatPayer")}
+                      {t("common.vatPayer")}
                     </FieldLabel>
                     <span
                       className="text-muted-foreground text-xs"
@@ -213,3 +201,31 @@ export const SellerProfileForm = ({
     </Form>
   );
 };
+
+function sellerProfileDefaults(profile: SellerProfile | undefined) {
+  return {
+    ...sellerIdentityDefaults(profile),
+    legalName: profile?.legalName ?? "",
+    vatPayer: profile?.vatPayer ?? false,
+    addressLine1: profile?.addressLine1 ?? "",
+    addressLine2: profile?.addressLine2 ?? "",
+    city: profile?.city ?? "",
+    postalCode: profile?.postalCode ?? "",
+    country: profile?.country ?? "",
+    iban: profile?.iban ?? "",
+    bic: profile?.bic ?? "",
+    accountNumber: profile?.accountNumber ?? "",
+    defaultCurrency: profile?.defaultCurrency ?? DEFAULT_CURRENCY,
+    footerNotes: profile?.footerNotes ?? "",
+  };
+}
+
+function sellerIdentityDefaults(profile: SellerProfile | undefined) {
+  return {
+    registrationId: profile?.registrationId ?? "",
+    taxId: profile?.taxId ?? "",
+    vatId: profile?.vatId ?? "",
+    registerEntry: profile?.registerEntry ?? "",
+    barRegistration: profile?.barRegistration ?? "",
+  };
+}

@@ -1,5 +1,5 @@
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { factoriesWhere } from "@/api/lib/safe-handler-factories";
 

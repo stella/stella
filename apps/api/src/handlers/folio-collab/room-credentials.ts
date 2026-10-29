@@ -1,23 +1,34 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
+import type { VerifyCaller } from "@/api/lib/api-handlers";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  authorizeFolioCollabRoom,
   type AuthorizedFolioCollabRoom,
+  authorizeFolioCollabRoom,
 } from "@/api/lib/folio-collab-rooms";
-import { validatePostAuth } from "@/api/lib/permissive-route-schema";
 
 const FOLIO_COLLAB_TOKEN_LENGTH = 64;
 
-const folioCollabRoomCredentialsSchema = t.Object({
-  roomId: tSafeId("folioCollabRoom"),
-  token: t.String({
-    minLength: FOLIO_COLLAB_TOKEN_LENGTH,
-    maxLength: FOLIO_COLLAB_TOKEN_LENGTH,
-  }),
+/** A collaborative edit token as the room credential carries it. */
+export const folioCollabTokenSchema = v.pipe(
+  v.string(),
+  v.minLength(FOLIO_COLLAB_TOKEN_LENGTH),
+  v.maxLength(FOLIO_COLLAB_TOKEN_LENGTH),
+);
+
+/** The room credential a collaborating client sends in its body. */
+export const folioCollabRoomCredentialsSchema = v.object({
+  roomId: resourceIdSchema("folioCollabRoom"),
+  token: folioCollabTokenSchema,
 });
+
+export type AuthorizedFolioCollabCredentials = {
+  room: AuthorizedFolioCollabRoom;
+  token: string;
+};
 
 const folioCollabRoomNotFoundError = () =>
   new HandlerError({
@@ -25,23 +36,28 @@ const folioCollabRoomNotFoundError = () =>
     message: "Collaborative editing room not found.",
   });
 
+/**
+ * Authorize a room credential read from an unvalidated request. A malformed
+ * credential answers exactly like an unknown room, so a probe cannot tell
+ * "wrong shape" from "no such room".
+ */
 export const authorizeFolioCollabCredentials = async (
   rawCredentials: unknown,
 ): Promise<
-  Result<
-    { room: AuthorizedFolioCollabRoom; token: string },
-    HandlerError<401 | 403 | 404 | 409>
-  >
+  Result<AuthorizedFolioCollabCredentials, HandlerError<401 | 403 | 404 | 409>>
 > => {
-  const credentials = validatePostAuth(
+  const credentials = v.safeParse(
     folioCollabRoomCredentialsSchema,
     rawCredentials,
   );
-  if (!credentials.ok) {
+  if (!credentials.success) {
     return Result.err(folioCollabRoomNotFoundError());
   }
 
-  const authorized = await authorizeFolioCollabRoom(credentials.value);
+  const authorized = await authorizeFolioCollabRoom({
+    ...credentials.output,
+    readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+  });
   if (authorized.status === "missing") {
     return Result.err(folioCollabRoomNotFoundError());
   }
@@ -72,6 +88,11 @@ export const authorizeFolioCollabCredentials = async (
 
   return Result.ok({
     room: authorized.value,
-    token: credentials.value.token,
+    token: credentials.output.token,
   });
 };
+
+/** A room endpoint's caller: the room credential in its body. */
+export const verifyFolioCollabRoomCaller: VerifyCaller<
+  AuthorizedFolioCollabCredentials
+> = async ({ body }) => await authorizeFolioCollabCredentials(body);

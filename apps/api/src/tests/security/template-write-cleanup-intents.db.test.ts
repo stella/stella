@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
@@ -14,6 +14,8 @@ import {
   reserveObjectCleanupIntents,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -38,7 +40,7 @@ let migratedPolicyExpression: string;
 
 const migrationPath = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20261004000100_template_creation_cleanup_intents/migration.sql",
+  "../../../drizzle/20261020000300_chat_cleanup_intent_organization_keys/migration.sql",
 );
 
 const insertPolicy = getTableConfig(bufferObjectCleanupIntents).policies.find(
@@ -107,6 +109,15 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  await Promise.all(
+    [organizationId, otherOrganizationId].map(
+      async (id) =>
+        await recordNewOrganizationAccessState(testDb, {
+          organizationId: id,
+          now: new Date(),
+        }),
+    ),
+  );
   await testDb.insert(member).values([
     {
       id: mintAuthProviderIdValue(),
@@ -136,7 +147,7 @@ beforeAll(async () => {
       organizationId,
       name: "Template",
       fileName: "template.docx",
-      s3Key: `${organizationId}/templates/${templateId}.docx`,
+      s3Key: buildTemplateS3Key(organizationId, templateId),
       sizeBytes: 1,
       createdBy: userId,
     },
@@ -145,7 +156,7 @@ beforeAll(async () => {
       organizationId: otherOrganizationId,
       name: "Other template",
       fileName: "other.docx",
-      s3Key: `${otherOrganizationId}/templates/${otherTemplateId}.docx`,
+      s3Key: buildTemplateS3Key(otherOrganizationId, otherTemplateId),
       sizeBytes: 1,
       createdBy: userId,
     },

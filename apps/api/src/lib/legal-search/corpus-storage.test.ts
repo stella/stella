@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { randomFillSync } from "node:crypto";
+import * as v from "valibot";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -22,11 +26,11 @@ import {
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 import {
+  CORPUS_TRANSFER_MAX_BYTES,
   corpusContentHash,
   corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  CORPUS_TRANSFER_MAX_BYTES,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
@@ -38,6 +42,7 @@ import {
   readCorpusText,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
+  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusPayload,
@@ -47,6 +52,7 @@ import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombsto
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 /** Nothing erased: the denial list a read consults when the case is not it. */
 const noTombstones = async (): Promise<ReadonlySet<string>> =>
@@ -147,7 +153,7 @@ describe("readCorpusText bounded corpus read", () => {
       await readCorpusText("legal-corpus/never/text.zst", {
         readObject: async () => await neverSettles,
         readTombstones: noTombstones,
-        timeoutMs: 25,
+        timeoutMs: 25, // timeout under test
       });
     } catch (error) {
       captured = error;
@@ -165,7 +171,7 @@ describe("readCorpusText bounded corpus read", () => {
         return await Promise.resolve(zstdCompress("hello corpus"));
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
 
     expect(text).toBe("hello corpus");
@@ -760,7 +766,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(member);
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
 
     expect(text).toBe("packed corpus text");
@@ -777,7 +783,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(zstdCompress("x"));
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     // A member at the bound is served as one frame, so the digest the
     // address carries is that frame's.
@@ -900,4 +906,74 @@ describe("deleteCorpusDocument", () => {
     // deleted object would outlive the key it names.
     expect(erasure.tombstoned).toEqual([[]]);
   });
+});
+
+test("standalone writes validate structure before comparing the stored payload", async () => {
+  const invalidAst = {
+    version: 1,
+    source: {
+      system: "synthetic",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "p1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+      {
+        id: "p2",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+    ],
+  } satisfies DocumentAst;
+  expect(v.safeParse(persistedDocumentAstSchema, invalidAst).success).toBe(
+    false,
+  );
+  const payload = {
+    text: "Synthetic decision.",
+    sections: null,
+    ast: EMPTY_AST,
+  };
+  expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
+    corpusContentHash(payload),
+  );
+  const plan = planCorpusDocumentWrite({
+    ...payload,
+    documentId: "synthetic",
+    jurisdiction: "SVK",
+    stored: null,
+  });
+  if (plan.type !== "put") {
+    expect.unreachable("Fixture must carry text");
+  }
+  // A rejected AST must converge to the already stored text-only payload. The
+  // aborted signal makes any unintended transfer fail before reaching S3.
+  const outcome = await writeCorpusDocument(
+    {
+      ...payload,
+      ast: invalidAst,
+      documentId: "synthetic",
+      jurisdiction: "SVK",
+      stored: plan.written,
+    },
+    { signal: AbortSignal.abort() },
+  );
+  expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

@@ -5,8 +5,8 @@ import type { Document } from "@stll/folio-core";
 import { fromMarkdown } from "@stll/folio-core/markdown";
 
 import {
-  DocxAuthoringError,
   documentToDocx,
+  DocxAuthoringError,
   stellaDocument,
 } from "@/api/lib/docx-authoring/document";
 

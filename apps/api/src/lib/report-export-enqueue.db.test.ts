@@ -546,7 +546,7 @@ describe("queued report export reconciliation", () => {
     { phase: "requeue", grade: "transient" },
     { phase: "both", grade: "transient" },
   ] as const)(
-    "records one $grade exception and a failed run for $phase",
+    "records a $grade failure and a failed run for $phase",
     async ({ phase, grade }) => {
       const cause =
         grade === "defect"
@@ -569,14 +569,24 @@ describe("queued report export reconciliation", () => {
       });
 
       expect(status).toBe("failed");
-      expect(analytics.exceptions()).toHaveLength(1);
-      expect(analytics.exceptions().at(0)?.properties).toMatchObject({
-        "error.class":
-          phase === "requeue"
-            ? "ReportExportRequeueError"
-            : "ReportExportInspectionError",
-        "failure.grade": grade,
-        "failure.reason": grade === "defect" ? "unclassified" : "network_reset",
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.class":
+            phase === "requeue"
+              ? "ReportExportRequeueError"
+              : "ReportExportInspectionError",
+          "failure.grade": grade,
+          "failure.reason": "tagged_failure",
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason":
+          grade === "defect" ? "tagged_failure" : "network_reset",
       });
       expect(
         logs.records.filter(

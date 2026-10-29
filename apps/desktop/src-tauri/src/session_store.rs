@@ -102,10 +102,13 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
       trusted_self_host_connections: payload.trusted_self_host_connections,
       load_issue: None,
     },
-    Err(_) => LoadedSessionStore {
-      load_issue: Some(StoreLoadIssue::InvalidStore),
-      ..empty
-    },
+    Err(error) => {
+      crate::logging::log_json_error(&error, "session store is invalid");
+      LoadedSessionStore {
+        load_issue: Some(StoreLoadIssue::InvalidStore),
+        ..empty
+      }
+    }
   }
 }
 

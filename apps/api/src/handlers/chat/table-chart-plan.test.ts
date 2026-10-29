@@ -63,6 +63,7 @@ const organizationId = toSafeId<"organization">("org-table-chart");
 const generation = {
   task: "short-text",
   dataClass: "customer",
+  userId: null,
   orgAIConfig: null,
   managedAIResidency: "eu",
   organizationId,
@@ -154,6 +155,26 @@ describe("table chart decisions", () => {
     ).toEqual({ status: "unavailable" });
   });
 
+  test("a table without a numeric column spends no decision", async () => {
+    let calls = 0;
+    const result = await planTableChart({
+      table: {
+        headers: ["Situace", "Následek"],
+        rows: [
+          ["Opilost při řízení", "Okamžité zrušení"],
+          ["Nízká hladina", "Výpověď"],
+        ],
+      },
+      decisionOptions: { orgAIConfig: null, generation },
+      decide: async () => {
+        calls += 1;
+        return await Promise.resolve({ decisions: {}, model: null });
+      },
+    });
+    expect(result).toEqual({ status: "unavailable" });
+    expect(calls).toBe(0);
+  });
+
   test("unexpected decision failures return an unavailable chart and emit no table contents", async () => {
     analytics = installRecordingAnalytics();
     const result = await plan(
@@ -194,7 +215,10 @@ describe("table chart decisions", () => {
       );
       const rows: string[][] = [];
       for (let count = 0; count < TABLE_CHART_LIMITS.rows; count += 1) {
-        const row = headers.map(() => cell.repeat(80));
+        // One numeric column keeps the table chartable, so the decision runs.
+        const row = headers.map((_header, index) =>
+          index === 0 ? "1" : cell.repeat(80),
+        );
         const candidate = { headers, rows: [...rows, row] };
         if (!v.safeParse(tableChartRequestSchema, candidate).success) {
           break;
@@ -202,10 +226,12 @@ describe("table chart decisions", () => {
         rows.push(row);
       }
       const bounded = v.parse(tableChartRequestSchema, { headers, rows });
+      let decided = false;
       await planTableChart({
         table: bounded,
         decisionOptions: { orgAIConfig: null, generation },
         decide: async ({ state, questions }) => {
+          decided = true;
           const body = serializeSystemOneRequest({
             state,
             questions,
@@ -217,6 +243,7 @@ describe("table chart decisions", () => {
           return { decisions: {}, model: null };
         },
       });
+      expect(decided).toBe(true);
     }
   });
 

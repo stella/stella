@@ -2,6 +2,8 @@ import { Result } from "better-result";
 
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -9,7 +11,7 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
@@ -34,8 +36,8 @@ const config = {
   },
   access: "write",
   params: workspaceParams({
-    entityId: tSafeId("entity"),
-    versionId: tSafeId("entityVersion"),
+    entityId: resourceIdSchema("entity"),
+    versionId: resourceIdSchema("entityVersion"),
   }),
   requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;
@@ -49,6 +51,7 @@ const config = {
 const versionSummarize = createSafeHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     safeDb,
     workspaceId,
@@ -58,6 +61,10 @@ const versionSummarize = createSafeHandler(
     orgAIConfig,
     managedAIResidency,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* loadEntityVersionDiffSources({

@@ -223,7 +223,6 @@ impl Parent {
       OpenMode::Read => OFlags::RDONLY,
       OpenMode::CreateNew => OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
       OpenMode::Append => OFlags::WRONLY | OFlags::CREATE | OFlags::APPEND,
-      OpenMode::AppendExisting => OFlags::WRONLY | OFlags::APPEND,
       OpenMode::Lock => OFlags::RDWR | OFlags::CREATE,
     };
     let file = File::from(fs::openat(
@@ -248,6 +247,14 @@ impl Parent {
   }
 
   pub(super) fn rename_to(&self, destination: &Self) -> io::Result<()> {
+    self.rename_to_with(destination, &File::sync_all)
+  }
+
+  pub(super) fn rename_to_with(
+    &self,
+    destination: &Self,
+    sync: &impl Fn(&File) -> io::Result<()>,
+  ) -> io::Result<()> {
     let source = self.open(OpenMode::Read)?;
     fs::fchmod(&source, FILE_MODE)?;
     destination.check_entry()?;
@@ -257,13 +264,13 @@ impl Parent {
       &destination.directory,
       &destination.name,
     )?;
-    fs::fsync(&destination.directory)?;
+    sync(&destination.directory)?;
     let source_metadata = self.directory.metadata()?;
     let destination_metadata = destination.directory.metadata()?;
     if source_metadata.dev() != destination_metadata.dev()
       || source_metadata.ino() != destination_metadata.ino()
     {
-      fs::fsync(&self.directory)?;
+      sync(&self.directory)?;
     }
     Ok(())
   }

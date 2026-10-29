@@ -1,12 +1,13 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { sha256 } from "./classification-values";
+import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
+
 export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
 }> {}
 
-// Only these document/job/step keys are omitted; new keys participate automatically.
-// YAML comments are absent from the parsed objects. Action inputs stay intact.
 export const CLASSIFICATION_EXCLUSIONS = {
   document: ["name", "run-name"],
   job: ["name", "timeout-minutes"],
@@ -15,7 +16,23 @@ export const CLASSIFICATION_EXCLUSIONS = {
 
 const DOCUMENT = v.strictObject({
   digest: v.string(),
-  jobs: v.record(v.string(), v.strictObject({ digest: v.string() })),
+  privileged: v.boolean(),
+  // Composite-action steps are not kept in the shape, so callers read this.
+  writesRepository: v.boolean(),
+  jobs: v.record(
+    v.string(),
+    v.strictObject({
+      digest: v.string(),
+      shape: v.strictObject({
+        document: v.record(v.string(), v.unknown()),
+        job: v.record(v.string(), v.unknown()),
+      }),
+      dependencies: v.record(
+        v.string(),
+        v.picklist(["action", "reusable-workflow"]),
+      ),
+    }),
+  ),
   dependencies: v.record(
     v.string(),
     v.picklist(["action", "reusable-workflow"]),
@@ -32,243 +49,330 @@ const DOCUMENT = v.strictObject({
   ),
 });
 
-// Validate duplicate keys and bound alias expansion before projecting classification metadata.
-const PARSER = String.raw`
-require 'psych'
-require 'json'
-require 'digest'
-EXCLUSIONS = JSON.parse(ARGV.fetch(0))
-MAX_SOURCE_BYTES = 4 * 1024 * 1024
-MAX_AST_NODES = 100_000
-MAX_EXPANDED_NODES = 250_000
-MAX_EXPANDED_BYTES = 16 * 1024 * 1024
-MAX_DEPTH = 256
+export type JobShape = v.InferOutput<typeof DOCUMENT>["jobs"][string]["shape"];
+export type ParsedDocument = v.InferOutput<typeof DOCUMENT>;
 
-def string_scalar(node)
-  node.tag = 'tag:yaml.org,2002:str'
-  node.plain = false
-  node.quoted = true
-  node.style = Psych::Nodes::Scalar::DOUBLE_QUOTED
-end
+type JsonRecord = Record<string, unknown>;
+type DependencyKind = "action" | "reusable-workflow";
+type RelocatedAction = {
+  repository: string | null;
+  ref: string | null;
+  path: string;
+};
 
-def check(node, anchors, count, depth = 0)
-  raise 'YAML nesting limit exceeded' if depth > MAX_DEPTH
-  count[0] += 1
-  raise 'YAML AST node limit exceeded' if count[0] > MAX_AST_NODES
-  if node.is_a?(Psych::Nodes::Alias)
-    raise "undefined YAML alias #{node.anchor}" unless anchors.key?(node.anchor)
-    return
-  end
-  if node.respond_to?(:anchor) && node.anchor
-    raise "duplicate YAML anchor #{node.anchor}" if anchors.key?(node.anchor)
-    anchors[node.anchor] = node
-  end
-  if node.is_a?(Psych::Nodes::Scalar) && node.tag.nil? && !node.quoted && node.value.match?(/\A(?:yes|no|on|off)\z/i)
-    string_scalar(node)
-  end
-  if node.is_a?(Psych::Nodes::Mapping)
-    seen = {}
-    node.children.each_slice(2) do |k,v|
-      raise 'complex YAML key' unless k.is_a?(Psych::Nodes::Scalar)
-      raise "duplicate YAML key #{k.value}" if seen[k.value]
-      raise 'YAML merge key' if k.value == '<<'
-      seen[k.value] = true
-      # GitHub mapping keys are strings (not YAML 1.1 booleans such as on).
-      string_scalar(k)
-      check(k, anchors, count, depth + 1)
-      check(v, anchors, count, depth + 1)
-    end
-  elsif node.respond_to?(:children) && node.children
-    node.children.each { |n| check(n, anchors, count, depth + 1) }
-  end
-end
+const MAX_SOURCE_BYTES = 4 * 1024 * 1024;
+const MAX_EXPANDED_NODES = 250_000;
+const MAX_EXPANDED_BYTES = 16 * 1024 * 1024;
+const MAX_DEPTH = 256;
+const encoder = new TextEncoder();
 
-# Compute the fully resolved size on the AST DAG before safe_load or canon can
-# allocate expanded values. Memoized costs still multiply at every alias use.
-def expansion(node, anchors, active, memo, depth = 0)
-  raise 'YAML alias nesting limit exceeded' if depth > MAX_DEPTH
-  id = node.object_id
-  raise 'recursive YAML alias' if active[id]
-  return memo[id] if memo.key?(id)
-  active[id] = true
-  if node.is_a?(Psych::Nodes::Alias)
-    result = expansion(anchors.fetch(node.anchor), anchors, active, memo, depth + 1)
-  else
-    total = 1
-    bytes = node.is_a?(Psych::Nodes::Scalar) ? node.value.bytesize : 0
-    height = 1
-    if node.respond_to?(:children) && node.children
-      node.children.each do |child|
-        child_nodes, child_bytes, child_height = expansion(child, anchors, active, memo, depth + 1)
-        total += child_nodes
-        bytes += child_bytes
-        height = [height, child_height + 1].max
-        raise 'YAML alias nesting limit exceeded' if height > MAX_DEPTH
-        raise 'YAML alias expansion limit exceeded' if total > MAX_EXPANDED_NODES || bytes > MAX_EXPANDED_BYTES
-      end
-    end
-    result = [total, bytes, height]
-  end
-  active.delete(id)
-  memo[id] = result
-end
-def canon(value)
-  case value
-  when Hash
-    value.keys.sort_by(&:to_s).to_h { |k| [k,canon(value[k])] }
-  when Array
-    value.map { |v| canon(v) }
-  else
-    value
-  end
-end
-def steps(value)
-  raise 'steps must be array' unless value.is_a?(Array)
-  value.flat_map do |s|
-    raise 'step must be mapping' unless s.is_a?(Hash)
-    if s.key?('parallel')
-      raise 'parallel group cannot have leaf fields' if s.key?('uses') || s.key?('run')
-      next steps(s['parallel'])
-    end
-    ['uses','run'].each { |k| raise "#{k} must be string" if s.key?(k) && !s[k].is_a?(String) }
-    raise 'step cannot have uses and run' if s.key?('uses') && s.key?('run')
-    {'uses'=>s['uses'],'run'=>s['run'],'with'=>s['with']}
-  end
-end
-# Run bodies retain secret references and a publication-command marker.
-# Everything else participates unless its owning job/step exclusion names it.
-def secret_refs(value)
-  case value
-  when Hash
-    value.values.flat_map { |v| secret_refs(v) }.uniq.sort
-  when Array
-    value.flat_map { |v| secret_refs(v) }.uniq.sort
-  when String
-    value.scan(/secrets(?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])?/).uniq.sort
-  else
-    []
-  end
-end
-def project(value, scope)
-  value.reject { |key,_| EXCLUSIONS.fetch(scope).include?(key) }
-end
-def step_shapes(value)
-  value.map do |s|
-    shape = project(s, 'step')
-    publication_command = s.fetch('run', '').match?(/publish|deploy|release|push/i)
-    shape['parallel'] = step_shapes(s['parallel']) if s.key?('parallel')
-    refs = secret_refs(s['run'])
-    next if shape.empty? && refs.empty? && !publication_command
-    {'definition'=>shape, 'run-secret-refs'=>refs, 'publication-command'=>publication_command}
-  end.compact
-end
-def job_shape(job)
-  shape = project(job, 'job')
-  shape['steps'] = step_shapes(job['steps']) if job.key?('steps')
-  shape
-end
-def add_action_dependencies(dependencies, steps, relocated_actions)
-  checkouts = []
-  steps.each do |step|
-    uses = step['uses']
-    dependencies[uses] ||= 'action' if uses
-    if uses&.start_with?('./')
-      local_path = uses.delete_prefix('./')
-      checkout = checkouts
-        .select { |entry| local_path.start_with?(entry['path'] + '/') }
-        .max_by { |entry| entry['path'].length }
-      if checkout
-        source_path = local_path.delete_prefix(checkout['path'] + '/')
-        (relocated_actions[uses] ||= []) << {
-          'repository'=>checkout['repository'],
-          'ref'=>checkout['ref'],
-          'path'=>source_path,
-        }
-      end
-    end
-    if uses&.start_with?('actions/checkout@') && step['with'].is_a?(Hash) && step['with']['path'].is_a?(String)
-      checkouts << {
-        'repository'=>step['with']['repository'].is_a?(String) ? step['with']['repository'] : nil,
-        'ref'=>step['with']['ref'].is_a?(String) ? step['with']['ref'] : nil,
-        'path'=>step['with']['path'].delete_prefix('./').delete_suffix('/'),
+const isRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const requireRecord = (value: unknown, message: string) => {
+  if (!isRecord(value)) {
+    throw new AdmissionError({ message });
+  }
+  return value;
+};
+
+const measure = (value: unknown, depth = 0): [number, number] => {
+  if (depth > MAX_DEPTH) {
+    throw new AdmissionError({ message: "YAML nesting limit exceeded" });
+  }
+  if (typeof value === "string") {
+    return [1, encoder.encode(value).byteLength];
+  }
+  let children: unknown[] = [];
+  if (Array.isArray(value)) {
+    children = value;
+  } else if (isRecord(value)) {
+    children = Object.entries(value).flat();
+  }
+  let nodes = 1;
+  let bytes = 0;
+  for (const child of children) {
+    const [childNodes, childBytes] = measure(child, depth + 1);
+    nodes += childNodes;
+    bytes += childBytes;
+    if (nodes > MAX_EXPANDED_NODES || bytes > MAX_EXPANDED_BYTES) {
+      throw new AdmissionError({
+        message: "YAML alias expansion limit exceeded",
+      });
+    }
+  }
+  return [nodes, bytes];
+};
+
+const canonicalize = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .toSorted()
+        .map((key) => [key, canonicalize(value[key])]),
+    );
+  }
+  return value;
+};
+
+const digest = (value: unknown) => sha256(JSON.stringify(canonicalize(value)));
+
+const project = (
+  value: JsonRecord,
+  scope: keyof typeof CLASSIFICATION_EXCLUSIONS,
+) => {
+  const excluded: readonly string[] = CLASSIFICATION_EXCLUSIONS[scope];
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !excluded.includes(key)),
+  );
+};
+
+const secretRefs = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return [
+      ...value.matchAll(/secrets(?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])?/gu),
+    ]
+      .map(([match]) => match)
+      .filter((match, index, matches) => matches.indexOf(match) === index)
+      .toSorted();
+  }
+  let children: unknown[] = [];
+  if (Array.isArray(value)) {
+    children = value;
+  } else if (isRecord(value)) {
+    children = Object.values(value);
+  }
+  return [...new Set(children.flatMap(secretRefs))].toSorted();
+};
+
+const stepShapes = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    throw new AdmissionError({ message: "steps must be array" });
+  }
+  return value.flatMap((candidate) => {
+    const step = requireRecord(candidate, "step must be mapping");
+    const shape = project(step, "step");
+    const run = step["run"];
+    const publicationCommand =
+      typeof run === "string" && /publish|deploy|release|push/iu.test(run);
+    if ("parallel" in step) {
+      shape["parallel"] = stepShapes(step["parallel"]);
+    }
+    const refs = secretRefs(run);
+    if (
+      Object.keys(shape).length === 0 &&
+      refs.length === 0 &&
+      !publicationCommand
+    ) {
+      return [];
+    }
+    return [
+      {
+        definition: shape,
+        "run-secret-refs": refs,
+        "publication-command": publicationCommand,
+      },
+    ];
+  });
+};
+
+const canonicalSteps = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    throw new AdmissionError({ message: "steps must be array" });
+  }
+  return value.flatMap((candidate) => {
+    const step = requireRecord(candidate, "step must be mapping");
+    if ("parallel" in step) {
+      if ("uses" in step || "run" in step) {
+        throw new AdmissionError({
+          message: "parallel group cannot have leaf fields",
+        });
       }
-    end
-  end
-end
-def digest(value)
-  Digest::SHA256.hexdigest(JSON.generate(canon(value)))
-end
-text = STDIN.read
-raise 'YAML source byte limit exceeded' if text.bytesize > MAX_SOURCE_BYTES
-tree = Psych.parse_stream(text)
-raise 'one YAML document required' unless tree.children.length == 1
-anchors = {}
-check(tree, anchors, [0])
-expansion(tree, anchors, {}, {})
-data = Psych.safe_load(tree.to_yaml, permitted_classes: [], permitted_symbols: [], aliases: true)
-raise 'document must be mapping' unless data.is_a?(Hash)
-shape = project(data, 'document')
-if data['runs'].is_a?(Hash) && data['runs'].key?('steps')
-  shape['runs'] = data['runs'].merge('steps'=>step_shapes(data['runs']['steps']))
-end
-context = shape.reject { |key,_| key == 'jobs' }
-jobs = {}
-dependencies = {}
-relocated_actions = {}
-if data.key?('jobs')
-  raise 'jobs must be nonempty mapping' unless data['jobs'].is_a?(Hash) && !data['jobs'].empty?
-  data['jobs'].each do |id,j|
-    raise 'job must be mapping with string id' unless id.is_a?(String) && j.is_a?(Hash)
-    ss = j.key?('steps') ? steps(j['steps']) : []
-    if j.key?('uses')
-      raise 'job uses must be string' unless j['uses'].is_a?(String)
-      dependencies[j['uses']] = 'reusable-workflow'
-    end
-    add_action_dependencies(dependencies, ss, relocated_actions)
-    jobs[id] = {'digest'=>digest({'document'=>context, 'job'=>job_shape(j)})}
-  end
-end
-ss = []
-if data.key?('runs')
-  r = data['runs']
-  raise 'action runs must be mapping' unless r.is_a?(Hash)
-  if r['using'] == 'composite'
-    ss = steps(r.fetch('steps'))
-  else
-    # Executable JS/container entry points are deliberately opaque boundaries.
-    ss = [{'uses'=>nil,'run'=>JSON.generate(canon(r))}]
-  end
-end
-add_action_dependencies(dependencies, ss, relocated_actions)
-shape['jobs'] = jobs.transform_values { |j| j['digest'] } if data.key?('jobs')
-STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
-`;
+      return canonicalSteps(step["parallel"]);
+    }
+    for (const key of ["uses", "run"] as const) {
+      if (key in step && typeof step[key] !== "string") {
+        throw new AdmissionError({ message: `${key} must be string` });
+      }
+    }
+    if ("uses" in step && "run" in step) {
+      throw new AdmissionError({ message: "step cannot have uses and run" });
+    }
+    return [
+      {
+        uses: step["uses"] ?? null,
+        run: step["run"] ?? null,
+        with: step["with"] ?? null,
+      },
+    ];
+  });
+};
+
+const addActionDependencies = (
+  dependencies: Record<string, DependencyKind>,
+  steps: JsonRecord[],
+  relocatedActions: Record<string, RelocatedAction[]>,
+) => {
+  const checkouts: RelocatedAction[] = [];
+  for (const step of steps) {
+    const uses = step["uses"];
+    if (typeof uses === "string") {
+      dependencies[uses] ??= "action";
+      if (uses.startsWith("./")) {
+        const localPath = uses.slice(2);
+        const checkout = checkouts
+          .filter(({ path }) => localPath.startsWith(`${path}/`))
+          .toSorted((left, right) => right.path.length - left.path.length)
+          .at(0);
+        if (checkout) {
+          (relocatedActions[uses] ??= []).push({
+            repository: checkout.repository,
+            ref: checkout.ref,
+            path: localPath.slice(checkout.path.length + 1),
+          });
+        }
+      }
+    }
+    const withInputs = step["with"];
+    if (
+      typeof uses === "string" &&
+      uses.startsWith("actions/checkout@") &&
+      isRecord(withInputs) &&
+      typeof withInputs["path"] === "string"
+    ) {
+      checkouts.push({
+        repository:
+          typeof withInputs["repository"] === "string"
+            ? withInputs["repository"]
+            : null,
+        ref: typeof withInputs["ref"] === "string" ? withInputs["ref"] : null,
+        path: withInputs["path"].replace(/^\.\//u, "").replace(/\/$/u, ""),
+      });
+    }
+  }
+};
+
+const privileged = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return /secrets(?:\.|\[)|publish|deploy|release|self-hosted/iu.test(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some(privileged);
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  return Object.entries(value).some(([key, child]) => {
+    if (key === "publication-command" && child === true) {
+      return true;
+    }
+    if (key === "secrets" && child !== null) {
+      return true;
+    }
+    if (
+      key === "permissions" &&
+      (child === "write-all" ||
+        (isRecord(child) && Object.values(child).includes("write")))
+    ) {
+      return true;
+    }
+    return privileged(child);
+  });
+};
+
+const parse = (text: string): ParsedDocument => {
+  if (encoder.encode(text).byteLength > MAX_SOURCE_BYTES) {
+    throw new AdmissionError({ message: "YAML source byte limit exceeded" });
+  }
+  const data = requireRecord(Bun.YAML.parse(text), "document must be mapping");
+  measure(data);
+  const shape = project(data, "document");
+  const runs = data["runs"];
+  if (isRecord(runs) && "steps" in runs) {
+    shape["runs"] = { ...runs, steps: stepShapes(runs["steps"]) };
+  }
+  const context = Object.fromEntries(
+    Object.entries(shape).filter(([key]) => key !== "jobs"),
+  );
+  const jobs: ParsedDocument["jobs"] = {};
+  const dependencies: Record<string, DependencyKind> = {};
+  const relocatedActions: Record<string, RelocatedAction[]> = {};
+  if ("jobs" in data) {
+    const jobValues = requireRecord(
+      data["jobs"],
+      "jobs must be nonempty mapping",
+    );
+    if (Object.keys(jobValues).length === 0) {
+      throw new AdmissionError({ message: "jobs must be nonempty mapping" });
+    }
+    for (const [id, candidate] of Object.entries(jobValues)) {
+      const job = requireRecord(
+        candidate,
+        "job must be mapping with string id",
+      );
+      const steps = "steps" in job ? canonicalSteps(job["steps"]) : [];
+      if ("uses" in job && typeof job["uses"] !== "string") {
+        throw new AdmissionError({ message: "job uses must be string" });
+      }
+      if (typeof job["uses"] === "string") {
+        dependencies[job["uses"]] = "reusable-workflow";
+      }
+      addActionDependencies(dependencies, steps, relocatedActions);
+      const jobDependencies: Record<string, DependencyKind> = {};
+      if (typeof job["uses"] === "string") {
+        jobDependencies[job["uses"]] = "reusable-workflow";
+      }
+      addActionDependencies(jobDependencies, steps, {});
+      const jobShape = project(job, "job");
+      if ("steps" in job) {
+        jobShape["steps"] = stepShapes(job["steps"]);
+      }
+      const jobContext = { document: context, job: jobShape };
+      jobs[id] = {
+        digest: digest(jobContext),
+        shape: jobContext,
+        dependencies: jobDependencies,
+      };
+    }
+  }
+  let actionSteps: JsonRecord[] = [];
+  if ("runs" in data) {
+    const actionRuns = requireRecord(runs, "action runs must be mapping");
+    actionSteps =
+      actionRuns["using"] === "composite"
+        ? canonicalSteps(actionRuns["steps"])
+        : [{ run: JSON.stringify(canonicalize(actionRuns)) }];
+  }
+  addActionDependencies(dependencies, actionSteps, relocatedActions);
+  if ("jobs" in data) {
+    shape["jobs"] = Object.fromEntries(
+      Object.entries(jobs).map(([id, job]) => [id, job.digest]),
+    );
+  }
+  return v.parse(DOCUMENT, {
+    digest: digest(shape),
+    privileged:
+      privileged(shape) ||
+      Object.values(jobs).some(({ shape: jobShape }) => privileged(jobShape)),
+    writesRepository:
+      requestsRepositoryWrite(actionSteps) ||
+      Object.values(jobs).some(({ shape: jobShape }) =>
+        shapeWritesRepository(jobShape),
+      ),
+    jobs,
+    dependencies,
+    relocatedActions,
+  });
+};
 
 export const parseDocument = (text: string) =>
   Result.try({
-    try: () => {
-      const parsed = Bun.spawnSync(
-        ["ruby", "-e", PARSER, JSON.stringify(CLASSIFICATION_EXCLUSIONS)],
-        {
-          stdin: new TextEncoder().encode(text),
-          stdout: "pipe",
-          stderr: "pipe",
-          timeout: 15_000,
-          maxBuffer: 32 * 1024 * 1024,
-        },
-      );
-      if (parsed.exitCode !== 0) {
-        throw new AdmissionError({
-          message: `YAML rejected: ${new TextDecoder().decode(parsed.stderr).trim()}`,
-        });
-      }
-      return v.parse(
-        DOCUMENT,
-        JSON.parse(new TextDecoder().decode(parsed.stdout)),
-      );
-    },
+    try: () => parse(text),
     catch: (cause) =>
       new AdmissionError({
-        message: cause instanceof Error ? cause.message : "YAML parser failed",
+        message: `YAML rejected: ${cause instanceof Error ? cause.message : "YAML parser failed"}`,
       }),
   });

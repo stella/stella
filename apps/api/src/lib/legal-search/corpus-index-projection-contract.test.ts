@@ -5,11 +5,11 @@ import {
   CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION,
   CORPUS_INDEX_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_TRANSITIONS,
+  type CorpusIndexDesiredProjection,
+  type CorpusIndexIntentStatus,
   corpusIndexIntentStatusAfterUnknownAppend,
   isCorpusIndexIntentOutstanding,
   isCorpusIndexProjectionConverged,
-  type CorpusIndexDesiredProjection,
-  type CorpusIndexIntentStatus,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 
 // Treating retained cleanup as terminal would let unresolved revisions launch.

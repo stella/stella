@@ -40,8 +40,8 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
   test("safe outbound wrappers cannot bypass the publisher block latch", async () => {
     expect(
       await lint([
-        'import { safeOutboundFetchBytes as bytes, safeOutboundFetchStream, fetchWithResolvedAddress, fetchStreamWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";',
-        'import * as outbound from "@/api/lib/safe-outbound-fetch";',
+        'import { safeOutboundFetchBytes as bytes, safeOutboundFetchStream, fetchWithResolvedAddress, fetchStreamWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fetch";',
+        'import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";',
         'await bytes({ url: "https://uoou.gov.cz/document", maxBytes: 1000, timeoutMs: 1000 });',
         'await safeOutboundFetchStream({ url: "https://uoou.gov.cz/document", maxBytes: 1000, timeoutMs: 1000 });',
         "await fetchWithResolvedAddress(options);",
@@ -70,7 +70,7 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
       await lint(
         [
           'import { fetchWithTimeout } from "@stll/fetch";',
-          'import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";',
+          'import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";',
           'await fetchWithTimeout("https://uoou.gov.cz/document", { timeoutMs: 1000 });',
           "await safeOutboundFetchBytes({ url: input, maxBytes: 1000, timeoutMs: 1000 });",
         ],
@@ -80,22 +80,31 @@ describe.serial("soft-law handlers use the supplied fetch capability", () => {
   });
 
   test("handlers and helpers cannot bypass the transport outside the adapter directory", async () => {
-    for (const sourcePath of [
-      "apps/api/src/handlers/soft-law/ingestion.ts",
-      "apps/api/src/handlers/soft-law/helpers/download.ts",
-      "apps/api/src/handlers/soft-law/helpers/publisher-access.ts",
-      "apps/api/src/handlers/soft-law/publisher-access-other.ts",
-    ]) {
-      expect(
-        await lint(
-          [
-            'import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";',
-            'await fetch("https://uoou.gov.cz/document");',
-            "await safeOutboundFetchBytes({ url: input, maxBytes: 1000, timeoutMs: 1000 });",
-          ],
-          sourcePath,
-        ),
-      ).toEqual([2, 3]);
-    }
+    const results = await Promise.all(
+      [
+        "apps/api/src/handlers/soft-law/ingestion.ts",
+        "apps/api/src/handlers/soft-law/helpers/download.ts",
+        "apps/api/src/handlers/soft-law/helpers/publisher-access.ts",
+        "apps/api/src/handlers/soft-law/publisher-access-other.ts",
+      ].map(async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(
+            [
+              'import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";',
+              'await fetch("https://uoou.gov.cz/document");',
+              "await safeOutboundFetchBytes({ url: input, maxBytes: 1000, timeoutMs: 1000 });",
+            ],
+            sourcePath,
+          ),
+          expected: [2, 3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 });

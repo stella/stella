@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import type {
   BlockContent as FolioBlockContent,
@@ -20,6 +21,11 @@ import type {
  *
  * Fallback: for pre-2007 decisions that lack the hidden field,
  * the old `extractLinesFromDocContent` approach is used.
+ *
+ * Decisions of the 1990s carry the court's typescript: one RTF
+ * paragraph per printed line. Their lines are joined back into
+ * paragraphs (`hard-wrapped-lines.ts`), and letter-spaced emphasis
+ * ("N á v r h   s e   z a m í t á") is read as words.
  *
  * Additional hidden fields extracted for metadata:
  *   - `registrySignHidden` — e.g., "I.ÚS 100/25 #1"
@@ -57,9 +63,17 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: cached DocContent and direct paragraph validation preserve extracted content; the output retains its decision-specific AST type.
 import {
+  type Block,
+  type DecisionDocumentAst,
+  hasInlineChildren,
+  type Inline,
+  plainTextOf,
+} from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
+import {
+  mapInlineText,
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
@@ -68,20 +82,24 @@ import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
+import {
+  type ContinuingJoin,
+  LINE_JOINS,
+  printedLine,
+  readHardWrap,
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import { visibleHtmlText, stripFurniturePrefix } from "./shared-inlines";
+import { stripFurniturePrefix, visibleHtmlText } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -100,7 +118,7 @@ type CrossReference = {
 };
 
 type ParseUsDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Cross-references to other decisions found in the HTML. */
@@ -111,14 +129,15 @@ export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
   const $ = cheerio.load(input.html);
+  const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields
   const hiddenMeta = extractHiddenMetadata($);
 
   // Extract cross-reference links from the visible HTML
-  const crossReferences = extractCrossReferences($);
+  const crossReferences = extractCrossReferences($, docContent);
 
-  const lines = extractLines($);
+  const lines = extractLines($, docContent);
   const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
     parser: "cz-us",
     caseNumber: input.caseNumber,
@@ -147,14 +166,12 @@ export const parseUsDecisionHtml = (
   // all text without whitespace between sections, creating
   // phantom words like "tarifu.ii.skutkové" that aren't in
   // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationHtml = buildValidationHtml(
-    lines.map((line) =>
-      line.kind === "body" ? line.value.plainText : line.note.value.plainText,
-    ),
+  const validationParagraphs = lines.map((line) =>
+    line.kind === "body" ? line.value.plainText : line.note.value.plainText,
   );
   validateAndLog(
     { parser: "cz-us", caseNumber: input.caseNumber },
-    validationHtml,
+    { type: "paragraphs", paragraphs: validationParagraphs },
     blocks,
   );
 
@@ -162,7 +179,7 @@ export const parseUsDecisionHtml = (
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "nalus.usoud.cz",
@@ -216,11 +233,14 @@ const CROSS_REF_HREF_RE = /GetRegSignDecisions\.aspx\?sz=/iu;
  * Extract cross-reference links to other ÚS decisions from
  * the visible DocContent HTML.
  */
-const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
+const extractCrossReferences = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): CrossReference[] => {
   const refs: CrossReference[] = [];
   const seen = new Set<string>();
 
-  $(".DocContent a[href]").each((_, el) => {
+  docContent.find("a[href]").each((_, el) => {
     const href = $(el).attr("href") ?? "";
     if (!CROSS_REF_HREF_RE.test(href)) {
       return;
@@ -308,7 +328,35 @@ const rtfInlinesOf = (paragraph: FolioParagraph): Inline[] => {
   };
 
   visit(paragraph.content);
-  return inlines;
+  return coalesceRuns(inlines);
+};
+
+/**
+ * Adjacent runs of the same formatting as one inline. RTF starts a run at
+ * every escaped character (`N \'e1 v r h`), and a word read run by run
+ * cannot be recognised as letter-spaced or as a heading.
+ */
+const coalesceRuns = (inlines: readonly Inline[]): Inline[] => {
+  const result: Inline[] = [];
+  for (const node of inlines) {
+    const previous = result.at(-1);
+    if (previous?.type === "text" && node.type === "text") {
+      result[result.length - 1] = {
+        ...previous,
+        text: previous.text + node.text,
+      };
+      continue;
+    }
+    if (previous?.type === "bold" && node.type === "bold") {
+      result[result.length - 1] = {
+        ...previous,
+        children: coalesceRuns([...previous.children, ...node.children]),
+      };
+      continue;
+    }
+    result.push(node);
+  }
+  return result;
 };
 
 /** Primary extraction: read the `docContentHidden` RTF field. */
@@ -320,26 +368,49 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
   return usDocumentLinesOf(document);
 };
 
+/** A line as the RTF printed it, and which run of adjacent paragraphs it is in. */
+type PrintedUsLine = {
+  readonly line: DocumentLine<Inline[]>;
+  /**
+   * Paragraphs side by side in one container. A table cell is a run of its
+   * own, and so is the text after a table: a printed line never continues
+   * across either.
+   */
+  readonly run: number;
+};
+
+type UsDocumentLinesOptions = {
+  /**
+   * Trims a line's inlines. Each printed line is trimmed once and each
+   * paragraph once more; a test counts the work through it.
+   */
+  normalize?: typeof normalizeInlineLine;
+};
+
 /** Shared-model entry point, including nested tables and content controls. */
 export const usDocumentLinesOf = (
   document: ReturnType<typeof readRtfString>,
+  { normalize = normalizeInlineLine }: UsDocumentLinesOptions = {},
 ): ParsedLine[] => {
-  const lines: ParsedLine[] = [];
-  const readLines = createParagraphLineReader(document, (paragraph) =>
-    normalizeInlineLine(rtfInlinesOf(paragraph)),
-  );
+  const printed: PrintedUsLine[] = [];
+  let run = 0;
+  const readLines = createParagraphLineReader(document, rtfInlinesOf);
   const visit = (blocks: readonly FolioBlockContent[]): void => {
     for (const block of blocks) {
       switch (block.type) {
         case "paragraph":
-          lines.push(...readLines(block));
+          for (const line of readLines(block)) {
+            printed.push({ line, run });
+          }
           break;
         case "table":
           for (const row of block.rows) {
             for (const cell of row.cells) {
+              run += 1;
               visit(cell.content);
             }
           }
+          run += 1;
           break;
         case "blockSdt":
         case "blockCustomXml":
@@ -348,6 +419,10 @@ export const usDocumentLinesOf = (
         case "preservedBlock":
         case "bookmarkStart":
         case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
           break;
         default:
           block satisfies never;
@@ -356,6 +431,125 @@ export const usDocumentLinesOf = (
     }
   };
   visit(document.package.document.content);
+  return reflowUsLines(printed, normalize);
+};
+
+/**
+ * Drop the last character of the inlines, wherever it is nested. Touches
+ * only the trailing node, so it costs the same however long the paragraph.
+ */
+const dropLastCharacter = (inlines: Inline[]): void => {
+  for (let index = inlines.length - 1; index >= 0; index -= 1) {
+    const node = inlines[index];
+    if (node === undefined || plainTextOf([node]).length === 0) {
+      continue;
+    }
+    if (node.type === "text") {
+      inlines[index] = { ...node, text: node.text.slice(0, -1) };
+      return;
+    }
+    if (hasInlineChildren(node)) {
+      const children = [...node.children];
+      dropLastCharacter(children);
+      inlines[index] = { ...node, children };
+      return;
+    }
+    // A line break: one character on the text axis, and the last one.
+    inlines.splice(index, 1);
+    return;
+  }
+};
+
+/**
+ * Append the next printed line, already trimmed, to a paragraph whose lines
+ * were trimmed as they came, as the margin joined them.
+ */
+const appendPrintedLine = (
+  paragraph: Inline[],
+  line: readonly Inline[],
+  join: ContinuingJoin,
+): void => {
+  switch (join) {
+    case LINE_JOINS.SPACE:
+      paragraph.push({ type: "text", text: " " }, ...line);
+      return;
+    case LINE_JOINS.WORD:
+      dropLastCharacter(paragraph);
+      paragraph.push(...line);
+      return;
+    case LINE_JOINS.COMPOUND:
+      paragraph.push(...line);
+      return;
+    default:
+      join satisfies never;
+      panic("Unhandled printed line join");
+  }
+};
+
+/**
+ * The printed lines as the court's paragraphs: letter-spaced words read as
+ * words, and a typescript's margin-wrapped lines joined back together. See
+ * `hard-wrapped-lines.ts` for when a document counts as one.
+ *
+ * Each line is trimmed once as it joins and each paragraph once when it
+ * closes, so the work grows with the text, not with a paragraph's length
+ * times its lines.
+ */
+const reflowUsLines = (
+  printed: readonly PrintedUsLine[],
+  normalize: typeof normalizeInlineLine,
+): ParsedLine[] => {
+  const reading = readHardWrap(
+    printed.map(({ line }) =>
+      line.kind === "body" ? printedLine(plainTextOf(line.value)) : null,
+    ),
+  );
+  // Not a typescript: every line is its own paragraph, and an absent join
+  // below reads as a break.
+  const joins =
+    reading === null
+      ? []
+      : reading.joins.map((join, index) =>
+          printed[index]?.run === printed[index + 1]?.run
+            ? join
+            : LINE_JOINS.BREAK,
+        );
+  const finish = (inlines: readonly Inline[]): ParsedLineData =>
+    normalize(
+      reading === null ? inlines : mapInlineText(inlines, reading.clean),
+    );
+  const spelled = (inlines: readonly Inline[]): Inline[] =>
+    mapInlineText(inlines, collapseLetterSpacing);
+
+  const lines: ParsedLine[] = [];
+  let paragraph: Inline[] | null = null;
+  for (const [index, { line }] of printed.entries()) {
+    if (line.kind === "note") {
+      lines.push({
+        kind: "note",
+        note: { ...line.note, value: finish(spelled(line.note.value)) },
+      });
+      continue;
+    }
+    const continues = (joins[index] ?? LINE_JOINS.BREAK) !== LINE_JOINS.BREAK;
+    const join = joins[index - 1] ?? LINE_JOINS.BREAK;
+    if (paragraph === null || join === LINE_JOINS.BREAK) {
+      // A paragraph of one line is trimmed when it closes.
+      paragraph = continues
+        ? [...normalize(spelled(line.value)).inlines]
+        : spelled(line.value);
+    } else {
+      appendPrintedLine(
+        paragraph,
+        normalize(spelled(line.value)).inlines,
+        join,
+      );
+    }
+    if (!continues) {
+      lines.push({ kind: "body", value: finish(paragraph) });
+      paragraph = null;
+    }
+  }
   return lines;
 };
 
@@ -366,8 +560,10 @@ export const usDocumentLinesOf = (
  * `docContentHidden` field. Splits the crammed text at
  * paragraph boundaries using heuristics.
  */
-const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
-  const docContent = $(".DocContent");
+const extractLinesFromDocContent = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): ParsedLine[] => {
   const container = docContent.length > 0 ? docContent : $("body");
 
   const fullText = visibleHtmlText(container).trim();
@@ -423,7 +619,10 @@ const PARAGRAPH_BOUNDARY_PATTERNS = [
  * Prefers the `docContentHidden` RTF field; falls back to
  * parsing the visible DocContent HTML.
  */
-const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
+const extractLines = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): ParsedLine[] => {
   const rtfContent = $("input#docContentHidden").attr("value") ?? "";
 
   if (rtfContent.trim()) {
@@ -431,7 +630,7 @@ const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
   }
 
   // Fallback: parse the visible DocContent HTML
-  return extractLinesFromDocContent($);
+  return extractLinesFromDocContent($, docContent);
 };
 
 // ── Patterns ───────────────────────────────────────────────
@@ -456,6 +655,13 @@ const collapseSpaces = (text: string): string =>
 /** "takto:" separator (with spaced variants). */
 const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
+/**
+ * The opening sentence of a decision ending in "takto:". Since the court
+ * stopped setting the word on a line of its own, the ruling follows the
+ * sentence that names the parties directly.
+ */
+const TAKTO_TAIL_RE = /(?:^|[\s,])takto\s*:$/u;
+
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
   /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*(?::\s*)?$/iu;
@@ -470,6 +676,22 @@ const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 /** Numbered paragraph: "1. ...", "2. ..." */
 const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
 
+/** The court's first reasoning paragraph, which no ruling item opens with. */
+const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
+
+/**
+ * A line a section title never is: one opening with a list item, or ending
+ * where a sentence or a printed line goes on. A title may end with a full
+ * stop ("… zákona č. 128/1946 Sb."); a long line that does is a sentence.
+ */
+const ITEM_OPENING_RE = /^(?:\d{1,3}[.)]|\p{L}\)|[-–•])\s/u;
+const UNFINISHED_TITLE_RE = /[,;:-]$/u;
+const TITLE_SENTENCE_MAX_WORDS = 10;
+
+const readsAsSentence = (text: string): boolean =>
+  UNFINISHED_TITLE_RE.test(text) ||
+  (text.endsWith(".") && text.split(/\s+/u).length > TITLE_SENTENCE_MAX_WORDS);
+
 /**
  * Heading opening a separate opinion. The court prints it either on its own
  * or as the next enumerated item, and names the dissenting judges after it,
@@ -477,8 +699,31 @@ const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
  * closed at the end.
  */
 const DISSENT_HEADING_RE =
-  /^(?:Odli[šs]n[ée]\s+stanovisko|Odli[šs]n[áa]\s+stanoviska|Stanovisko\s+men[šs]iny)\b/iu;
+  /^(?:Odli[šs]n[ée]\s+stanovisko|Odli[šs]n[áa]\s+stanoviska|Stanovisko\s+men[šs]iny)(?<tail>.*)$/iu;
+/**
+ * The early plenary set its opinions under a bare, letter-spaced
+ * "S T A N O V I S K O" and named the judges on the following lines.
+ */
+const BARE_OPINION_HEADING_RE = /^STANOVISKO(?<tail>)$/u;
+/**
+ * What the heading line goes on with: nothing, or whose opinion it is and
+ * what it is to. "Odlišné stanovisko odůvodňuji takto:" is a sentence of the
+ * opinion, not its heading.
+ */
+const DISSENT_HEADING_TAIL_RE =
+  /^(?:\s*[.:]?$|\s+(?:(?:k|ke|ve|podle)\s|soud|předsed|místopředsed|JUDr|prof|doc|Mgr|pléna|člen|men[šs]in|podan|uplatn|vyjádřen))/iu;
+/** A heading line that names its author. */
+const NAMES_AUTHOR_RE = /(?:^|\s)(?:soudc|soudky|soudkyň|JUDr)/iu;
+/** The judges named on the lines after a bare heading. */
+const AUTHOR_CONTINUATION_RE = /^(?:soudc|soudky|soudkyň)/iu;
 const DISSENT_HEADING_MAX_CHARS = 120;
+/**
+ * A closing names the place and the date and nothing else. A paragraph that
+ * opens with a date ("Dne 26. 8. 1993 zaslaly stěžovatelky …") is reasoning.
+ */
+const CLOSING_MAX_CHARS = 80;
+/** Longest heading an author continuation can make. */
+const DISSENT_TITLE_MAX_CHARS = 500;
 
 // ── Block classification ───────────────────────────────────
 
@@ -502,6 +747,8 @@ type UsClassificationState = {
   inRuling: boolean;
   inOduvodneni: boolean;
   inDissent: boolean;
+  /** Whether the ruling zone has produced a holding yet. */
+  sawHolding: boolean;
   consumedLines: Set<ParsedLine>;
 };
 
@@ -592,18 +839,8 @@ const classifyUsBodyLine = ({
 
   // A separate opinion runs to the end of the document, so the heading
   // opens a zone rather than a section.
-  // The court numbers some of these headings. The number is stripped for
-  // the match alone: the heading block below carries the line the court
-  // printed, because what the heading is does not change what it says.
-  const { line: unnumbered } = stripInlineLinePrefix(
-    normalized,
-    NUMBERED_PARA_RE,
-  );
-  const unnumberedText = unnumbered.plainText;
-  if (
-    unnumberedText.length <= DISSENT_HEADING_MAX_CHARS &&
-    DISSENT_HEADING_RE.test(unnumberedText)
-  ) {
+  const dissentTail = opinionHeadingTail(normalized);
+  if (dissentTail !== undefined) {
     state.inDissent = true;
     state.blockIndex += 1;
     blocks.push({
@@ -612,8 +849,9 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      inlines,
-      plainText,
+      ...(NAMES_AUTHOR_RE.test(dissentTail)
+        ? { inlines, plainText }
+        : withAuthorContinuation({ heading: normalized, i, lines, state })),
     });
     return;
   }
@@ -624,7 +862,11 @@ const classifyUsBodyLine = ({
   const courtNumbered = opensWithCourtParagraphMarker(plainText);
 
   // Closing: "V Brně dne ..."
-  if (!courtNumbered && CLOSING_RE.test(plainText)) {
+  if (
+    !courtNumbered &&
+    plainText.length <= CLOSING_MAX_CHARS &&
+    CLOSING_RE.test(plainText)
+  ) {
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -680,10 +922,16 @@ const classifyUsBodyLine = ({
     }
   }
 
+  if (closesRuling(state, plainText)) {
+    state.inRuling = false;
+    state.inOduvodneni = true;
+  }
+
   // Ruling items (in the ruling zone): detected by Roman
   // numeral prefix, emitted as holding paragraphs with
   // the full original text preserved.
   if (state.inRuling && !state.inOduvodneni) {
+    state.sawHolding = true;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -700,7 +948,7 @@ const classifyUsBodyLine = ({
   // numeral possibly followed by a title on the next line
   if (state.inOduvodneni) {
     const titledRoman = caseLawSectionHeading(plainText);
-    if (titledRoman !== null) {
+    if (titledRoman !== null && readsAsSectionTitle(plainText)) {
       state.blockIndex += 1;
       blocks.push({
         id: makeUsBlockId(state),
@@ -720,7 +968,8 @@ const classifyUsBodyLine = ({
       if (
         nextNonEmpty &&
         nextNonEmpty.value.plainText.length < 120 &&
-        !NUMBERED_PARA_RE.test(nextNonEmpty.value.plainText) &&
+        !ITEM_OPENING_RE.test(nextNonEmpty.value.plainText) &&
+        !readsAsSentence(nextNonEmpty.value.plainText) &&
         !SECTION_ROMAN_RE.test(nextNonEmpty.value.plainText) &&
         !CLOSING_RE.test(nextNonEmpty.value.plainText)
       ) {
@@ -767,6 +1016,102 @@ const classifyUsBodyLine = ({
     inlines,
     plainText,
   });
+  state.inRuling ||= opensRuling(state, plainText);
+};
+
+/**
+ * Reasoning the court did not head with "Odůvodnění": its first numbered
+ * paragraph, after the holdings, closes the ruling.
+ */
+const closesRuling = (
+  state: UsClassificationState,
+  plainText: string,
+): boolean =>
+  state.inRuling &&
+  state.sawHolding &&
+  FIRST_REASONING_PARAGRAPH_RE.test(plainText);
+
+/** The opening sentence ends in "takto:", and the ruling follows it. */
+const opensRuling = (
+  state: UsClassificationState,
+  plainText: string,
+): boolean =>
+  !state.inOduvodneni && !state.inDissent && TAKTO_TAIL_RE.test(plainText);
+
+/**
+ * What follows the title of a separate opinion's heading on its line, or
+ * `undefined` for a line that is no such heading. The court numbers some of
+ * these headings; the number is stripped for the match alone, because the
+ * heading block carries the line the court printed.
+ */
+const opinionHeadingTail = (line: ParsedLineData): string | undefined => {
+  const { plainText } = stripInlineLinePrefix(line, NUMBERED_PARA_RE).line;
+  if (plainText.length > DISSENT_HEADING_MAX_CHARS) {
+    return undefined;
+  }
+  const tail = (
+    DISSENT_HEADING_RE.exec(plainText) ??
+    BARE_OPINION_HEADING_RE.exec(plainText)
+  )?.groups?.["tail"];
+  return tail !== undefined && DISSENT_HEADING_TAIL_RE.test(tail)
+    ? tail
+    : undefined;
+};
+
+/**
+ * A Roman-numbered line that reads as a section title: one that opens with
+ * a capital, a number or a subsection letter ("IV. 1. Obecná východiska",
+ * "V. a)"), not a sentence that starts with an ordinal ("II. senát Ústavního
+ * soudu nepovažoval …"), and one that does not break off mid-sentence.
+ */
+const readsAsSectionTitle = (text: string): boolean => {
+  const title = text.replace(/^[IVXLC]+\.\s*/u, "");
+  return (
+    /^(?:[\p{Lu}\d§]|\p{Ll}[.)](?:\s|$))/u.test(title) &&
+    !UNFINISHED_TITLE_RE.test(title)
+  );
+};
+
+type AuthorContinuationOptions = {
+  heading: ParsedLineData;
+  i: number;
+  lines: readonly ParsedLine[];
+  state: UsClassificationState;
+};
+
+/**
+ * A separate opinion's heading together with the lines naming its authors
+ * ("STANOVISKO" / "soudců Ústavního soudu … JUDr. P. H., …"), which the
+ * court set beneath the heading rather than on it. The lines join the
+ * heading as printed; only their role changes.
+ */
+const withAuthorContinuation = ({
+  heading,
+  i,
+  lines,
+  state,
+}: AuthorContinuationOptions): { inlines: Inline[]; plainText: string } => {
+  const inlines = [...heading.inlines];
+  let { plainText } = heading;
+  let next = findNextNonEmpty(lines, i + 1);
+  if (
+    next === undefined ||
+    !AUTHOR_CONTINUATION_RE.test(next.value.plainText)
+  ) {
+    return { inlines, plainText };
+  }
+  while (
+    next !== undefined &&
+    /^\p{Ll}/u.test(next.value.plainText) &&
+    plainText.length + 1 + next.value.plainText.length <=
+      DISSENT_TITLE_MAX_CHARS
+  ) {
+    inlines.push({ type: "text", text: " " }, ...next.value.inlines);
+    plainText = `${plainText} ${next.value.plainText}`;
+    state.consumedLines.add(next);
+    next = findNextNonEmpty(lines, lines.indexOf(next) + 1);
+  }
+  return { inlines, plainText };
 };
 
 export const classifyUsDocumentLines = (
@@ -779,6 +1124,7 @@ export const classifyUsDocumentLines = (
     inRuling: false,
     inOduvodneni: false,
     inDissent: false,
+    sawHolding: false,
     consumedLines: new Set(),
   };
 

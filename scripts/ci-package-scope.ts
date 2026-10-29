@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import { GENERATORS } from "./generated-files";
@@ -134,8 +135,7 @@ const identifierExpressions = ({
   code,
   source,
 }: Pick<PathExpressionOptions, "expression" | "code" | "source">):
-  | readonly string[]
-  | undefined => {
+  readonly string[] | undefined => {
   if (
     identifierBindingCache?.source !== source ||
     identifierBindingCache.code !== code
@@ -565,8 +565,7 @@ const declaredMarkdownInputs = (
 };
 
 type GlobPathResult =
-  | PathExpressionResult
-  | { kind: "declared"; inputs: readonly string[] };
+  PathExpressionResult | { kind: "declared"; inputs: readonly string[] };
 
 type GlobPathOptions = PathExpressionOptions & {
   target: string;
@@ -1201,15 +1200,34 @@ const retainedMarkdownReader = ({
 };
 
 let rootReaders: readonly MarkdownReader[] | undefined;
-export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
-  // The tracked checkout is fixed during a planning process; fixture roots
-  // remain uncached so tests and callers can change their declarations.
-  if (root === ROOT && rootReaders !== undefined) {
-    return rootReaders;
+type FinalizeMarkdownReadersOptions = {
+  root: string;
+  sourceFileOrder: readonly string[] | undefined;
+  readers: MarkdownReader[];
+};
+const finalizeMarkdownReaders = ({
+  root,
+  sourceFileOrder,
+  readers,
+}: FinalizeMarkdownReadersOptions) => {
+  readers.sort((left, right) => compareCodeUnit(left.file, right.file));
+  if (root === ROOT && sourceFileOrder === undefined) {
+    rootReaders = readers;
+  }
+  return readers;
+};
+export const markdownReaders = (
+  root = ROOT,
+  sourceFileOrder?: readonly string[],
+): readonly MarkdownReader[] => {
+  // Fixture roots remain uncached so tests can change their declarations.
+  const cached = sourceFileOrder === undefined ? rootReaders : undefined;
+  if (root === ROOT && cached !== undefined) {
+    return cached;
   }
   const policyReaders = markdownPolicyReaders(root);
   const readers: MarkdownReader[] = [...policyReaders];
-  for (const file of sourceFiles(root)) {
+  for (const file of sourceFileOrder ?? sourceFiles(root)) {
     const source = readFileSync(path.join(root, file), "utf-8").replace(
       /^#![^\n]*/u,
       "",
@@ -1397,10 +1415,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
       });
     }
   }
-  if (root === ROOT) {
-    rootReaders = readers;
-  }
-  return readers;
+  return finalizeMarkdownReaders({ root, sourceFileOrder, readers });
 };
 
 export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>
@@ -1409,6 +1424,15 @@ export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>
       !reader.file.startsWith(".github/workflows/ci.yml:ci-checks-policy:") &&
       reader.inputs.some((input) => matches(file, input)),
   );
+
+// Code-point order without a collation package: the scope planner runs
+// before dependencies are installed.
+const compareCodePoints = (left: string, right: string) => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
 
 export const markdownChecks = ({
   changed,
@@ -1430,10 +1454,35 @@ export const markdownChecks = ({
     }
     checks.set(JSON.stringify(reader.command), reader.command);
   }
-  return [...checks.values()];
+  // Readers come in file-listing order, which varies by filesystem; the plan
+  // is ordered by command so the same change always yields the same checks.
+  return [...checks.entries()]
+    .toSorted(([left], [right]) => compareCodePoints(left, right))
+    .map(([, command]) => command);
 };
 
-type ScopeOptions = { changed: readonly string[]; root?: string };
+type ScopeOptions = {
+  changed: readonly string[];
+  root?: string | undefined;
+};
+// Parsing dominates; keyed by file text, an edited lockfile or turbo config
+// is parsed again while repeated plans over one revision parse it once.
+const parsedLocks = new Map<string, ReturnType<typeof parseLockfile>>();
+const parsedTurbo = new Map<string, unknown>();
+const readPackageScopeInputs = (root: string) => {
+  const lockText = readFileSync(path.join(root, "bun.lock"), "utf-8");
+  const turboText = readFileSync(path.join(root, "turbo.json"), "utf-8");
+  if (!parsedLocks.has(lockText)) {
+    parsedLocks.set(lockText, parseLockfile(Bun.JSONC.parse(lockText)));
+  }
+  if (!parsedTurbo.has(turboText)) {
+    parsedTurbo.set(turboText, Bun.JSONC.parse(turboText));
+  }
+  return {
+    lock: parsedLocks.get(lockText),
+    turbo: parsedTurbo.get(turboText),
+  };
+};
 export const requiresPackageChecks = ({
   changed,
   root = ROOT,
@@ -1494,9 +1543,7 @@ export const requiresLandingBuild = ({
     ) {
       return true;
     }
-    const lock = parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    );
+    const { lock, turbo } = readPackageScopeInputs(root);
     if (lock === undefined) {
       return true;
     }
@@ -1526,9 +1573,6 @@ export const requiresLandingBuild = ({
         }
       }
     }
-    const turbo: unknown = Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    );
     const inputs = landingBuildRootInputs(turbo);
     // An absent task/input declaration cannot prove the landing is unaffected.
     if (inputs.length === 0) {
@@ -1554,9 +1598,7 @@ export const requiresDesktopBrowser = ({
     if (changed.some((file) => GLOBAL.test(file))) {
       return true;
     }
-    const lock = parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    );
+    const { lock, turbo } = readPackageScopeInputs(root);
     if (lock === undefined) {
       return true;
     }
@@ -1595,9 +1637,6 @@ export const requiresDesktopBrowser = ({
         }
       }
     }
-    const turbo: unknown = Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    );
     if (typeof turbo !== "object" || turbo === null || !("tasks" in turbo)) {
       return true;
     }

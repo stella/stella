@@ -43,7 +43,7 @@ import {
 } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
-import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
   type DocumentFetchOutcome,
@@ -63,8 +63,8 @@ import { corpusStorageMode } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
@@ -80,6 +80,7 @@ import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   type ActiveCorpusProjectionSourceLock,
   lockActiveCorpusProjectionSourceTx,
@@ -109,9 +110,10 @@ import {
   withDeferredDocumentSourceOwnership,
 } from "@/api/lib/legal-search/deferred-document-source-ownership";
 import {
-  withDocumentStageObserver,
   recordDocumentStageError,
+  withDocumentStageObserver,
 } from "@/api/lib/legal-search/document-stage-observation";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -138,6 +140,7 @@ import {
   DOCUMENT_SCAN_PAGE_LIMIT,
   DOCUMENT_SCAN_REPROBE_MS,
 } from "@/api/lib/legal-search/sk-document-remaining-scan";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -184,8 +187,7 @@ export type SkDocumentFetch = (
 
 /** What one gated download established. */
 export type SkDocumentRead =
-  | ReadOutcome<Response>
-  | { type: "refused-target"; reason: string };
+  ReadOutcome<Response> | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;
@@ -427,7 +429,7 @@ const publisherStatusPdf = (status: number): PdfFetchResult => {
 
 export type BackfilledDocument = {
   fulltext: string;
-  documentAst: DocumentAst;
+  documentAst: DocumentAst | EmptyAst;
   sections: ReturnType<typeof segmentDecision>;
 };
 
@@ -467,10 +469,8 @@ export const parsePendingDocument = async (
   });
 
   const fulltext = sanitized.fulltext ?? "";
-  // `sanitizeResult` drops an AST it cannot round-trip, so a sanitized
-  // document that lost its blocks is treated as unparseable rather
-  // than stored half-formed.
-  if (fulltext === "" || !isDocumentAst(sanitized.documentAst)) {
+  // Text remains readable even when the reader rejects its structure.
+  if (fulltext === "") {
     return undefined;
   }
 
@@ -1035,10 +1035,16 @@ const storedForCorpusOutcome = (
       if (isDeferredDocumentOwnershipLost(outcome.error)) {
         throw outcome.error;
       }
-      captureError(outcome.error, {
-        decisionId,
-        step: "storeBackfilledDocument.corpusBatchWrite",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.storedForCorpusOutcome.outcome_error",
+          {
+            decisionId,
+            step: "storeBackfilledDocument.corpusBatchWrite",
+          },
+        ),
+      );
       return false;
     default:
       outcome satisfies never;
@@ -1082,7 +1088,7 @@ const storedForCorpusOutcome = (
  */
 const storeBackfilledDocumentOwned = async ({
   decision,
-  document,
+  document: uncheckedDocument,
   transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
   fence,
@@ -1090,6 +1096,14 @@ const storeBackfilledDocumentOwned = async ({
   fence: DeferredDocumentSourceFence;
 }): Promise<"stored" | "superseded"> => {
   const { scopedDb } = fence;
+  const document = {
+    ...uncheckedDocument,
+    documentAst: prepareCorpusAst({
+      ast: uncheckedDocument.documentAst,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      source: ADAPTER_KEYS.SK_COURTS,
+    }).ast,
+  };
   const sections = document.sections.length > 0 ? document.sections : null;
   const ownerPredicate = and(
     eq(caseLawDecisions.id, decision.id),
@@ -1258,10 +1272,16 @@ const storeBackfilledDocumentOwned = async ({
     // backfill reselects while the row is missing. Failing the store here
     // would make the queue fetch and parse the document again only to find
     // the row already filled.
-    captureError(indexed.error, {
-      decisionId: decision.id,
-      step: "storeBackfilledDocument.indexDecision",
-    });
+    captureError(
+      indexed.error,
+      handlerErrorContext(
+        "legalsearch.storeBackfilledDocumentOwned.indexed_error",
+        {
+          decisionId: decision.id,
+          step: "storeBackfilledDocument.indexDecision",
+        },
+      ),
+    );
     logger.error("case_law.search_index.store_projection_failed", {
       decisionId: decision.id,
       ...errorSystemFields(indexed.error),

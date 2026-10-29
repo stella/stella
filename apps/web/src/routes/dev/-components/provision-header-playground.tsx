@@ -4,12 +4,15 @@
  *
  * The header is one row that must never wrap and never lose its open button,
  * and that gives way in a fixed order as it narrows: the act's title, then
- * the provision label, then the date. Which part gives way is layout, so it
+ * the date, then the provision label. Which part gives way is layout, so it
  * is measured in a browser rather than asserted in a unit test. The label
  * names several cited parts, the widest a paragraph's card draws.
  */
 
-import { ProvisionCardHeader } from "@stll/decision-reader/cited-provision";
+import {
+  PROVISION_OPEN_BUTTON,
+  ProvisionCardHeader,
+} from "@stll/decision-reader/cited-provision";
 
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
@@ -44,6 +47,7 @@ export const ProvisionHeaderPlayground = () => (
         >
           <ProvisionCardHeader
             label={BENCH_LABEL}
+            openButton={PROVISION_OPEN_BUTTON.always}
             provision={BENCH_PROVISION}
           />
         </section>

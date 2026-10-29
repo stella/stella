@@ -254,5 +254,10 @@ export const spawnPostgresTestProcess = (
     get signalCode() {
       return child.signalCode;
     },
+    // A runner's interrupt must reach the test process, or it keeps its
+    // database connections open after the run.
+    kill: (signal?: NodeJS.Signals) => {
+      child.kill(signal);
+    },
   };
 };

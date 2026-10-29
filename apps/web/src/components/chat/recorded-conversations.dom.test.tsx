@@ -1,5 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { Result, panic } from "better-result";
+import { INTERRUPT_BINDING_METADATA_KEY } from "@tanstack/ai/client";
+import type { InterruptBinding } from "@tanstack/ai/client";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,10 +14,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { compareCodeUnit } from "@stll/collation";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
+import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
@@ -48,8 +52,7 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const { getToolApprovalGrant, isApprovalToolName } =
-  await import("@/components/chat/chat-ui-tools");
+const { isApprovalToolName } = await import("@/components/chat/chat-ui-tools");
 const { CHAT_USER_ACTIONS } =
   await import("@/components/chat/chat-user-actions");
 const { isThreadPageSuspended, openChatThreadDomPage } =
@@ -192,8 +195,13 @@ type Posted = { body: Record<string, unknown>; exchange: RecordedExchange };
  * response recorded as cut off streams what the page read before the cut and
  * then stays open until the page stops it or `dropConnection` drops it.
  */
-const createRecordedServer = (recording: RecordedConversation) => {
+const createRecordedServer = (
+  recording: RecordedConversation,
+  initialGrants: StoredToolGrant[],
+) => {
   const exchanges = recording.steps.flatMap((step) => step.exchanges);
+  /** The approvals the API holds for this conversation. */
+  const grants = [...initialGrants];
   const posted: Posted[] = [];
   const unexpected: string[] = [];
   let page = recording.initialPage;
@@ -371,6 +379,42 @@ const createRecordedServer = (recording: RecordedConversation) => {
     ) {
       return threadPage();
     }
+    if (
+      url.origin === API_ORIGIN &&
+      url.pathname === "/v1/chat/tool-grants/coverage"
+    ) {
+      const toolName = url.searchParams.get("toolName") ?? "";
+      const asked = storedToolGrant(recording.threadId, toolName);
+      return Response.json({
+        covered: grants.some((grant) =>
+          asked.mcpConnectorId === null
+            ? grant.toolName === toolName
+            : grant.mcpConnectorToolNamespace ===
+              asked.mcpConnectorToolNamespace,
+        ),
+      });
+    }
+    if (url.origin === API_ORIGIN && url.pathname === "/v1/chat/tool-grants") {
+      if (method === "GET") {
+        return Response.json({ grants });
+      }
+      const text =
+        typeof init?.body === "string" ? init.body : await request?.text();
+      const body: unknown = JSON.parse(text ?? "null");
+      const toolName = isJsonObject(body) ? body["toolName"] : undefined;
+      if (typeof toolName !== "string") {
+        unexpected.push("POST /chat/tool-grants without a tool");
+        return Response.json({}, { status: 400 });
+      }
+      const grant = storedToolGrant(recording.threadId, toolName);
+      grants.push(grant);
+      return Response.json({
+        created: true,
+        mcpConnectorId: grant.mcpConnectorId,
+        scope: grant.scope,
+        toolName: grant.toolName,
+      });
+    }
     const turnRoute =
       /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/(?<action>resume|join|cancel)$/u.exec(
         url.pathname,
@@ -409,6 +453,8 @@ const createRecordedServer = (recording: RecordedConversation) => {
   };
 
   return {
+    /** The approvals the API holds now; a page opens with them loaded. */
+    grants,
     dropConnection: () => {
       (drop ?? expect.unreachable("No response is streaming"))();
     },
@@ -427,13 +473,24 @@ const createRecordedServer = (recording: RecordedConversation) => {
 // --- The page ------------------------------------------------------------
 
 /** A tab on the recorded thread, loaded the way the page loads it. */
+/** The grants of the conversation on screen, as the API holds them. */
+let openGrants: StoredToolGrant[] = [];
+
 const openPage = async (
   recording: RecordedConversation,
-  { organizationId = ORGANIZATION_ID }: { organizationId?: string } = {},
+  {
+    organizationId = ORGANIZATION_ID,
+    routeHandoff,
+  }: {
+    organizationId?: string;
+    routeHandoff?: ChatRouteHandoffMessage;
+  } = {},
 ) =>
   await openChatThreadDomPage({
     organizationId,
+    routeHandoff,
     threadId: recording.threadId,
+    toolGrants: [...openGrants],
   });
 
 afterEach(() => {
@@ -705,9 +762,33 @@ const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
 // --- Replaying a recording -----------------------------------------------------
 
 const RELOAD_ORGANIZATION_ID = "00000000-0000-7000-8000-00000000fffd";
-/** Where the page keeps a conversation's grants for the tab's lifetime
- *  (`use-chat-session.ts`). */
-const CONVERSATION_GRANTS_KEY = "stella.chat.conversationApprovedTools:";
+/** A conversation grant as the API lists it. */
+type StoredToolGrant = ChatToolGrantsResponse["grants"][number];
+
+const EXTERNAL_CONNECTOR_ID = "00000000-0000-7000-8000-00000000c0de";
+let storedToolGrantCount = 0;
+
+/** What the API stores for a grant on `toolName`: a connector tool is
+ *  covered through its connector, any other tool by name. */
+const storedToolGrant = (
+  threadId: string,
+  toolName: string,
+): StoredToolGrant => {
+  const [namespace, connector] = toolName.split("__");
+  const external = namespace === "mcp" && connector !== undefined;
+  return {
+    id: toSafeId<"chatToolGrant">(
+      `00000000-0000-7000-8000-${String((storedToolGrantCount += 1)).padStart(12, "0")}`,
+    ),
+    scope: "conversation",
+    chatThreadId: toSafeId<"chatThread">(threadId),
+    toolName: external ? null : toolName,
+    mcpConnectorId: external
+      ? toSafeId<"mcpConnector">(EXTERNAL_CONNECTOR_ID)
+      : null,
+    mcpConnectorToolNamespace: external ? connector : null,
+  };
+};
 
 /** Opens a second tab on the thread as it is stored now and reads it. */
 const readReload = async (
@@ -744,11 +825,13 @@ const storedToolCalls = (recording: RecordedConversation) =>
     });
 
 /**
- * The grants the tab holds before the conversation starts: the tools whose
+ * The grants the API holds before the conversation starts: the tools whose
  * approvals the recording answers without a click, allowed for this
- * conversation earlier in the tab.
+ * conversation earlier.
  */
-const grantConversationTools = (recording: RecordedConversation) => {
+const grantConversationTools = (
+  recording: RecordedConversation,
+): StoredToolGrant[] => {
   const calls = storedToolCalls(recording);
   const toolOf = (toolCallId: string) =>
     (
@@ -771,18 +854,10 @@ const grantConversationTools = (recording: RecordedConversation) => {
         : [],
     ),
   );
-  if (granted.size === 0) {
-    return;
-  }
-  sessionArea().setItem(
-    userStorageKey(`${CONVERSATION_GRANTS_KEY}${recording.threadId}`),
-    JSON.stringify(
-      [...granted].map((name) =>
-        isApprovalToolName(name)
-          ? getToolApprovalGrant(name)
-          : expect.unreachable(`${name} is not an approval tool`),
-      ),
-    ),
+  return [...granted].map((name) =>
+    isApprovalToolName(name)
+      ? storedToolGrant(recording.threadId, name)
+      : expect.unreachable(`${name} is not an approval tool`),
   );
 };
 
@@ -916,18 +991,55 @@ const finding = (
   where: string,
 ) => JSON.stringify({ oracle, where });
 
+/** Where a conversation's first message is typed. */
+const FIRST_SEND = {
+  /** On the thread page, which then sends it. */
+  threadPage: "thread-page",
+  /** On the new-chat route, which starts its stream and hands the running
+   *  runtime to the thread page. */
+  routeHandoff: "route-handoff",
+} as const;
+type FirstSend = (typeof FIRST_SEND)[keyof typeof FIRST_SEND];
+
+/** The new-chat route's first message: the recording's opening send. */
+const routeHandoffMessage = (
+  recording: RecordedConversation,
+): ChatRouteHandoffMessage => {
+  const first = recording.steps.at(0)?.action;
+  if (first?.type !== "send") {
+    return expect.unreachable(
+      `${recording.scenario} does not open with a message`,
+    );
+  }
+  return {
+    content: first.text,
+    id: toSafeId<"chatMessage">(first.messageId),
+  };
+};
+
 /**
  * Replays `scenario` through the rendered chat. After every step the user
  * could look at, what the page shows must be what the stored thread says,
  * and a second tab loading the thread must show the same; at the end the page
  * must have posted exactly the recorded requests.
  */
-const replay = async (scenario: string) => {
+const replay = async (
+  scenario: string,
+  firstSend: FirstSend = FIRST_SEND.threadPage,
+) => {
   const recording = readRecording(scenario);
-  const server = createRecordedServer(recording);
+  const server = createRecordedServer(
+    recording,
+    grantConversationTools(recording),
+  );
   routeRequest = server.fetch;
-  grantConversationTools(recording);
-  let live = await openPage(recording);
+  openGrants = server.grants;
+  let live = await openPage(
+    recording,
+    firstSend === FIRST_SEND.routeHandoff
+      ? { routeHandoff: routeHandoffMessage(recording) }
+      : {},
+  );
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];
   const pendingActions: Promise<Result<void, unknown>>[] = [];
@@ -943,7 +1055,10 @@ const replay = async (scenario: string) => {
       live = await openPage(recording);
     }
     const container = live.view.container;
-    await performAction({ action, container, live, server, pendingActions });
+    // The new-chat route already sent the opening message.
+    if (index > 0 || firstSend === FIRST_SEND.threadPage) {
+      await performAction({ action, container, live, server, pendingActions });
+    }
     const next = recording.steps[index + 1];
     if (next !== undefined && isAutomatic(next.action)) {
       // The page answers on its own; the check comes once it has.
@@ -1050,8 +1165,12 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder posts text messages only; attachments need stored files.",
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "check-stored-grant": OUTSIDE_THE_CONVERSATION,
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
+  "continue-connector-request": notRecorded(
+    "The recorder posts text messages only; connector cards submit through their own endpoint.",
   ),
   copy: OUTSIDE_THE_CONVERSATION,
   "delete-thread": OUTSIDE_THE_CONVERSATION,
@@ -1088,6 +1207,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "submit-connector-request": notRecorded(
+    "The recorder posts text messages only; connector cards submit through their own endpoint.",
+  ),
   "submit-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
@@ -1113,6 +1235,49 @@ const SUPERSEDE_SCENARIOS = new Set([
 /** A replay renders the thread once per checked step, in a second tab. */
 const REPLAY_TIMEOUT_MS = 60_000;
 
+/** A stored interrupt without a readable binding kind. */
+const UNBOUND_INTERRUPT = "unbound";
+
+/** The interrupts a recording's first turn ends in, by binding kind. */
+const firstTurnInterruptKinds = (recording: RecordedConversation): string[] => {
+  const stored = recording.steps.at(0)?.exchanges.at(-1)?.page.messages.at(-1);
+  const metadata = isJsonObject(stored) ? stored["metadata"] : undefined;
+  const resumeSnapshot = isJsonObject(metadata)
+    ? metadata["resumeSnapshot"]
+    : undefined;
+  const pending = isJsonObject(resumeSnapshot)
+    ? resumeSnapshot["pendingInterrupts"]
+    : undefined;
+  return Array.isArray(pending)
+    ? pending.map((interrupt: unknown) => {
+        const interruptMetadata = isJsonObject(interrupt)
+          ? interrupt["metadata"]
+          : undefined;
+        const binding = isJsonObject(interruptMetadata)
+          ? interruptMetadata[INTERRUPT_BINDING_METADATA_KEY]
+          : undefined;
+        const kind = isJsonObject(binding) ? binding["kind"] : undefined;
+        return typeof kind === "string" ? kind : UNBOUND_INTERRUPT;
+      })
+    : [];
+};
+
+/**
+ * Whether a recording's first turn ends in each interrupt the SDK can bind,
+ * so the new-chat route replays hand each one to the thread page mid-turn.
+ */
+const FIRST_TURN_INTERRUPT_COVERAGE = {
+  "client-tool-execution": { type: "recorded" },
+  generic: {
+    reason: "The server defines no generic interrupt; its tools bind theirs.",
+    type: "not-recorded",
+  },
+  "tool-approval": { type: "recorded" },
+} as const satisfies Record<
+  InterruptBinding["kind"],
+  { type: "recorded" } | { reason: string; type: "not-recorded" }
+>;
+
 describe("a recorded conversation, rendered", () => {
   test.each(SCENARIOS)(
     "%s shows what the server stored, live and in a second tab",
@@ -1121,6 +1286,28 @@ describe("a recorded conversation, rendered", () => {
     },
     REPLAY_TIMEOUT_MS,
   );
+
+  test.each(SCENARIOS)(
+    "%s, its first message sent from the new-chat route, shows what the server stored, live and in a second tab",
+    async (scenario) => {
+      await replay(scenario, FIRST_SEND.routeHandoff);
+    },
+    REPLAY_TIMEOUT_MS,
+  );
+
+  test("a first turn sent from the new-chat route ends in every interrupt kind the server binds", () => {
+    const reached = new Set(
+      SCENARIOS.flatMap((scenario) =>
+        firstTurnInterruptKinds(readRecording(scenario)),
+      ),
+    );
+    const recorded = Object.entries(FIRST_TURN_INTERRUPT_COVERAGE).flatMap(
+      ([kind, coverage]) => (coverage.type === "recorded" ? [kind] : []),
+    );
+    expect([...reached].toSorted(compareCodeUnit)).toEqual(
+      recorded.toSorted(compareCodeUnit),
+    );
+  });
 
   test.each([...SUPERSEDE_SCENARIOS])(
     "%s sends the new message and never answers the replaced card",

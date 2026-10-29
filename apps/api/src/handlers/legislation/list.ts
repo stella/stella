@@ -1,9 +1,10 @@
 import { panic } from "better-result";
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
@@ -23,14 +24,19 @@ import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
-import { escapeLike } from "@/api/lib/escape-like";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
+import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
 import {
   ACT_NUMBER_PATTERN,
   actNumberCondition,
   actYearCondition,
 } from "@/api/lib/legal-search/legislation-act-number";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import {
   isLatestOpenedVersionOfWorkAt,
   listedLegislationRef,
@@ -68,33 +74,44 @@ import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundarie
 /** A publisher collection segment of an ELI: `sb`, `ul1`, `zz`. */
 const COLLECTION_PATTERN = /^[a-z0-9]{1,8}$/u;
 
-export const listStatutesQuerySchema = t.Object({
+export const listStatutesQuerySchema = v.object({
   country: tPublicLawCountry,
-  query: t.Optional(t.String({ maxLength: 256 })),
+  query: v.optional(v.pipe(v.string(), v.maxLength(256))),
   /** Year in the act number, not the consolidation date. */
-  year: t.Optional(t.Integer(LAW_YEAR_BOUNDS)),
-  /** An act's own number, `<number>/<year>`; the request asks for that work. */
-  number: t.Optional(t.String({ pattern: ACT_NUMBER_PATTERN.source })),
-  /** The collection the number was published in, when the caller knows it. */
-  collection: t.Optional(t.String({ pattern: COLLECTION_PATTERN.source })),
-  /** Calendar date whose applicable consolidation each work should return. */
-  asOf: t.Optional(t.String({ format: "date" })),
-  language: t.Optional(t.String({ maxLength: 8 })),
-  /** The kind of act, exactly as the publisher names it (`zákon`, `vyhláška`). */
-  documentType: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
-  /** Works still in force on `asOf`, or works that no longer are; both when absent. */
-  validity: t.Optional(
-    t.Enum(
-      Object.fromEntries(
-        LEGISLATION_LIST_VALIDITIES.map((value) => [value, value] as const),
+  year: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(LAW_YEAR_BOUNDS.minimum),
+        v.maxValue(LAW_YEAR_BOUNDS.maximum),
       ),
     ),
   ),
-  limit: t.Optional(tPaginationLimit(LIMITS.legislationListPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+  /** An act's own number, `<number>/<year>`; the request asks for that work. */
+  number: v.optional(
+    v.pipe(v.string(), v.regex(new RegExp(ACT_NUMBER_PATTERN.source, "u"))),
+  ),
+  /** The collection the number was published in, when the caller knows it. */
+  collection: v.optional(
+    v.pipe(v.string(), v.regex(new RegExp(COLLECTION_PATTERN.source, "u"))),
+  ),
+  /** Calendar date whose applicable consolidation each work should return. */
+  asOf: v.optional(apiDateSchema),
+  language: v.optional(v.pipe(v.string(), v.maxLength(8))),
+  /** The kind of act, exactly as the publisher names it (`zákon`, `vyhláška`). */
+  documentType: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  ),
+  /** Works still in force on `asOf`, or works that no longer are; both when absent. */
+  validity: v.optional(v.picklist(LEGISLATION_LIST_VALIDITIES)),
+  limit: v.optional(
+    numberFromString(paginationLimitSchema(LIMITS.legislationListPageSizeMax)),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ListStatutesQuery = Static<typeof listStatutesQuerySchema>;
+type ListStatutesQuery = v.InferOutput<typeof listStatutesQuerySchema>;
 
 /**
  * The two orderings the list serves, each with its own cursor protocol. A
@@ -123,7 +140,7 @@ type ListCursor =
 const titleSortKey = legislationTitleSortKey(legislationDocuments.title);
 const validFromKey = versionSortKey(legislationDocuments.versionValidFrom);
 
-const decodeListCursor = (cursor: string): ListCursor | null => {
+export const decodeListCursor = (cursor: string): ListCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts === null) {
     return null;
@@ -165,6 +182,16 @@ const decodeListCursor = (cursor: string): ListCursor | null => {
 
   return null;
 };
+
+export const encodeListCursor = (cursor: ListCursor): string =>
+  cursor.type === LEGISLATION_LIST_CURSOR_KIND.recent
+    ? encodePaginationCursor([cursor.type, cursor.validFrom, cursor.id])
+    : encodePaginationCursor([
+        cursor.type,
+        cursor.rank,
+        cursor.titleSortKey,
+        cursor.id,
+      ]);
 
 const listedRef = listedLegislationRef;
 const workRef = legislationVersionRefAt("work");
@@ -261,7 +288,7 @@ END)`;
  */
 const titleRank = (trimmedQuery: string): SQL<number> => sql<number>`(CASE
   WHEN ${legislationTitleFold(legislationTitleName(legislationDocuments.title))}
-    LIKE ${legislationTitleFold(escapeLike(trimmedQuery))} || '%'
+    LIKE ${escapeLikeSql(legislationTitleFold(trimmedQuery))} || '%'
   THEN 0
   ELSE 1
 END)`;
@@ -409,7 +436,7 @@ export const buildListStatutesQuery = (
 
   if (trimmedQuery !== null) {
     const titleOrEli = or(
-      sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${legislationTitleFold(escapeLike(trimmedQuery))} || '%'`,
+      sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${escapeLikeSql(legislationTitleFold(trimmedQuery))} || '%'`,
       ilike(legislationDocuments.eli, `%${escapeLike(trimmedQuery)}%`),
     );
     if (titleOrEli) {
@@ -459,7 +486,7 @@ export const buildListStatutesQuery = (
       country: legislationDocuments.country,
       language: legislationDocuments.language,
       documentType: legislationDocuments.documentType,
-      status: legislationDocuments.status,
+      status: legislationDocumentStatusToday,
       effectiveDate: legislationDocuments.effectiveDate,
       versionValidFrom: legislationDocuments.versionValidFrom,
       versionValidTo: legislationDocuments.versionValidTo,

@@ -3,10 +3,10 @@ import { current, type Draft } from "immer";
 
 import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
 import {
-  CASE_DECISION_VIEW,
   CASE_DECISION_PLACEMENT,
-  isCaseDecisionViewPayload,
+  CASE_DECISION_VIEW,
   caseDecisionTabId,
+  isCaseDecisionViewPayload,
 } from "@/components/inspector/case-decision-view";
 import {
   getInspectorTabGroupId,
@@ -31,6 +31,7 @@ import {
   adoptLegalDocumentChatThread,
   ensureLegalDocumentChatThread,
 } from "@/features/chat/legal-document-chat-threads";
+import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -154,6 +155,11 @@ const upsertFileTab = (
   existing.justificationFieldId = tab.justificationFieldId;
   existing.propertyId = tab.propertyId;
   existing.metadataLane = tab.metadataLane;
+  // A caller that names a facet asks for it even when the file is already
+  // open; one that names none keeps the facet the reader chose.
+  if (tab.facet !== undefined) {
+    existing.facet = tab.facet;
+  }
   if (tab.label) {
     existing.label = tab.label;
   }
@@ -385,11 +391,17 @@ export const createInspectorTabsSlice = (
       );
     }),
 
-  openFile: (tab) =>
+  openFile: (tab) => {
+    // Only a new tab mounts a new editor; activating an existing one may
+    // reuse a mounted viewer whose layout never reports again.
+    if (!get().tabs.some((existing) => existing.id === tab.id)) {
+      documentOpenTiming.requested(tab.id, "inspector");
+    }
     openTabs(set, {
       targets: [{ type: "pdf", ...tab }],
       activeId: tab.id,
-    }),
+    });
+  },
 
   openFileForEntity: (tab) =>
     set((state) => {

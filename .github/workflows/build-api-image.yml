@@ -27,7 +27,8 @@ env:
 jobs:
   resolve:
     name: Resolve protected source
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -77,6 +78,9 @@ jobs:
   build:
     name: Build and attest API image
     needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: success()
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     permissions:

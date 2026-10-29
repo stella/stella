@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { LIMITS } from "@/api/lib/limits";
 import {
   SafeOutboundFetchError,
   type SafeOutboundFetchResponse,
-  type safeOutboundFetchBytes,
 } from "@/api/lib/safe-outbound-fetch";
 import {
   createSkillPackageFetchContext as createSkillPackageFetchContextWithDependencies,

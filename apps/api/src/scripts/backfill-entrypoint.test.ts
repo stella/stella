@@ -59,6 +59,15 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
       },
     },
     {
+      entrypoint: "cz-us-judge-relink",
+      args: [],
+      expected: {
+        name: "cz-us-judge-relink",
+        tableName: "case_law_decision_judges",
+        initialSize: 500,
+      },
+    },
+    {
       entrypoint: "statute-citation-counts",
       args: [],
       expected: {

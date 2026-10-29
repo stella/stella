@@ -4,10 +4,10 @@ import type { SQL } from "drizzle-orm";
 
 import { isDocumentReferenceQuery } from "@stll/api-contract";
 import {
-  normalizeUnicode,
   applyArabicFolds,
-  foldToAscii,
   arabicNormalize,
+  foldToAscii,
+  normalizeUnicode,
 } from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;

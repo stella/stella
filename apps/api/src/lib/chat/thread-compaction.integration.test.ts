@@ -11,6 +11,8 @@ import type { Logger } from "drizzle-orm";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   CHAT_COMPACTION_MEMORY_ELIGIBILITY,
@@ -21,7 +23,9 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
+  chatMessageContentFromMessage,
   createChatAttachmentPart,
+  toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
@@ -29,6 +33,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  SKILL_SUMMARY_SECRET,
+  skillSummaryMessage,
+} from "@/api/tests/helpers/skill-summary-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -238,6 +246,14 @@ type RecordedRun = {
   queries: { params: unknown[]; query: string }[];
 };
 
+const withTestStoredContentEgress = async <T>({
+  work,
+}: {
+  signal: AbortSignal;
+  threadId: SafeId<"chatThread">;
+  work: () => Promise<T>;
+}): Promise<T> => await work();
+
 /**
  * Run the compactor with the model replaced by a recording stub, capturing
  * both what it asked the model to summarize and every statement it issued.
@@ -247,10 +263,14 @@ const runCompaction = async ({
   triggerTokens = 1,
   preserveTokens = 1,
   extractionFeatureEnabled = true,
+  beforeDispatchAuthorization,
   onSummarize,
   summary = SUMMARY_MARKDOWN,
 }: {
   threadId: SafeId<"chatThread">;
+  /** Runs after the delta read and immediately before current authority is
+   * captured for provider dispatch. */
+  beforeDispatchAuthorization?: () => Promise<void>;
   extractionFeatureEnabled?: boolean;
   /**
    * Runs while the summarizer is in flight, which is between the delta read
@@ -267,7 +287,7 @@ const runCompaction = async ({
 
   const result = await runChatThreadCompaction({
     abortSignal: AbortSignal.timeout(60_000),
-    dataWorkspaceIds: [ids.wsA1],
+    beforeDispatchAuthorization,
     extractionFeatureEnabled,
     orgAIConfig: null,
     managedAIResidency: "eu",
@@ -282,6 +302,8 @@ const runCompaction = async ({
     },
     threadId,
     triggerTokens,
+    userId: ids.userA1,
+    withStoredContentEgress: withTestStoredContentEgress,
   });
 
   if (Result.isError(result)) {
@@ -314,6 +336,97 @@ const transcriptMessageIds = (transcript: string): string[] =>
     .flatMap((id) => (id === undefined ? [] : [id]));
 
 describe("chat thread compaction", () => {
+  test("a checkpoint summarizes ordinary work without skill payloads or changes to the retained tail", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+    const rows = await testDb
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+    const olderId = rows.at(1)?.id;
+    const tailId = rows.at(-1)?.id;
+    if (olderId === undefined || tailId === undefined) {
+      throw new TypeError("Expected the seeded summary prefix and tail");
+    }
+    for (const { id, instructions } of [
+      { id: olderId, instructions: SKILL_SUMMARY_SECRET.repeat(100) },
+      { id: tailId, instructions: SKILL_SUMMARY_SECRET },
+    ]) {
+      await testDb
+        .update(chatMessages)
+        .set({
+          role: "assistant",
+          content: chatMessageContentFromMessage(
+            toPersistableChatMessage(skillSummaryMessage({ id, instructions })),
+          ),
+        })
+        .where(eq(chatMessages.id, id));
+    }
+    const readTail = async () =>
+      await testDb
+        .select({ content: chatMessages.content })
+        .from(chatMessages)
+        .where(eq(chatMessages.id, tailId));
+    const tailBefore = await readTail();
+    expect(JSON.stringify(tailBefore)).toContain(SKILL_SUMMARY_SECRET);
+
+    const run = await runCompaction({ threadId, preserveTokens: 1000 });
+
+    expect(run.outcome.type).toBe("advanced");
+    expect(run.prompts).toHaveLength(1);
+    expect(run.prompts.at(0)?.newMessages).not.toContain(SKILL_SUMMARY_SECRET);
+    expect(run.prompts.at(0)?.newMessages).toContain("ORDINARY CONVERSATION");
+    expect(run.prompts.at(0)?.newMessages).toContain("ORDINARY OUTCOME");
+    expect(await readTail()).toEqual(tailBefore);
+  });
+
+  test("a standalone orphan result reaches neither the background summarizer nor a checkpoint", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+    const first = await testDb
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+      .limit(1);
+    const id = first.at(0)?.id;
+    if (id === undefined) {
+      throw new TypeError("Expected the seeded orphan prefix");
+    }
+    await testDb
+      .update(chatMessages)
+      .set({
+        role: "assistant",
+        content: toPersistedChatMessageContentV3({
+          data: [
+            {
+              type: "tool-result",
+              toolCallId: "missing",
+              content: SKILL_SUMMARY_SECRET,
+              state: "complete",
+            },
+          ],
+        }),
+      })
+      .where(eq(chatMessages.id, id));
+    let calls = 0;
+    expect(
+      await rejectionOf(
+        runCompaction({
+          threadId,
+          onSummarize: async () => {
+            calls += 1;
+          },
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "Failed to summarize chat compaction delta",
+      ),
+    });
+    expect(calls).toBe(0);
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
   test.each(["application/pdf", "image/png"])(
     "omits canonical %s attachments from compaction prompts",
     async (mimeType) => {
@@ -766,11 +879,11 @@ describe("chat thread compaction retry semantics", () => {
     const outputCeilingError = new HandlerError({
       message: "AI generation did not complete",
       status: 502,
+      code: "internal_error",
     });
 
     const result = await runChatThreadCompaction({
       abortSignal: AbortSignal.timeout(60_000),
-      dataWorkspaceIds: [ids.wsA1],
       extractionFeatureEnabled: true,
       orgAIConfig: null,
       managedAIResidency: "eu",
@@ -783,6 +896,8 @@ describe("chat thread compaction retry semantics", () => {
       },
       threadId,
       triggerTokens: 1,
+      userId: ids.userA1,
+      withStoredContentEgress: withTestStoredContentEgress,
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -981,7 +1096,44 @@ describe("chat thread compaction send mode", () => {
     expect(await readChain(threadId)).toEqual([]);
   });
 
-  test("keeps no checkpoint when the thread switches while summarizing", async () => {
+  test("does not dispatch when anonymization commits at the dispatch seam", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const run = await runCompaction({
+      beforeDispatchAuthorization: async () => {
+        await markThreadAnonymized(threadId);
+      },
+      threadId,
+    });
+
+    expect(run.outcome.type).toBe("anonymized");
+    expect(run.prompts).toEqual([]);
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("does not dispatch a delta after its tenant scope changes", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+    await testDb
+      .update(chatThreads)
+      .set({ dataWorkspaceIds: [ids.wsA1] })
+      .where(eq(chatThreads.id, threadId));
+
+    const run = await runCompaction({
+      beforeDispatchAuthorization: async () => {
+        await testDb
+          .update(chatThreads)
+          .set({ dataWorkspaceIds: [] })
+          .where(eq(chatThreads.id, threadId));
+      },
+      threadId,
+    });
+
+    expect(run.outcome.type).toBe("superseded");
+    expect(run.prompts).toEqual([]);
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("keeps no checkpoint when the thread switches after dispatch", async () => {
     const threadId = await seedThread({ messageCount: 6 });
 
     const run = await runCompaction({

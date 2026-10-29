@@ -19,13 +19,13 @@ import { sanitizeRunningToolCalls } from "@/components/chat/chat-ui-tools";
 import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import type { WebApiRoutes } from "@/lib/eden-client";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -35,13 +35,14 @@ import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
-  DecisionChatThreadKey,
   ChatThreadOptionsInput,
   ChatThreadTitleKey,
+  DecisionChatThreadKey,
   FileChatThreadKey,
   GroupedChatThreadsKey,
   TemplateChatThreadKey,
 } from "./chat-query-contract";
+import { chatToolGrantsOptions } from "./chat-tool-grants";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
@@ -146,7 +147,7 @@ export const fetchChatMessage = async ({
   threadId,
   messageId,
 }: FetchChatMessageOptions) => {
-  const message = unwrapEden(
+  const message = unwrapApiResponse(
     await api.chat.threads({ threadId }).messages({ messageId }).get(),
   );
   const { createdAt, parts, ...rest } = message;
@@ -197,7 +198,7 @@ const fetchThreadMessages = async (
     };
   }
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
   return {
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
@@ -241,7 +242,7 @@ export const fetchOlderMessages = async ({
       },
     });
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
 
   return {
     messages: deserializeChatMessages(data.messages),
@@ -272,7 +273,7 @@ const fetchGroupedChatThreads = async ({
     },
   });
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 type GroupedChatThreadsPage = Awaited<
@@ -340,7 +341,7 @@ const fetchFileChatThread = async ({
       },
     });
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
 
   return {
     threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
@@ -368,7 +369,7 @@ const fetchTemplateChatThread = async ({
     templateId: toSafeId<"template">(templateId),
   });
 
-  return toChatThreadId(unwrapEden(response).threadId);
+  return toChatThreadId(unwrapApiResponse(response).threadId);
 };
 
 export const mergeGroupedChatThreadPages = (
@@ -669,6 +670,23 @@ export const fileChatThreadOptions = ({
         workspaceId: key.workspaceId,
       });
 
+      // The tool grants of this thread load with the binding, not after the
+      // overlay mounts: a draft thread has none, and a persisted one starts
+      // its read as soon as its id is known.
+      const grantsOptions = chatToolGrantsOptions({
+        activeOrganizationId,
+        threadId,
+        userId: key.userId,
+      });
+      if (fetched.threadId === null) {
+        client.setQueryData(grantsOptions.queryKey, { grants: [] });
+      } else {
+        detached(
+          client.query(grantsOptions),
+          "chat-queries.prefetch-file-thread-tool-grants",
+        );
+      }
+
       return { threadId, threadExists: fetched.threadId !== null };
     },
   });
@@ -707,7 +725,7 @@ export const materializeFileChatThread = async ({
       threadId: toSafeId<"chatThread">(draftThreadId),
     });
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
   const threadId = toChatThreadId(data.threadId);
   const binding: FileChatThreadBinding = { threadId, threadExists: true };
 
@@ -780,7 +798,7 @@ export const decisionChatThreadOptions = ({
       const response = await api.chat["decision-threads"]({
         decisionId: key.decisionId,
       }).get({ fetch: { signal } });
-      const { threadId } = unwrapEden(response);
+      const { threadId } = unwrapApiResponse(response);
       return { threadId: threadId === null ? null : toChatThreadId(threadId) };
     },
   });
@@ -928,7 +946,10 @@ const fetchThreadRecap = async (
   if (response.error) {
     // A recap is a non-critical nicety: surface nothing on failure,
     // but keep the error in telemetry.
-    getAnalytics().captureError(toAPIError(response.error));
+    getAnalytics().captureError(toAPIError(response.error), {
+      fingerprintKey: "fetchThreadRecap:failure",
+      scope: { type: "handler", handlerId: "fetchThreadRecap:failure" },
+    });
     return { recap: null };
   }
 
@@ -975,7 +996,13 @@ const fetchThreadSuggestedPrompts = async (
     });
 
   if (response.error) {
-    getAnalytics().captureError(toAPIError(response.error));
+    getAnalytics().captureError(toAPIError(response.error), {
+      fingerprintKey: "fetchThreadSuggestedPrompts:failure",
+      scope: {
+        type: "handler",
+        handlerId: "fetchThreadSuggestedPrompts:failure",
+      },
+    });
     return { prompts: [] };
   }
 
@@ -1010,7 +1037,7 @@ export const chatThreadSuggestedPromptsOptions = ({
 const fetchChatModelOptions = async () => {
   const response = await api.chat["model-options"].get();
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type ChatModelBenchmarkOption = Awaited<
@@ -1067,7 +1094,7 @@ const fetchChatThreadTitle = async ({
         : {},
     });
 
-  return unwrapEden(response).title;
+  return unwrapApiResponse(response).title;
 };
 
 type ChatDraftMetaOptionsArgs = {
@@ -1094,7 +1121,7 @@ export const chatDraftMetaOptions = ({
           query: { allowMissingThread: true },
           fetch: { signal },
         });
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
       return {
         webSearchAvailable: data.webSearchAvailable,
         webSearchEnabled: data.webSearchEnabled,

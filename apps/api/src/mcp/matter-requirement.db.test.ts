@@ -25,9 +25,9 @@ import {
   SESSION_CREDENTIAL,
 } from "@/api/lib/permission-authorization";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -80,7 +80,7 @@ const createEmptyOrganization = async (): Promise<Caller> => {
 const mcpRequestContext = async ({
   organizationId,
   userId,
-}: Caller): Promise<McpRequestContext> => {
+}: Caller): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, identity),
@@ -94,7 +94,7 @@ const mcpRequestContext = async ({
     tokenWorkspaceIds: undefined,
   });
   const workspaceIds = usable.map((workspace) => workspace.id);
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(

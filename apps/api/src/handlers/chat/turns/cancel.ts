@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   readChatTurnView,
@@ -9,7 +9,7 @@ import { stopLocalChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -29,9 +29,9 @@ const config = {
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
-  params: t.Object({
-    threadId: tSafeId("chatThread"),
-    turnId: tSafeId("chatTurn"),
+  params: v.object({
+    threadId: resourceIdSchema("chatThread"),
+    turnId: resourceIdSchema("chatTurn"),
   }),
 } satisfies HandlerConfig;
 

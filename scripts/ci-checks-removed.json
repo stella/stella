@@ -1,5 +1,9 @@
 [
   {
+    "name": "Release CLI changeset hold",
+    "reason": "Release versions are bound to their version commits; later CLI changesets cannot enter an existing release."
+  },
+  {
     "name": "ci-checks-generated: Install Safe Chain",
     "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
   },
@@ -98,5 +102,21 @@
   {
     "name": "MCP app package bundles and shared assets guard",
     "reason": "Its outputs are derived before use and no longer committed, so it became 'MCP app derived outputs guard': it builds them, checks the bundle budgets, and fails when an output is missing, empty, or tracked again."
+  },
+  {
+    "name": "Published export map guard",
+    "reason": "Renamed to Workspace package export map guard; @stll/time is published from stella/tooling now, so its export check left the workspace list with the package"
+  },
+  {
+    "name": "Check workflow job classifications",
+    "reason": "Moved to ci-quick-checks unchanged in substance (same tooling checkout at the workflow revision and the same command), so it fails a pull request before the heavy suites start."
+  },
+  {
+    "name": "Test merge-group ancestor check",
+    "reason": "The merge queue now requires every entry's own group to pass before it merges (ALLGREEN), so the polling step it tested and the step's script were removed."
+  },
+  {
+    "name": "exactMirror route guard",
+    "reason": "Elysia's exactMirror response normalization is gone with Elysia; the HTTP core parses every response through its route schema, which the response schema tests cover."
   }
 ]

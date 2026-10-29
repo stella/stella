@@ -5,18 +5,22 @@ import type {
   ReaderAnswer,
   ReaderAnswerCitation,
 } from "@stll/api-contract/reader-answers";
+import type { Block } from "@stll/legal-ast/document-ast";
 
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
+import type { AnchoredNote } from "@/components/legal-reader/margin-notes.logic";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-import type { MarginItem } from "./analysis/margin-notes";
-import type { AnchoredNote } from "./analysis/margin-notes.logic";
 
 GlobalRegistrator.register();
 const { cleanup, render, fireEvent, act, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ReaderAnswerCard } = await import("./reader-answer-card");
+const { resolveReaderAnswerCitation } =
+  await import("./reader-answer-citation.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
 const observers: IntersectionObserverCallback[] = [];
@@ -80,10 +84,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: "Selected words",
-    startOffset: 0,
-    endOffset: 14,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: "Selected words",
+        startOffset: 0,
+        endOffset: 14,
+      },
+    ],
   },
   messages: [
     {
@@ -118,6 +126,47 @@ const answer = {
   createdAt: "2026-10-10",
   updatedAt: "2026-10-10",
 } satisfies ReaderAnswer;
+const openBlocks = [
+  {
+    id: "five",
+    anchorId: "p-5",
+    type: "paragraph",
+    number: 5,
+    inlines: [],
+    plainText: "The applicant was not heard before the order was made.",
+  },
+] satisfies Block[];
+const citedDecision = {
+  decisionId: "00000000-0000-4000-8000-000000000005",
+  court: "Synthetic Supreme Court",
+  courtShortCode: "SYN",
+  caseNumber: "SYN 12/2026",
+  decisionDate: "2026-01-12",
+  readerUrl: "/law/cze/cases/synthetic-supreme-court/synthetic-decision",
+  originalUrl: null,
+} satisfies DecisionCitationMetadata;
+const citedBlocks = [
+  {
+    id: "six",
+    anchorId: "p-6",
+    type: "paragraph",
+    number: 6,
+    inlines: [],
+    plainText: "A hearing is required before an order of that kind.",
+  },
+] satisfies Block[];
+const citationTarget = (citation: ReaderAnswerCitation) =>
+  resolveReaderAnswerCitation({
+    citation,
+    decisionId: answer.decisionId,
+    blocks: openBlocks,
+    formatNumber: String,
+    readCitedDecision: () => ({
+      type: "loaded",
+      decision: citedDecision,
+      blocks: citedBlocks,
+    }),
+  });
 const mount = (
   overrides: Partial<Parameters<typeof ReaderAnswerCard>[0]> = {},
   locale = "en",
@@ -136,12 +185,8 @@ const mount = (
     ...handlers,
     active: false,
     openRevision: 0,
-    citationLabel: (
-      citation: ReaderAnswer["messages"][number]["citations"][number],
-    ) =>
-      citation.decisionId === answer.decisionId
-        ? `¶${citation.paragraphId}`
-        : `${citation.decisionId} · ¶${citation.paragraphId}`,
+    citationTarget,
+    language: "en",
     busy: false,
     ...overrides,
   };
@@ -149,18 +194,33 @@ const mount = (
     <IntlProvider
       locale={locale}
       messages={locale === "ar" ? arabicMessages : messages}
+      timeZone="UTC"
     >
-      <ReaderAnswerCard {...updated} />
+      <FormattingProvider locale={locale} timeZone="UTC">
+        <ReaderAnswerCard {...updated} />
+      </FormattingProvider>
     </IntlProvider>
   );
   return { ...render(tree()), handlers, tree, props };
 };
 
-test("citations preserve both decision and paragraph identity and each action calls its owner", () => {
-  const { getByRole, handlers } = mount();
-  fireEvent.click(getByRole("button", { name: "¶p-5" }));
+test("citations preserve both decision and paragraph identity and each action calls its owner", async () => {
+  const { container, findByRole, getByRole, handlers } = mount();
+  expect(
+    [...container.querySelectorAll<HTMLElement>("[data-citation-kind]")].map(
+      (chip) => chip.dataset["citationKind"],
+    ),
+  ).toEqual(["paragraph", "decision"]);
+  fireEvent.click(getByRole("button", { name: "Paragraph 5" }));
+  const decisionChip = getByRole("button", {
+    name: "Synthetic Supreme Court, SYN 12/2026, Jan 12, 2026, paragraph 6",
+  });
+  expect(decisionChip.getAttribute("href")).toBe(
+    `${citedDecision.readerUrl}#p-6`,
+  );
+  fireEvent.click(decisionChip);
   fireEvent.click(
-    getByRole("button", { name: /00000000-0000-4000-8000-000000000005/u }),
+    await findByRole("link", { name: messages.common.openInStella }),
   );
   const message = answer.messages.at(0);
   if (message === undefined) {
@@ -208,7 +268,8 @@ test("IME confirmation does not send a follow-up until composition ends", () => 
 });
 
 test("IME confirmation does not send a margin comment until composition ends", async () => {
-  const { MarginNotes } = await import("./analysis/margin-notes");
+  const { MarginNotes } =
+    await import("@/components/legal-reader/margin-notes");
   const onSubmit = mock(
     (_body: string, _visibility: "private" | "shared") => undefined,
   );
@@ -221,6 +282,7 @@ test("IME confirmation does not send a margin comment until composition ends", a
             kind: "composer",
             id: "comment-composer",
             startAnchorId: "p-2",
+            targetType: "decision",
             onSubmit,
             onCancel: () => undefined,
           },
@@ -305,7 +367,7 @@ test("revealing an already visible card still lets it minimise when the reader s
 });
 
 test("streaming and failed partial replies remain visible, with typed errors and invalid citation feedback", () => {
-  const { getByRole, getByText, rerender, tree, props } = mount({
+  const { getByRole, getByText, queryByRole, rerender, tree, props } = mount({
     busy: true,
     answer: {
       ...answer,
@@ -337,14 +399,12 @@ test("streaming and failed partial replies remain visible, with typed errors and
     }),
   );
   expect(getByText("Partial explanation")).toBeDefined();
-  expect(getByRole("alert").textContent).toBe(
-    "The answer budget is exhausted.",
-  );
+  expect(queryByRole("alert")).toBeNull();
   expect(getByText("2 citations could not be verified.")).toBeDefined();
 });
 
-test("a persisted timeout shows its own error and leaves follow-up and regeneration available", () => {
-  const { getByRole, handlers } = mount({
+test("a persisted timeout leaves actions available without a raw alert", () => {
+  const { getByRole, queryByRole, handlers } = mount({
     answer: {
       ...answer,
       messages: answer.messages.map((message) => ({
@@ -354,9 +414,7 @@ test("a persisted timeout shows its own error and leaves follow-up and regenerat
       })),
     },
   });
-  expect(getByRole("alert").textContent).toBe(
-    messages.readerAnswers.timeoutError,
-  );
+  expect(queryByRole("alert")).toBeNull();
   const composer = getByRole("textbox", { name: "Ask a follow-up" });
   expect(composer.hasAttribute("disabled")).toBe(false);
   const regenerate = getByRole("button", { name: "Regenerate answer" });
@@ -410,8 +468,10 @@ test("opening another answer leaves this minimised card closed", () => {
 });
 
 test("answer and comment share the canonical gutter placement without overlapping", async () => {
-  const { MarginNotes } = await import("./analysis/margin-notes");
-  const { placeGutterNotes } = await import("./analysis/margin-notes.logic");
+  const { MarginNotes } =
+    await import("@/components/legal-reader/margin-notes");
+  const { placeGutterNotes } =
+    await import("@/components/legal-reader/margin-notes.logic");
   const originalBounds = HTMLElement.prototype.getBoundingClientRect;
   const originalHeight = Object.getOwnPropertyDescriptor(
     HTMLElement.prototype,
@@ -452,7 +512,10 @@ test("answer and comment share the canonical gutter placement without overlappin
       text: "A nearby comment",
       startAnchorId: "p-3",
       author: { name: null, image: null },
+      createdAt: "2026-09-01T10:00:00.000Z",
+      updatedAt: "2026-09-01T10:00:00.000Z",
       mine: false,
+      targetType: "decision",
       visibility: "private",
       onDelete: () => undefined,
       onToggleVisibility: () => undefined,
@@ -463,12 +526,14 @@ test("answer and comment share the canonical gutter placement without overlappin
     ];
     const expected = placeGutterNotes({ notes, region: { width: 320 } });
     const { container } = render(
-      <IntlProvider locale="en" messages={messages}>
-        <MarginNotes
-          placement="gutter"
-          items={[answerItem, commentItem]}
-          scrollContainerRef={{ current: scroll }}
-        />
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <MarginNotes
+            placement="gutter"
+            items={[answerItem, commentItem]}
+            scrollContainerRef={{ current: scroll }}
+          />
+        </FormattingProvider>
       </IntlProvider>,
     );
     await waitFor(() => {

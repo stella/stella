@@ -19,8 +19,8 @@ import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check
 import type { SanctionsCheckDependencies } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
-  screenSanctionsSubject,
   SanctionsScreening,
+  screenSanctionsSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
@@ -187,6 +187,7 @@ describe("sanctions check", () => {
       answer: async () =>
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Registry 'ares' lookup failed",
         }),
       reason: "registry-unavailable",
@@ -261,7 +262,11 @@ describe("sanctions check", () => {
         subject: { type: "company-id", value: "26863154", country: "CZ" },
         dependencies: dependencies({
           executeLookup: async () =>
-            new HandlerError({ status, message: "Register did not answer" }),
+            new HandlerError({
+              status,
+              code: "internal_error",
+              message: "Register did not answer",
+            }),
         }),
       });
       const check = result.unwrap();
