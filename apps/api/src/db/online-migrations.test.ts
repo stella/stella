@@ -508,9 +508,11 @@ describe("online migrations", () => {
   });
 
   test("reports newest-set retirement work and rejects an older leftover", async () => {
-    const replacement = ONLINE_INDEX_REPLACEMENTS.at(0);
-    if (!replacement) {
-      throw new TypeError("Expected retirement fixture");
+    const replacement = ONLINE_INDEX_REPLACEMENTS.find(
+      ({ introducedBy }) => typeof introducedBy === "string",
+    );
+    if (!replacement || typeof replacement.introducedBy !== "string") {
+      throw new TypeError("Expected migration-owned retirement fixture");
     }
     const states = { [replacement.legacyName]: [true] };
     const newest = createHarness({
