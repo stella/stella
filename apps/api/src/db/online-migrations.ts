@@ -546,6 +546,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_citations_decision_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("decision_id", "jurisdiction", "work_identifier", "anchor" COLLATE "C", "span_start")',
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (decision_id, jurisdiction, work_identifier, anchor COLLATE "C", span_start)',
+    isUnique: false,
+    name: "case_law_provision_citations_decision_work_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_jurisdiction_due_idx" ON public."case_law_provision_extractions" USING btree ("jurisdiction", "lane", "due_at", "decision_id") WHERE "due_at" IS NOT NULL AND "work_status" <> \'blocked\'',
     definitionBody:
       "ON public.case_law_provision_extractions USING btree (jurisdiction, lane, due_at, decision_id) WHERE ((due_at IS NOT NULL) AND (work_status <> 'blocked'::text))",
