@@ -1,38 +1,25 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type * as TestingLibrary from "@testing-library/react";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { Field, FieldError, FieldLabel } from "./field";
-import { Form } from "./form";
-import { Input } from "./input";
-
-// Registered for this file only, and the testing library loaded after it,
-// so the shared test process keeps one happy-dom at a time.
-let library: typeof TestingLibrary;
-
-beforeAll(async () => {
-  GlobalRegistrator.register();
-  library = await import("@testing-library/react");
-});
+// The same order as the other DOM tests here: register, then load the
+// libraries that read the document, and unregister when the file is done.
+GlobalRegistrator.register();
+const { cleanup, render, screen } = await import("@testing-library/react");
+const { Field, FieldError, FieldLabel } = await import("./field");
+const { Form } = await import("./form");
+const { Input } = await import("./input");
 
 afterEach(() => {
-  library.cleanup();
+  cleanup();
 });
 
 afterAll(async () => {
+  cleanup();
   await GlobalRegistrator.unregister();
 });
 
 describe("Form server errors", () => {
   test("a server error marks its field and shows in its FieldError", () => {
-    const { render, screen } = library;
     render(
       <Form errors={{ email: "Already invited" }}>
         <Field name="email">
@@ -58,7 +45,6 @@ describe("Form server errors", () => {
   });
 
   test("a FieldError matched to one constraint stays hidden for a server error", () => {
-    const { render, screen } = library;
     render(
       <Form errors={{ email: "Already invited" }}>
         <Field name="email">
