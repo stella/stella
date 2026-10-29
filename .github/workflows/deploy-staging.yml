@@ -789,7 +789,7 @@ jobs:
           # first lease bridges until it starts, the second covers every later
           # step's timeout-minutes (scripts/staging-proof-lease.test.ts).
           staging-lease-before-hours: ${{ inputs.release_ref != '' && '1' || '' }}
-          staging-lease-after-hours: ${{ inputs.release_ref != '' && '3' || '' }}
+          staging-lease-after-hours: ${{ inputs.release_ref != '' && '4' || '' }}
           staging-lease-sha: ${{ inputs.release_ref != '' && needs.resolve.outputs.sha || '' }}
 
       # The commit staging is running, recorded where it outlives this run.
