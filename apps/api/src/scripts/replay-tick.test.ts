@@ -106,7 +106,6 @@ describe("scheduled replay entrypoint", () => {
       [ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }],
       [ADAPTER_KEYS.SK_COURTS, { mode: "dry-run", dailyBudget: 10_000 }],
       [ADAPTER_KEYS.SK_US, { mode: "dry-run", dailyBudget: 10_000 }],
-      [ADAPTER_KEYS.CZ_UOHS, { mode: "dry-run", dailyBudget: 10_000 }],
     ]);
   });
 
