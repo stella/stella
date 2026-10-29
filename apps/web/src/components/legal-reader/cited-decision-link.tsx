@@ -106,7 +106,8 @@ type CitedDecisionLinkProps = Omit<
 > & {
   children: ReactNode;
   className?: string | undefined;
-  showBadge: boolean;
+  /** Split citation ranges override this for every continuation segment. */
+  showBadge?: boolean | undefined;
 };
 
 /**
@@ -177,7 +178,7 @@ const CitingPassage = ({
 export const CitedDecisionLink = ({
   children,
   className,
-  showBadge,
+  showBadge = true,
   ...chip
 }: CitedDecisionLinkProps) => (
   <CitedDecisionChip

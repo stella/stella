@@ -280,7 +280,10 @@ describe("a citation card in the decision text", () => {
     expect(citationLinks).toHaveLength(4);
     const citationText = Array.from(citationLinks ?? [])
       .map((link) => {
-        const copy = link.cloneNode(true) as HTMLElement;
+        const copy = link.cloneNode(true);
+        if (!(copy instanceof Element)) {
+          return "";
+        }
         for (const node of copy.querySelectorAll("[data-reader-chrome]")) {
           node.remove();
         }

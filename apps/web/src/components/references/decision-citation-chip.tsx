@@ -137,7 +137,7 @@ const DecisionCitationTriggerContent = ({
   /** The court's number, already in the reader's formatting locale. */
   paragraph: string | null;
   presentation: DecisionCitationPresentation;
-}) => {
+}): ReactNode => {
   const t = useTranslations();
   const badge = (
     <DecisionCitationLabel
