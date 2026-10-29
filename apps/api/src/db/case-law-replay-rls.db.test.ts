@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { getTableName, isTable } from "drizzle-orm";
+import { getTableName, is } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 
 import { withGatedTestClients } from "../tests/gated-test-database";
 import * as replaySchema from "./schema/case-law-replay";
@@ -84,15 +85,14 @@ const receipts = [
 
 test("replay owner-only role coverage includes every declared replay table", () => {
   const declared = Object.values(replaySchema)
-    .filter(isTable)
-    .map(getTableName)
+    .flatMap((value) => (is(value, PgTable) ? [getTableName(value)] : []))
     .toSorted();
-  expect(
+  expect(declared).toEqual(
     receipts
       .map(({ table }) => table)
       .filter((name) => name.startsWith("case_law_replay_"))
       .toSorted(),
-  ).toEqual(declared);
+  );
 });
 
 describe.skipIf(!enabled)("replay receipt row security", () => {
