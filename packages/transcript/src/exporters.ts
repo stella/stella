@@ -131,7 +131,7 @@ const planCues = ({
           }),
         );
       }
-      const words = text.split(" ");
+      const words = text.trim().split(/\s+/u);
       const splitOnWords = words.length >= count;
       // Attach separators to a text unit so no cue can consist only of whitespace.
       const units = splitOnWords
@@ -153,6 +153,14 @@ const planCues = ({
           .slice(unitOffset, unitOffset + unitCount)
           .join(splitOnWords ? " " : "")
           .trim();
+        if (part.length === 0) {
+          return Result.err(
+            new TranscriptInputError({
+              message:
+                "Segment has insufficient text for subtitle cue durations",
+            }),
+          );
+        }
         cues.push({
           startMs:
             segment.startMs +

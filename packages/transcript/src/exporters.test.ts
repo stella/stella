@@ -318,36 +318,54 @@ test("subtitle cue arithmetic retains exact safe-integer endpoints", () => {
 });
 
 test("subtitle partitions keep every feasible cue nonempty around whitespace", () => {
-  const transcript = {
-    durationMs: 28_000,
-    segments: [{ startMs: 0, endMs: 28_000, text: "ab cd" }],
-  } satisfies Transcript;
-  for (const [format, output] of [
-    ["srt", exportSrt(transcript).unwrap()],
-    ["vtt", exportVtt(transcript).unwrap()],
-  ] as const) {
-    const cues = parseSubtitles(output, format);
-    expect(cues.map(({ text }) => text)).toEqual(["a", "b", "c", "d"]);
-    expect(cues.map(({ startMs, endMs }) => endMs - startMs)).toEqual([
-      7000, 7000, 7000, 7000,
-    ]);
+  for (const text of [
+    "ab cd",
+    "a  b  c  d",
+    "  a  b  c  d  ",
+    "\ta\t \nb\r\n c\u00a0d ",
+  ]) {
+    const transcript = {
+      durationMs: 28_000,
+      segments: [{ startMs: 0, endMs: 28_000, text }],
+    } satisfies Transcript;
+    for (const [format, output] of [
+      ["srt", exportSrt(transcript).unwrap()],
+      ["vtt", exportVtt(transcript).unwrap()],
+    ] as const) {
+      const cues = parseSubtitles(output, format);
+      expect(cues.map(({ text: part }) => part)).toEqual(["a", "b", "c", "d"]);
+      expect(cues.map(({ startMs, endMs }) => endMs - startMs)).toEqual([
+        7000, 7000, 7000, 7000,
+      ]);
+    }
   }
 });
+
+const whitespaceRun = fc
+  .array(fc.constantFrom(" ", "\t", "\n", "\r", "\u00a0", "\u2003"), {
+    minLength: 1,
+    maxLength: 8,
+  })
+  .map((characters) => characters.join(""));
 
 test("subtitle partitions preserve all nonwhitespace text for feasible cue counts", () => {
   assertProperty(
     "subtitle partitions preserve all nonwhitespace text for feasible cue counts",
     fc.property(
-      fc.array(fc.constantFrom("ab", "Žofii", "č", "Ľubor", "🗂️"), {
-        minLength: 1,
-        maxLength: 20,
-      }),
+      fc.array(
+        fc.record({
+          word: fc.constantFrom("ab", "Žofii", "č", "Ľubor", "🗂️"),
+          whitespace: whitespaceRun,
+        }),
+        { minLength: 1, maxLength: 20 },
+      ),
       fc.nat(),
-      (words, choice) => {
-        const text = words.join(" ");
-        const content = Array.from(text)
-          .filter((character) => character !== " ")
-          .join("");
+      whitespaceRun,
+      (entries, choice, trailingWhitespace) => {
+        const text =
+          entries.map(({ word, whitespace }) => whitespace + word).join("") +
+          trailingWhitespace;
+        const content = entries.map(({ word }) => word).join("");
         const count = 1 + (choice % Array.from(content).length);
         const durationMs = count * 7000;
         const transcript = {
@@ -360,6 +378,9 @@ test("subtitle partitions preserve all nonwhitespace text for feasible cue count
         ] as const) {
           const cues = parseSubtitles(output, format);
           expect(cues).toHaveLength(count);
+          expect(cues.every(({ text: part }) => part.trim().length > 0)).toBe(
+            true,
+          );
           expect(
             cues.map(({ text: part }) => part.replaceAll(/\s/gu, "")).join(""),
           ).toBe(content);
