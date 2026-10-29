@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -16,6 +16,9 @@ const { decryptAIConfig, encryptAIConfig, isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
 const { encryptContent } = await import("@/api/lib/content-encryption");
 const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
+const captureModule = await import("@/api/lib/analytics/capture");
+const { installRecordingAnalytics, installRecordingLogger } =
+  await import("@/api/tests/helpers/recording-telemetry");
 
 const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
   if ((typeof value !== "object" && typeof value !== "function") || !value) {
@@ -83,40 +86,89 @@ describe("unreadable configuration boundary", () => {
       decrypt: async () => JSON.stringify({ [marker]: marker }),
     },
   ] as const)("returns only the classified $reason error", async (fixture) => {
-    const result = await decryptAIConfig(
-      organizationId,
-      fixture.ciphertext,
-      fixture.iv,
-      fixture.decrypt,
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    const capture = spyOn(captureModule, "captureError");
+    const devErrors = spyOn(console, "error").mockImplementation(
+      () => undefined,
     );
+    const ciphertext = fixture.ciphertext ?? Buffer.from(`cipher-${marker}`);
+    const iv = fixture.iv ?? Buffer.from(`iv-${marker}`);
+    const markers = [
+      marker,
+      `nested-${marker}`,
+      ciphertext.toString("hex"),
+      ciphertext.toString("base64"),
+      iv.toString("hex"),
+      iv.toString("base64"),
+    ];
 
-    expect(result.isErr()).toBe(true);
-    if (result.isOk()) {
-      throw new Error("Expected an unreadable configuration");
+    try {
+      const result = await decryptAIConfig(
+        organizationId,
+        fixture.ciphertext,
+        fixture.iv,
+        fixture.decrypt,
+      );
+
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new Error("Expected an unreadable configuration");
+      }
+      expect(result.error.reason).toBe(fixture.reason);
+      expect(Reflect.ownKeys(result.error).map(String).toSorted()).toEqual([
+        "_tag",
+        "column",
+        "line",
+        "message",
+        "name",
+        "originalColumn",
+        "originalLine",
+        "reason",
+        "sourceURL",
+        "stack",
+      ]);
+      expect(result.error).toMatchObject({
+        _tag: "OrgAIConfigReadError",
+        message: "Decrypted organization AI configuration is unreadable",
+        name: "OrgAIConfigReadError",
+        reason: fixture.reason,
+      });
+      expect(logs.records).toEqual([
+        expect.objectContaining({
+          message: "organization_ai_config.read_failed",
+          attributes: {
+            action: "decrypt",
+            organizationId,
+            reason: fixture.reason,
+            source: "organization_ai_config",
+          },
+        }),
+      ]);
+      expect(analytics.events).toEqual([]);
+      expect(capture).not.toHaveBeenCalled();
+      expect(devErrors).not.toHaveBeenCalled();
+
+      const recorded = JSON.stringify(
+        descriptorGraph({
+          analytics: analytics.events,
+          captureArguments: capture.mock.calls,
+          development: devErrors.mock.calls,
+          error: result.error,
+          logs: logs.records,
+        }),
+      );
+      for (const secret of markers) {
+        expect(recorded).not.toContain(secret);
+      }
+      expect(recorded).not.toContain("cause");
+      expect(recorded).not.toContain("metadata");
+    } finally {
+      devErrors.mockRestore();
+      capture.mockRestore();
+      logs.restore();
+      analytics.restore();
     }
-    expect(result.error.reason).toBe(fixture.reason);
-    expect(Reflect.ownKeys(result.error).map(String).toSorted()).toEqual([
-      "_tag",
-      "column",
-      "line",
-      "message",
-      "name",
-      "originalColumn",
-      "originalLine",
-      "reason",
-      "sourceURL",
-      "stack",
-    ]);
-    expect(result.error).toMatchObject({
-      _tag: "OrgAIConfigReadError",
-      message: "Decrypted organization AI configuration is unreadable",
-      name: "OrgAIConfigReadError",
-      reason: fixture.reason,
-    });
-    const walked = JSON.stringify(descriptorGraph(result.error));
-    expect(walked).not.toContain(marker);
-    expect(walked).not.toContain("cause");
-    expect(walked).not.toContain("metadata");
   });
 });
 
