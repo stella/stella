@@ -215,4 +215,26 @@ describe("cutting a line's end", () => {
       { type: "text", text: " third" },
     ]);
   });
+
+  test("a whitespace edit aligns a long paragraph without changing later nodes", () => {
+    const paragraph = "word ".repeat(40_000).split("");
+    for (let index = 399; index < paragraph.length - 1; index += 400) {
+      paragraph[index] = "\n";
+    }
+    const chunks = paragraph.join("").split("\n");
+    const inlines: Inline[] = chunks.flatMap((text, index) =>
+      index === chunks.length - 1
+        ? [{ type: "text", text }]
+        : [{ type: "text", text }, { type: "line-break" }],
+    );
+    const expected: Inline[] = inlines.map((node, index) =>
+      index === 0 && node.type === "text"
+        ? { ...node, text: node.text.replace(" ", "") }
+        : node,
+    );
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace(" ", "")),
+    ).toEqual(expected);
+  });
 });

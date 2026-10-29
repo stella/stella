@@ -229,6 +229,16 @@ export const mapInlineText = (
 const isWhitespace = (char: string | undefined): boolean =>
   char !== undefined && /^\s$/u.test(char);
 
+const whitespaceRunLengths = (text: string): number[] => {
+  const lengths = Array.from<number>({ length: text.length }).fill(0);
+  for (let index = text.length - 1; index >= 0; index -= 1) {
+    if (isWhitespace(text[index])) {
+      lengths[index] = 1 + (lengths[index + 1] ?? 0);
+    }
+  }
+  return lengths;
+};
+
 /**
  * What each character of `before` becomes in `after`: itself, other
  * whitespace, or nothing. `undefined` when `after` is not `before` with only
@@ -242,24 +252,14 @@ const whitespaceEdits = (
   let next = 0;
   // Code units, not code points: the offsets below are a text node's length.
   const source = before.split("");
+  const sourceWhitespaceRuns = whitespaceRunLengths(before);
+  const targetWhitespaceRuns = whitespaceRunLengths(after);
   for (const [index, char] of source.entries()) {
     const target = after[next];
-    const sourceWhitespaceLeft = source
-      .slice(index)
-      .findIndex((sourceChar) => !isWhitespace(sourceChar));
-    const targetWhitespaceLeft = after
-      .slice(next)
-      .split("")
-      .findIndex((targetChar) => !isWhitespace(targetChar));
     const canSkipWhitespace =
       isWhitespace(char) &&
       isWhitespace(target) &&
-      (sourceWhitespaceLeft === -1
-        ? source.length - index
-        : sourceWhitespaceLeft) >
-        (targetWhitespaceLeft === -1
-          ? after.length - next
-          : targetWhitespaceLeft);
+      (sourceWhitespaceRuns[index] ?? 0) > (targetWhitespaceRuns[next] ?? 0);
     if (
       char === target ||
       (isWhitespace(char) && isWhitespace(target) && !canSkipWhitespace)
