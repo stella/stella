@@ -765,31 +765,46 @@ export const readPrivateRecord = (value: unknown): PrivateRecord => {
 const STORE_RELEASE = "release-health-v1";
 const DEFAULT_STORE = "stella/stella-infra";
 
-// Never echo API response bodies on failure: even errors can contain private data.
-const github = (args: readonly string[]): string => {
+/** One GitHub command: the CLI runs it through gh-retry.sh, tests answer in memory. */
+export type GitHubCall = (args: readonly string[]) => {
+  readonly exitCode: number;
+  readonly stdout: string;
+};
+
+const spawnGitHub: GitHubCall = (args) => {
   const result = Bun.spawnSync(
     ["bash", path.join(import.meta.dir, "gh-retry.sh"), ...args],
     { stdout: "pipe", stderr: "pipe" },
   );
+  return { exitCode: result.exitCode, stdout: result.stdout.toString() };
+};
+
+// Never echo API response bodies on failure: even errors can contain private data.
+const github = (call: GitHubCall, args: readonly string[]): string => {
+  const result = call(args);
   if (result.exitCode !== 0) {
     throw new ReleaseHealthError(
       "Private release record request failed: the draft store or tag record is missing or inaccessible. Draft reads require a token with contents:write (GitHub returns 404 for insufficient access).",
     );
   }
-  return result.stdout.toString();
+  return result.stdout;
 };
 
-const requirePrivateStore = (store: string): void => {
+export const requirePrivateStore = (
+  store: string,
+  call: GitHubCall = spawnGitHub,
+): void => {
   if (
     !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(store) ||
-    github(["api", `repos/${store}`, "--jq", ".private"]).trim() !== "true"
+    github(call, ["api", `repos/${store}`, "--jq", ".private"]).trim() !==
+      "true"
   ) {
     throw new ReleaseHealthError(
       "Release health store must be a private repository",
     );
   }
   const metadata: unknown = JSON.parse(
-    github([
+    github(call, [
       "release",
       "view",
       STORE_RELEASE,
@@ -809,15 +824,17 @@ const requirePrivateStore = (store: string): void => {
 type ReadStoredRecordOptions = {
   readonly release: string;
   readonly store: string;
+  readonly call?: GitHubCall;
 };
 
-const readStoredRecord = ({
+export const readStoredRecord = ({
   release,
   store,
+  call = spawnGitHub,
 }: ReadStoredRecordOptions): PrivateRecord => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-health-read-"));
   try {
-    github([
+    github(call, [
       "release",
       "download",
       STORE_RELEASE,
@@ -835,6 +852,44 @@ const readStoredRecord = ({
       throw new ReleaseHealthError("Private record names another release");
     }
     return record;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+type WriteStoredRecordOptions = ReadStoredRecordOptions & {
+  readonly record: PrivateRecord;
+};
+
+/** Uploads a release's private record and proves it reads back unchanged. */
+export const writeStoredRecord = ({
+  release,
+  store,
+  record,
+  call = spawnGitHub,
+}: WriteStoredRecordOptions): void => {
+  if (record.verdict.release !== release) {
+    throw new ReleaseHealthError("Private record names another release");
+  }
+  const directory = mkdtempSync(path.join(tmpdir(), "release-health-record-"));
+  try {
+    const file = path.join(directory, `${release}.json`);
+    writeFileSync(file, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+    github(call, [
+      "release",
+      "upload",
+      STORE_RELEASE,
+      file,
+      "--repo",
+      store,
+      "--clobber",
+    ]);
+    if (
+      JSON.stringify(readStoredRecord({ release, store, call })) !==
+      JSON.stringify(record)
+    ) {
+      throw new ReleaseHealthError("Private release record readback mismatch");
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1125,36 +1180,11 @@ const run = (argv: readonly string[]): number => {
         );
         return 0;
       }
-      const record = readPrivateRecordFile(required(values.record, "record"));
-      if (record.verdict.release !== release) {
-        throw new ReleaseHealthError("Private record names another release");
-      }
-      const directory = mkdtempSync(
-        path.join(tmpdir(), "release-health-record-"),
-      );
-      try {
-        const file = path.join(directory, `${release}.json`);
-        writeFileSync(file, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-        github([
-          "release",
-          "upload",
-          STORE_RELEASE,
-          file,
-          "--repo",
-          store,
-          "--clobber",
-        ]);
-        if (
-          JSON.stringify(readStoredRecord({ release, store })) !==
-          JSON.stringify(record)
-        ) {
-          throw new ReleaseHealthError(
-            "Private release record readback mismatch",
-          );
-        }
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
-      }
+      writeStoredRecord({
+        release,
+        store,
+        record: readPrivateRecordFile(required(values.record, "record")),
+      });
       return 0;
     }
     case "gate": {
