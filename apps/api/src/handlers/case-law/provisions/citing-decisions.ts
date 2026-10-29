@@ -1,5 +1,5 @@
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -136,10 +136,12 @@ const workCondition = (query: ListCitingDecisionsQuery): SQL | null => {
   return null;
 };
 
-/** A null date sorts last under the shared descending order. */
-const DECISION_DATE_FLOOR = "0001-01-01";
-
-const decisionDateKeySql = sql`coalesce(${caseLawProvisionCitations.decisionDate}, ${DECISION_DATE_FLOOR}::date)`;
+/**
+ * A null date sorts last under the shared descending order. The floor is
+ * spelled inline, never bound: the page groups and orders by this key, which
+ * PostgreSQL matches by expression, and two parameters are never equal.
+ */
+const decisionDateKeySql = sql`coalesce(${caseLawProvisionCitations.decisionDate}, '0001-01-01'::date)`;
 const decisionDateCursorSql = sql<string>`to_char(${decisionDateKeySql}, 'YYYY-MM-DD')`;
 
 type CitingDecisionsCursor = {
@@ -178,17 +180,50 @@ export const encodeCitingDecisionsCursor = (
 
 type CitingDecisionsPageOptions = {
   tx: CaseLawPublicReadTransaction;
-  conditions: SQL[];
+  conditions: CitingDecisionConditions;
   cursor: CitingDecisionsCursor | null;
   sort: ListCitingDecisionsQuery["sort"];
   limit: number;
 };
 
+type CitingPageKeys = {
+  citationAuthority: SQLWrapper;
+  mentionCount: SQLWrapper;
+  decisionDateKey: SQLWrapper;
+  decisionId: SQLWrapper;
+};
+
+/** The page order: the requested rank, then newest first, then the id. */
+const citingPageOrder = (
+  sort: ListCitingDecisionsQuery["sort"],
+  keys: CitingPageKeys,
+): SQL[] => [
+  ...(sort === "authority"
+    ? [sql`coalesce(${keys.citationAuthority}, 0) DESC`]
+    : []),
+  ...(sort === "citations" ? [sql`${keys.mentionCount} DESC`] : []),
+  sql`${keys.decisionDateKey} DESC`,
+  sql`${keys.decisionId} DESC`,
+];
+
 /**
- * One row per citing decision, its earliest mention, with the count of all
- * its mentions the conditions admit. The mention window reads every link
- * row the conditions admit, so their access path is the cost of the page:
- * `query-plans/registry.ts` holds it to the work and anchor indexes.
+ * One page of citing decisions, each with its earliest mention and the count
+ * of all its mentions the conditions admit.
+ *
+ * Three steps, so a page never waits on the whole citing set:
+ *
+ * 1. The link rows alone, one group per decision: its date key and its
+ *    mention count. Every column this step reads is a key of the anchor
+ *    indexes, so a provision's subtree is one index-only range and no
+ *    decision row is read. The groups leave this step in page order.
+ * 2. The groups joined to their decisions one at a time, in that order,
+ *    until the page is full. Only the authority order ranks by a decision
+ *    column, so only it reads every candidate's decision first.
+ * 3. The earliest mention of each decision on the page, one lookup per row
+ *    through the decision's own span index.
+ *
+ * `query-plans/registry.ts` holds the access paths, and
+ * `citing-decisions-plan.db.test.ts` holds the decision reads to the page.
  */
 export const citingDecisionsPageQuery = ({
   tx,
@@ -197,11 +232,40 @@ export const citingDecisionsPageQuery = ({
   sort,
   limit,
 }: CitingDecisionsPageOptions) => {
-  const mentions = tx
+  let continuation: SQL | undefined;
+  if (cursor !== null) {
+    continuation = sql`(${decisionDateCursorSql}, ${caseLawProvisionCitations.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
+  }
+  // The groups leave in page order, which is what lets the join below stop
+  // at the limit. The authority order ranks by a decision column, so for it
+  // this order is only the tie-break.
+  const citing = tx
     .select({
-      ...PROVISION_VERSION_COLUMNS,
-      versionValidFrom: caseLawProvisionCitations.versionValidFrom,
       decisionId: caseLawProvisionCitations.decisionId,
+      decisionDateKey: sql<string>`${decisionDateKeySql}`.as(
+        "decision_date_key",
+      ),
+      mentionCount: sql<number>`count(*)::integer`.as("mention_count"),
+    })
+    .from(caseLawProvisionCitations)
+    .where(and(...conditions.links, continuation))
+    // sql-perf-allow: index case_law_provision_citations_work_subtree_page_idx (or its ELI twin), bounded by one provision's subtree read from the index alone
+    .groupBy(decisionDateKeySql, caseLawProvisionCitations.decisionId)
+    // SAFETY: the groups are a subquery the page below limits; a limit here
+    // would cut candidates the decision filters have not yet judged.
+    // oxlint-disable-next-line require-query-limit/require-query-limit -- the enclosing page query applies the limit; see SAFETY above
+    .orderBy(
+      ...(sort === "citations" ? [sql`count(*)::integer DESC`] : []),
+      sql`${decisionDateKeySql} DESC`,
+      sql`${caseLawProvisionCitations.decisionId} DESC`,
+    )
+    .as("citing_decisions");
+
+  const page = tx
+    .select({
+      decisionId: citing.decisionId,
+      decisionDateKey: citing.decisionDateKey,
+      mentionCount: citing.mentionCount,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       // The decision's own address, so a reader can follow the citation
       // without a second read to resolve one.
@@ -215,85 +279,92 @@ export const citingDecisionsPageQuery = ({
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       citationAuthority: publishedCaseLawDecisions.citationAuthority,
+    })
+    .from(citing)
+    .innerJoin(
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, citing.decisionId),
+    )
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(and(...conditions.decisions))
+    .orderBy(
+      ...citingPageOrder(sort, {
+        citationAuthority: publishedCaseLawDecisions.citationAuthority,
+        mentionCount: citing.mentionCount,
+        decisionDateKey: citing.decisionDateKey,
+        decisionId: citing.decisionId,
+      }),
+    )
+    .limit(limit + 1)
+    .as("citing_decision_page");
+
+  const firstMention = tx
+    .select({
+      ...PROVISION_VERSION_COLUMNS,
+      versionValidFrom: caseLawProvisionCitations.versionValidFrom,
       sentenceText: sql<
         string | null
       >`${caseLawProvisionCitations.sentenceText}`.as("sentence_text"),
       printText: caseLawProvisionCitations.printText,
       spanStart: caseLawProvisionCitations.spanStart,
       spanEnd: caseLawProvisionCitations.spanEnd,
-      anchor: caseLawProvisionCitations.anchor,
-      decisionDateCursor: decisionDateCursorSql.as("decision_date_cursor"),
-      mentionCount:
-        sql<number>`count(*) OVER (PARTITION BY ${caseLawProvisionCitations.decisionId})::integer`.as(
-          "mention_count",
-        ),
-      mentionRank: sql<number>`row_number() OVER (
-          PARTITION BY ${caseLawProvisionCitations.decisionId}
-          ORDER BY ${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}
-        )`.as("mention_rank"),
     })
     .from(caseLawProvisionCitations)
-    .innerJoin(
-      publishedCaseLawDecisions,
-      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
+    .where(
+      and(
+        eq(caseLawProvisionCitations.decisionId, page.decisionId),
+        ...conditions.links,
+      ),
     )
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(and(...conditions))
-    .as("citing_decision_mentions");
-
-  let continuation: SQL | undefined;
-  if (cursor !== null) {
-    continuation = sql`(${mentions.decisionDateCursor}, ${mentions.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
-  }
-  return tx
-    .select({
-      appliedVersionBasis: mentions.appliedVersionBasis,
-      appliedVersionDate: mentions.appliedVersionDate,
-      appliedVersionDateRelation: mentions.appliedVersionDateRelation,
-      appliedVersionAmendmentWorkIdentifier:
-        mentions.appliedVersionAmendmentWorkIdentifier,
-      appliedVersionExpressionDate: mentions.appliedVersionExpressionDate,
-      appliedVersionExpressionEli: mentions.appliedVersionExpressionEli,
-      versionEvidenceStart: mentions.versionEvidenceStart,
-      versionEvidenceEnd: mentions.versionEvidenceEnd,
-      versionEvidenceKind: mentions.versionEvidenceKind,
-      versionValidFrom: mentions.versionValidFrom,
-      decisionId: mentions.decisionId,
-      caseNumber: mentions.caseNumber,
-      slug: mentions.slug,
-      court: mentions.court,
-      courtId: mentions.courtId,
-      ecli: mentions.ecli,
-      sourceUrl: mentions.sourceUrl,
-      country: mentions.country,
-      language: mentions.language,
-      languageGroupKey: mentions.languageGroupKey,
-      decisionDate: mentions.decisionDate,
-      citationAuthority: mentions.citationAuthority,
-      sentenceText: mentions.sentenceText,
-      printText: mentions.printText,
-      mentionCount: mentions.mentionCount,
-      spanStart: mentions.spanStart,
-      spanEnd: mentions.spanEnd,
-      anchor: mentions.anchor,
-      decisionDateCursor: mentions.decisionDateCursor,
-    })
-    .from(mentions)
-    .where(and(eq(mentions.mentionRank, 1), continuation))
     .orderBy(
-      ...(sort === "authority"
-        ? [sql`coalesce(${mentions.citationAuthority}, 0) DESC`]
-        : []),
-      ...(sort === "citations" ? [desc(mentions.mentionCount)] : []),
-      desc(mentions.decisionDateCursor),
-      desc(mentions.decisionId),
-      desc(mentions.spanStart),
-      desc(mentions.anchor),
+      asc(caseLawProvisionCitations.spanStart),
+      asc(caseLawProvisionCitations.anchor),
     )
-    .limit(limit + 1);
+    .limit(1)
+    .as("citing_decision_first_mention");
+
+  return (
+    tx
+      .select({
+        appliedVersionBasis: firstMention.appliedVersionBasis,
+        appliedVersionDate: firstMention.appliedVersionDate,
+        appliedVersionDateRelation: firstMention.appliedVersionDateRelation,
+        appliedVersionAmendmentWorkIdentifier:
+          firstMention.appliedVersionAmendmentWorkIdentifier,
+        appliedVersionExpressionDate: firstMention.appliedVersionExpressionDate,
+        appliedVersionExpressionEli: firstMention.appliedVersionExpressionEli,
+        versionEvidenceStart: firstMention.versionEvidenceStart,
+        versionEvidenceEnd: firstMention.versionEvidenceEnd,
+        versionEvidenceKind: firstMention.versionEvidenceKind,
+        versionValidFrom: firstMention.versionValidFrom,
+        decisionId: page.decisionId,
+        caseNumber: page.caseNumber,
+        slug: page.slug,
+        court: page.court,
+        courtId: page.courtId,
+        ecli: page.ecli,
+        sourceUrl: page.sourceUrl,
+        country: page.country,
+        language: page.language,
+        languageGroupKey: page.languageGroupKey,
+        decisionDate: page.decisionDate,
+        citationAuthority: page.citationAuthority,
+        sentenceText: firstMention.sentenceText,
+        printText: firstMention.printText,
+        mentionCount: page.mentionCount,
+        spanStart: firstMention.spanStart,
+        spanEnd: firstMention.spanEnd,
+        decisionDateCursor: sql<string>`to_char(${page.decisionDateKey}, 'YYYY-MM-DD')`,
+      })
+      .from(page)
+      .innerJoinLateral(firstMention, sql`true`)
+      // SAFETY: one row per page row, and the page holds at most limit + 1.
+      // oxlint-disable-next-line require-query-limit/require-query-limit -- the page subquery applies the limit; see SAFETY above
+      .orderBy(...citingPageOrder(sort, page))
+  );
 };
 
 type CitingDecisionRowsOptions = CitingDecisionsPageOptions & {
@@ -356,21 +427,34 @@ type CitingJurisdictionScope = NonNullable<
 >;
 
 /**
- * The link rows a request admits, or null when it names neither work key or
- * both.
+ * What a request admits, split by the table that decides it: the link rows
+ * alone pick and count each decision's mentions, and the decision and its
+ * source admit the decision. A page reads the second only for the decisions
+ * the first already ordered.
+ */
+type CitingDecisionConditions = {
+  links: SQL[];
+  decisions: SQL[];
+};
+
+/**
+ * The link rows and decisions a request admits, or null when it names
+ * neither work key or both.
  */
 export const citingDecisionConditions = (
   query: ListCitingDecisionsQuery,
   { jurisdiction, decisionCountryCondition }: CitingJurisdictionScope,
-): SQL[] | null => {
+): CitingDecisionConditions | null => {
   const work = workCondition(query);
   if (work === null) {
     return null;
   }
-  const conditions: SQL[] = [
+  const links: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
-    decisionCountryCondition,
     work,
+  ];
+  const decisions: SQL[] = [
+    decisionCountryCondition,
     redistributableCaseLawSource,
   ];
 
@@ -378,7 +462,7 @@ export const citingDecisionConditions = (
   // section lists the decisions citing only `odst. 1` of it, and each
   // decision's mention count covers the whole subtree.
   if (query.anchor !== undefined) {
-    conditions.push(
+    links.push(
       provisionAnchorSubtreeSql(caseLawProvisionCitations.anchor, {
         jurisdiction,
         anchor: query.anchor,
@@ -386,17 +470,17 @@ export const citingDecisionConditions = (
     );
   }
   if (query.court !== undefined) {
-    conditions.push(eq(publishedCaseLawDecisions.court, query.court));
+    decisions.push(eq(publishedCaseLawDecisions.court, query.court));
   }
   if (query.year !== undefined) {
     const from = `${String(query.year).padStart(4, "0")}-01-01`;
     const until = `${String(query.year + 1).padStart(4, "0")}-01-01`;
-    conditions.push(
+    links.push(
       gte(caseLawProvisionCitations.decisionDate, from),
       lt(caseLawProvisionCitations.decisionDate, until),
     );
   }
-  return conditions;
+  return { links, decisions };
 };
 
 type CitingDecisionsReadOptions = {
@@ -495,7 +579,7 @@ export const listCitingDecisionsHandler = async (
         } as const)
       : null,
     items: page.items.map(
-      ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
+      ({ decisionDateCursor: _decisionDateCursor, ...item }) =>
         projectProvisionVersion(item),
     ),
   };

@@ -2325,13 +2325,27 @@ export const caseLawProvisionCitations = p.pgTable(
     // One provision with every subdivision under it, for either work key.
     // The anchor compares byte-wise so a subtree is one contiguous range
     // (`provisionAnchorSubtreeSql`); under the database collation `par_510`
-    // sorts between `par_51` and `par_51-odst_1`.
+    // sorts between `par_51` and `par_51-odst_1`. The trailing date and
+    // decision make the range index-only for the cited-by page, which groups
+    // a subtree per decision before it reads any decision.
     p
-      .index("case_law_provision_citations_work_subtree_idx")
-      .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+      .index("case_law_provision_citations_work_subtree_page_idx")
+      .on(
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+      ),
     p
-      .index("case_law_provision_citations_eli_subtree_idx")
-      .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)
+      .index("case_law_provision_citations_eli_subtree_page_idx")
+      .on(
+        t.jurisdiction,
+        t.workEli,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+      )
       .where(isNotNull(t.workEli)),
     p.check(
       "provision_citations_work_number_shape",
