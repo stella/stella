@@ -1,3 +1,4 @@
+import { isValidContactBirthDate } from "@stll/api-contract/contact-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
@@ -34,35 +35,8 @@ export const dateOfBirthToColumns = (dateOfBirth: DateOfBirth | null) => ({
   dateOfBirthDay: dateOfBirth?.precision === "day" ? dateOfBirth.day : null,
 });
 
-export const isValidDateOfBirth = (dateOfBirth: DateOfBirth): boolean => {
-  if (
-    !Number.isInteger(dateOfBirth.year) ||
-    dateOfBirth.year < 1000 ||
-    dateOfBirth.year > 9999
-  ) {
-    return false;
-  }
-  if (
-    dateOfBirth.precision !== "year" &&
-    (!Number.isInteger(dateOfBirth.month) ||
-      dateOfBirth.month < 1 ||
-      dateOfBirth.month > 12)
-  ) {
-    return false;
-  }
-  if (dateOfBirth.precision !== "day") {
-    return true;
-  }
-  const { year, month, day } = dateOfBirth;
-  const leap = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
-  let days = 31;
-  if (month === 2) {
-    days = leap ? 29 : 28;
-  } else if ([4, 6, 9, 11].includes(month)) {
-    days = 30;
-  }
-  return Number.isInteger(day) && day >= 1 && day <= days;
-};
+export const isValidDateOfBirth = (dateOfBirth: DateOfBirth): boolean =>
+  isValidContactBirthDate(dateOfBirth);
 
 export const validatePersonDetails = ({
   type,
