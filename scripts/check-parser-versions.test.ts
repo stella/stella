@@ -12,6 +12,9 @@ import path from "node:path";
 import {
   checkParserVersions,
   comparisonBase,
+  NO_STORED_ROW_EFFECT_REASONS,
+  PARSER_REPLAY_DECLARATIONS_PATH,
+  type ParserReplayDeclaration,
   readGitTree,
 } from "./check-parser-versions";
 
@@ -57,6 +60,17 @@ const fixture = ({
     .map((key) => `[ADAPTER_KEYS.${key}]: ${versions[key] ?? 1}`)
     .join(",\n  ");
   const files = new Map<string, string>([
+    [
+      PARSER_REPLAY_DECLARATIONS_PATH,
+      JSON.stringify(
+        adapters.map((key) => ({
+          source: `test-${key.toLowerCase()}`,
+          parserVersion: versions[key] ?? 1,
+          type: "pending-enrolment-wave",
+          wave: `fixture-${key}`,
+        })),
+      ),
+    ],
     [
       `${ADAPTERS}adapter-registry.ts`,
       [
@@ -1115,4 +1129,131 @@ test("trees without decoded source retain empty and non-code identities", () => 
   } finally {
     rmSync(repository, { force: true, recursive: true });
   }
+});
+
+test("every parser bump requires a declaration for its exact source and target version", () => {
+  const base = fixture();
+  const head = fixture({ versions: { A: 2 } });
+  expect(checkParserVersions({ base, head })).toEqual([]);
+  head.set(PARSER_REPLAY_DECLARATIONS_PATH, "[]");
+  expect(checkParserVersions({ base, head })).toEqual([
+    expect.stringContaining(
+      "test-a: parser version 2 requires a replay declaration",
+    ),
+  ]);
+  head.set(
+    PARSER_REPLAY_DECLARATIONS_PATH,
+    JSON.stringify([
+      {
+        source: "test-b",
+        parserVersion: 2,
+        type: "pending-enrolment-wave",
+        wave: "fixture",
+      },
+    ]),
+  );
+  expect(checkParserVersions({ base, head })).toEqual([
+    expect.stringContaining(
+      "test-a: parser version 2 requires a replay declaration",
+    ),
+  ]);
+  head.set(
+    PARSER_REPLAY_DECLARATIONS_PATH,
+    JSON.stringify([
+      {
+        source: "test-a",
+        parserVersion: 1,
+        type: "pending-enrolment-wave",
+        wave: "fixture",
+      },
+    ]),
+  );
+  expect(checkParserVersions({ base, head })).toEqual([
+    expect.stringContaining(
+      "test-a: parser version 2 requires a replay declaration",
+    ),
+  ]);
+});
+
+test("typed no-stored-row-effect reasons cover deliberate bumps without a stored replay", () => {
+  const base = fixture();
+  const head = fixture({ versions: { A: 2 } });
+  for (const reason of NO_STORED_ROW_EFFECT_REASONS) {
+    head.set(
+      PARSER_REPLAY_DECLARATIONS_PATH,
+      JSON.stringify([
+        {
+          source: "test-a",
+          parserVersion: 2,
+          type: "no-stored-row-effect",
+          reason,
+          explanation: "The fixture change cannot alter stored derived output.",
+        },
+      ]),
+    );
+    expect(checkParserVersions({ base, head })).toEqual([]);
+  }
+  for (const declaration of [
+    {
+      source: "test-a",
+      parserVersion: 2,
+      type: "pending-enrolment-wave",
+      wave: " ",
+    },
+    {
+      source: "test-a",
+      parserVersion: 2,
+      type: "no-stored-row-effect",
+      reason: "not-reviewed",
+      explanation: "Fixture",
+    },
+    {
+      source: "test-a",
+      parserVersion: 2,
+      type: "no-stored-row-effect",
+      reason: "unchanged-derived-output",
+      explanation: " ",
+    },
+  ]) {
+    head.set(PARSER_REPLAY_DECLARATIONS_PATH, JSON.stringify([declaration]));
+    expect(checkParserVersions({ base, head })).toEqual([
+      expect.stringContaining("Every replay declaration requires"),
+      expect.stringContaining(
+        "test-a: parser version 2 requires a replay declaration",
+      ),
+    ]);
+  }
+});
+
+test("replay declaration self-test rejects deletion, duplicates and malformed registries", () => {
+  const base = fixture();
+  const head = fixture({ versions: { A: 2 } });
+  expect(checkParserVersions({ base, head })).toEqual([]);
+  head.delete(PARSER_REPLAY_DECLARATIONS_PATH);
+  expect(checkParserVersions({ base, head })).toEqual([
+    expect.stringContaining("requires a replay declaration"),
+  ]);
+  head.set(PARSER_REPLAY_DECLARATIONS_PATH, "{}");
+  expect(checkParserVersions({ base, head })).toEqual([
+    expect.stringContaining("must be an array"),
+    expect.stringContaining("requires a replay declaration"),
+  ]);
+  head.set(PARSER_REPLAY_DECLARATIONS_PATH, "[");
+  expect(checkParserVersions({ base, head })).toEqual([
+    expect.stringContaining("must be valid JSON"),
+    expect.stringContaining("requires a replay declaration"),
+  ]);
+  const declaration = {
+    source: "test-a",
+    parserVersion: 2,
+    type: "pending-enrolment-wave",
+    wave: "fixture",
+  } satisfies ParserReplayDeclaration;
+  head.set(
+    PARSER_REPLAY_DECLARATIONS_PATH,
+    JSON.stringify([declaration, declaration]),
+  );
+  expect(checkParserVersions({ base, head })).toEqual([
+    "Duplicate replay declaration for test-a:2",
+  ]);
 });

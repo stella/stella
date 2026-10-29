@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import path from "node:path";
 
 /**
@@ -38,6 +39,111 @@ const PARSER_DIRECTORIES = [
 ];
 const PARSER_VERSION_MODULE =
   "apps/api/src/lib/legal-search/ingestion-constants.ts";
+export const PARSER_REPLAY_DECLARATIONS_PATH =
+  "apps/api/src/handlers/case-law/ingestion/replay-declarations.json";
+export const NO_STORED_ROW_EFFECT_REASONS = [
+  "unchanged-derived-output",
+  "newly-captured-raw-only",
+  "stored-raw-unavailable",
+] as const;
+
+type ParserReplayDeclarationIdentity = {
+  source: string;
+  parserVersion: number;
+};
+export type ParserReplayDeclaration = ParserReplayDeclarationIdentity &
+  (
+    | { type: "pending-enrolment-wave"; wave: string }
+    | {
+        type: "no-stored-row-effect";
+        reason: (typeof NO_STORED_ROW_EFFECT_REASONS)[number];
+        explanation: string;
+      }
+  );
+
+const isParserReplayDeclaration = (
+  value: unknown,
+): value is ParserReplayDeclaration => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("source" in value) ||
+    typeof value.source !== "string" ||
+    value.source.trim().length === 0 ||
+    !("parserVersion" in value) ||
+    typeof value.parserVersion !== "number" ||
+    !Number.isSafeInteger(value.parserVersion) ||
+    value.parserVersion < 1 ||
+    !("type" in value)
+  ) {
+    return false;
+  }
+  switch (value.type) {
+    case "pending-enrolment-wave":
+      return (
+        "wave" in value &&
+        typeof value.wave === "string" &&
+        value.wave.trim().length > 0
+      );
+    case "no-stored-row-effect":
+      return (
+        "reason" in value &&
+        NO_STORED_ROW_EFFECT_REASONS.some(
+          (reason) => reason === value.reason,
+        ) &&
+        "explanation" in value &&
+        typeof value.explanation === "string" &&
+        value.explanation.trim().length > 0
+      );
+    default:
+      return false;
+  }
+};
+
+type ReadReplayDeclarationsResult = {
+  declarations: readonly ParserReplayDeclaration[];
+  errors: string[];
+};
+const readReplayDeclarations = (
+  tree: SourceTree,
+): ReadReplayDeclarationsResult => {
+  const source = tree.get(PARSER_REPLAY_DECLARATIONS_PATH);
+  // Existing parser versions are grandfathered; declarations are required at each later bump.
+  if (source === undefined) {
+    return { declarations: [], errors: [] };
+  }
+  const decoded = Result.try(() => JSON.parse(source));
+  if (decoded.isErr()) {
+    return {
+      declarations: [],
+      errors: ["Replay declarations must be valid JSON"],
+    };
+  }
+  const parsed: unknown = decoded.value;
+  if (!Array.isArray(parsed)) {
+    return {
+      declarations: [],
+      errors: ["Replay declarations must be an array"],
+    };
+  }
+  const declarations = parsed.filter(isParserReplayDeclaration);
+  const errors =
+    declarations.length === parsed.length
+      ? []
+      : [
+          "Every replay declaration requires a source, positive parserVersion, and a pending enrolment wave or typed no-stored-row-effect reason with explanation",
+        ];
+  const identities = new Set<string>();
+  for (const declaration of declarations) {
+    const identity = `${declaration.source}:${declaration.parserVersion}`;
+    if (identities.has(identity)) {
+      errors.push(`Duplicate replay declaration for ${identity}`);
+    }
+    identities.add(identity);
+  }
+  return { declarations, errors };
+};
+
 const OUTPUT_SHAPING_ROOTS = [
   ADAPTER_DIRECTORY,
   LEGISLATION_ADAPTER_DIRECTORY,
@@ -702,6 +808,15 @@ export const checkParserVersions = ({
     ...before.errors,
     ...after.errors,
   ];
+  const replay = readReplayDeclarations(head);
+  errors.push(...replay.errors);
+  for (const declaration of replay.declarations) {
+    if (!after.owners.has(declaration.source)) {
+      errors.push(
+        `Replay declaration names unregistered source ${declaration.source}`,
+      );
+    }
+  }
   const movedSources = movedParserSources(baseTree, headTree);
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
@@ -719,6 +834,18 @@ export const checkParserVersions = ({
         `${key}: parser version ${current.version} must not be lower than base ${previous.version}`,
       );
       continue;
+    }
+    if (
+      current.version > previous.version &&
+      !replay.declarations.some(
+        (declaration) =>
+          declaration.source === key &&
+          declaration.parserVersion === current.version,
+      )
+    ) {
+      errors.push(
+        `${key}: parser version ${current.version} requires a replay declaration (pending-enrolment-wave or typed no-stored-row-effect)`,
+      );
     }
     const changed = [
       ...new Set([...previous.parsers, ...current.parsers]),
@@ -907,7 +1034,11 @@ export const readGitTree = (
     // Other imports (JSON, wasm, etc.) still enter the dependency graph by
     // object identity; only code and package export maps need decoding.
     files.set(file, `git-blob:${object}`);
-    if (/\.[cm]?[jt]sx?$/u.test(file) || file.endsWith("/package.json")) {
+    if (
+      /\.[cm]?[jt]sx?$/u.test(file) ||
+      file.endsWith("/package.json") ||
+      file === PARSER_REPLAY_DECLARATIONS_PATH
+    ) {
       sources.push({ file, object });
     }
   }
