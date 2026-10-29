@@ -382,6 +382,40 @@ describe("TanStack text model resolution", () => {
     }
   });
 
+  test("a deployment with only the fast-tier credential serves fast-tier metadata", () => {
+    const originalEnv = {
+      AI_PROVIDER: env.AI_PROVIDER,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+      OPENROUTER_FAST_TIER_API_KEY: env.OPENROUTER_FAST_TIER_API_KEY,
+      REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
+    };
+    try {
+      testState.setConfig("AI_PROVIDER", "openrouter");
+      testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+      testState.setConfig("OPENROUTER_API_KEY", undefined);
+      testState.setConfig("OPENROUTER_FAST_TIER_API_KEY", "fast-tier-key");
+
+      expect(
+        getTanStackTextModelInfoForTask("chat", null, {
+          dataClass: "public_corpus",
+          organizationId: orgId,
+          modelTier: MANAGED_MODEL_TIER.fast,
+        }),
+      ).toMatchObject({ keySource: "instance", provider: "openrouter" });
+      // Standard work has no credential of its own and is refused at
+      // dispatch rather than told to bring its own key.
+      expect(() =>
+        getTanStackTextModelForTask("chat", null, {
+          dataClass: "public_corpus",
+          organizationId: orgId,
+          modelTier: MANAGED_MODEL_TIER.standard,
+        }),
+      ).toThrow("Managed AI is not available");
+    } finally {
+      testState.patchConfig(originalEnv);
+    }
+  });
+
   test("checks the managed policy for an automatically selected provider", () => {
     const originalEnv = {
       AI_PROVIDER: env.AI_PROVIDER,
@@ -440,6 +474,10 @@ describe("TanStack text model resolution", () => {
         task: "reasoning",
         dataClass: "customer",
         managedAIResidency: "eu",
+        managedOpenRouterCredential: {
+          type: "static",
+          apiKey: "test-openrouter-instance-key",
+        },
         organizationId: orgId,
         modelTier: MANAGED_MODEL_TIER.standard,
       },
@@ -482,6 +520,10 @@ describe("TanStack text model resolution", () => {
         managedAIResidency: "eu",
         organizationId: null,
         modelTier: MANAGED_MODEL_TIER.standard,
+        managedOpenRouterCredential: {
+          type: "static",
+          apiKey: "test-openrouter-instance-key",
+        },
       },
     );
 
@@ -1650,6 +1692,10 @@ describe("managed model tier", () => {
   const MANAGED_CUSTOMER = {
     dataClass: "customer",
     managedAIResidency: "eu",
+    managedOpenRouterCredential: {
+      type: "static",
+      apiKey: "test-openrouter-instance-key",
+    },
     organizationId: orgId,
   } as const;
   // The organization's own key: each task on its own catalog model, so a

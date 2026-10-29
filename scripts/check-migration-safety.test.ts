@@ -180,6 +180,122 @@ describe("check-migration-safety", () => {
     });
   });
 
+  describe("uniqueness contract steps", () => {
+    it("flags a unique index added to an existing table", () => {
+      expectFinding(
+        runChecker(
+          `CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
+        ),
+        "add-unique-constraint",
+      );
+    });
+
+    const addedUniquenessContracts = [
+      `ALTER TABLE documents ADD UNIQUE NULLS NOT DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE INITIALLY DEFERRED NOT VALID;`,
+      `ALTER TABLE documents ADD PRIMARY KEY NULLS DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE;`,
+      `ALTER TABLE documents ADD EXCLUDE USING gist (validity WITH &&) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE NOT VALID;`,
+      `ALTER TABLE documents ADD CONSTRAINT documents_external_id_unique UNIQUE USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD PRIMARY KEY USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD COLUMN external_id text PRIMARY KEY;`,
+      `ALTER TABLE documents ADD external_id text UNIQUE;`,
+      `ALTER TABLE documents ADD COLUMN IF NOT EXISTS external_id text CONSTRAINT documents_external_id_key UNIQUE;`,
+      `ALTER TABLE documents ADD IF NOT EXISTS external_id text CONSTRAINT documents_external_id_pkey PRIMARY KEY;`,
+      `AlTeR TaBlE "legal"."Documents" ADD CONSTRAINT "External Id Key" UNIQUE ("External Id");`,
+    ];
+
+    it.each(addedUniquenessContracts)(
+      "flags an added table uniqueness contract: %s",
+      (sql) => {
+        expectFinding(runChecker(sql), "add-unique-constraint");
+      },
+    );
+
+    it.each(addedUniquenessContracts)(
+      "allows an added uniqueness contract on a table created in the migration: %s",
+      (sql) => {
+        const qualified = sql.includes('"legal"."Documents"');
+        const create = qualified
+          ? `CREATE TABLE "legal"."Documents" (seed text);`
+          : `CREATE TABLE documents (seed text);`;
+
+        expectClean(runChecker(`${create}\n${sql}`));
+      },
+    );
+
+    it("flags a uniqueness contract in the second ALTER TABLE action", () => {
+      expectFinding(
+        runChecker(`
+          ALTER TABLE "legal"."Documents"
+            ADD COLUMN "status" text,
+            ADD COLUMN IF NOT EXISTS "External Id" text UNIQUE;
+        `),
+        "add-unique-constraint",
+      );
+    });
+
+    it("allows the same SQL in the pending-contract registry", () => {
+      const [result] = checkMigrationSources([
+        {
+          file: "apps/api/src/lib/db/pending-contract-migrations/20261015060000_case_law_decisions_base_table_contract.sql",
+          source: `${TIMEOUTS}CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
+        },
+      ]);
+
+      expect(result?.guardedFindings).toEqual([]);
+      expect(result?.invariantFindings).toEqual([]);
+      expect(result?.acknowledgementErrors).toEqual([]);
+    });
+
+    it("allows inline uniqueness on a table created in the migration", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_aliases" (
+            "id" uuid PRIMARY KEY,
+            "alias" text UNIQUE
+          );
+        `),
+      );
+    });
+
+    it("allows a unique index on a table created in the migration", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_aliases" ("alias" text);
+          CREATE UNIQUE INDEX "document_aliases_alias_unique"
+            ON "document_aliases" ("alias");
+        `),
+      );
+    });
+
+    it("recognises concurrently and quoted identifiers", () => {
+      const result = runChecker(`
+        CREATE UNIQUE INDEX CONCURRENTLY "Document External Id Unique"
+          ON "Legal Documents" ("External Id");
+      `);
+
+      expectFinding(result, "add-unique-constraint");
+      expect(result.stderr).toContain("[pre-deploy-concurrent-index]");
+    });
+
+    it("requires typed writer names in an acknowledgement", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed add-unique-constraint - application code already checks this
+        ALTER TABLE "documents"
+          ADD CONSTRAINT "documents_external_id_unique" UNIQUE ("external_id");
+      `);
+
+      expectFinding(result, "invalid-uniqueness-writers");
+
+      expectClean(
+        runChecker(`
+          -- stella-migration-safety: reviewed add-unique-constraint - writers: createDocument, importDocuments; both reject duplicate external identifiers
+          ALTER TABLE "documents"
+            ADD CONSTRAINT "documents_external_id_unique" UNIQUE ("external_id");
+        `),
+      );
+    });
+  });
+
   describe("unbounded-update", () => {
     it("flags a full-table UPDATE with no WHERE clause", () => {
       expectFinding(

@@ -33,6 +33,8 @@ import {
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
+import rootManifest from "../../../../package.json" with { type: "json" };
+
 const routeServer = serveRoutesForTest(meRoute);
 afterAll(async () => {
   await routeServer.stop();
@@ -62,7 +64,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
   });
   const fixture = async () => {
     const browser = await signInHuman(

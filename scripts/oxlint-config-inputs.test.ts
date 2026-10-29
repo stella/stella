@@ -6,6 +6,7 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { parseSource } from "../packages/scripts/src/syntax-tree.ts";
 import { OXLINT_CONFIGURATION_CACHE_INPUTS } from "./code-check-affected";
+import { lintModuleClosure } from "./oxlint-module-closure.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const CONFIG_PATH = "oxlint.config.ts";
@@ -14,13 +15,6 @@ const ROOT_PREFIX = "$TURBO_ROOT$/";
 
 const read = (file: string) =>
   readFileSync(path.join(REPO_ROOT, file), "utf-8");
-
-/** Repo-relative paths `oxlint.config.ts` imports with a relative specifier. */
-const configImports = (): string[] =>
-  Array.from(
-    read(CONFIG_PATH).matchAll(/from "\.\/(?<file>[^"]+)"/gu),
-    (match) => match.groups?.["file"],
-  ).filter((file): file is string => file !== undefined);
 
 const covers = (input: string, file: string): boolean => {
   const pattern = input.slice(ROOT_PREFIX.length);
@@ -49,16 +43,52 @@ test("every discovered ownership declaration invalidates lint caches", () => {
   ).toBe(true);
 });
 
-// A module the lint config imports is rule configuration: editing it changes
-// what every workspace lint reports, so it has to invalidate the cached lint
-// results and select the workspaces in the affected planner.
-test("every module oxlint.config.ts imports is a lint cache input", () => {
-  const uncovered = configImports().filter(
-    (file) =>
-      !OXLINT_CONFIGURATION_CACHE_INPUTS.some((input) => covers(input, file)),
-  );
+const closure = lintModuleClosure(REPO_ROOT);
 
-  expect(uncovered).toEqual([]);
+// A module the lint configs or their plugins load is rule configuration:
+// editing it changes what every workspace lint reports, so it has to
+// invalidate the cached lint results and select the workspaces in the
+// affected planner. An app's own module is the exception the planner's list
+// documents: it stays an input of that app's lint through its default inputs
+// unless a rule reads it for other workspaces, which the list then names.
+test("every module the lint configs and plugins load is a lint cache input", () => {
+  expect(closure.modules.length).toBeGreaterThan(100);
+  expect(
+    closure.modules.filter(
+      (file) =>
+        !file.startsWith("apps/") &&
+        !OXLINT_CONFIGURATION_CACHE_INPUTS.some((input) => covers(input, file)),
+    ),
+  ).toEqual([]);
+});
+
+// The other direction: a named input is either a loaded module or a file a
+// loaded module reads by name (a baseline, a ledger). One no loaded module
+// names any more only invalidates caches for nothing.
+test("every named lint cache input is loaded or read by the lint", () => {
+  const loaded = closure.modules.map((file) => read(file));
+  expect(
+    OXLINT_CONFIGURATION_CACHE_INPUTS.map((input) =>
+      input.slice(ROOT_PREFIX.length),
+    ).filter(
+      (file) =>
+        !/[*?[{]/u.test(file) &&
+        !closure.modules.includes(file) &&
+        !loaded.some((text) => text.includes(path.basename(file))),
+    ),
+  ).toEqual([]);
+});
+
+// Oxlint runs JS plugins under Node, whose ES module loader resolves a
+// relative import only by its full file name; an extensionless one stops the
+// whole lint from loading.
+test("every relative import in the lint module closure names its file", () => {
+  expect(closure.relativeImports.length).toBeGreaterThan(100);
+  expect(
+    closure.relativeImports
+      .filter(({ specifier }) => !/\.(?:[cm]?[jt]sx?|json)$/u.test(specifier))
+      .map(({ file, specifier }) => `${file}: ${specifier}`),
+  ).toEqual([]);
 });
 
 type TurboTasks = Record<string, { inputs?: string[] }>;

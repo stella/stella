@@ -169,6 +169,7 @@ const fullDecision = {
   decisionType: null,
   ecli: null,
   language: "cs",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   slug: null,

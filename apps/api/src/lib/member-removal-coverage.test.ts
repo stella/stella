@@ -124,6 +124,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
+  // Terminal AI outcomes contain a run id and timestamp, not a member id; the
+  // refusal reason is a closed literal and cannot carry user-provided text.
+  "fields.ai_settlement",
   "flow_definitions.steps",
   "flow_definitions.trigger",
   "flow_runs.definition_snapshot",
@@ -234,6 +237,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
   "time_entries.approved_by_user_id": "Billing approval history.",
+  "invoice_payments.recorded_by": "Billing payment attribution history.",
+  "invoice_payments.voided_by": "Billing payment reversal attribution history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
@@ -301,6 +306,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "correspondence_filers.filed_by_user_id":
     "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "document_processing_runs.requested_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "document_review_finding_decisions.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "document_review_findings.decided_by":
     "Retained attribution or request history; this column grants no matter membership.",

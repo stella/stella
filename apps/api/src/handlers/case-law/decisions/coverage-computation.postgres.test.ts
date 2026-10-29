@@ -9,6 +9,7 @@ import {
   caseLawBrowseFacetCounts,
   caseLawCourtWeights,
   caseLawDecisions,
+  caseLawSourceArrivals,
   caseLawSources,
   publishedCaseLawDecisions,
   unredactedCaseLawDecisions,
@@ -49,6 +50,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
       try {
         for (const table of [
           "case_law_sources",
+          "case_law_source_arrivals",
           "case_law_decisions",
           "case_law_search_documents",
           "case_law_browse_facet_counts",
@@ -83,6 +85,9 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               storedTotalAsOf: new Date(),
             }),
           );
+          await tx
+            .insert(caseLawSourceArrivals)
+            .values({ sourceId, addedLastWeek: 7, countedAt: new Date() });
           await tx.insert(caseLawDecisions).values({
             id: decisionId,
             sourceId,
@@ -114,6 +119,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             panic("The fixture must produce a coverage answer");
           }
           expect(answer.totals.searchable).toBe(1);
+          expect(answer.totals.addedLastWeek).toBe(7);
           const coverageCountry = answer.countries.find(
             ({ country }) => country === "CZE",
           );
@@ -162,7 +168,21 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             Object.values(CZ_ECLI_COURT_REGISTRY).map(({ name }) => name),
           ).not.toContain("Okresní soud v Benešově");
           const datedRows = [
-            { court: "Nejvyšší správní soud", decisionDate: "1872-06-15" },
+            {
+              court: "Nejvyšší správní soud",
+              decisionDate: "1872-06-15",
+              caseNumber: "7 Co 91/2022",
+            },
+            {
+              court: "Krajský soud v Brně",
+              decisionDate: "1898-06-15",
+              caseNumber: "23 C 57/2020",
+            },
+            {
+              court: "Krajský soud v Brně",
+              decisionDate: "2025-12-31",
+              caseNumber: "6 As 99/2026",
+            },
             { court: "Krajský soud v Brně", decisionDate: "2024-03-20" },
             { court: "Okresní soud v Benešově", decisionDate: null },
             { court: "", decisionDate: "0001-01-01" },
@@ -181,7 +201,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               sourceId: multiCourtSourceId,
               country: "CZE",
               language: "cs",
-              caseNumber: `6 As ${index + 1}/2024`,
+              caseNumber: row.caseNumber ?? `6 As ${index + 1}/2024`,
               fulltext: "Rozsudek ve správním soudnictví.",
             })),
             {
@@ -221,6 +241,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           if ("message" in result.answer) {
             panic("The corpus must produce coverage");
           }
+          expect(result.answer.totals.addedLastWeek).toBeNull();
           const computedCountry = result.answer.countries.find(
             ({ country }) => country === "CZE",
           );
@@ -260,12 +281,12 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           expect(multiCourt).toMatchObject({
             publishedDecisions: datedRows.length,
             storedDecisions: 50,
-            decisionYearFrom: 1872,
+            decisionYearFrom: 2024,
             decisionYearTo: 2024,
           });
           expect(multiCourt?.courts).toEqual(
             expect.arrayContaining([
-              { court: "Krajský soud v Brně", decisions: 2 },
+              { court: "Krajský soud v Brně", decisions: 4 },
               { court: "Okresní soud v Benešově", decisions: 1 },
               { court: null, decisions: 1 },
             ]),
@@ -282,7 +303,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             court: null,
             decisions: regionalCourts.length - LIMITS.caseLawFacetLimit,
           });
-          expect(computedCountry.decisionYearFrom).toBe(1872);
+          expect(computedCountry.decisionYearFrom).toBe(2024);
           expect(computedCountry.decisionYearTo).toBe(2026);
           await refreshPgFtsBrowseFacets(tx);
           const snapshot = await computeCaseLawCoverageAnswer(

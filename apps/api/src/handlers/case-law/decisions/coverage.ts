@@ -6,7 +6,7 @@ import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   caseLawBrowseFacetCounts,
@@ -56,7 +56,10 @@ import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law
 import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { decisionDateWithinBoundsSql } from "@/api/lib/decision-date-bounds-sql";
+import {
+  decisionDateNotBeforeFilingYearSql,
+  decisionDateWithinBoundsSql,
+} from "@/api/lib/decision-date-bounds-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -189,7 +192,8 @@ type CaseLawCoverage = {
    * decision twice and imply that an in-preparation country can be searched.
    */
   totals: {
-    searchable: number;
+    addedLastWeek: number | null;
+    searchable: number | null;
     stored: { decisions: number; asOf: string | null };
   };
   countries: readonly CaseLawCoverageCountry[];
@@ -275,6 +279,24 @@ type CaseLawCoverageSourceRow = {
   publishedDecisions: number;
 };
 
+const coverageDecisionYearSql = (order: "ASC" | "DESC") => sql<number | null>`(
+  SELECT extract(year FROM coverage_decisions.decision_date)::integer
+  FROM ${publishedCaseLawDecisions} AS coverage_decisions
+  WHERE coverage_decisions.source_id = case_law_sources.id
+    AND coverage_decisions.decision_date IS NOT NULL
+    AND ${decisionDateWithinBoundsSql(
+      sql`coverage_decisions.decision_date`,
+      sql`coverage_decisions.country`,
+    )}
+    AND ${decisionDateNotBeforeFilingYearSql({
+      date: sql`coverage_decisions.decision_date`,
+      country: sql`coverage_decisions.country`,
+      caseNumber: sql`coverage_decisions.case_number`,
+    })}
+  ORDER BY coverage_decisions.decision_date ${sql.raw(order)}, coverage_decisions.id ${sql.raw(order)}
+  LIMIT 1
+)`;
+
 /**
  * Every redistributable court feed, with the freshness and completeness
  * bookkeeping a public page may state.
@@ -335,30 +357,8 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
             ORDER BY decisions DESC, court ASC)
           FROM bounded
         ), '[]'::jsonb)`,
-        decisionYearFrom: sql<number | null>`(
-          SELECT extract(year FROM coverage_decisions.decision_date)::integer
-          FROM ${publishedCaseLawDecisions} AS coverage_decisions
-          WHERE coverage_decisions.source_id = case_law_sources.id
-            AND coverage_decisions.decision_date IS NOT NULL
-            AND ${decisionDateWithinBoundsSql(
-              sql`coverage_decisions.decision_date`,
-              sql`coverage_decisions.country`,
-            )}
-          ORDER BY coverage_decisions.decision_date ASC, coverage_decisions.id ASC
-          LIMIT 1
-        )`,
-        decisionYearTo: sql<number | null>`(
-          SELECT extract(year FROM coverage_decisions.decision_date)::integer
-          FROM ${publishedCaseLawDecisions} AS coverage_decisions
-          WHERE coverage_decisions.source_id = case_law_sources.id
-            AND coverage_decisions.decision_date IS NOT NULL
-            AND ${decisionDateWithinBoundsSql(
-              sql`coverage_decisions.decision_date`,
-              sql`coverage_decisions.country`,
-            )}
-          ORDER BY coverage_decisions.decision_date DESC, coverage_decisions.id DESC
-          LIMIT 1
-        )`,
+        decisionYearFrom: coverageDecisionYearSql("ASC"),
+        decisionYearTo: coverageDecisionYearSql("DESC"),
       })
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
@@ -416,6 +416,27 @@ const sumOfKnown = (terms: readonly (number | null)[]): number | null => {
     total += term;
   }
   return total;
+};
+
+const searchableCoverageTotals = (
+  countries: readonly CaseLawCoverageCountry[],
+) => {
+  // Admission determines who contributes; a failed facet read has no observed country count.
+  const searchable = countries
+    .filter(({ country }) => isPublicCaseLawCountry(country))
+    .map((country) =>
+      country.availability === CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE
+        ? country
+        : null,
+    );
+  return {
+    searchable: sumOfKnown(
+      searchable.map((country) => country?.searchable ?? null),
+    ),
+    addedLastWeek: sumOfKnown(
+      searchable.map((country) => country?.addedLastWeek ?? null),
+    ),
+  };
 };
 
 /** A part of the answer that can fail without failing the page. */
@@ -595,7 +616,6 @@ export const loadCaseLawCoverage = async ({
   }
 
   const countries: CaseLawCoverageCountry[] = [];
-  let searchableTotal = 0;
   let storedTotal = 0;
   let storedAsOf: string | null = null;
 
@@ -626,10 +646,7 @@ export const loadCaseLawCoverage = async ({
       storedAsOf = entry.storedAsOf;
     }
 
-    const isAdmitted = PUBLIC_CASE_LAW_COUNTRIES.some(
-      (candidate) => candidate === country,
-    );
-    if (!isAdmitted) {
+    if (!isPublicCaseLawCountry(country)) {
       countries.push({
         ...base,
         availability: CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
@@ -652,7 +669,6 @@ export const loadCaseLawCoverage = async ({
     }
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
-    searchableTotal += searchable;
     const searchableSources = entry.sources.filter(
       ({ decisionYearFrom, decisionYearTo }) =>
         decisionYearFrom !== null && decisionYearTo !== null,
@@ -702,7 +718,7 @@ export const loadCaseLawCoverage = async ({
   return Result.ok({
     generatedAt: now.toISOString(),
     totals: {
-      searchable: searchableTotal,
+      ...searchableCoverageTotals(countries),
       stored: { decisions: storedTotal, asOf: storedAsOf },
     },
     countries,

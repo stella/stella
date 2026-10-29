@@ -54,6 +54,9 @@ const PURE_AUTOFIX = {
   // Source-owned module metadata and CSS tokens render Markdown blocks.
   "module-ownership": "scripts/ownership.ts",
   "design-tokens": "scripts/design-tokens-doc.ts",
+  // Resolves the committed web theme against the lockfile-pinned Tailwind
+  // palette with lightningcss; no network, clock or environment.
+  "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
@@ -88,6 +91,8 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "playwright-devices":
+    "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":
     "Protected workflow metadata is refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
@@ -98,6 +103,7 @@ const EXCLUDED_AUTOFIX = {
     "Model catalogs are explicitly excluded from automatic repair",
   "model-benchmarks": "Fetches upstream benchmark data",
   "catalogue-pinned-facts": "Fetches upstream content facts",
+  "harness-releases": "Fetches upstream release metadata",
   "us-courts": "Upstream court data refresh is excluded",
   "us-reporters": "Fetches pinned upstream reporter data",
   snowball: "Fetches/builds upstream Snowball sources",

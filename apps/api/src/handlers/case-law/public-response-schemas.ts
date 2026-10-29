@@ -418,7 +418,11 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
-  totals: v.object({ searchable: v.number(), stored }),
+  totals: v.object({
+    addedLastWeek: v.nullable(v.number()),
+    searchable: v.nullable(v.number()),
+    stored,
+  }),
   countries: v.pipe(
     v.array(
       v.union([

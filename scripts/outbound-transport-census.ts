@@ -41,6 +41,13 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/web/src/lib/preload-error-recovery.ts",
+    class: "package-owned-client",
+    reason:
+      "Probes the bounded same-origin version manifest to distinguish deployment skew from transient chunk transport failures.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/api/src/db/sql-client.ts",
     class: "operator-configured-infrastructure",
     reason: "Creates every Bun SQL client and drizzle database for the API.",
@@ -157,24 +164,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "Requests identity assertions from the configured identity service.",
     transports: ["module:@stll/fetch", "module:jose"],
   },
-  {
-    path: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
-    class: "third-party",
-    reason: "Reads decision content from the selected public publisher.",
-    transports: ["module:@stll/fetch"],
-  },
+
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
     class: "third-party",
     reason: "Paces requests to the Czech court publisher.",
     transports: ["module:@stll/fetch"],
   },
-  {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
-    class: "third-party",
-    reason: "Sends paged and document requests to public court publishers.",
-    transports: ["module:@stll/fetch"],
-  },
+
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
     class: "package-owned-client",
@@ -450,10 +447,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Queries the configured corpus index service and records registry request metadata.",
-    transports: [
-      "module:@stll/business-registries/shared/request-observer",
-      "module:@stll/fetch",
-    ],
+    transports: ["module:@stll/business-registries/shared/request-observer"],
   },
   {
     path: "apps/api/src/lib/visual-preview.ts",
@@ -462,10 +456,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-lambda"],
   },
   {
-    path: "apps/api/src/lib/observability/otel.ts",
+    path: "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
     class: "operator-configured-infrastructure",
-    reason: "Exports sanitized logs to the configured OTLP endpoint.",
-    transports: ["module:@opentelemetry/exporter-logs-otlp-http"],
+    reason:
+      "Posts analytics batches and log records to the endpoints configured in the API environment.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/api/src/lib/stella-openrouter-text-adapter.ts",
@@ -503,12 +498,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/lib/s3.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads and writes objects using configured S3-compatible services.",
-    transports: [
-      "global:fetch",
-      "module:@aws-sdk/client-s3",
-      "module:@stll/fetch",
-      "module:bun",
-    ],
+    transports: ["global:fetch", "module:@aws-sdk/client-s3", "module:bun"],
   },
   {
     path: "apps/api/src/lib/safe-outbound-fetch.ts",
@@ -516,6 +506,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Validates destinations and pins resolved addresses for HTTP requests.",
     transports: [
+      "module:@stll/fetch",
       "module:node:dns/promises",
       "module:node:http",
       "module:node:https",
@@ -606,12 +597,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "package-owned-client",
     reason: "Uses InfoSoud package errors when shaping workspace handlers.",
     transports: ["module:@stll/infosoud"],
-  },
-  {
-    path: "apps/api/src/lib/analytics/posthog-node.ts",
-    class: "vendor-sdk",
-    reason: "Sends configured analytics events to the PostHog service.",
-    transports: ["module:posthog-node"],
   },
   {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
@@ -1120,6 +1105,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:node:net"],
   },
   {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",
     class: "third-party",
     reason:
@@ -1275,6 +1267,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
     reason: "Issues request authority for the connector probe route.",
+  },
+  {
+    path: "apps/api/src/handlers/mobile-updates/read.ts",
+    reason:
+      "Public direct boundary relaying the mobile app's signed updates from the downloads CDN.",
   },
   {
     path: "apps/api/src/handlers/organization-settings/business-registry-credentials.ts",

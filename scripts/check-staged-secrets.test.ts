@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import {
   appendFileSync,
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -26,7 +27,10 @@ afterAll(() => {
 const baseEnv = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] =>
-      !entry[0].startsWith("GIT_") && entry[1] !== undefined,
+      !entry[0].startsWith("GIT_") &&
+      entry[0] !== "CLAUDE_CODE_REMOTE" &&
+      entry[0] !== "CODEX_CI" &&
+      entry[1] !== undefined,
   ),
 );
 
@@ -111,6 +115,42 @@ const scan = (repo: string, scanner: Scanner, behavior: FakeBehavior = {}) => {
   };
 };
 
+const scanWithoutGitleaks = (
+  repo: string,
+  installer: string,
+  hosted: boolean,
+) => {
+  const bin = path.join(repo, "empty-bin");
+  const scripts = path.join(repo, "scripts");
+  const installerLog = path.join(repo, "installer.log");
+  const scanLog = path.join(repo, "scan.log");
+  mkdirSync(bin);
+  mkdirSync(scripts);
+  writeFileSync(
+    path.join(scripts, "cloud-env-secret-scanner-setup.sh"),
+    `#!/bin/bash\necho run >> ${JSON.stringify(installerLog)}\n${installer}\n`,
+  );
+  const result = Bun.spawnSync([process.execPath, SCRIPT], {
+    cwd: repo,
+    env: {
+      ...baseEnv,
+      PATH: `${bin}:/usr/bin:/bin`,
+      ...(hosted ? { CLAUDE_CODE_REMOTE: "true" } : {}),
+      TEST_SCAN_LOG: scanLog,
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return {
+    exitCode: result.exitCode,
+    installerRuns: existsSync(installerLog)
+      ? readFileSync(installerLog, "utf-8").trim().split("\n").length
+      : 0,
+    output: `${result.stdout.toString()}${result.stderr.toString()}`,
+    scanInvoked: existsSync(scanLog),
+  };
+};
+
 let repoCount = 0;
 const initRepo = (): string => {
   repoCount += 1;
@@ -128,6 +168,66 @@ const initRepo = (): string => {
   run(dir, ["git", "commit", "-q", "-m", "base"]);
   return dir;
 };
+
+describe("hosted environment scanner setup", () => {
+  // Hosted sessions are Linux only; on any other platform the marker alone never installs.
+  const onLinux = process.platform === "linux";
+
+  test.if(onLinux)(
+    "a hosted session installs a missing scanner once and scans",
+    () => {
+      const repo = initRepo();
+      const result = scanWithoutGitleaks(
+        repo,
+        `cat > empty-bin/gitleaks <<'EOF'\n#!/bin/bash\necho scan >> "$TEST_SCAN_LOG"\nexit 0\nEOF\nchmod +x empty-bin/gitleaks`,
+        true,
+      );
+      expect(result.installerRuns).toBe(1);
+      expect(result.scanInvoked).toBe(true);
+      expect(result.exitCode).toBe(0);
+    },
+  );
+
+  test("a developer machine refuses without running the installer", () => {
+    const repo = initRepo();
+    const result = scanWithoutGitleaks(repo, "exit 0", false);
+    expect(result.installerRuns).toBe(0);
+    expect(result.output).toContain(
+      "error: gitleaks is required for pre-commit secret scanning.",
+    );
+    expect(result.exitCode).toBe(1);
+  });
+
+  test.if(onLinux)(
+    "a hosted session preserves the installer failure reason",
+    () => {
+      const repo = initRepo();
+      const result = scanWithoutGitleaks(
+        repo,
+        'echo "gitleaks NOT installed: download failed" >&2',
+        true,
+      );
+      expect(result.installerRuns).toBe(1);
+      expect(result.output).toContain(
+        "gitleaks NOT installed: download failed",
+      );
+      expect(result.exitCode).toBe(1);
+    },
+  );
+
+  test.if(!onLinux)(
+    "a hosted marker off Linux refuses without running the installer",
+    () => {
+      const repo = initRepo();
+      const result = scanWithoutGitleaks(repo, "exit 0", true);
+      expect(result.installerRuns).toBe(0);
+      expect(result.output).toContain(
+        "error: gitleaks is required for pre-commit secret scanning.",
+      );
+      expect(result.exitCode).toBe(1);
+    },
+  );
+});
 
 /**
  * A feature branch merging main, where main added a token line after the

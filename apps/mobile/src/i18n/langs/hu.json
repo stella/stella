@@ -9,6 +9,9 @@
     "description": "Tartsa kéznél a folyamatban lévő munkát, és folytassa bármely eszközről.",
     "emptyTitle": "Még nincsenek beszélgetések",
     "emptyDescription": "Az új beszélgetések és a legutóbbi szálak itt jelennek meg.",
+    "noMatchesTitle": "Nincs egyező csevegés",
+    "noMatchesDescription": "Egyik csevegés címe vagy ügy sem tartalmazza ezt: „{search}”.",
+    "search": "Csevegések keresése",
     "loadFailed": "A beszélgetéseit nem sikerült betölteni.",
     "retry": "Újrapróbálás",
     "untitled": "Névtelen beszélgetés",
@@ -23,7 +26,16 @@
       "yesterday": "Tegnap",
       "week": "Előző 7 nap",
       "earlier": "Korábban"
-    }
+    },
+    "newChat": "Új beszélgetés",
+    "composerPlaceholder": "Kérdezze stellát",
+    "send": "Küldés",
+    "stop": "Leállítás",
+    "sendFailed": "Az üzenetet nem sikerült elküldeni. Próbálja újra.",
+    "answerWorking": "Dolgozom…",
+    "answerStopped": "Leállítva.",
+    "answerNeedsInput": "Ez a válasz az Ön közreműködésére vár. Folytassa a stella webes felületén.",
+    "answerFailed": "A választ nem sikerült befejezni."
   },
   "tasks": {
     "description": "Lássa, mi igényel figyelmet, anélkül hogy a teljes munkaterületet megnyitná.",
