@@ -385,6 +385,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/ui": "workspace:*",
         "better-result": "catalog:",
         "expo": "~58.0.17",
         "expo-constants": "~58.0.13",
