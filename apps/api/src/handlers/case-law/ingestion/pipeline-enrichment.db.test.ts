@@ -45,21 +45,23 @@ test("weak publication enrichment preserves its row and distinguishes full cohor
   const scopedDb: ScopedDb = async (callback) =>
     await db.transaction(async (tx) => await callback(asTestRaw(tx)));
   const sourceId = createSafeId<"caseLawSource">();
-  const publication = (
-    fulltext: string,
-    sourceUrl = "https://example.org/publication/first",
-  ) =>
+  const publication = (fulltext: string, sourceUrl?: string) =>
     plainTextIngestionResult({
       caseNumber: "0Pu/1/2025",
       court: "Mestský súd Košice",
       country: "SVK",
       language: "sk",
-      decisionDate: "2025-04-18",
-      decisionType: "Uznesenie",
+      decisionDate: fulltext ? "2025-04-18" : undefined,
+      decisionType: fulltext ? "Uznesenie" : undefined,
+      judges: fulltext
+        ? [{ nameAsPrinted: "Sudca A", role: "presiding" }]
+        : undefined,
       sourceUrl,
       fulltext,
       rawHash: `${sourceUrl}:${fulltext}`,
-      metadata: {},
+      metadata: fulltext
+        ? { publicationLabel: "first", detail: "published" }
+        : { publicationLabel: "first" },
       documentAst: EMPTY_AST,
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     });
@@ -96,7 +98,9 @@ test("weak publication enrichment preserves its row and distinguishes full cohor
     expect(before).toHaveLength(1);
     const original =
       before.at(0) ?? panic("Metadata observation must be stored");
-    await ingest(publication("Prvé uznesenie."));
+    await ingest(
+      publication("Prvé uznesenie.", "https://example.org/publication/first"),
+    );
     expect(await stored()).toEqual([
       {
         id: original.id,
@@ -129,10 +133,97 @@ test("weak publication enrichment preserves its row and distinguishes full cohor
     );
     await ingest(publication("Tretie uznesenie."));
     expect(await stored()).toHaveLength(3);
+    await ingest(publication("", "https://example.org/publication/fourth"));
+    await ingest(publication("", "https://example.org/publication/fifth"));
+    await ingest(publication("Publication without the distinguishing URL."));
+    const ambiguous = await stored();
+    expect(ambiguous).toHaveLength(6);
+    expect(ambiguous.filter(({ text }) => text === null)).toHaveLength(2);
   } finally {
     await client.close();
   }
 });
+
+test.each(["ecli", "sheet-number"] as const)(
+  "weak publication receives %s evidence without replacing a strong sibling",
+  async (evidence) => {
+    const client = await createTestPglite();
+    const db = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+    });
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const sourceId = createSafeId<"caseLawSource">();
+    const publication = (member?: string) =>
+      plainTextIngestionResult({
+        caseNumber: "104 C 16/2024",
+        court: "Okresní soud v Chrudimi",
+        country: "CZE",
+        language: "cs",
+        ecli:
+          evidence === "ecli" && member
+            ? `ECLI:CZ:OSCR:2025:104.C.16.2024.${member}`
+            : undefined,
+        sheetNumber: evidence === "sheet-number" ? member : undefined,
+        fulltext: member ? `Výrok ${member}.` : "",
+        rawHash: member ?? "listing",
+        metadata: { publicationLabel: "stated publication" },
+        documentAst: EMPTY_AST,
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      });
+    let observationOrder = 0n;
+    const ingest = async (member?: string) => {
+      const outcome = await processDecision({
+        input: publication(member),
+        scopedDb,
+        sourceId,
+        corpus,
+        observationOrder: ++observationOrder,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      });
+      expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+    };
+    const rows = async () =>
+      await db
+        .select({
+          id: caseLawDecisions.id,
+          text: caseLawDecisions.fulltext,
+          strongKey: caseLawDecisions.fallbackIdentityKey,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+    try {
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `evidence-${sourceId}`,
+        name: "Evidence enrichment fixture",
+      });
+      await ingest();
+      const original =
+        (await rows()).at(0) ?? panic("Weak publication must be stored");
+      await ingest("1");
+      await ingest();
+      const enriched = await rows();
+      expect(enriched).toHaveLength(1);
+      expect(enriched.at(0)?.id).toBe(original.id);
+      expect(enriched.at(0)?.text).toBe("Výrok 1.");
+      expect(enriched.at(0)?.strongKey).toContain("case-number:v2:");
+      // The expansion keeps the previous index until the separate contract release.
+      await db.execute(
+        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
+      );
+      await ingest("2");
+      await ingest("1");
+      expect(await rows()).toHaveLength(2);
+      expect((await rows()).find(({ id }) => id === original.id)?.text).toBe(
+        "Výrok 1.",
+      );
+    } finally {
+      await client.close();
+    }
+  },
+);
 
 test("sheet and normalized ECLI aliases enrich one row in both observation orders", async () => {
   const client = await createTestPglite();

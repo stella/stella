@@ -294,7 +294,11 @@ const writeDecisionRow = async (
       write.storageIdentity.type === "strong"
     ) {
       const winner = await findFallbackDecisionTx(tx, write);
-      if (winner !== undefined && winner.id !== (existing?.id ?? decisionId)) {
+      if (
+        existing !== undefined
+          ? winner?.id !== existing.id
+          : winner !== undefined && winner.id !== decisionId
+      ) {
         return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
       }
     }

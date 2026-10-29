@@ -673,15 +673,15 @@ export const caseLawDecisions = p.pgTable(
      * makes two unrelated decisions the same row. The publisher's id is
      * unique across the whole source by construction.
      *
-     * Null only for sources that expose no such id; those keep the older
-     * case-number key, which is sound for a source holding one court.
+     * Null for sources without a publisher document id; their fallback
+     * identity uses court-qualified evidence or normalized content.
      */
     sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
     /** Canonical court and decision evidence for rows without a publisher document id. */
     fallbackIdentityKey: p.varchar("fallback_identity_key", { length: 320 }),
     /** Weak source cohort; individual members are identified by normalized content. */
     fallbackCohortKey: p.varchar("fallback_cohort_key", { length: 320 }),
-    /** Shared publication fields, stable when a textless observation receives its document. */
+    /** Nonunique court/docket publication scope; compatible stated fields disambiguate enrichment. */
     fallbackPublicationHash: p.varchar("fallback_publication_hash", {
       length: 64,
     }),

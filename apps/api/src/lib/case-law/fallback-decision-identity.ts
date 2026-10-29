@@ -10,6 +10,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { listingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
 import type { ListingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
+import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { FALLBACK_DECISION_IDENTITY_PREFIX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
@@ -19,8 +20,9 @@ import {
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";
-import { isUnknownArray } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const MAX_KEY_LENGTH = 320;
 const ABSENT_FIELD = { isNull: true } as const;
@@ -257,20 +259,91 @@ export const parseFallbackDecisionIdentityKey = (
   return fallbackDecisionIdentityKey(identity) === key ? identity : null;
 };
 
-/** Only publication fields shared by listing and detail participate; enrichment payloads do not. */
-const publicationFieldsHash = (result: IngestionResult) =>
-  sha256Hex(
-    JSON.stringify(
-      sortDeep({
-        decisionDate: result.decisionDate,
-        decisionType: result.decisionType,
-        judges: result.judges,
-        identifiers: result.identifiers,
-        sourceUrl: result.sourceUrl,
-        documentUrl: result.documentUrl,
-      }),
-    ),
-  );
+type PublicationFieldsInput = {
+  decisionDate?: string | null;
+  decisionType?: string | null;
+  judges?: readonly unknown[] | null;
+  sourceUrl?: string | null;
+  documentUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+  hasStoredDocument?: boolean;
+};
+
+/** Availability describes the observation, not contradictory publication evidence. */
+const OBSERVATION_METADATA_KEYS = new Set([
+  PARTIAL_OBSERVATION_KEY,
+  "sourceUrlStatus",
+  "ecliAvailability",
+  "decisionDateAvailability",
+  "detailUnavailable",
+]);
+
+const publicationFields = (result: PublicationFieldsInput) => ({
+  decisionDate: result.decisionDate,
+  decisionType: result.decisionType,
+  judges: result.judges,
+  sourceUrl: result.sourceUrl,
+  documentUrl: result.documentUrl,
+  metadata: Object.fromEntries(
+    Object.entries(
+      splitStoredDecisionTextMetadata(result.metadata ?? {}).metadata,
+    ).filter(([key]) => !OBSERVATION_METADATA_KEYS.has(key)),
+  ),
+});
+
+/** Absence is not evidence; every value stated by both observations must agree.
+ * Collections may gain members on enrichment, but disjoint stated collections conflict.
+ */
+const sharedPublicationFieldsAgree = ({
+  left,
+  right,
+  mode,
+}: {
+  left: unknown;
+  right: unknown;
+  mode: "shared" | "contained";
+}): boolean => {
+  if (left === undefined || left === null || left === "") {
+    return true;
+  }
+  if (right === undefined || right === null || right === "") {
+    return mode === "shared";
+  }
+  if (isUnknownArray(left) && isUnknownArray(right)) {
+    const [smaller, larger] =
+      mode === "contained" || left.length <= right.length
+        ? [left, right]
+        : [right, left];
+    return smaller.every((entry) =>
+      larger.some(
+        (other) =>
+          JSON.stringify(sortDeep(entry)) === JSON.stringify(sortDeep(other)),
+      ),
+    );
+  }
+  if (isRecord(left) && isRecord(right)) {
+    return Object.entries(left).every(([key, value]) =>
+      sharedPublicationFieldsAgree({ left: value, right: right[key], mode }),
+    );
+  }
+  return left === right;
+};
+
+export const decisionPublicationCompatible = (
+  storage: DecisionStorageIdentity,
+  stored: PublicationFieldsInput,
+) =>
+  (storage.type === "content" || storage.type === "strong") &&
+  sharedPublicationFieldsAgree({
+    left: storage.publicationFields,
+    right: publicationFields(stored),
+    mode:
+      storage.type === "content" &&
+      storage.documentState === "metadata-only" &&
+      stored.hasStoredDocument
+        ? "contained"
+        : "shared",
+  });
 
 const scopedPublicationHash = (
   identity: Exclude<FallbackDecisionIdentity, { type: "unidentifiable" }>,
@@ -291,6 +364,8 @@ export type DecisionStorageIdentity =
       type: "strong";
       identity: Extract<FallbackDecisionIdentity, { type: "decision" }>;
       key: string;
+      publicationHash: string;
+      publicationFields: ReturnType<typeof publicationFields>;
       aliases: readonly {
         identity: Extract<FallbackDecisionIdentity, { type: "decision" }>;
         key: string;
@@ -306,6 +381,7 @@ export type DecisionStorageIdentity =
       contentHash: string;
       publishedContentHash: string;
       publicationHash: string;
+      publicationFields: ReturnType<typeof publicationFields>;
       documentState: "metadata-only" | "document";
     }
   | { type: "unkeyable"; identity: FallbackDecisionIdentity };
@@ -322,6 +398,7 @@ export const decisionStorageIdentity = (
   if (key === null || identity.type === "unidentifiable") {
     return { type: "unkeyable", identity };
   }
+  const publicationHash = scopedPublicationHash(identity, "");
   if (identity.type === "decision") {
     const sheetIdentity = fallbackDecisionIdentity({
       ...result,
@@ -336,19 +413,22 @@ export const decisionStorageIdentity = (
     ) {
       aliases.push({ identity: sheetIdentity, key: sheetKey });
     }
-    return { type: "strong", identity, key, aliases };
+    return {
+      type: "strong",
+      identity,
+      key,
+      aliases,
+      publicationHash,
+      publicationFields: publicationFields(result),
+    };
   }
-  const publicationHash = scopedPublicationHash(
-    identity,
-    publicationFieldsHash(result),
-  );
   const publishedContentHash = corpusContentHash(
     caseLawCanonicalPayload(result),
   );
   const documentState = payloadCarriesDocument(caseLawCanonicalPayload(result))
     ? "document"
     : "metadata-only";
-  // The stable publication fingerprint bridges enrichment; content still distinguishes siblings.
+  // The nonunique scope stays stable as publication fields and document content arrive.
   const contentHash =
     documentState === "metadata-only"
       ? scopedPublicationHash(
@@ -357,6 +437,7 @@ export const decisionStorageIdentity = (
             JSON.stringify(
               sortDeep({
                 publicationHash,
+                publicationFields: publicationFields(result),
                 metadata: result.metadata,
                 textFields: result.textFields,
               }),
@@ -371,6 +452,7 @@ export const decisionStorageIdentity = (
     contentHash,
     publishedContentHash,
     publicationHash,
+    publicationFields: publicationFields(result),
     documentState,
   };
 };
@@ -390,7 +472,7 @@ export const decisionFallbackColumns = (storage: DecisionStorageIdentity) => {
         fallbackIdentityKey: storage.key,
         fallbackCohortKey: null,
         fallbackContentHash: null,
-        fallbackPublicationHash: null,
+        fallbackPublicationHash: storage.publicationHash,
       };
     case "content":
       return {
@@ -468,16 +550,24 @@ export const decisionStorageIdentityMatch = (
 export const decisionStorageEnrichmentMatch = (
   storage: DecisionStorageIdentity,
 ) => {
-  if (storage.type !== "content") {
+  if (storage.type !== "content" && storage.type !== "strong") {
     return null;
   }
-  return {
+  const scope = {
     sourceDocumentId: ABSENT_FIELD,
     fallbackPublicationHash: storage.publicationHash,
-    RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
-      storage.documentState === "document"
-        ? not(rowHoldsDocumentFor(table))
-        : rowHoldsDocumentFor(table),
+  };
+  if (storage.type === "strong" || storage.documentState === "document") {
+    return {
+      ...scope,
+      fallbackIdentityKey: ABSENT_FIELD,
+      RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
+        not(rowHoldsDocumentFor(table)),
+    };
+  }
+  return {
+    ...scope,
+    OR: [{ fallbackIdentityKey: ABSENT_FIELD }, { RAW: rowHoldsDocumentFor }],
   };
 };
 
@@ -503,7 +593,10 @@ export const decisionStorageLockKeys = (
 ): string[] => {
   switch (storage.type) {
     case "strong":
-      return storage.aliases.map(({ key }) => key).toSorted();
+      return [
+        ...storage.aliases.map(({ key }) => key),
+        `publication:${storage.publicationHash}`,
+      ].toSorted();
     case "content":
       return [
         `content:${storage.contentHash}`,

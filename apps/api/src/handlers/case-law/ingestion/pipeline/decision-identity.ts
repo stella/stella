@@ -6,6 +6,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionFallbackIdentities,
+  caseLawDecisionJudges,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
@@ -27,6 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import {
+  decisionPublicationCompatible,
   decisionStorageEnrichmentMatch,
   decisionStorageIdentity,
   decisionStorageIdentityMatch,
@@ -479,20 +481,17 @@ export const findFallbackDecisionTx = async (
   tx: Transaction,
   { sourceId, storageIdentity }: FindFallbackDecisionOptions,
 ) => {
-  if (storageIdentity.type === "strong") {
-    return await findStrongFallbackDecisionTx(tx, {
-      sourceId,
-      storageIdentity,
-    });
-  }
-  const exact = await tx.query.caseLawDecisions.findFirst({
-    where: {
-      sourceId: { eq: sourceId },
-      ...decisionStorageIdentityMatch(storageIdentity),
-    },
-    columns: IDENTITY_COLUMNS,
-    extras: IDENTITY_EXTRAS,
-  });
+  const exact =
+    storageIdentity.type === "strong"
+      ? await findStrongFallbackDecisionTx(tx, { sourceId, storageIdentity })
+      : await tx.query.caseLawDecisions.findFirst({
+          where: {
+            sourceId: { eq: sourceId },
+            ...decisionStorageIdentityMatch(storageIdentity),
+          },
+          columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+        });
   if (exact !== undefined) {
     return exact;
   }
@@ -502,12 +501,34 @@ export const findFallbackDecisionTx = async (
   }
   const publications = await tx.query.caseLawDecisions.findMany({
     where: { sourceId: { eq: sourceId }, ...enrichmentMatch },
-    columns: IDENTITY_COLUMNS,
-    extras: IDENTITY_EXTRAS,
-    limit: 2,
+    columns: {
+      id: true,
+      decisionDate: true,
+      decisionType: true,
+      sourceUrl: true,
+      documentUrl: true,
+      metadata: true,
+    },
+    extras: {
+      ...IDENTITY_EXTRAS,
+      judges: (table) =>
+        sql<
+          unknown[]
+        >`(SELECT coalesce(jsonb_agg(jsonb_build_object('nameAsPrinted', ${caseLawDecisionJudges.nameAsPrinted}, 'role', ${caseLawDecisionJudges.role}) ORDER BY ${caseLawDecisionJudges.position}), '[]'::jsonb) FROM ${caseLawDecisionJudges} WHERE ${caseLawDecisionJudges.decisionId} = ${table.id})`,
+    },
+    limit: MAX_LEGACY_DOCKET_CANDIDATES + 1,
   });
-  // Ambiguous publication fields cannot identify one of several full siblings.
-  return publications.length === 1 ? publications.at(0) : undefined;
+  // Overflow and multiple compatible publications cannot establish a unique owner.
+  if (publications.length > MAX_LEGACY_DOCKET_CANDIDATES) {
+    return undefined;
+  }
+  const compatible = publications.filter((row) =>
+    decisionPublicationCompatible(storageIdentity, row),
+  );
+  const candidate = compatible.length === 1 ? compatible.at(0) : undefined;
+  return candidate === undefined
+    ? undefined
+    : await findIdentityRowTx(tx, candidate.id);
 };
 
 /**
