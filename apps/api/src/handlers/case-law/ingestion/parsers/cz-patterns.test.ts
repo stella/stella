@@ -131,22 +131,33 @@ describe("CZ_JUDGE_TITLE_RE whole-word property", () => {
   test("declined forms never match", () => {
     assertProperty(
       "legal-ast.cz-judge-title.declined-forms",
-      fc.tuple(declinedArb, nameArb, fc.boolean()),
-      ([declined, name, nameFirst]) =>
-        !CZ_JUDGE_TITLE_RE.test(
-          nameFirst ? `${name}, ${declined}` : `rozhodl ${declined} ${name}`,
-        ),
+      fc.property(
+        declinedArb,
+        nameArb,
+        fc.boolean(),
+        (declined, name, nameFirst) => {
+          expect(
+            CZ_JUDGE_TITLE_RE.test(
+              nameFirst
+                ? `${name}, ${declined}`
+                : `rozhodl ${declined} ${name}`,
+            ),
+          ).toBe(false);
+        },
+      ),
     );
   });
 
   test("nominative titles on a short line with a name match", () => {
     assertProperty(
       "legal-ast.cz-judge-title.nominative-forms",
-      fc.tuple(titleArb, nameArb, fc.boolean()),
-      ([title, name, nameFirst]) =>
-        CZ_JUDGE_TITLE_RE.test(
-          nameFirst ? `${name}, ${title}` : `${title} ${name}`,
-        ),
+      fc.property(titleArb, nameArb, fc.boolean(), (title, name, nameFirst) => {
+        expect(
+          CZ_JUDGE_TITLE_RE.test(
+            nameFirst ? `${name}, ${title}` : `${title} ${name}`,
+          ),
+        ).toBe(true);
+      }),
     );
   });
 });
