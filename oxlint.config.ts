@@ -5038,6 +5038,8 @@ const config = defineConfig({
               "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
+              "apps/api/src/env-file-derivative-worker.ts",
+              "apps/api/src/env-converter.ts",
               "apps/api/src/db-url.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
               // Publisher pacing must distinguish deployed runtimes without

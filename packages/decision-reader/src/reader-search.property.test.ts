@@ -10,6 +10,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { textAnchorSegmentOwnsRange } from "./document-ast-text";
 import {
   queryFindTokens,
   queryMarkRanges,
@@ -161,6 +162,36 @@ const scanResults = (
 };
 
 describe("indexed reader search", () => {
+  test("random citation run splits preserve its text and choose one badge owner", () => {
+    const citation = "sp.\u00a0zn. II. ÚS 1852/22";
+    assertProperty(
+      "random citation run splits preserve its text and choose one badge owner",
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 1, max: citation.length - 1 }), {
+          maxLength: citation.length - 1,
+        }),
+        (generatedCuts) => {
+          const cuts = [
+            0,
+            ...generatedCuts.toSorted((a, b) => a - b),
+            citation.length,
+          ];
+          const runs = cuts.slice(0, -1).map((start, index) => ({
+            start,
+            text: citation.slice(start, cuts[index + 1]),
+          }));
+
+          expect(runs.map(({ text }) => text).join("")).toBe(citation);
+          expect(
+            runs.filter(({ start }) =>
+              textAnchorSegmentOwnsRange({ start: 0 }, start),
+            ),
+          ).toHaveLength(1);
+        },
+      ),
+    );
+  });
+
   test("indexed search marks exactly what a scan of the folded text marks", () => {
     assertProperty(
       "indexed search marks exactly what a scan of the folded text marks",
