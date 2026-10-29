@@ -44,7 +44,6 @@ export const createSetSharepointCapabilities = (
         const purge = await disableAndPurgeSharepointForOrg({
           organizationId,
           recordAuditEvent,
-          failureMessage: "Failed to disable the Microsoft connection",
         });
         if (Result.isError(purge)) {
           return Result.err(purge.error);

@@ -10,7 +10,6 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
  * The generated census contains no policy, so a new tag requires a decision.
  */
 export const TAGGED_FAILURE_REASON = {
-  SharepointDisablePurgeError: "tagged_failure",
   AIColumnInputRequiredError: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",

@@ -646,6 +646,7 @@ test("revoked calendar reads leave persisted calls valid without advertising or 
       },
     ],
     safeDb: unusedSafeDb,
+    refRegistry: createChatRefRegistry(),
     threadId,
     tools: validationTools,
     userId,

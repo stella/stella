@@ -40,7 +40,6 @@ const setSharepointEnablement = createSafeRootHandler(
       const purge = await disableAndPurgeSharepointForOrg({
         organizationId,
         recordAuditEvent,
-        failureMessage: "Failed to disable the SharePoint connection",
       });
       if (Result.isError(purge)) {
         return Result.err(purge.error);

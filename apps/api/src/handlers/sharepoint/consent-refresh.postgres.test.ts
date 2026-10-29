@@ -572,7 +572,11 @@ test("a delayed refresh cannot replace newer consent or its ciphertext", async (
         }),
       refreshAccessToken: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     },
   );

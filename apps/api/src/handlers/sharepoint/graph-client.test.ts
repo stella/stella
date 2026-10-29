@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { readFailureBrand } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
 
 import {
   type DriveChildrenResponse,
@@ -234,7 +235,7 @@ test("Graph response failures distinguish availability, credentials and request 
     { status: 401, reason: "provider_credentials_rejected" },
     { status: 403, reason: "provider_credentials_rejected" },
     { status: 400, reason: "provider_request_rejected" },
-  ]) {
+  ] as const satisfies readonly { status: number; reason: FailureReason }[]) {
     const result = await listDriveRootChildren({
       accessToken: v.parse(secretSchema, "access-token"),
       cursor: null,

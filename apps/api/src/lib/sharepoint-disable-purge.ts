@@ -17,7 +17,7 @@
  * org's rows.
  */
 
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -112,24 +112,10 @@ export const purgeSharepointForOrg = async (
   };
 };
 
-class SharepointDisablePurgeError extends TaggedError(
-  "SharepointDisablePurgeError",
-)<{
-  message: string;
-  cause: unknown;
-}> {}
-
-type DisablePurgeOptions = PurgeOptions & { failureMessage: string };
-
-export const disableAndPurgeSharepointForOrg = async ({
-  failureMessage,
-  ...options
-}: DisablePurgeOptions) =>
-  await Result.tryPromise({
-    try: async () =>
+export const disableAndPurgeSharepointForOrg = async (options: PurgeOptions) =>
+  await Result.tryPromise(
+    async () =>
       await rootDb.transaction(
         async (tx) => await purgeSharepointForOrg(tx, options),
       ),
-    catch: (cause) =>
-      new SharepointDisablePurgeError({ message: failureMessage, cause }),
-  });
+  );

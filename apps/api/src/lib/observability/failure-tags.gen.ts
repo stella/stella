@@ -396,7 +396,6 @@ export const FAILURE_TAGS = [
   "ServiceClientOperatorError",
   "ServiceClientUnavailableError",
   "SesInboundError",
-  "SharepointDisablePurgeError",
   "SkCollectionIssueError",
   "SkillFileError",
   "SkillRequiredToolsError",
