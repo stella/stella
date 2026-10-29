@@ -255,3 +255,6 @@ export const searchPageEnd = ({
     ? SEARCH_PAGE_END.COMPLETE
     : SEARCH_PAGE_END.STOPPED;
 };
+
+export const GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE =
+  "global_search_rank_work_limit";

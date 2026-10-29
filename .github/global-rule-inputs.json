@@ -82,6 +82,7 @@
     "scripts/check-mcp-generated-tracking.ts",
     "scripts/check-migration-order.test.ts",
     "scripts/check-migration-order.ts",
+    "scripts/check-online-index-dependencies.ts",
     "scripts/check-oxlint-effective-config.ts",
     "scripts/check-oxlint-rule-coverage.test.ts",
     "scripts/check-oxlint-rule-coverage.ts",
@@ -181,6 +182,7 @@
     "scripts/docker-source-closure.test.ts",
     "scripts/document-identity-guard.test.ts",
     "scripts/document-identity-guard.ts",
+    "scripts/draft-release-reads.test.ts",
     "scripts/e2e-geometry-shards.test.ts",
     "scripts/e2e-shard-budget.test.ts",
     "scripts/e2e-spec-shards.test.ts",
@@ -241,6 +243,7 @@
     "scripts/ratchet.ts",
     "scripts/rc-bailouts.ts",
     "scripts/release-channel.test.sh",
+    "scripts/release-final-graph.test.ts",
     "scripts/release-pull-requests.sh",
     "scripts/release-pull-requests.test.sh",
     "scripts/release-rc-selection.test.ts",
@@ -261,6 +264,10 @@
     "scripts/sql-perf-detector.test.ts",
     "scripts/sql-perf-suppressions.ts",
     "scripts/stage-web-runtime.test.ts",
+    "scripts/staging-ecs-readiness.test.ts",
+    "scripts/staging-proof-readiness-cli.test.ts",
+    "scripts/staging-proof-readiness.test.ts",
+    "scripts/staging-proof-workflow.test.ts",
     "scripts/staging-wake.test.ts",
     "scripts/stll-registry-resolutions.test.ts",
     "scripts/suppression-waivers.ts",
@@ -282,11 +289,22 @@
     "scripts/verify-workflow.test.ts",
     "scripts/verify.test.ts",
     "scripts/visual-preview-scope.test.ts",
+    "scripts/web-raw-json-api-census.test.ts",
+    "scripts/web-raw-json-api-census.ts",
     "scripts/workflow-cache-policy.test.ts",
     "scripts/workflow-call-permissions.test.ts",
     "scripts/workflow-concurrency.test.ts",
     "scripts/workflow-run-trust.test.ts",
     "scripts/workflow-skipped-needs.test.ts"
   ],
-  "changeScoped": []
+  "changeScoped": [
+    {
+      "path": "scripts/check-publish-reproducibility.sh",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/generate-npm-release-jobs.ts",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
+    }
+  ]
 }

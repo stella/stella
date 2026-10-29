@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 9,
+  "reason": "The iOS app takes the web's look: uniwind and tailwindcss for the web's Tailwind classes, lucide-react-native and lucide-static for the web's icons, react-native-svg to draw them and the sign-in backdrop, expo-font and @expo-google-fonts/dm-sans for the web's typeface, and @expo/vector-icons to set lucide's font as glyph images for the platform's own bars. The root gains sharp, already installed through the resolutions pin, for scripts/generate-mobile-app-icon.ts, which rasterizes the web's favicon into the app icon."
+}

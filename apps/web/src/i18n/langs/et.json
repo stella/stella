@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "modelRefused": "Mudel keeldus vastamast",
+    "nothingFound": "Midagi ei leitud",
     "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
     "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
     "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
@@ -130,6 +132,7 @@
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
     "codeSentAgain": "Saatsime uue koodi.",
+    "continueWithApple": "Jätka Apple'iga",
     "continueWithEmail": "Jätka",
     "continueWithGoogle": "Jätka Google'iga",
     "continueWithMicrosoft": "Jätka Microsoftiga",
@@ -544,6 +547,14 @@
     },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
+    "arrangement": {
+      "alertThreshold": "Hoiatuse lävend (%)",
+      "amountCap": "Tasu ülempiir",
+      "flatFee": "Kindel tasu",
+      "invalidCap": "Sisestage positiivsed ülempiirid ja hoiatuse lävend vahemikus 0,01% kuni 100%.",
+      "minuteCap": "Ajalimiit (minutites)",
+      "title": "Tasustamise kokkulepe"
+    },
     "batchActions": "Partiiaktsioonid",
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
@@ -708,10 +719,29 @@
       },
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
-      "markPaid": "Märgi makstuks",
       "noEntries": "Selle arvega pole kirjeid seotud",
       "noInvoices": "Arveid pole veel",
       "paidAt": "Tasutud",
+      "payments": {
+        "amountTooHigh": "Summa ületab tasumata jäägi {amount}.",
+        "confirmVoid": "Makse jääb arvele tühistatuna ega lähe enam selle arve tasumise arvestusse.",
+        "empty": "Makseid pole veel registreeritud",
+        "method": "Makseviis",
+        "methods": {
+          "bank_transfer": "Pangaülekanne",
+          "card": "Kaart",
+          "cash": "Sularaha",
+          "other": "Muu viis"
+        },
+        "outstandingAmount": "Tasumata {amount}",
+        "paidOn": "Makse kuupäev",
+        "partiallyPaid": "Osaliselt makstud",
+        "record": "Registreeri makse",
+        "summary": "Makstud {paid}, tasumata {outstanding}",
+        "title": "Maksed",
+        "void": "Tühista makse",
+        "voided": "Tühistatud"
+      },
       "removeEntries": "Eemalda kirjed",
       "send": "Saada",
       "statuses": {
@@ -893,6 +923,7 @@
     "aiMissing": "Tehisintellekt pole seadistatud.",
     "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
     "deeplMissing": "DeepL pole seadistatud.",
+    "deeplPdfRequired": "PDF-failide tõlkimiseks on vaja DeepL-i.",
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",
@@ -910,12 +941,16 @@
         "reasoning": "Arutlus"
       },
       "errors": {
+        "analysisDisabled": "Tehisintellekti analüüside loomine on selles serveris välja lülitatud. Lugege kohtulahendi teksti või proovige hiljem uuesti.",
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
+        "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
+        "languageUnsupported": "Tehisintellekti analüüs ei toeta veel selle kohtulahendi keelt. Lugege kohtulahendi teksti või algallikat.",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",
-        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
-        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
+        "sourceRestricted": "Allikas ei luba tehisintellekti analüüsi. Lugege kohtulahendi teksti või algallikat.",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -1120,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
-      "headMatter": "Päis",
+      "headMatter": "Kohtuasja andmed",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "research": {
@@ -1252,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
       "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
       "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
-    }
+    },
+    "withdrawnByPublisher": "Avaldaja on tagasi võtnud"
   },
   "catalogue": {
     "addCustom": "Lisa kohandatud",
@@ -1549,6 +1585,12 @@
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# veel} other {+# veel}}",
+      "dismiss": "Peida ühenduse teade",
+      "stoppedWorking": "Teie ühendus teenusega <name>{server}</name> lakkas töötamast.",
+      "waitingApproval": "Teie ühendus teenusega <name>{server}</name> ootab kinnitamist."
+    },
     "mention": {
       "category": {
         "entities": "Selles toimikus",
@@ -2212,6 +2254,7 @@
     "moveDown": "Liiguta alla",
     "moveUp": "Liiguta üles",
     "name": "Nimi",
+    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
@@ -2454,6 +2497,8 @@
       "aresNotFound": "Selle IČO järgi ettevõtet ei leitud.",
       "aresTitle": "Tšehhi register (ARES)",
       "contactName": "Kontakti nimi",
+      "displayNameOrganizationHint": "Valikuline asendus; muul juhul luuakse organisatsiooni nimest.",
+      "displayNamePersonHint": "Valikuline asendus; muul juhul luuakse ees- ja perekonnanimest.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Sisesta 8-kohaline IČO."
     },
@@ -2531,6 +2576,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
+      "skippedInFileDuplicate": "Vahele jäetud: kordab faili varasemat rida",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",
       "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
@@ -2572,6 +2618,7 @@
       "issue": {
         "address_line_required": "Kui aadress on lisatud, on aadressirida 1 kohustuslik.",
         "display_name_required": "Kuvatavat nime ei õnnestunud koostada.",
+        "in_file_duplicate": "Selle faili varasema rea duplikaat",
         "invalid_email": "E-posti aadress on vigane.",
         "invalid_phone": "Telefoninumber on vigane.",
         "invalid_tags": "Sildid peavad olema tekstiväärtused.",
@@ -2600,7 +2647,11 @@
       "taxIdSchemeBrCpfCnpj": "Brasiilia CPF/CNPJ (kontrollsumma)",
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
-      "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
+      "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
+      "warning": {
+        "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
+        "possible_in_file_duplicate": "Rea {row} võimalik duplikaat; kattub ainult nimi."
+      }
     },
     "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
     "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
@@ -2760,12 +2811,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
+      "configurationIncomplete": "See toiming pole täielikult seadistatud. Võtke ühendust administraatoriga.",
       "contact": "Võtke meiega ühendust",
       "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
+      "leaseLost": "Toimingu broneering aegus. Palun proovige uuesti.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
-      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
+      "organizationStateUnreadable": "Organisatsiooni juurdepääsu ei saanud kontrollida. Palun proovige varsti uuesti.",
+      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud.",
+      "storeUnavailable": "Teenus pole ajutiselt saadaval. Palun proovige varsti uuesti."
     },
     "actionFailed": "See ei õnnestunud. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "api": {
@@ -3297,7 +3351,6 @@
       "simple": "Lihtmärgistus"
     },
     "moreFormatting": "Veel vormindust",
-    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "nextChange": "Järgmine muudatus",
     "numberedList": "Nummerdatud loend",
     "parseError": "Dokumenti ei õnnestunud sõeluda. See võib olla rikutud või toetamata vormingus.",
@@ -4837,7 +4890,9 @@
     "viewOnGithub": "Vaata GitHubis"
   },
   "readerAnswers": {
+    "answerLanguage": "Vastuse keel",
     "budgetError": "Vastuste eelarve on ammendatud.",
+    "documentLanguage": "Dokumendi keel ({language})",
     "expand": "Laienda vastust",
     "explain": "Selgita",
     "followUp": "Esita täpsustav küsimus",
@@ -5024,6 +5079,16 @@
       "preferredNamePlaceholder": "Teie nimi",
       "profileDescription": "Hallake oma isiklikke eelistusi",
       "sendOtpCode": "Saada kinnituskood",
+      "signInMethods": {
+        "confirmDescription": "Selle sisselogimisviisi ühenduse katkestamiseks sisesta uus e-postiga saadetud kood.",
+        "confirmTitle": "Kas katkestada {provider} ühendus?",
+        "description": "Ühenda kontod, mis kasutavad sama kinnitatud e-posti aadressi.",
+        "emailCode": "E-posti kood",
+        "emailCodeDescription": "Saad alati sisse logida e-postiga saadetud koodi abil.",
+        "lastMethod": "Enne selle konto lahtiühendamist ühenda teine konto.",
+        "title": "Sisselogimisviisid",
+        "unavailable": "Sisselogimisviiside ühenduse katkestamiseks peab e-posti saatmine olema seadistatud."
+      },
       "timezone": "Ajavöönd",
       "timezoneDescription": "Kasutatakse teadete ja e-kirjade ajatemplite jaoks",
       "timezoneSaved": "Ajavöönd uuendatud",
@@ -5989,6 +6054,9 @@
       "title": "Tõlge on valmis"
     }
   },
+  "transportErrors": {
+    "timeout": "Päring võttis liiga kaua aega. Proovi uuesti."
+  },
   "validation": {
     "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
@@ -6186,20 +6254,18 @@
         "notOpeningConnect": "Ei avane? Ühenda stella desktop",
         "notPickedUpDescription": "stella desktop ei pruugi töötada või pole selle kontoga ühendatud. Ühenda see ja proovi uuesti.",
         "notPickedUpTitle": "stella desktop ei avanud PDF-i",
+        "placementAttachmentsOnly": "See vaade näitab PDF-i manuseid, seega ei saa templit siia paigutada. Allkirjasta selle asemel ilma templita.",
         "placementBox": "Templi asukoht",
-        "placementConfirm": "Ava stella desktop",
-        "placementDescription": "Vali, kuidas allkiri PDF-is paistab.",
+        "placementDrawTooLarge": "Templi jaoks liiga suur. Lahti lastes kasutatakse suurimat suurust.",
+        "placementDrawTooSmall": "Templi jaoks liiga väike. Lahti lastes kasutatakse väikseimat suurust.",
         "placementHint": "Lohista templit selle liigutamiseks või selle nurka suuruse muutmiseks. Kui tempel on valitud, liigutavad nooleklahvid seda ja Shift koos nooleklahviga muudab selle suurust.",
-        "placementInvisible": "Nähtamatu allkiri",
-        "placementInvisibleDescription": "Allkiri salvestatakse faili ilma ühelegi leheküljele märki lisamata.",
-        "placementPageLabel": "Templi lehekülg",
-        "placementPageOption": "Lehekülg {page, number}/{count, number}",
-        "placementPreview": "Lehekülje {page, number} eelvaade",
-        "placementPreviewFailed": "Lehekülje eelvaadet ei õnnestunud laadida.",
+        "placementModeHint": "Lohista leheküljel templi joonistamiseks või klõpsa selle paigutamiseks.",
+        "placementPlaceOnLastPage": "Paiguta viimasele leheküljele",
+        "placementRedrawHint": "Lohista templit selle kohandamiseks või joonista uus mis tahes leheküljele.",
+        "placementSignInvisible": "Allkirjasta ilma templita",
+        "placementSignVisible": "Allkirjasta templiga",
         "placementTitle": "Allkirjasta PDF",
         "placementTooSmall": "See lehekülg on templi jaoks liiga väike. Vali mõni teine lehekülg.",
-        "placementVisible": "Nähtav tempel",
-        "placementVisibleDescription": "Leheküljel olev kast näitab, kes ja millal allkirjastas.",
         "preparingDescription": "PDF-i ettevalmistamine stella desktopi jaoks.",
         "readOnlyDescription": "See dokument on kirjutuskaitstud.",
         "signedDescription": "Allkiri salvestati versioonina {versionNumber, number}.",

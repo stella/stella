@@ -410,7 +410,7 @@ for (const scenario of [
       if (scenario === "definite_loss") {
         expect(result).toMatchObject({
           status: "error",
-          error: { reason: "unavailable" },
+          error: { reason: "lease_lost" },
         });
       } else {
         expect(result).toMatchObject(

@@ -324,7 +324,15 @@ test.each(["active", "daily"] as const)(
       };
       const capability =
         await CAPABILITY_DISPATCH["lists.verifications.create"].load();
-      for (const endpoint of [create, capability.default]) {
+      const capabilityEndpoint = capability["default"];
+      const isRestHandler = (value: unknown): value is typeof create =>
+        value === create;
+      if (!isRestHandler(capabilityEndpoint)) {
+        throw new TypeError(
+          "Verification capability must load the REST handler",
+        );
+      }
+      for (const endpoint of [create, capabilityEndpoint]) {
         const result = await endpoint.handler(
           asTestRaw({
             ...context(tx, {

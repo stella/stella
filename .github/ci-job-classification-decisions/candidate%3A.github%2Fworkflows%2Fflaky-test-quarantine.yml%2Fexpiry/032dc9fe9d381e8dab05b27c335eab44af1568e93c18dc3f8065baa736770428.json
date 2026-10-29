@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Checks quarantine expiry on scheduled or manual default-branch runs; no publication or deployment.",
+  "reviewedDigest": "032dc9fe9d381e8dab05b27c335eab44af1568e93c18dc3f8065baa736770428"
+}

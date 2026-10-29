@@ -140,6 +140,7 @@ if (!databaseUrl || !enabled) {
       const finish = barrier();
       let remoteEffects = 0;
       const first = fetchDecisionDocument({
+        checkRetention: () => undefined,
         decisionId,
         scopedDb,
         signal: new AbortController().signal,
@@ -154,6 +155,7 @@ if (!databaseUrl || !enabled) {
       try {
         expect(
           await fetchDecisionDocument({
+            checkRetention: () => undefined,
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
@@ -185,6 +187,7 @@ if (!databaseUrl || !enabled) {
       try {
         expect(
           await fetchDecisionDocument({
+            checkRetention: () => undefined,
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
@@ -215,6 +218,7 @@ if (!databaseUrl || !enabled) {
           .where(eq(caseLawSources.id, sourceId));
         expect(
           await fetchDecisionDocument({
+            checkRetention: () => undefined,
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
@@ -236,6 +240,7 @@ if (!databaseUrl || !enabled) {
       } = { lease: null };
       try {
         const outcome = await fetchDecisionDocument({
+          checkRetention: () => undefined,
           decisionId,
           scopedDb,
           signal: new AbortController().signal,

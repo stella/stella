@@ -82,6 +82,29 @@ describe("server errors outside AI", () => {
   });
 });
 
+describe("transport failures", () => {
+  test.each([
+    ["network", messages.common.networkError],
+    ["timeout", messages.transportErrors.timeout],
+  ] as const)("localizes %s failures", (kind, expectedMessage) => {
+    const error = toAPIError({ status: 0, value: null, kind });
+
+    expect(error.message).toBe(expectedMessage);
+  });
+
+  test("keeps an aborted request distinct from a network failure", () => {
+    const error = toAPIError({
+      status: 0,
+      value: null,
+      kind: "aborted",
+      cause: new DOMException("Cancelled", "AbortError"),
+    });
+
+    expect(error.transportKind).toBe("aborted");
+    expect(error.message).not.toBe(messages.common.networkError);
+  });
+});
+
 describe("validation API failures", () => {
   test.each([
     [302, messages.errors.api.unknown],
@@ -101,4 +124,16 @@ describe("validation API failures", () => {
       expectedMessage.replace("{limit, number}", "256"),
     );
   });
+});
+
+test("search work limits provide the translated refinement action", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: "global_search_rank_work_limit",
+      message: "Search work limit",
+    },
+  });
+  expect(error.message).toBe(messages.caseLaw.pagination.refineForMore);
+  expect(isDisplayableAPIError(error)).toBe(true);
 });

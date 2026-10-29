@@ -352,7 +352,7 @@ export const generateBatch = async (
       }),
     );
 
-    const output = yield* Result.await(
+    const generation = yield* Result.await(
       generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
@@ -378,7 +378,11 @@ export const generateBatch = async (
     const settlements = new Map<SafeId<"property">, BatchSettlement>();
 
     for (const property of aiInputProperties) {
-      const propertyResult = output[property.id];
+      if (generation.refusedPropertyIds.has(property.id)) {
+        settlements.set(property.id, "refused");
+        continue;
+      }
+      const propertyResult = generation.output[property.id];
       if (!propertyResult) {
         settlements.set(property.id, "notStated");
         continue;

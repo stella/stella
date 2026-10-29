@@ -4,6 +4,34 @@
   "reportInvalidScopeDisables": true,
   "reportNeedlessDisables": true,
   "reportUnscopedDisables": true,
+  "overrides": [
+    {
+      "files": [
+        "packages/ui/src/styles/theme.css",
+        "apps/landing/src/styles/global.css",
+        "apps/landing/src/styles/docs.css",
+        "apps/extension/src/entrypoints/popup/theme.css"
+      ],
+      "rules": {
+        "color-named": null,
+        "color-no-hex": null,
+        "function-disallowed-list": null
+      }
+    },
+    {
+      "files": ["packages/decision-reader/**/*.css"],
+      "rules": {
+        "declaration-property-value-allowed-list": [
+          {
+            "/^-webkit-hyphens$|^hyphens$/": ["manual", "none"]
+          },
+          {
+            "message": "Decision reader styles must not enable automatic hyphenation. Found \"%s: %s\"."
+          }
+        ]
+      }
+    }
+  ],
   "rules": {
     "color-named": [
       "never",
@@ -20,7 +48,9 @@
     "color-no-invalid-hex": true,
     "declaration-block-no-duplicate-properties": [
       true,
-      { "ignore": ["consecutive-duplicates-with-different-values"] }
+      {
+        "ignore": ["consecutive-duplicates-with-different-values"]
+      }
     ],
     "declaration-property-value-disallowed-list": [
       {
@@ -63,7 +93,9 @@
       }
     ],
     "media-feature-name-value-allowed-list": [
-      { "/^(any-)?hover$/": ["hover"] },
+      {
+        "/^(any-)?hover$/": ["hover"]
+      },
       {
         "message": "conventions-ux (Interactions & Animations): keep touch reveals on the `pointer-coarse` query, not `hover: none`. Found \"(%s: %s)\"."
       }
@@ -75,20 +107,5 @@
         "message": "conventions-ux (Viewport & Responsive): `vh` resolves against the largest viewport and ignores mobile browser chrome. Use `dvh`, or `svh` for a length that must not move while the toolbar collapses."
       }
     ]
-  },
-  "overrides": [
-    {
-      "files": [
-        "packages/ui/src/styles/theme.css",
-        "apps/landing/src/styles/global.css",
-        "apps/landing/src/styles/docs.css",
-        "apps/extension/src/entrypoints/popup/theme.css"
-      ],
-      "rules": {
-        "color-named": null,
-        "color-no-hex": null,
-        "function-disallowed-list": null
-      }
-    }
-  ]
+  }
 }

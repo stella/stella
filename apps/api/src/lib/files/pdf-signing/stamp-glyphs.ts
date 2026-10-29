@@ -25,12 +25,15 @@ import {
 import type { PDF, PdfRef } from "@libpdf/core";
 import { panic } from "better-result";
 
+import type { SrgbColor } from "@stll/brand";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { subsetTrueType } from "@stll/folio-core/text-shaping";
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
+import { pdfFillColor } from "@/api/lib/files/pdf-color";
 import type { StampFace } from "@/api/lib/files/pdf-signing/stamp-font";
 import {
+  type PositionedStampRow,
   STAMP_UNITS_PER_EM,
   type StampGlyph,
   type StampRow,
@@ -368,25 +371,16 @@ const runOperators = ({
   return operators;
 };
 
-type StampTextRow = {
-  row: StampRow;
-  /** Left end of the row's baseline, in appearance space. */
-  x: number;
-  y: number;
-};
-
 /**
  * Embed the fonts the rows use and return the operators that draw them
  * (inside BT/ET) and the font resources they name.
  */
 export const drawStampRows = ({
-  fontSize,
   pdf,
   rows,
 }: {
-  fontSize: number;
   pdf: PDF;
-  rows: readonly StampTextRow[];
+  rows: readonly PositionedStampRow[];
 }): { fonts: PdfDict; operators: string[] } => {
   const usage = usageOf(rows.map(({ row }) => row));
   // Face order, not first use: the same stamp names its fonts the same way.
@@ -407,7 +401,12 @@ export const drawStampRows = ({
     ]),
   );
   const operators: string[] = [];
-  for (const { row, x, y } of rows) {
+  let fill: SrgbColor | null = null;
+  for (const { color, fontSize, row, x, y } of rows) {
+    if (color !== fill) {
+      operators.push(pdfFillColor(color));
+      fill = color;
+    }
     let pen = x;
     for (const run of row.runs) {
       const face =

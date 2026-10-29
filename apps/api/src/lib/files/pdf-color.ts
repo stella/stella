@@ -17,10 +17,10 @@ const grey = (level: number): SrgbColor => [level, level, level];
 export const PDF_NEUTRALS = {
   black: NEUTRAL_SRGB.black,
   white: NEUTRAL_SRGB.white,
-  /** The signature stamp's border. */
-  stampBorder: grey(0.35),
-  /** The signature stamp's text. */
-  stampText: grey(0.1),
+  /** The signature stamp's signer name. */
+  stampName: grey(0.1),
+  /** The signature stamp's signing details. */
+  stampDetail: [0.357, 0.373, 0.4],
 } as const satisfies Record<string, SrgbColor>;
 
 // A channel as a content-stream number: rounded to three decimals and printed
