@@ -6,15 +6,15 @@ import type { QueryPerfProfileId } from "./profiles";
 import { isLargeQueryPerfRelation } from "./table-sizes";
 
 /** Fixture rows represent one percent of the production-shape population. */
-export const QUERY_PERF_FIXTURE_SCALE_FACTOR = 100;
+const QUERY_PERF_FIXTURE_SCALE_FACTOR = 100;
 /**
  * PostgreSQL's outer statement bound. A private check pins this value to the
  * infrastructure setting; measured owners must use their own tighter bound.
  */
 export const SERVER_STATEMENT_TIMEOUT_MS = 300_000;
 /** A single statement may consume at most one quarter of its owner's deadline. */
-export const QUERY_PERF_TIMEOUT_SHARE = 1 / 4;
-export const NESTED_LOOP_OUTER_ROW_LIMIT = 1000;
+const QUERY_PERF_TIMEOUT_SHARE = 1 / 4;
+const NESTED_LOOP_OUTER_ROW_LIMIT = 1000;
 
 export type PlanViolation = {
   kind:

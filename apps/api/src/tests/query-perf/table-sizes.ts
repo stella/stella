@@ -18,8 +18,6 @@ export const QUERY_PERF_TABLE_SIZES = {
   workspaces: "large",
 } as const satisfies Record<string, "large" | "small">;
 
-export type QueryPerfDeclaredTable = keyof typeof QUERY_PERF_TABLE_SIZES;
-
 const queryPerfTableSizesByName = new Map(
   Object.entries(QUERY_PERF_TABLE_SIZES),
 );
