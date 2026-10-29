@@ -462,6 +462,7 @@
     ],
     "Test staging proof readiness": [
       "@stll/portable-path",
+      "apps/api/src/db-components.ts",
       "apps/api/src/deploy-env-contract.ts",
       "scripts/**",
       ".github/workflows/**",
