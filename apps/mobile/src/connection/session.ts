@@ -1,0 +1,207 @@
+import { Result } from "better-result";
+import * as v from "valibot";
+
+import { SignedOutError, TokenError } from "./errors";
+import type { Fetch } from "./http";
+import { refreshTokens } from "./tokens";
+
+/**
+ * What survives a restart, in the platform keychain. The access token is
+ * deliberately absent: it lives in memory only, so the stored secret is the
+ * refresh token alone, which the server can revoke and rotates on use.
+ */
+export const storedSessionSchema = v.object({
+  serverUrl: v.pipe(v.string(), v.url()),
+  issuer: v.pipe(v.string(), v.url()),
+  clientId: v.pipe(v.string(), v.minLength(1)),
+  tokenEndpoint: v.pipe(v.string(), v.url()),
+  /** RFC 7009; sign-out revokes the grant here when the server offers it. */
+  revocationEndpoint: v.optional(v.pipe(v.string(), v.url())),
+  resource: v.pipe(v.string(), v.url()),
+  refreshToken: v.pipe(v.string(), v.minLength(1)),
+  /**
+   * The signed-in person's stable id on this server, the ID token's `sub`.
+   * With `serverUrl` it keys whatever the app keeps per account on the
+   * device; a session kept before it existed no longer parses and signs in
+   * again.
+   */
+  userId: v.pipe(v.string(), v.minLength(1)),
+});
+
+export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
+
+export type SessionStore = {
+  readonly read: () => Promise<StoredSession | undefined>;
+  readonly write: (session: StoredSession) => Promise<void>;
+  readonly clear: () => Promise<void>;
+};
+
+export type AccessToken = {
+  readonly token: string;
+  /** Epoch milliseconds. */
+  readonly expiresAt: number;
+};
+
+/** Refresh this long before expiry, so a request never leaves with a token about to lapse. */
+export const EARLY_REFRESH_MS = 60_000;
+
+/** OAuth errors after which the stored grant can never work again (RFC 6749 §5.2). */
+const TERMINAL_REFRESH_ERRORS: ReadonlySet<string> = new Set([
+  "invalid_grant",
+  "invalid_client",
+  "unauthorized_client",
+]);
+
+export type AccessTokenSource = {
+  readonly session: () => StoredSession;
+  /** A current access token, refreshing first when the held one is spent. */
+  readonly accessToken: () => Promise<
+    Result<string, SignedOutError | TokenError>
+  >;
+  /** After the server rejects a token it is spent, whatever its clock says. */
+  readonly invalidate: () => void;
+};
+
+/**
+ * Hands out access tokens for one signed-in session. Concurrent callers
+ * share one refresh: refresh tokens rotate, so a second refresh racing the
+ * first would present a token the server already retired.
+ */
+export const createAccessTokenSource = ({
+  fetch,
+  initialAccess,
+  now,
+  session,
+  store,
+}: {
+  readonly fetch: Fetch;
+  readonly initialAccess: AccessToken | undefined;
+  readonly now: () => number;
+  readonly session: StoredSession;
+  readonly store: SessionStore;
+}): AccessTokenSource => {
+  let current = session;
+  let access = initialAccess;
+  let refreshing:
+    Promise<Result<string, SignedOutError | TokenError>> | undefined;
+
+  /**
+   * After the server refuses `presented`: another run of the app (a reload
+   * during development, a render React threw away) may have rotated the
+   * grant first and kept its successor, which this source then adopts and
+   * presents once. Only a successor for exactly this session (same server,
+   * issuer, client, endpoints and resource) is adopted, so a source left
+   * over from another sign-in never takes, or sends anywhere, a token that
+   * belongs to the one now kept. Only a keychain still holding the refused
+   * token means the grant itself ended and is cleared; one holding another
+   * session is left alone. Never throws: a keychain that cannot be read or
+   * cleared still ends in a signed-out session.
+   */
+  const afterRefusal = async (
+    presented: string,
+    oauthError: string,
+    adopted: boolean,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const kept = await Result.tryPromise(async () => await store.read());
+    const successor = Result.isOk(kept) ? kept.value : undefined;
+    const sameSession =
+      successor !== undefined && sameSessionIdentity(successor, current);
+    if (!adopted && sameSession && successor.refreshToken !== presented) {
+      current = successor;
+      return await refresh(true);
+    }
+    // Only a keychain read as empty or still holding the refused token is
+    // cleared: a newer token another run stored, or a keychain that could
+    // not be read, is left as it is.
+    const refusedKept =
+      Result.isOk(kept) &&
+      (successor === undefined ||
+        (sameSession && successor.refreshToken === presented));
+    if (refusedKept) {
+      (
+        await Result.tryPromise(async () => {
+          await store.clear();
+        })
+      ).unwrapOr(undefined);
+    }
+    return Result.err(
+      new SignedOutError({
+        message: `The server ended the session: ${oauthError}`,
+      }),
+    );
+  };
+
+  const refresh = async (
+    adopted = false,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const presented = current.refreshToken;
+    const refreshed = await refreshTokens({
+      fetch,
+      clientId: current.clientId,
+      refreshToken: presented,
+      resource: current.resource,
+      tokenEndpoint: current.tokenEndpoint,
+    });
+    if (Result.isError(refreshed)) {
+      const { oauthError } = refreshed.error;
+      if (oauthError !== undefined && TERMINAL_REFRESH_ERRORS.has(oauthError)) {
+        return await afterRefusal(presented, oauthError, adopted);
+      }
+      return Result.err(refreshed.error);
+    }
+    const tokens = refreshed.value;
+    if (
+      tokens.refresh_token !== undefined &&
+      tokens.refresh_token !== current.refreshToken
+    ) {
+      current = { ...current, refreshToken: tokens.refresh_token };
+      const persisted = await Result.tryPromise({
+        try: async () => {
+          await store.write(current);
+        },
+        catch: (cause) =>
+          new TokenError({
+            message: "Could not keep the rotated session",
+            cause,
+          }),
+      });
+      if (Result.isError(persisted)) {
+        return Result.err(persisted.error);
+      }
+    }
+    access = {
+      token: tokens.access_token,
+      expiresAt: now() + tokens.expires_in * 1000,
+    };
+    return Result.ok(tokens.access_token);
+  };
+
+  return {
+    session: () => current,
+    accessToken: async () => {
+      if (access !== undefined && access.expiresAt - EARLY_REFRESH_MS > now()) {
+        return Result.ok(access.token);
+      }
+      refreshing ??= refresh().finally(() => {
+        refreshing = undefined;
+      });
+      return await refreshing;
+    },
+    invalidate: () => {
+      access = undefined;
+    },
+  };
+};
+
+/** Whether two stored sessions are the same sign-in, whatever their refresh token. */
+function sameSessionIdentity(a: StoredSession, b: StoredSession): boolean {
+  return (
+    a.serverUrl === b.serverUrl &&
+    a.userId === b.userId &&
+    a.issuer === b.issuer &&
+    a.clientId === b.clientId &&
+    a.tokenEndpoint === b.tokenEndpoint &&
+    a.revocationEndpoint === b.revocationEndpoint &&
+    a.resource === b.resource
+  );
+}

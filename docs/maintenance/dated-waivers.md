@@ -49,8 +49,6 @@ current main. Already removed entries produce no proposal; an existing proposal
 is closed with a neutral note.
 Commits are signed through the GitHub API; proposals are queued with
 `gh pr merge --auto`, pinned to the published head with `--match-head-commit`.
-When `STELLA_MERGE_HOLD` is set, an existing proposal is disarmed before either
-reserved branch is refreshed, and arming is skipped.
 Removal commits are always rebuilt from the probed base; only the PR number is
 reused. The reserved branch is force-updated to the freshly signed commit, then
 its head and complete tree are verified against the generated commit before

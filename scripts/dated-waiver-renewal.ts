@@ -3,8 +3,7 @@
 // waiver on main in one proposal instead of leaving the date to whichever
 // change next touches the owner file. Every other kind, and any probe that
 // could not confirm absence, keeps its deadline.
-import type ts from "typescript6";
-
+import type { StringLiteral } from "../packages/scripts/src/syntax-tree";
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   type DocumentationSite,
@@ -53,7 +52,7 @@ type PlanRenewalOptions = {
 
 const slotKey = (site: DocumentationSite): string | undefined =>
   site.checkedAt && site.expiresAt
-    ? `${site.checkedAt.pos}:${site.expiresAt.pos}`
+    ? `${site.checkedAt.start}:${site.expiresAt.start}`
     : undefined;
 
 export const planDocRenewal = ({
@@ -62,7 +61,7 @@ export const planDocRenewal = ({
   now,
 }: PlanRenewalOptions): RenewalPlan => {
   const dates = renewalDates(now);
-  const { ast, sites } = readDocumentationOwner(source);
+  const { sites } = readDocumentationOwner(source);
   const confirmed = new Set(
     absent
       .filter(
@@ -82,7 +81,7 @@ export const planDocRenewal = ({
   }
   const replacements = new Map<
     number,
-    { literal: ts.StringLiteral; value: string }
+    { literal: StringLiteral; value: string }
   >();
   const renewed: DatedWaiver[] = [];
   const held: DatedWaiver[] = [];
@@ -96,18 +95,18 @@ export const planDocRenewal = ({
       matches.length !== 1 ||
       site?.checkedAt === undefined ||
       site.expiresAt === undefined ||
-      site.expiresAt.text !== entry.expiresAt ||
-      site.checkedAt.text !== entry.checkedAt ||
+      site.expiresAt.value !== entry.expiresAt ||
+      site.checkedAt.value !== entry.checkedAt ||
       !group.every(({ dependency }) => confirmed.has(dependency))
     ) {
       held.push(entry);
       continue;
     }
-    replacements.set(site.checkedAt.pos, {
+    replacements.set(site.checkedAt.start, {
       literal: site.checkedAt,
       value: dates.checkedAt,
     });
-    replacements.set(site.expiresAt.pos, {
+    replacements.set(site.expiresAt.start, {
       literal: site.expiresAt,
       value: dates.expiresAt,
     });
@@ -115,9 +114,9 @@ export const planDocRenewal = ({
   }
   let after = source;
   for (const { literal, value } of [...replacements.values()].toSorted(
-    (left, right) => right.literal.pos - left.literal.pos,
+    (left, right) => right.literal.start - left.literal.start,
   )) {
-    after = `${after.slice(0, literal.getStart(ast))}${JSON.stringify(value)}${after.slice(literal.end)}`;
+    after = `${after.slice(0, literal.start)}${JSON.stringify(value)}${after.slice(literal.end)}`;
   }
   readDocumentationOwner(after);
   return {

@@ -76,10 +76,11 @@ export const useDocxCheckpointAutosave = ({
       surface: timingSurface,
     });
     const buffer = await ref.save({ selective: true });
-    const outcome = buffer ? await saveCheckpoint(buffer) : "failed";
+    const outcome = buffer ? await saveCheckpoint(buffer) : null;
+    const saved = outcome?.type === "saved";
     // Only a confirmed checkpoint is a round trip; a failed or released save
     // ends early and would read as fast.
-    if (outcome === "saved") {
+    if (saved) {
       timer.finish();
     } else {
       timer.cancel();
@@ -87,7 +88,7 @@ export const useDocxCheckpointAutosave = ({
     setAutosaveStatus(
       resolveCheckpointAutosaveStatus({
         buffer: buffer ?? null,
-        checkpointSaved: outcome === "saved",
+        checkpointSaved: saved,
       }),
     );
   });

@@ -4,13 +4,23 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import type * as v from "valibot";
 
+import {
+  DECISION_LIST_SORTS,
+  type DecisionListSort,
+} from "@stll/api-contract/search";
+
 import { caseLawSources } from "@/api/db/schema";
 import {
+  admitsDecisionDateBand,
   listDecisionsPageQuery,
   type listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import {
+  DECISION_DATE_BANDS,
+  type DecisionDateBand,
+} from "@/api/lib/case-law/decision-date-order";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import {
@@ -49,7 +59,7 @@ beforeAll(
         CASE WHEN i % 10 = 3 THEN 'en' ELSE 'cs' END,
         CASE WHEN i % 4 = 1 THEN NULL ELSE 'group:' || (i / 3)::text END,
         CASE WHEN i % 3 = 0 THEN 'rozsudek' ELSE 'usnesení' END,
-        DATE '2020-01-01' + (i % 97),
+        CASE WHEN i % 5 = 4 THEN NULL ELSE DATE '2020-01-01' + (i % 97) END,
         TIMESTAMPTZ '2020-01-01' + (i || ' seconds')::interval
       FROM generate_series(1, ${DECISIONS}::int) AS i
     `);
@@ -63,17 +73,45 @@ afterAll(async () => {
   await client.close();
 });
 
-test(
-  "the decision list keeps its index path with grouped and ungrouped rows",
-  async () => {
+/**
+ * The scan each order reads the walk index with: a range read in one
+ * direction, so the page limit stops it. Total over the orders, so a new one
+ * does not compile until it states the direction its plan must show.
+ */
+const WALK_SCAN_NODE = {
+  newest: "Index Scan Backward",
+  oldest: "Index Scan",
+} as const satisfies Record<DecisionListSort, string>;
+
+/**
+ * The range each band is. Both bands bound the index range itself, not a
+ * filter over the rows the range returns: the dated band starts above the
+ * undated one, which is the single key `-infinity`.
+ */
+const BAND_COND = {
+  dated:
+    " AND \\(COALESCE\\(decision_date, '-infinity'::date\\) > '-infinity'::date\\)\\)\\n",
+  undated:
+    " AND \\(COALESCE\\(decision_date, '-infinity'::date\\) = '-infinity'::date\\)\\)\\n",
+} as const satisfies Record<DecisionDateBand, string>;
+
+const ORDERS_BY_BAND = DECISION_LIST_SORTS.flatMap((sort) =>
+  DECISION_DATE_BANDS.map((band) => [sort, band] as const),
+);
+
+test.each(ORDERS_BY_BAND)(
+  "the %s-first decision list keeps its index path in the %s band with grouped and ungrouped rows",
+  async (sort, band) => {
     const plans = await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
       const tx = roleTx as unknown as CaseLawPublicReadTransaction;
       const query = listDecisionsPageQuery({
         query: { country: "CZE" },
-        limit: 50,
-        cursor: undefined,
+        sort,
+        band,
+        take: 51,
+        position: undefined,
         tx,
       });
       const natural = planLines(
@@ -87,8 +125,11 @@ test(
       return { natural, forced, rows };
     });
 
-    const indexedDecisionScan =
-      /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: \(\(country\)::text = 'CZE'::text\)/u;
+    const scan = WALK_SCAN_NODE[sort];
+    const indexedDecisionScan = new RegExp(
+      `${scan} using case_law_decisions_country_date_published_idx on case_law_decisions\\n\\s+Index Cond: \\(+\\(country\\)::text = 'CZE'::text\\)${BAND_COND[band]}`,
+      "u",
+    );
     expect(plans.natural).toMatch(indexedDecisionScan);
     expect(plans.forced).toMatch(indexedDecisionScan);
     for (const plan of [plans.natural, plans.forced]) {
@@ -96,16 +137,25 @@ test(
       // join (anti or lateral) the planner misjudges how many rows survive it
       // and sorts the whole country instead of stopping after one page.
       expect(plan).toMatch(
-        /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: [^\n]+\n\s+Filter: \(NOT EXISTS\(SubPlan \d+\)\)/u,
+        new RegExp(
+          `${scan} using case_law_decisions_country_date_published_idx on case_law_decisions\\n\\s+Index Cond: [^\\n]+\\n\\s+Filter: \\(NOT EXISTS\\(SubPlan \\d+\\)\\)`,
+          "u",
+        ),
       );
       expect(plan).not.toMatch(/Anti Join|Left Join/u);
-      expect(plan.slice(0, plan.indexOf("Index Scan Backward"))).not.toMatch(
+      expect(plan.slice(0, plan.indexOf(`${scan} using`))).not.toMatch(
         /\b(Sort|Bitmap Heap Scan)\b/u,
       );
       expect(plan).toContain("case_law_decisions_lang_group_idx");
       expect(plan).toMatch(/Index Cond: .*language_group_key/u);
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
     }
+    expect(plans.rows).toHaveLength(51);
+    expect(
+      plans.rows.every(
+        (row) => (row.decisionDate === null) === (band === "undated"),
+      ),
+    ).toBe(true);
     expect(plans.rows.some((row) => row.languageGroupKey === null)).toBe(true);
     const groupKeys = plans.rows.flatMap((row) =>
       row.languageGroupKey === null ? [] : [row.languageGroupKey],
@@ -116,11 +166,17 @@ test(
 );
 
 type BrowseQuery = v.InferOutput<typeof listDecisionsQuerySchema>;
-type BrowseFilter = Exclude<keyof BrowseQuery, "cursor" | "limit" | "offset">;
+type BrowseFilter = Exclude<
+  keyof BrowseQuery,
+  "cursor" | "limit" | "offset" | "sort"
+>;
 
 /** The indexes whose order is the walk's: a page is a range of one of them. */
-const WALK_SCAN =
-  /Index Scan Backward using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\n\s+Index Cond: ([^\n]+)/u;
+const walkScan = (sort: DecisionListSort) =>
+  new RegExp(
+    `${WALK_SCAN_NODE[sort]} using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_published_idx|case_law_decisions_country_language_date_published_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\\n\\s+Index Cond: ([^\\n]+)`,
+    "u",
+  );
 
 type FilterAccess =
   | {
@@ -179,7 +235,7 @@ const FILTER_ACCESS = {
     reason: "a canonical kind folded from the stated type; no index holds it",
   },
   language: {
-    type: "index-probe",
+    type: "walk-range",
     query: { country: "CZE", language: "en" },
     indexCond: /\(language\)::text = 'en'::text/u,
   },
@@ -190,15 +246,49 @@ const FILTER_ACCESS = {
   },
 } as const satisfies Record<BrowseFilter, FilterAccess>;
 
-const explainWalk = async (query: BrowseQuery) =>
+/**
+ * The access paths per band. The undated band is a single key of the walk
+ * index, so a filter no index holds may read the band's own range as a
+ * bitmap and sort what survives: the sort is bounded by the band, and the
+ * planner prefers the ordered walk once the band outgrows the page.
+ */
+const FILTER_ACCESS_BY_BAND = {
+  dated: FILTER_ACCESS,
+  undated: {
+    ...FILTER_ACCESS,
+    decisionType: {
+      type: "index-probe",
+      query: FILTER_ACCESS.decisionType.query,
+      indexCond:
+        /COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
+    },
+    language: {
+      type: "index-probe",
+      query: FILTER_ACCESS.language.query,
+      indexCond:
+        /\(language\)::text = 'en'::text\) AND \(COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
+    },
+  },
+} as const satisfies Record<
+  DecisionDateBand,
+  Record<BrowseFilter, FilterAccess>
+>;
+
+const explainWalk = async (
+  query: BrowseQuery,
+  sort: DecisionListSort,
+  band: DecisionDateBand,
+) =>
   await withPublicLawReaderRole(db, async (roleTx) => {
     // SAFETY: the role transaction supplies the select surface the read uses.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
     const tx = roleTx as unknown as CaseLawPublicReadTransaction;
     const page = listDecisionsPageQuery({
       query,
-      limit: 50,
-      cursor: undefined,
+      sort,
+      band,
+      take: 51,
+      position: undefined,
       tx,
     });
     const natural = planLines(
@@ -212,8 +302,8 @@ const explainWalk = async (query: BrowseQuery) =>
   });
 
 /** A walk index read in order, with nothing above it re-sorting its rows. */
-const orderedWalk = (plan: string) => {
-  const walk = WALK_SCAN.exec(plan);
+const orderedWalk = (plan: string, sort: DecisionListSort) => {
+  const walk = walkScan(sort).exec(plan);
   expect(walk, plan).not.toBeNull();
   // The page limit stops the walk only when nothing above it re-sorts or
   // re-reads the rows it returns.
@@ -223,14 +313,25 @@ const orderedWalk = (plan: string) => {
   return walk;
 };
 
-test.each(Object.entries(FILTER_ACCESS))(
-  "the browse walk reads its %s filter through the access path it declares",
-  async (_filter, access) => {
-    for (const plan of await explainWalk(access.query)) {
+// Every band a request with the filter reads; a date bound reads no undated
+// band, so it has no plan there to declare.
+test.each(
+  ORDERS_BY_BAND.flatMap(([sort, band]) => {
+    // The two bands' tables differ in shape; read either as one access map.
+    const accessByFilter: Readonly<Record<string, FilterAccess>> =
+      FILTER_ACCESS_BY_BAND[band];
+    return Object.entries(accessByFilter)
+      .filter(([, access]) => admitsDecisionDateBand(access.query, band))
+      .map(([filter, access]) => [sort, band, filter, access] as const);
+  }),
+)(
+  "the %s-first browse walk's %s band reads its %s filter through the access path it declares",
+  async (sort, band, _filter, access) => {
+    for (const plan of await explainWalk(access.query, sort, band)) {
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
       switch (access.type) {
         case "walk-range":
-          expect(orderedWalk(plan)?.[2]).toMatch(access.indexCond);
+          expect(orderedWalk(plan, sort)?.[2]).toMatch(access.indexCond);
           break;
         case "index-probe":
           expect(
@@ -241,12 +342,125 @@ test.each(Object.entries(FILTER_ACCESS))(
           ).toBe(true);
           break;
         case "walk-filter":
-          orderedWalk(plan);
+          orderedWalk(plan, sort);
           break;
         default:
           access satisfies never;
       }
     }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+/** The language-led walk index the browse reads a chosen language through. */
+const LANGUAGE_WALK_INDEX =
+  "case_law_decisions_country_language_date_published_idx";
+
+/** Raised to roll back the transaction that dropped the index. */
+class PlanReadRollbackError extends Error {
+  override name = "PlanReadRollbackError";
+}
+
+/**
+ * A language's page, explained as the public reader with the language walk
+ * index present or, inside a transaction that is rolled back, dropped.
+ */
+const explainLanguageWalk = async (
+  query: BrowseQuery,
+  sort: DecisionListSort,
+  band: DecisionDateBand,
+  index: "present" | "dropped",
+) => {
+  let plan = "";
+  await db
+    .transaction(async (tx) => {
+      if (index === "dropped") {
+        await tx.execute(
+          sql`DROP INDEX ${sql.identifier(LANGUAGE_WALK_INDEX)}`,
+        );
+      }
+      await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
+      // SAFETY: the role transaction supplies the select surface the read uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+      const readTx = tx as unknown as CaseLawPublicReadTransaction;
+      const page = listDecisionsPageQuery({
+        query,
+        sort,
+        band,
+        take: 51,
+        position: undefined,
+        tx: readTx,
+      });
+      plan = planLines(
+        await tx.execute(sql`EXPLAIN (COSTS OFF) ${page.getSQL()}`),
+      ).join("\n");
+      throw new PlanReadRollbackError("plan read; roll the dropped index back");
+    })
+    .catch((error: unknown) => {
+      if (!(error instanceof PlanReadRollbackError)) {
+        throw error;
+      }
+    });
+  return plan;
+};
+
+// A language is a share of a country: a tenth of it (`en`) or nearly all of
+// it (`cs`), as one language is all of a single-language country. Either way
+// the page is the language's own range of the walk, read in the page's order
+// and stopped by the limit, never every version in the language sorted for
+// one page.
+// timeout: each case explains its page twice, once in a transaction that drops
+// and restores the index, against the shared seeded database.
+test.each(
+  ORDERS_BY_BAND.flatMap(([sort, band]) =>
+    (["en", "cs"] as const).map((language) => [sort, band, language] as const),
+  ),
+)(
+  "the %s-first browse walk's %s band reads language %s as a range of the language walk index",
+  async (sort, band, language) => {
+    const query = { country: "CZE", language };
+    const plan = await explainLanguageWalk(query, sort, band, "present");
+    const languageCond = new RegExp(
+      `\\(language\\)::text = '${language}'::text`,
+      "u",
+    );
+    expect(plan).not.toContain("Seq Scan on case_law_decisions");
+    if (band === "dated") {
+      const walk = orderedWalk(plan, sort);
+      expect(walk?.[1], plan).toBe(LANGUAGE_WALK_INDEX);
+      expect(walk?.[2], plan).toMatch(languageCond);
+    } else {
+      // The undated band is one key of the index, so a small language's
+      // undated rows may come back as a bitmap of that key and be sorted by
+      // id: the sort is bounded by the band within the language, never by
+      // the language.
+      const probe = new RegExp(
+        `(Index Scan(?: Backward)? using|Bitmap Index Scan on) ${LANGUAGE_WALK_INDEX}[^\\n]*\\n\\s+Index Cond: ([^\\n]+)`,
+        "u",
+      ).exec(plan);
+      expect(probe?.[2], plan).toMatch(languageCond);
+      expect(probe?.[2], plan).toMatch(
+        /COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
+      );
+    }
+
+    // Without the index no walk range holds the language: the plan either
+    // filters the country's walk or sorts a probe of the language's rows.
+    const withoutIndex = await explainLanguageWalk(
+      query,
+      sort,
+      band,
+      "dropped",
+    );
+    expect(withoutIndex).not.toContain(LANGUAGE_WALK_INDEX);
+    const fallback = walkScan(sort).exec(withoutIndex);
+    const languageIsWalkRange =
+      fallback !== null &&
+      /\(language\)::text = /u.test(fallback[2] ?? "") &&
+      !/\b(Sort|Bitmap Heap Scan)\b/u.test(
+        withoutIndex.slice(0, fallback.index),
+      );
+    expect(languageIsWalkRange, withoutIndex).toBe(false);
   },
   DB_TEST_TIMEOUT_MS,
 );

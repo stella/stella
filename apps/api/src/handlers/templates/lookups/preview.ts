@@ -118,6 +118,7 @@ const lookupPreview = createSafeRootHandler(
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: `${registryName} lookup failed`,
             cause,
           }),
@@ -136,6 +137,7 @@ const lookupPreview = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `${registryName} lookup failed: ${outcome.message}`,
         }),
       );

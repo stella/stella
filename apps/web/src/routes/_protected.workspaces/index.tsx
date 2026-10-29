@@ -18,8 +18,8 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -37,7 +37,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
@@ -54,6 +54,7 @@ import type {
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS } from "@/lib/workspaces/types";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupSection } from "@/routes/_protected.workspaces/-components/client-group-section";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
@@ -78,6 +79,7 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/_protected/workspaces/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
   loader: async ({ context }) => {
     // Prime the workspaces query the page suspends on so the fetch starts
@@ -128,7 +130,7 @@ const MattersContent = ({
   resetExternalState: boolean;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { data, isFetching } = useSuspenseQuery(
     workspacesRouteOptions(activeOrganizationId),
@@ -388,11 +390,15 @@ const MattersToolbarSkeleton = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Input
-        className="w-64 max-w-[40%]"
+      <SearchField
+        aria-label={t("common.search")}
+        clearLabel={t("common.clearSearch")}
         disabled
+        groupClassName="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
+        onValueChange={() => undefined}
         placeholder={t("common.search")}
         size="sm"
+        value=""
       />
       <Separator className="mx-1 h-4" orientation="vertical" />
       <Button disabled size="xs" variant="ghost">

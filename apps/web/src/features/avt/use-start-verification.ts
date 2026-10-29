@@ -76,6 +76,12 @@ export const useStartVerification = ({
     const response = sent.value;
 
     if (response.error) {
+      if ("kind" in response.error) {
+        notifyUserError(toAPIError(response.error), t("avt.runs.startFailed"), {
+          description: t("common.unexpectedError"),
+        });
+        return;
+      }
       const detail = runSizeConfirmationDetail(response.error);
       if (detail !== null) {
         setSizeConfirmation({ ...detail, target });

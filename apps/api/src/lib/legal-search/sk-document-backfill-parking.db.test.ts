@@ -299,6 +299,7 @@ type FetchSeededOptions = {
 /** One pass of the unit the walk runs, over a seeded decision. */
 const fetchSeeded = async ({ answer, label, observe }: FetchSeededOptions) =>
   await fetchDecisionDocument({
+    checkRetention: () => undefined,
     onDocumentObservation: observe,
     decisionId: idFor(label),
     fetchDocument: async () =>
@@ -493,6 +494,7 @@ describe("a stale claim", () => {
       expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
       const urls: string[] = [];
       const outcome = await fetchDecisionDocument({
+        checkRetention: () => undefined,
         decisionId: buffered.id,
         fetchDocument: async (url) => {
           urls.push(url.href);

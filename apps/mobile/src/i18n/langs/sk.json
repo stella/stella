@@ -1,0 +1,233 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "close": "Zavrieť",
+    "law": "Judikatúra",
+    "matters": "Spisy",
+    "more": "Ďalšie",
+    "settings": "Nastavenia",
+    "tasks": "Úlohy"
+  },
+  "chat": {
+    "emptyTitle": "Zatiaľ žiadne konverzácie",
+    "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna.",
+    "noMatchesTitle": "Žiadne zodpovedajúce konverzácie",
+    "noMatchesDescription": "Žiadny názov konverzácie ani spisu neobsahuje „{search}“.",
+    "search": "Hľadať konverzácie",
+    "loadFailed": "Vaše konverzácie sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "untitled": "Konverzácia bez názvu",
+    "loadMoreFailed": "Načítať ďalšie",
+    "loadOlderFailed": "Načítať staršie správy",
+    "toolUsed": "Použité: {tool}",
+    "threadTitle": "Konverzácia",
+    "threadLoadFailed": "Túto konverzáciu sa nepodarilo načítať.",
+    "threadEmptyDescription": "Táto konverzácia zatiaľ nemá žiadne správy.",
+    "sections": {
+      "today": "Dnes",
+      "yesterday": "Včera",
+      "week": "Posledných 7 dní",
+      "earlier": "Skôr"
+    },
+    "newChat": "Nová konverzácia",
+    "composerPlaceholder": "Opýtajte sa stelly",
+    "send": "Odoslať",
+    "stop": "Zastaviť",
+    "sendFailed": "Správu sa nepodarilo odoslať. Skúste to znova.",
+    "answerWorking": "Pracujem…",
+    "answerStopped": "Zastavené.",
+    "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
+    "answerFailed": "Odpoveď sa nepodarilo dokončiť.",
+    "composerMenu": "Otvoriť ponuku príloh a nástrojov",
+    "pickTitle": "Vyberte konverzáciu",
+    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
+  },
+  "tasks": {
+    "emptyTitle": "Žiadne otvorené úlohy",
+    "emptyDescription": "Tu sa zobrazia otvorené úlohy, ktoré vám boli pridelené.",
+    "loadFailed": "Vaše úlohy sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "newTask": "Nová úloha",
+    "add": "Pridať",
+    "name": "Názov úlohy",
+    "dueTitle": "Termín",
+    "matterTitle": "Spis",
+    "findMatter": "Nájsť spis",
+    "addFailed": "Úlohu sa nepodarilo pridať. Skúste to znova.",
+    "mattersFailed": "Vaše spisy sa nepodarilo načítať.",
+    "dueOn": "termín {day}",
+    "dueChoice": {
+      "none": "Bez termínu",
+      "today": "Dnes",
+      "tomorrow": "Zajtra",
+      "nextWeek": "O týždeň"
+    },
+    "due": {
+      "overdue": "Po termíne",
+      "today": "Dnes",
+      "tomorrow": "Zajtra",
+      "week": "Tento týždeň",
+      "later": "Neskôr",
+      "none": "Bez termínu"
+    },
+    "markDone": "Označiť ako hotové",
+    "reopen": "Znova otvoriť",
+    "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
+    "pickTitle": "Vyberte úlohu",
+    "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu.",
+    "openMatter": "Otvoriť spis"
+  },
+  "matters": {
+    "emptyTitle": "Zatiaľ žiadne spisy",
+    "emptyDescription": "Tu sa zobrazia vaše nedávne spisy.",
+    "loadFailed": "Vaše spisy sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "groupBy": "Zoskupiť podľa",
+    "noGrouping": "Nezoskupovať",
+    "groupClient": "Klient",
+    "personal": "Osobný",
+    "newMatter": "Nový spis",
+    "create": "Vytvoriť",
+    "name": "Názov spisu",
+    "personalHint": "Spis vznikne ako osobný a uvidíte ho len vy. Klienta a členov pridáte na webe.",
+    "createFailed": "Spis sa nepodarilo vytvoriť. Skúste to znova.",
+    "pickTitle": "Vyberte spis",
+    "pickDescription": "Vyberte spis zo zoznamu a uvidíte jeho dokumenty a úlohy."
+  },
+  "matter": {
+    "documents": "Dokumenty",
+    "tasks": "Úlohy",
+    "emptyTitle": "Zatiaľ tu nič nie je",
+    "emptyDescription": "Tu sa zobrazia dokumenty a úlohy tohto spisu.",
+    "loadFailed": "Spis sa nepodarilo načítať.",
+    "loadMoreFailed": "Ďalšie položky sa nepodarilo načítať.",
+    "loadMore": "Načítať ďalšie",
+    "retry": "Skúsiť znova",
+    "untitled": "Bez názvu",
+    "updated": "Upravené {time}",
+    "kind": {
+      "folder": "Priečinok",
+      "document": "Dokument",
+      "task": "Úloha"
+    },
+    "status": {
+      "open": "Otvorená",
+      "in_progress": "Rozpracovaná",
+      "in_review": "Na kontrolu",
+      "done": "Hotová",
+      "cancelled": "Zrušená"
+    },
+    "add": "Pridať",
+    "scanDocument": "Naskenovať dokument",
+    "newTask": "Nová úloha"
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Spisová značka",
+    "currentVersion": "Aktuálna verzia",
+    "loadFailed": "Položku sa nepodarilo načítať."
+  },
+  "signIn": {
+    "beta": "Beta",
+    "headline": "Jasno v každom prípade.",
+    "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
+    "submit": "Prihlásiť sa",
+    "terms": "Pokračovaním súhlasíte s našimi <terms>zmluvnými podmienkami</terms>.",
+    "options": "Možnosti prihlásenia",
+    "serverTitle": "Server",
+    "serverDescription": "Aplikácia sa prihlasuje do stella. Iný server zadajte, len ak vaša organizácia prevádzkuje vlastný.",
+    "useStella": "Použiť stella",
+    "done": "Hotovo",
+    "serverLabel": "Adresa servera",
+    "serverPlaceholder": "stella.example.com",
+    "sessionEnded": "Vaša relácia skončila. Prihláste sa znova.",
+    "errors": {
+      "address": "Zadajte adresu https, napríklad stella.example.com.",
+      "unreachable": "Na tejto adrese neodpovedal žiadny server stella.",
+      "denied": "Prihlásenie nebolo schválené.",
+      "failed": "Prihlásenie sa nedokončilo. Skúste to znova."
+    }
+  },
+  "settings": {
+    "accountTitle": "Účet",
+    "server": "Server",
+    "signOut": "Odhlásiť sa",
+    "deleteAccount": "Odstrániť účet",
+    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše."
+  },
+  "header": {
+    "search": "Hľadať"
+  },
+  "law": {
+    "title": "Judikatúra",
+    "newest": "Najnovšie rozhodnutia",
+    "noResults": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá.",
+    "noResultsHint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
+    "unavailable": "Vyhľadávanie je dočasne nedostupné",
+    "retry": "Skúsiť znova",
+    "headnote": "Právna veta",
+    "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+    "openSource": "Otvoriť originál",
+    "loadFailed": "Judikatúru sa nepodarilo načítať.",
+    "share": "Zdieľať"
+  },
+  "more": {
+    "soon": "Čoskoro",
+    "timers": "Časovače",
+    "voiceInput": "Hlasové zadávanie"
+  },
+  "writes": {
+    "consentNeeded": "Aby aplikácia mohla robiť zmeny, stella potrebuje vaše povolenie. Prihláste sa znova a udeľte ho.",
+    "signInAgain": "Prihlásiť sa znova"
+  },
+  "timers": {
+    "title": "Časovače",
+    "start": "Spustiť",
+    "startTimer": "Spustiť časovač",
+    "newTimer": "Nový časovač",
+    "description": "Na čom pracujete?",
+    "matterTitle": "Spis",
+    "noMatter": "Bez spisu",
+    "noDescription": "Bez popisu",
+    "running": "Beží",
+    "paused": "Pozastavené",
+    "pause": "Pozastaviť",
+    "resume": "Pokračovať",
+    "save": "Uložiť",
+    "discard": "Zahodiť",
+    "emptyTitle": "Žiadne časovače",
+    "emptyDescription": "Spustite časovač tlačidlom + a po dokončení ho uložte ako výkaz času.",
+    "loadFailed": "Vaše časovače sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "unavailable": "Vaša organizácia nemá zapnuté vykazovanie času.",
+    "startFailed": "Časovač sa nepodarilo spustiť. Skúste to znova.",
+    "changeFailed": "Časovač sa nepodarilo zmeniť. Skúste to znova.",
+    "more": "{count, plural, one {a # ďalší časovač} few {a # ďalšie časovače} other {a # ďalších časovačov}}"
+  },
+  "scan": {
+    "title": "Naskenovať dokument",
+    "upload": "Nahrať",
+    "name": "Názov dokumentu",
+    "defaultName": "Sken {day}",
+    "pages": "{count, plural, one {# strana} few {# strany} other {# strán}}",
+    "matterTitle": "Spis",
+    "uploadFailed": "Sken sa nepodarilo nahrať. Skúste to znova.",
+    "failedTitle": "Skenovanie zlyhalo",
+    "failed": "Fotoaparát sken neuložil. Skúste to znova."
+  },
+  "shortcuts": {
+    "search": "Hľadať",
+    "palette": "Paleta príkazov",
+    "next": "Ďalší výsledok",
+    "previous": "Predchádzajúci výsledok",
+    "toggleList": "Zobraziť alebo skryť zoznam"
+  },
+  "palette": {
+    "placeholder": "Hľadajte spisy a konverzácie alebo spustite príkaz",
+    "noResults": "Nič nezodpovedá „{query}“"
+  },
+  "pane": {
+    "showList": "Zobraziť zoznam",
+    "hideList": "Skryť zoznam"
+  }
+}

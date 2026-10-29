@@ -1213,6 +1213,7 @@ test("web catalog checks pass without the derived message declarations", async (
       "apps/web/src",
       "apps/web/scripts",
       "apps/web/public/prepaint-init.js",
+      "apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json",
       "packages/ai-catalog/src",
     ],
     { cwd: repo, stdout: "pipe", stderr: "pipe" },
@@ -1390,6 +1391,13 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "scripts/generate-cloud-setup.ts",
       "scripts/generated-artifacts.ts",
     ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      "packages/portable-path/src/index.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
     write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
     check: ["bun", "scripts/generate-cloud-setup.ts"],
     autofix: true,
@@ -1409,9 +1417,15 @@ test("every plan builds the derived outputs its generators read before running t
   const witness = (glob: string) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
   const problems: string[] = [];
+  const planByGlob = new Map(
+    GENERATORS.flatMap((entry) => [...entry.inputs, ...entry.outputs]).map(
+      (glob) =>
+        [glob, orderGenerators(generatorsForFiles([witness(glob)]))] as const,
+    ),
+  );
   for (const start of GENERATORS) {
     for (const glob of [...start.inputs, ...start.outputs]) {
-      const plan = orderGenerators(generatorsForFiles([witness(glob)]));
+      const plan = planByGlob.get(glob) ?? [];
       const position = new Map(plan.map(({ id }, index) => [id, index]));
       for (const planned of plan) {
         for (const prerequisite of derivedPrerequisites(planned)) {

@@ -45,7 +45,7 @@ const DECREE = statute({
 describe("what a statute row shows a find", () => {
   test("the act column reads both the number and the name the cell draws", () => {
     expect(statuteFindRowText(CIVIL_CODE).get("act")).toBe(
-      "89/2012 Sb.\nobčanský zákoník",
+      "Zákon č. 89/2012 Sb.\nobčanský zákoník",
     );
   });
 

@@ -22,6 +22,8 @@ const _marks = text.replaceAll(/\p{M}/gu, "");
 const _nonspacingMarks = text.replace(/\p{Mn}/g, "");
 // oxlint-disable-next-line no-direct-unicode-normalize/no-direct-unicode-normalize -- fixture proves the basic combining range without a Unicode flag is reported
 const _basicMarks = text.replaceAll(/[̀-ͯ]/g, "");
+// oxlint-disable-next-line no-direct-unicode-normalize/no-direct-unicode-normalize -- fixture proves a hand-rolled slug run is reported
+const _slug = text.replace(/[^a-z0-9]+/gu, "-");
 
 // expect-clean: no-direct-unicode-normalize/no-direct-unicode-normalize
 const _owned = normalizeUnicode(text, "NFKC");

@@ -101,7 +101,6 @@ test("package and probe execution precede conditional write credential minting",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
   expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
-  expect(publish.env?.["MERGE_HOLD"]).toBe(`\${{ vars.STELLA_MERGE_HOLD }}`);
 });
 
 test("probe evidence stays local and public output does not expose failed probes", () => {
