@@ -1309,6 +1309,7 @@ export type PushOptions = {
   api?: string;
   fetch?: Fetch;
   retryDelayMs?: number;
+  treeBatchSize?: number;
 };
 
 /**
@@ -1325,6 +1326,7 @@ export const push = async ({
   api = "https://api.github.com",
   fetch: send = fetch,
   retryDelayMs = 2000,
+  treeBatchSize = 100,
 }: PushOptions) => {
   const [owner, name] = repository.split("/");
   if (!owner || !name || !/^[A-Za-z0-9._/-]+$/u.test(branch)) {
@@ -1383,15 +1385,34 @@ export const push = async ({
       );
     }
   }
-  const createdTree = await call(
-    `/repos/${repository}/git/trees`,
-    JSON.parse(readFileSync(path.join(requests, "tree.json"), "utf-8")),
-    3,
+  // Large trees are built in batches, each on top of the previous one, so no
+  // single request carries the whole merge; the final tree is the same.
+  const treeRequest: unknown = JSON.parse(
+    readFileSync(path.join(requests, "tree.json"), "utf-8"),
   );
-  if (field(createdTree, "sha") !== tree) {
-    return fail(
-      `GitHub built tree ${String(field(createdTree, "sha"))}, not ${tree}`,
+  const treeEntries = field(treeRequest, "tree");
+  const batches =
+    Array.isArray(treeEntries) && treeEntries.length > treeBatchSize
+      ? Array.from(
+          { length: Math.ceil(treeEntries.length / treeBatchSize) },
+          (_, index) =>
+            treeEntries.slice(
+              index * treeBatchSize,
+              (index + 1) * treeBatchSize,
+            ),
+        )
+      : [treeEntries];
+  let builtTree = field(treeRequest, "base_tree");
+  for (const batch of batches) {
+    const createdTree = await call(
+      `/repos/${repository}/git/trees`,
+      { base_tree: builtTree, tree: batch },
+      3,
     );
+    builtTree = field(createdTree, "sha");
+  }
+  if (builtTree !== tree) {
+    return fail(`GitHub built tree ${String(builtTree)}, not ${tree}`);
   }
   const commit = await call(
     `/repos/${repository}/git/commits`,

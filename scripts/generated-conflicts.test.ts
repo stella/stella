@@ -1289,6 +1289,55 @@ describe("branch update", () => {
     expect(String(refusal)).toContain("GraphQL refused");
   });
 
+  test("a large tree is built in batches on top of each other", async () => {
+    const { calls, fetch } = github(null);
+    const directory = requests();
+    const entries = ["a", "b", "c", "d", "e"].map((name) => ({
+      path: name,
+      mode: "100644",
+      type: "blob",
+      sha: blob,
+    }));
+    writeFileSync(
+      path.join(directory, "tree.json"),
+      JSON.stringify({ base_tree: "6".repeat(40), tree: entries }),
+    );
+    const trees = ["7".repeat(40), "8".repeat(40), tree];
+    const batched = async (url: string, init: RequestInit) => {
+      if (!url.endsWith("/git/trees")) {
+        return fetch(url, init);
+      }
+      const body: unknown = JSON.parse(
+        typeof init.body === "string" ? init.body : "null",
+      );
+      calls.push({ route: url, body });
+      return new Response(JSON.stringify({ sha: trees.shift() }));
+    };
+    try {
+      expect(
+        await push({
+          requests: directory,
+          repository: "stella/stella",
+          branch: "feat/x",
+          token: "token",
+          api: "https://api.example",
+          fetch: batched,
+          treeBatchSize: 2,
+        }),
+      ).toBe(commit);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+    const treeCalls = calls
+      .filter(({ route }) => route.endsWith("/git/trees"))
+      .map(({ body }) => body);
+    expect(treeCalls).toEqual([
+      { base_tree: "6".repeat(40), tree: entries.slice(0, 2) },
+      { base_tree: "7".repeat(40), tree: entries.slice(2, 4) },
+      { base_tree: "8".repeat(40), tree: entries.slice(4) },
+    ]);
+  });
+
   const withBlob = () => {
     const directory = requests();
     writeFileSync(
