@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { apiDateSchema } from "@stll/api-contract/api-date";
-
 import createWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/create";
 import deleteWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/delete";
 import readWorkspaceAnonymizationAllowlist from "@/api/handlers/workspaces/anonymization-allowlist/list";
@@ -82,16 +80,13 @@ const readOverview = createSafeHandler(
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
-    query: v.object({
-      agendaFrom: v.optional(apiDateSchema),
-    }),
+    query: v.object({}),
   } satisfies WorkspaceHandlerConfig,
-  async function* ({ safeDb, workspaceId, query }) {
+  async function* ({ safeDb, workspaceId }) {
     const response = yield* Result.await(
       readOverviewHandler({
         workspaceId,
         safeDb,
-        agendaFrom: query.agendaFrom,
       }),
     );
 

@@ -35,8 +35,10 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { pageTitle } from "@/lib/page-title";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
+import { routePresentation } from "@/routes/-route-presentation";
 import { AuditChangeDetails } from "@/routes/_protected.admin/-components/audit-change-details";
 import {
   AUDIT_ACTION_PROJECTIONS,
@@ -52,6 +54,13 @@ import {
 } from "@/routes/_protected.admin/-queries/audit-logs";
 
 export const Route = createFileRoute("/_protected/admin/audit-logs")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "settings.organization.auditLogs",
+      to: "/admin/audit-logs",
+    }),
+  },
   loader: async ({ context }) => {
     await prefetchRouteQuery(
       context.queryClient,
@@ -74,6 +83,9 @@ export const Route = createFileRoute("/_protected/admin/audit-logs")({
       },
     );
   },
+  head: () => ({
+    meta: [{ title: pageTitle("settings.organization.auditLogs") }],
+  }),
   component: AuditLogsPage,
 });
 

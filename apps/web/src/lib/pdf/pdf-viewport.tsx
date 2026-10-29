@@ -12,6 +12,7 @@ import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { composeRefs } from "@stll/ui/utils";
 
+import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { SecretInput } from "@/components/secret-input";
 import { useTheme } from "@/components/theme-provider";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -286,6 +287,7 @@ const PDFViewerContent = ({
     >
       <div
         ref={pdfContentRef}
+        {...DOCKED_COMPOSER_CLEARANCE}
         className={contentClassName}
         style={viewportStyle}
       >

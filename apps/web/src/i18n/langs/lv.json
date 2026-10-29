@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "modelRefused": "Modelis atteicās atbildēt",
+    "nothingFound": "Nekas netika atrasts",
     "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
     "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
     "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
@@ -130,6 +132,7 @@
     "checkSpamHint": "Ja to neredzat, pārbaudiet mēstuļu mapi.",
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
     "codeSentAgain": "Nosūtījām jaunu kodu.",
+    "continueWithApple": "Turpināt ar Apple",
     "continueWithEmail": "Turpināt",
     "continueWithGoogle": "Turpināt ar Google",
     "continueWithMicrosoft": "Turpināt ar Microsoft",
@@ -708,10 +711,29 @@
       },
       "linkedExpenses": "Saistītie izdevumi",
       "linkedTimeEntries": "Saistītie laika ieraksti",
-      "markPaid": "Atzīmēt kā apmaksātu",
       "noEntries": "Nav ierakstu, kas saistīti ar šo rēķinu",
       "noInvoices": "Rēķinu vēl nav",
       "paidAt": "Apmaksāts",
+      "payments": {
+        "amountTooHigh": "Summa pārsniedz neapmaksāto atlikumu {amount}.",
+        "confirmVoid": "Maksājums paliks uzskaitē kā anulēts un vairs netiks ieskaitīts šī rēķina apmaksā.",
+        "empty": "Maksājumi vēl nav reģistrēti",
+        "method": "Maksājuma veids",
+        "methods": {
+          "bank_transfer": "Bankas pārskaitījums",
+          "card": "Karte",
+          "cash": "Skaidra nauda",
+          "other": "Cits veids"
+        },
+        "outstandingAmount": "Atlikums {amount}",
+        "paidOn": "Maksājuma datums",
+        "partiallyPaid": "Daļēji apmaksāts",
+        "record": "Reģistrēt maksājumu",
+        "summary": "Samaksāts {paid}, atlikums {outstanding}",
+        "title": "Maksājumi",
+        "void": "Anulēt maksājumu",
+        "voided": "Anulēts"
+      },
       "removeEntries": "Noņemt ierakstus",
       "send": "Sūtīt",
       "statuses": {
@@ -893,6 +915,7 @@
     "aiMissing": "AI nav konfigurēts.",
     "availabilityUnknown": "Neizdevās apstiprināt pieejamību.",
     "deeplMissing": "DeepL nav konfigurēts.",
+    "deeplPdfRequired": "PDF failu tulkošanai ir nepieciešams DeepL.",
     "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
     "featureUnavailable": "Šī funkcija nav pieejama.",
     "ocrUnavailable": "OCR nav pieejams.",
@@ -2213,6 +2236,7 @@
     "moveDown": "Pārvietot lejup",
     "moveUp": "Pārvietot augšup",
     "name": "Nosaukums",
+    "networkError": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "newMatter": "Jauna lieta",
     "newRow": "Jauna rinda",
     "next": "Tālāk",
@@ -2455,6 +2479,8 @@
       "aresNotFound": "Šim IČO uzņēmums netika atrasts.",
       "aresTitle": "Čehijas reģistrs (ARES)",
       "contactName": "Kontakta nosaukums",
+      "displayNameOrganizationHint": "Neobligāta pārrakstīšana; citādi tiek izveidots no organizācijas nosaukuma.",
+      "displayNamePersonHint": "Neobligāta pārrakstīšana; citādi tiek izveidots no vārda un uzvārda.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Ievadiet 8 ciparu IČO."
     },
@@ -2532,6 +2558,7 @@
       "rowLabel": "Klients {index}",
       "skippedDuplicateContactId": "Izlaists: dublēts kontakta ID",
       "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
+      "skippedInFileDuplicate": "Izlaists: atkārto agrāku faila rindu",
       "skippedInvalidRow": "Izlaists: rinda neatbilst importa noteikumiem",
       "skippedInvalidTaxId": "Izlaists: nederīgs nodokļu maksātāja numurs",
       "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"
@@ -2573,6 +2600,7 @@
       "issue": {
         "address_line_required": "Ja ir norādīta adrese, adreses 1. rinda ir obligāta.",
         "display_name_required": "Neizdevās izveidot parādāmo nosaukumu.",
+        "in_file_duplicate": "Iepriekšējas šī faila rindas dublikāts",
         "invalid_email": "E-pasta adrese nav derīga.",
         "invalid_phone": "Tālruņa numurs nav derīgs.",
         "invalid_tags": "Atzīmēm jābūt teksta vērtībām.",
@@ -2601,7 +2629,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazīlijas CPF/CNPJ (kontrolsumma)",
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
-      "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas."
+      "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
+      "warning": {
+        "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",
+        "possible_in_file_duplicate": "Iespējams {row}. rindas dublikāts; sakrīt tikai nosaukums."
+      }
     },
     "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",
     "invalidNationalityCodes": "Ievadiet derīgus valstspiederības kodus.",
@@ -2761,12 +2793,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "configurationIncomplete": "Šī darbība nav pilnībā konfigurēta. Sazinieties ar administratoru.",
       "contact": "Sazinieties ar mums",
       "featureDisabled": "Šī funkcija ir īslaicīgi izslēgta.",
+      "leaseLost": "Darbības rezervācija ir beigusies. Lūdzu, mēģiniet vēlreiz.",
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
-      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+      "organizationStateUnreadable": "Neizdevās pārbaudīt organizācijas piekļuvi. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta.",
+      "storeUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, drīzumā mēģiniet vēlreiz."
     },
     "actionFailed": "Tas neizdevās. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "api": {
@@ -3298,7 +3333,6 @@
       "simple": "Vienkāršas atzīmes"
     },
     "moreFormatting": "Papildu formatēšana",
-    "networkError": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "nextChange": "Nākamā izmaiņa",
     "numberedList": "Numurēts saraksts",
     "parseError": "Dokumentu neizdevās apstrādāt. Iespējams, tas ir bojāts vai neatbalstītā formātā.",
@@ -6090,6 +6124,9 @@
       "title": "Tulkojums ir gatavs"
     }
   },
+  "transportErrors": {
+    "timeout": "Pieprasījums aizņēma pārāk ilgu laiku. Mēģiniet vēlreiz."
+  },
   "validation": {
     "invalidEmail": "Ievadiet derīgu e-pasta adresi.",
     "organizationNameRequired": "Organizācijas nosaukums ir obligāts",
@@ -6287,20 +6324,18 @@
         "notOpeningConnect": "Neatveras? Pievienojiet stella desktop",
         "notPickedUpDescription": "stella desktop, iespējams, nedarbojas vai nav pievienota šim kontam. Pievienojiet to un mēģiniet vēlreiz.",
         "notPickedUpTitle": "stella desktop neatvēra PDF",
+        "placementAttachmentsOnly": "Šajā skatā redzami PDF pielikumi, tāpēc zīmogu šeit nevar novietot. Parakstiet bez zīmoga.",
         "placementBox": "Zīmoga novietojums",
-        "placementConfirm": "Atvērt lietotnē stella desktop",
-        "placementDescription": "Izvēlieties, kā paraksts tiks parādīts PDF failā.",
+        "placementDrawTooLarge": "Par lielu zīmogam. Atlaidiet, lai izmantotu lielāko izmēru.",
+        "placementDrawTooSmall": "Par mazu zīmogam. Atlaidiet, lai izmantotu mazāko izmēru.",
         "placementHint": "Velciet zīmogu, lai to pārvietotu, vai tā stūri, lai mainītu izmēru. Kad zīmogs ir atlasīts, bulttaustiņi to pārvieto, bet Shift ar bulttaustiņu maina tā izmēru.",
-        "placementInvisible": "Neredzams paraksts",
-        "placementInvisibleDescription": "Paraksts tiek saglabāts failā bez atzīmes nevienā lapā.",
-        "placementPageLabel": "Zīmoga lappuse",
-        "placementPageOption": "{page, number}. lapa no {count, number}",
-        "placementPreview": "{page, number}. lapas priekšskatījums",
-        "placementPreviewFailed": "Neizdevās ielādēt lapas priekšskatījumu.",
+        "placementModeHint": "Velciet lapā, lai uzzīmētu zīmogu, vai noklikšķiniet, lai to novietotu.",
+        "placementPlaceOnLastPage": "Novietot pēdējā lapā",
+        "placementRedrawHint": "Velciet zīmogu, lai to pielāgotu, vai uzzīmējiet jaunu jebkurā lapā.",
+        "placementSignInvisible": "Parakstīt bez zīmoga",
+        "placementSignVisible": "Parakstīt ar zīmogu",
         "placementTitle": "Parakstīt PDF",
         "placementTooSmall": "Šī lapa ir par mazu zīmogam. Izvēlieties citu lapu.",
-        "placementVisible": "Redzams zīmogs",
-        "placementVisibleDescription": "Rāmis lapā parāda, kas un kad parakstīja.",
         "preparingDescription": "Notiek PDF sagatavošana stella desktop.",
         "readOnlyDescription": "Šis dokuments ir tikai lasāms.",
         "signedDescription": "Paraksts saglabāts kā {versionNumber, number}. versija.",

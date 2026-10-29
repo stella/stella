@@ -17,6 +17,7 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
+import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
@@ -51,6 +52,7 @@ const measuredApiScenarios = [
   ...documentAnnotationScalingScenarios,
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
+  ...invoicePaymentScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
