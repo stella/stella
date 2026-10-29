@@ -11,11 +11,13 @@ export const CZ_JUDGE_NAME_RE =
   /^(?:JUDr\.|Mgr\.|doc\.|prof\.|PhDr\.|Ing\.|Bc\.|RNDr\.|MUDr\.)\s+/u;
 
 /**
- * Court signature marker. Kept as a shared legal-document primitive because
- * every Czech court adapter and the statute reader assign the same AST role.
+ * Court signature marker, matched as whole words on a short line. Declined
+ * forms (`samosoudcem`, `předsedy senátu`) belong to running text such as
+ * "rozhodl samosoudcem Mgr. …" and never sign a decision. Shared because every
+ * Czech court adapter and the statute reader assign the same AST role.
  */
 export const CZ_JUDGE_TITLE_RE =
-  /(?:předsed(?:a|kyně|y)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)/iu;
+  /^(?=[^]{0,79}$)[^]*?(?<![\p{L}\p{N}])(?:(?:předseda|předsedkyně)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)(?![\p{L}\p{N}])/iu;
 
 const compactUpper = (text: string): string =>
   normalizeUnicode(text, "NFKC")
