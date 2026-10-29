@@ -356,12 +356,15 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
                   : [];
               }),
           );
-          const digest = Object.keys(dependencies).length
-            ? sha256(
-                JSON.stringify({ digest: definition.digest, dependencies }),
-              )
-            : definition.digest;
-          return digest !== job.digest && definition.digest !== job.digest;
+          const digests = [definition.digest, definition.privilegedDigest].map(
+            (definitionDigest) =>
+              Object.keys(dependencies).length
+                ? sha256(
+                    JSON.stringify({ digest: definitionDigest, dependencies }),
+                  )
+                : definitionDigest,
+          );
+          return !digests.includes(job.digest);
         });
         if (changedJobs.length) {
           reject(

@@ -18,8 +18,10 @@ documented scale factor is 100. Time is a coarse deadline guard rather than a
 benchmark; pages and plan shape are the deterministic gates. The suite does
 not use the in-process database.
 
-Each profile runs in its own fresh database cloned from the migrated
-template; the fixture database is dropped after its clients close.
+Tenant and corpus profiles run in fresh databases cloned from the migrated
+template; each fixture database is dropped after its clients close. The
+coverage profile uses an isolated schema with a single connection and drops
+it before closing the connection.
 
 - Tenant profiles (`small`, `growth`, `seed.ts`): document search as `stella`
   under row security, with 3,000 and 100,000 documents and 200 matches in
@@ -46,6 +48,18 @@ template; the fixture database is dropped after its clients close.
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
 its budget, and the census-readiness revision checks must fail the scale rule.
+
+The coverage profile (`coverage.test.ts`) clones the production source, decision
+and facet tables into an isolated schema. It runs the actual coverage source
+reader at 60,000 and 120,000 decisions per large source, including a source
+whose every date precedes its docket filing year. Court facets cover the large
+sources; a fourth source has twenty decisions and no cached facets, exercising
+the exact fallback at both sizes. Every statement the reader issues is captured
+and measured with `EXPLAIN (ANALYZE, BUFFERS)` under the refresh's 30-second
+statement timeout. Combined reads must fit 256 pages and remain constant at
+both sizes. Court rows must sum to the published totals, valid sources retain
+their date endpoints, and rejected dates produce null bounds. The production
+online coverage indexes are installed from their owning DDL exports.
 
 A budget marked `overBudget` documents a statement that is over its budget
 while a change is in progress; the suite then requires it to stay over, so the
