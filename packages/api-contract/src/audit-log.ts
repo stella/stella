@@ -107,12 +107,20 @@ export type AuditResourceType =
 
 export type AuditResourceKind = AuditResourceType;
 
-export type AuditResource = {
-  kind: AuditResourceKind;
-  id: string;
-  name: string | null;
-  available: boolean;
-};
+export type AuditResource =
+  | {
+      kind: AuditResourceKind;
+      id: string;
+      name: string | null;
+      available: boolean;
+    }
+  | {
+      kind: "unknown";
+      rawKind: string;
+      id: string;
+      name: null;
+      available: false;
+    };
 
 export const AUDIT_CHANGES_STATUS = {
   visible: "visible",

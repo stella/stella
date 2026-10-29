@@ -481,7 +481,7 @@ function AuditActionSentence({
   return t(AUDIT_ACTION_PROJECTIONS[action], { resource: label });
 }
 
-function AuditResourceLabel({
+export function AuditResourceLabel({
   action,
   resource,
 }: {
@@ -506,13 +506,14 @@ function AuditResourceLabel({
   return (
     <div className="min-w-0">
       <div className="truncate font-medium">{content}</div>
-      <div
-        aria-label={t("settings.organization.auditLogsResourceIdentifier", {
-          id: resource.id,
-        })}
-        className="text-muted-foreground font-mono"
-      >
-        <bdi>{shortId}</bdi>
+      <div className="text-muted-foreground font-mono">
+        {resource.kind === "unknown" ? <bdi>{resource.rawKind} · </bdi> : null}
+        <span className="sr-only">
+          {t("settings.organization.auditLogsResourceIdentifier", {
+            id: resource.id,
+          })}
+        </span>
+        <bdi aria-hidden="true">{shortId}</bdi>
       </div>
     </div>
   );
@@ -522,6 +523,9 @@ type AuditLogResource = AuditResource;
 
 function useAuditResourceLabel(action: string, resource: AuditLogResource) {
   const t = useTranslations();
+  if (resource.kind === "unknown") {
+    return t("settings.organization.auditLogsUnknownResource");
+  }
   return projectAuditResourceLabel({
     action,
     resource,

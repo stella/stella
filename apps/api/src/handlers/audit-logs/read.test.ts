@@ -1,11 +1,16 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { logger } from "@/api/lib/observability/logger";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { queryAuditLogPage } from "./query";
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("queryAuditLogPage", () => {
   test("resolves distinct accessible matters once and hides deleted or denied names", async () => {
@@ -13,10 +18,12 @@ describe("queryAuditLogPage", () => {
     const secondAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
     const deletedAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
     const deniedAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
+    const unknownAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
     const userId = toSafeId<"user">("user_test");
     const createdAt = new Date("2026-07-16T12:00:00.000Z");
     const events: Parameters<AuditRecorder>[1][] = [];
     let selectCount = 0;
+    const warning = spyOn(logger, "warn").mockImplementation(() => undefined);
 
     const { safeDb } = createScopedDbMock({
       select: () => {
@@ -57,6 +64,17 @@ describe("queryAuditLogPage", () => {
                       action: "update",
                       resourceType: "workspace",
                       resourceId: "workspace_denied",
+                      changes: null,
+                      changesStatus: "visible",
+                    },
+                    {
+                      id: unknownAuditLogId,
+                      createdAt,
+                      createdAtCursor: createdAt.toISOString(),
+                      userId,
+                      action: "update",
+                      resourceType: "retired_record_kind",
+                      resourceId: "retired_record_test",
                       changes: null,
                       changesStatus: "visible",
                     },
@@ -114,10 +132,10 @@ describe("queryAuditLogPage", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
       throw result.error;
     }
+    expect(Result.isOk(result)).toBe(true);
     expect(result.value.items).toEqual([
       {
         id: auditLogId,
@@ -171,6 +189,24 @@ describe("queryAuditLogPage", () => {
         changesStatus: "visible",
       },
       {
+        id: unknownAuditLogId,
+        createdAt,
+        userId,
+        actor: "Test User",
+        action: "update",
+        resourceType: "retired_record_kind",
+        resourceId: "retired_record_test",
+        resource: {
+          kind: "unknown",
+          rawKind: "retired_record_kind",
+          id: "retired_record_test",
+          name: null,
+          available: false,
+        },
+        changes: null,
+        changesStatus: "visible",
+      },
+      {
         id: secondAuditLogId,
         createdAt,
         userId,
@@ -189,6 +225,10 @@ describe("queryAuditLogPage", () => {
       },
     ]);
     expect(selectCount).toBe(3);
+    expect(warning).toHaveBeenCalledWith(
+      "audit_log.stored_resource_kind_unknown",
+      { kind: "retired_record_kind", count: 1 },
+    );
     expect(events).toEqual([
       {
         action: "access",

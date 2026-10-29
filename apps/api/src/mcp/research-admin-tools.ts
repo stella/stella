@@ -235,12 +235,21 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       action: v.string(),
       resourceType: v.string(),
       resourceId: v.string(),
-      resource: v.strictObject({
-        kind: v.picklist(Object.values(AUDIT_RESOURCE_TYPE)),
-        id: v.string(),
-        name: v.nullable(v.string()),
-        available: v.boolean(),
-      }),
+      resource: v.variant("kind", [
+        v.strictObject({
+          kind: v.picklist(Object.values(AUDIT_RESOURCE_TYPE)),
+          id: v.string(),
+          name: v.nullable(v.string()),
+          available: v.boolean(),
+        }),
+        v.strictObject({
+          kind: v.literal("unknown"),
+          rawKind: v.string(),
+          id: v.string(),
+          name: v.null(),
+          available: v.literal(false),
+        }),
+      ]),
       changes: v.unknown(),
       changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),

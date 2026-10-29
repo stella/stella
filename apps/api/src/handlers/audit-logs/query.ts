@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -7,6 +7,7 @@ import {
   API_STORABLE_INSTANT_CHECK,
   apiDateTimeSchema,
 } from "@stll/api-contract/api-date";
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -33,6 +34,7 @@ import {
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
@@ -183,11 +185,17 @@ const AUDIT_RESOURCE_KIND_SCHEMA = v.picklist(
   Object.values(AUDIT_RESOURCE_TYPE),
 );
 
-const toAuditResourceKind = (value: string) => {
+type ClassifiedAuditResourceKind =
+  | { type: "known"; kind: v.InferOutput<typeof AUDIT_RESOURCE_KIND_SCHEMA> }
+  | { type: "unknown"; raw: string };
+
+const classifyAuditResourceKind = (
+  value: string,
+): ClassifiedAuditResourceKind => {
   if (VALID_RESOURCE_TYPES.has(value)) {
-    return v.parse(AUDIT_RESOURCE_KIND_SCHEMA, value);
+    return { type: "known", kind: v.parse(AUDIT_RESOURCE_KIND_SCHEMA, value) };
   }
-  return panic(`Persisted audit row has unknown resource type '${value}'`);
+  return { type: "unknown", raw: value };
 };
 
 /**
@@ -292,12 +300,30 @@ export const queryAuditLogPage = async function* ({
         ]),
       );
 
+      const classifiedRows = auditRows.map((row) => ({
+        row,
+        resourceKind: classifyAuditResourceKind(row.resourceType),
+      }));
+      const unknownKindCounts = new Map<string, number>();
+      for (const { resourceKind } of classifiedRows) {
+        if (resourceKind.type === "unknown") {
+          unknownKindCounts.set(
+            resourceKind.raw,
+            (unknownKindCounts.get(resourceKind.raw) ?? 0) + 1,
+          );
+        }
+      }
+      for (const [kind, count] of unknownKindCounts) {
+        logger.warn("audit_log.stored_resource_kind_unknown", { kind, count });
+      }
+
       const resourceNames = await resolveAuditResourceNames({
         tx,
-        rows: auditRows.map((row) => ({
-          resourceType: toAuditResourceKind(row.resourceType),
-          resourceId: row.resourceId,
-        })),
+        rows: classifiedRows.flatMap(({ row, resourceKind }) =>
+          resourceKind.type === "known"
+            ? [{ resourceType: resourceKind.kind, resourceId: row.resourceId }]
+            : [],
+        ),
         organizationId,
         userId,
       });
@@ -309,32 +335,45 @@ export const queryAuditLogPage = async function* ({
       });
 
       const rowsWithActors = [];
-      for (const row of auditRows) {
+      for (const { row, resourceKind } of classifiedRows) {
+        const resource =
+          resourceKind.type === "known"
+            ? {
+                kind: resourceKind.kind,
+                id: row.resourceId,
+                name:
+                  resourceNames.get(resourceKind.kind)?.get(row.resourceId) ??
+                  null,
+                available:
+                  resourceNames.get(resourceKind.kind)?.has(row.resourceId) ??
+                  false,
+              }
+            : {
+                kind: "unknown" as const,
+                rawKind: resourceKind.raw,
+                id: row.resourceId,
+                name: null,
+                available: false as const,
+              };
         rowsWithActors.push({
           id: row.id,
           createdAt: row.createdAt,
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
-          resource: {
-            kind: toAuditResourceKind(row.resourceType),
-            id: row.resourceId,
-            name:
-              resourceNames
-                .get(toAuditResourceKind(row.resourceType))
-                ?.get(row.resourceId) ?? null,
-            available:
-              resourceNames
-                .get(toAuditResourceKind(row.resourceType))
-                ?.has(row.resourceId) ?? false,
-          },
-          ...projectAuditReadChanges({
-            resourceType: row.resourceType,
-            changes: row.changes,
-            metadata: row.metadata,
-            featureAccessSnapshot,
-            principal: { organizationId, userId },
-          }),
+          resource,
+          ...(resourceKind.type === "known"
+            ? projectAuditReadChanges({
+                resourceType: resourceKind.kind,
+                changes: row.changes,
+                metadata: row.metadata,
+                featureAccessSnapshot,
+                principal: { organizationId, userId },
+              })
+            : {
+                changes: null,
+                changesStatus: AUDIT_CHANGES_STATUS.visible,
+              }),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
           actor: userMap.get(row.userId) ?? row.userId,
