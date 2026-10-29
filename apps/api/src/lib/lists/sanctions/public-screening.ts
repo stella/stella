@@ -234,37 +234,44 @@ const createEditionWarmer = ({
         value: Result.err({ reason: "short-read" }),
       };
     }
-    return await pool.run(
-      async (session): Promise<Result<void, WarmFailure>> => {
-        if (session.hasEdition(source, edition.id)) {
-          return Result.ok(undefined);
-        }
-        const indexed = await session.load({
-          source,
-          editionId: edition.id,
-          list: {
-            version: {
-              source,
-              publishedAt: edition.publishedAt,
-              fileId: edition.fileId,
+    // The database read runs outside a matcher lease, so loaded editions keep
+    // screening while this edition is fetched.
+    state.holdsMatcher = true;
+    try {
+      return await pool.run(
+        async (session): Promise<Result<void, WarmFailure>> => {
+          if (session.hasEdition(source, edition.id)) {
+            return Result.ok(undefined);
+          }
+          const indexed = await session.load({
+            source,
+            editionId: edition.id,
+            list: {
+              version: {
+                source,
+                publishedAt: edition.publishedAt,
+                fileId: edition.fileId,
+              },
+              entries: loaded.value,
             },
-            entries: loaded.value,
-          },
-        });
-        if (indexed !== "indexed") {
-          return Result.err({ reason: "matcher-unavailable" });
-        }
-        const durationMs = Math.round(now() - startedAt);
-        durations.set(source, durationMs);
-        logger.info("sanctions.edition_warmed", {
-          source,
-          entries: edition.entryCount,
-          durationMs,
-        });
-        return Result.ok(undefined);
-      },
-      { deadlineMs: SANCTIONS_WARM_STALL_MS },
-    );
+          });
+          if (indexed !== "indexed") {
+            return Result.err({ reason: "matcher-unavailable" });
+          }
+          const durationMs = Math.round(now() - startedAt);
+          durations.set(source, durationMs);
+          logger.info("sanctions.edition_warmed", {
+            source,
+            entries: edition.entryCount,
+            durationMs,
+          });
+          return Result.ok(undefined);
+        },
+        { deadlineMs: SANCTIONS_WARM_STALL_MS },
+      );
+    } finally {
+      state.holdsMatcher = false;
+    }
   };
 
   const settle = (
@@ -299,27 +306,17 @@ const createEditionWarmer = ({
   };
 
   const pass = async () => {
-    // Requests bypass the pool for the whole pass, including database reads
-    // between editions. Otherwise a short request can acquire the warmed
-    // worker in that gap, time out mid-reply, and retire every loaded index.
-    state.holdsMatcher = true;
-    try {
-      for (;;) {
-        const instant = now();
-        const due = [...targets].find(
-          ([, target]) => target.retryAt <= instant,
-        );
-        if (due === undefined || state.db === null) {
-          // In the same step as the last look: any later request starts a pass.
-          state.active = false;
-          return;
-        }
-        const [source, target] = due;
-        // db-await-in-loop: one edition at a time keeps a single bounded load in memory
-        settle(source, target, await warm(state.db, source, target));
+    for (;;) {
+      const instant = now();
+      const due = [...targets].find(([, target]) => target.retryAt <= instant);
+      if (due === undefined || state.db === null) {
+        // In the same step as the last look: any later request starts a pass.
+        state.active = false;
+        return;
       }
-    } finally {
-      state.holdsMatcher = false;
+      const [source, target] = due;
+      // db-await-in-loop: one edition at a time keeps a single bounded load in memory
+      settle(source, target, await warm(state.db, source, target));
     }
   };
 
@@ -337,7 +334,7 @@ const createEditionWarmer = ({
   };
 
   return {
-    /** A warm pass is running; the matcher answers nothing else until it ends. */
+    /** A warm lease is active; requests bypass the matcher until it ends. */
     holdsMatcher: () => state.holdsMatcher,
     durations: () => Object.fromEntries(durations),
     /** Like `want`, without asking for the edition: a request that cannot check it. */

@@ -7,6 +7,7 @@ import {
 
 export {
   SANCTIONS_MATCHER_CONFIG,
+  SANCTIONS_MATCHER_REPLY_GRACE_MS,
   isSanctionsMatcherCancelled,
 } from "./matcher-pool-core";
 export type { MatcherWorkOutcome } from "./matcher-pool-core";

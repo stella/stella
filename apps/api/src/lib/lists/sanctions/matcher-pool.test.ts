@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
+import { EventEmitter } from "node:events";
 import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
@@ -20,6 +21,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSanctionsMatcherPool,
   SANCTIONS_MATCHER_CONFIG,
+  SANCTIONS_MATCHER_REPLY_GRACE_MS,
 } from "./matcher-pool";
 import type { MatcherWorkOutcome } from "./matcher-pool";
 import { createSanctionsMatcherPoolCore } from "./matcher-pool-core";
@@ -130,6 +132,13 @@ for (const fault of ["hang", "crash"] as const) {
         await crashed.promise;
       }
       expect(await failed).toBeNull();
+      if (fault === "hang") {
+        expect(clock.pending()).toEqual([SANCTIONS_MATCHER_REPLY_GRACE_MS]);
+        clock.advance(SANCTIONS_MATCHER_REPLY_GRACE_MS);
+        await new Promise<void>((resolve) => {
+          setImmediate(resolve);
+        });
+      }
       expect(clock.pending()).toEqual([]);
       const next = await pool
         .run(
@@ -460,6 +469,8 @@ test("late retired-worker errors cannot release a held acquisition or a replacem
     expect(clock.pending()).toEqual([20]);
     clock.advance(20);
     expect(await first).toBeNull();
+    expect(clock.pending()).toEqual([SANCTIONS_MATCHER_REPLY_GRACE_MS]);
+    clock.advance(SANCTIONS_MATCHER_REPLY_GRACE_MS);
     const retired = workers.at(0);
     expect(retired).toBeDefined();
     retired?.events.emit("error");
@@ -507,6 +518,125 @@ const inertWorker = () =>
     unref: () => {},
     terminate: async () => 0,
   });
+
+const workerEvents = () =>
+  // oxlint-disable-next-line unicorn/prefer-event-target -- This fake implements node Worker on/once/off, whose contract requires EventEmitter.
+  new EventEmitter();
+
+test("a deadline drains its owed reply before preserving the worker and indexes", async () => {
+  const clock = createMatcherTestClock();
+  const worker = workerEvents();
+  const replyOutstanding = Promise.withResolvers<undefined>();
+  const nextReplyOutstanding = Promise.withResolvers<undefined>();
+  let messages = 0;
+  let terminations = 0;
+  const rawWorker = asTestRaw<Worker>(
+    Object.assign(worker, {
+      on: worker.on.bind(worker),
+      once: worker.once.bind(worker),
+      off: worker.off.bind(worker),
+      unref: () => {},
+      terminate: async () => {
+        terminations += 1;
+        return 0;
+      },
+      postMessage: () => {
+        messages += 1;
+        if (messages === 1) {
+          queueMicrotask(() => {
+            worker.emit("message", { status: "entries-loaded" });
+          });
+        } else if (messages === 2) {
+          queueMicrotask(() => {
+            worker.emit("message", { status: "indexed" });
+          });
+        } else if (messages === 3) {
+          replyOutstanding.resolve(undefined);
+        } else if (messages === 4) {
+          nextReplyOutstanding.resolve(undefined);
+        }
+      },
+    }),
+  );
+  const pool = createSanctionsMatcherPool({
+    clock,
+    createWorker: () => rawWorker,
+  });
+  try {
+    expect(
+      await pool.run(
+        async (session) =>
+          await session.load({
+            source: "eu",
+            editionId: "first",
+            list: list("Late Reply"),
+          }),
+      ),
+    ).toEqual({ status: "completed", value: "indexed" });
+    const timedOut = pool.run(
+      async (session) =>
+        await session.match({ ...request("Late Reply"), list: null }),
+    );
+    await replyOutstanding.promise;
+    clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+    expect(await timedOut).toEqual({
+      status: "unavailable",
+      cause: "deadline",
+    });
+
+    const next = pool.run(async (session) => {
+      expect(session.hasEdition("eu", "first")).toBe(true);
+      return await session.match({ ...request("Next Reply"), list: null });
+    });
+    expect(messages).toBe(3);
+    worker.emit("message", { status: "screened", marker: "discarded" });
+    await nextReplyOutstanding.promise;
+    expect(messages).toBe(4);
+    worker.emit("message", { status: "screened", marker: "next" });
+    expect(await next.then(outcomeValue)).toMatchObject({ marker: "next" });
+    expect(terminations).toBe(0);
+  } finally {
+    await pool.close();
+  }
+});
+
+test("a worker that misses the late-reply grace is retired before another lease", async () => {
+  const clock = createMatcherTestClock();
+  const worker = workerEvents();
+  let terminations = 0;
+  const pool = createSanctionsMatcherPool({
+    clock,
+    createWorker: () =>
+      asTestRaw<Worker>(
+        Object.assign(worker, {
+          unref: () => {},
+          terminate: async () => {
+            terminations += 1;
+            return 0;
+          },
+          postMessage: () => {},
+        }),
+      ),
+  });
+  try {
+    const timedOut = pool.run(
+      async (session) => await session.match(request("Never Replies")),
+    );
+    await Promise.resolve();
+    clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+    expect(await timedOut).toEqual({
+      status: "unavailable",
+      cause: "deadline",
+    });
+    clock.advance(SANCTIONS_MATCHER_REPLY_GRACE_MS);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(terminations).toBe(1);
+  } finally {
+    await pool.close();
+  }
+});
 
 const deadlineCases = [20, 150, 1000].flatMap((deadlineMs) =>
   [-1, 0, 1].map((offset) => ({ deadlineMs, elapsedMs: deadlineMs + offset })),
@@ -590,7 +720,6 @@ const observableFaults = {
 test.each(Object.values(observableFaults))(
   "reports %s once and releases its worker lease for recovery",
   async (fault) => {
-    const { EventEmitter } = await import("node:events");
     const clock = createMatcherTestClock();
     const observations: Parameters<typeof reportSanctionsScreeningFailure>[] =
       [];
@@ -606,8 +735,7 @@ test.each(Object.values(observableFaults))(
         if (spawned === 1 && fault === "worker-create") {
           throw new TypeError("Worker creation fault");
         }
-        // oxlint-disable-next-line unicorn/prefer-event-target -- This fake implements node Worker on/once/off, whose contract requires EventEmitter.
-        const worker = new EventEmitter();
+        const worker = workerEvents();
         return asTestRaw<Worker>(
           Object.assign(worker, {
             unref: () => {},
@@ -657,6 +785,9 @@ test.each(Object.values(observableFaults))(
           reason: observation.reason,
         })),
       ).toEqual([{ stage: "matcher-pool", reason: fault }]);
+      if (fault === "deadline") {
+        clock.advance(SANCTIONS_MATCHER_REPLY_GRACE_MS);
+      }
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
