@@ -39,6 +39,7 @@ import type {
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
 import type {
+  authorizeSyntheticSession,
   readSyntheticSessionAuthority,
   SyntheticSessionAuthorityReader,
 } from "@/api/lib/synthetic-principal/session-authority";
@@ -181,6 +182,12 @@ export const bindOwnerSyntheticSessionAuthorityReader =
   ): SyntheticSessionAuthorityReader =>
   async (options) =>
     await readAuthority(rootDb, options);
+
+/** Better Auth binds its session decision without exporting the owner handle. */
+export const bindOwnerSyntheticSessionAuthorizer =
+  (authorize: typeof authorizeSyntheticSession) =>
+  async (current: Parameters<typeof authorizeSyntheticSession>[1]) =>
+    await authorize(rootDb, current);
 
 export type RootDatabase = typeof rootDb;
 export type Transaction = TransactionOf<RootDatabase>;

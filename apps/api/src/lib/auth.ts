@@ -45,6 +45,7 @@ import {
 } from "@/api/db/auth-schema";
 import {
   bindOwnerSyntheticSessionAuthorityReader,
+  bindOwnerSyntheticSessionAuthorizer,
   isPartnerOAuthClient,
   rlsDb,
   rootDb,
@@ -2337,8 +2338,9 @@ export const createAuth = (
         config: syntheticPrincipalAuthConfig,
         localPasswordEnabled: true,
         checkAccess: checkSyntheticPrincipalAccess,
-        authorizeSession: async (current) =>
-          await authorizeSyntheticSession(rootDb, current),
+        authorizeSession: bindOwnerSyntheticSessionAuthorizer(
+          authorizeSyntheticSession,
+        ),
       }),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({

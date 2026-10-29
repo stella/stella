@@ -628,11 +628,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/scripts/better-auth-sign-in-replay.ts",
     class: "operator-configured-infrastructure",
     reason: "Runs an authentication replay against the configured API origin.",
-    transports: [
-      "global:fetch",
-      "module:better-auth",
-      "module:better-auth/crypto",
-    ],
+    transports: ["global:fetch", "module:better-auth"],
   },
   {
     path: "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
