@@ -37,6 +37,7 @@ import {
   scaleViolations,
   shapeViolations,
 } from "./measurement";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
 import {
   corpusStatementRegistry,
