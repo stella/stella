@@ -46,13 +46,17 @@ import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import {
+  containedEventHandler,
+  ownsContextMenuTarget,
+} from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -93,6 +97,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/sidebar";
+import { SidebarEntityRow } from "@/components/sidebar-entity-row";
 import { SidebarUserMenu } from "@/components/sidebar-user-menu";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
@@ -955,6 +960,9 @@ const NavContextMenu = ({
     <div
       className="contents"
       onContextMenu={containedEventHandler((e) => {
+        if (!ownsContextMenuTarget(e)) {
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         const x = e.clientX;
@@ -975,10 +983,7 @@ const NavContextMenu = ({
         }}
         open={open}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
+        <MenuAnchor />
         <MenuPopup anchor={anchor ?? undefined}>
           {config.primaryAction && (
             <MenuItem onClick={config.primaryAction.onClick}>
@@ -1379,6 +1384,7 @@ const MatterItem = ({
   return (
     <>
       <SidebarMenuItem
+        data-context-menu-target={ws.id}
         className={cn(
           isDropTarget &&
             "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
@@ -1386,6 +1392,9 @@ const MatterItem = ({
             "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
         )}
         onContextMenu={containedEventHandler((e) => {
+          if (!ownsContextMenuTarget(e)) {
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const x = e.clientX;
@@ -1788,30 +1797,35 @@ export const MatterActivityList = ({
           </>
         );
 
+        if (item.type === "entity") {
+          return (
+            <SidebarEntityRow
+              entityId={item.id}
+              key={`${item.type}-${item.id}`}
+              name={title}
+              onOpen={() =>
+                detached(openEntity(item), "app-sidebar.open-entity")
+              }
+              workspaceId={workspaceId}
+            >
+              {content}
+            </SidebarEntityRow>
+          );
+        }
         return (
-          <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
-            {item.type === "thread" ? (
-              <MatterActivityRow>
-                <Link
-                  activeProps={{ "data-active": true }}
-                  params={{ threadId: item.id, workspaceId }}
-                  to="/chat/workspaces/$workspaceId/$threadId"
-                >
-                  {content}
-                </Link>
-              </MatterActivityRow>
-            ) : (
-              <MatterActivityRow>
-                <button
-                  onClick={() => {
-                    detached(openEntity(item), "app-sidebar.open-entity");
-                  }}
-                  type="button"
-                >
-                  {content}
-                </button>
-              </MatterActivityRow>
-            )}
+          <SidebarMenuSubItem
+            data-context-menu-target={item.id}
+            key={`${item.type}-${item.id}`}
+          >
+            <MatterActivityRow>
+              <Link
+                activeProps={{ "data-active": true }}
+                params={{ threadId: item.id, workspaceId }}
+                to="/chat/workspaces/$workspaceId/$threadId"
+              >
+                {content}
+              </Link>
+            </MatterActivityRow>
           </SidebarMenuSubItem>
         );
       })}
@@ -1853,6 +1867,9 @@ const SidebarContextArea = ({
     <div
       className="flex min-h-0 flex-1 flex-col"
       onContextMenu={containedEventHandler((e) => {
+        if (!ownsContextMenuTarget(e)) {
+          return;
+        }
         e.preventDefault();
         const x = e.clientX;
         const y = e.clientY;
@@ -1872,10 +1889,7 @@ const SidebarContextArea = ({
         }}
         open={ctxOpen}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
+        <MenuAnchor />
         <MenuPopup anchor={ctxAnchor ?? undefined}>
           {canCreateWorkspace && (
             <MenuItem onClick={onCreateWorkspace}>

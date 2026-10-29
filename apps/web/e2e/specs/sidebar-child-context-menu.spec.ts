@@ -1,0 +1,84 @@
+import { apiGet, apiPut, apiStatus } from "../helpers/api";
+import { seedSidebarState } from "../helpers/sidebar-state";
+import { expect, test } from "../helpers/test";
+import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
+
+for (const kind of ["document", "task"] as const) {
+  test(`sidebar ${kind} actions delete only the child`, async ({
+    baseURL,
+    page,
+    request,
+  }, testInfo) => {
+    const workspace = await createTestWorkspace(request, "sidebar-actions");
+    const name = `Sidebar ${kind}`;
+    try {
+      const child = await apiPut<{ entityId: string }>(
+        request,
+        kind === "task"
+          ? `/tasks/${workspace.id}`
+          : `/entities/${workspace.id}`,
+        kind === "task" ? { name } : { kind, name },
+      );
+      const sibling = await apiPut<{ entityId: string }>(
+        request,
+        `/tasks/${workspace.id}`,
+        { name: "Untouched sibling" },
+      );
+      await page.context().addCookies((await request.storageState()).cookies);
+      await seedSidebarState({
+        baseURL,
+        context: page.context(),
+        state: "expanded",
+      });
+      await page.goto(`/workspaces/${workspace.id}/${workspace.viewId}`, {
+        waitUntil: "domcontentloaded",
+      });
+      const sidebar = page.locator('[data-slot="sidebar"]');
+      const disclosure = sidebar.locator(
+        `button[aria-controls="matter-activity-${workspace.id}"]`,
+      );
+      await expect(disclosure).toBeVisible();
+      if ((await disclosure.getAttribute("aria-expanded")) === "false") {
+        await disclosure.click();
+      }
+      const row = sidebar
+        .locator('[data-slot="sidebar-menu-sub-item"]')
+        .filter({ has: page.getByText(name, { exact: true }) });
+      await expect(row).toBeVisible();
+      await row.getByText(name, { exact: true }).click({ button: "right" });
+      await page.getByRole("menuitem", { exact: true, name: "Delete" }).click();
+      const confirmation = page.getByRole("alertdialog");
+      await expect(confirmation).toContainText(name);
+      const deleted = page.waitForResponse(
+        (response) =>
+          response.request().method() === "DELETE" &&
+          new URL(response.url()).pathname === `/v1/entities/${workspace.id}`,
+      );
+      await confirmation
+        .getByRole("button", { exact: true, name: "Delete" })
+        .click();
+      const response = await deleted;
+      expect(response.ok()).toBe(true);
+      expect(response.request().postDataJSON()).toEqual({
+        entityIds: [child.entityId],
+      });
+      expect(
+        await apiStatus(
+          request,
+          `/entities/${workspace.id}/entity/${child.entityId}`,
+        ),
+      ).toBe(404);
+      expect(await apiStatus(request, `/workspaces/${workspace.id}`)).toBe(200);
+      expect(
+        await apiGet<{ name: string }>(
+          request,
+          `/entities/${workspace.id}/entity/${sibling.entityId}`,
+        ),
+      ).toMatchObject({ name: "Untouched sibling" });
+    } finally {
+      await deleteTestWorkspace(request, workspace.id, {
+        leave: { page, testInfo },
+      });
+    }
+  });
+}

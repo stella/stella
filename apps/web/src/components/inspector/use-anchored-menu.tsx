@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
+import { ownsContextMenuTarget } from "@stll/ui/use-contained-handler";
 
 type AnchorRect = {
   getBoundingClientRect: () => DOMRect;
@@ -10,7 +11,7 @@ type AnchorRect = {
 /**
  * Cursor-anchored context menu primitive shared by the inspector
  * rail (`useRailContextMenu`) and per-tab actions
- * (`useTabContextMenu`). Wraps the same anchor-ref + sr-only
+ * (`useTabContextMenu`). Wraps the same anchor-ref + nonfocusable
  * trigger boilerplate both surfaces need so a third surface can
  * compose without duplicating it.
  *
@@ -33,6 +34,9 @@ export const useAnchoredMenu = ({
   const openAt = (
     event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
   ) => {
+    if (!ownsContextMenuTarget(event)) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const x = "clientX" in event ? event.clientX : 0;
@@ -74,7 +78,7 @@ export const useAnchoredMenu = ({
       }}
       open={open}
     >
-      <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+      <MenuAnchor />
       <MenuPopup anchor={anchor ?? undefined} finalFocus={returnFocus}>
         {children}
       </MenuPopup>

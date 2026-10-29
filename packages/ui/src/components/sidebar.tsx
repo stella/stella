@@ -822,6 +822,7 @@ const SidebarMenuSubItem = ({
   <li
     className={cn("group/menu-sub-item relative", className)}
     data-sidebar="menu-sub-item"
+    data-context-menu-target=""
     data-slot="sidebar-menu-sub-item"
     {...props}
   />
