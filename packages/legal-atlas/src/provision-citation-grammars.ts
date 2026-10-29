@@ -26,7 +26,10 @@ import type {
 } from "@stll/legal-ast/provision-reference";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
+import {
+  CZ_PROFILE,
+  CZ_STATUTE_COLLECTION,
+} from "./cz-provision-citation-profile";
 import {
   EU_PROVISION_ANCHOR_SEPARATOR,
   euProvisionAnchor,
@@ -151,7 +154,19 @@ type ProvisionCitationGrammarSpec<TJurisdiction extends CaseLawJurisdiction> = {
    * level it names.
    */
   levels: readonly [ProvisionLevel, ...ProvisionLevel[]];
+  /**
+   * The sentence a citation may name between its path and the act
+   * (`§ 18 ods. 2 prvá veta SSP`, `odst. 1 věta druhá s. ř. s.`). It refines
+   * the last provision and is recorded, never anchored.
+   */
+  sentence?: SentenceSpec;
   unit: ProvisionUnit;
+};
+
+type SentenceSpec = {
+  terms: readonly string[];
+  /** Ordinal words mapped to their digit. */
+  ordinals: Readonly<Record<string, string>>;
 };
 
 export type SupportedProvisionCitationGrammar<
@@ -236,6 +251,37 @@ const canonicalDesignator = (value: string): string =>
 const valueOf = (match: RegExpExecArray): string =>
   canonicalDesignator((match.groups?.["value"] ?? match[0]).toLowerCase());
 
+const alternation = (words: readonly string[]): string =>
+  words
+    .toSorted((left, right) => right.length - left.length)
+    .map((word) => RegExp.escape(word))
+    .join("|");
+
+/**
+ * A sentence after a path, in either order (`prvá veta`, `veta prvá`,
+ * `veta 2`). The digit form needs its term first: a bare number before the
+ * act is the act's own number, not a sentence.
+ */
+const compileSentence = ({ ordinals, terms }: SentenceSpec) => {
+  const term = alternation(terms);
+  const ordinal = alternation(Object.keys(ordinals));
+  const pattern = sticky(
+    String.raw`\s+(?:(?:${term})\s+(?<after>${ordinal}|\d{1,2})|(?<before>${ordinal})\s+(?:${term}))(?![\p{L}\p{N}])`,
+  );
+  return (text: string, index: number) => {
+    const match = matchAt(pattern, text, index);
+    const printed = match?.groups?.["after"] ?? match?.groups?.["before"];
+    if (match === null || printed === undefined) {
+      return null;
+    }
+    const lower = normalizeUnicode(printed, "NFC").toLowerCase();
+    return {
+      end: match.index + match[0].length,
+      sentence: ordinals[lower] ?? canonicalDesignator(lower),
+    };
+  };
+};
+
 const referenceOf = (
   levels: readonly CompiledLevel[],
   values: readonly (string | null)[],
@@ -314,6 +360,7 @@ export const createProvisionCitationGrammar = <
   gazette,
   jurisdiction,
   levels,
+  sentence,
   unit,
 }: ProvisionCitationGrammarSpec<TJurisdiction>): SupportedProvisionCitationGrammar<TJurisdiction> & {
   gazette: { eli: (work: GazetteWork) => string };
@@ -382,6 +429,8 @@ export const createProvisionCitationGrammar = <
     ),
   }));
   const gazettePattern = new RegExp(gazette.source, "giu");
+  const sentenceAfter =
+    sentence === undefined ? null : compileSentence(sentence);
 
   const resolveAbbreviation = (printed: string): StatuteAbbreviation | null => {
     const normalized = normalizeUnicode(printed, "NFC");
@@ -481,7 +530,13 @@ export const createProvisionCitationGrammar = <
     return parseCoordinatedValue(text, index, previous);
   };
 
-  type Chain = { abbreviation: string; elements: ChainElement[]; end: number };
+  type Chain = {
+    abbreviation: string;
+    elements: ChainElement[];
+    end: number;
+    /** The sentence the last element names, if it names one. */
+    sentence: string | null;
+  };
 
   /**
    * The chain opened by a designator at `index`, if an abbreviation closes
@@ -520,10 +575,16 @@ export const createProvisionCitationGrammar = <
       if (last === undefined) {
         break;
       }
-      const tail = matchAt(abbreviationAfter, text, last.end);
+      const named = sentenceAfter?.(text, last.end) ?? null;
+      const tail = matchAt(abbreviationAfter, text, named?.end ?? last.end);
       const abbreviation = tail?.groups?.["abbreviation"];
       if (tail !== null && abbreviation !== undefined) {
-        return { abbreviation, elements, end: tail.index + tail[0].length };
+        return {
+          abbreviation,
+          elements,
+          end: tail.index + tail[0].length,
+          sentence: named?.sentence ?? null,
+        };
       }
       elements.pop();
     }
@@ -625,10 +686,14 @@ export const createProvisionCitationGrammar = <
           continue;
         }
         for (const element of chain.elements) {
-          const reference = referenceOf(compiledLevels, element.values, unit);
-          if (reference === null) {
+          const path = referenceOf(compiledLevels, element.values, unit);
+          if (path === null) {
             continue;
           }
+          const reference =
+            element === chain.elements.at(-1)
+              ? { ...path, sentence: chain.sentence }
+              : path;
           citations.push({
             abbreviation,
             anchor: anchor(reference),
@@ -754,6 +819,15 @@ const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
  * Czech acts open in the hosted corpus; EU works open at their publisher.
  * Other jurisdictions remain unsupported until they have a target reader.
  */
+const profileSentence = (
+  profile: Pick<JurisdictionProfile, "ordinalWords" | "subdivisionTerms">,
+) => ({
+  ordinals: profile.ordinalWords,
+  terms: profile.subdivisionTerms.flatMap(({ level, text }) =>
+    level === "sentence" ? [text] : [],
+  ),
+});
+
 export const PROVISION_CITATION_GRAMMARS = {
   AUT: unsupported("AUT"),
   BRA: unsupported("BRA"),
@@ -803,7 +877,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         key: "letter",
         anchorMarker: "pism_",
         marker: String.raw`p(?:í|i\u0301)sm\.`,
-        value: String.raw`(?<value>[a-zA-Z])\)?`,
+        value: String.raw`(?<value>[a-zA-Z])[)/]?`,
       },
       {
         key: "point",
@@ -812,6 +886,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         value: String.raw`\d+`,
       },
     ],
+    sentence: profileSentence(CZ_PROFILE),
     unit: "section",
   }),
   EU: {
@@ -894,7 +969,7 @@ export const PROVISION_CITATION_GRAMMARS = {
       {
         key: "letter",
         marker: `(?:${RegExp.escape(SK_PROFILE.citationTerms.letter)}|${RegExp.escape(normalizeUnicode(SK_PROFILE.citationTerms.letter, "NFD"))})`,
-        value: String.raw`(?<value>[a-zA-Z])\)?`,
+        value: String.raw`(?<value>[a-zA-Z])[)/]?`,
         anchorMarker: SK_PROFILE.anchor.render.letter(""),
       },
       {
@@ -904,6 +979,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         anchorMarker: SK_PROFILE.anchor.render.point(""),
       },
     ],
+    sentence: profileSentence(SK_PROFILE),
     unit: "section",
   }),
   USA: {

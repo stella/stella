@@ -5680,7 +5680,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve billing rate is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "annotations": {
       "title": "Resolve billing rate",
       "destructiveHint": false,
@@ -5700,6 +5700,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -12337,7 +12342,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve billing rate is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "annotations": {
       "title": "Resolve billing rate",
       "destructiveHint": false,
@@ -12357,6 +12362,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -16009,7 +16019,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve billing rate is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "annotations": {
       "title": "Resolve billing rate",
       "destructiveHint": false,
@@ -16029,6 +16039,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",

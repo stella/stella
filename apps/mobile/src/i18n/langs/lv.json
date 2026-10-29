@@ -1,12 +1,14 @@
 {
   "tabs": {
     "chat": "Tērzēšana",
-    "tasks": "Uzdevumi",
+    "close": "Aizvērt",
+    "law": "Tiesu prakse",
     "matters": "Lietas",
-    "settings": "Iestatījumi"
+    "more": "Vairāk",
+    "settings": "Iestatījumi",
+    "tasks": "Uzdevumi"
   },
   "chat": {
-    "description": "Turiet iesākto darbu pa rokai un turpiniet no jebkuras ierīces.",
     "emptyTitle": "Sarunu vēl nav",
     "emptyDescription": "Šeit tiks parādītas jaunās sarunas un nesenie pavedieni.",
     "noMatchesTitle": "Nav atbilstošu tērzēšanu",
@@ -35,19 +37,62 @@
     "answerWorking": "Strādāju…",
     "answerStopped": "Apturēts.",
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
-    "answerFailed": "Atbildi neizdevās pabeigt."
+    "answerFailed": "Atbildi neizdevās pabeigt.",
+    "composerMenu": "Atvērt pielikumu un rīku izvēlni",
+    "pickTitle": "Izvēlieties sarunu",
+    "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
   },
   "tasks": {
-    "description": "Skatiet, kam nepieciešama uzmanība, neatverot visu darbvietu.",
     "emptyTitle": "Nav atvērtu uzdevumu",
-    "emptyDescription": "Šeit tiks parādīti piešķirtie un gaidāmie uzdevumi."
+    "emptyDescription": "Šeit parādīsies jums piešķirtie atvērtie uzdevumi.",
+    "loadFailed": "Jūsu uzdevumus neizdevās ielādēt.",
+    "retry": "Mēģināt vēlreiz",
+    "newTask": "Jauns uzdevums",
+    "add": "Pievienot",
+    "name": "Uzdevuma nosaukums",
+    "dueTitle": "Termiņš",
+    "matterTitle": "Lieta",
+    "findMatter": "Meklēt lietu",
+    "addFailed": "Uzdevumu neizdevās pievienot. Mēģiniet vēlreiz.",
+    "mattersFailed": "Jūsu lietas neizdevās ielādēt.",
+    "dueOn": "termiņš {day}",
+    "dueChoice": {
+      "none": "Bez datuma",
+      "today": "Šodien",
+      "tomorrow": "Rīt",
+      "nextWeek": "Pēc nedēļas"
+    },
+    "due": {
+      "overdue": "Nokavēti",
+      "today": "Šodien",
+      "tomorrow": "Rīt",
+      "week": "Šonedēļ",
+      "later": "Vēlāk",
+      "none": "Bez termiņa"
+    },
+    "markDone": "Atzīmēt kā izpildītu",
+    "reopen": "Atvērt atkārtoti",
+    "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
+    "pickTitle": "Izvēlieties uzdevumu",
+    "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
+    "openMatter": "Atvērt lietu"
   },
   "matters": {
-    "description": "Atrodiet lietu un ātri iegūstiet būtisko kontekstu.",
     "emptyTitle": "Lietu vēl nav",
     "emptyDescription": "Šeit tiks parādītas jūsu nesenās lietas.",
     "loadFailed": "Jūsu lietas neizdevās ielādēt.",
-    "retry": "Mēģināt vēlreiz"
+    "retry": "Mēģināt vēlreiz",
+    "groupBy": "Grupēt pēc",
+    "noGrouping": "Negrupēt",
+    "groupClient": "Klients",
+    "personal": "Personīga",
+    "newMatter": "Jauna lieta",
+    "create": "Izveidot",
+    "name": "Lietas nosaukums",
+    "personalHint": "Tā tiek izveidota kā personīga lieta, ko redzat tikai jūs. Klientu un dalībniekus pievienojiet tīmeklī.",
+    "createFailed": "Lietu neizdevās izveidot. Mēģiniet vēlreiz.",
+    "pickTitle": "Izvēlieties lietu",
+    "pickDescription": "Izvēlieties lietu no saraksta, lai redzētu tās dokumentus un uzdevumus."
   },
   "matter": {
     "documents": "Dokumenti",
@@ -71,7 +116,10 @@
       "in_review": "Pārskatīšanā",
       "done": "Pabeigts",
       "cancelled": "Atcelts"
-    }
+    },
+    "add": "Pievienot",
+    "scanDocument": "Skenēt dokumentu",
+    "newTask": "Jauns uzdevums"
   },
   "entity": {
     "type": "Veids",
@@ -80,11 +128,18 @@
     "loadFailed": "Šo ierakstu neizdevās ielādēt."
   },
   "signIn": {
-    "title": "Pieslēdzieties stella",
-    "description": "Ievadiet sava stella servera adresi. Pieslēgšanos apstiprināsiet pārlūkprogrammā.",
+    "beta": "Beta",
+    "headline": "Skaidrība ikvienā lietā.",
+    "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
+    "submit": "Pieslēgties",
+    "terms": "Turpinot jūs piekrītat mūsu <terms>pakalpojumu lietošanas noteikumiem</terms>.",
+    "options": "Pierakstīšanās iespējas",
+    "serverTitle": "Serveris",
+    "serverDescription": "Lietotne pierakstās stella. Norādiet citu serveri tikai tad, ja jūsu organizācijai ir savs.",
+    "useStella": "Izmantot stella",
+    "done": "Gatavs",
     "serverLabel": "Servera adrese",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Turpināt",
     "sessionEnded": "Jūsu sesija ir beigusies. Pieslēdzieties vēlreiz.",
     "errors": {
       "address": "Ievadiet https adresi, piemēram, stella.example.com.",
@@ -97,5 +152,79 @@
     "accountTitle": "Konts",
     "server": "Serveris",
     "signOut": "Atslēgties"
+  },
+  "header": {
+    "search": "Meklēt"
+  },
+  "law": {
+    "title": "Tiesu prakse",
+    "newest": "Jaunākie nolēmumi",
+    "noResults": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana.",
+    "noResultsHint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
+    "unavailable": "Meklēšana īslaicīgi nav pieejama",
+    "retry": "Mēģināt vēlreiz",
+    "headnote": "Kopsavilkums",
+    "textUnavailable": "Šim nolēmumam teksts nav pieejams",
+    "openSource": "Atvērt sākotnējo avotu",
+    "loadFailed": "Tiesu praksi neizdevās ielādēt.",
+    "share": "Kopīgot"
+  },
+  "more": {
+    "soon": "Drīzumā",
+    "timers": "Taimeri",
+    "voiceInput": "Balss ievade"
+  },
+  "writes": {
+    "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",
+    "signInAgain": "Pieteikties vēlreiz"
+  },
+  "timers": {
+    "title": "Taimeri",
+    "start": "Sākt",
+    "startTimer": "Sākt taimeri",
+    "newTimer": "Jauns taimeris",
+    "description": "Pie kā strādājat?",
+    "matterTitle": "Lieta",
+    "noMatter": "Bez lietas",
+    "noDescription": "Bez apraksta",
+    "running": "Darbojas",
+    "paused": "Apturēts",
+    "pause": "Apturēt",
+    "resume": "Turpināt",
+    "save": "Saglabāt",
+    "discard": "Atmest",
+    "emptyTitle": "Nav taimeru",
+    "emptyDescription": "Sāciet taimeri ar + un beigās saglabājiet to kā laika ierakstu.",
+    "loadFailed": "Jūsu taimerus neizdevās ielādēt.",
+    "retry": "Mēģināt vēlreiz",
+    "unavailable": "Jūsu organizācijā laika uzskaite nav ieslēgta.",
+    "startFailed": "Taimeri neizdevās sākt. Mēģiniet vēlreiz.",
+    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz."
+  },
+  "scan": {
+    "title": "Skenēt dokumentu",
+    "upload": "Augšupielādēt",
+    "name": "Dokumenta nosaukums",
+    "defaultName": "Skenējums {day}",
+    "pages": "{count, plural, zero {# lappušu} one {# lappuse} other {# lappuses}}",
+    "matterTitle": "Lieta",
+    "uploadFailed": "Skenējumu neizdevās augšupielādēt. Mēģiniet vēlreiz.",
+    "failedTitle": "Skenēšana neizdevās",
+    "failed": "Kamera nevarēja saglabāt skenējumu. Mēģiniet vēlreiz."
+  },
+  "shortcuts": {
+    "search": "Meklēt",
+    "palette": "Komandu palete",
+    "next": "Nākamais rezultāts",
+    "previous": "Iepriekšējais rezultāts",
+    "toggleList": "Rādīt vai paslēpt sarakstu"
+  },
+  "palette": {
+    "placeholder": "Meklējiet lietas un sarunas vai izpildiet komandu",
+    "noResults": "Nekas neatbilst “{query}”"
+  },
+  "pane": {
+    "showList": "Rādīt sarakstu",
+    "hideList": "Paslēpt sarakstu"
   }
 }

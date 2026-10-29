@@ -54,6 +54,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:bun"],
   },
   {
+    path: "packages/parameter-store/src/read-parameter.ts",
+    class: "vendor-sdk",
+    reason: "Reads one deployment parameter from the configured AWS account.",
+    transports: ["module:@aws-sdk/client-ssm"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:
@@ -1103,6 +1109,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Probes development service endpoints and local TCP ports for the configured stack.",
     transports: ["global:fetch", "module:node:net"],
+  },
+  {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",
