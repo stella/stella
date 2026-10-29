@@ -133,13 +133,27 @@ export const messageXml = (message: FixtureMessage = FIXTURE_MESSAGE) =>
 let sealCertificate: ReturnType<typeof createSelfSignedCertificate> | null =
   null;
 
+type SealContentOptions = {
+  certificateCommonName?: string;
+  signedAt?: Date;
+};
+
 /** Seals `content` the way an exported file is sealed: DER CMS SignedData. */
-export const sealContent = async (content: Uint8Array) => {
-  sealCertificate ??= createSelfSignedCertificate({
-    commonName: SEAL_COMMON_NAME,
-  });
-  const seal = await sealCertificate;
-  const certificate = pkijs.Certificate.fromBER(seal.der);
+export const sealContent = async (
+  content: Uint8Array,
+  {
+    certificateCommonName = SEAL_COMMON_NAME,
+    signedAt = SEAL_SIGNED_AT,
+  }: SealContentOptions = {},
+) => {
+  const seal =
+    certificateCommonName === SEAL_COMMON_NAME
+      ? (sealCertificate ??= createSelfSignedCertificate({
+          commonName: certificateCommonName,
+        }))
+      : createSelfSignedCertificate({ commonName: certificateCommonName });
+  const certificateMaterial = await seal;
+  const certificate = pkijs.Certificate.fromBER(certificateMaterial.der);
   const signedData = new pkijs.SignedData({
     version: 1,
     encapContentInfo: new pkijs.EncapsulatedContentInfo({
@@ -178,12 +192,12 @@ export const sealContent = async (content: Uint8Array) => {
         }),
         new pkijs.Attribute({
           type: ID_SIGNING_TIME,
-          values: [new asn1js.UTCTime({ valueDate: SEAL_SIGNED_AT })],
+          values: [new asn1js.UTCTime({ valueDate: signedAt })],
         }),
       ],
     });
   }
-  await signedData.sign(seal.privateKey, 0, "SHA-256");
+  await signedData.sign(certificateMaterial.privateKey, 0, "SHA-256");
   return new Uint8Array(
     new pkijs.ContentInfo({
       contentType: ID_SIGNED_DATA,

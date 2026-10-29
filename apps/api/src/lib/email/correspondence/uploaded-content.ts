@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -13,6 +14,7 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 
@@ -178,8 +180,34 @@ const findSourceContent = async ({
         )
         .limit(1);
 
+type SourceLifetimeReadOptions = {
+  tx: Pick<Transaction, "execute">;
+  workspaceId: SafeId<"workspace">;
+  sourceEntityId: SafeId<"entity">;
+};
+
+const sourceHasOtherCopies = async ({
+  tx,
+  workspaceId,
+  sourceEntityId,
+}: SourceLifetimeReadOptions) => {
+  const rows = executedRows(
+    await tx.execute(sql`
+      SELECT public.correspondence_has_other_sources(${workspaceId}, ${sourceEntityId}) AS has_other_sources
+    `),
+  );
+  return v.parse(
+    v.object({ has_other_sources: v.nullable(v.boolean()) }),
+    rows.at(0),
+  ).has_other_sources;
+};
+
+type PlanContentOptions = FindSourceContentOptions & {
+  readSourceLifetime: () => Promise<boolean | null>;
+};
+
 /** Only reads are available until the entire filing target is admitted. */
-const planCorrespondenceContent = async (options: FindSourceContentOptions) => {
+const planCorrespondenceContent = async (options: PlanContentOptions) => {
   const { tx, organizationId, workspaceId, content } = options;
   const [previous] = await findSourceContent(options);
   const [target] = await tx
@@ -200,27 +228,19 @@ const planCorrespondenceContent = async (options: FindSourceContentOptions) => {
   ) {
     return Result.ok({ type: "invalid_content" as const });
   }
-  const [survivor] =
+  const hasOtherSources =
     previous !== undefined &&
     content.sourceEntityId !== null &&
     (previous.contentHash !== content.contentHash ||
       previous.dedupKey !== content.dedupKey)
-      ? await tx
-          .select({ entityId: correspondenceSources.entityId })
-          .from(correspondenceSources)
-          .where(
-            and(
-              eq(correspondenceSources.organizationId, organizationId),
-              eq(correspondenceSources.workspaceId, workspaceId),
-              eq(correspondenceSources.correspondenceId, previous.id),
-              ne(correspondenceSources.entityId, content.sourceEntityId),
-            ),
-          )
-          .limit(1)
-      : [];
+      ? await options.readSourceLifetime()
+      : false;
+  if (hasOtherSources === null) {
+    return Result.ok({ type: "invalid_content" as const });
+  }
   if (
     previous !== undefined &&
-    survivor !== undefined &&
+    hasOtherSources &&
     previous.dedupKey === content.dedupKey &&
     previous.contentHash !== content.contentHash
   ) {
@@ -228,7 +248,7 @@ const planCorrespondenceContent = async (options: FindSourceContentOptions) => {
   }
   if (
     previous !== undefined &&
-    survivor === undefined &&
+    !hasOtherSources &&
     target !== undefined &&
     target.id !== previous.id
   ) {
@@ -240,7 +260,12 @@ const planCorrespondenceContent = async (options: FindSourceContentOptions) => {
       }),
     );
   }
-  return Result.ok({ type: "ready" as const, previous, target, survivor });
+  return Result.ok({
+    type: "ready" as const,
+    previous,
+    target,
+    hasOtherSources,
+  });
 };
 
 /** The caller holds the matter and current source generation through this write. */
@@ -256,6 +281,16 @@ export const persistCorrespondenceContent = async ({
     organizationId,
     workspaceId,
     content,
+    readSourceLifetime: async () => {
+      if (content.sourceEntityId === null) {
+        return panic("A delivered message has no uploaded source lifetime");
+      }
+      return await sourceHasOtherCopies({
+        tx,
+        workspaceId,
+        sourceEntityId: content.sourceEntityId,
+      });
+    },
   });
   if (planned.isErr()) {
     return Result.err(planned.error);
@@ -267,7 +302,7 @@ export const persistCorrespondenceContent = async ({
   let previous = plan.previous;
   if (
     previous !== undefined &&
-    plan.survivor !== undefined &&
+    plan.hasOtherSources &&
     content.sourceEntityId !== null
   ) {
     // The remaining copies still own their original message and workflow.

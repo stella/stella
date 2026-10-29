@@ -182,8 +182,12 @@ over the message XML, takes the same path and files a `data_box` record.
 - Each file of the message is scanned before anything is written, then stored
   as a document in the `.zfo` file's folder and linked as an attachment. A
   rejected file refuses the whole message; a replay resumes missing ordinals.
-  A parsed payload fingerprint binds the envelope and each attachment ordinal
-  to its file name, media type and content hash. Another export can resume only
+  A parsed payload fingerprint binds the stable message assertions and each
+  ordered attachment to its file name, media type and content hash. The CMS
+  seal describes the exported source, so a different seal does not change
+  message identity; each source retains its `.zfo` bytes and the first
+  export's parsed seal remains on the correspondence. Another export can
+  resume only
   when that fingerprint matches; an asserted message ID alone is insufficient.
   Filing checks the target fingerprint under the matter lock before writing any
   record, source association or filer, so a refused export cannot become a source.

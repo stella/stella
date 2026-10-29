@@ -660,6 +660,191 @@ test("correspondence retains its remaining source across feature visibility chan
   ).toEqual([{ entityId: remainingSource }]);
 });
 
+// Gate propagation may hide the retained record; its persisted filing state stays.
+const retainedFilerFields = {
+  id: correspondenceFilers.id,
+  organizationId: correspondenceFilers.organizationId,
+  workspaceId: correspondenceFilers.workspaceId,
+  correspondenceId: correspondenceFilers.correspondenceId,
+  filedByUserId: correspondenceFilers.filedByUserId,
+  filedByAllowedSenderId: correspondenceFilers.filedByAllowedSenderId,
+  filedByDisplay: correspondenceFilers.filedByDisplay,
+  filedAt: correspondenceFilers.filedAt,
+};
+const retainedAttachmentFields = {
+  id: correspondenceAttachments.id,
+  organizationId: correspondenceAttachments.organizationId,
+  workspaceId: correspondenceAttachments.workspaceId,
+  correspondenceId: correspondenceAttachments.correspondenceId,
+  entityId: correspondenceAttachments.entityId,
+  ordinal: correspondenceAttachments.ordinal,
+  filename: correspondenceAttachments.filename,
+  mediaType: correspondenceAttachments.mediaType,
+  byteSize: correspondenceAttachments.byteSize,
+  scanVerdict: correspondenceAttachments.scanVerdict,
+  createdAt: correspondenceAttachments.createdAt,
+};
+
+test("a hidden duplicate source does not let a replacement refresh its correspondence", async () => {
+  const firstSource = createSafeId<"entity">();
+  const hiddenSource = createSafeId<"entity">();
+  const oldAttachmentId = createSafeId<"entity">();
+  const replacementAttachmentId = createSafeId<"entity">();
+  await testDb.insert(entities).values(
+    [firstSource, hiddenSource, oldAttachmentId, replacementAttachmentId].map(
+      (id) => ({
+        id,
+        workspaceId: ids.wsA1,
+        name: "Feature-hidden replacement fixture",
+        createdBy: ids.userA1,
+      }),
+    ),
+  );
+  const oldParsed = await parsedDataBoxFixture({
+    entityId: firstSource,
+    messageId: "98000000001",
+  });
+  const old = await fileCopy({
+    workspaceId: ids.wsA1,
+    entityId: firstSource,
+    parsed: oldParsed,
+    attachmentId: oldAttachmentId,
+  });
+  expect(
+    (
+      await fileCopy({
+        workspaceId: ids.wsA1,
+        entityId: hiddenSource,
+        parsed: oldParsed,
+        attachmentId: oldAttachmentId,
+      })
+    ).id,
+  ).toBe(old.id);
+  await testDb
+    .update(entities)
+    .set({ kind: "task", listItemType: "fact" })
+    .where(eq(entities.id, hiddenSource));
+  expect(
+    await testDb
+      .select({ gate: correspondenceSources.entityFeatureGate })
+      .from(correspondenceSources)
+      .where(eq(correspondenceSources.entityId, hiddenSource)),
+  ).toEqual([{ gate: "legal-lists" }]);
+  await testDb
+    .update(correspondence)
+    .set({ handlingState: "handled", assigneeId: ids.userA1 })
+    .where(eq(correspondence.id, old.id));
+  const oldRecord = await testDb
+    .select({
+      messageId: correspondence.messageId,
+      contentHash: correspondence.contentHash,
+      sourceEntityId: correspondence.sourceEntityId,
+      handlingState: correspondence.handlingState,
+      assigneeId: correspondence.assigneeId,
+    })
+    .from(correspondence)
+    .where(eq(correspondence.id, old.id));
+  expect(oldRecord).toHaveLength(1);
+  const oldFilers = await testDb
+    .select(retainedFilerFields)
+    .from(correspondenceFilers)
+    .where(eq(correspondenceFilers.correspondenceId, old.id));
+  const oldAttachments = await testDb
+    .select(retainedAttachmentFields)
+    .from(correspondenceAttachments)
+    .where(eq(correspondenceAttachments.correspondenceId, old.id));
+
+  const baseSafeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  );
+  const featureHiddenSafeDb: SafeDb = async (run, retry) =>
+    await baseSafeDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.enabled_features', '[]', true)`,
+      );
+      return run(tx);
+    }, retry);
+  const replacementParsed = await parsedDataBoxFixture({
+    entityId: firstSource,
+    messageId: "98000000002",
+  });
+  const replacement = await createCorrespondence({
+    safeDb: asTestRaw<SafeDb>(featureHiddenSafeDb),
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    filer: { type: "user", userId: ids.userA1 },
+    parsed: { ...replacementParsed, sourceEntityId: firstSource },
+    expectedSourceVersionId: null,
+    attachments: [
+      {
+        entityId: replacementAttachmentId,
+        filename: "evidence.pdf",
+        mediaType: "application/pdf",
+        byteSize: 128,
+        scanVerdict: "clean",
+      },
+    ],
+    recordAuditEvent: createAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      request: new Request("https://api.example.test/v1/correspondence"),
+      server: null,
+    }),
+  });
+  expect(replacement.type).toBe("ok");
+  if (replacement.type !== "ok") {
+    throw new Error(`Expected filing success, received ${replacement.type}`);
+  }
+  expect(replacement.id).not.toBe(old.id);
+  expect(replacement.contentHash).toBe(replacementParsed.contentHash);
+  expect(
+    await testDb
+      .select({
+        messageId: correspondence.messageId,
+        contentHash: correspondence.contentHash,
+        sourceEntityId: correspondence.sourceEntityId,
+        handlingState: correspondence.handlingState,
+        assigneeId: correspondence.assigneeId,
+      })
+      .from(correspondence)
+      .where(eq(correspondence.id, old.id)),
+  ).toEqual([{ ...oldRecord.at(0), sourceEntityId: hiddenSource }]);
+  expect(
+    await testDb
+      .select(retainedFilerFields)
+      .from(correspondenceFilers)
+      .where(eq(correspondenceFilers.correspondenceId, old.id)),
+  ).toEqual(oldFilers);
+  expect(
+    await testDb
+      .select(retainedAttachmentFields)
+      .from(correspondenceAttachments)
+      .where(eq(correspondenceAttachments.correspondenceId, old.id)),
+  ).toEqual(oldAttachments);
+  expect(oldAttachments.map(({ entityId }) => entityId)).toEqual([
+    oldAttachmentId,
+  ]);
+  const visible = await featureHiddenSafeDb(async (tx) => {
+    const visibleRecords = await tx
+      .select({ id: correspondence.id, messageId: correspondence.messageId })
+      .from(correspondence)
+      .where(inArray(correspondence.id, [old.id, replacement.id]));
+    const hiddenSourceRows = await tx
+      .select({ id: entities.id })
+      .from(entities)
+      .where(eq(entities.id, hiddenSource));
+    return { visibleRecords, hiddenSourceRows };
+  });
+  if (visible.isErr()) {
+    throw visible.error;
+  }
+  expect(visible.value).toEqual({
+    visibleRecords: [{ id: replacement.id, messageId: "98000000002" }],
+    hiddenSourceRows: [],
+  });
+});
+
 const replacementScenarios = [
   {
     oldSources: "last",
@@ -1369,7 +1554,8 @@ test.each(sourceTransitions)(
         await testDb
           .select({ entityId: correspondenceSources.entityId })
           .from(correspondenceSources)
-          .where(eq(correspondenceSources.correspondenceId, oldId)),
+          .where(eq(correspondenceSources.correspondenceId, oldId))
+          .orderBy(asc(correspondenceSources.entityId)),
       ).toEqual(
         expectedOldSourceIds
           .toSorted()

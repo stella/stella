@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { readCorrespondenceChannel } from "@/api/lib/email/correspondence/provenance";
 import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -506,9 +507,38 @@ if (!databaseUrl || !runPostgresTests) {
     test("a copy resumes missing ordinals across distinct exports of one message", async () => {
       const firstExport = await zfoFile();
       const secondExport = await sealContent(
-        new TextEncoder().encode(messageXml().replaceAll("><", ">\n<")),
+        new TextEncoder().encode(messageXml()),
+        {
+          certificateCommonName: "Second test data-box seal",
+          signedAt: new Date("2026-10-15T08:30:00.000Z"),
+        },
       );
       expect(sha256Hex(firstExport)).not.toBe(sha256Hex(secondExport));
+      const firstParsed = parseDataBoxMessage(firstExport);
+      const secondParsed = parseDataBoxMessage(secondExport);
+      expect(firstParsed.isOk()).toBe(true);
+      expect(secondParsed.isOk()).toBe(true);
+      if (firstParsed.isErr() || secondParsed.isErr()) {
+        throw new Error("Expected both sealed exports to parse");
+      }
+      expect(firstParsed.value.envelope.seal).not.toEqual(
+        secondParsed.value.envelope.seal,
+      );
+      expect(firstParsed.value.envelope.seal.signedAt).not.toBe(
+        secondParsed.value.envelope.seal.signedAt,
+      );
+      expect(firstParsed.value.envelope.seal.signerName).not.toBe(
+        secondParsed.value.envelope.seal.signerName,
+      );
+      expect(firstParsed.value.envelope.seal.serialNumber).not.toBe(
+        secondParsed.value.envelope.seal.serialNumber,
+      );
+      const { seal: firstSeal, ...firstAssertions } =
+        firstParsed.value.envelope;
+      const { seal: secondSeal, ...secondAssertions } =
+        secondParsed.value.envelope;
+      expect(secondAssertions).toEqual(firstAssertions);
+      expect(firstSeal).not.toEqual(secondSeal);
       const first = await storeZfoFile({ createdBy: uploaderId });
       const copy = await storeZfoFile({ createdBy: uploaderId });
       const failed = await processUpload({

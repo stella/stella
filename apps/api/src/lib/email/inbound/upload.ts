@@ -413,12 +413,24 @@ const dataBoxCorrespondence = ({
   dataBox: envelope,
   direction: null,
   messageId: envelope.messageId,
-  // Bind every ordinal, including files not yet written, to the parsed payload.
-  // CMS serialization and unverified message IDs cannot establish equivalence.
+  // The seal describes this exported source, not the message asserted inside
+  // it. Bind stable message fields and every ordered attachment so another
+  // export with a different seal can resume the same filing.
   contentHash: hashSha256Hex(
     JSON.stringify([
       annotation,
-      envelope,
+      {
+        messageId: envelope.messageId,
+        messageType: envelope.messageType,
+        sender: envelope.sender,
+        recipient: envelope.recipient,
+        toHands: envelope.toHands,
+        personalDelivery: envelope.personalDelivery,
+        substituteDelivery: envelope.substituteDelivery,
+        deliveredAt: envelope.deliveredAt,
+        acceptedAt: envelope.acceptedAt,
+        status: envelope.status,
+      } satisfies Omit<typeof envelope, "seal">,
       files.map(({ fileName, mimeType, bytes }) => [
         fileName,
         mimeType,
