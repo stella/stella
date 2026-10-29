@@ -412,7 +412,7 @@ export const BUNDLED_CONSUMERS = [
   },
   {
     file: "packages/mcp-apps/scripts/build-mcp-apps.ts",
-    command: "Bun.build(entrypoints: [path.join(appRoot, input)])",
+    command: "Bun.build({ ...config, throw: false })",
     bootCheck: {
       type: "none",
       reason:

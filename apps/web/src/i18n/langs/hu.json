@@ -547,6 +547,14 @@
     },
     "approve": "Jóváhagy",
     "approveSelected": "Kijelöltek jóváhagyása",
+    "arrangement": {
+      "alertThreshold": "Értesítési küszöb (%)",
+      "amountCap": "Díjkorlát",
+      "flatFee": "Átalánydíj",
+      "invalidCap": "Adjon meg pozitív korlátokat és 0,01% és 100% közötti értesítési küszöböt.",
+      "minuteCap": "Időkorlát (perc)",
+      "title": "Díjmegállapodás"
+    },
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",
@@ -5058,6 +5066,16 @@
       "preferredNamePlaceholder": "Az Ön neve",
       "profileDescription": "Személyes beállítások kezelése",
       "sendOtpCode": "Ellenőrző kód küldése",
+      "signInMethods": {
+        "confirmDescription": "A bejelentkezési mód leválasztásához add meg az e-mail-címedre küldött új kódot.",
+        "confirmTitle": "Leválasztod ezt: {provider}?",
+        "description": "Kapcsold össze azokat a fiókokat, amelyek ugyanazt az ellenőrzött e-mail-címet használják.",
+        "emailCode": "E-mailben küldött kód",
+        "emailCodeDescription": "Mindig bejelentkezhetsz az e-mail-címedre küldött kóddal.",
+        "lastMethod": "Mielőtt leválasztod ezt a fiókot, kapcsolj hozzá egy másikat.",
+        "title": "Bejelentkezési módok",
+        "unavailable": "A bejelentkezési módok leválasztásához be kell állítani az e-mail-küldést."
+      },
       "timezone": "Időzóna",
       "timezoneDescription": "Az értesítések és e-mailek időbélyegeihez használjuk",
       "timezoneSaved": "Időzóna frissítve",

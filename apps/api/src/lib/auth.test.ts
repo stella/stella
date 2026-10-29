@@ -45,6 +45,7 @@ import {
   TWO_FACTOR_SESSION_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
@@ -1095,12 +1096,17 @@ describe("session freshness", () => {
     expect(getAuth().options.session.freshAge).toBe(0);
   });
 
-  test("the other freshness-gated endpoint (unlink-account) stays disabled", () => {
-    // `freshAge: 0` is only safe because the one other freshness-gated endpoint
-    // Better Auth mounts, `/unlink-account`, is not a Stella feature and is
-    // disabled. If it were re-exposed, relaxing freshAge would let an old
-    // session unlink a provider. Keep these two decisions coupled.
-    expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  test("account unlinking is available through its confirmation gate", () => {
+    expect(getAuth().options.disabledPaths).not.toContain("/unlink-account");
+  });
+
+  test("sign-in method confirmation requires a signed-in account", async () => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("sign-in-methods/send-otp"), {
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(401);
   });
 
   test("session cookie cache stays enabled with its pinned revocation window", () => {

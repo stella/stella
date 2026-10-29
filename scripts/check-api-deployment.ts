@@ -1,3 +1,4 @@
+import { DEPLOY_ENV_CONTRACT } from "../apps/api/src/deploy-env-contract";
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 
 const DEFAULT_ATTEMPTS = 30;
@@ -109,14 +110,19 @@ const readDeployedCommit = async ({
     );
   }
   if (expectedEnvironment !== undefined) {
-    const observedEnvironment =
-      typeof body === "object" && body !== null
-        ? Reflect.get(body, "deployEnvironment")
-        : undefined;
-    if (observedEnvironment !== expectedEnvironment) {
-      throw new ApiDeploymentError(
-        `${probeUrl.toString()} deployEnvironment must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
-      );
+    for (const { readinessField } of DEPLOY_ENV_CONTRACT) {
+      if (readinessField === undefined) {
+        continue;
+      }
+      const observedEnvironment =
+        typeof body === "object" && body !== null
+          ? Reflect.get(body, readinessField)
+          : undefined;
+      if (observedEnvironment !== expectedEnvironment) {
+        throw new ApiDeploymentError(
+          `${probeUrl.toString()} ${readinessField} must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
+        );
+      }
     }
   }
   return commit;
