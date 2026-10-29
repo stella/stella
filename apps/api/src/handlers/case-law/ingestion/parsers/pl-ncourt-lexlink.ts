@@ -97,7 +97,7 @@ const chainsOf = (text: string): ProvisionChains => {
         (step) => LEVELS.indexOf(step.slice(0, step.indexOf(":"))) < level,
       );
       let last = outer;
-      for (const number of numbers.match(NUMBER_PATTERN) ?? []) {
+      for (const [number] of numbers.matchAll(NUMBER_PATTERN)) {
         last = [...outer, `${kind}:${number}`];
         leaves.push(last.join("/"));
         for (let end = 1; end <= last.length; end += 1) {

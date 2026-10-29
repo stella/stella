@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -13,8 +14,8 @@ import {
 const KPC_TITLE =
   "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego";
 
-const fixture = (name: string): Promise<string> =>
-  Bun.file(new URL(`__fixtures__/${name}`, import.meta.url)).text();
+const fixture = async (name: string) =>
+  await Bun.file(new URL(`__fixtures__/${name}`, import.meta.url)).text();
 
 const anchorsOf = (
   html: string,
@@ -194,13 +195,16 @@ const labelled = ({ article, index, paragraph, clause, point }: Chain) => {
 
 const claimOf = (value: Chain): string => labelled(value).join(";");
 const anchorOf = (value: Chain): string =>
-  `${labelled(value).at(-1)} k.p.c.`.replace(/\((\d+)\)/u, " ($1)");
+  `${labelled(value).at(-1) ?? panic("A chain has at least an article")} k.p.c.`.replace(
+    /\((\d+)\)/u,
+    " ($1)",
+  );
 
 test(
   "a claim built from the anchor's own provisions is kept",
   () => {
     assertProperty(
-      "pl-ncourt-lexlink-claim-from-anchor",
+      "a claim built from the anchor's own provisions is kept",
       fc.property(chain, (value) => {
         const verdict = judgeLexLink({
           anchor: anchorOf(value),
@@ -218,7 +222,7 @@ test(
   "a claim naming a provision the anchor does not print is never kept",
   () => {
     assertProperty(
-      "pl-ncourt-lexlink-foreign-claim",
+      "a claim naming a provision the anchor does not print is never kept",
       fc.property(chain, level, (value, other) => {
         fc.pre(other !== value.article);
         const verdict = judgeLexLink({
@@ -237,7 +241,7 @@ test(
   "an anchor naming another act never points at the tagged act",
   () => {
     assertProperty(
-      "pl-ncourt-lexlink-foreign-act",
+      "an anchor naming another act never points at the tagged act",
       fc.property(
         chain,
         fc.constantFrom(
@@ -265,7 +269,7 @@ test(
   "an anchor with a paragraph but no article never points at an act",
   () => {
     assertProperty(
-      "pl-ncourt-lexlink-bare-provision",
+      "an anchor with a paragraph but no article never points at an act",
       fc.property(
         level,
         level,
