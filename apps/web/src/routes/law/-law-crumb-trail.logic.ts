@@ -8,6 +8,7 @@ import { decisionYear } from "@/features/case-law/citation-format";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
+import { hasOtherCaseFileDocuments } from "@/routes/law/-components/public-decision-case-file.logic";
 
 export const statuteLawCrumbTrailOf = ({
   eli,
@@ -61,20 +62,31 @@ export const statuteLawCrumbTrailOf = ({
 
 type DecisionLawCrumbTrailInput = Pick<
   PublicCaseLawDecision,
-  "court" | "courtAbbreviation" | "caseNumber" | "decisionDate" | "metadata"
+  | "caseFile"
+  | "court"
+  | "courtAbbreviation"
+  | "caseNumber"
+  | "decisionDate"
+  | "id"
+  | "languageGroupKey"
+  | "metadata"
 > & {
   courtTier?: PublicCaseLawDecision["courtTier"] | undefined;
 };
 
 export const decisionLawCrumbTrailOf = ({
+  caseFile,
   court,
   courtAbbreviation,
   courtTier,
   caseNumber,
   decisionDate,
+  id,
+  languageGroupKey,
   metadata,
 }: DecisionLawCrumbTrailInput) => {
   const year = decisionYear(decisionDate);
+  const current = { id, languageGroupKey };
   return {
     kind: "decision",
     court: {
@@ -96,6 +108,11 @@ export const decisionLawCrumbTrailOf = ({
             }),
           },
     caseNumber,
+    // The case number's document list: offered only when it holds somewhere
+    // to go besides the open decision.
+    caseFile: hasOtherCaseFileDocuments(caseFile, current)
+      ? { ...caseFile, current }
+      : null,
     legalArea:
       typeof metadata["legalArea"] === "string" ? metadata["legalArea"] : null,
   } as const;

@@ -640,3 +640,46 @@ describe("section text fallback", () => {
     );
   });
 });
+
+test("a fallback cannot reintroduce a removed running header", () => {
+  const header = "pokračování -2- sp. zn. 9 C 191/2025";
+  const { documentAst, fulltext } = parseRegionalDecision(
+    baseInput({
+      verdict: [makePara(header)],
+      verdictText: header,
+      justification: [makePara(header)],
+      justificationText: header,
+    }),
+  );
+  expect(
+    documentAst.blocks.some((block) => block.plainText.includes(header)),
+  ).toBe(false);
+  expect(fulltext).not.toContain(header);
+});
+
+test("quote repair preserves the publisher span owning every surviving character", () => {
+  const { documentAst } = parseRegionalDecision(
+    baseInput({
+      header: [
+        {
+          texts: [
+            { text: "též„", anonStyle: "NORMAL" },
+            { text: " J. N.", anonStyle: "ANON" },
+          ],
+          styleLocalId: 1,
+          tableCellInfo: null,
+        },
+      ],
+    }),
+  );
+  const intro = documentAst.blocks
+    .filter(isParagraph)
+    .find((block) => block.role === "intro");
+  expect(intro?.plainText).toBe("též „J. N.");
+  expect(intro?.inlines).toEqual([
+    { type: "text", text: "též" },
+    { type: "text", text: " ", anonymized: true },
+    { type: "text", text: "„" },
+    { type: "text", text: "J. N.", anonymized: true },
+  ]);
+});
