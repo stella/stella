@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -15,6 +16,109 @@ const { decryptAIConfig, encryptAIConfig, isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
 const { encryptContent } = await import("@/api/lib/content-encryption");
 const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
+
+const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
+  if ((typeof value !== "object" && typeof value !== "function") || !value) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[cycle]";
+  }
+  seen.add(value);
+  return Reflect.ownKeys(value).map((key) => {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    return {
+      key: String(key),
+      value:
+        descriptor && "value" in descriptor
+          ? descriptorGraph(descriptor.value, seen)
+          : "[accessor]",
+    };
+  });
+};
+
+describe("unreadable configuration boundary", () => {
+  const organizationId = toSafeId<"organization">("org_marked_crypto_test");
+  const marker = "provider-secret-boundary-marker";
+  const markedError = Object.assign(
+    new Error(marker, {
+      cause: Object.assign(new Error(`nested-${marker}`), { nested: marker }),
+    }),
+    { metadata: { marker } },
+  );
+
+  test.each([
+    {
+      reason: "incomplete-envelope",
+      ciphertext: null,
+      iv: null,
+      decrypt: async () => marker,
+    },
+    {
+      reason: "missing-key",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => {
+        throw new ConfigurationError({ message: marker });
+      },
+    },
+    {
+      reason: "decryption-failed",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => {
+        throw markedError;
+      },
+    },
+    {
+      reason: "invalid-json",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => `{${marker}`,
+    },
+    {
+      reason: "invalid-schema",
+      ciphertext: Buffer.from(marker),
+      iv: Buffer.alloc(12, 1),
+      decrypt: async () => JSON.stringify({ [marker]: marker }),
+    },
+  ] as const)("returns only the classified $reason error", async (fixture) => {
+    const result = await decryptAIConfig(
+      organizationId,
+      fixture.ciphertext,
+      fixture.iv,
+      fixture.decrypt,
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("Expected an unreadable configuration");
+    }
+    expect(result.error.reason).toBe(fixture.reason);
+    expect(Reflect.ownKeys(result.error).map(String).toSorted()).toEqual([
+      "_tag",
+      "column",
+      "line",
+      "message",
+      "name",
+      "originalColumn",
+      "originalLine",
+      "reason",
+      "sourceURL",
+      "stack",
+    ]);
+    expect(result.error).toMatchObject({
+      _tag: "OrgAIConfigReadError",
+      message: "Decrypted organization AI configuration is unreadable",
+      name: "OrgAIConfigReadError",
+      reason: fixture.reason,
+    });
+    const walked = JSON.stringify(descriptorGraph(result.error));
+    expect(walked).not.toContain(marker);
+    expect(walked).not.toContain("cause");
+    expect(walked).not.toContain("metadata");
+  });
+});
 
 describe("maskApiKey", () => {
   test("retains only provider prefix and last four", () => {
@@ -287,7 +391,9 @@ describe("decision model in the stored blob", () => {
       JSON.stringify({ providers, overrideModels }),
     );
 
-    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    const config = (
+      await decryptAIConfig(organizationId, ciphertext, iv)
+    ).unwrap();
 
     expect(config.decision).toBeNull();
   });
@@ -307,7 +413,8 @@ describe("decision model in the stored blob", () => {
           decision,
         });
         expect(
-          (await decryptAIConfig(organizationId, ciphertext, iv)).decision,
+          (await decryptAIConfig(organizationId, ciphertext, iv)).unwrap()
+            .decision,
         ).toEqual(decision);
       }
     }
@@ -325,7 +432,9 @@ describe("decision model in the stored blob", () => {
       overrideModels,
       decision,
     });
-    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    const config = (
+      await decryptAIConfig(organizationId, ciphertext, iv)
+    ).unwrap();
 
     expect(config.decision).toEqual(decision);
   });
@@ -342,7 +451,9 @@ describe("decision model in the stored blob", () => {
       overrideModels,
       decision: null,
     });
-    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    const config = (
+      await decryptAIConfig(organizationId, ciphertext, iv)
+    ).unwrap();
     expect(config.providers).toEqual([
       {
         provider: "anthropic",

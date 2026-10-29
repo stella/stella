@@ -148,11 +148,11 @@ const updateAIConfig = createSafeRootHandler(
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
     if (ciphertext || iv) {
-      const decryptResult = await Result.tryPromise({
-        try: async () =>
-          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-        catch: (error: unknown) => error,
-      });
+      const decryptResult = await decryptAIConfig(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
 
       if (decryptResult.isErr()) {
         // The stored config is the merge base for a partial update, so an

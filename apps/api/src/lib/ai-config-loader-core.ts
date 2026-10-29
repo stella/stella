@@ -1,10 +1,9 @@
+import type { Result } from "better-result";
+
 import { AI_UNAVAILABLE_REASON } from "@stll/api-contract/organization-ai-availability";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import {
-  OrgAIConfigReadError,
-  unreadableOrgAIConfig,
-} from "@/api/lib/ai-config-crypto";
+import type { OrgAIConfigReadError } from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type OrgAIConfigRow = {
@@ -16,7 +15,7 @@ type DecryptOrgAIConfig = (
   organizationId: SafeId<"organization">,
   ciphertext: Buffer | null | undefined,
   iv: Buffer | null | undefined,
-) => Promise<OrgAIConfig>;
+) => Promise<Result<OrgAIConfig, OrgAIConfigReadError>>;
 
 export type DecryptOrgAIConfigRowInput = {
   decrypt: DecryptOrgAIConfig;
@@ -72,16 +71,11 @@ export const decryptOrgAIConfigRow = async ({
     return { status: "ok", config: null };
   }
 
-  try {
-    const config = await decrypt(organizationId, ciphertext, iv);
-    return { status: "ok", config };
-  } catch (error) {
-    const safeError =
-      error instanceof OrgAIConfigReadError
-        ? error
-        : unreadableOrgAIConfig(organizationId, "decryption-failed");
-    return { status: "corrupt", error: safeError };
+  const config = await decrypt(organizationId, ciphertext, iv);
+  if (config.isErr()) {
+    return { status: "corrupt", error: config.error };
   }
+  return { status: "ok", config: config.value };
 };
 
 export type PromptCachingPreferenceRow = {

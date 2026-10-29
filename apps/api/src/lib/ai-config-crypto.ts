@@ -154,20 +154,23 @@ export const decryptAIConfig = async (
   organizationId: SafeId<"organization">,
   ciphertext: Buffer | null | undefined,
   iv: Buffer | null | undefined,
-): Promise<OrgAIConfig> => {
+  decrypt: typeof decryptContent = decryptContent,
+): Promise<Result<OrgAIConfig, OrgAIConfigReadError>> => {
   if (!ciphertext || !iv) {
-    throw unreadableOrgAIConfig(organizationId, "incomplete-envelope");
+    return Result.err(
+      unreadableOrgAIConfig(organizationId, "incomplete-envelope"),
+    );
   }
 
   const decrypted = await Result.tryPromise({
-    try: async () => await decryptContent(organizationId, ciphertext, iv),
+    try: async () => await decrypt(organizationId, ciphertext, iv),
     catch: (error: unknown) =>
       error instanceof ConfigurationError
         ? unreadableOrgAIConfig(organizationId, "missing-key")
         : unreadableOrgAIConfig(organizationId, "decryption-failed"),
   });
   if (decrypted.isErr()) {
-    throw decrypted.error;
+    return Result.err(decrypted.error);
   }
   const json = decrypted.value;
   const decoded = Result.try({
@@ -175,13 +178,13 @@ export const decryptAIConfig = async (
     catch: () => unreadableOrgAIConfig(organizationId, "invalid-json"),
   });
   if (Result.isError(decoded)) {
-    throw decoded.error;
+    return Result.err(decoded.error);
   }
   const parsed = v.safeParse(orgAIConfigSchema, decoded.value);
   if (!parsed.success) {
-    throw unreadableOrgAIConfig(organizationId, "invalid-schema");
+    return Result.err(unreadableOrgAIConfig(organizationId, "invalid-schema"));
   }
-  return normalizeOrgAIConfig(parsed.output);
+  return Result.ok(normalizeOrgAIConfig(parsed.output));
 };
 
 /**

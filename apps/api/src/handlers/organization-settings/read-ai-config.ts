@@ -90,11 +90,11 @@ const readAIConfig = createSafeRootHandler(
     };
 
     if (ciphertext || iv) {
-      const decryptResult = await Result.tryPromise({
-        try: async () =>
-          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-        catch: (error: unknown) => error,
-      });
+      const decryptResult = await decryptAIConfig(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
 
       if (decryptResult.isErr()) {
         // Reporting the default here would present a stored-but-unreadable

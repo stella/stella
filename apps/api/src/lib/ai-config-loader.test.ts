@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -59,7 +60,7 @@ const decryptedAIConfig: OrgAIConfig = {
   decision: null,
 };
 
-const decryptAIConfigMock = mock(async () => decryptedAIConfig);
+const decryptAIConfigMock = mock(async () => Result.ok(decryptedAIConfig));
 
 beforeEach(() => {
   decryptAIConfigMock.mockClear();
@@ -119,17 +120,12 @@ describe("loadOrgAIConfig", () => {
     expect(decryptAIConfigMock).not.toHaveBeenCalled();
   });
 
-  test("reports a corrupt row instead of throwing, for degrade-capable callers", async () => {
-    const marker = "marker-secret-from-provider-settings";
-    const decryptError = Object.assign(
-      new Error(marker, {
-        cause: Object.assign(new Error(marker), { nested: marker }),
-      }),
-      { metadata: marker },
+  test("preserves the classified result without throwing", async () => {
+    const classified = unreadableOrgAIConfig(
+      organizationId,
+      "decryption-failed",
     );
-    const decrypt = mock(async () => {
-      throw decryptError;
-    });
+    const decrypt = mock(async () => Result.err(classified));
 
     const result = await decryptOrgAIConfigRow({
       decrypt,
@@ -142,7 +138,7 @@ describe("loadOrgAIConfig", () => {
       throw new Error("Expected decryption failure to be corrupt");
     }
     expect(result.error.reason).toBe("decryption-failed");
-    expect(JSON.stringify(descriptorGraph(result.error))).not.toContain(marker);
+    expect(result.error).toBe(classified);
     expect(Object.hasOwn(result.error, "cause")).toBe(false);
     expect(Object.hasOwn(result.error, "metadata")).toBe(false);
   });
