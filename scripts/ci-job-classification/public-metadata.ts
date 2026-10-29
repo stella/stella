@@ -9,6 +9,8 @@ import {
   METADATA_ORIGIN,
   metadataReferenceIdentity,
   parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
   sameMetadataOrigin,
   verifyRemoteReference,
 } from "./references";
@@ -78,13 +80,13 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
-const githubExpression = (value: string) => `\${{ ${value} }}`;
 type ReferenceOptions = {
   callerRepository: string;
   callerOrigin: MetadataOrigin;
   target: PublicMetadata["nodes"][number];
   reference: string;
   kind: MetadataReferenceKind;
+  inheritedMount: string | null;
   relocatedActions: Record<
     string,
     { repository: string | null; ref: string | null; path: string }[]
@@ -97,6 +99,7 @@ const verifyReference = ({
   reference,
   kind,
   relocatedActions,
+  inheritedMount,
 }: ReferenceOptions) => {
   if (
     kind === "reusable-workflow" &&
@@ -104,6 +107,7 @@ const verifyReference = ({
   ) {
     reject("reusable workflow requires callee job metadata");
   }
+  let targetMount: string | null = null;
   if (target.type === "metadata") {
     const local = reference.startsWith("./") || reference.startsWith("$/");
     if (!local) {
@@ -114,29 +118,22 @@ const verifyReference = ({
         kind,
       });
     } else {
-      const localPath = reference.slice(2);
-      const relocations = relocatedActions[reference] ?? [];
+      const selected = resolveLocalMetadataPath({
+        reference,
+        kind,
+        relocations: relocatedActions[reference] ?? [],
+        inheritedMount,
+      });
+      targetMount = selected.mount;
       const exactPath =
         kind === "reusable-workflow"
-          ? target.path === localPath
-          : target.path === `${localPath}/action.yml` ||
-            target.path === `${localPath}/action.yaml`;
-      const relocatedPath = relocations.some(
-        (relocation) =>
-          (relocation.repository === null ||
-            relocation.repository === githubExpression("github.repository") ||
-            relocation.repository ===
-              githubExpression("job.workflow_repository")) &&
-          (relocation.ref === null ||
-            relocation.ref === githubExpression("github.workflow_sha") ||
-            relocation.ref === githubExpression("job.workflow_sha")) &&
-          (target.path === `${relocation.path}/action.yml` ||
-            target.path === `${relocation.path}/action.yaml`),
-      );
+          ? target.path === selected.path
+          : target.path === `${selected.path}/action.yml` ||
+            target.path === `${selected.path}/action.yaml`;
       if (
         target.repository !== callerRepository ||
         !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
-        (!exactPath && !relocatedPath)
+        !exactPath
       ) {
         reject("local metadata path, repository or origin mismatch");
       }
@@ -167,6 +164,25 @@ const verifyReference = ({
       }
     }
   }
+  return targetMount;
+};
+
+const verifyWorkflowInventory = (
+  metadata: PublicMetadata,
+  reader: MetadataReader,
+) => {
+  const observed = reader.workflows().toSorted();
+  unique(observed, "observed workflow");
+  if (
+    JSON.stringify(observed) !==
+    JSON.stringify(
+      metadata.workflows.map((workflow) => workflow.path).toSorted(),
+    )
+  ) {
+    reject(
+      `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
+    );
+  }
 };
 
 export type MetadataOptions = { manifest: unknown; reader: MetadataReader };
@@ -182,35 +198,36 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         metadata.workflows.map((workflow) => workflow.path),
         "workflow declaration",
       );
-      const observed = reader.workflows().toSorted();
-      unique(observed, "observed workflow");
-      if (
-        JSON.stringify(observed) !==
-        JSON.stringify(
-          metadata.workflows.map((workflow) => workflow.path).toSorted(),
-        )
-      ) {
-        reject(
-          `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
-        );
-      }
+      verifyWorkflowInventory(metadata, reader);
       const nodes = new Map(metadata.nodes.map((node) => [node.id, node]));
       const visited = new Set<string>();
+      const mounts = new Map<string, string>();
       const active = new Set<string>();
       const classifications = { ordinary: 0, support: 0, priority: 0 };
       const parsedDocuments = new Map<string, ParsedDocument>();
       let jobCount = 0;
       let documentCount = 0;
-      const visit = (id: string): void => {
+      const visit = (id: string, mount: string | null = null): void => {
         if (active.has(id)) {
           reject("metadata dependency cycle");
-        }
-        if (visited.has(id)) {
-          return;
         }
         const node = nodes.get(id);
         if (!node) {
           reject(`missing metadata dependency: ${id}`);
+        }
+        if (node.type === "metadata") {
+          const definition = parsedDocuments.get(id);
+          if (definition) {
+            recordMetadataMount({
+              mounts,
+              identity: id,
+              mount,
+              document: definition,
+            });
+          }
+        }
+        if (visited.has(id)) {
+          return;
         }
         active.add(id);
         if (node.type === "metadata") {
@@ -221,6 +238,12 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             throw parsed.error;
           }
           parsedDocuments.set(id, parsed.value);
+          recordMetadataMount({
+            mounts,
+            identity: id,
+            mount,
+            document: parsed.value,
+          });
           unique(
             node.jobs.map((job) => job.id),
             "callee job classification",
@@ -256,15 +279,16 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             if (!targetId || !target) {
               reject(`undeclared metadata edge: ${id}/${reference}`);
             }
-            verifyReference({
+            const targetMount = verifyReference({
               callerRepository: node.repository,
               callerOrigin: node.origin,
               target,
               reference,
               kind,
               relocatedActions: parsed.value.relocatedActions,
+              inheritedMount: mount,
             });
-            visit(targetId);
+            visit(targetId, targetMount);
           }
           documentCount += 1;
         }

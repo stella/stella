@@ -19,6 +19,11 @@ import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get"
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import {
+  invoicePaidAmountSql,
+  invoicePaymentAmounts,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payments";
+import {
   invoiceInMatter,
   invoiceMatterShare,
   invoiceTouchesMatter,
@@ -1428,6 +1433,110 @@ const projectInvoiceLine = <
     line.workspace ?? panic("Invoice line has no participating matter"),
 });
 
+/** One invoice as the detail branch of list_invoices returns it. */
+const invoiceDetailView = (
+  invoiceRow: NonNullable<Awaited<ReturnType<typeof readInvoiceDetail>>>,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const totals = readInvoiceTotals(invoiceRow);
+  return {
+    id: invoiceRow.id,
+    // A client invoice has no owning matter; retain a participating matter
+    // for invoice navigation. Source references carry their own matter.
+    workspaceId,
+    clientId: invoiceRow.clientId,
+    invoiceNumber: invoiceRow.invoiceNumber,
+    documentType: invoiceRow.documentType,
+    originalInvoiceId: invoiceRow.originalInvoiceId,
+    reference: invoiceRow.reference,
+    status: invoiceRow.status,
+    invoiceDate: invoiceRow.invoiceDate,
+    taxableSupplyDate: invoiceRow.taxableSupplyDate,
+    dueDate: invoiceRow.dueDate,
+    currency: invoiceRow.currency,
+    totalAmount: invoiceRow.totalAmount,
+    ...invoicePaymentAmounts({
+      totalAmount: invoiceRow.totalAmount,
+      paidAmount: paidAmountOf(invoiceRow.payments),
+    }),
+    notes: invoiceRow.notes,
+    sellerProfileId: invoiceRow.sellerProfileId,
+    buyerName: invoiceRow.buyerName,
+    buyerRegistrationId: invoiceRow.buyerRegistrationId,
+    buyerVatId: invoiceRow.buyerVatId,
+    buyerAddressLine1: invoiceRow.buyerAddressLine1,
+    buyerAddressLine2: invoiceRow.buyerAddressLine2,
+    buyerCity: invoiceRow.buyerCity,
+    buyerPostalCode: invoiceRow.buyerPostalCode,
+    buyerCountry: invoiceRow.buyerCountry,
+    paidAt: invoiceRow.paidAt?.toISOString() ?? null,
+    createdAt: invoiceRow.createdAt.toISOString(),
+    updatedAt: invoiceRow.updatedAt.toISOString(),
+    timeEntries: invoiceRow.timeEntries.map((te) => {
+      const workItem = te.workItem;
+      const entryWorkspaceId =
+        te.workspaceId ?? panic("Invoiced time entry has no matter");
+      return {
+        id: te.id,
+        workspaceId: entryWorkspaceId,
+        entityId: te.workItemId,
+        entityReference:
+          te.workItemReference?.type === "available"
+            ? {
+                type: te.workItemReference.type,
+                id: te.workItemReference.id,
+                workspaceId: entryWorkspaceId,
+              }
+            : te.workItemReference,
+        dateWorked: te.dateWorked,
+        billedMinutes: te.billedMinutes,
+        rateAtEntry: te.rateAtEntry,
+        currency: te.currency,
+        narrative: te.narrative,
+        invoiceNarrative: te.invoiceNarrative,
+        noCharge: te.noCharge,
+        status: te.status,
+        entity: workItem
+          ? {
+              id: workItem.id,
+              name: workItem.name,
+              workspaceId: entryWorkspaceId,
+            }
+          : null,
+      };
+    }),
+    expenses: invoiceRow.expenses.map((ex) => {
+      const entity = ex.matter;
+      return {
+        id: ex.id,
+        workspaceId: ex.workspaceId,
+        entityId: ex.matterId,
+        entityReference:
+          ex.matterReference?.type === "available"
+            ? {
+                type: ex.matterReference.type,
+                id: ex.matterReference.id,
+                workspaceId: ex.workspaceId,
+              }
+            : ex.matterReference,
+        dateIncurred: ex.dateIncurred,
+        amount: ex.amount,
+        currency: ex.currency,
+        category: ex.category,
+        description: ex.description,
+        invoiceDescription: ex.invoiceDescription,
+        billable: ex.billable,
+        markup: ex.markup,
+        entity: entity
+          ? { id: entity.id, name: entity.name, workspaceId: ex.workspaceId }
+          : null,
+      };
+    }),
+    lines: invoiceRow.lines.map(projectInvoiceLine),
+    totals,
+  };
+};
+
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
@@ -1460,100 +1569,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     if (!invoiceRow) {
       return notFoundResult("Invoice not found or not accessible");
     }
-    const totals = readInvoiceTotals(invoiceRow);
-
-    const invoice = {
-      id: invoiceRow.id,
-      // A client invoice has no owning matter; retain a participating matter
-      // for invoice navigation. Source references carry their own matter.
-      workspaceId,
-      clientId: invoiceRow.clientId,
-      invoiceNumber: invoiceRow.invoiceNumber,
-      documentType: invoiceRow.documentType,
-      originalInvoiceId: invoiceRow.originalInvoiceId,
-      reference: invoiceRow.reference,
-      status: invoiceRow.status,
-      invoiceDate: invoiceRow.invoiceDate,
-      taxableSupplyDate: invoiceRow.taxableSupplyDate,
-      dueDate: invoiceRow.dueDate,
-      currency: invoiceRow.currency,
-      totalAmount: invoiceRow.totalAmount,
-      notes: invoiceRow.notes,
-      sellerProfileId: invoiceRow.sellerProfileId,
-      buyerName: invoiceRow.buyerName,
-      buyerRegistrationId: invoiceRow.buyerRegistrationId,
-      buyerVatId: invoiceRow.buyerVatId,
-      buyerAddressLine1: invoiceRow.buyerAddressLine1,
-      buyerAddressLine2: invoiceRow.buyerAddressLine2,
-      buyerCity: invoiceRow.buyerCity,
-      buyerPostalCode: invoiceRow.buyerPostalCode,
-      buyerCountry: invoiceRow.buyerCountry,
-      paidAt: invoiceRow.paidAt?.toISOString() ?? null,
-      createdAt: invoiceRow.createdAt.toISOString(),
-      updatedAt: invoiceRow.updatedAt.toISOString(),
-      timeEntries: invoiceRow.timeEntries.map((te) => {
-        const workItem = te.workItem;
-        const entryWorkspaceId =
-          te.workspaceId ?? panic("Invoiced time entry has no matter");
-        return {
-          id: te.id,
-          workspaceId: entryWorkspaceId,
-          entityId: te.workItemId,
-          entityReference:
-            te.workItemReference?.type === "available"
-              ? {
-                  type: te.workItemReference.type,
-                  id: te.workItemReference.id,
-                  workspaceId: entryWorkspaceId,
-                }
-              : te.workItemReference,
-          dateWorked: te.dateWorked,
-          billedMinutes: te.billedMinutes,
-          rateAtEntry: te.rateAtEntry,
-          currency: te.currency,
-          narrative: te.narrative,
-          invoiceNarrative: te.invoiceNarrative,
-          noCharge: te.noCharge,
-          status: te.status,
-          entity: workItem
-            ? {
-                id: workItem.id,
-                name: workItem.name,
-                workspaceId: entryWorkspaceId,
-              }
-            : null,
-        };
-      }),
-      expenses: invoiceRow.expenses.map((ex) => {
-        const entity = ex.matter;
-        return {
-          id: ex.id,
-          workspaceId: ex.workspaceId,
-          entityId: ex.matterId,
-          entityReference:
-            ex.matterReference?.type === "available"
-              ? {
-                  type: ex.matterReference.type,
-                  id: ex.matterReference.id,
-                  workspaceId: ex.workspaceId,
-                }
-              : ex.matterReference,
-          dateIncurred: ex.dateIncurred,
-          amount: ex.amount,
-          currency: ex.currency,
-          category: ex.category,
-          description: ex.description,
-          invoiceDescription: ex.invoiceDescription,
-          billable: ex.billable,
-          markup: ex.markup,
-          entity: entity
-            ? { id: entity.id, name: entity.name, workspaceId: ex.workspaceId }
-            : null,
-        };
-      }),
-      lines: invoiceRow.lines.map(projectInvoiceLine),
-      totals,
-    };
+    const invoice = invoiceDetailView(invoiceRow, workspaceId);
 
     const textFields = runTextFieldSpecs(
       invoiceDetailTextFieldSpecs(workspaceId),
@@ -1598,6 +1614,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         dueDate: invoices.dueDate,
         currency: invoices.currency,
         totalAmount: invoices.totalAmount,
+        paidAmount: invoicePaidAmountSql(invoices),
         createdAtCursor: invoicePageCursor.cursorValue.as("created_at_cursor"),
       })
       .from(invoices)
@@ -1629,7 +1646,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   });
 
   const invoiceList = page.items.map(
-    ({ createdAtCursor: _createdAtCursor, ...invoice }) => invoice,
+    ({ createdAtCursor: _createdAtCursor, paidAmount, ...invoice }) => ({
+      ...invoice,
+      ...invoicePaymentAmounts({
+        totalAmount: invoice.totalAmount,
+        paidAmount,
+      }),
+    }),
   );
 
   const textFields = runTextFieldSpecs(invoiceListTextFieldSpecs(workspaceId), {

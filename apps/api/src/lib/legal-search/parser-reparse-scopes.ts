@@ -109,54 +109,6 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_US]: {
-    version: 29,
-    scope: {
-      type: "all",
-      reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.SK_COURTS]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
-    },
-  },
-  [ADAPTER_KEYS.SK_US]: {
-    version: 13,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
     version: 15,
     scope: {
       type: "all",
@@ -164,8 +116,56 @@ export const PARSER_VERSION_SCOPES = {
         "Revalidate document AST identities across the complete parser output.",
     },
   },
+  [ADAPTER_KEYS.CZ_NS]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_NSS]: {
+    version: 22,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_US]: {
+    version: 31,
+    scope: {
+      type: "all",
+      reason:
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card",
+    },
+  },
+  [ADAPTER_KEYS.SK_COURTS]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
+    },
+  },
+  [ADAPTER_KEYS.SK_US]: {
+    version: 16,
+    scope: {
+      type: "all",
+      reason:
+        "letter-spaced words and section markers are recomputed from stored markup, including uneven chunks witnessed by intact words in the decision; paragraph text has no feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 17,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
+    },
+  },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -173,15 +173,15 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 9,
+    version: 11,
     scope: {
       type: "all",
       reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
+        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 14,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -293,7 +293,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 10,
+    version: 11,
     scope: {
       type: "all",
       reason:
@@ -301,7 +301,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
@@ -309,7 +309,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:
@@ -325,22 +325,6 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 10,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_UODO]: {
-    version: 14,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_UOKIK]: {
     version: 11,
     scope: {
       type: "all",
@@ -348,8 +332,24 @@ export const PARSER_VERSION_SCOPES = {
         "Revalidate document AST identities across the complete parser output.",
     },
   },
+  [ADAPTER_KEYS.PL_UODO]: {
+    version: 15,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    version: 12,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:

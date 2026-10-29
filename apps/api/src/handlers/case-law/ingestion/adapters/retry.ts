@@ -1,3 +1,34 @@
+// parser-output-unchanged: [cz-ns] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-nss] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-regional] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-uohs] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [sk-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [sk-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-sn] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-kio] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-tk] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-nsa] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-ncourt] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-vfgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-vwgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-bvwg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-lvwg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-asylgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-ubas] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-uvs] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-verg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-umse] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-bks] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-findok] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [eu-ecj] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [hu-bhgy] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [uk-fcl] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-kis] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-uodo] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-uokik] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
 // parser-output-unchanged: one-request reads honor the existing rate-limit redirect predicate and preserve its typed source stop.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
@@ -18,7 +49,7 @@ import { panic, Result } from "better-result";
 
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
-import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import type { FetchWithTimeoutInit } from "@stll/fetch";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -34,6 +65,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
@@ -226,8 +258,12 @@ const fetchPublisherRequest = async (
   ) => {
     // Each request, including a redirect or backoff attempt, is observed.
     const sendRequest = async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
-      await fetchWithTimeout(target, requestOptions);
+      await withPublicReadIo(
+        "publisher",
+        async (io) =>
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
+          await io.fetchStream(target, requestOptions),
+      );
     if (fetchStage === "listing") {
       return await sendRequest();
     }
@@ -285,6 +321,12 @@ const fetchPublisherRequest = async (
           }),
         );
         controls.onRefusal?.(refusalNow + delay);
+        yield* Result.await(
+          Result.tryPromise({
+            try: async () => await response.body?.cancel(),
+            catch: (error) => error,
+          }),
+        );
         const cooldownUntilEpochMs = yield* Result.await(
           Result.tryPromise({
             try: async () =>
@@ -293,12 +335,6 @@ const fetchPublisherRequest = async (
                 Math.min(delay, RETRY_AFTER_MAX_MS),
                 requestInit.signal,
               ),
-            catch: (error) => error,
-          }),
-        );
-        yield* Result.await(
-          Result.tryPromise({
-            try: async () => await response.body?.cancel(),
             catch: (error) => error,
           }),
         );
@@ -463,7 +499,8 @@ export const fetchWithRetry = async (
         return response;
       }
 
-      // Retryable status: back off and retry
+      // Settle the discarded body before the next attempt.
+      await response.body?.cancel();
       const delay = backoffDelay(attempt, {
         baseMs: baseDelayMs,
         maxMs: maxDelayMs,
@@ -616,11 +653,11 @@ export const retryPublisherRequest = async (
         }),
       );
       controls?.onRefusal?.(runtime.now() + delay);
+      await fetched.value.body?.cancel();
       const cooldownUntilEpochMs = await runtime.defer(
         Math.min(delay, RETRY_AFTER_MAX_MS),
         init.signal,
       );
-      await fetched.value.body?.cancel();
       throw new PublisherRateLimitRefusalError({
         cursor: null,
         publisherKey: gateId,
@@ -663,10 +700,10 @@ export const retryPublisherRequest = async (
     );
     // Publish the cooldown before sleeping. The Redis gate checks it before
     // every ECJ request, including slots reserved before this backoff began.
-    await runtime.defer(delay, init.signal);
     if (Result.isOk(fetched)) {
       await fetched.value.body?.cancel();
     }
+    await runtime.defer(delay, init.signal);
     await runtime.sleep(delay, init.signal);
   }
   return panic("retryPublisherRequest: unreachable");

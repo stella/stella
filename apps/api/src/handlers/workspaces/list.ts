@@ -18,6 +18,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 const config = {
@@ -56,7 +57,7 @@ const readWorkspaces = createSafeRootHandler(
         const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
 
         const openTaskCondition = and(
-          eq(entities.kind, "task"),
+          workTask(entities),
           or(
             notInArray(entities.status, closedStatuses),
             isNull(entities.status),

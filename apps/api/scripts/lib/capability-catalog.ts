@@ -202,6 +202,7 @@ export const DOMAIN_ACTION_VERBS = [
   "unlink",
   "upload",
   "upsert",
+  "void",
 ] as const;
 
 const ALLOWED_ACTION_VERBS: ReadonlySet<string> = new Set([
