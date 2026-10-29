@@ -36,6 +36,7 @@ import type { Transaction } from "@/api/db/root";
 import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
 import {
   billingArrangements,
+  billingCodes,
   caseLawReplayBatches,
   entities,
   entityVersions,
@@ -78,6 +79,9 @@ export const AGGREGATE_LOCKS = {
   // Take it before any case-law decision row lock: link pages use exclusive
   // mode, while erasures use shared mode so independent erasures can proceed.
   caseLawRepublication: { rank: 45, kind: "advisory" },
+  // One public sitemap month, held by the refresh from its count to its write
+  // so overlapping refreshes never interleave on a month.
+  caseLawSitemapMonth: { rank: 46, kind: "advisory" },
   // Public-corpus work fence is taken before its legacy projection/expression locks.
   legislationAmendmentWork: { rank: 50, kind: "advisory" },
   scoutCensus: { rank: 60, kind: "row" },
@@ -142,6 +146,23 @@ export const queryOrganizationFencedRepairBatch = async ({
 }: OrganizationFencedRepairBatchOptions) =>
   await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
+type InvoiceRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  predicate: string;
+  limit: number;
+};
+
+/** Online invoice repairs hold their candidates through the batch transaction. */
+export const lockInvoiceRepairBatch = async ({
+  connection,
+  predicate,
+  limit,
+}: InvoiceRepairBatchOptions) =>
+  await connection.query(
+    `SELECT i.id FROM public.invoices i WHERE ${predicate} ORDER BY i.id LIMIT $1 FOR UPDATE OF i`,
+    [limit],
+  );
+
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
   existing: [
@@ -177,6 +198,7 @@ export const AGGREGATE_CHAINS = {
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
   legislationAmendments: ["legislationAmendmentWork"],
   caseLawRepublication: ["caseLawRepublication"],
+  caseLawSitemapMonth: ["caseLawSitemapMonth"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   chatToolGrants: ["chatThread", "chatToolGrants"],
   chatStoredContent: [
@@ -305,6 +327,7 @@ type AggregateIdentities = {
     organizationId: SafeId<"organization">;
   };
   caseLawRepublication: "global";
+  caseLawSitemapMonth: { country: string; year: string; month: string };
   scoutCensus: {
     type: "run";
     id: SafeId<"scoutRun">;
@@ -1549,6 +1572,17 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         second: sql`0::integer`,
         order: [options.aggregate, options.id],
       };
+    case "caseLawSitemapMonth":
+      return {
+        first: sql`${0x0f_10_cc_b5}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.country, options.id.year, options.id.month])})`,
+        order: [
+          options.aggregate,
+          options.id.country,
+          options.id.year,
+          options.id.month,
+        ],
+      };
     default:
       options satisfies never;
       return panic("Unknown advisory aggregate");
@@ -2491,6 +2525,27 @@ export const lockCaseLawRepublication = async ({
   });
 };
 
+/**
+ * Hold one public sitemap month from its count to its write, without
+ * waiting: false when an overlapping refresh holds it, whose count is then
+ * at least as new as one taken now.
+ */
+export const tryLockCaseLawSitemapMonth = async ({
+  tx,
+  month,
+}: {
+  tx: ExecuteTransaction;
+  month: AggregateIdentities["caseLawSitemapMonth"];
+}): Promise<boolean> =>
+  (
+    await withAggregateLock({
+      aggregate: "caseLawSitemapMonth",
+      id: month,
+      wait: "nowait",
+      tx,
+    })
+  ).status === "locked";
+
 /** Lock decision rows in stable order before reading mutation preconditions. */
 export const lockCaseLawDecisionRows = async ({
   tx,
@@ -2654,6 +2709,52 @@ export const withDecisionCitationStatsLocks = async ({
   `);
 };
 
+type LockBillingCapArrangementsOptions<
+  Usage extends Record<string, SQL<string>>,
+> = {
+  workspaceIds: readonly SafeId<"workspace">[];
+  usageProjection: Usage;
+};
+
+/** Fence matter keys together before locking capped arrangements and their usage snapshot. */
+export const lockBillingCapArrangements = async <
+  Usage extends Record<string, SQL<string>>,
+>(
+  tx: Transaction,
+  { workspaceIds, usageProjection }: LockBillingCapArrangementsOptions<Usage>,
+) => {
+  await withBillingMatterAdvisoryLocks(
+    tx,
+    sql`
+    SELECT DISTINCT hashtext(workspace_id) AS lock_key
+    FROM unnest(ARRAY[${sql.join(
+      workspaceIds.map((id) => sql`${id}`),
+      sql`, `,
+    )}]::text[]) AS matters(workspace_id)
+  `,
+  );
+  return await tx
+    .select({
+      arrangement: getColumns(billingArrangements),
+      ...usageProjection,
+    })
+    .from(billingArrangements)
+    .where(
+      and(
+        inArray(billingArrangements.workspaceId, workspaceIds),
+        eq(billingArrangements.mode, "hourly"),
+        or(
+          isNotNull(billingArrangements.capAmount),
+          isNotNull(billingArrangements.capMinutes),
+        ),
+        isNotNull(billingArrangements.alertThresholdBps),
+      ),
+    )
+    .orderBy(asc(billingArrangements.workspaceId))
+    .limit(workspaceIds.length)
+    .for("update");
+};
+
 export const lockBillingArrangement = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
@@ -2785,6 +2886,7 @@ export const lockInvoiceInStatus = async (
       invoiceNumber: invoices.invoiceNumber,
       notes: invoices.notes,
       reference: invoices.reference,
+      sentAt: invoices.sentAt,
       sellerProfileId: invoices.sellerProfileId,
       taxableSupplyDate: invoices.taxableSupplyDate,
       totalAmount: invoices.totalAmount,
@@ -3092,3 +3194,49 @@ export const lockCaseLawRemovalSource = async ({
     sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
   );
 };
+
+type LockBillingCodeOptions = {
+  id: SafeId<"billingCode">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** Fence new rate references before checking whether a code may be deleted. */
+export const lockBillingCode = async (
+  tx: Transaction,
+  { id, workspaceId }: LockBillingCodeOptions,
+) =>
+  (
+    await tx
+      .select({
+        id: billingCodes.id,
+        type: billingCodes.type,
+        code: billingCodes.code,
+        label: billingCodes.label,
+      })
+      .from(billingCodes)
+      .where(
+        and(eq(billingCodes.id, id), eq(billingCodes.workspaceId, workspaceId)),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
+
+/** Caller holds the matter/timer guards before changing nonbillable work. */
+export const lockUnbillableRateCandidates = async (
+  tx: Transaction,
+  condition: SQL | undefined,
+) =>
+  await tx
+    .select({
+      currency: timeEntries.currency,
+      dateWorked: timeEntries.dateWorked,
+      activityCode: timeEntries.activityCode,
+      narrative: timeEntries.narrative,
+      timezoneId: timeEntries.timezoneId,
+      id: timeEntries.id,
+      rateAtEntry: timeEntries.rateAtEntry,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(condition)
+    .for("update");

@@ -132,6 +132,7 @@
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
     "chooseOrganization": "Vyberte organizáciu, v ktorej chcete pracovať",
     "codeSentAgain": "Poslali sme nový kód.",
+    "continueWithApple": "Pokračovať cez Apple",
     "continueWithEmail": "Pokračovať",
     "continueWithGoogle": "Pokračovať cez Google",
     "continueWithMicrosoft": "Pokračovať cez Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
+    "arrangement": {
+      "alertThreshold": "Prah upozornenia (%)",
+      "amountCap": "Limit odmeny",
+      "flatFee": "Paušálna odmena",
+      "invalidCap": "Zadajte kladné limity a prah upozornenia od 0,01 % do 100 %.",
+      "minuteCap": "Časový limit (minúty)",
+      "title": "Dohoda o odmene"
+    },
     "batchActions": "Hromadné akcie",
     "billable": "Fakturovateľné",
     "billedAmount": "Fakturovaná čiastka",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Prepojené výdavky",
       "linkedTimeEntries": "Prepojené časové záznamy",
-      "markPaid": "Označiť ako uhradenú",
       "noEntries": "K tejto faktúre nie sú pripojené žiadne záznamy",
       "noInvoices": "Zatiaľ žiadne faktúry",
       "paidAt": "Uhradená",
+      "payments": {
+        "amountTooHigh": "Čiastka prevyšuje zostávajúcu dlžnú čiastku {amount}.",
+        "confirmVoid": "Platba zostane v evidencii ako zrušená a do úhrady tejto faktúry sa už nezapočíta.",
+        "empty": "Zatiaľ nie sú zaznamenané žiadne platby",
+        "method": "Spôsob platby",
+        "methods": {
+          "bank_transfer": "Bankový prevod",
+          "card": "Platobná karta",
+          "cash": "Hotovosť",
+          "other": "Iný spôsob"
+        },
+        "outstandingAmount": "Zostáva uhradiť {amount}",
+        "paidOn": "Dátum platby",
+        "partiallyPaid": "Čiastočne uhradená",
+        "record": "Zaznamenať platbu",
+        "summary": "Uhradené {paid}, zostáva uhradiť {outstanding}",
+        "title": "Platby",
+        "void": "Zrušiť platbu",
+        "voided": "Zrušená"
+      },
       "removeEntries": "Odstrániť záznamy",
       "send": "Odoslať",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "AI nie je nakonfigurovaná.",
     "availabilityUnknown": "Dostupnosť sa nepodarilo overiť.",
     "deeplMissing": "DeepL nie je nakonfigurovaný.",
+    "deeplPdfRequired": "Preklad súborov PDF vyžaduje DeepL.",
     "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
     "featureUnavailable": "Táto funkcia nie je k dispozícii.",
     "ocrUnavailable": "OCR nie je k dispozícii.",
@@ -912,12 +941,16 @@
         "reasoning": "Uvažovanie"
       },
       "errors": {
+        "analysisDisabled": "Generovanie AI analýzy je na tomto serveri vypnuté. Prečítajte si text rozhodnutia alebo to skúste neskôr.",
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
+        "decisionNotFound": "Rozhodnutie sa nenašlo. Otvorte ho znova z vyhľadávania.",
+        "documentUnparseable": "Text rozhodnutia nie je pripravený na analýzu. Prečítajte si pôvodný zdroj.",
+        "languageUnsupported": "AI analýza zatiaľ nepodporuje jazyk tohto rozhodnutia. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
         "retryAfter": "Znova to môžete skúsiť po {time}.",
-        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
-        "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
+        "sourceRestricted": "Zdroj nepovoľuje AI analýzu. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
+        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}"
       },
       "generate": "Zostaviť právne vety pomocou AI",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
@@ -1122,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
-      "headMatter": "Úvodná časť",
+      "headMatter": "Informácie o veci",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)",
       "versionBasisInferredCompact": "Dátum rozhodnutia · odvodené",
       "versionBasisInferredExplanation": "Znenie je odvodené z dátumu rozhodnutia. Rozhodnutie neuvádza, ktoré znenie sa použije."
-    }
+    },
+    "withdrawnByPublisher": "Stiahnuté vydavateľom"
   },
   "catalogue": {
     "addCustom": "Pridať vlastné",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} other {+# ďalších}}",
+      "dismiss": "Skryť upozornenie na pripojenie",
+      "stoppedWorking": "Vaše pripojenie k službe <name>{server}</name> prestalo fungovať.",
+      "waitingApproval": "Vaše pripojenie k službe <name>{server}</name> čaká na schválenie."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spise",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "Pre toto IČO sme nenašli žiadnu firmu.",
       "aresTitle": "Český register (ARES)",
       "contactName": "Názov kontaktu",
+      "displayNameOrganizationHint": "Voliteľné prepísanie; inak sa vytvorí z názvu organizácie.",
+      "displayNamePersonHint": "Voliteľné prepísanie; inak sa vytvorí z mena a priezviska.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Zadajte 8-miestne IČO."
     },
@@ -4848,7 +4890,9 @@
     "viewOnGithub": "Zobraziť na GitHube"
   },
   "readerAnswers": {
+    "answerLanguage": "Jazyk odpovede",
     "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
     "expand": "Rozbaliť odpoveď",
     "explain": "Vysvetliť",
     "followUp": "Položiť doplňujúcu otázku",
@@ -5035,6 +5079,16 @@
       "preferredNamePlaceholder": "Vaše meno",
       "profileDescription": "Spravujte svoje osobné nastavenia",
       "sendOtpCode": "Odoslať overovací kód",
+      "signInMethods": {
+        "confirmDescription": "Zadajte nový kód zaslaný na e-mail, aby ste tento spôsob prihlásenia odpojili.",
+        "confirmTitle": "Odpojiť {provider}?",
+        "description": "Prepojte účty, ktoré používajú rovnakú overenú e-mailovú adresu.",
+        "emailCode": "Kód z e-mailu",
+        "emailCodeDescription": "Vždy sa môžete prihlásiť pomocou kódu zaslaného na e-mail.",
+        "lastMethod": "Pred odpojením tohto účtu prepojte iný účet.",
+        "title": "Spôsoby prihlásenia",
+        "unavailable": "Aby bolo možné odpojiť spôsoby prihlásenia, musí byť nakonfigurované doručovanie e-mailov."
+      },
       "timezone": "Časové pásmo",
       "timezoneDescription": "Použité pre časové údaje v notifikáciách a e-mailoch",
       "timezoneSaved": "Časové pásmo aktualizované",

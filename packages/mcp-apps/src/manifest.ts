@@ -77,6 +77,8 @@ export const MCP_APPS = [
   },
 ] as const;
 
+export type McpAppDirectory = (typeof MCP_APPS)[number]["directory"];
+
 export const DOCUMENT_UPLOAD_APP = MCP_APPS[0];
 export const FILE_COMPARISON_APP = MCP_APPS[1];
 export const CASE_LAW_RESULTS_APP = MCP_APPS[2];
