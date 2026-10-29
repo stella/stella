@@ -178,7 +178,7 @@ const surfaces = [
   },
   {
     name: "document toolbar",
-    capability: "translation",
+    capability: "deepl",
     surface: "control",
     label: messages.common.translate,
   },
@@ -245,7 +245,7 @@ for (const fixture of surfaces) {
                     entityId="entity"
                     fieldId="field"
                     entityVersionKey="1"
-                    isDocx
+                    isDocx={false}
                   />
                 );
               case "row actions":
@@ -369,9 +369,27 @@ for (const fixture of surfaces) {
             document.querySelector(`#${CSS.escape(descriptionId ?? "")}`)
               ?.textContent.length,
           ).toBeGreaterThan(0);
+          if (fixture.surface === "control") {
+            expect(
+              document
+                .querySelector(`#${CSS.escape(descriptionId ?? "")}`)
+                ?.classList.contains("sr-only"),
+            ).toBe(true);
+          }
           const state = value.capabilities[fixture.capability];
           expect(state.type).toBe("unavailable");
-          const settingsItems = screen.getAllByRole(
+          if (fixture.surface === "control") {
+            expect(
+              control.parentElement?.classList.contains("opacity-64"),
+            ).toBe(true);
+            expect(
+              screen.queryByRole("link", {
+                name: messages.organization.aiConfig.configure,
+              }),
+            ).toBeNull();
+            fireEvent.click(control);
+          }
+          const settingsItems = await screen.findAllByRole(
             fixture.surface === "menu" ? "menuitem" : "link",
             { name: messages.organization.aiConfig.configure },
           );
@@ -391,10 +409,26 @@ for (const fixture of surfaces) {
               ).toBe(true);
             });
           }
-          fireEvent.click(control);
+          if (fixture.surface === "control") {
+            fireEvent.keyDown(control, { key: "Escape" });
+            await waitFor(() => {
+              expect(control.getAttribute("aria-expanded")).toBe("false");
+            });
+          } else {
+            fireEvent.click(control);
+          }
           fireEvent.keyDown(control, { key: "Enter" });
+          if (fixture.surface === "control") {
+            expect(
+              await screen.findByRole("link", {
+                name: messages.organization.aiConfig.configure,
+              }),
+            ).toBeTruthy();
+          }
           expect(calls).toBe(0);
-          expect(screen.queryByRole("dialog")).toBeNull();
+          if (fixture.surface === "menu") {
+            expect(screen.queryByRole("dialog")).toBeNull();
+          }
         });
       }
     }

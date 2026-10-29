@@ -895,6 +895,7 @@
     "aiMissing": "DI nesukonfigūruotas.",
     "availabilityUnknown": "Nepavyko patvirtinti prieinamumo.",
     "deeplMissing": "DeepL nesukonfigūruotas.",
+    "deeplPdfRequired": "PDF failams versti reikalinga „DeepL“.",
     "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
     "featureUnavailable": "Ši funkcija nepasiekiama.",
     "ocrUnavailable": "OCR nepasiekiamas.",

@@ -895,6 +895,7 @@
     "aiMissing": "AI nav konfigurēts.",
     "availabilityUnknown": "Neizdevās apstiprināt pieejamību.",
     "deeplMissing": "DeepL nav konfigurēts.",
+    "deeplPdfRequired": "PDF failu tulkošanai ir nepieciešams DeepL.",
     "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
     "featureUnavailable": "Šī funkcija nav pieejama.",
     "ocrUnavailable": "OCR nav pieejams.",

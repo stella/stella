@@ -1,5 +1,5 @@
-import { createContext, createElement, use, useId } from "react";
-import type { MouseEvent, ReactElement, ReactNode } from "react";
+import { createContext, createElement, use, useId, useState } from "react";
+import type { KeyboardEvent, MouseEvent, ReactElement, ReactNode } from "react";
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { MenuItem } from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { api } from "@/lib/api";
@@ -192,6 +193,7 @@ type CapabilityActionChildProps = {
   "aria-disabled"?: boolean;
   "aria-describedby"?: string;
   onClick?: (event: MouseEvent) => void;
+  onKeyDown?: (event: KeyboardEvent) => void;
   onSelect?: () => void;
 };
 export const CapabilityAction = ({
@@ -206,6 +208,7 @@ export const CapabilityAction = ({
   const resolved = useActionCapabilities(action.capability);
   const t = useTranslations();
   const reasonId = useId();
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const state =
     action.capability === null
       ? null
@@ -222,10 +225,54 @@ export const CapabilityAction = ({
   if (!isCapabilityActionVisible(action, resolved)) {
     return null;
   }
+  const reason = t(
+    surface === "control" && action.capability === "deepl"
+      ? "capabilityActions.deeplPdfRequired"
+      : CAPABILITY_REASON_KEYS[state.reason],
+  );
+  const unavailableControl = children({
+    "aria-disabled": true,
+    "aria-describedby": reasonId,
+    onClick: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setExplanationOpen(true);
+    },
+    onKeyDown: (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setExplanationOpen(true);
+    },
+    // Clear a handler installed before the capability props are spread.
+    onSelect: () => undefined,
+  });
+  if (surface === "control") {
+    return (
+      <Popover onOpenChange={setExplanationOpen} open={explanationOpen}>
+        <span className="inline-flex opacity-64">
+          <PopoverTrigger render={unavailableControl} />
+        </span>
+        <span className="sr-only" id={reasonId}>
+          {reason}
+        </span>
+        <PopoverPopup className="max-w-72" tooltipStyle>
+          <div className="flex items-center gap-2">
+            <span>{reason}</span>
+            <a href={sanitizeHref(state.settingsLink)}>
+              {t("organization.aiConfig.configure")}
+            </a>
+          </div>
+        </PopoverPopup>
+      </Popover>
+    );
+  }
   return (
     <>
       {children({
-        ...(surface === "menu" ? { disabled: true } : {}),
+        disabled: true,
         "aria-disabled": true,
         "aria-describedby": reasonId,
         onClick: (event) => {
@@ -236,21 +283,14 @@ export const CapabilityAction = ({
         onSelect: () => undefined,
       })}
       <div className="text-muted-foreground flex items-center gap-2 px-2 text-xs">
-        <span id={reasonId}>{t(CAPABILITY_REASON_KEYS[state.reason])}</span>
-        {surface === "control" && (
-          <a href={sanitizeHref(state.settingsLink)}>
-            {t("organization.aiConfig.configure")}
-          </a>
-        )}
+        <span id={reasonId}>{reason}</span>
       </div>
-      {surface === "menu" && (
-        <MenuItem
-          aria-describedby={reasonId}
-          render={<a href={sanitizeHref(state.settingsLink)} />}
-        >
-          {t("organization.aiConfig.configure")}
-        </MenuItem>
-      )}
+      <MenuItem
+        aria-describedby={reasonId}
+        render={<a href={sanitizeHref(state.settingsLink)} />}
+      >
+        {t("organization.aiConfig.configure")}
+      </MenuItem>
     </>
   );
 };
