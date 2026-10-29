@@ -1,8 +1,8 @@
 # Local file creation
 
 `local_store` owns application file creation, opening and publication. Its
-platform backends implement the native filesystem operations. Harness archives
-use owner-only files (0700 for executables, 0600 otherwise) and directories;
+platform backends implement the native filesystem operations. On Unix, harness
+archives use owner-only files (0700 for executables, 0600 otherwise) and directories;
 release directories are published through the same storage owner.
 
 `local_store::token_broker` owns the private channel directory and socket
