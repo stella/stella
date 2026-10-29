@@ -101,7 +101,7 @@ describe("confirmed linked method persistence", () => {
   test("audit constraint replacement replays without a blocking validation scan", async () => {
     const migration = await Bun.file(
       new URL(
-        "../../../drizzle/20261029000200_sign_in_method_audit_event/migration.sql",
+        "../../../drizzle/20261029094225_sign_in_method_audit_event/migration.sql",
         import.meta.url,
       ),
     ).text();
