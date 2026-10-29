@@ -299,7 +299,7 @@
     "moreOptions": "Vairāk iespēju",
     "moreItemActions": "Vairāk darbību vienumam {number}",
     "noResults": "Nav atbilstošu izgriezumu",
-    "noResultsDescription": "Vai tā vietā meklēt “{query}” reģistros?",
+    "noResultsSearchRegistries": "Meklēt “{query}” reģistros",
     "noGroup": "Bez grupas",
     "newGroupOption": "Jauna grupa…",
     "copyItem": "Kopēt vienumu {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Nospiediet {shortcut}, lai pārlūkotu vēsturi un izvēlētos izgriezumu.",
     "welcomeShortcutTitle": "Atveriet to jebkur.",
     "welcomeStart": "Sākt kopēšanu",
-    "welcomeTitle": "Iepazīstiet savu starpliktuvi"
+    "welcomeTitle": "Iepazīstiet savu starpliktuvi",
+    "registryIdentifierSearchHint": "Ievadiet {identifiers}."
   },
   "activity": {
     "title": "Darbība",

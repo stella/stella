@@ -8,6 +8,7 @@ import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader
 
 import { member, user } from "@/api/db/auth-schema";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   paginationCursorSchema,
   paginationLimitSchema,
@@ -136,6 +137,7 @@ export const listReaderAnnotationsHandler = async function* ({
   organizationId,
   query,
   safeDb,
+  readCopies = readWithdrawnCopyProjection,
   userId,
   verificationClaim,
 }: ListReaderAnnotationsProps) {
@@ -218,9 +220,22 @@ export const listReaderAnnotationsHandler = async function* ({
       annotationCursor.encode(item.createdAtCursor, item.id),
   });
 
+  const projection = yield* Result.await(
+    Result.tryPromise(async () =>
+      readCopies({
+        values: [],
+        decisionIds: targetType === "decision" ? [query.targetId] : [],
+      }),
+    ),
+  );
   return Result.ok({
     ...page,
     limit,
-    items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+    items: page.items.map(({ createdAtCursor: _, ...item }) =>
+      projection.annotation(
+        item,
+        targetType === "decision" ? query.targetId : null,
+      ),
+    ),
   });
 };

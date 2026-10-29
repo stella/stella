@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/auth/unlink-account-runtime.ts",
+  "delta": 1,
+  "reason": "Better Auth unlinks an account before organization scope exists. This request-bound owner supplies the root connection to a user-scoped transaction that locks the authenticated user's row, verifies account ownership and a remaining linked account, and records the deletion in the audit log."
+}
