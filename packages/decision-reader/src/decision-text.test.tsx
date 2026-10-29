@@ -881,7 +881,9 @@ test("EU provisions link to EUR-Lex in every supported citation language without
       throw new TypeError("EU citation fixture was not placed");
     }
     const markup = renderToStaticMarkup(
-      anchor.render(sentenceText.slice(anchor.start, anchor.end)),
+      anchor.render(sentenceText.slice(anchor.start, anchor.end), {
+        isRangeStart: true,
+      }),
     );
     expect(markup).toContain(`href="${href.replaceAll("&", "&amp;")}"`);
     expect(markup).toContain('target="_blank"');
