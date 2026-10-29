@@ -133,11 +133,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 29,
+    version: 30,
     scope: {
       type: "all",
       reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -149,19 +149,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 13,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
     version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "letter-spaced words and section markers are recomputed from stored markup, including uneven chunks witnessed by intact words in the decision; paragraph text has no feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 16,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
@@ -173,11 +173,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
+        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {

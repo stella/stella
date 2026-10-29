@@ -51,6 +51,7 @@ import { useDecisionColumnPreferences } from "@/features/case-law/decision-colum
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -62,7 +63,7 @@ import {
   resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -274,7 +275,7 @@ function LawHome() {
     if (!decisionNotFound) {
       return;
     }
-    notifyUserError(undefined, t("caseLaw.decisionNotFound"));
+    notifyUserProblem(t("caseLaw.decisionNotFound"));
     detached(
       routeNavigate({
         replace: true,
@@ -518,9 +519,9 @@ function LawHome() {
               })}
               to="/law/$country/statutes/$slug"
             >
-              <LandingItemText
+              <StatuteSignalText
                 meta={signalLine(side, item.versionValidFrom)}
-                title={item.title}
+                statute={item}
               />
             </Link>
           ))

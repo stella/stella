@@ -1,3 +1,4 @@
+// parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
 import { panic, Result } from "better-result";
 import { load } from "cheerio";
 import * as slimdom from "slimdom";

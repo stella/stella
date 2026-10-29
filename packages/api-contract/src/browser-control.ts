@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 4 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 5 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 export const BROWSER_CONTROL_CONTENT_TRUST = {
@@ -16,6 +16,11 @@ export const BROWSER_CONTROL_ACTION = {
   pressKey: "press-key",
   select: "select",
   snapshot: "snapshot",
+} as const;
+
+export const BROWSER_CONTROL_TARGET_METADATA = {
+  absent: "absent",
+  present: "present",
 } as const;
 
 export const BROWSER_CONTROL_KEYS = [
@@ -140,11 +145,35 @@ const contextSchema = v.pipe(
   v.maxLength(BROWSER_CONTROL_LIMITS.contextChars),
 );
 
+export const browserControlTargetContextSchema = v.variant("type", [
+  v.strictObject({
+    type: v.literal(BROWSER_CONTROL_TARGET_METADATA.absent),
+  }),
+  v.strictObject({
+    type: v.literal(BROWSER_CONTROL_TARGET_METADATA.present),
+    value: contextSchema,
+  }),
+]);
+
+export const browserControlTargetHrefSchema = v.variant("type", [
+  v.strictObject({
+    type: v.literal(BROWSER_CONTROL_TARGET_METADATA.absent),
+  }),
+  v.strictObject({
+    type: v.literal(BROWSER_CONTROL_TARGET_METADATA.present),
+    value: urlSchema,
+  }),
+]);
+
+export type BrowserControlTargetMetadata = v.InferOutput<
+  typeof browserControlTargetContextSchema
+>;
+
 const targetSchema = v.strictObject({
-  /** Enclosing row or form text copied from the snapshot; rejected when the element now sits in a different row. */
-  context: v.optional(contextSchema),
-  /** Link destination copied from the snapshot; the extension rejects a target whose href changed. */
-  href: v.optional(urlSchema),
+  /** Exact presence and value of enclosing row or form text copied from the snapshot. */
+  context: browserControlTargetContextSchema,
+  /** Exact presence and value of the link destination copied from the snapshot. */
+  href: browserControlTargetHrefSchema,
   name: v.pipe(
     v.string(),
     v.maxLength(BROWSER_CONTROL_LIMITS.elementNameChars),
@@ -225,8 +254,8 @@ export type BrowserControlElementCommand = Extract<
 >;
 
 const browserControlElementSchema = v.strictObject({
-  context: v.optional(contextSchema),
-  href: v.optional(urlSchema),
+  context: browserControlTargetContextSchema,
+  href: browserControlTargetHrefSchema,
   name: v.pipe(
     v.string(),
     v.maxLength(BROWSER_CONTROL_LIMITS.elementNameChars),

@@ -1,11 +1,17 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { parseSync } from "oxc-parser";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
+import {
+  devices,
+  isDevicePresetName,
+} from "../packages/playwright-tools/src/devices";
 import {
   type ArrayExpression,
   type CallExpression,
@@ -44,7 +50,14 @@ export type TestRetryFinding = {
 
 type SourceMap = ReadonlyMap<string, string>;
 
-type Source = { file: string; program: Program; text: string };
+type Source = {
+  type: "playwright" | "test";
+  file: string;
+  program: Program;
+  root: string;
+  text: string;
+  configAncestry: ReadonlySet<string>;
+};
 
 type Wrapper =
   "ParenthesizedExpression" | "TSAsExpression" | "TSSatisfiesExpression";
@@ -103,7 +116,7 @@ const isPropertyAssignment = (property: ObjectProperty): boolean =>
 const isObjectExpression = (node: Node): node is ObjectExpression =>
   node.type === "ObjectExpression";
 
-const configObject = (statement: Node): ObjectExpression | undefined => {
+const exportedExpression = (statement: Node): Node | undefined => {
   let expression: Node;
   if (statement.type === "ExportDefaultDeclaration") {
     expression = statement.declaration;
@@ -113,16 +126,39 @@ const configObject = (statement: Node): ObjectExpression | undefined => {
     return undefined;
   }
   expression = unwrap(expression, ["TSAsExpression", "TSSatisfiesExpression"]);
-  const call =
-    expression.type === "ChainExpression" ? expression.expression : expression;
-  if (call.type === "CallExpression") {
-    return call.arguments.toReversed().find(isObjectExpression);
-  }
-  return isObjectExpression(expression) ? expression : undefined;
+  return expression.type === "ChainExpression"
+    ? expression.expression
+    : expression;
 };
 
-// Resolve imported device presets from the pinned package's literal data,
-// rather than exempting spreads by identifier or trusting arbitrary imports.
+// `defineConfig({...})` or a bare object literal.
+const configObjectOf = (
+  expression: Node,
+  source: Source,
+): ObjectExpression | undefined => {
+  if (isObjectExpression(expression)) {
+    return expression;
+  }
+  if (expression.type !== "CallExpression") {
+    return undefined;
+  }
+  const objects: ObjectExpression[] = [];
+  for (const argument of expression.arguments) {
+    const object =
+      resolveObject(argument, source) ??
+      verifiedImportedConfig(argument, source);
+    if (object === undefined) {
+      return undefined;
+    }
+    objects.push(object);
+  }
+  const first = objects.at(0);
+  return first === undefined
+    ? undefined
+    : { ...first, properties: objects.flatMap(({ properties }) => properties) };
+};
+
+// Runtime configuration and policy inspection share the same frozen presets.
 const resolveDevicePreset = (
   expression: Node,
   source: Source,
@@ -140,53 +176,32 @@ const resolveDevicePreset = (
   }
   const binding = access.object.name;
   const presetName = access.property.value;
-  const imported = source.program.body.some(
-    (statement) =>
-      statement.type === "ImportDeclaration" &&
-      statement.source.value === "@playwright/test" &&
-      statement.specifiers.some(
-        (entry) =>
-          entry.type === "ImportSpecifier" &&
-          entry.local.name === binding &&
-          (entry.imported.type === "Identifier"
-            ? entry.imported.name
-            : entry.imported.value) === "devices",
-      ),
+  const imported = importedBinding(source, binding);
+  if (
+    imported?.type !== "named" ||
+    (imported.module !== "@stll/playwright-tools/devices" &&
+      !(
+        source.file === "packages/playwright-tools/src/marketing-config.ts" &&
+        imported.module === "./devices"
+      )) ||
+    imported.name !== "devices"
+  ) {
+    return undefined;
+  }
+  if (!isDevicePresetName(presetName)) {
+    return undefined;
+  }
+  const descriptor = devices[presetName];
+  const literal = parseSource(
+    "device-preset.ts",
+    `export default ${JSON.stringify(descriptor)};`,
   );
-  if (!imported) {
-    return undefined;
-  }
-  // Dependency resolution and descriptor reads are filesystem boundaries.
-  try {
-    const requireConfig = createRequire(path.resolve(REPO_ROOT, source.file));
-    const testEntry = requireConfig.resolve("@playwright/test");
-    const playwrightEntry = createRequire(testEntry).resolve("playwright");
-    const coreEntry = createRequire(playwrightEntry).resolve("playwright-core");
-    const descriptors: unknown = JSON.parse(
-      readFileSync(
-        path.join(
-          path.dirname(coreEntry),
-          "lib/server/deviceDescriptorsSource.json",
-        ),
-        "utf-8",
-      ),
-    );
-    if (!isRecord(descriptors)) {
-      return undefined;
-    }
-    const descriptor = descriptors[presetName];
-    if (!isRecord(descriptor)) {
-      return undefined;
-    }
-    const literal = parseSource(
-      "device-preset.ts",
-      `export default ${JSON.stringify(descriptor)};`,
-    );
-    const statement = literal.program.body.at(0);
-    return statement === undefined ? undefined : configObject(statement);
-  } catch {
-    return undefined;
-  }
+  const statement = literal.program.body.at(0);
+  const presetExpression =
+    statement === undefined ? undefined : exportedExpression(statement);
+  return presetExpression?.type === "ObjectExpression"
+    ? presetExpression
+    : panic("A generated device descriptor must be an object");
 };
 
 const resolveVariable = (name: string, source: Source): Node | undefined => {
@@ -231,6 +246,9 @@ const resolveObject = (
   if (value.type !== "Identifier" || visited.has(value.name)) {
     return undefined;
   }
+  if (source.type === "playwright" && !staticConfigModule(source)) {
+    return undefined;
+  }
   visited.add(value.name);
   const initializer = resolveVariable(value.name, source);
   return initializer === undefined
@@ -262,6 +280,9 @@ const resolveArray = (
     return value;
   }
   if (value.type !== "Identifier" || visited.has(value.name)) {
+    return undefined;
+  }
+  if (source.type === "playwright" && !staticConfigModule(source)) {
     return undefined;
   }
   visited.add(value.name);
@@ -464,6 +485,18 @@ const nestedObjectLiterals = (
     collect = true,
     projectElements = false,
   ): void => {
+    // Either branch of a conditional may be the configuration; both must be
+    // readable.
+    const branch = unwrap(value, [
+      "ParenthesizedExpression",
+      "TSAsExpression",
+      "TSSatisfiesExpression",
+    ]);
+    if (branch.type === "ConditionalExpression") {
+      visitExpression(branch.consequent, failClosed, collect, projectElements);
+      visitExpression(branch.alternate, failClosed, collect, projectElements);
+      return;
+    }
     const resolved =
       resolveArray(value, source) ?? resolveObject(value, source);
     if (resolved !== undefined) {
@@ -493,6 +526,10 @@ const nestedObjectLiterals = (
           // The containing object's effectiveRetries already evaluates this
           // spread in order; inspect its children without judging overridden values.
           visitExpression(member.argument, true, false);
+          continue;
+        }
+        if (member.kind !== "init") {
+          unknownConfig = true;
           continue;
         }
         let name: string | undefined;
@@ -528,28 +565,295 @@ const nestedObjectLiterals = (
   return { objects, unknownConfig };
 };
 
-const scanConfig = (file: string, sourceText: string): TestRetryFinding[] => {
-  // Syntax errors are a finding here, so read them as data.
-  const parsed = parseSync(file, sourceText);
-  if (
-    parsed.errors.some((error) => {
-      // oxc-parser declares Severity as an ambient const enum of strings.
-      const severity: string = error.severity;
-      return severity === "Error";
-    })
-  ) {
-    return [{ file, message: "Playwright config has TypeScript parse errors" }];
-  }
-  const source: Source = { file, program: parsed.program, text: sourceText };
-  const object = source.program.body.map(configObject).find(Boolean);
-  if (object === undefined) {
-    return [
-      {
+// Syntax errors are a finding for configs, so they are read as data here.
+const parseConfigSource = (
+  file: string,
+  text: string,
+  root: string,
+): Source | undefined => {
+  const parsed = parseSync(file, text);
+  const hasErrors = parsed.errors.some((error) => {
+    // oxc-parser declares Severity as an ambient const enum of strings.
+    const severity: string = error.severity;
+    return severity === "Error";
+  });
+  return hasErrors
+    ? undefined
+    : {
+        type: "playwright",
         file,
-        message: "Playwright config must explicitly set top-level retries: 0",
-      },
-    ];
+        program: parsed.program,
+        root,
+        text,
+        configAncestry: new Set([file]),
+      };
+};
+
+type ImportedConfigBinding =
+  | { type: "named"; module: string; name: string }
+  | { type: "namespace"; module: string }
+  | { type: "default"; module: string };
+
+const importedBinding = (
+  source: Source,
+  local: string,
+): ImportedConfigBinding | undefined => {
+  for (const statement of source.program.body) {
+    if (
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
+    ) {
+      continue;
+    }
+    for (const specifier of statement.specifiers) {
+      if (
+        specifier.type === "ImportDefaultSpecifier" &&
+        specifier.local.name === local
+      ) {
+        return { type: "default", module: statement.source.value };
+      }
+      if (
+        specifier.type === "ImportNamespaceSpecifier" &&
+        specifier.local.name === local
+      ) {
+        return { type: "namespace", module: statement.source.value };
+      }
+      if (
+        specifier.type === "ImportSpecifier" &&
+        specifier.importKind !== "type" &&
+        specifier.local.name === local
+      ) {
+        const name =
+          specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : specifier.imported.value;
+        return { type: "named", module: statement.source.value, name };
+      }
+    }
   }
+  return undefined;
+};
+
+type ConfigTarget = { object: ObjectExpression; source: Source };
+
+const playwrightFactoryLocal = (
+  callee: Node,
+  source: Source,
+): string | undefined => {
+  const value = unwrap(callee, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type === "Identifier") {
+    const binding = importedBinding(source, value.name);
+    return binding?.type === "named" &&
+      binding.module === "@playwright/test" &&
+      binding.name === "defineConfig"
+      ? value.name
+      : undefined;
+  }
+  if (value.type !== "MemberExpression" || value.object.type !== "Identifier") {
+    return undefined;
+  }
+  const member =
+    !value.computed && value.property.type === "Identifier"
+      ? value.property.name
+      : literalText(value.property);
+  if (member !== "defineConfig") {
+    return undefined;
+  }
+  const local = value.object.name;
+  const binding = importedBinding(source, local);
+  return binding?.type === "namespace" && binding.module === "@playwright/test"
+    ? local
+    : undefined;
+};
+
+const staticConfigCall = (callee: Node, source: Source): boolean => {
+  if (playwrightFactoryLocal(callee, source) !== undefined) {
+    return true;
+  }
+  if (callee.type === "Identifier") {
+    const binding = importedBinding(source, callee.name);
+    return (
+      binding?.type === "named" &&
+      (binding.module === "node:path" || binding.module === "path") &&
+      (binding.name === "join" || binding.name === "resolve")
+    );
+  }
+  if (
+    callee.type !== "MemberExpression" ||
+    callee.object.type !== "Identifier"
+  ) {
+    return false;
+  }
+  const binding = importedBinding(source, callee.object.name);
+  const member =
+    !callee.computed && callee.property.type === "Identifier"
+      ? callee.property.name
+      : literalText(callee.property);
+  return (
+    binding !== undefined &&
+    (binding.type === "default" || binding.type === "namespace") &&
+    (binding.module === "node:path" || binding.module === "path") &&
+    (member === "join" || member === "resolve")
+  );
+};
+
+const DYNAMIC_CONFIG_NODE_TYPES = new Set([
+  "AssignmentExpression",
+  "UpdateExpression",
+  "NewExpression",
+  "TaggedTemplateExpression",
+  "ImportExpression",
+  "AwaitExpression",
+  "YieldExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ClassExpression",
+]);
+
+const isErasedConfigStatement = (statement: Node): boolean => {
+  if (
+    statement.type === "TSTypeAliasDeclaration" ||
+    statement.type === "TSInterfaceDeclaration"
+  ) {
+    return true;
+  }
+  if (statement.type !== "ExportNamedDeclaration") {
+    return false;
+  }
+  if (statement.declaration !== null) {
+    return (
+      statement.declaration.type === "TSTypeAliasDeclaration" ||
+      statement.declaration.type === "TSInterfaceDeclaration"
+    );
+  }
+  return (
+    statement.exportKind === "type" ||
+    (statement.specifiers.length > 0 &&
+      statement.specifiers.every(
+        (specifier) => specifier.exportKind === "type",
+      ))
+  );
+};
+
+// Named policy data must retain the value of its literal initializer.
+// Restrict its construction module before resolving bindings, so statements
+// and calls cannot change those objects before composition.
+const staticConfigModule = (source: Source): boolean => {
+  const declarationsOnly = source.program.body.every((statement) => {
+    if (
+      statement.type === "ImportDeclaration" ||
+      statement.type === "ExportDefaultDeclaration" ||
+      statement.type === "EmptyStatement" ||
+      isErasedConfigStatement(statement)
+    ) {
+      return true;
+    }
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    return (
+      declaration?.type === "VariableDeclaration" &&
+      declaration.kind === "const"
+    );
+  });
+  if (!declarationsOnly) {
+    return false;
+  }
+  let readable = true;
+  walk(source.program, (node) => {
+    if (isErasedConfigStatement(node)) {
+      return "skip-children";
+    }
+    if (
+      DYNAMIC_CONFIG_NODE_TYPES.has(node.type) ||
+      (node.type === "UnaryExpression" && node.operator === "delete") ||
+      (node.type === "Property" && node.kind !== "init") ||
+      (node.type === "CallExpression" && !staticConfigCall(node.callee, source))
+    ) {
+      readable = false;
+    }
+    return readable ? undefined : "skip-children";
+  });
+  return readable;
+};
+
+/**
+ * The source of a repository module a config imports, or undefined for a
+ * package outside the repository (such as `@playwright/test` itself).
+ */
+const repositoryModule = (
+  source: Source,
+  specifier: string,
+): Source | null | undefined => {
+  // Module resolution and reads are filesystem boundaries.
+  try {
+    const root = realpathSync(source.root);
+    const resolved = realpathSync(
+      Bun.resolveSync(
+        specifier,
+        path.dirname(path.resolve(source.root, source.file)),
+      ),
+    );
+    if (!isPathInside(root, resolved)) {
+      return undefined;
+    }
+    const file = repoRelativePath(root, resolved);
+    if (file.split("/").includes("node_modules")) {
+      return undefined;
+    }
+    if (source.configAncestry.has(file)) {
+      return null;
+    }
+    const parsed = parseConfigSource(
+      file,
+      readFileSync(resolved, "utf-8"),
+      source.root,
+    );
+    return parsed === undefined
+      ? null
+      : {
+          ...parsed,
+          configAncestry: new Set([...source.configAncestry, file]),
+        };
+  } catch {
+    return null;
+  }
+};
+
+// Configuration roots are literal data or the imported Playwright factory.
+// Repository functions stay opaque: reading their return values cannot prove
+// the configuration that executing them produces.
+const configTarget = (source: Source): ConfigTarget | undefined => {
+  for (const statement of source.program.body) {
+    const expression = exportedExpression(statement);
+    if (expression === undefined) {
+      continue;
+    }
+    if (
+      expression.type === "CallExpression" &&
+      playwrightFactoryLocal(expression.callee, source) === undefined
+    ) {
+      return undefined;
+    }
+    const object = configObjectOf(expression, source);
+    if (object !== undefined) {
+      return { object, source };
+    }
+  }
+  return undefined;
+};
+
+const configFindings = (
+  target: ConfigTarget,
+  file: string,
+): TestRetryFinding[] => {
+  const { object, source } = target;
   const retries = effectiveRetries(object, source);
   const findings: TestRetryFinding[] = [];
   if (!retries.explicit || retries.value !== 0 || retries.unknownOverride) {
@@ -578,14 +882,218 @@ const scanConfig = (file: string, sourceText: string): TestRetryFinding[] => {
   return findings;
 };
 
+const verifiedImportedConfig = (
+  argument: Node,
+  source: Source,
+): ObjectExpression | undefined => {
+  if (!staticConfigModule(source)) {
+    return undefined;
+  }
+  const value = unwrap(argument, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type !== "Identifier") {
+    return undefined;
+  }
+  const binding = importedBinding(source, value.name);
+  if (
+    binding === undefined ||
+    (binding.type !== "default" &&
+      !(binding.type === "named" && binding.name === "default"))
+  ) {
+    return undefined;
+  }
+  const module = repositoryModule(source, binding.module);
+  if (module === undefined || module === null) {
+    return undefined;
+  }
+  const target = configTarget(module);
+  if (
+    target === undefined ||
+    configFindings(target, module.file).length !== 0
+  ) {
+    return undefined;
+  }
+  // The entire base passed the policy, including inherited project/use
+  // settings. Compose only its verified scalar policy in the caller's scope.
+  const parsed = parseSource(
+    "verified-config.ts",
+    "export default { retries: 0 };",
+  );
+  const statement = parsed.program.body.at(0);
+  const expression =
+    statement === undefined ? undefined : exportedExpression(statement);
+  return expression?.type === "ObjectExpression" ? expression : undefined;
+};
+
+const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
+  const specifiers: string[] = [];
+  const dynamicImports = new Set<Node>();
+  walk(source.program, (node) => {
+    if (isErasedConfigStatement(node)) {
+      return "skip-children";
+    }
+    if (
+      node.type === "ImportExpression" ||
+      node.type === "TSImportEqualsDeclaration" ||
+      (node.type === "Identifier" &&
+        (node.name === "require" || node.name === "eval"))
+    ) {
+      dynamicImports.add(node);
+    }
+    return undefined;
+  });
+  for (const statement of source.program.body) {
+    if (isErasedConfigStatement(statement)) {
+      continue;
+    }
+    if (statement.type === "ImportDeclaration") {
+      if (
+        statement.importKind === "type" ||
+        (statement.specifiers.length > 0 &&
+          statement.specifiers.every(
+            (specifier) =>
+              specifier.type === "ImportSpecifier" &&
+              specifier.importKind === "type",
+          ))
+      ) {
+        continue;
+      }
+      specifiers.push(statement.source.value);
+    } else if (
+      (statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportAllDeclaration") &&
+      statement.exportKind !== "type" &&
+      statement.source !== null
+    ) {
+      specifiers.push(statement.source.value);
+    }
+  }
+  return dynamicImports.size === 0 && !specifiers.includes("node:module")
+    ? specifiers
+    : undefined;
+};
+
+const importedRepositoryModule = (source: Source, specifier: string) => {
+  const module = repositoryModule(
+    { ...source, configAncestry: new Set() },
+    specifier,
+  );
+  if (module !== null) {
+    return module;
+  }
+  return specifier.startsWith(".") ||
+    specifier.startsWith("@stll/") ||
+    path.isAbsolute(specifier)
+    ? null
+    : undefined;
+};
+
+const composedConfigurationSources = (source: Source) => {
+  const configs = new Map([[source.file, source]]);
+  for (const config of configs.values()) {
+    for (const statement of config.program.body) {
+      const expression = exportedExpression(statement);
+      if (expression?.type !== "CallExpression") {
+        continue;
+      }
+      for (const argument of expression.arguments) {
+        const value = unwrap(argument, [
+          "ParenthesizedExpression",
+          "TSAsExpression",
+          "TSSatisfiesExpression",
+        ]);
+        const binding =
+          value.type === "Identifier"
+            ? importedBinding(config, value.name)
+            : undefined;
+        if (
+          binding?.type !== "default" &&
+          !(binding?.type === "named" && binding.name === "default")
+        ) {
+          continue;
+        }
+        const module = importedRepositoryModule(config, binding.module);
+        if (module !== undefined && module !== null) {
+          configs.set(module.file, module);
+        }
+      }
+    }
+  }
+  return configs;
+};
+
+// Follow static repository edges, not helper execution. A module outside
+// configuration composition must never acquire a mutable configuration base.
+const isolatedConfigurationImports = (source: Source): boolean => {
+  const configs = composedConfigurationSources(source);
+  const pending = [source];
+  const visited = new Set<string>();
+  for (const current of pending) {
+    if (visited.has(current.file)) {
+      continue;
+    }
+    visited.add(current.file);
+    const specifiers = runtimeModuleSpecifiers(current);
+    if (specifiers === undefined) {
+      return false;
+    }
+    for (const specifier of specifiers) {
+      const module = importedRepositoryModule(current, specifier);
+      if (module === null) {
+        return false;
+      }
+      if (module === undefined) {
+        continue;
+      }
+      if (
+        configs.has(module.file) &&
+        (!configs.has(current.file) || !staticConfigModule(current))
+      ) {
+        return false;
+      }
+      pending.push(module);
+    }
+  }
+  return true;
+};
+
+const scanConfig = (
+  file: string,
+  sourceText: string,
+  root: string,
+): TestRetryFinding[] => {
+  const parsed = parseConfigSource(file, sourceText, root);
+  if (parsed === undefined) {
+    return [{ file, message: "Playwright config has TypeScript parse errors" }];
+  }
+  const target = isolatedConfigurationImports(parsed)
+    ? configTarget(parsed)
+    : undefined;
+  return target === undefined
+    ? [
+        {
+          file,
+          message: "Playwright config must explicitly set top-level retries: 0",
+        },
+      ]
+    : configFindings(target, file);
+};
+
 const scanTestSource = (
   file: string,
   sourceText: string,
+  root: string,
 ): TestRetryFinding[] => {
   const source: Source = {
+    type: "test",
     file,
     program: parseSource(file, sourceText).program,
+    root,
     text: sourceText,
+    configAncestry: new Set([file]),
   };
   const findings: TestRetryFinding[] = [];
   walk(source.program, (node) => {
@@ -764,14 +1272,15 @@ const scanWorkflow = (file: string, sourceText: string): TestRetryFinding[] => {
 
 export const findTestRetryViolations = (
   sources: SourceMap,
+  root = REPO_ROOT,
 ): TestRetryFinding[] => {
   const findings: TestRetryFinding[] = [];
   for (const [file, source] of sources) {
     if (isPlaywrightConfig(file)) {
-      findings.push(...scanConfig(file, source));
+      findings.push(...scanConfig(file, source, root));
     }
     if (isSourceFile(file) && hasRetryRelevantSyntax(source)) {
-      findings.push(...scanTestSource(file, source));
+      findings.push(...scanTestSource(file, source, root));
     }
     if (file.endsWith(".sh")) {
       const commands = source
@@ -790,10 +1299,10 @@ export const findTestRetryViolations = (
   return findings;
 };
 
-const trackedSources = (): Map<string, string> => {
+const trackedSources = (root: string): Map<string, string> => {
   const files = execFileSync("git", ["ls-files", "-z"], {
     maxBuffer: 2 ** 30,
-    cwd: REPO_ROOT,
+    cwd: root,
     encoding: "utf-8",
   })
     .split("\0")
@@ -807,8 +1316,14 @@ const trackedSources = (): Map<string, string> => {
     );
   const sources = new Map<string, string>();
   for (const file of files) {
-    const source = readFileSync(path.join(REPO_ROOT, file), "utf-8");
-    if (isSourceFile(file) && !hasRetryRelevantSyntax(source)) {
+    const source = readFileSync(path.join(root, file), "utf-8");
+    // Only sources that spawn or configure tests are scanned as code; every
+    // Playwright config is read, since its top-level retries is the policy.
+    if (
+      isSourceFile(file) &&
+      !isPlaywrightConfig(file) &&
+      !hasRetryRelevantSyntax(source)
+    ) {
       continue;
     }
     sources.set(file, source);
@@ -816,8 +1331,8 @@ const trackedSources = (): Map<string, string> => {
   return sources;
 };
 
-export const checkTestRetries = (): TestRetryFinding[] =>
-  findTestRetryViolations(trackedSources());
+export const checkTestRetries = (root = REPO_ROOT): TestRetryFinding[] =>
+  findTestRetryViolations(trackedSources(root), root);
 
 if (import.meta.main) {
   const findings = checkTestRetries();

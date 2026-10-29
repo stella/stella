@@ -1,6 +1,7 @@
-// parser-output-unchanged: [pl-kis] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [pl-uokik] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading, positioned word spaces included, never reaches.
+// parser-output-unchanged: [pl-sn] the paragraph helpers moved unchanged to pl-printed-lines.ts; positioned spaces and superscript placement stay as on main.
+// parser-output-unchanged: [pl-kis] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [pl-uokik] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [cz-uohs] the helper extraction does not affect extractPlPdfSeparatedContent, which reads through readPagesWithFootnotes and never calls readPage.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
@@ -26,6 +27,10 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  INDENT_THRESHOLD_PT,
+  opensBlockParagraph,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
 import {
   buildBoldRanges,
   normalizeSpanText,
@@ -76,15 +81,6 @@ const SOFT_HYPHEN_END = /\p{L}-$/u;
  * ("Administracyjnego-" + "Ośrodka").
  */
 const RESUMES_A_BROKEN_WORD = /^\p{Ll}/u;
-
-/**
- * How far past the body margin a first line has to sit to read as an indent.
- *
- * The observed step is a full tab (72pt body, 108pt indent). Half of that is
- * comfortably above the sub-point jitter the extractor reports for lines that
- * begin at the same margin, and comfortably below a real indent.
- */
-const INDENT_THRESHOLD_PT = 18;
 
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
   "&": "&amp;",
@@ -411,89 +407,6 @@ const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
     }
   }
   return edge;
-};
-
-/** A list point's own number or bullet: `2.`, `IV.`, `a)`, `–`. */
-const LIST_MARKER = /^(?:(?:\d{1,3}|[IVXLC]{1,6}|\p{Ll})[.)]|[-–•])\s/u;
-
-/** A point numbered in a way no wrapped sentence starts: `2.`, `2)`, `a)`. */
-const NUMBERED_POINT = /^(?:\d{1,3}[.)]|\p{Ll}\))\s/u;
-
-/** A line ending on a unit a number follows: `art.`, `ust.`, `pkt`, `§`, `nr`. */
-const TAKES_A_NUMBER =
-  /(?:(?:^|\s)(?:art|ust|pkt|lit|poz|nr|zd|par|rozdz|tom|str|s|k)\.?|§)$/iu;
-
-/** A line ending a sentence or a list point, closing quotes included. */
-const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
-/** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
-const STARTS_SENTENCE = /^[\p{Lu}[(„"]/u;
-
-/**
- * Whether the line above ended only because `line`'s first word no longer
- * fit on it. A line that stopped short of that ended its paragraph.
- *
- * A short first word fits almost any gap, so a line that ended a sentence
- * before a capital or a list point is taken as the paragraph's end: two
- * paragraphs merged would hide the structure, where a missed continuation
- * only leaves the line break the reading had before.
- */
-const ranOutOfRoom = (
-  previous: ExtractedLine,
-  line: ExtractedLine,
-  rightEdge: number,
-): boolean => {
-  const opening = line.text.trimStart();
-  if (
-    previous.right === undefined ||
-    line.right === undefined ||
-    (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
-      (STARTS_SENTENCE.test(opening) || LIST_MARKER.test(opening)))
-  ) {
-    return false;
-  }
-  const firstWord = opening.split(/\s/u, 1).at(0) ?? "";
-  const characterWidth = (line.right - line.x) / Math.max(1, line.text.length);
-  return rightEdge - previous.right < (firstWord.length + 1) * characterWidth;
-};
-
-/**
- * Whether `line` opens a paragraph, where the indent alone misreads blocks
- * and lists.
- *
- * An indented line carries on the full line above it when it sits no
- * deeper than that line, or when that line is a list point's first line
- * set with a hanging indent. A short line above ended its paragraph, which
- * is what keeps two one-line points of an operative part apart. A list
- * point opens a paragraph wherever it starts, though nothing indents it.
- */
-const opensBlockParagraph = (
-  previous: ExtractedLine | undefined,
-  line: ExtractedLine,
-  indented: boolean,
-  rightEdge: number,
-): boolean => {
-  if (previous === undefined || previous.text.length === 0) {
-    return indented;
-  }
-  // A numbered point opens its own paragraph however full the line above
-  // ran, unless that line ended on a word the number belongs to (`art.`).
-  // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
-  // sentences, so only the full-line test reads those.
-  if (
-    NUMBERED_POINT.test(line.text.trimStart()) &&
-    !TAKES_A_NUMBER.test(previous.text.trimEnd())
-  ) {
-    return true;
-  }
-  const full = ranOutOfRoom(previous, line, rightEdge);
-  if (!indented) {
-    return !full && LIST_MARKER.test(line.text.trimStart());
-  }
-  return !(
-    full &&
-    (line.x - previous.x < INDENT_THRESHOLD_PT ||
-      LIST_MARKER.test(previous.text.trimStart()))
-  );
 };
 
 /** Read one page's lines, keeping blanks and the indent decision. */

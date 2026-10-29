@@ -1,4 +1,3 @@
-// parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -18,10 +17,10 @@
  * Redaction. The court anonymizes by painting a run black on black:
  * `<span style="color: #000000; background-color: #000000; …">` over a run
  * of `&nbsp;`. The span carries no words, so nothing is being uncovered
- * here; what it carries is a bar as wide as what it replaced. Dropped
- * rather than kept, because those spaces are not text the decision states,
- * and marked anonymized, because a reader has to see that something stood
- * there.
+ * here; what it carries is a bar as wide as what it replaced. Replace it
+ * with a visible anonymization marker. Some conversions omit the paint
+ * and leave only the non-breaking
+ * space run; those gaps must become visible before whitespace is trimmed.
  */
 
 import { panic } from "better-result";
@@ -30,6 +29,7 @@ import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -56,6 +56,7 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -75,6 +76,32 @@ import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
  * with two different words.
  */
 const SK_US_ANONYMIZED_PLACEHOLDER = "anonymizované";
+
+/** The shortest redaction run in the court's I. ÚS 442/2020 conversion. */
+const REDACTION_GAP = /(\u00a0{4,})/u;
+
+/** Retain unpainted redaction gaps, including lines containing only a gap. */
+const preserveRedactionGaps = (inlines: readonly Inline[]): Inline[] =>
+  inlines.flatMap((inline): Inline[] => {
+    if (hasInlineChildren(inline)) {
+      return [{ ...inline, children: preserveRedactionGaps(inline.children) }];
+    }
+    if (inline.type !== "text") {
+      return [inline];
+    }
+    return inline.text
+      .split(REDACTION_GAP)
+      .filter((text) => text.length > 0)
+      .map((text) =>
+        REDACTION_GAP.test(text)
+          ? {
+              type: "text",
+              text: SK_US_ANONYMIZED_PLACEHOLDER,
+              anonymized: true,
+            }
+          : { ...inline, text },
+      );
+  });
 
 /** The declaration that paints a run the colour of its own background. */
 const HIDDEN_STYLE_PARTS = ["color: #000000", "background-color: #000000"];
@@ -220,7 +247,7 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
   // lines reads the same through either: the reader's text, and the text
   // left once a court number is cut off the inlines.
   for (const line of lines) {
-    setInlines(line, line.inlines);
+    setInlines(line, preserveRedactionGaps(line.inlines));
   }
   return lines;
 };
@@ -558,6 +585,43 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
 
+/** Intact document words and section markers recognized by the shared vocabulary. */
+const typographyWords = (lines: readonly MarkupLine[]) => {
+  const words = new Set<string>();
+  const spacedWords = new Set<string>();
+  for (const { text } of lines) {
+    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
+      words.add(normalizeUnicode(word, "NFC").toLowerCase());
+    }
+    const colon = text.indexOf(":");
+    if (colon === -1) {
+      continue;
+    }
+    const chunks = text
+      .slice(0, colon + 1)
+      .trim()
+      .split(/\s+/u);
+    let marker = "";
+    for (const chunk of chunks.toReversed()) {
+      marker = `${chunk} ${marker}`.trim();
+      if (
+        isSkHoldingMarker(marker) ||
+        isSkReasoningMarker(marker) ||
+        isSkStandaloneInstructionMarker(marker)
+      ) {
+        spacedWords.add(
+          normalizeUnicode(
+            marker.replaceAll(/[\s:]/gu, ""),
+            "NFC",
+          ).toLowerCase(),
+        );
+        break;
+      }
+    }
+  }
+  return { attestedWords: words, spacedWords };
+};
+
 /**
  * The court's typography read as the characters it prints.
  *
@@ -572,11 +636,14 @@ const SOFT_HYPHEN = String.fromCodePoint(0xad);
  * is a visible hyphen, the ones at a line's end included (`obrazovo<U+00AD>`
  * / `zvukových`, `C<U+00AD>` / `293/12`).
  */
-const readTypography = (inlines: readonly Inline[]): Inline[] =>
+const readTypography = (
+  inlines: readonly Inline[],
+  evidence: ReturnType<typeof typographyWords>,
+): Inline[] =>
   rewriteInlineWhitespace(
     mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
     // Over the whole line: a wrapper's edge is not a gap between words.
-    (text) => collapseLetterSpacing(text, { setApart: true }),
+    (text) => collapseLetterSpacing(text, { setApart: true, ...evidence }),
   );
 
 type Section = SkDocumentSection;
@@ -1222,8 +1289,9 @@ export const parseSkUsDocumentXhtml = ({
   const $ = cheerio.load(xhtml);
   markHiddenRuns($);
   const lines = removePageFurniture(readMarkupLines($));
+  const words = typographyWords(lines);
   for (const line of lines) {
-    setInlines(line, readTypography(line.inlines));
+    setInlines(line, readTypography(line.inlines, words));
   }
   const blocks = courtParagraphNumbers(classifyLines(lines), {
     parser: "sk-us",
