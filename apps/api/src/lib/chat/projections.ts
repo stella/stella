@@ -2586,16 +2586,20 @@ const readerAnnotationPassageProjection = v.strictObject({
  * words in one place it can be told by.
  */
 const listedReaderAnnotationPassageProjection = v.variant("placement", [
-  v.strictObject({
-    placement: v.literal("placed"),
-    anchor: v.string(),
-    quote: v.string(),
-  }),
-  v.strictObject({
-    placement: v.literal("orphaned"),
-    reason: v.picklist(READER_TEXT_QUOTE_ORPHAN_REASONS),
-    quote: v.string(),
-  }),
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("placed"),
+      anchor: v.string(),
+      quote: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("orphaned"),
+      reason: v.picklist(READER_TEXT_QUOTE_ORPHAN_REASONS),
+      quote: v.string(),
+    }),
+  ),
 ]);
 
 /** list_reader_annotations: one entry per mark, its passages grouped. */

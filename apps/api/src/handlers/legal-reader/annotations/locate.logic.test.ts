@@ -109,6 +109,8 @@ describe("locatePassages", () => {
       startOffset: 0,
       endOffset: "Zob.: pkt 2".length,
       quote: "Zob.: pkt 2",
+      quotePrefix: "",
+      quoteSuffix: " wyjaśnień.",
     };
 
     expect(
@@ -155,6 +157,8 @@ describe("locatePassages", () => {
       startOffset: 0,
       endOffset: "The applicant lodged".length,
       quote: "The applicant lodged",
+      quotePrefix: "",
+      quoteSuffix: " an appeal.",
     };
 
     expect(

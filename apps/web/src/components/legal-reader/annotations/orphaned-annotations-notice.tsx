@@ -1,5 +1,11 @@
 import { useTranslations } from "use-intl";
 
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
@@ -30,52 +36,58 @@ export const OrphanedAnnotationsNotice = ({
   }
 
   return (
-    <details
+    <div
       className={cn(
         "bg-muted text-muted-foreground border-b px-4 py-2 text-xs",
         className,
       )}
     >
-      <summary className="cursor-pointer py-1">
-        {t("legalReader.annotations.orphaned.summary", {
-          count: orphaned.length,
-        })}
-      </summary>
-      <p className="py-1">
-        {t("legalReader.annotations.orphaned.description")}
-      </p>
-      <ul className="space-y-2 py-1">
-        {orphaned.map(({ annotation }) => (
-          <li className="flex items-start gap-3" key={annotation.id}>
-            <div className="min-w-0 flex-1 space-y-1">
-              <blockquote
-                className="text-foreground border-s-2 ps-2 wrap-break-word"
-                dir="auto"
-              >
-                {annotation.quote}
-              </blockquote>
-              {annotation.body !== null && (
-                <UserText as="p" className="wrap-break-word">
-                  {annotation.body}
-                </UserText>
-              )}
-              {!annotation.mine && (
-                <UserText as="p">{annotation.authorName}</UserText>
-              )}
-            </div>
-            {annotation.mine && (
-              <Button
-                className="shrink-0"
-                onClick={() => onRemove(annotation.id)}
-                size="sm"
-                variant="outline"
-              >
-                {t("common.remove")}
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </details>
+      <Accordion>
+        <AccordionItem value="orphaned">
+          <AccordionTrigger size="compact">
+            {t("legalReader.annotations.orphaned.summary", {
+              count: orphaned.length,
+            })}
+          </AccordionTrigger>
+          <AccordionPanel size="compact">
+            <p className="py-1">
+              {t("legalReader.annotations.orphaned.description")}
+            </p>
+            <ul className="space-y-2 py-1">
+              {orphaned.map(({ annotation }) => (
+                <li className="flex items-start gap-3" key={annotation.id}>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <blockquote
+                      className="text-foreground border-s-2 ps-2 wrap-break-word"
+                      dir="auto"
+                    >
+                      {annotation.quote}
+                    </blockquote>
+                    {annotation.body !== null && (
+                      <UserText as="p" className="wrap-break-word">
+                        {annotation.body}
+                      </UserText>
+                    )}
+                    {!annotation.mine && (
+                      <UserText as="p">{annotation.authorName}</UserText>
+                    )}
+                  </div>
+                  {annotation.mine && (
+                    <Button
+                      className="shrink-0"
+                      onClick={() => onRemove(annotation.id)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {t("common.remove")}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
+    </div>
   );
 };
