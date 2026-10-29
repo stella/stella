@@ -1850,6 +1850,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
+    "./.oxlint-plugins/no-raw-query-error-capture.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
@@ -2071,6 +2072,14 @@ const config = defineConfig({
       ],
       rules: {
         "narrative-prose-component/require-prose": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-query-error-capture.fixture.ts",
+      ],
+      rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
       },
     },
     {
@@ -4881,6 +4890,7 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**"],
       rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
         "query-data-requires-state/query-data-requires-state": "error",
       },
     },
