@@ -49,12 +49,23 @@ class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;
 }> {}
 
-test("the CLI registry declares every imported generator input", () => {
-  const registry = generator("cli-registry");
-  const family = GENERATORS.filter(
-    ({ id }) => id === registry.id || registry.after.includes(id),
+test("generator input declarations cover their transitive import closures", () => {
+  expect(generatorInputCensus(GENERATORS)).toEqual([]);
+});
+
+test("sharing an import graph preserves each family's input findings", () => {
+  const tailwind = generator("tailwind-class-cache");
+  const families = [
+    { ...tailwind, id: "declared" },
+    { ...tailwind, id: "undeclared", inputs: [], checkInputs: [] },
+  ];
+  const independent = families.flatMap((family) =>
+    generatorInputCensus([family]),
   );
-  expect(generatorInputCensus(family)).toEqual([]);
+  expect(independent.length).toBeGreaterThan(0);
+  expect(generatorInputCensus(families)).toEqual(
+    [...new Set(independent)].toSorted(),
+  );
 });
 
 test("a change to the guard's own sources selects every family", () => {

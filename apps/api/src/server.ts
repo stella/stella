@@ -30,6 +30,7 @@ import {
   startDatabaseLoginProbe,
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
@@ -248,6 +249,9 @@ const startServer = async (): Promise<void> => {
     ...apiApp.serveOptions,
     maxRequestBodySize: HTTP_REQUEST_BODY_MAX_BYTES,
   });
+
+  // The listener stays available for liveness while /started holds traffic.
+  sanctionsStartupWarmup.start();
 
   // From here the loop serves requests; boot work before this point delays
   // none, so it stays out of the stall signal.
