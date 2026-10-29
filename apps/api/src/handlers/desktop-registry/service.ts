@@ -13,6 +13,7 @@ import type {
 } from "@stll/api-contract/desktop-registry";
 import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { classifyFailure } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
@@ -213,11 +214,14 @@ export const searchDesktopRegistry = async (
               };
         },
         catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Could not load web search configuration",
-            cause,
-          }),
+          classifyFailure(
+            new HandlerError({
+              status: 500,
+              message: "Could not load web search configuration",
+              cause,
+            }),
+            "unobserved_5xx",
+          ),
       }));
   const lookup = await executeRegistryLookup({
     loadWebSearch,

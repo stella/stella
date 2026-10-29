@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { readFailureBrand } from "@stll/errors";
+
 import { searchDesktopRegistry } from "@/api/handlers/desktop-registry/service";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -62,4 +64,34 @@ test("returns verified KRS candidates through desktop web name search", async ()
   expect(result.value.results).toEqual([
     expect.objectContaining({ id: "0000028860", name: "ORLEN SPÓŁKA AKCYJNA" }),
   ]);
+});
+
+test("classifies web search configuration failures", async () => {
+  const result = await searchDesktopRegistry(
+    {
+      organizationId: toSafeId<"organization">("fixture-org"),
+      userId: toSafeId<"user">("fixture-user"),
+      scopedDb: asTestRaw(() => {
+        throw new Error("configuration read failed");
+      }),
+      testDependencies: {
+        getOrganizationRegistryHandler: async () =>
+          BUSINESS_REGISTRY_DISPATCH.krs,
+      },
+    },
+    { registry: "krs", query: "Fikcyjna Firma" },
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isOk()) {
+    throw new TypeError("expected a web search configuration failure");
+  }
+  expect(result.error).toMatchObject({
+    status: 500,
+    message: "Could not load web search configuration",
+  });
+  expect(readFailureBrand(result.error)).toEqual({
+    reason: "unobserved_5xx",
+    source: "instance",
+  });
 });

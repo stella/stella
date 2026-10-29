@@ -142,6 +142,7 @@ import {
   ViesValidationError,
 } from "@stll/business-registries/vies";
 import type { CountryCode } from "@stll/country-codes";
+import { classifyFailure } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -1935,11 +1936,14 @@ export const executeRegistryLookup = async ({
       });
     }
     if (!searchFn) {
-      return new HandlerError({
-        status: 400,
-        code: "name_search_unsupported",
-        message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
-      });
+      return classifyFailure(
+        new HandlerError({
+          status: 400,
+          code: "name_search_unsupported",
+          message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
+        }),
+        "request_invalid",
+      );
     }
     const hits = await searchFn(trimmed, {
       observer,

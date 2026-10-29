@@ -32,6 +32,7 @@ import {
 } from "@stll/business-registries/recherche-entreprises";
 import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
+import { readFailureBrand } from "@stll/errors";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
@@ -358,6 +359,10 @@ describe("VIES handler wiring", () => {
       expect(result).toMatchObject({
         status: 400,
         code: "name_search_unsupported",
+      });
+      expect(readFailureBrand(result)).toEqual({
+        reason: "request_invalid",
+        source: "instance",
       });
     }
   });
