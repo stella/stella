@@ -28,7 +28,9 @@ const DOCUMENT_PART = "document";
 /** The first bytes of a ZIP local file header, which a Word package opens with. */
 const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04] as const;
 
-const projectHuBhgy = (sourceRaw: string): RetentionProjection => {
+const projectHuBhgy = async (
+  sourceRaw: string,
+): Promise<RetentionProjection> => {
   const parts = decodeSourceRawEnvelope(sourceRaw);
   if (parts === null) {
     return {
@@ -42,7 +44,7 @@ const projectHuBhgy = (sourceRaw: string): RetentionProjection => {
   }
   const bytes = new Uint8Array(Buffer.from(encoded, "base64"));
   const paragraphs = ZIP_SIGNATURE.every((byte, index) => bytes[index] === byte)
-    ? docxParagraphs(bytes)
+    ? await docxParagraphs(bytes)
     : rtfParagraphs(bytes);
   if (paragraphs === null) {
     return {
@@ -55,5 +57,5 @@ const projectHuBhgy = (sourceRaw: string): RetentionProjection => {
 
 export const huBhgyRetention = {
   type: "checked",
-  project: async (sourceRaw) => await Promise.resolve(projectHuBhgy(sourceRaw)),
+  project: projectHuBhgy,
 } as const satisfies RetentionPolicy;

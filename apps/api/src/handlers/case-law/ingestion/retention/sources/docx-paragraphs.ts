@@ -9,8 +9,11 @@
  * deletions, field instructions, hidden runs and the fallback copy of
  * alternate content, none of which is visible text.
  */
+import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
+import { promisify } from "node:util";
+import { inflateRaw } from "node:zlib";
 
 import { hexValue } from "@/api/handlers/case-law/ingestion/retention/sources/hex-value";
 
@@ -23,15 +26,18 @@ const STORED = 0;
 const DEFLATED = 8;
 /** A 32-bit size field holding this says the real size is in a ZIP64 record. */
 const ZIP64_MARKER = 0xff_ff_ff_ff;
+const MAX_ENTRY_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 16 * 1024 * 1024;
+const inflateEntry = promisify(inflateRaw);
 
 /**
  * Each entry's bytes by name, or `null` for a package this cannot open.
  * Only the parts asked for are inflated.
  */
-const readZipEntries = (
+const readZipEntries = async (
   bytes: Uint8Array,
   wanted: ReadonlySet<string>,
-): Map<string, Uint8Array> | null => {
+): Promise<Map<string, Uint8Array> | null> => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const lowest = Math.max(0, bytes.length - EOCD_MAX_DISTANCE);
   let eocd = -1;
@@ -48,6 +54,7 @@ const readZipEntries = (
   let cursor = view.getUint32(eocd + 16, true);
   const names = new TextDecoder();
   const entries = new Map<string, Uint8Array>();
+  let outputBytes = 0;
   for (let index = 0; index < entryCount; index += 1) {
     if (
       cursor + 46 > bytes.length ||
@@ -80,15 +87,37 @@ const readZipEntries = (
       30 +
       view.getUint16(localOffset + 26, true) +
       view.getUint16(localOffset + 28, true);
-    // A copy, which owns a plain ArrayBuffer as the inflater requires.
-    const data = bytes.slice(dataStart, dataStart + compressedSize);
+    if (dataStart + compressedSize > bytes.length) {
+      return null;
+    }
+    const budget = Math.min(MAX_ENTRY_BYTES, MAX_TOTAL_BYTES - outputBytes);
+    if (budget <= 0) {
+      return null;
+    }
+    const data = bytes.subarray(dataStart, dataStart + compressedSize);
+    let content: Uint8Array;
     if (method === STORED) {
-      entries.set(name, data);
+      if (data.byteLength > budget) {
+        return null;
+      }
+      content = data;
     } else if (method === DEFLATED) {
-      entries.set(name, Bun.inflateSync(data));
+      // The async native decoder stops at the remaining output budget,
+      // independently of the archive's declared uncompressed sizes.
+      const inflated = (
+        await Result.tryPromise(
+          async () => await inflateEntry(data, { maxOutputLength: budget }),
+        )
+      ).unwrapOr(null);
+      if (inflated === null) {
+        return null;
+      }
+      content = inflated;
     } else {
       return null;
     }
+    outputBytes += content.byteLength;
+    entries.set(name, content);
   }
   return entries;
 };
@@ -202,8 +231,10 @@ const NOTE_PARTS = ["word/footnotes.xml", "word/endnotes.xml"] as const;
  * The paragraphs of a Word package, or `null` for bytes that are not one:
  * no central directory, an entry it cannot inflate, or no document part.
  */
-export const docxParagraphs = (bytes: Uint8Array): string[] | null => {
-  const entries = readZipEntries(
+export const docxParagraphs = async (
+  bytes: Uint8Array,
+): Promise<string[] | null> => {
+  const entries = await readZipEntries(
     bytes,
     new Set([DOCUMENT_PART, ...NOTE_PARTS]),
   );
