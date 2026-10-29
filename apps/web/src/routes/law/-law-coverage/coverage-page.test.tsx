@@ -259,6 +259,8 @@ describe("the coverage page states what it counts", () => {
     );
 
     expect(markup).toContain(messages.caseLaw.coverage.healthSnapshot);
+    expect(markup).not.toContain("source needs attention");
+    expect(markup).not.toContain("All sources up to date");
     expect(markup).toContain('dateTime="2025-03-06"');
     expect(markup).toContain("Mar 6, 2025");
     // A live source states no such day.

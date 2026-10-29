@@ -681,12 +681,17 @@ const CountrySection = ({
 };
 
 const CountryFreshness = ({
-  sources,
+  sources: allSources,
 }: {
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
+  // A fixed release states its own date in the row; sync freshness applies to live sources.
+  const sources = allSources.filter((source) => source.edition.type === "live");
+  if (sources.length === 0) {
+    return null;
+  }
   const exceptions = sources.filter(
     (source) => source.health !== "current",
   ).length;
