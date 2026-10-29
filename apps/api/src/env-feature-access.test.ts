@@ -63,7 +63,7 @@ test("the server awaits initial grants before exposing requests", async () => {
 test("the server closes its grants refresh with background workers", async () => {
   const server = await Bun.file(new URL("server.ts", import.meta.url)).text();
   expect(server).toMatch(
-    /const stopFeatureAccessGrantsRefresh = await startFeatureAccessGrantsRefresh\(\);/u,
+    /const stopFeatureAccessGrantsRefresh =\s*await startFeatureAccessGrantsRefresh\(\);/u,
   );
   expect(server).toMatch(
     /closeBackgroundWorkers: async \(\) => \{\s*await stopFeatureAccessGrantsRefresh\?\.\(\);\s*await backgroundWorkers\.close\(\);/u,
