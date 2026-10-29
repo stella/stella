@@ -140,6 +140,7 @@ export const READ_BUDGET_PROFILES = {
   "scheduled.caseLaw.backfillProvisionState": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
   "scheduled.legislation.backfillExpressionIds": "corpus",
+  "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
-} as const satisfies Record<ReadBudgetId, "corpus" | "tenant">;
+} as const satisfies Record<ReadBudgetId, "corpus" | "tenant" | "coverage">;
