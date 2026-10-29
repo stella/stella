@@ -547,6 +547,14 @@
     },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
+    "arrangement": {
+      "alertThreshold": "Brīdinājuma slieksnis (%)",
+      "amountCap": "Atlīdzības limits",
+      "flatFee": "Fiksēta atlīdzība",
+      "invalidCap": "Ievadiet pozitīvus limitus un brīdinājuma slieksni no 0,01 % līdz 100 %.",
+      "minuteCap": "Laika limits (minūtes)",
+      "title": "Vienošanās par atlīdzību"
+    },
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",

@@ -547,6 +547,14 @@
     },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
+    "arrangement": {
+      "alertThreshold": "Įspėjimo slenkstis (%)",
+      "amountCap": "Atlygio riba",
+      "flatFee": "Fiksuotas atlygis",
+      "invalidCap": "Įveskite teigiamas ribas ir įspėjimo slenkstį nuo 0,01 % iki 100 %.",
+      "minuteCap": "Laiko riba (minutėmis)",
+      "title": "Susitarimas dėl atlygio"
+    },
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",

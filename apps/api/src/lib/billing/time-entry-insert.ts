@@ -146,6 +146,7 @@ export const prepareTimeEntryInsert = async function* ({
           workspaceId,
           userId,
           dateWorked: body.dateWorked,
+          activityCode: body.activityCode,
         })));
   const billable =
     body.billable ??

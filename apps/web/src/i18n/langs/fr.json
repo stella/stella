@@ -547,6 +547,14 @@
     },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
+    "arrangement": {
+      "alertThreshold": "Seuil d’alerte (%)",
+      "amountCap": "Plafond des honoraires",
+      "flatFee": "Forfait",
+      "invalidCap": "Saisissez des plafonds positifs et un seuil d’alerte compris entre 0,01 % et 100 %.",
+      "minuteCap": "Plafond de temps (minutes)",
+      "title": "Convention d’honoraires"
+    },
     "batchActions": "Actions groupées",
     "billable": "Facturable",
     "billedAmount": "Montant facturé",

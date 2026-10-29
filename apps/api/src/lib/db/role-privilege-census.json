@@ -125,6 +125,7 @@
       "function:public.stella_list_verification_day(instant timestamp with time zone):EXECUTE",
       "function:public.stella_matter_invoice_count(matter_id uuid):EXECUTE",
       "function:public.stella_matter_reserved_charges(matter_id uuid, invoice_currency text, excluded_invoice_id uuid):EXECUTE",
+      "function:public.stella_matter_reserved_minutes(matter_id uuid, excluded_invoice_id uuid):EXECUTE",
       "function:public.stella_refresh_entity_display_name(entity_id uuid):EXECUTE",
       "function:public.stella_refresh_entity_display_name_from_entity():EXECUTE",
       "function:public.stella_refresh_entity_display_name_from_field():EXECUTE",
