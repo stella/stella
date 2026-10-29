@@ -5,6 +5,7 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Select,
   SelectItem,
@@ -116,8 +117,8 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
   const canSubmit = content.trim().length > 0 && !createMemory.isPending;
 
   return (
-    <form
-      className="flex flex-col gap-2"
+    <Form
+      density="compact"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) {
@@ -164,7 +165,7 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
       >
         {commonT("add")}
       </Button>
-    </form>
+    </Form>
   );
 };
 

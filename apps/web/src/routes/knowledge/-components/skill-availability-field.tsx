@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -88,12 +89,9 @@ export const SkillAvailabilityField = ({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-end gap-2">
-        <label
-          className="text-muted-foreground text-xs"
-          htmlFor="skill-availability"
-        >
-          {tSkills("availabilityLabel")}
-        </label>
+        <Label htmlFor="skill-availability" variant="muted">
+          <span className="font-normal">{tSkills("availabilityLabel")}</span>
+        </Label>
         <Select
           disabled={options.length < 2}
           onValueChange={(value) => {

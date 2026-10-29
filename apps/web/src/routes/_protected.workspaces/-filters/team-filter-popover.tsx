@@ -87,28 +87,28 @@ export const TeamFilterPopover = ({
         <p className="text-muted-foreground px-2 text-xs font-medium tracking-tight uppercase">
           {t("workspaces.filters.team.lead")}
         </p>
-        <button
-          className={cn(
-            "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
-          )}
+        <Button
+          aria-pressed={isLeadAny}
+          className="justify-between"
           onClick={() => onLeadChange(isLeadAny ? undefined : { type: "any" })}
-          type="button"
+          size="row"
+          variant="ghost"
         >
           <span>{t("workspaces.filters.team.hasLead")}</span>
           {isLeadAny && <CheckIcon className="text-primary size-3.5" />}
-        </button>
-        <button
-          className={cn(
-            "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
-          )}
+        </Button>
+        <Button
+          aria-pressed={isLeadNone}
+          className="justify-between"
           onClick={() =>
             onLeadChange(isLeadNone ? undefined : { type: "none" })
           }
-          type="button"
+          size="row"
+          variant="ghost"
         >
           <span>{t("workspaces.filters.team.noLead")}</span>
           {isLeadNone && <CheckIcon className="text-primary size-3.5" />}
-        </button>
+        </Button>
       </section>
 
       <Separator />
@@ -138,30 +138,32 @@ export const TeamFilterPopover = ({
                   className="hover:bg-accent flex items-center gap-2 rounded px-1 py-1"
                   key={m.userId}
                 >
-                  <button
-                    className="flex min-w-0 flex-1 items-center gap-2"
+                  <Button
+                    aria-pressed={active}
+                    className="flex min-w-0 flex-1"
                     onClick={() => toggleTeam(m.userId)}
-                    type="button"
+                    variant="plain"
                   >
-                    <UserIdentity
-                      avatarClassName="size-5 shrink-0 text-[0.5625rem]"
-                      className="min-w-0 flex-1"
-                      image={m.userImage}
-                      name={m.userName}
-                      nameClassName="text-sm"
-                    />
-                    {active && (
-                      <CheckIcon className="text-primary size-3.5 shrink-0" />
-                    )}
-                  </button>
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <UserIdentity
+                        avatarClassName="size-5 shrink-0 text-[0.5625rem]"
+                        className="min-w-0 flex-1"
+                        image={m.userImage}
+                        name={m.userName}
+                        nameClassName="text-sm"
+                      />
+                      {active && (
+                        <CheckIcon className="text-primary size-3.5 shrink-0" />
+                      )}
+                    </span>
+                  </Button>
                   <Tooltip
                     content={t("workspaces.filters.team.filterAsLead")}
                     render={
-                      <button
-                        className={cn(
-                          "text-muted-foreground hover:text-foreground text-3xs shrink-0 rounded px-1.5 py-0.5 tracking-tight uppercase",
-                          isLeadUser && "text-primary",
-                        )}
+                      // Its label already names the state ("Lead" /
+                      // "Set lead"), so no aria-pressed on top of it.
+                      <Button
+                        className="shrink-0"
                         onClick={() =>
                           onLeadChange(
                             isLeadUser
@@ -169,12 +171,20 @@ export const TeamFilterPopover = ({
                               : { type: "user", userId: m.userId },
                           )
                         }
-                        type="button"
+                        size="inline"
+                        variant="muted"
                       >
-                        {isLeadUser
-                          ? t("workspaces.filters.team.leadActive")
-                          : t("workspaces.filters.team.leadInactive")}
-                      </button>
+                        <span
+                          className={cn(
+                            "text-3xs px-1.5 py-0.5 tracking-tight uppercase",
+                            isLeadUser && "text-primary",
+                          )}
+                        >
+                          {isLeadUser
+                            ? t("workspaces.filters.team.leadActive")
+                            : t("workspaces.filters.team.leadInactive")}
+                        </span>
+                      </Button>
                     }
                   />
                 </div>

@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/dialog";
 import { SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
@@ -367,17 +368,18 @@ const ImportSkillDialogBody = ({
               </p>
             )}
 
-            <div className="border-border flex max-h-80 flex-col overflow-y-auto rounded-lg border">
+            <div className="border-border flex max-h-80 flex-col overflow-y-auto rounded-lg border p-1">
               {discovery.skills.map((skill, index) => {
                 const checked = selected.has(skill.sourceUrl);
                 const checkboxId = `import-skill-${index}`;
                 const selectionFull =
                   selected.size >= MAX_SELECTED_SKILLS && !checked;
                 return (
-                  <label
-                    className="hover:bg-muted/50 flex min-h-11 items-start gap-3 p-3"
+                  <Label
+                    className="items-start"
                     htmlFor={checkboxId}
                     key={skill.sourceUrl}
+                    variant="choice"
                   >
                     <Checkbox
                       checked={checked}
@@ -420,7 +422,7 @@ const ImportSkillDialogBody = ({
                         )}
                       </span>
                     </span>
-                  </label>
+                  </Label>
                 );
               })}
             </div>
@@ -435,12 +437,11 @@ const ImportSkillDialogBody = ({
 
             {canManageTeam && (
               <div className="flex items-center justify-end gap-2">
-                <label
-                  className="text-muted-foreground text-xs"
-                  htmlFor="import-skill-scope"
-                >
-                  {t("knowledge.skills.form.scope")}
-                </label>
+                <Label htmlFor="import-skill-scope" variant="muted">
+                  <span className="font-normal">
+                    {t("knowledge.skills.form.scope")}
+                  </span>
+                </Label>
                 <Select
                   disabled={busy}
                   onValueChange={(value) => {

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { FilterIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
@@ -67,20 +68,26 @@ export const ColumnFilterButton = ({
       <PopoverTrigger
         aria-label={t("common.filter")}
         render={
-          <button
+          <Button
             aria-label={t("common.filter")}
             className={cn(
-              "inline-flex size-4 cursor-pointer items-center justify-center rounded-sm opacity-0 transition-opacity",
+              "inline-flex size-4 items-center justify-center opacity-0 transition-opacity",
               "group-hover/header:opacity-100 focus-visible:opacity-100",
-              isActive && "text-primary hover:text-primary/80 opacity-100",
+              isActive && "opacity-100",
             )}
-            type="button"
+            size="inline"
+            variant="muted"
           />
         }
         tooltip={t("common.filter")}
       >
+        {/* Full opacity: Button dims an unmarked glyph to 80%, which would
+            fade the small header glyph against the column label. */}
         <FilterIcon
-          className={cn("size-3", isActive && "fill-primary stroke-primary")}
+          className={cn(
+            "size-3 opacity-100",
+            isActive && "fill-primary stroke-primary text-primary",
+          )}
         />
       </PopoverTrigger>
       <PopoverPopup align="start">

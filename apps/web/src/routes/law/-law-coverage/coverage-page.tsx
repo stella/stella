@@ -18,6 +18,13 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -244,21 +251,11 @@ export const CaseLawCoveragePage = ({
         aria-label={t("caseLaw.coverage.countryNavigation")}
         className="bg-background sticky top-0 z-10 border-b py-2"
       >
-        <select
-          aria-label={t("caseLaw.coverage.countryNavigation")}
-          className="bg-background focus-visible:ring-ring min-h-11 w-full rounded-md border px-3 text-sm focus-visible:ring-2 sm:hidden"
-          value={
-            countries.some(
-              (country) => caseLawCoverageAnchor(country.country) === hash,
-            )
-              ? hash
-              : ""
-          }
-          onChange={(event) => {
+        <Select<string>
+          onValueChange={(anchor) => {
             const country = countries.find(
               (candidate) =>
-                caseLawCoverageAnchor(candidate.country) ===
-                event.currentTarget.value,
+                caseLawCoverageAnchor(candidate.country) === anchor,
             );
             if (country === undefined) {
               return;
@@ -272,19 +269,33 @@ export const CaseLawCoveragePage = ({
               "law-coverage.navigate-country",
             );
           }}
+          value={
+            countries.some(
+              (country) => caseLawCoverageAnchor(country.country) === hash,
+            )
+              ? hash
+              : null
+          }
         >
-          <option value="" disabled>
-            {t("caseLaw.coverage.countryNavigation")}
-          </option>
-          {countries.map((country) => (
-            <option
-              value={caseLawCoverageAnchor(country.country)}
-              key={country.country}
-            >
-              {caseLawCountryName(format, country.country)}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label={t("caseLaw.coverage.countryNavigation")}
+            className="min-h-11 w-full sm:hidden"
+          >
+            <SelectValue
+              placeholder={t("caseLaw.coverage.countryNavigation")}
+            />
+          </SelectTrigger>
+          <SelectPopup>
+            {countries.map((country) => (
+              <SelectItem
+                key={country.country}
+                value={caseLawCoverageAnchor(country.country)}
+              >
+                {caseLawCountryName(format, country.country)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
         <div className="hidden flex-wrap gap-x-1 sm:flex">
           {countries.map((country) => (
             <Link
@@ -736,13 +747,16 @@ const SourcesTableHead = () => {
           <Tooltip>
             <TooltipTrigger
               render={
-                <button
-                  type="button"
-                  className="focus-visible:ring-ring min-h-11 max-w-full whitespace-normal underline decoration-dotted underline-offset-4 focus-visible:ring-2"
+                <Button
+                  className="min-h-11 max-w-full"
+                  size="inline"
+                  variant="muted"
                 />
               }
             >
-              {t("caseLaw.coverage.completeness")}
+              <span className="font-medium underline decoration-dotted underline-offset-4">
+                {t("caseLaw.coverage.completeness")}
+              </span>
             </TooltipTrigger>
             <TooltipPopup>
               {t("caseLaw.coverage.completenessHelp")}
@@ -820,7 +834,7 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
               </div>
             )}
           </TableHead>
-          <TableCell className="text-end tabular-nums">
+          <TableCell align="end" numeric>
             {format.number(source.publishedDecisions)}
           </TableCell>
           <TableCell className={"text-end"}>
@@ -839,7 +853,7 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
                 {row.court ?? t("caseLaw.corpusStatus.otherCourts")}
               </span>
             </TableHead>
-            <TableCell className="text-end tabular-nums">
+            <TableCell align="end" numeric>
               {format.number(row.decisions)}
             </TableCell>
             <TableCell colSpan={SOURCE_COLUMN_COUNT - 2} />

@@ -7,6 +7,8 @@ import { toMajorUnits } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
+import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -210,24 +212,21 @@ function PolicyRow({
       <div className="flex items-center gap-2">
         {withSeats && perSeat && (
           <>
-            <label
-              className="text-muted-foreground text-sm"
-              htmlFor={seatsInputId}
-            >
+            <Label htmlFor={seatsInputId} variant="muted">
               {t("settings.organization.usagePlanSeats")}
-            </label>
-            <input
-              className="border-input bg-background h-8 w-20 rounded-md border px-2 text-sm"
+            </Label>
+            <NumberInput
+              className="w-20"
               id={seatsInputId}
               max={MAX_SEATS}
               min={MIN_SEATS}
-              onChange={(event) => {
-                const parsed = Number.parseInt(event.target.value, 10);
-                if (Number.isInteger(parsed)) {
-                  setSeats(Math.min(Math.max(parsed, MIN_SEATS), MAX_SEATS));
+              onValueChange={(next) => {
+                if (next !== null && Number.isInteger(next)) {
+                  setSeats(Math.min(Math.max(next, MIN_SEATS), MAX_SEATS));
                 }
               }}
-              type="number"
+              size="sm"
+              step={1}
               value={seats}
             />
           </>

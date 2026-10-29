@@ -16,6 +16,7 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { GripVerticalIcon, PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
@@ -149,8 +150,9 @@ export const DocumentTypesCard = () => {
         </ul>
       )}
 
-      <form
-        className="flex items-center gap-2"
+      <Form
+        density="compact"
+        layout="inline"
         onSubmit={(event) => {
           event.preventDefault();
           submitNew();
@@ -169,7 +171,7 @@ export const DocumentTypesCard = () => {
           <PlusIcon />
           {t("common.add")}
         </Button>
-      </form>
+      </Form>
     </div>
   );
 };

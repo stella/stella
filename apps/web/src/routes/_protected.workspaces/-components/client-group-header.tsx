@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -27,44 +28,36 @@ export const ClientGroupHeader = ({
   const matterCount = group.workspaces.length;
 
   return (
-    <button
-      className={cn(
-        "sticky top-0 z-10 col-span-full",
-        "flex cursor-pointer items-center gap-2",
-        "bg-background/95 border-b backdrop-blur-sm",
-        "pt-4 pb-2 text-start group-first/client-section:pt-0",
-      )}
+    <Button
+      className="sticky top-0 z-10 col-span-full flex"
       data-group-id={group.groupId}
       onClick={onToggle}
-      type="button"
+      variant="plain"
     >
-      <DirectionalIcon
+      {/* The sticky band the matters scroll under. */}
+      <span
         className={cn(
-          "text-muted-foreground size-3.5 shrink-0 transition-transform",
-          !collapsed && "rotate-90",
+          "flex w-full items-center gap-2",
+          "bg-background/95 border-b backdrop-blur-sm",
+          "pt-4 pb-2 group-first/client-section:pt-0",
         )}
-        flip={collapsed}
-        icon={ChevronRightIcon}
-      />
-      <h3 className="text-sm font-semibold">
-        {group.type === "personal" ? (
-          <span>{personalLabel}</span>
-        ) : (
-          <span
-            aria-label={group.clientName}
-            className="hover:underline"
-            onClick={(e) => {
-              e.stopPropagation();
-              detached(
-                navigate({
-                  to: "/contacts/$contactId",
-                  params: { contactId: group.clientId },
-                }),
-                "client-group-header.navigate",
-              );
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
+      >
+        <DirectionalIcon
+          className={cn(
+            "text-muted-foreground size-3.5 shrink-0 transition-transform",
+            !collapsed && "rotate-90",
+          )}
+          flip={collapsed}
+          icon={ChevronRightIcon}
+        />
+        <h3 className="text-sm font-semibold">
+          {group.type === "personal" ? (
+            <span>{personalLabel}</span>
+          ) : (
+            <span
+              aria-label={group.clientName}
+              className="hover:underline"
+              onClick={(e) => {
                 e.stopPropagation();
                 detached(
                   navigate({
@@ -73,31 +66,43 @@ export const ClientGroupHeader = ({
                   }),
                   "client-group-header.navigate",
                 );
-              }
-            }}
-            role="link"
-            tabIndex={0}
-          >
-            <BidiText>{group.clientName}</BidiText>
-          </span>
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  detached(
+                    navigate({
+                      to: "/contacts/$contactId",
+                      params: { contactId: group.clientId },
+                    }),
+                    "client-group-header.navigate",
+                  );
+                }
+              }}
+              role="link"
+              tabIndex={0}
+            >
+              <BidiText>{group.clientName}</BidiText>
+            </span>
+          )}
+        </h3>
+        <span
+          className={cn(
+            "bg-muted rounded-full px-1.5 py-0.5",
+            "text-muted-foreground text-3xs tabular-nums",
+          )}
+        >
+          {format.number(matterCount)}
+        </span>
+        {group.type === "client" && group.responsibleAttorneyName && (
+          <>
+            <span className="text-foreground-subtle">·</span>
+            <BidiText as="span" className="text-muted-foreground text-xs">
+              {group.responsibleAttorneyName}
+            </BidiText>
+          </>
         )}
-      </h3>
-      <span
-        className={cn(
-          "bg-muted rounded-full px-1.5 py-0.5",
-          "text-muted-foreground text-3xs tabular-nums",
-        )}
-      >
-        {format.number(matterCount)}
       </span>
-      {group.type === "client" && group.responsibleAttorneyName && (
-        <>
-          <span className="text-foreground-subtle">·</span>
-          <BidiText as="span" className="text-muted-foreground text-xs">
-            {group.responsibleAttorneyName}
-          </BidiText>
-        </>
-      )}
-    </button>
+    </Button>
   );
 };

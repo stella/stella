@@ -22,6 +22,7 @@ import {
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuItem,
@@ -37,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -656,27 +658,35 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             in the top-right corner, the identity stays a readable width. */}
         <div className="flex items-start gap-4">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <input
-              aria-label={t("common.name")}
-              className="text-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
-              dir={contentDir(name)}
-              onBlur={commitName}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t("common.name")}
-              readOnly={!canEditContent}
-              value={name}
-            />
-            <textarea
-              aria-label={t("common.description")}
-              className="text-muted-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
-              dir={contentDir(description)}
-              onBlur={commitDescription}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder={t("common.description")}
-              readOnly={!canEditContent}
-              rows={2}
-              value={description}
-            />
+            {/* The name and summary are edited where they are read: the
+                fields take the heading's and the body's type from here. */}
+            <div className="text-foreground flex text-lg font-semibold">
+              <Input
+                aria-label={t("common.name")}
+                className="-ms-1.5 max-w-3xl"
+                dir={contentDir(name)}
+                onBlur={commitName}
+                onChange={(event) => setName(event.currentTarget.value)}
+                placeholder={t("common.name")}
+                readOnly={!canEditContent}
+                value={name}
+                inline
+              />
+            </div>
+            <div className="text-muted-foreground flex text-sm leading-relaxed">
+              <Textarea
+                aria-label={t("common.description")}
+                className="-ms-1.5 max-w-3xl"
+                dir={contentDir(description)}
+                onBlur={commitDescription}
+                onChange={(event) => setDescription(event.currentTarget.value)}
+                placeholder={t("common.description")}
+                readOnly={!canEditContent}
+                rows={2}
+                value={description}
+                inline
+              />
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {detail.data && (
@@ -738,12 +748,15 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             {tSkills("howItRuns")}
           </p>
           <div className="grid max-w-3xl grid-cols-[9rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5">
-            <label
-              className="text-muted-foreground pt-1.5 text-xs"
+            <Label
+              className="mt-1.5"
               htmlFor="edit-skill-command"
+              variant="muted"
             >
-              {t("knowledge.skills.commandLabel")}
-            </label>
+              <span className="font-normal">
+                {t("knowledge.skills.commandLabel")}
+              </span>
+            </Label>
             <div className="flex flex-col gap-1">
               <div className="flex items-stretch">
                 <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
@@ -940,12 +953,9 @@ function SkillInvocationField({
   const tCommon = useTranslations("common");
   return (
     <>
-      <label
-        className="text-muted-foreground pt-1.5 text-xs"
-        htmlFor="edit-skill-invocation"
-      >
-        {tCommon("whenToUse")}
-      </label>
+      <Label className="mt-1.5" htmlFor="edit-skill-invocation" variant="muted">
+        <span className="font-normal">{tCommon("whenToUse")}</span>
+      </Label>
       <div className="flex flex-col gap-1">
         <Select
           disabled={locked || saving}

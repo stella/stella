@@ -132,9 +132,20 @@ for (const locale of ["en", "ar"]) {
     await expect(switcher).toBeVisible();
     await toggle.focus();
     await page.keyboard.press("Space");
-    await switcher.selectOption("country-svk");
+    // The switcher is the design system's Select: open it, then pick the
+    // country by the name the (hidden) desktop link shows in this locale.
+    const pickCountry = async (anchor: string) => {
+      const name = await page
+        .locator(`nav a[href$="#${anchor}"]`)
+        .textContent();
+      await switcher.click();
+      await page
+        .getByRole("option", { name: name ?? anchor, exact: true })
+        .click();
+    };
+    await pickCountry("country-svk");
     await expect(page).toHaveURL(/#country-svk$/u);
-    await switcher.selectOption("country-cze");
+    await pickCountry("country-cze");
     await expect(page).toHaveURL(/#country-cze$/u);
     await expect(table).toBeVisible();
     expect(

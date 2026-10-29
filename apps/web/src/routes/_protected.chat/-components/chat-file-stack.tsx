@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { buttonVariants } from "@stll/ui/button";
+import { Button, buttonVariants } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -242,16 +242,16 @@ const MatterFileRow = ({
     type: "entity",
   });
   return (
-    <button
-      className={ROW_CLASS}
+    <Button
       onClick={() => {
         activate?.();
         onOpen();
       }}
-      type="button"
+      size="row"
+      variant="ghost"
     >
       <ThreadFileRowContent file={file} />
-    </button>
+    </Button>
   );
 };
 

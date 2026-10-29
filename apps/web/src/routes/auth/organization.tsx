@@ -32,6 +32,7 @@ import {
 import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   OAuthAccountList,
@@ -384,21 +385,30 @@ const OrganizationList = ({
       </FrameHeader>
       <FramePanel className="flex flex-col gap-2">
         {organizations.map((org) => (
-          <button
-            className="hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start disabled:opacity-64"
+          <Button
+            className="w-full"
             disabled={isSelectPending}
             key={org.id}
             onClick={() => selectOrg(org.id)}
-            type="button"
+            variant="plain"
           >
-            <Avatar className="size-10">
-              <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-medium">{org.name}</p>
-              <p className="text-muted-foreground text-sm">{org.slug}</p>
-            </div>
-          </button>
+            <span
+              className={cn(
+                "hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start",
+                isSelectPending && "opacity-64",
+              )}
+            >
+              <Avatar className="size-10">
+                <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
+              </Avatar>
+              <span>
+                <span className="block font-medium">{org.name}</span>
+                <span className="text-muted-foreground block text-sm">
+                  {org.slug}
+                </span>
+              </span>
+            </span>
+          </Button>
         ))}
       </FramePanel>
     </Frame>

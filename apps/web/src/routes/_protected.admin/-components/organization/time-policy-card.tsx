@@ -7,8 +7,9 @@ import { useTranslations } from "use-intl";
 import { Temporal, todayFor } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { Frame, FramePanel } from "@stll/ui/frame";
-import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -157,175 +158,184 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
   return (
     <Frame>
       <FramePanel>
-        <form
-          className="flex flex-col gap-4 p-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (disabled) {
-              return;
-            }
-            detached(form.handleSubmit(), "time-policy.submit");
-          }}
-        >
-          <form.Field name="timeMinimumUnitMinutes">
-            {(field) => (
-              <Field>
-                <FieldLabel htmlFor={`${id}-unit`}>
-                  {t("settings.organization.timePolicy.minimumUnit")}
-                </FieldLabel>
-                <Select
-                  disabled={disabled}
-                  value={String(field.state.value)}
-                  onValueChange={(value) => {
-                    if (value !== null) {
-                      field.handleChange(Number(value));
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    id={`${id}-unit`}
-                    aria-describedby={`${id}-unit-help`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {[
-                      ...new Set([
-                        ...TIME_UNIT_OPTIONS,
-                        settings.timeMinimumUnitMinutes,
-                      ]),
-                    ]
-                      .toSorted((a, b) => a - b)
-                      .map((value) => (
-                        <SelectItem key={value} value={String(value)}>
-                          {t("guides.minutes", { count: format.number(value) })}
-                        </SelectItem>
-                      ))}
-                  </SelectPopup>
-                </Select>
-                <p
-                  className="text-muted-foreground text-xs"
-                  id={`${id}-unit-help`}
-                >
-                  {t("settings.organization.timePolicy.minimumUnitHelp")}
-                </p>
-              </Field>
-            )}
-          </form.Field>
-          <form.Field name="timeEditWindowDays">
-            {(field) => (
-              <Field>
-                <FieldLabel htmlFor={`${id}-window`}>
-                  {t("settings.organization.timePolicy.editWindow")}
-                </FieldLabel>
-                <Input
-                  aria-describedby={`${id}-window-help`}
-                  disabled={disabled}
-                  id={`${id}-window`}
-                  inputMode="numeric"
-                  min={0}
-                  step={1}
-                  type="number"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-                <p
-                  className="text-muted-foreground text-xs"
-                  id={`${id}-window-help`}
-                >
-                  {t("settings.organization.timePolicy.editWindowHelp")}
-                </p>
-                {field.state.meta.errors.map(
-                  (error) =>
-                    error && (
-                      <p
-                        className="text-destructive text-sm"
-                        key={error.message}
-                        role="alert"
-                      >
-                        {error.message}
-                      </p>
-                    ),
-                )}
-              </Field>
-            )}
-          </form.Field>
-          <form.Field name="timeLockedThroughMonth">
-            {(field) => (
-              <Field>
-                <FieldLabel htmlFor={`${id}-month`}>
-                  {t("settings.organization.timePolicy.lockedThrough")}
-                </FieldLabel>
-                <div className="flex items-center gap-2">
-                  <MonthLockPicker
-                    describedBy={`${id}-month-help`}
+        <div className="p-1">
+          <Form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (disabled) {
+                return;
+              }
+              detached(form.handleSubmit(), "time-policy.submit");
+            }}
+          >
+            <form.Field name="timeMinimumUnitMinutes">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={`${id}-unit`}>
+                    {t("settings.organization.timePolicy.minimumUnit")}
+                  </FieldLabel>
+                  <Select
                     disabled={disabled}
-                    id={`${id}-month`}
-                    today={today}
-                    value={field.state.value}
-                    onChange={field.handleChange}
-                  />
-                  <Button
-                    disabled={disabled || field.state.value === ""}
-                    onClick={() => field.handleChange("")}
-                    type="button"
-                    variant="ghost"
+                    value={String(field.state.value)}
+                    onValueChange={(value) => {
+                      if (value !== null) {
+                        field.handleChange(Number(value));
+                      }
+                    }}
                   >
-                    {t("common.clearDate")}
-                  </Button>
-                </div>
-                <p
-                  className="text-muted-foreground text-xs"
-                  id={`${id}-month-help`}
-                >
-                  {t("settings.organization.timePolicy.lockedThroughHelp")}
-                </p>
-                {field.state.meta.errors.map(
-                  (error) =>
-                    error && (
-                      <p
-                        className="text-destructive text-sm"
-                        key={error.message}
-                        role="alert"
-                      >
-                        {error.message}
-                      </p>
-                    ),
-                )}
-              </Field>
+                    <SelectTrigger
+                      id={`${id}-unit`}
+                      aria-describedby={`${id}-unit-help`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {[
+                        ...new Set([
+                          ...TIME_UNIT_OPTIONS,
+                          settings.timeMinimumUnitMinutes,
+                        ]),
+                      ]
+                        .toSorted((a, b) => a - b)
+                        .map((value) => (
+                          <SelectItem key={value} value={String(value)}>
+                            {t("guides.minutes", {
+                              count: format.number(value),
+                            })}
+                          </SelectItem>
+                        ))}
+                    </SelectPopup>
+                  </Select>
+                  <p
+                    className="text-muted-foreground text-xs"
+                    id={`${id}-unit-help`}
+                  >
+                    {t("settings.organization.timePolicy.minimumUnitHelp")}
+                  </p>
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="timeEditWindowDays">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={`${id}-window`}>
+                    {t("settings.organization.timePolicy.editWindow")}
+                  </FieldLabel>
+                  <NumberInput
+                    disabled={disabled}
+                    id={`${id}-window`}
+                    inputProps={{
+                      "aria-describedby": `${id}-window-help`,
+                      onBlur: field.handleBlur,
+                    }}
+                    min={0}
+                    onValueChange={(next) =>
+                      field.handleChange(next === null ? "" : String(next))
+                    }
+                    step={1}
+                    value={
+                      field.state.value === ""
+                        ? null
+                        : Number(field.state.value)
+                    }
+                  />
+                  <p
+                    className="text-muted-foreground text-xs"
+                    id={`${id}-window-help`}
+                  >
+                    {t("settings.organization.timePolicy.editWindowHelp")}
+                  </p>
+                  {field.state.meta.errors.map(
+                    (error) =>
+                      error && (
+                        <p
+                          className="text-destructive text-sm"
+                          key={error.message}
+                          role="alert"
+                        >
+                          {error.message}
+                        </p>
+                      ),
+                  )}
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="timeLockedThroughMonth">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={`${id}-month`}>
+                    {t("settings.organization.timePolicy.lockedThrough")}
+                  </FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <MonthLockPicker
+                      describedBy={`${id}-month-help`}
+                      disabled={disabled}
+                      id={`${id}-month`}
+                      today={today}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                    />
+                    <Button
+                      disabled={disabled || field.state.value === ""}
+                      onClick={() => field.handleChange("")}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("common.clearDate")}
+                    </Button>
+                  </div>
+                  <p
+                    className="text-muted-foreground text-xs"
+                    id={`${id}-month-help`}
+                  >
+                    {t("settings.organization.timePolicy.lockedThroughHelp")}
+                  </p>
+                  {field.state.meta.errors.map(
+                    (error) =>
+                      error && (
+                        <p
+                          className="text-destructive text-sm"
+                          key={error.message}
+                          role="alert"
+                        >
+                          {error.message}
+                        </p>
+                      ),
+                  )}
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="timeNarrativeRequired">
+              {(field) => (
+                <Field className="min-h-11 flex-row items-center gap-2">
+                  <Switch
+                    disabled={disabled}
+                    id={`${id}-narrative`}
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                  />
+                  <FieldLabel htmlFor={`${id}-narrative`}>
+                    {t("settings.organization.timePolicy.narrativeRequired")}
+                  </FieldLabel>
+                </Field>
+              )}
+            </form.Field>
+            {mutation.error !== null && (
+              <p className="text-destructive text-sm" role="alert">
+                {errorKey === null ? mutation.error.message : t(errorKey)}
+              </p>
             )}
-          </form.Field>
-          <form.Field name="timeNarrativeRequired">
-            {(field) => (
-              <Field className="min-h-11 flex-row items-center gap-2">
-                <Switch
-                  disabled={disabled}
-                  id={`${id}-narrative`}
-                  checked={field.state.value}
-                  onCheckedChange={field.handleChange}
-                />
-                <FieldLabel htmlFor={`${id}-narrative`}>
-                  {t("settings.organization.timePolicy.narrativeRequired")}
-                </FieldLabel>
-              </Field>
+            {canEdit && (
+              <Button
+                className="self-start"
+                disabled={!dirty || mutation.isPending}
+                type="submit"
+              >
+                {t("common.saveChanges")}
+              </Button>
             )}
-          </form.Field>
-          {mutation.error !== null && (
-            <p className="text-destructive text-sm" role="alert">
-              {errorKey === null ? mutation.error.message : t(errorKey)}
-            </p>
-          )}
-          {canEdit && (
-            <Button
-              className="self-start"
-              disabled={!dirty || mutation.isPending}
-              type="submit"
-            >
-              {t("common.saveChanges")}
-            </Button>
-          )}
-        </form>
+          </Form>
+        </div>
       </FramePanel>
     </Frame>
   );

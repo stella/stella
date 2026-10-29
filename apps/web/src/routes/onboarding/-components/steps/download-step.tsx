@@ -144,18 +144,22 @@ const TargetCard = ({
   selected,
   onSelect,
 }: TargetCardProps) => (
-  <button
+  // A no-fill wrapper: the card inside draws the border, the hover tint and a
+  // selected state distinct from hover (foreground border and ring).
+  <Button
     aria-pressed={selected}
+    className="group w-full"
     onClick={onSelect}
-    type="button"
-    className={cn(
-      "rounded-lg border p-4 text-start",
-      selected
-        ? "border-foreground bg-accent/60 ring-foreground/20 ring-1"
-        : "border-border hover:bg-muted/40",
-    )}
+    variant="plain"
   >
-    <div className="flex items-start gap-3">
+    <div
+      className={cn(
+        "flex w-full items-start gap-3 rounded-lg border p-4 text-start",
+        selected
+          ? "border-foreground bg-accent/60 ring-foreground/20 ring-1"
+          : "border-border group-hover:bg-muted/40",
+      )}
+    >
       {/* Fixed to the widest icon (the assistant pair) so titles align. */}
       <span className="mt-0.5 flex w-7 shrink-0 items-center">{icon}</span>
       <div className="min-w-0 flex-1">
@@ -163,7 +167,7 @@ const TargetCard = ({
         <p className="text-muted-foreground mt-1 text-sm">{description}</p>
       </div>
     </div>
-  </button>
+  </Button>
 );
 
 /** Compact Claude and ChatGPT marks for the assistant card's icon slot. */
