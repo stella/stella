@@ -36,7 +36,9 @@ export const liveCreateRouteRows = () => {
     ),
   ]);
   if (result.exitCode !== 0) {
-    panic("Cannot read the API mounted create route projection");
+    panic(
+      `Cannot read the API mounted create route projection (exit ${String(result.exitCode)}, signal ${String(result.signalCode)}): ${result.stderr.toString()}`,
+    );
   }
   const output = result.stdout
     .toString()
