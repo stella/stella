@@ -34,7 +34,10 @@ import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
-import { hasActiveInvoicePayments } from "@/api/lib/billing/invoice-payments";
+import {
+  hasActiveInvoicePayments,
+  settleSentInvoice,
+} from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import {
   allocateNumber,
@@ -61,8 +64,7 @@ import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
-// Paid is not a transition: recording payments that reach the total marks an
-// invoice paid (`lib/billing/invoice-payments`), the only path to it.
+// Settlement belongs to `lib/billing/invoice-payments`, including zero totals on send.
 type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
 const TRANSITIONS = {
@@ -823,6 +825,14 @@ const applyTransition = async (
           : {}),
       },
     });
+  }
+  if (options.action === "send") {
+    return (
+      await settleSentInvoice(tx, {
+        scope: options,
+        invoice: existing,
+      })
+    ).map(() => ({ id: row.id }));
   }
   return Result.ok({ id: row.id });
 };

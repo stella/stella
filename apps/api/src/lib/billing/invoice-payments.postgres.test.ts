@@ -333,7 +333,9 @@ if (!databaseUrl || !runPostgres) {
               .from(invoicePayments)
               .where(eq(invoicePayments.invoiceId, invoiceId)),
         ),
-      ).toEqual([{ amount: TOTAL, paidOn: "2026-07-01", recordedBy: null }]);
+      ).toEqual([
+        { amount: cents(TOTAL), paidOn: "2026-07-01", recordedBy: null },
+      ]);
       // The owner may not insert a payment someone is said to have entered.
       const forged = await Result.tryPromise(
         async () =>

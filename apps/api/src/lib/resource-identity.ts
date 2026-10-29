@@ -206,6 +206,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
   invoiceLine: { type: "non_resource", reason: "subresource" },
+  invoicePayment: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
     type: "resource",

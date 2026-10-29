@@ -10,7 +10,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import { Temporal } from "@stll/time";
+import { parseTimeZoneId, Temporal } from "@stll/time";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
@@ -19,6 +19,8 @@ import {
   INVOICE_STATUS,
   invoicePayments,
   invoices,
+  organizationSettings,
+  sellerProfiles,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -42,6 +44,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { loadInvoiceExport, toExportRecords } from "../export-records";
 import readInvoiceById from "../get";
 import readInvoices from "../list";
 import transitionInvoice from "../transition";
@@ -289,6 +292,48 @@ const listedItems = (result: unknown): unknown[] =>
     : panic("Expected an invoice page", { result });
 
 describe("invoice payments", () => {
+  test.each(["invoice", "credit_note"] as const)(
+    "a zero-total %s settles only when sent, without a payment",
+    async (documentType) => {
+      const invoiceId = await seedInvoice({
+        status: INVOICE_STATUS.DRAFT,
+        totalAmount: 0,
+        documentType,
+      });
+      const changeStatus = async (action: "finalize" | "send") =>
+        await run(transitionInvoice, {
+          params: { invoiceId },
+          body: { action },
+          route: "/v1/invoices/:workspaceId/:invoiceId/transition",
+        });
+      expect(await changeStatus("finalize")).toEqual({ id: invoiceId });
+      expect(await readStored(invoiceId)).toMatchObject({
+        status: INVOICE_STATUS.FINALIZED,
+        paidAt: null,
+        totalAmount: 0,
+      });
+      expect(await record(invoiceId, { amount: 1 })).toMatchObject({
+        code: 409,
+        response: { message: "This invoice has nothing outstanding" },
+      });
+      expect(await changeStatus("send")).toEqual({ id: invoiceId });
+      const stored = await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { status: true, paidAt: true, sentAt: true },
+      });
+      expect(stored?.status).toBe(INVOICE_STATUS.PAID);
+      expect(stored?.paidAt).toBeInstanceOf(Date);
+      expect(stored?.paidAt).toEqual(stored?.sentAt);
+      expect(await storedPayments(invoiceId)).toEqual([]);
+      expect(await record(invoiceId, { amount: 1 })).toMatchObject({
+        code: 409,
+        response: {
+          message: "This invoice is already paid; nothing is outstanding",
+        },
+      });
+    },
+  );
+
   test("a partial payment keeps the invoice sent; the remainder marks it paid", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
     const auditEvents: AuditEvent[] = [];
@@ -351,7 +396,7 @@ describe("invoice payments", () => {
       },
     });
     expect(await storedPayments(invoiceId)).toEqual([
-      { amount: 7000, voided: null },
+      { amount: cents(7000), voided: null },
     ]);
     expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.SENT);
   });
@@ -394,7 +439,7 @@ describe("invoice payments", () => {
       paidAt: null,
     });
     const [kept] = await storedPayments(invoiceId);
-    expect(kept?.amount).toBe(10_000);
+    expect(kept?.amount).toBe(cents(10_000));
     expect(kept?.voided).toBeInstanceOf(Date);
     expect(await voidPayment(invoiceId, paymentId)).toMatchObject({
       code: 404,
@@ -557,6 +602,105 @@ describe("invoice payments", () => {
       outstandingAmount: 10_000,
     });
   });
+
+  test.each(["explicit", "practice-jurisdiction"] as const)(
+    "legacy settlements preserve the organization's export day across the backfill (%s zone)",
+    async (zoneSource) => {
+      const paidAt = new Date("2026-07-01T23:30:00Z");
+      const invoiceId = await seedInvoice({
+        status: INVOICE_STATUS.PAID,
+        legacy: { paidAt },
+      });
+      const settings = await testDb.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: ids.orgA } },
+      });
+      const sellerId = createSafeId<"sellerProfile">();
+      await testDb.insert(sellerProfiles).values({
+        id: sellerId,
+        organizationId: ids.orgA,
+        legalName: "Export test seller",
+        country: "CZ",
+        defaultCurrency: "USD",
+      });
+      await testDb
+        .update(invoices)
+        .set({ sellerProfileId: sellerId })
+        .where(eq(invoices.id, invoiceId));
+      const timeZone =
+        zoneSource === "explicit"
+          ? (parseTimeZoneId("Europe/Prague") ??
+            panic("Unknown test time zone"))
+          : null;
+      const practiceJurisdictions = [
+        { countryCode: "CZ", isPrimary: true },
+      ] as const;
+      await testDb
+        .insert(organizationSettings)
+        .values({
+          organizationId: ids.orgA,
+          timeZone,
+          practiceJurisdictions: [...practiceJurisdictions],
+        })
+        .onConflictDoUpdate({
+          target: organizationSettings.organizationId,
+          set: { timeZone, practiceJurisdictions: [...practiceJurisdictions] },
+        });
+      const exportDate = async () => {
+        const scopedDb = createScopedDb(
+          testDb,
+          [ids.wsA1],
+          ids.orgA,
+          ids.userA1,
+        );
+        const loaded = await scopedDb(
+          async (tx) =>
+            await loadInvoiceExport(tx, {
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA1,
+              invoiceIds: [invoiceId],
+            }),
+        );
+        const exported = toExportRecords(loaded, [invoiceId]);
+        if (exported.isErr()) {
+          return panic("Expected exportable legacy invoice", {
+            error: exported.error,
+          });
+        }
+        return exported.value.at(0)?.paidDate;
+      };
+      try {
+        expect(paidAt.toISOString().slice(0, 10)).toBe("2026-07-01");
+        const before = await exportDate();
+        expect(before).toBe("2026-07-02");
+        await runInvoiceBackfills();
+        expect(await readDetail(invoiceId)).toMatchObject({
+          payments: [{ paidOn: "2026-07-02" }],
+        });
+        expect(await exportDate()).toBe(before);
+      } finally {
+        await testDb
+          .update(invoices)
+          .set({ sellerProfileId: null })
+          .where(eq(invoices.id, invoiceId));
+        await testDb
+          .delete(sellerProfiles)
+          .where(eq(sellerProfiles.id, sellerId));
+        if (settings === undefined) {
+          await testDb
+            .delete(organizationSettings)
+            .where(eq(organizationSettings.organizationId, ids.orgA));
+        } else {
+          await testDb
+            .update(organizationSettings)
+            .set({
+              timeZone: settings.timeZone,
+              practiceJurisdictions: settings.practiceJurisdictions,
+            })
+            .where(eq(organizationSettings.organizationId, ids.orgA));
+        }
+      }
+    },
+  );
 
   test("the invoice backfills reach a fixed point: a second run changes nothing", async () => {
     const paidId = await seedInvoice({

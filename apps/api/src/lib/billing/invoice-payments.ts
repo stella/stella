@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { InvoicePaymentMethod } from "@stll/api-contract";
 import { currencyMinorUnitDigits, toMajorUnits } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
@@ -18,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { outerColumnReference } from "@/api/lib/db/outer-column-reference";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -144,17 +146,26 @@ export const INVOICE_PAYMENT_ORDER = {
 export const readInvoicePayments = async (
   tx: Transaction,
   invoiceId: SafeId<"invoice">,
-) =>
-  await tx
-    .select(INVOICE_PAYMENT_SELECTION)
-    .from(invoicePayments)
-    .where(eq(invoicePayments.invoiceId, invoiceId))
-    .orderBy(
-      asc(invoicePayments.paidOn),
-      asc(invoicePayments.createdAt),
-      asc(invoicePayments.id),
-    )
-    .limit(LIMITS.invoicePaymentsPerInvoice);
+) => {
+  const read = await readBounded(
+    tx
+      .select(INVOICE_PAYMENT_SELECTION)
+      .from(invoicePayments)
+      .where(eq(invoicePayments.invoiceId, invoiceId))
+      .orderBy(
+        asc(invoicePayments.paidOn),
+        asc(invoicePayments.createdAt),
+        asc(invoicePayments.id),
+      ),
+    LIMITS.invoicePaymentsPerInvoice,
+  );
+  if (read.type === "overflow") {
+    return panic("Invoice payment count exceeds its enforced limit", {
+      invoiceId,
+    });
+  }
+  return read.rows;
+};
 
 const readPaidAmount = async (
   tx: Transaction,
@@ -171,7 +182,9 @@ const readPaidAmount = async (
         isNull(invoicePayments.voidedAt),
       ),
     );
-  return Number(rows.at(0)?.paid ?? 0);
+  return parseIntegerToken(rows.at(0)?.paid, { sign: "unsigned" }).unwrap(
+    "Invoice payment sum must be a safe nonnegative integer",
+  );
 };
 
 /** Whether an invoice still carries a payment that has not been voided. */
@@ -235,6 +248,11 @@ type InvoicePaymentScope = {
   recordAuditEvent: AuditRecorder;
 };
 
+type InvoiceSettlementScope = Pick<
+  InvoicePaymentScope,
+  "invoiceId" | "now" | "recordAuditEvent"
+>;
+
 type InvoicePaymentInput = {
   amount: number;
   paidOn: string;
@@ -266,7 +284,11 @@ const settledStatus = (
   invoice: LockedInvoice,
   paidAmount: number,
 ): InvoiceStatus => {
-  const settled = paidAmount >= payableAmount(invoice.totalAmount);
+  const settled =
+    paidAmount >= payableAmount(invoice.totalAmount) &&
+    (invoice.totalAmount !== 0 ||
+      invoice.status === INVOICE_STATUS.SENT ||
+      invoice.status === INVOICE_STATUS.PAID);
   const issued =
     invoice.status === INVOICE_STATUS.FINALIZED ||
     invoice.status === INVOICE_STATUS.SENT;
@@ -286,7 +308,7 @@ const settledStatus = (
  * the total, recording the status change with the payment that caused it.
  */
 const recordSettlement =
-  (scope: InvoicePaymentScope, previous: InvoiceStatus) =>
+  (scope: InvoiceSettlementScope, previous: InvoiceStatus) =>
   async (tx: Transaction, row: { status: InvoiceStatus }) => {
     await scope.recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
@@ -304,7 +326,7 @@ const moveInvoiceStatus = async (
     to,
     recordTransitionAuditEvent,
   }: {
-    scope: InvoicePaymentScope;
+    scope: InvoiceSettlementScope;
     to: InvoiceStatus;
     recordTransitionAuditEvent: ReturnType<typeof recordSettlement>;
   },
@@ -358,7 +380,7 @@ const settleStatus = async (
     invoice,
     paidAmount,
   }: {
-    scope: InvoicePaymentScope;
+    scope: InvoiceSettlementScope;
     invoice: LockedInvoice;
     paidAmount: number;
   },
@@ -384,6 +406,21 @@ const settleStatus = async (
         }),
       );
 };
+
+/** Settles a sent invoice under the send transition's existing aggregate lock. */
+export const settleSentInvoice = async (
+  tx: Transaction,
+  { scope, invoice }: { scope: InvoiceSettlementScope; invoice: LockedInvoice },
+) =>
+  await settleStatus(tx, {
+    scope,
+    invoice: {
+      status: INVOICE_STATUS.SENT,
+      sentAt: scope.now,
+      totalAmount: invoice.totalAmount,
+    },
+    paidAmount: await readPaidAmount(tx, scope.invoiceId),
+  });
 
 /**
  * Records one payment on a finalized or sent invoice and marks it paid when
@@ -437,6 +474,14 @@ export const recordInvoicePayment = async (
     totalAmount: invoice.totalAmount,
     paidAmount: paidBefore,
   });
+  if (outstandingAmount === 0) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "This invoice has nothing outstanding",
+      }),
+    );
+  }
   if (input.amount > outstandingAmount) {
     return Result.err(
       new HandlerError({

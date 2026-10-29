@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
-const MIGRATION = "20261027210000_invoice_payments";
+const MIGRATION = "20261029000100_invoice_payments";
 
 const migrationSql = async () =>
   await Bun.file(
