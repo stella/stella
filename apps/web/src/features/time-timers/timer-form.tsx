@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 
@@ -98,8 +99,8 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
   );
 
   return (
-    <form
-      className="flex flex-col gap-3"
+    <Form
+      className="gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (mutation.isPending || (timer !== null && !policy.data)) {
@@ -203,6 +204,6 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
           )}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

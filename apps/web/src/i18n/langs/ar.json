@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "مرات ذكر هذا الحكم لهذا النص",
     "citingDecisionsSortDate": "تاريخ القرار",
     "citingDecisionsYear": "سنة القرار",
+    "citingDecisionsYearOutOfRange": "أدخل سنة من {min} إلى {max}.",
     "citingDecisionsYearPlaceholder": "كل السنوات",
     "columns": {
       "act": "التشريع",

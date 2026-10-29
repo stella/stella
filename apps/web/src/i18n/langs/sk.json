@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Zmienky o tomto ustanovení",
     "citingDecisionsSortDate": "Dátum rozhodnutia",
     "citingDecisionsYear": "Rok rozhodnutia",
+    "citingDecisionsYearOutOfRange": "Zadajte rok od {min} do {max}.",
     "citingDecisionsYearPlaceholder": "Všetky roky",
     "columns": {
       "act": "Predpis",

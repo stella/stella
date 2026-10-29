@@ -26,6 +26,39 @@ import type { GraphModel, GraphNode } from "./model";
 import { parseCitationPage } from "./parse";
 import "../shared/generated/style.css";
 
+/**
+ * One node's label plate. The plate is narrower than most case names, so an
+ * available node gives its label back in full in a tooltip; an unavailable one
+ * stays natively disabled, out of the tab order, with no tooltip to focus.
+ */
+const CitationGraphNodeButton = ({
+  disabled,
+  label,
+  nodeId,
+  onActivate,
+  onFocus,
+}: {
+  disabled: boolean;
+  label: string;
+  nodeId: string;
+  onActivate: () => void;
+  onFocus: () => void;
+}) => (
+  <Button
+    className="flex h-11 w-full"
+    data-node-id={nodeId}
+    disabled={disabled}
+    onClick={containedEventHandler(onActivate)}
+    onFocus={onFocus}
+    tooltip={disabled ? undefined : label}
+    variant="plain"
+  >
+    <span className="bg-background flex h-full w-full min-w-0 items-center justify-center rounded-md px-2 text-xs">
+      <bdi className="min-w-0 truncate">{label}</bdi>
+    </span>
+  </Button>
+);
+
 const bridge = createPresentationBridge({
   manifest: CITATION_GRAPH_APP,
   parse: parseCitationPage,
@@ -130,19 +163,16 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
               width="160"
               height="44"
             >
-              <button
-                type="button"
-                data-node-id={node.id}
+              <CitationGraphNodeButton
                 disabled={
                   node.type === "resolved" &&
                   (busy ||
                     (!bridge.supportsTools() &&
                       parseLegalCitationHttpUrl(node.decision.url) === null))
                 }
-                className="bg-background h-11 w-full truncate rounded-md px-2 text-xs focus-visible:outline-2"
-                title={nodeLabel(node, t)}
-                onFocus={() => setSelected(node.id)}
-                onClick={containedEventHandler(() => {
+                label={nodeLabel(node, t)}
+                nodeId={node.id}
+                onActivate={() => {
                   setSelected(node.id);
                   if (node.type === "resolved") {
                     bridge.detached(
@@ -150,10 +180,9 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
                       "citationGraph.openDecision",
                     );
                   }
-                })}
-              >
-                <bdi>{nodeLabel(node, t)}</bdi>
-              </button>
+                }}
+                onFocus={() => setSelected(node.id)}
+              />
             </foreignObject>
           </g>
         ))}

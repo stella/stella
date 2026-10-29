@@ -49,6 +49,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -105,6 +106,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -417,24 +419,40 @@ const ClipboardCardFooterMetadata = ({
   if (editingName) {
     return null;
   }
+  // Both read as a bare number or a relative time; the tooltip spells out
+  // what they count.
   const itemMetadata =
     active && characterCount !== null ? (
-      <span
-        aria-label={t("characterCount", { count: characterCount })}
-        className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs tabular-nums"
-        title={t("characterCount", { count: characterCount })}
-      >
-        <span aria-hidden="true">{format.number(characterCount)}</span>
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              aria-label={t("characterCount", { count: characterCount })}
+              className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs tabular-nums"
+            />
+          }
+        >
+          <span aria-hidden="true">{format.number(characterCount)}</span>
+        </TooltipTrigger>
+        <TooltipPopup>
+          {t("characterCount", { count: characterCount })}
+        </TooltipPopup>
+      </Tooltip>
     ) : (
-      <time
-        className="text-muted-foreground shrink-0 text-xs tabular-nums"
-        dateTime={copiedAt}
-        title={copiedAtLabel}
-      >
-        <span aria-hidden="true">{relativeTime}</span>
-        <span className="sr-only">{copiedAtLabel}</span>
-      </time>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <time
+              className="text-muted-foreground shrink-0 text-xs tabular-nums"
+              dateTime={copiedAt}
+            />
+          }
+        >
+          <span aria-hidden="true">{relativeTime}</span>
+          <span className="sr-only">{copiedAtLabel}</span>
+        </TooltipTrigger>
+        <TooltipPopup>{copiedAtLabel}</TooltipPopup>
+      </Tooltip>
     );
 
   return (
@@ -469,6 +487,10 @@ type ClipboardFormatShortcutsProps = {
   onPreview: (format: ClipboardCopyFormat) => void;
 };
 
+/** One paste format: a small pill that tints while pointed at. */
+const FORMAT_SHORTCUT_CLASS =
+  "hover:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap";
+
 /** The active formatted card's paste format row; highlighting a format previews it. */
 const ClipboardFormatShortcuts = ({
   onClearPreview,
@@ -481,30 +503,71 @@ const ClipboardFormatShortcuts = ({
       className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
       data-clipboard-format-shortcuts=""
     >
-      <button
-        type="button"
+      <Button
         onClick={() => onCopy("original")}
         onFocus={() => onPreview("original")}
         onPointerEnter={() => onPreview("original")}
-        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+        variant="plain"
       >
-        <kbd className="font-mono">↵</kbd>
-        {t("originalFormatting")}
-      </button>
+        <span className={FORMAT_SHORTCUT_CLASS}>
+          <kbd className="font-mono">↵</kbd>
+          {t("originalFormatting")}
+        </span>
+      </Button>
       <span aria-hidden="true">·</span>
-      <button
-        type="button"
-        onClick={() => onCopy("plainText")}
+      <Button
         onBlur={onClearPreview}
+        onClick={() => onCopy("plainText")}
         onFocus={() => onPreview("plainText")}
         onPointerEnter={() => onPreview("plainText")}
         onPointerLeave={onClearPreview}
-        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+        variant="plain"
       >
-        <kbd className="font-mono">⇧↵</kbd>
-        {t("plainText")}
-      </button>
+        <span className={FORMAT_SHORTCUT_CLASS}>
+          <kbd className="font-mono">⇧↵</kbd>
+          {t("plainText")}
+        </span>
+      </Button>
     </div>
+  );
+};
+
+/** A clip's name in its card footer; activating it starts the rename. */
+const ClipboardCardName = ({
+  name,
+  onEdit,
+  onFocus,
+  untitledName,
+}: {
+  name: string | null | undefined;
+  onEdit: () => void;
+  onFocus: () => void;
+  untitledName: string;
+}) => {
+  const t = useTranslations("clipboard");
+  return (
+    <Button
+      className="min-w-0 flex-1"
+      onClick={onEdit}
+      onFocus={onFocus}
+      tooltip={t("editItem")}
+      variant="plain"
+    >
+      <span
+        className={cn(
+          "flex min-w-0 items-center gap-1.5 text-sm font-semibold",
+          name ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        <span className="truncate" dir="auto">
+          {name ?? untitledName}
+        </span>
+        <PencilIcon
+          aria-hidden="true"
+          className="size-3 shrink-0 opacity-0 transition-opacity group-focus-within:opacity-60 group-hover:opacity-60"
+        />
+      </span>
+    </Button>
   );
 };
 
@@ -661,11 +724,13 @@ const ClipboardCard = ({
       role="listitem"
       style={sourceStyle}
     >
-      <button
+      <Button
         aria-label={t(item.type === "image" ? "copyImage" : "copyItem", {
           number: index + 1,
         })}
-        className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
+        className="flex min-h-0 flex-1 flex-col self-stretch"
+        // The card clips its overflow; an outside ring would be cut off.
+        focusRing="inside"
         data-clipboard-card-trigger=""
         aria-pressed={selected}
         onClick={(event) => {
@@ -696,7 +761,7 @@ const ClipboardCard = ({
           onOpenMenu({ anchor: "pointer", event, item, index })
         }
         onFocus={() => onSelect(index)}
-        type="button"
+        variant="plain"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
           {renderFormat === "plainText" ? (
@@ -716,7 +781,7 @@ const ClipboardCard = ({
             query={query}
           />
         </div>
-      </button>
+      </Button>
 
       {formatShortcutsVisible ? (
         <ClipboardFormatShortcuts
@@ -749,12 +814,18 @@ const ClipboardCard = ({
 
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         {editingName ? null : (
-          <span
-            className="relative flex shrink-0 items-center"
-            title={sourceTitle ?? groupName ?? metadataTitle}
-          >
-            {metadataIcon}
-          </span>
+          // The glyph alone stands for the source app, group or kind; the
+          // tooltip names it.
+          <Tooltip>
+            <TooltipTrigger
+              render={<span className="relative flex shrink-0 items-center" />}
+            >
+              {metadataIcon}
+            </TooltipTrigger>
+            <TooltipPopup>
+              {sourceTitle ?? groupName ?? metadataTitle}
+            </TooltipPopup>
+          </Tooltip>
         )}
         {editingName ? (
           <InlineRenameInput
@@ -773,24 +844,12 @@ const ClipboardCard = ({
             value={nameDraft}
           />
         ) : (
-          <button
-            className={cn(
-              "text-foreground focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-start text-sm font-semibold focus-visible:ring-2 focus-visible:outline-none",
-              !item.name && "text-muted-foreground",
-            )}
-            onClick={beginNameEdit}
+          <ClipboardCardName
+            name={item.name}
+            onEdit={beginNameEdit}
             onFocus={() => onSelect(index)}
-            title={t("editItem")}
-            type="button"
-          >
-            <span className="truncate" dir="auto">
-              {item.name ?? untitledName}
-            </span>
-            <PencilIcon
-              aria-hidden="true"
-              className="size-3 shrink-0 opacity-0 transition-opacity group-focus-within:opacity-60 group-hover:opacity-60"
-            />
-          </button>
+            untitledName={untitledName}
+          />
         )}
         <ClipboardCardFooterMetadata
           active={active}
@@ -875,8 +934,8 @@ const DialogShell = ({
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] px-5 py-3"
       >
-        <form
-          className="flex min-h-0 flex-col"
+        <Form
+          className="min-h-0 gap-0"
           onSubmit={(event) => {
             event.preventDefault();
             onSubmit();
@@ -898,7 +957,7 @@ const DialogShell = ({
               {submitLabel}
             </Button>
           </DialogFooter>
-        </form>
+        </Form>
       </DialogPopup>
     </Dialog>
   );
@@ -1019,10 +1078,10 @@ const ClipboardDialog = ({
                   },
                 ] as const
               ).map((option) => (
-                <label
+                <Label
                   aria-label={option.label}
-                  className="border-border has-[:checked]:border-destructive/50 has-[:checked]:bg-destructive/6 flex min-h-16 cursor-pointer items-start gap-3 rounded-2xl border p-3"
                   key={option.mode}
+                  variant="choice-card"
                 >
                   <input
                     checked={dialog.mode === option.mode}
@@ -1047,7 +1106,7 @@ const ClipboardDialog = ({
                       {option.description}
                     </span>
                   </span>
-                </label>
+                </Label>
               ))}
             </div>
           </fieldset>
@@ -3063,32 +3122,38 @@ const ClipboardApp = () => {
               ref={controlsRef}
             >
               <div className="flex shrink-0 items-center gap-0.5">
-                <a
-                  aria-label="Stella"
-                  className="text-foreground grid size-11 place-items-center"
-                  href={STELLA_WEB_APP_URL}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    void invoke("clipboard_open_stella").catch(
-                      (error: unknown) => {
-                        reportDesktopError({
-                          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-                          detail: describeError(error),
-                          operation:
-                            DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
-                          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-                        });
-                        setError({
-                          message: t("errorOpenStella"),
-                          source: "operation",
-                        });
-                      },
-                    );
-                  }}
-                  title="Stella"
-                >
-                  <StellaMark className="size-5" />
-                </a>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <a
+                        aria-label="Stella"
+                        className="text-foreground grid size-11 place-items-center"
+                        href={STELLA_WEB_APP_URL}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void invoke("clipboard_open_stella").catch(
+                            (error: unknown) => {
+                              reportDesktopError({
+                                code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                                detail: describeError(error),
+                                operation:
+                                  DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                                window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+                              });
+                              setError({
+                                message: t("errorOpenStella"),
+                                source: "operation",
+                              });
+                            },
+                          );
+                        }}
+                      />
+                    }
+                  >
+                    <StellaMark className="size-5" />
+                  </TooltipTrigger>
+                  <TooltipPopup>Stella</TooltipPopup>
+                </Tooltip>
                 {snapshot.captureStatus === "paused" ? (
                   <Button
                     aria-label={t("resume")}
@@ -3108,34 +3173,53 @@ const ClipboardApp = () => {
                 {snapshot.persistence.status === "memoryOnly" ||
                 snapshot.persistence.status === "deletionOnly" ||
                 imageCleanupPending ? (
-                  <span
-                    aria-label={persistenceWarningLabel}
-                    className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
-                    role="status"
-                    title={persistenceWarningLabel}
-                  >
-                    <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span
+                          aria-label={persistenceWarningLabel}
+                          className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
+                          role="status"
+                        />
+                      }
+                    >
+                      <ShieldAlertIcon
+                        aria-hidden="true"
+                        className="size-3.5"
+                      />
+                    </TooltipTrigger>
+                    <TooltipPopup>{persistenceWarningLabel}</TooltipPopup>
+                  </Tooltip>
                 ) : null}
               </div>
 
               <InputGroup className="clipboard-search h-11 w-full rounded-full">
                 <InputGroupAddon className="text-foreground/65">
-                  <button
+                  <Button
                     aria-label={t(
                       CLIPBOARD_SCOPE_PRESENTATION[searchSource].label,
                     )}
                     aria-keyshortcuts="ArrowUp ArrowDown"
-                    className="focus-visible:ring-ring ms-1.5 flex h-8 items-center gap-1 rounded-full px-1.5 outline-none focus-visible:ring-2"
+                    className="ms-1.5"
                     data-clipboard-scope={searchSource}
                     onClick={cycleScope}
                     onKeyDown={handleSwitcherKeyDown}
-                    title={t(CLIPBOARD_SCOPE_PRESENTATION[searchSource].label)}
-                    type="button"
+                    shape="round"
+                    tooltip={t(
+                      CLIPBOARD_SCOPE_PRESENTATION[searchSource].label,
+                    )}
+                    variant="plain"
                   >
-                    <ScopeIcon aria-hidden="true" className="size-4" />
-                    <ChevronsUpDownIcon aria-hidden="true" className="size-3" />
-                  </button>
+                    {/* The switcher keeps the search pill's own glyph tone;
+                        the plain button draws no chip around it. */}
+                    <span className="flex h-8 items-center gap-1 px-1.5">
+                      <ScopeIcon aria-hidden="true" className="size-4" />
+                      <ChevronsUpDownIcon
+                        aria-hidden="true"
+                        className="size-3"
+                      />
+                    </span>
+                  </Button>
                 </InputGroupAddon>
                 <InputGroupInput
                   aria-label={t("search")}

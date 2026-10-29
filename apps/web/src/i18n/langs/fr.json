@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Mentions de cette disposition",
     "citingDecisionsSortDate": "Date de la décision",
     "citingDecisionsYear": "Année de la décision",
+    "citingDecisionsYearOutOfRange": "Saisissez une année entre {min} et {max}.",
     "citingDecisionsYearPlaceholder": "Toutes les années",
     "columns": {
       "act": "Texte",

@@ -155,11 +155,12 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
   expect(
     screen.getByText(/I\. ÚS 1\/26/u, { selector: ".font-medium" }),
   ).toBeTruthy();
-  const disclosure = screen.getByText("Also consulted (1)");
-  const details = disclosure.closest("details");
-  expect(details?.open).toBe(false);
+  const disclosure = screen.getByRole("button", {
+    name: "Also consulted (1)",
+  });
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(disclosure);
-  expect(details?.open).toBe(true);
+  expect(disclosure.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByRole("heading", { name: "Supreme courts" })).toBeTruthy();
   expect(screen.getAllByText(/2 Cdo 2\/26/u).length).toBeGreaterThan(0);
   for (const abbreviation of ["ÚS", "NS", "NSS", "VS", "KS", "MS", "OS"]) {
@@ -173,7 +174,9 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
 
 test("renders a case-law source without an invalid decision date", () => {
   renderInvalidDateSource();
-  const disclosure = screen.getByText("Also consulted (1)");
+  const disclosure = screen.getByRole("button", {
+    name: "Also consulted (1)",
+  });
   fireEvent.click(disclosure);
   expect(
     screen.getByText("3 Cdo 3/26", { selector: ".font-medium" }),

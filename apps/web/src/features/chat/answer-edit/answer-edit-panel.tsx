@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import type { ComponentProps } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { panic, Result } from "better-result";
@@ -8,7 +9,9 @@ import * as v from "valibot";
 import type { CHAT_ANSWER_EDIT_STATES } from "@stll/api-contract/chat-message-revisions";
 import { CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH } from "@stll/api-contract/chat-message-revisions";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import { ReviewDiffText } from "@stll/ui/review-diff-text";
 
@@ -169,7 +172,7 @@ export const AnswerEditPanel = ({
     cancelPanel();
   });
   return (
-    <div
+    <AnswerEditFrame
       className="w-80 max-w-full space-y-2 p-2"
       ref={(node) => {
         panelRef.current = node;
@@ -179,28 +182,25 @@ export const AnswerEditPanel = ({
         node.addEventListener("keydown", onPanelKeyDown);
         return () => node.removeEventListener("keydown", onPanelKeyDown);
       }}
-      tabIndex={-1}
-      role="dialog"
       aria-label={t("chat.answerEdit.ask")}
     >
       {(() => {
         switch (state.status) {
           case "instruction":
             return (
-              <form
-                noValidate
+              <Form
+                className="gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   detached(form.handleSubmit(), "answer-edit.submit");
                 }}
-                className="space-y-2"
               >
                 <form.Field name="instruction">
                   {(field) => (
                     <div className="space-y-1">
-                      <label className="block text-sm" htmlFor={instructionId}>
+                      <Label htmlFor={instructionId}>
                         {t("chat.answerEdit.instruction")}
-                      </label>
+                      </Label>
                       <Input
                         id={instructionId}
                         ref={(node) => node?.focus()}
@@ -250,7 +250,7 @@ export const AnswerEditPanel = ({
                     {t("common.cancel")}
                   </Button>
                 </div>
-              </form>
+              </Form>
             );
           case "requesting":
           case "stale":
@@ -277,9 +277,24 @@ export const AnswerEditPanel = ({
             return panic(`Unhandled answer edit state: ${String(state)}`);
         }
       })()}
-    </div>
+    </AnswerEditFrame>
   );
 };
+
+/**
+ * The panel an answer edit opens inside the selection bar. The bar is already
+ * the floating layer over the selected chat text; the panel replaces its
+ * actions, takes focus, and closes on Escape: a non-modal dialog, named by its
+ * caller. Every answer-edit state renders through this one frame.
+ */
+export const AnswerEditFrame = (
+  props: Omit<ComponentProps<"div">, "role" | "tabIndex"> & {
+    "aria-label": string;
+  },
+) => (
+  // oxlint-disable-next-line no-native-ui/no-native-dialog -- the panel is the content of the shared SelectionToolbar, already the floating layer over the selected text; Dialog would add a modal backdrop and focus trap over the chat, and Popover would stack a second floating layer on the bar
+  <div {...props} role="dialog" tabIndex={-1} />
+);
 
 type EditState =
   | { status: "instruction"; error?: string }

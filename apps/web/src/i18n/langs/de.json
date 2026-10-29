@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Erwähnungen dieser Vorschrift",
     "citingDecisionsSortDate": "Entscheidungsdatum",
     "citingDecisionsYear": "Entscheidungsjahr",
+    "citingDecisionsYearOutOfRange": "Geben Sie ein Jahr von {min} bis {max} ein.",
     "citingDecisionsYearPlaceholder": "Alle Jahre",
     "columns": {
       "act": "Rechtsakt",

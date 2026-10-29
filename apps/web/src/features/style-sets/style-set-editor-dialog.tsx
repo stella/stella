@@ -11,12 +11,12 @@ import {
   DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
@@ -239,17 +239,18 @@ const LoadedStyleSetEditor = ({
   };
 
   return (
-    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      <DialogFormState
-        dirty={
-          name !== initialName ||
-          JSON.stringify(settings) !== JSON.stringify(initialSettings)
-        }
-        onDiscard={() => {
-          setName(initialName);
-          setSettings(initialSettings);
-        }}
-      />
+    <Form
+      className="min-h-0 flex-1 gap-0"
+      dirty={
+        name !== initialName ||
+        JSON.stringify(settings) !== JSON.stringify(initialSettings)
+      }
+      onDiscard={() => {
+        setName(initialName);
+        setSettings(initialSettings);
+      }}
+      onSubmit={handleSubmit}
+    >
       <DialogHeader className="border-b pe-14">
         <DialogTitle>
           {saveTarget.type === "stella"
@@ -297,7 +298,7 @@ const LoadedStyleSetEditor = ({
           {saving ? t("common.loading") : t("common.save")}
         </Button>
       </DialogFooter>
-    </form>
+    </Form>
   );
 };
 

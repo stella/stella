@@ -33,6 +33,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -638,8 +639,7 @@ export const RegistrySearch = ({
               className="clipboard-card relative flex min-h-0 w-[246px] shrink-0 flex-col overflow-hidden rounded-2xl"
               data-registry-result={card.id}
             >
-              <button
-                type="button"
+              <Button
                 data-registry-card
                 disabled={card.status === "formatting"}
                 onKeyDown={(event) => {
@@ -691,28 +691,34 @@ export const RegistrySearch = ({
                     inline: "nearest",
                   });
                 }}
-                className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                className="block min-h-0 flex-1 overflow-y-auto"
+                // The card clips its overflow; an outside ring would be cut
+                // off.
+                focusRing="inside"
+                variant="plain"
               >
-                <h2 className="truncate text-sm font-semibold" dir="auto">
-                  {card.name}
-                </h2>
-                <p
-                  className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
-                  dir="auto"
-                >
-                  {parseRegistryFormatMarkdown(card.rendered).map(
-                    ({ text: runText, style, start }) => {
-                      if (style === "bold") {
-                        return <strong key={start}>{runText}</strong>;
-                      }
-                      if (style === "italic") {
-                        return <em key={start}>{runText}</em>;
-                      }
-                      return <span key={start}>{runText}</span>;
-                    },
-                  )}
-                </p>
-              </button>
+                <div className="px-4 py-3">
+                  <h2 className="truncate text-sm font-semibold" dir="auto">
+                    {card.name}
+                  </h2>
+                  <p
+                    className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
+                    dir="auto"
+                  >
+                    {parseRegistryFormatMarkdown(card.rendered).map(
+                      ({ text: runText, style, start }) => {
+                        if (style === "bold") {
+                          return <strong key={start}>{runText}</strong>;
+                        }
+                        if (style === "italic") {
+                          return <em key={start}>{runText}</em>;
+                        }
+                        return <span key={start}>{runText}</span>;
+                      },
+                    )}
+                  </p>
+                </div>
+              </Button>
               <footer className="clipboard-card-footer flex h-12 shrink-0 items-center px-2">
                 <Menu>
                   <MenuTrigger
@@ -810,9 +816,13 @@ export const RegistrySearch = ({
           aria-atomic="true"
         >
           <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="truncate" title={errorMessage}>
-            {errorMessage}
-          </span>
+          {/* A long registry error truncates; the tooltip gives it back. */}
+          <Tooltip>
+            <TooltipTrigger render={<span className="truncate" />}>
+              {errorMessage}
+            </TooltipTrigger>
+            <TooltipPopup>{errorMessage}</TooltipPopup>
+          </Tooltip>
         </p>
       ) : null}
     </div>

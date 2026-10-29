@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { ClaimComments } from "@/features/avt/claim-comments";
@@ -137,26 +138,36 @@ export const ClaimDetailPanel = ({
             <StateChip state={state} />
             <TypeChip type={claim.type} />
             {review?.reopened === true && (
-              <span title={t("avt.claimDetail.reopenedTooltip")}>
-                <ReviewStatusBadge
-                  icon={<HistoryIcon aria-hidden="true" className="size-3" />}
-                  size="sm"
-                  tone="highlight"
-                >
-                  {t("avt.claimDetail.reopened")}
-                </ReviewStatusBadge>
-              </span>
+              <Tooltip>
+                <TooltipTrigger render={<span />}>
+                  <ReviewStatusBadge
+                    icon={<HistoryIcon aria-hidden="true" className="size-3" />}
+                    size="sm"
+                    tone="highlight"
+                  >
+                    {t("avt.claimDetail.reopened")}
+                  </ReviewStatusBadge>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  {t("avt.claimDetail.reopenedTooltip")}
+                </TooltipPopup>
+              </Tooltip>
             )}
             {override !== null && (
-              <span title={t("avt.claimDetail.overrideTooltip")}>
-                <ReviewStatusBadge
-                  icon={<PenIcon aria-hidden="true" className="size-3" />}
-                  size="sm"
-                  tone={STATE_COLOR[override].tone}
-                >
-                  {t("avt.claimDetail.overridden")}
-                </ReviewStatusBadge>
-              </span>
+              <Tooltip>
+                <TooltipTrigger render={<span />}>
+                  <ReviewStatusBadge
+                    icon={<PenIcon aria-hidden="true" className="size-3" />}
+                    size="sm"
+                    tone={STATE_COLOR[override].tone}
+                  >
+                    {t("avt.claimDetail.overridden")}
+                  </ReviewStatusBadge>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  {t("avt.claimDetail.overrideTooltip")}
+                </TooltipPopup>
+              </Tooltip>
             )}
             <SaveIndicator state={saveState} />
           </div>

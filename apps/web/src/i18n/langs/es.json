@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Menciones de esta disposición",
     "citingDecisionsSortDate": "Fecha de la resolución",
     "citingDecisionsYear": "Año de la resolución",
+    "citingDecisionsYearOutOfRange": "Introduzca un año entre {min} y {max}.",
     "citingDecisionsYearPlaceholder": "Todos los años",
     "columns": {
       "act": "Norma",

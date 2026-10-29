@@ -23,6 +23,7 @@ import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline"
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
@@ -309,24 +310,34 @@ const ProvisionDetailsAction = ({
   const t = useTranslations();
 
   return (
-    <button
-      aria-label={t("statutes.provisionDetailsFor", { provision })}
+    // The wrapper carries what the heading asks of its chrome: the reader's
+    // sans face at its own tracking, shown on wide panes and on screen only,
+    // and revealed with the heading's ¶ by the same rule.
+    <span
       className={cn(
-        "reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden",
-        // Revealed with the heading's ¶, by the same rule.
+        "reader-chrome hidden tracking-normal md:inline-flex print:hidden",
         READER_BLOCK_CHROME_REVEAL_CLASS,
       )}
-      onClick={onOpen}
-      type="button"
     >
-      <span>{t("common.details")}</span>
-      {/* The count needs a wide pane; beside the designation in a narrow
-          one there is room for the action's name only. */}
-      {citationCount !== undefined && citationCount > 0 && (
-        <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
-          {t("caseLaw.citation.decisionCount", { count: citationCount })}
+      {/* A quiet hairline action beside the heading, lighter than an
+          outline button. */}
+      <Button
+        aria-label={t("statutes.provisionDetailsFor", { provision })}
+        className="group/plain"
+        onClick={onOpen}
+        variant="plain"
+      >
+        <span className="border-border text-foreground group-hover/plain:bg-muted group-hover/plain:border-foreground-disabled inline-flex h-8 items-center rounded-sm border px-3 text-sm font-normal">
+          <span>{t("common.details")}</span>
+          {/* The count needs a wide pane; beside the designation in a narrow
+              one there is room for the action's name only. */}
+          {citationCount !== undefined && citationCount > 0 && (
+            <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
+              {t("caseLaw.citation.decisionCount", { count: citationCount })}
+            </span>
+          )}
         </span>
-      )}
-    </button>
+      </Button>
+    </span>
   );
 };

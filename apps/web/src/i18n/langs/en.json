@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Mentions of this provision",
     "citingDecisionsSortDate": "Decision date",
     "citingDecisionsYear": "Decision year",
+    "citingDecisionsYearOutOfRange": "Enter a year from {min} to {max}.",
     "citingDecisionsYearPlaceholder": "All years",
     "columns": {
       "act": "Act",

@@ -12,6 +12,7 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -202,10 +203,12 @@ const groupApparatusWrap = (
     const runBlocks = run;
     run = [];
     out.push(
+      // oxlint-disable-next-line no-native-ui/no-native-accordion -- the reporter's apparatus is part of the decision's source text: closed, it stays in the document for copy and print, and browser find-in-page opens it on a match; its one-line label is reader chrome at the reader's text scale, where AccordionTrigger's fixed sizes and chevron do not belong
       <details
         className="reader-apparatus"
         key={`apparatus-${runBlocks[0]?.id ?? String(out.length)}`}
       >
+        {/* oxlint-disable-next-line no-native-ui/no-native-accordion -- the apparatus disclosure's own label, see the details above */}
         <summary className="reader-apparatus-summary">{apparatusLabel}</summary>
         {runBlocks.map((block) => (
           <Fragment key={block.id}>{renderBlock(block)}</Fragment>
@@ -1137,16 +1140,15 @@ export const DecisionText = ({
           {hydrated && onAnnotationActivate !== undefined && (
             <div className="sr-only">
               {annotationAnchors.map((annotation) => (
-                <button
+                <Button
                   key={annotation.id}
                   onClick={() => onAnnotationActivate(annotation.id)}
-                  type="button"
                 >
                   {annotation.activationLabel ??
                     (annotation.kind === "comment"
                       ? messages["folio.comment"]
                       : messages["legalReader.annotations.highlight"])}
-                </button>
+                </Button>
               ))}
             </div>
           )}

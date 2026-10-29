@@ -4,7 +4,14 @@ import { useTranslations } from "use-intl";
 
 import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
@@ -75,18 +82,22 @@ export const SourceChips = ({
             />
           )}
           {consulted.length > 0 && (
-            <details className="group">
-              <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
-                {t("alsoConsulted", { count: consulted.length })}
-              </summary>
-              <div className="mt-2">
-                <SourceEntryList
-                  entries={consulted}
-                  messageId={`${messageId}-consulted`}
-                  workspaceId={workspaceId}
-                />
-              </div>
-            </details>
+            <Accordion>
+              <AccordionItem>
+                <AccordionTrigger size="compact" variant="muted">
+                  {t("alsoConsulted", { count: consulted.length })}
+                </AccordionTrigger>
+                {/* Kept in the document while closed, so find-in-page reaches
+                    the consulted sources and opens the list on a match. */}
+                <AccordionPanel hiddenUntilFound keepMounted size="compact">
+                  <SourceEntryList
+                    entries={consulted}
+                    messageId={`${messageId}-consulted`}
+                    workspaceId={workspaceId}
+                  />
+                </AccordionPanel>
+              </AccordionItem>
+            </Accordion>
           )}
         </div>
       </div>
@@ -281,24 +292,30 @@ const SourceChip = ({
   };
 
   return (
-    <button
+    <Button
       className={cn(
-        "inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs",
-        resolvedWorkspaceId
-          ? "hover:bg-muted cursor-pointer"
-          : "cursor-default",
+        "group/plain max-w-full min-w-0 shrink-0",
+        !resolvedWorkspaceId && "cursor-default",
       )}
       onClick={handleClick}
-      type="button"
+      variant="plain"
     >
-      <SourceIcon
-        sourceDocument={sourceDocument}
-        workspaceId={resolvedWorkspaceId}
-      />
-      <BidiText as="span" className="max-w-full min-w-0 truncate">
-        {sourceDocument.title}
-      </BidiText>
-    </button>
+      {/* The chip draws itself: a hairline pill in the answer's own type,
+          lit while pointed at when it opens a document. */}
+      <span
+        className={cn(
+          "bg-muted/50 text-foreground inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs",
+          resolvedWorkspaceId && "group-hover/plain:bg-muted",
+        )}
+      >
+        <SourceIcon
+          sourceDocument={sourceDocument}
+          workspaceId={resolvedWorkspaceId}
+        />
+        <BidiText as="span" className="max-w-full min-w-0 truncate">
+          {sourceDocument.title}
+        </BidiText>
+      </span>
+    </Button>
   );
 };

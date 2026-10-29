@@ -51,17 +51,20 @@ export const ParagraphReference = ({
         closeDelay={PREVIEW_CLOSE_DELAY_MS}
         delay={PREVIEW_OPEN_DELAY_MS}
         render={
-          <button
+          <Button
             aria-label={t("caseLaw.viewer.paragraphReference", {
               number: reference.label.slice(1, -1).replace("]-[", "–"),
             })}
-            className="reader-chrome text-muted-foreground hover:text-foreground data-popup-open:text-foreground rounded-sm underline-offset-2 hover:underline data-popup-open:underline"
             onClick={jump}
-            type="button"
+            size="inline"
+            variant="muted"
           />
         }
       >
-        <bdi>{reference.label}</bdi>
+        {/* The reference is chrome drawn inside the text: the reader's sans
+            face, not the decision's serif. An inline button, so it wraps
+            and copies with the passage. */}
+        <bdi className="reader-chrome">{reference.label}</bdi>
       </PreviewCardTrigger>
       <PreviewCardPopup align="start" className="w-96 max-w-[calc(100vw-2rem)]">
         <div className="flex min-w-0 flex-1 flex-col gap-2">

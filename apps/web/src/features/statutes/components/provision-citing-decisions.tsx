@@ -1,9 +1,13 @@
+import { useId, useState } from "react";
+
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { PROVISION_CITING_FILTER_LIMITS } from "@stll/api-contract/provision-citing-decisions";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -48,6 +52,10 @@ export const ProvisionCitingDecisions = ({
 }: ProvisionCitingDecisionsProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  // The year field keeps what was typed (no clamping on blur); a year outside
+  // the range blocks the filter and says why, as the native field did.
+  const [yearOutOfRange, setYearOutOfRange] = useState(false);
+  const yearErrorId = useId();
   const {
     data,
     fetchNextPage,
@@ -72,24 +80,32 @@ export const ProvisionCitingDecisions = ({
   const snapshot = data?.pages.at(0)?.snapshot;
   return (
     <div className="flex flex-col gap-2">
-      <form
-        className="flex flex-wrap items-center gap-2"
+      <Form
+        className="flex flex-row flex-wrap items-center gap-2"
         key={JSON.stringify(filters)}
         onSubmit={(event) => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
           const court = fields.get("court");
           const year = fields.get("year");
+          const yearValue =
+            typeof year === "string" && year !== "" ? Number(year) : undefined;
+          const outOfRange =
+            yearValue !== undefined &&
+            (!Number.isInteger(yearValue) ||
+              yearValue < PROVISION_CITING_FILTER_LIMITS.yearMin ||
+              yearValue > PROVISION_CITING_FILTER_LIMITS.yearMax);
+          setYearOutOfRange(outOfRange);
+          if (outOfRange) {
+            return;
+          }
           onFiltersChange(
             readProvisionCitingSearch({
               citingCourt:
                 typeof court === "string" && court.trim() !== ""
                   ? court
                   : undefined,
-              citingYear:
-                typeof year === "string" && year !== ""
-                  ? Number(year)
-                  : undefined,
+              citingYear: yearValue,
               citingSort: filters.citingSort,
             }),
           );
@@ -105,17 +121,23 @@ export const ProvisionCitingDecisions = ({
           placeholder={t("statutes.citingDecisionsCourtPlaceholder")}
           type="search"
         />
-        <Input
-          aria-label={t("statutes.citingDecisionsYear")}
+        <NumberInput
+          allowOutOfRange
           className="w-24"
-          size="sm"
-          defaultValue={filters.citingYear ?? ""}
+          defaultValue={filters.citingYear ?? null}
+          // A year, not a quantity: no thousands separator.
+          format={{ useGrouping: false }}
+          inputProps={{
+            "aria-describedby": yearOutOfRange ? yearErrorId : undefined,
+            "aria-invalid": yearOutOfRange || undefined,
+            "aria-label": t("statutes.citingDecisionsYear"),
+            placeholder: t("statutes.citingDecisionsYearPlaceholder"),
+          }}
           max={PROVISION_CITING_FILTER_LIMITS.yearMax}
           min={PROVISION_CITING_FILTER_LIMITS.yearMin}
           name="year"
-          placeholder={t("statutes.citingDecisionsYearPlaceholder")}
+          size="sm"
           step={1}
-          type="number"
         />
         <Button size="sm" type="submit" variant="ghost">
           {t("common.filter")}
@@ -140,7 +162,19 @@ export const ProvisionCitingDecisions = ({
             </SelectItem>
           </SelectContent>
         </Select>
-      </form>
+      </Form>
+      {yearOutOfRange && (
+        <p
+          className="text-destructive-foreground text-xs"
+          id={yearErrorId}
+          role="alert"
+        >
+          {t("statutes.citingDecisionsYearOutOfRange", {
+            max: PROVISION_CITING_FILTER_LIMITS.yearMax,
+            min: PROVISION_CITING_FILTER_LIMITS.yearMin,
+          })}
+        </p>
+      )}
       {snapshot?.type === "capped" && (
         <p className="text-muted-foreground text-xs">
           {t("statutes.citingDecisionsSnapshotCapped", {

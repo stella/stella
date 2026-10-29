@@ -219,11 +219,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
               <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
                 {jurisdictionQuery.trim() === "" && (
                   <>
-                    <button
+                    <Button
                       aria-pressed={jurisdictionFilter.size === 0}
-                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                       onClick={() => setJurisdictionFilter(new Set())}
-                      type="button"
+                      size="row"
+                      variant="ghost"
                     >
                       <span
                         className={cn(
@@ -239,7 +239,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                       <span className="text-foreground font-medium">
                         {t("common.all")}
                       </span>
-                    </button>
+                    </Button>
                     <div className="bg-border my-1 h-px" />
                   </>
                 )}
@@ -259,9 +259,8 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                   return matches.map((code) => {
                     const active = jurisdictionFilter.has(code);
                     return (
-                      <button
+                      <Button
                         aria-pressed={active}
-                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                         key={code}
                         onClick={() =>
                           setJurisdictionFilter((prev) => {
@@ -274,7 +273,8 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                             return next;
                           })
                         }
-                        type="button"
+                        size="row"
+                        variant="ghost"
                       >
                         <span
                           className={cn(
@@ -287,7 +287,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                           )}
                         </span>
                         <span className="text-foreground">{code}</span>
-                      </button>
+                      </Button>
                     );
                   });
                 })()}
@@ -308,31 +308,30 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
           {t("catalogue.filterHint", {
             codes: [...jurisdictionFilter].toSorted().join(", "),
           })}{" "}
-          <button
-            className="hover:text-foreground underline underline-offset-2"
+          <Button
+            className="group/plain"
             onClick={() => setJurisdictionFilter(new Set())}
-            type="button"
+            variant="plain"
           >
-            {t("common.showAll")}
-          </button>
+            <span className="group-hover/plain:text-foreground underline underline-offset-2">
+              {t("common.showAll")}
+            </span>
+          </Button>
         </p>
       )}
 
       <div className="flex items-center gap-1.5">
         {FILTERS.map((option) => (
-          <button
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium",
-              filter === option
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
-            )}
+          <Button
+            aria-pressed={filter === option}
             key={option}
             onClick={() => setFilter(option)}
-            type="button"
+            selected={filter === option}
+            size="xs"
+            variant="muted"
           >
             {t(KIND_LABEL_KEY[option])}
-          </button>
+          </Button>
         ))}
       </div>
 

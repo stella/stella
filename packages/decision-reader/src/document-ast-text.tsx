@@ -23,6 +23,7 @@ import {
   withStatuteListDepth,
 } from "@stll/legal-ast/statute-list";
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
+import { Button } from "@stll/ui/button";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import {
@@ -1021,16 +1022,18 @@ const jumpToNoteReference = (anchorId: string) => {
 const NoteBackJump = ({ headAnchorId }: { headAnchorId: string }) => {
   const messages = useReaderMessages();
   return (
-    <button
-      aria-label={messages["common.back"]}
-      className="reader-note-back"
-      data-reader-chrome=""
-      onClick={() => jumpToNoteReference(headAnchorId)}
-      title={messages["common.back"]}
-      type="button"
-    >
-      {"\u21B5"}
-    </button>
+    // The span carries the reader's note type (size, colour, spacing and
+    // the hover underline); the plain button inherits it.
+    <span className="reader-note-back" data-reader-chrome="">
+      <Button
+        aria-label={messages["common.back"]}
+        onClick={() => jumpToNoteReference(headAnchorId)}
+        tooltip={messages["common.back"]}
+        variant="plain"
+      >
+        {"\u21B5"}
+      </Button>
+    </span>
   );
 };
 
@@ -1486,14 +1489,14 @@ const renderParagraphBlock = ({
         </span>
       )}
       {showNoteLabel && isAddressable && (
-        <button
-          className="reader-note-label"
-          data-reader-chrome=""
-          onClick={() => jumpToNoteReference(block.anchorId)}
-          type="button"
-        >
-          {noteLabel}
-        </button>
+        <span className="reader-note-label" data-reader-chrome="">
+          <Button
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            variant="plain"
+          >
+            {noteLabel}
+          </Button>
+        </span>
       )}
       {block.number !== undefined && (
         <HighlightedText
@@ -1709,15 +1712,16 @@ const renderTableBlock = ({
         </span>
       )}
       {showTableNoteLabel && isAddressable && (
-        <button
-          className="reader-note-label"
-          data-reader-chrome=""
-          onClick={() => jumpToNoteReference(block.anchorId)}
-          type="button"
-        >
-          {tableNoteLabel}
-        </button>
+        <span className="reader-note-label" data-reader-chrome="">
+          <Button
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            variant="plain"
+          >
+            {tableNoteLabel}
+          </Button>
+        </span>
       )}
+      {/* oxlint-disable-next-line no-native-ui/no-native-table -- a court's own table, parsed from the decision's source text: its cells wrap legal prose at the reader's text scale and carry the anchors deep links and citations point at, where Table's hover rows, nowrap cells and own scroll box would rewrite the document */}
       <table
         className={cn(
           "reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]",
@@ -1726,9 +1730,10 @@ const renderTableBlock = ({
         )}
         {...documentAnchorProps}
       >
+        {/* oxlint-disable-next-line no-native-ui/no-native-table -- body of the court's source table above */}
         <tbody>
           {block.rows.map((row, rowIndex) => (
-            // oxlint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds tableCellPieceId's identity below) and never reordered/inserted by the reader UI.
+            // oxlint-disable-next-line react/no-array-index-key, no-native-ui/no-native-table -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds tableCellPieceId's identity below) and never reordered/inserted by the reader UI, and a source row is no TableRow (no hover highlight on a document).
             <tr key={rowIndex}>
               {row.map((cell, columnIndex) => {
                 const pieceId = tableCellPieceId({

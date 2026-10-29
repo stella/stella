@@ -5,6 +5,8 @@ import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
+import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
@@ -411,9 +413,10 @@ export const AnonymizeLiveDemo = () => {
             ),
           )}
         </div>
-        <label htmlFor="anon-demo-textarea" className="sr-only">
+        <Label className="sr-only" htmlFor="anon-demo-textarea">
           Try the anonymization engine: edit this paragraph
-        </label>
+        </Label>
+        {/* oxlint-disable-next-line no-native-ui/no-native-textarea -- a transparent typing layer laid exactly over the highlighted copy of the same text: it must share the backdrop's padding, type and wrapping glyph for glyph, where Textarea brings its own border, padding, focus ring and auto-sizing */}
         <textarea
           id="anon-demo-textarea"
           className={`${textLayerClassName} absolute inset-0 border-0 bg-transparent text-transparent caret-[var(--foreground)] outline-none [-webkit-text-fill-color:transparent]`}
@@ -437,18 +440,9 @@ export const AnonymizeLiveDemo = () => {
             {describeEngineStatus(engine, highlights)}
           </p>
           {engine.status === "error" && (
-            <button
-              type="button"
-              className="cursor-pointer rounded border px-2 py-0.5 underline-offset-2 hover:underline"
-              style={{
-                borderColor:
-                  "color-mix(in srgb, var(--border) 65%, transparent)",
-                color: "var(--foreground)",
-              }}
-              onClick={retry}
-            >
+            <Button onClick={retry} size="xs" variant="outline">
               {engine.recovery === "reload" ? "Reload" : "Retry"}
-            </button>
+            </Button>
           )}
         </div>
         {legend.length > 0 && (

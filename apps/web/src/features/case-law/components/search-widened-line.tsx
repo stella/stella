@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { CaseLawResultsLine } from "@/features/case-law/search-warnings.logic";
 
@@ -32,14 +33,19 @@ export const SearchWidenedLine = ({
         isolated, because it is the reader's text and may run the other way.
         Isolating the whole line instead would let a Latin query set the
         direction of an Arabic sentence. A long query ends in an ellipsis on
-        one line rather than wrapping the toolbar row; the title keeps it whole.
+        one line rather than wrapping the toolbar row; the tooltip keeps it whole.
       */}
-      <p className="min-w-0 truncate" title={line.query}>
-        {t.rich(line.messageKey, {
-          bdi: (chunks) => <BidiText>{chunks}</BidiText>,
-          query: line.query,
-        })}
-      </p>
+      <Tooltip>
+        <TooltipTrigger render={<p className="min-w-0 truncate" />}>
+          {t.rich(line.messageKey, {
+            bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+            query: line.query,
+          })}
+        </TooltipTrigger>
+        <TooltipPopup>
+          <BidiText>{line.query}</BidiText>
+        </TooltipPopup>
+      </Tooltip>
       {onSearchEveryWord === null ? null : (
         <Button onClick={onSearchEveryWord} size="xs" variant="link">
           {t(line.actionKey)}

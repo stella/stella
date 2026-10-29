@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "A rendelkezés említései",
     "citingDecisionsSortDate": "A határozat dátuma",
     "citingDecisionsYear": "A határozat éve",
+    "citingDecisionsYearOutOfRange": "Adjon meg egy évet {min} és {max} között.",
     "citingDecisionsYearPlaceholder": "Minden év",
     "columns": {
       "act": "Jogszabály",

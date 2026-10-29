@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Menções a este dispositivo",
     "citingDecisionsSortDate": "Data da decisão",
     "citingDecisionsYear": "Ano da decisão",
+    "citingDecisionsYearOutOfRange": "Informe um ano entre {min} e {max}.",
     "citingDecisionsYearPlaceholder": "Todos os anos",
     "columns": {
       "act": "Norma",

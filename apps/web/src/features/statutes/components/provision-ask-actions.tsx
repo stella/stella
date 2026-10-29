@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { AiActionIcon, ArrowUpIcon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 
@@ -184,7 +185,7 @@ export const ProvisionAskActions = ({
           </Button>
         )}
       </CapabilityAction>
-      <form
+      <Form
         className="flex flex-col gap-2"
         onSubmit={(event) => {
           event.preventDefault();
@@ -227,7 +228,7 @@ export const ProvisionAskActions = ({
             </Button>
           )}
         </CapabilityAction>
-      </form>
+      </Form>
     </div>
   );
 };

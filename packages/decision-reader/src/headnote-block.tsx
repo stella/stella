@@ -105,6 +105,7 @@ export const HeadnoteBlock = ({
       >
         <OriginMark origin={origin} />
       </span>
+      {/* oxlint-disable-next-line no-native-ui/no-native-accordion -- a headnote or abstract inside the decision's top matter: its label is set in the reader's chrome type at the reader's text scale and shares its line with the origin mark at the end, where AccordionTrigger's fixed type sizes and trailing chevron would collide with the mark; a reader-scale trigger would put the reader's private type scale into the design system */}
       <details
         data-reader-chrome={origin.type === "court" ? undefined : ""}
         onToggle={(event) => {
@@ -117,6 +118,7 @@ export const HeadnoteBlock = ({
         }}
         open={openedByReader || forceOpen}
       >
+        {/* oxlint-disable-next-line no-native-ui/no-native-accordion -- the headnote section's own label, see the details above */}
         <summary
           className="reader-chrome text-muted-foreground cursor-pointer pe-20 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
           data-reader-chrome=""

@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { DatePickerPopover } from "@stll/ui/date-picker-popover";
 import { PlusIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -74,7 +75,7 @@ export type ConditionBuilderLabels = {
 
 type ConditionBuilderContextValue = {
   labels: ConditionBuilderLabels;
-  /** Formatting locale for the date editor. */
+  /** Formatting locale for the date and number editors. */
   locale: string;
 };
 
@@ -158,7 +159,7 @@ type ConditionBuilderProps = {
   onChange: (next: GroupNode) => void;
   capabilities: ConditionCapabilities;
   labels: ConditionBuilderLabels;
-  /** Formatting locale for the date editor. */
+  /** Formatting locale for the date and number editors. */
   locale: string;
 };
 
@@ -543,7 +544,6 @@ const FormulaLeafRow = ({
   onRemove,
   onSetCombinator,
 }: FormulaLeafRowProps) => {
-  const labels = useLabels();
   const { fields, formulaNumberFields = [] } = capabilities;
   const opsFor = capabilities.operatorsFor ?? operatorsFor;
   const operator =
@@ -584,26 +584,58 @@ const FormulaLeafRow = ({
           operator={operator}
           operators={operators}
         />
-        <Input
-          aria-label={labels.valuePlaceholder}
-          className="h-7! w-24 text-xs"
-          onChange={(e) =>
+        <LeafNumberInput
+          onValueChange={(value) =>
             onChange(
               buildLeaf({
                 operand: formulaOperand,
                 operator,
-                value: e.currentTarget.value,
+                value,
               }),
             )
           }
-          placeholder={labels.valuePlaceholder}
-          size="sm"
-          type="number"
           value={leafValueString(node)}
         />
       </div>
       <RemoveButton onRemove={onRemove} />
     </div>
+  );
+};
+
+/** A condition stores its operand as text; an empty or unparsable one is no
+ * number yet, which the field shows as empty. */
+const parseLeafNumber = (value: string): number | null => {
+  if (value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const LeafNumberInput = ({
+  onValueChange,
+  value,
+}: {
+  onValueChange: (value: string) => void;
+  value: string;
+}) => {
+  const { labels, locale } = useBuilderContext();
+  return (
+    <NumberInput
+      className="h-7! w-24"
+      // A condition operand is a raw value (a year, a count, an identifier);
+      // it reads back as typed, without locale grouping on blur.
+      format={{ useGrouping: false }}
+      inputClassName="text-xs"
+      inputProps={{
+        "aria-label": labels.valuePlaceholder,
+        placeholder: labels.valuePlaceholder,
+      }}
+      locale={locale}
+      onValueChange={(next) => onValueChange(next === null ? "" : String(next))}
+      size="sm"
+      value={parseLeafNumber(value)}
+    />
   );
 };
 
@@ -787,15 +819,7 @@ const LeafValueEditor = ({
 
   if (editorKind === "int") {
     return (
-      <Input
-        aria-label={labels.valuePlaceholder}
-        className="h-7! w-24 text-xs"
-        onChange={(e) => emit(e.currentTarget.value)}
-        placeholder={labels.valuePlaceholder}
-        size="sm"
-        type="number"
-        value={leafValueString(node)}
-      />
+      <LeafNumberInput onValueChange={emit} value={leafValueString(node)} />
     );
   }
 

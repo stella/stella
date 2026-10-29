@@ -26,6 +26,7 @@ import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { TEXT_MARK_TONE_COLOR } from "@stll/ui/text-mark";
 import type { TextMarkTone, TextMarkVariant } from "@stll/ui/text-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import type { SaveState } from "@/features/avt/save-state.logic";
@@ -158,12 +159,17 @@ export const ConfBadge = ({ level }: { level: FactConfidence | null }) => {
     return null;
   }
   return (
-    <span title={t("avt.confidence.tooltip")}>
-      <ReviewStatusBadge tone={level === "low" ? "warning" : "neutral"}>
-        {t("avt.confidence.interpretation")}{" "}
-        <span className="font-semibold">{t(CONFIDENCE_LABEL_KEYS[level])}</span>
-      </ReviewStatusBadge>
-    </span>
+    <Tooltip>
+      <TooltipTrigger render={<span />}>
+        <ReviewStatusBadge tone={level === "low" ? "warning" : "neutral"}>
+          {t("avt.confidence.interpretation")}{" "}
+          <span className="font-semibold">
+            {t(CONFIDENCE_LABEL_KEYS[level])}
+          </span>
+        </ReviewStatusBadge>
+      </TooltipTrigger>
+      <TooltipPopup>{t("avt.confidence.tooltip")}</TooltipPopup>
+    </Tooltip>
   );
 };
 
@@ -174,14 +180,17 @@ export const MediumChip = ({ medium }: { medium: string | null }) => {
     return null;
   }
   return (
-    <span title={t("avt.sourceMediumTooltip")}>
-      <ReviewStatusBadge
-        icon={<PenIcon aria-hidden="true" className="size-3" />}
-        tone="neutral"
-      >
-        {medium}
-      </ReviewStatusBadge>
-    </span>
+    <Tooltip>
+      <TooltipTrigger render={<span />}>
+        <ReviewStatusBadge
+          icon={<PenIcon aria-hidden="true" className="size-3" />}
+          tone="neutral"
+        >
+          {medium}
+        </ReviewStatusBadge>
+      </TooltipTrigger>
+      <TooltipPopup>{t("avt.sourceMediumTooltip")}</TooltipPopup>
+    </Tooltip>
   );
 };
 

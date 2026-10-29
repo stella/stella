@@ -78,15 +78,18 @@ export const RegistryLookupPreview = () => (
             Active
           </span>
         </div>
+        {/* oxlint-disable-next-line no-native-ui/no-native-details-grid -- a miniature drawing of the registry card inside an aria-hidden, pointer-events-none preview, set in 0.5–0.62rem mock type; DetailsGrid's real text-xs rows and 20rem container columns cannot draw at that scale */}
         <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
           {FIELDS.map((field) => (
             <div key={field.label} className="flex min-w-0 flex-col">
+              {/* oxlint-disable-next-line no-native-ui/no-native-details-grid -- a field label in the miniature registry card drawing above */}
               <dt
                 className="text-[0.5rem] font-medium tracking-wider uppercase"
                 style={{ color: "var(--muted-foreground)" }}
               >
                 {field.label}
               </dt>
+              {/* oxlint-disable-next-line no-native-ui/no-native-details-grid -- a field value in the miniature registry card drawing above */}
               <dd
                 className="truncate text-[0.62rem]"
                 style={{ color: "var(--foreground)" }}

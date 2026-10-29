@@ -11,6 +11,7 @@ import type {
 } from "@stll/api-contract/reader-answers";
 import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
@@ -313,7 +314,7 @@ export const ReaderAnswerCard = ({
             )}
           </div>
           {answer.mine && generationMode === "enabled" && (
-            <form
+            <Form
               className="mt-1 flex flex-col gap-1"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -347,17 +348,15 @@ export const ReaderAnswerCard = ({
               >
                 {t("readerAnswers.send")}
               </Button>
-            </form>
+            </Form>
           )}
         </>
       ) : (
-        <button
-          className="text-foreground-muted min-h-11 w-full text-start"
-          type="button"
-          onClick={open}
-        >
-          {lastAssistant?.content.slice(0, 140) || t("readerAnswers.expand")}
-        </button>
+        <Button className="min-h-11 w-full" onClick={open} variant="plain">
+          <span className="text-foreground-muted">
+            {lastAssistant?.content.slice(0, 140) || t("readerAnswers.expand")}
+          </span>
+        </Button>
       )}
     </section>
   );

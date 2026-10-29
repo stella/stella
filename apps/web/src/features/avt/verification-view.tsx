@@ -300,36 +300,47 @@ export const VerificationView = ({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="grid grid-cols-4 overflow-hidden rounded-xl border md:grid-cols-8">
         {stats.map((stat) => (
-          <button
-            aria-pressed={filter === stat.filter}
-            className={cn(
-              "hover:bg-muted border-e border-b p-2.5 text-start md:border-b-0 md:last:border-e-0",
-              filter === stat.filter && "bg-muted",
-            )}
+          <div
+            className="flex border-e border-b md:border-b-0 md:last:border-e-0"
             key={stat.key}
-            onClick={() =>
-              applyFilter(filter === stat.filter ? "all" : stat.filter)
-            }
-            type="button"
           >
-            <div
-              className={cn(
-                "text-lg font-semibold tabular-nums",
-                stat.state !== undefined && STATE_COLOR[stat.state].textClass,
-              )}
-              style={
-                stat.state === undefined
-                  ? undefined
-                  : STATE_COLOR[stat.state].textStyle
+            <Button
+              aria-pressed={filter === stat.filter}
+              className="group/plain flex flex-1"
+              onClick={() =>
+                applyFilter(filter === stat.filter ? "all" : stat.filter)
               }
+              variant="plain"
             >
-              {stat.value}
-            </div>
-            <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
-              {stat.state !== undefined && <StateSwatch state={stat.state} />}
-              {stat.label}
-            </div>
-          </button>
+              <div
+                className={cn(
+                  "group-hover/plain:bg-muted flex w-full min-w-0 flex-col p-2.5",
+                  filter === stat.filter && "bg-muted",
+                )}
+              >
+                <div
+                  className={cn(
+                    "text-lg font-semibold tabular-nums",
+                    stat.state !== undefined &&
+                      STATE_COLOR[stat.state].textClass,
+                  )}
+                  style={
+                    stat.state === undefined
+                      ? undefined
+                      : STATE_COLOR[stat.state].textStyle
+                  }
+                >
+                  {stat.value}
+                </div>
+                <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
+                  {stat.state !== undefined && (
+                    <StateSwatch state={stat.state} />
+                  )}
+                  {stat.label}
+                </div>
+              </div>
+            </Button>
+          </div>
         ))}
       </div>
 
@@ -684,49 +695,55 @@ const ClaimSpan = ({
   const reviewStatus = claim.review?.status ?? null;
   const { mark, markTextClass } = STATE_COLOR[state];
   return (
-    <button
+    // The claim's look is the review text mark, drawn by the span; the plain
+    // button only makes the run of evidence a control.
+    <Button
       aria-pressed={selected}
-      className={cn(
-        "inline cursor-pointer text-start whitespace-pre-wrap hover:decoration-4 focus-visible:outline-2 focus-visible:outline-offset-2",
-        textMarkClass({
-          ...mark,
-          state: claimMarkState({ selected, highlight }),
-        }),
-        markTextClass,
-        dim && "opacity-40",
-      )}
+      className="inline"
       id={claimDomId(claim.id)}
       onClick={() => onSelect(claim.id)}
-      type="button"
+      variant="plain"
     >
-      {children}
-      {contested && (
-        <CircleAlertIcon
-          aria-hidden="true"
-          className="text-warning ms-0.5 inline-block size-3 align-middle"
-        />
-      )}
-      {reviewStatus === "reviewed" && (
-        <EyeIcon
-          aria-hidden="true"
-          className="text-muted-foreground ms-0.5 inline-block size-3 align-middle"
-        />
-      )}
-      {reviewStatus === "disputed" && (
-        <FlagIcon
-          aria-hidden="true"
-          className="text-destructive-foreground ms-0.5 inline-block size-3 align-middle"
-        />
-      )}
-      {/* The verdict colour, the underline and each marker are visual only;
-          a screen-reader user hears the verdict and markers here. */}
-      <span className="sr-only">
-        {t("avt.verification.claimAnnouncement", {
-          state: t(STATE_META[state].chipKey),
-          contested: String(contested),
-          reviewStatus: reviewStatus ?? "none",
-        })}
+      <span
+        className={cn(
+          "whitespace-pre-wrap hover:decoration-4",
+          textMarkClass({
+            ...mark,
+            state: claimMarkState({ selected, highlight }),
+          }),
+          markTextClass,
+          dim && "opacity-40",
+        )}
+      >
+        {children}
+        {contested && (
+          <CircleAlertIcon
+            aria-hidden="true"
+            className="text-warning ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
+        {reviewStatus === "reviewed" && (
+          <EyeIcon
+            aria-hidden="true"
+            className="text-muted-foreground ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
+        {reviewStatus === "disputed" && (
+          <FlagIcon
+            aria-hidden="true"
+            className="text-destructive-foreground ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
+        {/* The verdict colour, the underline and each marker are visual only;
+            a screen-reader user hears the verdict and markers here. */}
+        <span className="sr-only">
+          {t("avt.verification.claimAnnouncement", {
+            state: t(STATE_META[state].chipKey),
+            contested: String(contested),
+            reviewStatus: reviewStatus ?? "none",
+          })}
+        </span>
       </span>
-    </button>
+    </Button>
   );
 };

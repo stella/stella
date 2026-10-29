@@ -1,8 +1,9 @@
-import { isValidElement, useState } from "react";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { isValidElement, useId, useState } from "react";
+import type { AnchorHTMLAttributes, ReactElement, ReactNode } from "react";
 
 import { GitHubLogoIcon, XLogoIcon } from "@stll/ui/brand-icons";
 import { GlobeIcon } from "@stll/ui/icons";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import { normalizeChatLink } from "./link-detection";
 
@@ -73,6 +74,43 @@ type ChatLinkProps = Omit<
   newTabLabel?: string;
 };
 
+/**
+ * The hover hint a link carries: the new-tab notice, or the title the source
+ * gave it. A link with neither renders bare, so a long answer does not mount
+ * a tooltip for every link it has nothing to say about. The tooltip is for the
+ * pointer; the same words reach assistive technology as the link's
+ * description (see `HintDescription`).
+ */
+const LinkHint = ({
+  children,
+  hint,
+}: {
+  children: ReactElement;
+  hint: string | undefined;
+}) =>
+  hint ? (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipPopup>{hint}</TooltipPopup>
+    </Tooltip>
+  ) : (
+    children
+  );
+
+/** The hint as the link's accessible description, which a tooltip is not. */
+const HintDescription = ({
+  hint,
+  id,
+}: {
+  hint: string | undefined;
+  id: string;
+}) =>
+  hint ? (
+    <span hidden id={id}>
+      {hint}
+    </span>
+  ) : null;
+
 export const ChatLink = ({
   appearance = "inline",
   children,
@@ -82,6 +120,8 @@ export const ChatLink = ({
   title,
   ...anchorProps
 }: ChatLinkProps) => {
+  const hint = newTabLabel ?? title;
+  const hintId = useId();
   const className =
     appearance === "tray"
       ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -104,16 +144,19 @@ export const ChatLink = ({
       );
     }
     return (
-      <a
-        {...anchorProps}
-        title={newTabLabel ?? title}
-        className={className}
-        href={href}
-        target={CHAT_LINK_ATTRIBUTES.target}
-        rel={CHAT_LINK_ATTRIBUTES.rel}
-      >
-        <bdi className={labelClassName}>{children ?? href}</bdi>
-      </a>
+      <LinkHint hint={hint}>
+        <a
+          {...anchorProps}
+          aria-describedby={hint ? hintId : anchorProps["aria-describedby"]}
+          className={className}
+          href={href}
+          target={CHAT_LINK_ATTRIBUTES.target}
+          rel={CHAT_LINK_ATTRIBUTES.rel}
+        >
+          <bdi className={labelClassName}>{children ?? href}</bdi>
+          <HintDescription hint={hint} id={hintId} />
+        </a>
+      </LinkHint>
     );
   }
   const text = linkText(children).trim();
@@ -129,25 +172,28 @@ export const ChatLink = ({
     icon = bundledIcon;
   }
   return (
-    <a
-      {...anchorProps}
-      title={newTabLabel ?? title}
-      className={className}
-      href={target.href}
-      target={CHAT_LINK_ATTRIBUTES.target}
-      rel={CHAT_LINK_ATTRIBUTES.rel}
-    >
-      <span
-        aria-hidden="true"
-        className={
-          appearance === "tray"
-            ? "inline-block shrink-0"
-            : "me-1 inline-block align-[-0.125em]"
-        }
+    <LinkHint hint={hint}>
+      <a
+        {...anchorProps}
+        aria-describedby={hint ? hintId : anchorProps["aria-describedby"]}
+        className={className}
+        href={target.href}
+        target={CHAT_LINK_ATTRIBUTES.target}
+        rel={CHAT_LINK_ATTRIBUTES.rel}
       >
-        {icon}
-      </span>
-      <bdi className={labelClassName}>{label}</bdi>
-    </a>
+        <span
+          aria-hidden="true"
+          className={
+            appearance === "tray"
+              ? "inline-block shrink-0"
+              : "me-1 inline-block align-[-0.125em]"
+          }
+        >
+          {icon}
+        </span>
+        <bdi className={labelClassName}>{label}</bdi>
+        <HintDescription hint={hint} id={hintId} />
+      </a>
+    </LinkHint>
   );
 };

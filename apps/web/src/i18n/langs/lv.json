@@ -5331,6 +5331,7 @@
     "citingDecisionsSortCitations": "Šīs normas pieminējumi",
     "citingDecisionsSortDate": "Nolēmuma datums",
     "citingDecisionsYear": "Nolēmuma gads",
+    "citingDecisionsYearOutOfRange": "Ievadiet gadu no {min} līdz {max}.",
     "citingDecisionsYearPlaceholder": "Visi gadi",
     "columns": {
       "act": "Tiesību akts",

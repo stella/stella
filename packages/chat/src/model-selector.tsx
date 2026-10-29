@@ -1,6 +1,11 @@
-import type { ChangeEvent } from "react";
-
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 
 import type { ChatModelOption, ChatModelSelection } from "./runtime";
 import { ChatConfigurationError } from "./runtime";
@@ -96,8 +101,9 @@ const parseSelection = (
   };
 };
 
-/** Native, accessible model control. Provider configuration is validated by
- * `resolveChatModelSelection` before a host accepts the new selection. */
+/** Accessible model control on the design-system select. Provider
+ * configuration is validated by `resolveChatModelSelection` before a host
+ * accepts the new selection. */
 export const ChatModelSelector = ({
   autoLabel,
   disabled = false,
@@ -105,26 +111,27 @@ export const ChatModelSelector = ({
   onSelectionChange,
   options,
   selection,
-}: ChatModelSelectorProps) => {
-  const onChange = ({ currentTarget }: ChangeEvent<HTMLSelectElement>) => {
-    onSelectionChange(parseSelection(currentTarget.value, options));
-  };
-  return (
-    <select
-      aria-label={label}
-      disabled={disabled}
-      onChange={onChange}
-      value={toValue(selection)}
-    >
-      <option value="">{autoLabel}</option>
+}: ChatModelSelectorProps) => (
+  <Select
+    disabled={disabled}
+    onValueChange={(value) => {
+      onSelectionChange(parseSelection(value ?? "", options));
+    }}
+    value={toValue(selection)}
+  >
+    <SelectTrigger aria-label={label}>
+      <SelectValue />
+    </SelectTrigger>
+    <SelectPopup>
+      <SelectItem value="">{autoLabel}</SelectItem>
       {options.map((option) => (
-        <option
+        <SelectItem
           key={`${option.provider}:${option.modelId}`}
           value={`${option.provider}:${option.modelId}`}
         >
           {option.displayName}
-        </option>
+        </SelectItem>
       ))}
-    </select>
-  );
-};
+    </SelectPopup>
+  </Select>
+);

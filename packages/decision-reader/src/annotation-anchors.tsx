@@ -83,6 +83,7 @@ const renderAnnotation = (
       )}
       data-annotation-id={annotation.id}
       aria-label={annotation.activationLabel}
+      // oxlint-disable-next-line no-native-ui/no-native-button -- the highlight is a run of the decision's own text and must break across lines with its paragraph; a <button>, and so Button, lays out as one atomic inline box, so the mark takes button semantics by role with its own Enter/Space handling
       role={annotation.activationLabel === undefined ? undefined : "button"}
       tabIndex={annotation.activationLabel === undefined ? undefined : 0}
       onKeyDown={
