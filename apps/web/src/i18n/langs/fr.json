@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
-      "headMatter": "En-tête",
+      "headMatter": "Informations sur l’affaire",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
     "research": {
