@@ -141,7 +141,9 @@ jobs:
         id: evaluate
         env:
           PREVIOUS_REF: ${{ steps.release.outputs.previous }}
+          PREVIOUS_PUBLISHED_AT: ${{ steps.release.outputs.previous_published_at }}
           QUERY_OUTCOME: ${{ steps.query.outcome }}
+          WINDOW_END: ${{ steps.release.outputs.window_end }}
         run: |
           set -euo pipefail
           result_args=()
@@ -151,11 +153,35 @@ jobs:
           bun scripts/release-health.ts evaluate \
             --release "$RELEASE_REF" \
             --previous "$PREVIOUS_REF" \
+            --until "$WINDOW_END" \
+            --previous-published-at "$PREVIOUS_PUBLISHED_AT" \
+            --record "$RUNNER_TEMP/private-release-health.json" \
             "${result_args[@]}" \
             --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --verdict "$RUNNER_TEMP/release-health.json" \
             --summary "$GITHUB_STEP_SUMMARY"
           echo "verdict=$(jq -r '.verdict' "$RUNNER_TEMP/release-health.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Mint private record token
+        id: record-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          permission-contents: write
+
+      - name: Persist private release record
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ steps.record-token.outputs.token }}
+          RECORD_STORE: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+        run: |
+          bun scripts/release-health.ts record \
+            --release "$RELEASE_REF" \
+            --store "$RECORD_STORE" \
+            --record "$RUNNER_TEMP/private-release-health.json"
 
       - name: Record the verdict on the release
         timeout-minutes: 5

@@ -1,5 +1,5 @@
 {
   "kind": "priority",
-  "qualifier": "Records the release health verdict on the release.",
-  "reviewedDigest": "11961667fab6891e0e9dd1188eb31f1b6be9b8ad9e4a5ba02c3c400ac34a41fc"
+  "qualifier": "Records the release health verdict and persists its detailed record.",
+  "reviewedDigest": "129eba4563fe10aadb4ddd256a8c93b0815bd05807a355e8b53bb4ff79308d58"
 }

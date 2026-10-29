@@ -8,11 +8,13 @@
 // inconclusive or still inside its window, unless the dispatch acknowledges
 // that release by name.
 //
-// Every subcommand is a pure function of its files and flags; the workflows
-// make the network calls through the repository's retry wrappers. Its only
+// Evaluation and gating use files and flags; private record commands call
+// GitHub through the repository's retry wrapper. Its only
 // package import is a type, so the workflows run it without an install.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 import type { FailureReason } from "@stll/errors";
@@ -73,7 +75,9 @@ const stableVersion = (ref: string): SemVer | undefined => {
 
 const requireStableRef = (ref: string): string => {
   if (stableVersion(ref) === undefined) {
-    throw new ReleaseHealthError(`${ref} is not a stable release ref (v1.2.3)`);
+    throw new ReleaseHealthError(
+      "Release ref is not a stable release ref (v1.2.3)",
+    );
   }
   return ref;
 };
@@ -147,10 +151,11 @@ export const previousRelease = (
 };
 
 const instantMs = (value: string): number => {
-  if (!ISO_INSTANT.test(value)) {
-    throw new ReleaseHealthError(`${value} is not a UTC ISO instant`);
+  const instant = Date.parse(value);
+  if (!ISO_INSTANT.test(value) || !Number.isFinite(instant)) {
+    throw new ReleaseHealthError("Timestamp is not a UTC ISO instant");
   }
-  return Date.parse(value);
+  return instant;
 };
 
 /** When a release published at `publishedAt` leaves its window. */
@@ -361,6 +366,15 @@ type ReleaseFinding =
     }
   | { readonly type: "overflow"; readonly occurrences: number };
 
+const FINDING_TYPES = {
+  unclassified: true,
+  new_fingerprint: true,
+  overflow: true,
+} as const satisfies Record<ReleaseFinding["type"], boolean>;
+
+const isFindingType = (value: unknown): value is ReleaseFinding["type"] =>
+  typeof value === "string" && Object.hasOwn(FINDING_TYPES, value);
+
 const fingerprintKey = ({ handler, errorClass, errorCode }: Fingerprint) =>
   JSON.stringify([handler, errorClass, errorCode]);
 
@@ -532,68 +546,297 @@ export const evaluateRelease = ({
   }
 };
 
-const describeFingerprint = ({ handler, errorClass, errorCode }: Fingerprint) =>
-  `\`${handler}\` ${errorClass} (${errorCode})`;
+/** Public output contains only the verdict, count and opaque record reference. */
+export const summarize = ({ verdict, findings }: Evaluation): string =>
+  `### Release health: ${verdict.release} is ${verdict.verdict}\n\nFindings: ${findings.length}\nRecord: ${recordReference(verdict.release)}\n`;
 
-const describeFinding = (finding: ReleaseFinding): string => {
-  switch (finding.type) {
-    case "unclassified":
-      return `unclassified failure: ${describeFingerprint(finding.fingerprint)}`;
-    case "new_fingerprint":
-      return `new failure fingerprint: ${describeFingerprint(finding.fingerprint)}`;
-    case "overflow":
-      return "failures beyond the per-window fingerprint budget";
-    default:
-      finding satisfies never;
-      throw new ReleaseHealthError("Unhandled finding");
+const recordReference = (release: string): string =>
+  `release-health:${requireStableRef(release)}`;
+
+const findingCount = (value: unknown): number => {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new ReleaseHealthError("Invalid release health finding count");
   }
+  return value;
 };
 
-/**
- * The step summary. Fingerprints only: counts stay in the analytics project,
- * because the repository and its run logs are public.
- */
-export const summarize = ({ verdict, findings }: Evaluation): string => {
-  const heading = `### Release health: ${verdict.release} is ${verdict.verdict}`;
-  switch (verdict.verdict) {
-    case "healthy":
-      return `${heading}\n`;
-    case "unhealthy":
-      return [
-        heading,
-        "",
-        ...findings.map((finding) => `- ${describeFinding(finding)}`),
-        "",
-      ].join("\n");
-    case "inconclusive":
-      return `${heading}\n\nCause: ${verdict.cause}\n`;
-    default:
-      verdict satisfies never;
-      throw new ReleaseHealthError("Unhandled verdict");
-  }
+type PublicRecord = {
+  readonly verdict: ReleaseHealthVerdict;
+  readonly details:
+    | { readonly type: "unknown" }
+    | {
+        readonly type: "private";
+        readonly reference: string;
+        readonly count: number;
+      };
 };
 
-const VERDICTS: ReadonlySet<string> = new Set([
-  "healthy",
-  "unhealthy",
-  "inconclusive",
-]);
-
-const readVerdict = (value: unknown): ReleaseHealthVerdict["verdict"] => {
+/** Count-only assets are persisted data; their detail availability is unknown. */
+export const readPublicRecord = (value: unknown): PublicRecord => {
   if (
     !isRecord(value) ||
-    typeof value["verdict"] !== "string" ||
-    !VERDICTS.has(value["verdict"])
+    typeof value["release"] !== "string" ||
+    typeof value["checkedAt"] !== "string"
   ) {
-    throw new ReleaseHealthError(`${RELEASE_HEALTH_ASSET} is not a verdict`);
+    throw new ReleaseHealthError("Invalid release health verdict");
   }
+  const release = requireStableRef(value["release"]);
+  const checkedAt = value["checkedAt"];
+  instantMs(checkedAt);
+  let verdict: ReleaseHealthVerdict;
   switch (value["verdict"]) {
     case "healthy":
+      verdict = { verdict: "healthy", release, checkedAt };
+      break;
     case "unhealthy":
-    case "inconclusive":
-      return value["verdict"];
+      verdict = {
+        verdict: "unhealthy",
+        release,
+        checkedAt,
+        findings: findingCount(value["findings"]),
+      };
+      break;
+    case "inconclusive": {
+      const cause = INCONCLUSIVE_CAUSES.find(
+        (candidate) => candidate === value["cause"],
+      );
+      if (cause === undefined) {
+        throw new ReleaseHealthError("Invalid release health cause");
+      }
+      verdict = { verdict: "inconclusive", release, checkedAt, cause };
+      break;
+    }
     default:
-      throw new ReleaseHealthError(`${RELEASE_HEALTH_ASSET} is not a verdict`);
+      throw new ReleaseHealthError("Invalid release health verdict");
+  }
+  if (value["record"] === undefined) {
+    return { verdict, details: { type: "unknown" } };
+  }
+  if (value["record"] !== recordReference(release)) {
+    throw new ReleaseHealthError("Invalid release health reference");
+  }
+  const count = findingCount(value["findings"]);
+  if (verdict.verdict !== "unhealthy" && count !== 0) {
+    throw new ReleaseHealthError("Unexpected release health findings");
+  }
+  return {
+    verdict,
+    details: { type: "private", reference: recordReference(release), count },
+  };
+};
+
+type PrivateRecord = {
+  readonly version: 1;
+  readonly verdict: ReleaseHealthVerdict;
+  readonly baseline: {
+    readonly release: string;
+    readonly environment: ReturnType<typeof baselineEnvironment>;
+  } | null;
+  /** Snapshot the environment predicate and bindings used for this baseline. */
+  readonly query: ReturnType<typeof buildQuery>["query"];
+  readonly window: {
+    readonly start: string;
+    readonly end: string;
+    readonly baselineLookbackDays: number;
+  };
+  readonly findings: readonly ReleaseFinding[];
+};
+
+const readStoredQuery = (value: unknown): PrivateRecord["query"] => {
+  if (
+    !isRecord(value) ||
+    value["kind"] !== "HogQLQuery" ||
+    typeof value["query"] !== "string" ||
+    !isRecord(value["values"])
+  ) {
+    throw new ReleaseHealthError("Invalid private release health query");
+  }
+  const values = Object.fromEntries(
+    Object.entries(value["values"]).map(([key, binding]) => {
+      if (typeof binding !== "string") {
+        throw new ReleaseHealthError(
+          "Invalid private release health query binding",
+        );
+      }
+      return [key, binding] as const;
+    }),
+  );
+  return { kind: "HogQLQuery", query: value["query"], values };
+};
+
+export const readPrivateRecord = (value: unknown): PrivateRecord => {
+  if (
+    !isRecord(value) ||
+    value["version"] !== 1 ||
+    !Array.isArray(value["findings"]) ||
+    !isRecord(value["window"]) ||
+    !(value["baseline"] === null || isRecord(value["baseline"]))
+  ) {
+    throw new ReleaseHealthError("Invalid private release health record");
+  }
+  const { verdict } = readPublicRecord(value["verdict"]);
+  const rawBaseline = value["baseline"];
+  let baseline: PrivateRecord["baseline"] = null;
+  if (rawBaseline !== null) {
+    if (
+      !isRecord(rawBaseline) ||
+      typeof rawBaseline["release"] !== "string" ||
+      (rawBaseline["environment"] !== "recorded" &&
+        rawBaseline["environment"] !== "unrecorded")
+    ) {
+      throw new ReleaseHealthError("Invalid private release health baseline");
+    }
+    baseline = {
+      release: requireStableRef(rawBaseline["release"]),
+      environment: rawBaseline["environment"],
+    };
+  }
+  const query = readStoredQuery(value["query"]);
+  const window = value["window"];
+  if (
+    typeof window["start"] !== "string" ||
+    typeof window["end"] !== "string" ||
+    window["baselineLookbackDays"] !== BASELINE_LOOKBACK_DAYS ||
+    windowEnd(window["start"]) !==
+      new Date(instantMs(window["end"])).toISOString()
+  ) {
+    throw new ReleaseHealthError("Invalid private release health window");
+  }
+  const findings: ReleaseFinding[] = [];
+  for (const finding of value["findings"]) {
+    if (!isRecord(finding)) {
+      throw new ReleaseHealthError("Invalid private release finding");
+    }
+    const occurrences = findingCount(finding["occurrences"]);
+    const findingType = finding["type"];
+    if (!isFindingType(findingType)) {
+      throw new ReleaseHealthError("Invalid private release finding type");
+    }
+    switch (findingType) {
+      case "overflow":
+        findings.push({ type: "overflow", occurrences });
+        break;
+      case "unclassified":
+      case "new_fingerprint": {
+        const fingerprint = finding["fingerprint"];
+        if (
+          !isRecord(fingerprint) ||
+          typeof fingerprint["handler"] !== "string" ||
+          typeof fingerprint["errorClass"] !== "string" ||
+          typeof fingerprint["errorCode"] !== "string"
+        ) {
+          throw new ReleaseHealthError("Invalid private release fingerprint");
+        }
+        findings.push({
+          type: findingType,
+          occurrences,
+          fingerprint: {
+            handler: fingerprint["handler"],
+            errorClass: fingerprint["errorClass"],
+            errorCode: fingerprint["errorCode"],
+          },
+        });
+        break;
+      }
+      default:
+        findingType satisfies never;
+        throw new ReleaseHealthError("Unhandled private release finding type");
+    }
+  }
+  if (
+    findings.length !== (verdict.verdict === "unhealthy" ? verdict.findings : 0)
+  ) {
+    throw new ReleaseHealthError("Private release finding count mismatch");
+  }
+  return {
+    version: 1,
+    verdict,
+    baseline,
+    query,
+    window: {
+      start: window["start"],
+      end: window["end"],
+      baselineLookbackDays: BASELINE_LOOKBACK_DAYS,
+    },
+    findings,
+  };
+};
+
+const STORE_RELEASE = "release-health-v1";
+const DEFAULT_STORE = "stella/stella-infra";
+
+// Never echo API response bodies on failure: even errors can contain private data.
+const github = (args: readonly string[]): string => {
+  const result = Bun.spawnSync(
+    ["bash", path.join(import.meta.dir, "gh-retry.sh"), ...args],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    throw new ReleaseHealthError(
+      "Private release record request failed: the draft store or tag record is missing or inaccessible. Draft reads require a token with contents:write (GitHub returns 404 for insufficient access).",
+    );
+  }
+  return result.stdout.toString();
+};
+
+const requirePrivateStore = (store: string): void => {
+  if (
+    !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(store) ||
+    github(["api", `repos/${store}`, "--jq", ".private"]).trim() !== "true"
+  ) {
+    throw new ReleaseHealthError(
+      "Release health store must be a private repository",
+    );
+  }
+  const metadata: unknown = JSON.parse(
+    github([
+      "release",
+      "view",
+      STORE_RELEASE,
+      "--repo",
+      store,
+      "--json",
+      "isDraft",
+    ]),
+  );
+  if (!isRecord(metadata) || metadata["isDraft"] !== true) {
+    throw new ReleaseHealthError(
+      "Release health store must remain a draft release",
+    );
+  }
+};
+
+type ReadStoredRecordOptions = {
+  readonly release: string;
+  readonly store: string;
+};
+
+const readStoredRecord = ({
+  release,
+  store,
+}: ReadStoredRecordOptions): PrivateRecord => {
+  const directory = mkdtempSync(path.join(tmpdir(), "release-health-read-"));
+  try {
+    github([
+      "release",
+      "download",
+      STORE_RELEASE,
+      "--repo",
+      store,
+      "--pattern",
+      `${release}.json`,
+      "--dir",
+      directory,
+    ]);
+    const record = readPrivateRecordFile(
+      path.join(directory, `${release}.json`),
+    );
+    if (record.verdict.release !== release) {
+      throw new ReleaseHealthError("Private record names another release");
+    }
+    return record;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 };
 
@@ -648,7 +891,7 @@ export const gatePromotion = ({
       `${RELEASE_HEALTH_ASSET} on ${previous.tag} names another release`,
     );
   }
-  const recorded = readVerdict(verdict);
+  const recorded = readPublicRecord(verdict).verdict.verdict;
   switch (recorded) {
     case "healthy":
       return { type: "pass", reason: "healthy" };
@@ -679,7 +922,7 @@ const describeGate = (
       return `${tag} has no post-release verdict; it predates the check.`;
     case "unhealthy":
     case "inconclusive":
-      return `${tag} is ${decision.reason} after its post-release check. Investigate, then re-dispatch Release Artifacts with acknowledge_unhealthy_release=${tag}.`;
+      return `${tag} is ${decision.reason} after its post-release check. Read findings with: bun scripts/release-health.ts findings --release ${tag}. Investigate, then re-dispatch Release Artifacts with acknowledge_unhealthy_release=${tag}.`;
     case "window_open":
       return `${tag} is still inside its post-release window. Wait for its verdict, or re-dispatch Release Artifacts with acknowledge_unhealthy_release=${tag}.`;
     default:
@@ -692,6 +935,17 @@ const describeGate = (
 
 const readJsonFile = (file: string): unknown =>
   JSON.parse(readFileSync(file, "utf-8"));
+
+// The CLI's private-file boundary must not print JSON snippets or private values.
+const readPrivateRecordFile = (file: string): PrivateRecord => {
+  try {
+    return readPrivateRecord(readJsonFile(file));
+  } catch {
+    throw new ReleaseHealthError(
+      "Private release record is malformed or unreadable; inspect it in private storage",
+    );
+  }
+};
 
 const readOptionalJsonFile = (file: string | undefined): unknown => {
   if (file === undefined) {
@@ -748,10 +1002,12 @@ const CLI_OPTIONS = {
   "previous-release": { type: "string" },
   acknowledged: { type: "string" },
   summary: { type: "string" },
+  record: { type: "string" },
+  store: { type: "string" },
 } as const;
 
 const USAGE =
-  "usage: release-health.ts previous|window-end|query|evaluate|gate [flags]";
+  "usage: release-health.ts previous|window-end|query|evaluate|gate|findings|record [flags]";
 
 const run = (argv: readonly string[]): number => {
   const { positionals, values } = parseArgs({
@@ -798,15 +1054,56 @@ const run = (argv: readonly string[]): number => {
       return 0;
     }
     case "evaluate": {
+      const previousRef = optionalRef(values.previous);
+      const previous =
+        previousRef === null
+          ? null
+          : {
+              ref: previousRef,
+              publishedAt: required(
+                values["previous-published-at"],
+                "previous-published-at",
+              ),
+            };
       const evaluation = evaluateRelease({
         release: requireStableRef(required(values.release, "release")),
         baselineRelease: optionalRef(values.previous),
         response: readOptionalJsonFile(values.result),
         checkedAt: required(values.now, "now"),
       });
+      const until = required(values.until, "until");
+      const record = readPrivateRecord({
+        version: 1,
+        verdict: evaluation.verdict,
+        baseline:
+          previous === null
+            ? null
+            : {
+                release: previous.ref,
+                environment: baselineEnvironment(previous),
+              },
+        query: buildQuery({
+          release: requireStableRef(required(values.release, "release")),
+          previous,
+          until,
+        }).query,
+        window: {
+          start: new Date(
+            instantMs(until) - RELEASE_HEALTH_WINDOW_MINUTES * MINUTE_MS,
+          ).toISOString(),
+          end: until,
+          baselineLookbackDays: BASELINE_LOOKBACK_DAYS,
+        },
+        findings: evaluation.findings,
+      });
+      writeFileSync(
+        required(values.record, "record"),
+        `${JSON.stringify(record)}\n`,
+        { mode: 0o600 },
+      );
       writeFileSync(
         required(values.verdict, "verdict"),
-        `${JSON.stringify(evaluation.verdict)}\n`,
+        `${JSON.stringify({ ...evaluation.verdict, findings: evaluation.findings.length, record: recordReference(evaluation.verdict.release) })}\n`,
       );
       writeFileSync(
         required(values.summary, "summary"),
@@ -815,6 +1112,49 @@ const run = (argv: readonly string[]): number => {
           flag: "a",
         },
       );
+      return 0;
+    }
+    case "record":
+    case "findings": {
+      const release = requireStableRef(required(values.release, "release"));
+      const store = values.store ?? DEFAULT_STORE;
+      requirePrivateStore(store);
+      if (command === "findings") {
+        process.stdout.write(
+          `${JSON.stringify(readStoredRecord({ release, store }), null, 2)}\n`,
+        );
+        return 0;
+      }
+      const record = readPrivateRecordFile(required(values.record, "record"));
+      if (record.verdict.release !== release) {
+        throw new ReleaseHealthError("Private record names another release");
+      }
+      const directory = mkdtempSync(
+        path.join(tmpdir(), "release-health-record-"),
+      );
+      try {
+        const file = path.join(directory, `${release}.json`);
+        writeFileSync(file, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+        github([
+          "release",
+          "upload",
+          STORE_RELEASE,
+          file,
+          "--repo",
+          store,
+          "--clobber",
+        ]);
+        if (
+          JSON.stringify(readStoredRecord({ release, store })) !==
+          JSON.stringify(record)
+        ) {
+          throw new ReleaseHealthError(
+            "Private release record readback mismatch",
+          );
+        }
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
       return 0;
     }
     case "gate": {
