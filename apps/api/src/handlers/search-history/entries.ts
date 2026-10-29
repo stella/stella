@@ -531,6 +531,48 @@ type SearchHistoryInsert = Awaited<
   ReturnType<typeof prepareSearchHistoryRows>
 >[number];
 
+/** Split country aggregates before selecting the one row the expand index stores. */
+const aggregateCountryUses = (rows: readonly SearchHistoryInsert[]) => {
+  const byCountry = new Map<string, SearchHistoryInsert>();
+  for (const row of rows) {
+    const key = `${row.kind}:${row.lookupKey}:${row.country ?? "legacy"}`;
+    const previous = byCountry.get(key);
+    if (previous === undefined) {
+      byCountry.set(key, row);
+      continue;
+    }
+    byCountry.set(key, {
+      ...(row.lastUsedAt >= previous.lastUsedAt ? row : previous),
+      firstUsedAt:
+        row.firstUsedAt < previous.firstUsedAt
+          ? row.firstUsedAt
+          : previous.firstUsedAt,
+      lastUsedAt:
+        row.lastUsedAt > previous.lastUsedAt
+          ? row.lastUsedAt
+          : previous.lastUsedAt,
+      useCount: row.useCount + previous.useCount,
+    });
+  }
+  const latestByBaseKey = new Map<string, SearchHistoryInsert>();
+  for (const row of byCountry.values()) {
+    const key = `${row.kind}:${row.lookupKey}`;
+    const previous = latestByBaseKey.get(key);
+    if (
+      previous === undefined ||
+      (row.countryUsedAt !== null &&
+        (previous.countryUsedAt === null ||
+          row.countryUsedAt >= previous.countryUsedAt)) ||
+      (row.countryUsedAt === null &&
+        previous.countryUsedAt === null &&
+        row.lastUsedAt >= previous.lastUsedAt)
+    ) {
+      latestByBaseKey.set(key, row);
+    }
+  }
+  return [...latestByBaseKey.values()];
+};
+
 /**
  * Writes prepared rows. A use of an entry the owner already has bumps that
  * row (latest use, count, and the latest spelling) instead of adding one.
@@ -634,7 +676,7 @@ export const upsertSearchHistoryRows = async ({
   const deletedAt = new Map(
     tombstones.map((row) => [`${row.kind}:${row.lookupKey}`, row.deletedAt]),
   );
-  const accepted = new Map<string, SearchHistoryInsert>();
+  const accepted: SearchHistoryInsert[] = [];
   let skipped = 0;
   for (const row of rows) {
     const key = `${row.kind}:${row.lookupKey}`;
@@ -666,29 +708,18 @@ export const upsertSearchHistoryRows = async ({
       skipped += row.useCount;
       continue;
     }
-    const previous = accepted.get(key);
-    if (previous === undefined) {
-      accepted.set(key, row);
-      continue;
-    }
-    accepted.set(key, {
-      ...(row.lastUsedAt >= previous.lastUsedAt ? row : previous),
-      firstUsedAt:
-        row.firstUsedAt < previous.firstUsedAt
-          ? row.firstUsedAt
-          : previous.firstUsedAt,
-      lastUsedAt:
-        row.lastUsedAt > previous.lastUsedAt
-          ? row.lastUsedAt
-          : previous.lastUsedAt,
-      useCount: row.useCount + previous.useCount,
-    });
+    accepted.push(row);
   }
-  const acceptedRows = [...accepted.values()];
+  const acceptedRows = aggregateCountryUses(accepted);
   const table = searchHistoryEntries;
   // A later use replaces the stored spelling; an older one (an import of
   // what a browser kept) merges its first use and preserves replay counts.
   const incomingIsLatest = sql`excluded.last_used_at::timestamptz >= ${table.lastUsedAt}`;
+  const incomingCountryIsLatest = sql`excluded.country_used_at IS NOT NULL AND (${table.countryUsedAt} IS NULL OR excluded.country_used_at::timestamptz >= ${table.countryUsedAt})`;
+  const differentKnownCountry = sql`${table.country} IS NOT NULL AND excluded.country IS NOT NULL AND ${table.country} IS DISTINCT FROM excluded.country`;
+  const keepCountryAggregates = sql`(${differentKnownCountry}) AND NOT (${incomingCountryIsLatest})`;
+  const incomingCountryCutoff = sql`(SELECT cleared_at FROM public.search_history_country_clears WHERE organization_id = ${table.organizationId} AND user_id = ${table.userId} AND country = excluded.country)`;
+  const restartCountryAggregates = sql`(${incomingCountryIsLatest}) AND ((${differentKnownCountry}) OR ${table.firstUsedAt} <= ${incomingCountryCutoff})`;
   const written =
     acceptedRows.length === 0
       ? []
@@ -723,17 +754,18 @@ export const upsertSearchHistoryRows = async ({
               baseLookupKey: sql`COALESCE(${table.baseLookupKey}, excluded.base_lookup_key)`,
               // Each side carries the time of its latest jurisdiction-naming
               // use; the later one files the entry.
-              country: sql`CASE WHEN excluded.country_used_at IS NOT NULL AND (${table.countryUsedAt} IS NULL OR excluded.country_used_at::timestamptz >= ${table.countryUsedAt}) THEN excluded.country ELSE ${table.country} END`,
+              country: sql`CASE WHEN ${incomingCountryIsLatest} THEN excluded.country ELSE ${table.country} END`,
               countryUsedAt: sql`GREATEST(${table.countryUsedAt}, excluded.country_used_at)`,
               courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
               ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
               iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
-              firstUsedAt: sql`LEAST(${table.firstUsedAt}, excluded.first_used_at)`,
-              lastUsedAt: sql`GREATEST(${table.lastUsedAt}, excluded.last_used_at)`,
-              useCount:
+              firstUsedAt: sql`CASE WHEN ${keepCountryAggregates} THEN ${table.firstUsedAt} WHEN ${restartCountryAggregates} THEN excluded.first_used_at ELSE LEAST(${table.firstUsedAt}, excluded.first_used_at) END`,
+              lastUsedAt: sql`CASE WHEN ${keepCountryAggregates} THEN ${table.lastUsedAt} WHEN ${restartCountryAggregates} THEN excluded.last_used_at ELSE GREATEST(${table.lastUsedAt}, excluded.last_used_at) END`,
+              useCount: sql`CASE WHEN ${keepCountryAggregates} THEN ${table.useCount} WHEN ${restartCountryAggregates} THEN excluded.use_count ELSE ${
                 mode === "record"
                   ? sql`${table.useCount} + excluded.use_count`
-                  : sql`GREATEST(${table.useCount}, excluded.use_count)`,
+                  : sql`GREATEST(${table.useCount}, excluded.use_count)`
+              } END`,
             },
           })
           .returning({ id: table.id });

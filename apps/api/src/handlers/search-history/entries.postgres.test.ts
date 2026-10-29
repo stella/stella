@@ -18,6 +18,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
 import {
   auditLogs,
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -49,7 +50,11 @@ import { createUngatedTableGateForTests } from "../../db/online-ddl";
 import { createSearchHistoryCountryRepair } from "../../db/search-history-country-repair";
 import clear from "./clear";
 import deleteEntry from "./delete";
-import { prepareSearchHistoryRows, upsertSearchHistoryRows } from "./entries";
+import {
+  prepareSearchHistoryImportRows,
+  prepareSearchHistoryRows,
+  upsertSearchHistoryRows,
+} from "./entries";
 import importEntries from "./import";
 import importClock from "./import-clock";
 import list from "./list";
@@ -437,6 +442,113 @@ if (!databaseUrl || !enabled) {
             eq(searchHistoryTombstones.organizationId, fixture.organizationId),
           );
         expect(tombstones).toHaveLength(0);
+      });
+    });
+
+    test("country aggregates retain only that country's uses across a clear", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const query = "Náhrada škody";
+        await recordQuery(fixture, query, "CZE");
+        await recordQuery(fixture, query, "CZE");
+        await recordQuery(fixture, query, "POL");
+        const polish = (
+          await readHistory(fixture, { country: "POL" })
+        ).items.at(0);
+        const context = identity(fixture);
+        await clear.handler(
+          createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+            ...context,
+            query: { ...context.query, country: "CZE" },
+          }),
+        );
+        await recordQuery(fixture, query, "POL");
+        expect(
+          (await readHistory(fixture, { country: "POL" })).items.at(0),
+        ).toMatchObject({
+          useCount: 2,
+          firstUsedAt: polish?.firstUsedAt,
+        });
+        await recordQuery(fixture, query, "CZE");
+        const czech = (await readHistory(fixture, { country: "CZE" })).items.at(
+          0,
+        );
+        expect(czech?.useCount).toBe(1);
+        expect(
+          new Date(czech?.firstUsedAt ?? 0).getTime(),
+        ).toBeGreaterThanOrEqual(new Date(polish?.lastUsedAt ?? 0).getTime());
+      });
+    });
+
+    test("mixed country import aggregates stay on their own side of a clear", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const context = identity(fixture);
+        await clear.handler(
+          createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+            ...context,
+            query: { ...context.query, country: "CZE" },
+          }),
+        );
+        const cutoff = (
+          await fixture.db
+            .select()
+            .from(searchHistoryCountryClears)
+            .where(
+              eq(
+                searchHistoryCountryClears.organizationId,
+                fixture.organizationId,
+              ),
+            )
+        ).at(0);
+        if (cutoff === undefined) {
+          panic("Expected country clear cutoff");
+        }
+        const before = new Date(cutoff.clearedAt.getTime() - 1000);
+        const after = new Date(cutoff.clearedAt.getTime() + 1000);
+        const rows = await prepareSearchHistoryImportRows(fixture, [
+          {
+            entry: { kind: "search", query: "Náhrada škody", country: "POL" },
+            usedAt: before,
+          },
+          {
+            entry: { kind: "search", query: "Náhrada škody", country: "CZE" },
+            usedAt: after,
+          },
+        ]);
+        await fixture.db.transaction(
+          async (tx) =>
+            await upsertSearchHistoryRows({
+              tx,
+              rows,
+              mode: "import",
+              timestampSource: "prepared",
+              recordAuditEvent: historyAuditRecorder(fixture),
+            }),
+        );
+        await fixture.db.transaction(
+          async (tx) =>
+            await upsertSearchHistoryRows({
+              tx,
+              rows: rows.slice(0, 1),
+              mode: "import",
+              timestampSource: "prepared",
+              recordAuditEvent: historyAuditRecorder(fixture),
+            }),
+        );
+        expect(
+          (await readHistory(fixture, { country: "CZE" })).items.at(0),
+        ).toMatchObject({
+          firstUsedAt: after.toISOString(),
+          lastUsedAt: after.toISOString(),
+          useCount: 1,
+        });
+        expect(
+          await fixture.db
+            .select({ id: searchHistoryEntries.id })
+            .from(searchHistoryEntries)
+            .where(
+              eq(searchHistoryEntries.organizationId, fixture.organizationId),
+            ),
+        ).toHaveLength(1);
       });
     });
 
@@ -1316,7 +1428,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("entries keep their jurisdiction and a country filter lists only its own", async () => {
+    test("country filters use the latest jurisdiction and its own counted uses", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const refiled = await recordQuery(fixture, "Náhrada škody", "CZE");
         const czechQuery = await recordQuery(fixture, "Zástavní právo", "CZE");
@@ -1363,7 +1475,7 @@ if (!databaseUrl || !enabled) {
         );
         expect(
           polish.items.find(({ id }) => id === polishQuery.id),
-        ).toMatchObject({ useCount: 2 });
+        ).toMatchObject({ useCount: 1 });
         expect(polish.items.every(({ country }) => country === "POL")).toBe(
           true,
         );
