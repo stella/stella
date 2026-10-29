@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
 import {
   readPlaygroundInventory,
   replaySelection,
@@ -605,27 +606,32 @@ test("app shell and route-tree changes select every spec without following unrel
   }
 });
 
-test("an absent generated route tree remains an app shell boundary", () => {
-  const fixture = createSelectionFixture();
-  try {
-    fixture.write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
-    fixture.write(
-      "apps/web/src/router.tsx",
-      'export { routeTree } from "@/routeTree.gen";\n',
-    );
-    expect(
-      selectGeometrySpecs(
-        ["apps/web/src/routes/dev/fixture.tsx"],
-        fixture.root,
-      ),
-    ).toEqual([fixture.spec]);
-    expect(
-      selectGeometrySpecs(["apps/web/src/routeTree.gen.ts"], fixture.root),
-    ).toEqual([fixture.spec]);
-  } finally {
-    rmSync(fixture.root, { force: true, recursive: true });
-  }
-});
+test.each(CI_GENERATED_OUTPUTS.routeTree)(
+  "generated route outputs remain boundaries before generation: %s",
+  (output) => {
+    const fixture = createSelectionFixture();
+    try {
+      fixture.write("apps/web/src/routes/dev/fixture.ts", "export {};\n");
+      fixture.write(
+        "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+        'const url = "/dev?visual=fixture";\n',
+      );
+      const imported = output
+        .replace("apps/web/src/", "@/")
+        .replace(/\.ts$/u, "");
+      fixture.write("apps/web/src/router.tsx", `import "${imported}";\n`);
+      expect(selectGeometrySpecs([fixture.spec], fixture.root)).toEqual([
+        "apps/web/e2e/ui-playground/fixture.geometry.spec.ts",
+      ]);
+      expect(selectGeometrySpecs([output], fixture.root)).toEqual([
+        "apps/web/e2e/ui-playground/fixture.geometry.spec.ts",
+        "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+      ]);
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  },
+);
 
 test("a missing app shell entry selects every spec", () => {
   const fixture = createSelectionFixture();

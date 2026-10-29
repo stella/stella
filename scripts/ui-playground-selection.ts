@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WEB_SOURCE = "apps/web/src";
 const SPEC_DIRECTORY = "apps/web/e2e/ui-playground";
@@ -20,7 +22,7 @@ const APP_SHELL_ENTRIES = [
 // Boundary files affect the shell, but following their imports would reach
 // every app route or playground loader instead of their owning selection.
 const APP_SHELL_BOUNDARY: ReadonlySet<string> = new Set([
-  `${WEB_SOURCE}/routeTree.gen.ts`,
+  ...CI_GENERATED_OUTPUTS.routeTree,
   REGISTRY,
 ]);
 const IMPORT_CLOSURES = new Map<
