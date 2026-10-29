@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
@@ -11,8 +12,10 @@ import {
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
+  contacts,
   desktopTimeEntryBatches,
   timeEntries,
 } from "@/api/db/schema";
@@ -66,6 +69,9 @@ const serve = (table: RouteTable) =>
   );
 
 const receiptSchema = v.object({
+  organizationId: v.string(),
+  userId: v.string(),
+  idempotencyKey: v.string(),
   requestFingerprint: v.nullable(v.string()),
   status: v.picklist(DESKTOP_TIME_ENTRY_BATCH_STATUSES),
   result: v.nullable(desktopTimeEntryBatchResponseSchema),
@@ -144,7 +150,7 @@ test("an entry without a classification keeps the fingerprint it had before the 
 });
 
 const createBatchHarness = (existingEntries = 0) => {
-  let receipt: v.InferOutput<typeof receiptSchema> | undefined;
+  const receipts = new Map<string, v.InferOutput<typeof receiptSchema>>();
   let missingMatter = false;
   // The matter's client billing format; null is a matter without a client.
   let clientFormat: "ledes" | "categories" | null = null;
@@ -177,14 +183,31 @@ const createBatchHarness = (existingEntries = 0) => {
           },
         },
       },
-      select: (selection: Record<string, unknown>) =>
-        "format" in selection
-          ? createSelectQueryMock(
+      select: (_selection?: Parameters<Transaction["select"]>[0]) => ({
+        from: (
+          table: Parameters<ReturnType<Transaction["select"]>["from"]>[0],
+        ) => {
+          if (table === desktopTimeEntryBatches) {
+            return {
+              where: (condition: SQL) => {
+                const { params } = new PgDialect().sqlToQuery(condition);
+                const receipt = receipts.get(JSON.stringify(params));
+                return createSelectQueryMock(receipt ? [receipt] : [])
+                  .from()
+                  .where();
+              },
+            };
+          }
+          if (table === contacts) {
+            return createSelectQueryMock(
               clientFormat === null
                 ? []
                 : [{ id: CLIENT, format: clientFormat }],
-            )
-          : createSelectQueryMock(receipt ? [receipt] : []),
+            ).from();
+          }
+          return panic("Unexpected batch fixture select table");
+        },
+      }),
       $count: async () => existingEntries,
       insert: (table: unknown) => ({
         values: (row: unknown) => {
@@ -198,7 +221,15 @@ const createBatchHarness = (existingEntries = 0) => {
           }
           if (table === desktopTimeEntryBatches) {
             inserts.push("receipt");
-            receipt = v.parse(receiptSchema, row);
+            const receipt = v.parse(receiptSchema, row);
+            receipts.set(
+              JSON.stringify([
+                receipt.organizationId,
+                receipt.userId,
+                receipt.idempotencyKey,
+              ]),
+              receipt,
+            );
           }
           if (table === timeEntries) {
             writes.push(row);
@@ -565,7 +596,7 @@ test("LEDES codes are refused unless the matter's client bills in LEDES", async 
   });
   for (const format of [null, "categories"] as const) {
     billClientIn(format);
-    expect((await send(coded(`coded-${format}`))).status).toBe(400);
+    expect((await send(coded(`coded-${String(format)}`))).status).toBe(400);
   }
   billClientIn("ledes");
   const grouped = await send({
