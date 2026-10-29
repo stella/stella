@@ -85,9 +85,20 @@ const executeFetchWithTimeout = async (
         clear();
       }
     });
-  if (combined.aborted) {
+  if (controller.signal.aborted) {
     // The abort reason is the failure. Cancelling only releases the body, and
     // a body the abort already errored rejects with that same stored reason.
+    await Promise.allSettled([response.body?.cancel(combined.reason)]);
+    throw combined.reason;
+  }
+  if (combined.aborted) {
+    if (timeout === undefined || timeout.type === "total") {
+      // Total deadlines historically delegated this settlement race to the
+      // transport. Keep a response that wins a caller abort so resumable
+      // consumers can use work completed before they observe the signal.
+      clear();
+      return response;
+    }
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }

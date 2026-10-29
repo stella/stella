@@ -67,7 +67,12 @@ describe("response timeout policies", () => {
       await new Promise<never>((_resolve, reject) => {
         init?.signal?.addEventListener(
           "abort",
-          () => reject(init.signal?.reason),
+          () =>
+            reject(
+              init.signal?.reason instanceof Error
+                ? init.signal.reason
+                : new DOMException("Fetch aborted", "AbortError"),
+            ),
           { once: true },
         );
       });
@@ -88,7 +93,12 @@ describe("response timeout policies", () => {
       await new Promise<never>((_resolve, reject) => {
         init?.signal?.addEventListener(
           "abort",
-          () => reject(init.signal?.reason),
+          () =>
+            reject(
+              init.signal?.reason instanceof Error
+                ? init.signal.reason
+                : new DOMException("Fetch aborted", "AbortError"),
+            ),
           { once: true },
         );
       });
@@ -100,6 +110,29 @@ describe("response timeout policies", () => {
     await flush();
     await advance(20);
     expect(await result).toMatchObject({ name: "TimeoutError" });
+  });
+
+  test("a transport response that wins a caller abort remains settled without affecting the next request", async () => {
+    const controller = new AbortController();
+    let requests = 0;
+    const request = createFetchWithTimeout(async () => {
+      requests += 1;
+      if (requests === 1) {
+        controller.abort();
+      }
+      return new Response(String(requests));
+    });
+
+    const completed = await request("https://example.com/first", {
+      signal: controller.signal,
+      timeout: { type: "total", ms: 1000 },
+    });
+    const resumed = await request("https://example.com/second", {
+      timeout: { type: "total", ms: 1000 },
+    });
+
+    expect(await completed.text()).toBe("1");
+    expect(await resumed.text()).toBe("2");
   });
 
   test("abort after an ignoring fetcher resolves cancels the response body", async () => {
