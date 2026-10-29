@@ -13,7 +13,10 @@ import { readStoredListingIdentities } from "@/api/lib/case-law/stored-listing-i
 import { lockCaseLawSourceIngestionLease } from "@/api/lib/db/aggregate-lock";
 import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
-import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
+import {
+  createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
+} from "@/api/lib/legal-search/source-registry-membership";
 
 const CENSUS_IDENTITY_BATCH_SIZE = 500;
 
@@ -88,7 +91,7 @@ export const recordCompletenessCensus = async (
 ) => {
   const capability = censusCapabilityFor(options.adapterKey);
   if (capability === undefined) {
-    createUnrecognizedSourceReporter("case_law.completeness_census")(
+    createUnrecognizedSourceReporter(SOURCE_REPORT_FEATURE.completenessCensus)(
       options.adapterKey,
     );
     return;

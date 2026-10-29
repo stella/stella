@@ -34,6 +34,7 @@ export const sourceRegistryMembership = (
 
 export const SOURCE_REPORT_FEATURE = {
   coverage: "case_law.coverage",
+  completenessCensus: "case_law.completeness_census",
   ingestionStatus: "case_law.ingestion_status",
   adapterHealth: "case_law.adapter_health",
 } as const;
