@@ -3520,8 +3520,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": [
@@ -3541,8 +3540,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3568,8 +3566,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3859,8 +3856,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": [
@@ -3880,8 +3876,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -3907,8 +3902,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -10183,8 +10177,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": [
@@ -10204,8 +10197,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -10231,8 +10223,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -10522,8 +10513,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": [
@@ -10543,8 +10533,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -10570,8 +10559,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",

@@ -31,7 +31,7 @@ const { cleanup, fireEvent, render, screen, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { ActionCapabilitiesProvider, useActionCapabilities } =
+const { ActionCapabilitiesProvider, CapabilityAction, useActionCapabilities } =
   await import("./capability-actions");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -39,6 +39,7 @@ const { aiAvailabilityOptions } =
   await import("@/lib/organization/ai-config-queries");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { Menu, MenuPopup } = await import("@stll/ui/menu");
+const { Button } = await import("@stll/ui/button");
 const { RowFeatureMenuActions, RowOcrMenuActions } =
   await import("@/components/workspaces/row-actions");
 const { TranslateDocumentDialog } =
@@ -178,7 +179,7 @@ const surfaces = [
   },
   {
     name: "document toolbar",
-    capability: "translation",
+    capability: "deepl",
     surface: "control",
     label: messages.common.translate,
   },
@@ -206,6 +207,76 @@ const surfaces = [
   surface: "menu" | "control";
   label: string;
 }[];
+
+test("an unavailable flex control keeps its layout and remains explanatory", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  const value = resolveActionCapabilities({
+    role: "admin",
+    ai: false,
+    deepl: false,
+    ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
+    desktop: "none",
+    settings: undefined,
+  });
+
+  render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ActionCapabilitiesProvider value={value}>
+          <div className="flex" data-testid="flex-parent">
+            <CapabilityAction action={{ capability: "ai" }} surface="control">
+              {(capabilityProps) => (
+                <Button
+                  render={
+                    <button className="min-w-0 flex-1 truncate" type="button" />
+                  }
+                  {...capabilityProps}
+                >
+                  {messages.common.translate}
+                </Button>
+              )}
+            </CapabilityAction>
+          </div>
+        </ActionCapabilitiesProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  const parent = screen.getByTestId("flex-parent");
+  const control = screen.getByRole("button", {
+    name: messages.common.translate,
+  });
+  expect(control.parentElement).toBe(parent);
+  expect(control.classList.contains("min-w-0")).toBe(true);
+  expect(control.classList.contains("flex-1")).toBe(true);
+  expect(control.classList.contains("truncate")).toBe(true);
+  expect(control.classList.contains("opacity-64")).toBe(true);
+  expect(control.classList.contains("cursor-not-allowed")).toBe(true);
+  expect(control.getAttribute("aria-disabled")).toBe("true");
+  control.focus();
+  expect(document.activeElement).toBe(control);
+
+  fireEvent.click(control);
+  expect(
+    await screen.findByRole("link", {
+      name: messages.organization.aiConfig.configure,
+    }),
+  ).toBeTruthy();
+  fireEvent.keyDown(control, { key: "Escape" });
+  await waitFor(() =>
+    expect(control.getAttribute("aria-expanded")).toBe("false"),
+  );
+  fireEvent.keyDown(control, { key: "Enter" });
+  expect(
+    await screen.findByRole("link", {
+      name: messages.organization.aiConfig.configure,
+    }),
+  ).toBeTruthy();
+});
+
 for (const fixture of surfaces) {
   describe(`${fixture.name} shared renderer admission`, () => {
     for (const role of ORGANIZATION_ROLE_NAMES) {
@@ -245,7 +316,7 @@ for (const fixture of surfaces) {
                     entityId="entity"
                     fieldId="field"
                     entityVersionKey="1"
-                    isDocx
+                    isDocx={false}
                   />
                 );
               case "row actions":
@@ -369,9 +440,33 @@ for (const fixture of surfaces) {
             document.querySelector(`#${CSS.escape(descriptionId ?? "")}`)
               ?.textContent.length,
           ).toBeGreaterThan(0);
+          if (fixture.surface === "control") {
+            expect(
+              document
+                .querySelector(`#${CSS.escape(descriptionId ?? "")}`)
+                ?.classList.contains("sr-only"),
+            ).toBe(true);
+          }
           const state = value.capabilities[fixture.capability];
           expect(state.type).toBe("unavailable");
-          const settingsItems = screen.getAllByRole(
+          if (fixture.surface === "control") {
+            expect(control.classList.contains("opacity-64")).toBe(true);
+            expect(
+              screen.queryByRole("link", {
+                name: messages.organization.aiConfig.configure,
+              }),
+            ).toBeNull();
+            fireEvent.click(control);
+            if (fixture.name === "document toolbar") {
+              expect(
+                await screen.findByText(
+                  messages.capabilityActions.deeplPdfRequired,
+                  { selector: "[data-slot='popover-popup'] span" },
+                ),
+              ).toBeTruthy();
+            }
+          }
+          const settingsItems = await screen.findAllByRole(
             fixture.surface === "menu" ? "menuitem" : "link",
             { name: messages.organization.aiConfig.configure },
           );
@@ -391,15 +486,104 @@ for (const fixture of surfaces) {
               ).toBe(true);
             });
           }
-          fireEvent.click(control);
+          if (fixture.surface === "control") {
+            fireEvent.keyDown(control, { key: "Escape" });
+            await waitFor(() => {
+              expect(control.getAttribute("aria-expanded")).toBe("false");
+            });
+          } else {
+            fireEvent.click(control);
+          }
           fireEvent.keyDown(control, { key: "Enter" });
+          if (fixture.surface === "control") {
+            expect(
+              await screen.findByRole("link", {
+                name: messages.organization.aiConfig.configure,
+              }),
+            ).toBeTruthy();
+          }
           expect(calls).toBe(0);
-          expect(screen.queryByRole("dialog")).toBeNull();
+          if (fixture.surface === "menu") {
+            expect(screen.queryByRole("dialog")).toBeNull();
+          }
         });
       }
     }
   });
 }
+
+test("document toolbar preserves an unknown DeepL availability explanation", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  const root = router.createRootRoute({ component: router.Outlet });
+  const protectedRoute = router.createRoute({
+    getParentRoute: () => root,
+    id: "_protected",
+    beforeLoad: () => ({
+      user: { activeOrganizationId: "organization-a" },
+    }),
+    component: router.Outlet,
+  });
+  const route = router.createRoute({
+    getParentRoute: () => protectedRoute,
+    path: "/",
+    component: () => (
+      <TranslateDocumentDialog
+        workspaceId="matter"
+        viewId="view"
+        entityId="entity"
+        fieldId="field"
+        entityVersionKey="1"
+        isDocx={false}
+      />
+    ),
+  });
+  const appRouter = router.createRouter({
+    history: router.createMemoryHistory({ initialEntries: ["/"] }),
+    routeTree: root.addChildren([protectedRoute.addChildren([route])]),
+    isServer: false,
+  });
+  await appRouter.load();
+  const value = resolveActionCapabilities({
+    role: "admin",
+    ai: false,
+    deepl: { status: "error" },
+    ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
+    desktop: "none",
+    settings: undefined,
+  });
+  expect(value.capabilities.deepl).toMatchObject({
+    type: "unavailable",
+    reason: "availabilityUnknown",
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ActionCapabilitiesProvider value={value}>
+          <FormattingProvider locale="en" timeZone="UTC">
+            <router.RouterProvider router={appRouter} />
+          </FormattingProvider>
+        </ActionCapabilitiesProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  const control = await screen.findByRole("button", {
+    name: messages.common.translate,
+  });
+  fireEvent.click(control);
+  expect(
+    await screen.findByText(messages.capabilityActions.availabilityUnknown, {
+      selector: "[data-slot='popover-popup'] span",
+    }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText(messages.capabilityActions.deeplPdfRequired, {
+      selector: "[data-slot='popover-popup'] span",
+    }),
+  ).toBeNull();
+});
 
 describe("OCR batch help", () => {
   // An administrator sees the action in every status, so the absence of
