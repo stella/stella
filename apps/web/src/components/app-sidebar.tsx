@@ -52,7 +52,7 @@ import {
   UsersIcon,
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
-import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
@@ -210,6 +210,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const sidebarToggleLabel = isCollapsed
+    ? t("inspector.showPane")
+    : t("inspector.hidePane");
   const router = useRouter();
   // On compact layouts the sidebar is a sheet over the page, so a navigation
   // started from it would land behind it. Close it once the new location
@@ -684,21 +687,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Button
-            className={SIDE_RAIL_ICON_BUTTON_SIZE}
-            disabled={!mounted}
-            onClick={toggleSidebar}
-            size="icon"
-            tooltip={
-              isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
+          {/* The inspector's toggle primitive, so both pane toggles share
+              one size and ink (a `Button` dims its icon to 80%). */}
+          <Tooltip
+            content={sidebarToggleLabel}
+            render={
+              <InspectorRailIconButton
+                aria-label={sidebarToggleLabel}
+                disabled={!mounted}
+                onClick={toggleSidebar}
+              />
             }
-            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
-            <span className="sr-only">
-              {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
-            </span>
-          </Button>
+          </Tooltip>
         </div>
       </SidebarHeader>
 

@@ -11,8 +11,8 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
-import { Button } from "@stll/ui/button";
 import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
+import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
@@ -274,17 +274,20 @@ const PublicSidebar = ({
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Button
-            aria-label={t("navigation.toggleSidebar")}
-            className="size-7"
-            disabled={!mounted}
-            onClick={toggleSidebar}
-            size="icon"
-            variant="muted"
+          {/* The inspector's toggle primitive, so both pane toggles share
+              one size and ink (a `Button` dims its icon to 80%). */}
+          <Tooltip
+            content={t("navigation.toggleSidebar")}
+            render={
+              <InspectorRailIconButton
+                aria-label={t("navigation.toggleSidebar")}
+                disabled={!mounted}
+                onClick={toggleSidebar}
+              />
+            }
           >
             <PanelLeftIcon className="size-4" />
-            <span className="sr-only">{t("navigation.toggleSidebar")}</span>
-          </Button>
+          </Tooltip>
         </div>
       </SidebarHeader>
       <SidebarContent>
