@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -12,6 +12,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const describePostgres = describe.skipIf(!runPostgresTests);
 const migrationsFolder = path.resolve(import.meta.dir, "../../../drizzle");
 const censusPath = path.join(import.meta.dir, "role-privilege-census.json");
+const policyCensusPath = path.join(import.meta.dir, "role-policy-census.json");
 
 type RoleCensus = {
   role: string;
@@ -26,9 +27,23 @@ type CensusRow = {
   value: string;
 };
 
-const readRolePrivilegeCensus = async (
-  database: SQL,
-): Promise<RoleCensus[]> => {
+type PolicyCensus = {
+  schema: string;
+  table: string;
+  policy: string;
+  command: string;
+  roles: string[];
+  permissive: string;
+  using: string | null;
+  withCheck: string | null;
+};
+
+type Census = {
+  roles: RoleCensus[];
+  policies: PolicyCensus[];
+};
+
+const readRolePrivilegeCensus = async (database: SQL): Promise<Census> => {
   const rows = await database.unsafe<CensusRow[]>(`
     WITH RECURSIVE
     application_roles AS (
@@ -170,11 +185,7 @@ const readRolePrivilegeCensus = async (
       UNION ALL
       SELECT role.rolname, 'privilege',
              'table:' || policy.schemaname || '.' || policy.tablename ||
-             ':POLICY:' || policy.policyname || ':COMMAND:' || policy.cmd ||
-             ':ROLES:' || array_to_string(policy.roles, ',') ||
-             ':PERMISSIVE:' || policy.permissive ||
-             ':USING:' || COALESCE(policy.qual, 'NULL') ||
-             ':WITH_CHECK:' || COALESCE(policy.with_check, 'NULL')
+             ':POLICY:' || policy.policyname
       FROM pg_catalog.pg_policies policy
       JOIN application_schemas schema ON schema.nspname = policy.schemaname
       JOIN application_relations relation
@@ -183,6 +194,17 @@ const readRolePrivilegeCensus = async (
       JOIN application_roles role ON role.oid = accessible.role_oid
     )
     SELECT role, kind, value FROM results ORDER BY role, kind, value
+  `);
+
+  const policies = await database.unsafe<PolicyCensus[]>(`
+    SELECT schemaname AS schema, tablename AS table, policyname AS policy,
+           cmd AS command, roles, permissive,
+           qual AS using, with_check AS "withCheck"
+    FROM pg_catalog.pg_policies
+    WHERE schemaname <> 'information_schema'
+      AND schemaname <> 'drizzle'
+      AND schemaname !~ '^pg_'
+    ORDER BY schemaname, tablename, policyname
   `);
 
   const census = new Map<string, RoleCensus>();
@@ -208,7 +230,7 @@ const readRolePrivilegeCensus = async (
     }
     census.set(row.role, entry);
   }
-  return [...census.values()];
+  return { roles: [...census.values()], policies };
 };
 
 const censusLines = (census: RoleCensus[]) =>
@@ -235,8 +257,43 @@ const assertCensus = (expected: RoleCensus[], actual: RoleCensus[]) => {
   }
 };
 
+const policyLines = (policies: PolicyCensus[]) =>
+  policies.map(
+    (policy) =>
+      `${policy.schema}.${policy.table}:POLICY:${policy.policy}:COMMAND:${policy.command}:ROLES:${policy.roles.join(",")}:PERMISSIVE:${policy.permissive}:USING:${policy.using ?? "NULL"}:WITH_CHECK:${policy.withCheck ?? "NULL"}`,
+  );
+
+const assertPolicyCensus = (
+  expected: PolicyCensus[],
+  actual: PolicyCensus[],
+) => {
+  const expectedLines = new Set(policyLines(expected));
+  const actualLines = new Set(policyLines(actual));
+  const removed = [...expectedLines]
+    .filter((line) => !actualLines.has(line))
+    .map((line) => `- ${line}`);
+  const added = [...actualLines]
+    .filter((line) => !expectedLines.has(line))
+    .map((line) => `+ ${line}`);
+  if (removed.length > 0 || added.length > 0) {
+    throw new Error(
+      `Database row-level security policy census changed:\n${[...removed, ...added].join("\n")}`,
+    );
+  }
+};
+
+const readExpectedCensus = (): Census => ({
+  roles: JSON.parse(readFileSync(censusPath, "utf-8")),
+  policies: JSON.parse(readFileSync(policyCensusPath, "utf-8")),
+});
+
+const assertCompleteCensus = (expected: Census, actual: Census) => {
+  assertCensus(expected.roles, actual.roles);
+  assertPolicyCensus(expected.policies, actual.policies);
+};
+
 const withMigratedDatabase = async (
-  run: (database: SQL, census: RoleCensus[]) => Promise<void>,
+  run: (database: SQL, census: Census) => Promise<void>,
 ) => {
   await withIsolatedPostgresCluster(
     {
@@ -268,23 +325,38 @@ const withMigratedDatabase = async (
 describePostgres("database role privilege census", () => {
   // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
   test("matches every migrated role and effective privilege", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const updateCensus =
+      process.env["STELLA_UPDATE_ROLE_PRIVILEGE_CENSUS"] === "true";
+    const expected = updateCensus ? undefined : readExpectedCensus();
     await withMigratedDatabase(async (_database, actual) => {
-      assertCensus(expected, actual);
+      if (updateCensus) {
+        // oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- Explicit census regeneration is audited and never runs in normal test or CI mode.
+        writeFileSync(censusPath, `${JSON.stringify(actual.roles, null, 2)}\n`);
+        // oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- Explicit census regeneration is audited and never runs in normal test or CI mode.
+        writeFileSync(
+          policyCensusPath,
+          `${JSON.stringify(actual.policies, null, 2)}\n`,
+        );
+        return;
+      }
+      if (expected === undefined) {
+        throw new Error("Expected census was not loaded");
+      }
+      assertCompleteCensus(expected, actual);
     });
   }, 120_000);
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports disabled row-level security", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCensus(expected, baseline);
+      assertCompleteCensus(expected, baseline);
       try {
         await database.unsafe(
           `ALTER TABLE public.account_audit_logs DISABLE ROW LEVEL SECURITY`,
         );
         const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCensus(expected, mutated)).toThrow(
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
           "stella table:public.account_audit_logs:RLS_ENABLED:false",
         );
       } finally {
@@ -297,16 +369,16 @@ describePostgres("database role privilege census", () => {
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a sequence UPDATE grant", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCensus(expected, baseline);
+      assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
         await database.unsafe(
           `CREATE ROLE "${role}" NOLOGIN; GRANT UPDATE ON SEQUENCE public.corpus_index_projection_revisions_revision_seq TO "${role}"`,
         );
         const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCensus(expected, mutated)).toThrow(
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
           `${role} sequence:public.corpus_index_projection_revisions_revision_seq:UPDATE:GRANTABLE:false`,
         );
       } finally {
@@ -319,16 +391,16 @@ describePostgres("database role privilege census", () => {
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a column-level grant", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCensus(expected, baseline);
+      assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
         await database.unsafe(
           `CREATE ROLE "${role}" NOLOGIN; GRANT SELECT (id) ON TABLE public.account TO "${role}"`,
         );
         const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCensus(expected, mutated)).toThrow(
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
           `${role} column:public.account.id:SELECT:GRANTABLE:false`,
         );
       } finally {
@@ -341,17 +413,17 @@ describePostgres("database role privilege census", () => {
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a new row-level security policy", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCensus(expected, baseline);
+      assertCompleteCensus(expected, baseline);
       const policy = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
         await database.unsafe(
           `CREATE POLICY "${policy}" ON public.account_audit_logs AS PERMISSIVE FOR SELECT TO stella USING (false)`,
         );
         const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCensus(expected, mutated)).toThrow(
-          `stella table:public.account_audit_logs:POLICY:${policy}:COMMAND:SELECT:ROLES:stella:PERMISSIVE:PERMISSIVE:USING:false:WITH_CHECK:NULL`,
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
+          `stella table:public.account_audit_logs:POLICY:${policy}`,
         );
       } finally {
         await database.unsafe(
@@ -363,15 +435,15 @@ describePostgres("database role privilege census", () => {
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a changed row-level security USING predicate", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCensus(expected, baseline);
+      assertCompleteCensus(expected, baseline);
       try {
         await database.unsafe(
           `ALTER POLICY account_audit_logs_select ON public.account_audit_logs USING (true)`,
         );
         const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCensus(expected, mutated)).toThrow(
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
           "POLICY:account_audit_logs_select:COMMAND:SELECT:ROLES:public:PERMISSIVE:PERMISSIVE:USING:true:WITH_CHECK:NULL",
         );
       } finally {
@@ -384,15 +456,15 @@ describePostgres("database role privilege census", () => {
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a changed row-level security WITH CHECK predicate", async () => {
-    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCensus(expected, baseline);
+      assertCompleteCensus(expected, baseline);
       try {
         await database.unsafe(
           `ALTER POLICY account_audit_logs_insert ON public.account_audit_logs WITH CHECK (true)`,
         );
         const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCensus(expected, mutated)).toThrow(
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
           "POLICY:account_audit_logs_insert:COMMAND:INSERT:ROLES:stella:PERMISSIVE:PERMISSIVE:USING:NULL:WITH_CHECK:true",
         );
       } finally {

@@ -1,5 +1,17 @@
 [
   {
+    "source": "apps/api/src/lib/db/role-privilege-census.db.test.ts",
+    "operation": "writeFileSync",
+    "destination": "apps/api/src/lib/db/role-policy-census.json",
+    "reason": "Explicit STELLA_UPDATE_ROLE_PRIVILEGE_CENSUS=true regeneration updates the committed policy census; normal test runs only compare it."
+  },
+  {
+    "source": "apps/api/src/lib/db/role-privilege-census.db.test.ts",
+    "operation": "writeFileSync",
+    "destination": "apps/api/src/lib/db/role-privilege-census.json",
+    "reason": "Explicit STELLA_UPDATE_ROLE_PRIVILEGE_CENSUS=true regeneration updates the committed role census; normal test runs only compare it."
+  },
+  {
     "source": "apps/api/src/tests/helpers/provider-request-cache.ts",
     "operation": "writeFileSync",
     "destination": "apps/api/src/tests/fixtures/provider-request-schemas/chat-prompt-baseline.json",
