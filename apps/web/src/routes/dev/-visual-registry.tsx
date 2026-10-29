@@ -14,6 +14,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "mcp-reconnect": {
+    load: async () => {
+      const { McpReconnectPlayground } =
+        await import("./-components/mcp-reconnect-playground");
+      return { default: McpReconnectPlayground };
+    },
+  },
   "task-metadata": {
     load: async () => {
       const { TaskMetadataPlayground } =
@@ -75,6 +82,13 @@ const visualLoaders = {
       const { ChatLongPastePlayground } =
         await import("./-components/chat-long-paste-playground");
       return { default: ChatLongPastePlayground };
+    },
+  },
+  "chat-composer-reference": {
+    load: async () => {
+      const { ChatComposerReferencePlayground } =
+        await import("./-components/chat-composer-reference-playground");
+      return { default: ChatComposerReferencePlayground };
     },
   },
   "chat-continuation-error": {

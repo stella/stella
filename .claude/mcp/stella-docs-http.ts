@@ -11,14 +11,19 @@ const HTTP_HOST = process.env["STELLA_DOCS_HOST"] ?? "127.0.0.1";
 const DEFAULT_PORT = 8765;
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SESSION_SWEEP_MS = 60 * 1000;
-const MAX_REQUEST_BYTES = 1024 * 1024;
-const MAX_DRAIN_BYTES = 8 * MAX_REQUEST_BYTES;
+const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 // How long an unbounded upload is discarded after its 413 before the
 // connection is dropped (see sendErrorAndLinger).
 const LINGER_CLOSE_MS = 2000;
 
 const portValue = process.env["STELLA_DOCS_PORT"] ?? String(DEFAULT_PORT);
 const port = Number(portValue);
+const maxRequestBytesValue =
+  process.env["STELLA_DOCS_MAX_REQUEST_BYTES"] ??
+  String(DEFAULT_MAX_REQUEST_BYTES);
+const MAX_REQUEST_BYTES = Number(maxRequestBytesValue);
+const MAX_DRAIN_BYTES = 8 * MAX_REQUEST_BYTES;
+const BODY_LIMIT_MESSAGE = `Request body exceeds ${MAX_REQUEST_BYTES} bytes`;
 
 if (HTTP_HOST !== "127.0.0.1") {
   process.stderr.write(
@@ -30,6 +35,13 @@ if (HTTP_HOST !== "127.0.0.1") {
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   process.stderr.write(
     `[stella-docs] Invalid STELLA_DOCS_PORT: ${portValue}. Expected an integer from 1 to 65535.\n`,
+  );
+  process.exit(1);
+}
+
+if (!Number.isSafeInteger(MAX_REQUEST_BYTES) || MAX_REQUEST_BYTES < 1) {
+  process.stderr.write(
+    `[stella-docs] Invalid STELLA_DOCS_MAX_REQUEST_BYTES: ${maxRequestBytesValue}. Expected a positive integer.\n`,
   );
   process.exit(1);
 }
@@ -139,14 +151,7 @@ const collectBody = async (request: IncomingMessage) =>
       if (size > MAX_DRAIN_BYTES) {
         request.off("data", onData);
         request.pause();
-        reject(
-          new RequestBodyError(
-            413,
-            -32_000,
-            "Request body exceeds 1 MiB",
-            true,
-          ),
-        );
+        reject(new RequestBodyError(413, -32_000, BODY_LIMIT_MESSAGE, true));
         return;
       }
       if (size <= MAX_REQUEST_BYTES) {
@@ -157,9 +162,7 @@ const collectBody = async (request: IncomingMessage) =>
     request.once("error", reject);
     request.once("end", () => {
       if (size > MAX_REQUEST_BYTES) {
-        reject(
-          new RequestBodyError(413, -32_000, "Request body exceeds 1 MiB"),
-        );
+        reject(new RequestBodyError(413, -32_000, BODY_LIMIT_MESSAGE));
         return;
       }
       resolve(Buffer.concat(chunks));

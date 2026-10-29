@@ -410,6 +410,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
                   workspaceId,
                   verificationRunId,
                   verificationClaimId,
+                  entityId: null,
+                  pageTextSha256: null,
                   groupId: null,
                   kind: "comment",
                   visibility: comment.visibility,

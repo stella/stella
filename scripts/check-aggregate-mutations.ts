@@ -903,6 +903,12 @@ const JOINING_RUNNERS = {
       suppliesTransaction: true,
     },
     {
+      module: `${API}db/safe-db.ts`,
+      exported: "resultTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
       module: REGISTRY,
       exported: "withAggregateSavepoint",
       argument: 1,
@@ -1220,6 +1226,103 @@ const calleeCallbackCredit = (
       resultPropertyCredit(options))
     : undefined;
 
+const hasLockIds = (argument: Argument | undefined): boolean => {
+  if (argument === undefined || argument.type === "SpreadElement") {
+    return false;
+  }
+  const ids = unwrapExpression(argument);
+  return (
+    !(ids.type === "ArrayExpression" && ids.elements.length === 0) &&
+    !(ids.type === "Identifier" && ids.name === "undefined") &&
+    !(ids.type === "Literal" && ids.value === null) &&
+    !(ids.type === "UnaryExpression" && ids.operator === "void")
+  );
+};
+
+const hasWorkspaceParentBatch = (
+  call: CallExpression,
+  access: SourceAccess,
+): boolean => {
+  const options = call.arguments.at(0);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateParentBatch"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        !property.method &&
+        property.kind === "init",
+    )
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (property) => staticPropertyKey(property) === "workspaceIds",
+  );
+  const field = workspaceIds.at(0);
+  return (
+    workspaceIds.length === 1 &&
+    field !== undefined &&
+    isPropertyAssignment(field) &&
+    hasLockIds(field.value)
+  );
+};
+
+/** The invoice owner acquires all participating matters before its invoice row. */
+const hasInvoiceMatterAcquisition = (
+  call: CallExpression,
+  access: SourceAccess,
+) => {
+  const options = call.arguments.at(1);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["lockInvoiceInStatus"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(isPropertyAssignment) ||
+    options.properties.some((property) => property.computed)
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (field) => staticPropertyKey(field) === "workspaceId",
+  );
+  const workspaceId = workspaceIds.at(0);
+  const locks = options.properties.filter(
+    (field) => staticPropertyKey(field) === "matterLocks",
+  );
+  const lock = locks.at(0);
+  if (
+    workspaceIds.length !== 1 ||
+    workspaceId === undefined ||
+    !hasLockIds(workspaceId.value) ||
+    locks.length !== 1 ||
+    lock?.value.type !== "ObjectExpression" ||
+    lock.value.properties.length !== 1
+  ) {
+    return false;
+  }
+  const type = lock.value.properties.at(0);
+  return (
+    type !== undefined &&
+    isPropertyAssignment(type) &&
+    staticPropertyKey(type) === "type" &&
+    isStringLiteral(type.value) &&
+    type.value.value === "acquire"
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
@@ -1275,6 +1378,23 @@ const awaitedAggregateNames = ({
       node.argument.callee.type === "Identifier"
     ) {
       const options = node.argument.arguments.at(0);
+      if (
+        isTrustedImport({
+          identifier: node.argument.callee,
+          access,
+          module: REGISTRY,
+          exported: ["withInvoiceMatterLocks"],
+        }) &&
+        hasLockIds(node.argument.arguments.at(1))
+      ) {
+        names.add("workspace");
+      }
+      if (hasWorkspaceParentBatch(node.argument, access)) {
+        names.add("workspace");
+      }
+      if (hasInvoiceMatterAcquisition(node.argument, access)) {
+        names.add("workspace");
+      }
       if (
         isTrustedImport({
           identifier: node.argument.callee,

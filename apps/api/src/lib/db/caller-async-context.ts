@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+const wrappedBegin = new WeakMap<SQL, unknown>();
+
 /**
  * Runs every transaction callback on `client` in the async context of the
  * code that opened the transaction, and returns the same client.
@@ -17,6 +19,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * issued it. Savepoints run inside the callback, so they follow.
  */
 export const runTransactionsInCallerContext = (client: SQL): SQL => {
+  if (wrappedBegin.get(client) === client.begin) {
+    return client;
+  }
   const begin = client.begin.bind(client);
   const beginInCallerContext = async <const T>(
     optionsOrCallback: string | SQL.TransactionContextCallback<T>,
@@ -41,5 +46,6 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     configurable: true,
     value: beginInCallerContext,
   });
+  wrappedBegin.set(client, beginInCallerContext);
   return client;
 };

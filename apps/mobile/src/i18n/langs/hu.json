@@ -1,0 +1,230 @@
+{
+  "tabs": {
+    "chat": "Csevegés",
+    "close": "Bezárás",
+    "law": "Ítélkezési gyakorlat",
+    "matters": "Ügyek",
+    "more": "Továbbiak",
+    "settings": "Beállítások",
+    "tasks": "Feladatok"
+  },
+  "chat": {
+    "emptyTitle": "Még nincsenek beszélgetések",
+    "emptyDescription": "Az új beszélgetések és a legutóbbi szálak itt jelennek meg.",
+    "noMatchesTitle": "Nincs egyező csevegés",
+    "noMatchesDescription": "Egyik csevegés címe vagy ügy sem tartalmazza ezt: „{search}”.",
+    "search": "Csevegések keresése",
+    "loadFailed": "A beszélgetéseit nem sikerült betölteni.",
+    "retry": "Újrapróbálás",
+    "untitled": "Névtelen beszélgetés",
+    "loadMoreFailed": "Továbbiak betöltése",
+    "loadOlderFailed": "Korábbi üzenetek betöltése",
+    "toolUsed": "Használt eszköz: {tool}",
+    "threadTitle": "Beszélgetés",
+    "threadLoadFailed": "Ezt a beszélgetést nem sikerült betölteni.",
+    "threadEmptyDescription": "Ebben a beszélgetésben még nincs üzenet.",
+    "sections": {
+      "today": "Ma",
+      "yesterday": "Tegnap",
+      "week": "Előző 7 nap",
+      "earlier": "Korábban"
+    },
+    "newChat": "Új beszélgetés",
+    "composerPlaceholder": "Kérdezze stellát",
+    "send": "Küldés",
+    "stop": "Leállítás",
+    "sendFailed": "Az üzenetet nem sikerült elküldeni. Próbálja újra.",
+    "answerWorking": "Dolgozom…",
+    "answerStopped": "Leállítva.",
+    "answerNeedsInput": "Ez a válasz az Ön közreműködésére vár. Folytassa a stella webes felületén.",
+    "answerFailed": "A választ nem sikerült befejezni.",
+    "composerMenu": "Mellékletek és eszközök menüjének megnyitása",
+    "pickTitle": "Válasszon beszélgetést",
+    "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal."
+  },
+  "tasks": {
+    "emptyTitle": "Nincsenek nyitott feladatok",
+    "emptyDescription": "Itt jelennek meg az Önhöz rendelt nyitott feladatok.",
+    "loadFailed": "A feladatait nem sikerült betölteni.",
+    "retry": "Újra",
+    "newTask": "Új feladat",
+    "add": "Hozzáadás",
+    "name": "Feladat neve",
+    "dueTitle": "Határidő",
+    "matterTitle": "Ügy",
+    "findMatter": "Ügy keresése",
+    "addFailed": "A feladatot nem sikerült hozzáadni. Próbálja újra.",
+    "mattersFailed": "Az ügyeit nem sikerült betölteni.",
+    "dueOn": "határidő: {day}",
+    "dueChoice": {
+      "none": "Nincs dátum",
+      "today": "Ma",
+      "tomorrow": "Holnap",
+      "nextWeek": "Egy hét múlva"
+    },
+    "due": {
+      "overdue": "Lejárt",
+      "today": "Ma",
+      "tomorrow": "Holnap",
+      "week": "Ezen a héten",
+      "later": "Később",
+      "none": "Nincs határidő"
+    },
+    "markDone": "Késznek jelölés",
+    "reopen": "Újranyitás",
+    "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra.",
+    "pickTitle": "Válasszon feladatot",
+    "pickDescription": "Válasszon feladatot a listából, hogy itt lássa.",
+    "openMatter": "Ügy megnyitása"
+  },
+  "matters": {
+    "emptyTitle": "Még nincsenek ügyek",
+    "emptyDescription": "A legutóbbi ügyei itt jelennek meg.",
+    "loadFailed": "Az ügyeit nem sikerült betölteni.",
+    "retry": "Próbálja újra",
+    "groupBy": "Csoportosítás",
+    "noGrouping": "Ne csoportosítson",
+    "groupClient": "Ügyfél",
+    "personal": "Személyes",
+    "newMatter": "Új ügy",
+    "create": "Létrehozás",
+    "name": "Ügy neve",
+    "personalHint": "Személyes ügyként jön létre, csak Ön látja. Ügyfelet és tagokat a weben adhat hozzá.",
+    "createFailed": "Az ügyet nem sikerült létrehozni. Próbálja újra.",
+    "pickTitle": "Válasszon ügyet",
+    "pickDescription": "Válasszon ügyet a listából a dokumentumai és feladatai megtekintéséhez."
+  },
+  "matter": {
+    "documents": "Dokumentumok",
+    "tasks": "Feladatok",
+    "emptyTitle": "Még nincs itt semmi",
+    "emptyDescription": "Az ügy dokumentumai és feladatai itt jelennek meg.",
+    "loadFailed": "Az ügyet nem sikerült betölteni.",
+    "loadMoreFailed": "További elemeket nem sikerült betölteni.",
+    "loadMore": "Továbbiak betöltése",
+    "retry": "Újra",
+    "untitled": "Névtelen",
+    "updated": "Módosítva: {time}",
+    "kind": {
+      "folder": "Mappa",
+      "document": "Dokumentum",
+      "task": "Feladat"
+    },
+    "status": {
+      "open": "Nyitott",
+      "in_progress": "Folyamatban",
+      "in_review": "Ellenőrzésre vár",
+      "done": "Kész",
+      "cancelled": "Visszavonva"
+    },
+    "add": "Hozzáadás",
+    "scanDocument": "Dokumentum szkennelése",
+    "newTask": "Új feladat"
+  },
+  "entity": {
+    "type": "Típus",
+    "reference": "Ügyszám",
+    "currentVersion": "Aktuális verzió",
+    "loadFailed": "Az elemet nem sikerült betölteni."
+  },
+  "signIn": {
+    "beta": "Béta",
+    "headline": "Tisztán látás minden ügyben.",
+    "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
+    "submit": "Bejelentkezés",
+    "terms": "A folytatással elfogadja a <terms>felhasználási feltételeket</terms>.",
+    "options": "Bejelentkezési beállítások",
+    "serverTitle": "Szerver",
+    "serverDescription": "Az alkalmazás a stellába jelentkezik be. Másik szervert csak akkor adjon meg, ha a szervezete sajátot üzemeltet.",
+    "useStella": "A stella használata",
+    "done": "Kész",
+    "serverLabel": "Szervercím",
+    "serverPlaceholder": "stella.example.com",
+    "sessionEnded": "A munkamenete lejárt. Jelentkezzen be újra.",
+    "errors": {
+      "address": "Adjon meg egy https-címet, például: stella.example.com.",
+      "unreachable": "Ezen a címen nem válaszolt stella szerver.",
+      "denied": "A bejelentkezést nem hagyták jóvá.",
+      "failed": "A bejelentkezés nem fejeződött be. Próbálja újra."
+    }
+  },
+  "settings": {
+    "accountTitle": "Fiók",
+    "server": "Szerver",
+    "signOut": "Kijelentkezés"
+  },
+  "header": {
+    "search": "Keresés"
+  },
+  "law": {
+    "title": "Ítélkezési gyakorlat",
+    "newest": "Legújabb határozatok",
+    "noResults": "Semmi nem felel meg a keresés által megkívánt szavaknak.",
+    "noResultsHint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
+    "unavailable": "A keresés átmenetileg nem érhető el",
+    "retry": "Próbálja újra",
+    "headnote": "Jogi tétel",
+    "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
+    "openSource": "Eredeti forrás megnyitása",
+    "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
+    "share": "Megosztás"
+  },
+  "more": {
+    "soon": "Hamarosan",
+    "timers": "Időmérők",
+    "voiceInput": "Hangbevitel"
+  },
+  "writes": {
+    "consentNeeded": "Ahhoz, hogy az alkalmazásból módosíthasson, a stellának szüksége van az engedélyére. Jelentkezzen be újra a megadásához.",
+    "signInAgain": "Újra bejelentkezés"
+  },
+  "timers": {
+    "title": "Időzítők",
+    "start": "Indítás",
+    "startTimer": "Időzítő indítása",
+    "newTimer": "Új időzítő",
+    "description": "Min dolgozik?",
+    "matterTitle": "Ügy",
+    "noMatter": "Nincs ügy",
+    "noDescription": "Nincs leírás",
+    "running": "Fut",
+    "paused": "Szüneteltetve",
+    "pause": "Szüneteltetés",
+    "resume": "Folytatás",
+    "save": "Mentés",
+    "discard": "Elvetés",
+    "emptyTitle": "Nincsenek időzítők",
+    "emptyDescription": "Indítson időzítőt a + gombbal, és a végén mentse időbejegyzésként.",
+    "loadFailed": "Az időzítőit nem sikerült betölteni.",
+    "retry": "Újra",
+    "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
+    "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
+  },
+  "scan": {
+    "title": "Dokumentum szkennelése",
+    "upload": "Feltöltés",
+    "name": "Dokumentum neve",
+    "defaultName": "Szkennelés {day}",
+    "pages": "{count, plural, other {# oldal}}",
+    "matterTitle": "Ügy",
+    "uploadFailed": "A szkennelt dokumentumot nem sikerült feltölteni. Próbálja újra.",
+    "failedTitle": "A szkennelés nem sikerült",
+    "failed": "A kamera nem tudta menteni a szkennelést. Próbálja újra."
+  },
+  "shortcuts": {
+    "search": "Keresés",
+    "palette": "Parancspaletta",
+    "next": "Következő találat",
+    "previous": "Előző találat",
+    "toggleList": "Lista megjelenítése vagy elrejtése"
+  },
+  "palette": {
+    "placeholder": "Ügyek és beszélgetések keresése, vagy parancs futtatása",
+    "noResults": "Semmi sem felel meg ennek: „{query}”"
+  },
+  "pane": {
+    "showList": "Lista megjelenítése",
+    "hideList": "Lista elrejtése"
+  }
+}

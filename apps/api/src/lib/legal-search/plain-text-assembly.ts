@@ -62,6 +62,7 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     sheetNumber: undefined,
     ecli: undefined,
     legacyEcli: undefined,
+    legacyCaseNumber: undefined,
     decisionType: undefined,
     identifiers: undefined,
     publisherCitedCases: undefined,

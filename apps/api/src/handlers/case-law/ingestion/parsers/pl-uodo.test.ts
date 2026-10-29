@@ -23,6 +23,7 @@ import {
   plUodoSourceTexts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
+import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 
 const SHORT_DECISION = new URL(
   "__fixtures__/pl-uodo-zsoss-440-82-2019.xml",
@@ -53,8 +54,9 @@ const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
   blocks.filter((block): block is ParagraphBlock => block.type === "paragraph");
 
 /**
- * Every `<xText>` of the source as the portal prints it: a footnote mark as
- * its label, other markup dropped, whitespace collapsed.
+ * Every `<xText>` of the source as the portal prints it: a gloss reference as
+ * the label of the gloss it names or, naming none, as its reference, other
+ * markup dropped, whitespace collapsed.
  */
 const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
   const $ = cheerio.load(xml, { xml: true });
@@ -71,7 +73,8 @@ const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
       return "";
     }
     if (node.tagName === "xGlossRef") {
-      return withFootnoteMarks ? (labels.get(node.attribs["xRef"]) ?? "") : "";
+      const ref = node.attribs["xRef"] ?? "";
+      return withFootnoteMarks ? (labels.get(ref) ?? ref) : "";
     }
     return node.children.map(textOf).join("");
   };
@@ -202,6 +205,23 @@ describe("a long decision", () => {
     ]);
   });
 
+  test("the served text lists each footnote under the mark the body cites it by", async () => {
+    // The label is structure, not the note's text: served without it, the
+    // notes closing the text could not be matched to the body's marks.
+    const { documentAst } = await parse(LONG_DECISION);
+    const text = toPlainCorpusText({
+      blocks: documentAst.blocks,
+      fulltext: null,
+    });
+    const notes = paragraphs(documentAst.blocks).filter(
+      (block) => block.note !== undefined,
+    );
+    expect(notes).toHaveLength(4);
+    for (const note of notes) {
+      expect(text).toContain(`\n\n${note.note?.label ?? ""} ${note.plainText}`);
+    }
+  });
+
   test("a quoted passage is a quotation, opening with the source's mark", async () => {
     const { documentAst } = await parse(LONG_DECISION);
     const quoted = paragraphs(documentAst.blocks).filter(
@@ -229,6 +249,128 @@ describe("a long decision", () => {
     const missing = sourceTexts(xml).filter((text) => !fulltext.includes(text));
     expect(missing).toEqual([]);
     expect(validationIssues).toEqual([]);
+  });
+});
+
+/**
+ * Decisions whose gloss references include some that name no gloss: the
+ * portal's way of setting an article's superscript index (art. 22¹), beside
+ * the portal's own text rendition of the same body.
+ */
+const RAISED_INDEX_DECISIONS = [
+  {
+    name: "ZSZZS.440.780.2018",
+    body: new URL(
+      "__fixtures__/pl-uodo-zszzs-440-780-2018.xml",
+      import.meta.url,
+    ),
+    rendition: new URL(
+      "__fixtures__/pl-uodo-zszzs-440-780-2018.search.json",
+      import.meta.url,
+    ),
+  },
+  {
+    name: "DKN.5131.4.2024",
+    body: new URL("__fixtures__/pl-uodo-dkn-5131-4-2024.xml", import.meta.url),
+    rendition: new URL(
+      "__fixtures__/pl-uodo-dkn-5131-4-2024.search.json.gz",
+      import.meta.url,
+    ),
+  },
+] as const;
+
+/**
+ * The marks the portal's text rendition (`search.json`) raises in the body,
+ * in order. It sets raised text between `╚` and `╝`, and prints the footnotes
+ * after the body, each opening with `¤`.
+ */
+const renditionBodyMarks = async (rendition: URL): Promise<string[]> => {
+  const bytes = new Uint8Array(await Bun.file(rendition).arrayBuffer());
+  const json = rendition.pathname.endsWith(".gz")
+    ? Bun.gunzipSync(bytes)
+    : bytes;
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(json));
+  // `{ fts: { content: { pl: "<text>" } } }`
+  let text: unknown = parsed;
+  for (const key of ["fts", "content", "pl"]) {
+    text =
+      typeof text === "object" && text !== null
+        ? Reflect.get(text, key)
+        : undefined;
+  }
+  expect(typeof text, "the rendition states its text as fts.content.pl").toBe(
+    "string",
+  );
+  const body = String(text).split("\n¤").at(0) ?? "";
+  return [...body.matchAll(/╚(?<mark>[^╝]*)╝/gu)].map(
+    (match) => match.groups?.["mark"] ?? "",
+  );
+};
+
+describe("a gloss reference that names no gloss", () => {
+  test.each(RAISED_INDEX_DECISIONS)(
+    "$name: every mark the portal raises is a superscript, in its order",
+    async ({ body, rendition }) => {
+      const marks = await renditionBodyMarks(rendition);
+      // The fixture reaches the fault: a raised mark that is no footnote label.
+      expect(marks.filter((mark) => !/^\[\d+\]$/u.test(mark))).not.toEqual([]);
+
+      const { documentAst } = await parse(body);
+      expect(footnoteMarksOf(documentAst.blocks)).toEqual(marks);
+    },
+  );
+
+  test.each(RAISED_INDEX_DECISIONS)(
+    "$name: keeps every text the source prints, the raised index included",
+    async ({ body }) => {
+      const xml = await Bun.file(body).text();
+      const { fulltext, validationIssues } = await parse(body);
+      const missing = sourceTexts(xml).filter(
+        (text) => !fulltext.includes(text),
+      );
+      expect(missing).toEqual([]);
+      expect(validationIssues).toEqual([]);
+    },
+  );
+
+  test("the raised index sits against the article number it belongs to", async () => {
+    const { documentAst } = await parse(RAISED_INDEX_DECISIONS[0].body);
+    const paragraph = paragraphs(documentAst.blocks).find((block) =>
+      block.plainText.includes("zgodnie z brzmieniem art. 22"),
+    );
+    const at = paragraph?.inlines.findIndex(
+      (inline) => inline.type === "superscript",
+    );
+    expect(at).toBeGreaterThan(0);
+    const before = paragraph?.inlines[(at ?? 0) - 1];
+    const raised = paragraph?.inlines[at ?? 0];
+    const after = paragraph?.inlines[(at ?? 0) + 1];
+    expect(before?.type === "text" && before.text.endsWith("art. 22")).toBe(
+      true,
+    );
+    expect(raised).toEqual({
+      type: "superscript",
+      children: [{ type: "text", text: "1" }],
+    });
+    expect(after?.type === "text" && after.text.startsWith(" ustawy")).toBe(
+      true,
+    );
+  });
+
+  test("a reference that states nothing to print is reported, not dropped unseen", () => {
+    const parsed = parsePlUodoDecisionXml({
+      xml: `<xPart><xName>Decyzja</xName><xBlock><xUnit><xText>art. 22<xGlossRef xCtxt="0"/> ustawy</xText></xUnit></xBlock></xPart>`,
+      documentId: "x",
+      caseNumber: "x",
+      court: "x",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+    });
+    if (Result.isError(parsed)) {
+      throw parsed.error;
+    }
+    expect(parsed.value.unmappedMarkup).toEqual(["xGlossRef"]);
   });
 });
 
