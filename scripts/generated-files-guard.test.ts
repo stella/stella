@@ -49,6 +49,14 @@ class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;
 }> {}
 
+test("the CLI registry declares every imported generator input", () => {
+  const registry = generator("cli-registry");
+  const family = GENERATORS.filter(
+    ({ id }) => id === registry.id || registry.after.includes(id),
+  );
+  expect(generatorInputCensus(family)).toEqual([]);
+});
+
 test("a change to the guard's own sources selects every family", () => {
   const sources = guardSelectionSources();
   for (const file of [

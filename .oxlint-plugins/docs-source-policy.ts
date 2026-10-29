@@ -1,7 +1,6 @@
 // Every direct external dependency must have one deliberate documentation
-// disposition: coverage by an llms.txt source, one explicitly reviewed Markdown
-// index, or a time-bounded explanation that no source exists. The policy is
-// exact in both directions, so adding or
+// disposition: coverage by an llms.txt source, or a time-bounded explanation
+// that no source exists. The policy is exact in both directions, so adding or
 // removing a dependency cannot silently drift from the documentation MCP.
 //
 // A no-llms-txt classification is evidence about mutable upstream state, not
@@ -39,24 +38,6 @@ const FIXTURE_CASE_CALLEE = "docSourcePolicyCase";
 const NO_LLMS_TXT_REASON = "no-llms-txt";
 const MAX_QUARANTINE_MILLISECONDS = 31 * 24 * 60 * 60 * 1000;
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
-
-type ReviewedMarkdownSourceName = {
-  [Name in keyof typeof DOC_SOURCES]: (typeof DOC_SOURCES)[Name] extends {
-    indexKind: "reviewed-markdown";
-  }
-    ? Name
-    : never;
-}[keyof typeof DOC_SOURCES];
-
-// An index is accepted only at the exact official source path reviewed here.
-// Changing the catalog URL requires changing this policy as a separate decision.
-const REVIEWED_MARKDOWN_INDEX_URLS = {
-  ASN1js:
-    "https://raw.githubusercontent.com/PeculiarVentures/ASN1.js/master/website/docs/examples/index.md",
-  CLDR: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
-  PKIjs:
-    "https://raw.githubusercontent.com/PeculiarVentures/PKI.js/master/website/docs/examples/index.mdx",
-} as const satisfies Record<ReviewedMarkdownSourceName, string>;
 
 type DocumentationSourcePolicyOptions = {
   dependencies: ReadonlySet<string>;
@@ -143,22 +124,10 @@ export const checkDocumentationSourcePolicy = ({
       failures.push(`${sourceName} has no covered dependencies.`);
     }
     if (!URL.canParse(source.url)) {
-      failures.push(`${sourceName} has an invalid documentation index URL.`);
+      failures.push(`${sourceName} has an invalid llms.txt URL.`);
     } else {
       const url = new URL(source.url);
-      if (source.indexKind === "reviewed-markdown") {
-        const reviewedUrl = Object.entries(REVIEWED_MARKDOWN_INDEX_URLS).find(
-          ([name]) => name === sourceName,
-        )?.[1];
-        if (url.protocol !== "https:" || reviewedUrl !== source.url) {
-          failures.push(
-            `${sourceName} must use its reviewed HTTPS Markdown index URL.`,
-          );
-        }
-      } else if (
-        url.protocol !== "https:" ||
-        !url.pathname.endsWith("/llms.txt")
-      ) {
+      if (url.protocol !== "https:" || !url.pathname.endsWith("/llms.txt")) {
         failures.push(
           `${sourceName} must use an HTTPS URL ending in /llms.txt.`,
         );
@@ -287,19 +256,13 @@ const fixtureSource = (value: StaticValue): DocSource | null => {
   if (!isStaticRecord(value)) {
     return null;
   }
-  const { dependencies, indexKind, url } = value;
+  const { dependencies, url } = value;
   const strings = staticStrings(dependencies) ?? [];
   const first = strings.at(0);
   if (first === undefined || typeof url !== "string") {
     return null;
   }
-  if (indexKind === undefined) {
-    return { dependencies: [first, ...strings.slice(1)], url };
-  }
-  if (indexKind === "llms-txt" || indexKind === "reviewed-markdown") {
-    return { dependencies: [first, ...strings.slice(1)], indexKind, url };
-  }
-  return null;
+  return { dependencies: [first, ...strings.slice(1)], url };
 };
 
 const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {

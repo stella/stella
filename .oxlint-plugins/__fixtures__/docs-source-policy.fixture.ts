@@ -26,45 +26,6 @@ export const exhaustivePolicy = docSourcePolicyCase({
   ],
 });
 
-// expect-clean: docs-source-policy/docs-source-policy
-export const reviewedMarkdownIndex = docSourcePolicyCase({
-  dependencies: ["cldr-misc-full"],
-  sources: {
-    CLDR: {
-      dependencies: ["cldr-misc-full"],
-      indexKind: "reviewed-markdown",
-      url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
-    },
-  },
-  exclusions: [],
-});
-
-// oxlint-disable-next-line docs-source-policy/docs-source-policy -- an unreviewed Markdown URL cannot replace the approved index
-export const substitutedMarkdownIndex = docSourcePolicyCase({
-  dependencies: ["cldr-misc-full"],
-  sources: {
-    CLDR: {
-      dependencies: ["cldr-misc-full"],
-      indexKind: "reviewed-markdown",
-      url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/other.md",
-    },
-  },
-  exclusions: [],
-});
-
-// oxlint-disable-next-line docs-source-policy/docs-source-policy -- an unreviewed source name cannot borrow an approved URL
-export const unreviewedMarkdownSource = docSourcePolicyCase({
-  dependencies: ["cldr-misc-full"],
-  sources: {
-    Mirror: {
-      dependencies: ["cldr-misc-full"],
-      indexKind: "reviewed-markdown",
-      url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
-    },
-  },
-  exclusions: [],
-});
-
 // oxlint-disable-next-line docs-source-policy/docs-source-policy -- a direct dependency with no source or exclusion
 export const unclassifiedDependency = docSourcePolicyCase({
   dependencies: ["documented-package", "new-package"],

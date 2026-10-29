@@ -27,6 +27,23 @@ const quarantine = (expiresAt: string) =>
   ] as const;
 
 describe("documentation source policy rule", () => {
+  test("requires llms.txt indexes even when a source carries a retired index kind", () => {
+    const sources = {
+      CLDR: {
+        dependencies: ["cldr-misc-full"],
+        indexKind: "reviewed-markdown",
+        url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
+      },
+    } as const;
+    expect(
+      checkDocumentationSourcePolicy({
+        dependencies: new Set(["cldr-misc-full"]),
+        exclusions: [],
+        sources,
+      }),
+    ).toContain("CLDR must use an HTTPS URL ending in /llms.txt.");
+  });
+
   test("accepts exhaustive source coverage and a current quarantine", () => {
     expect(
       checkDocumentationSourcePolicy({
@@ -68,50 +85,6 @@ describe("documentation source policy rule", () => {
     ).toContain(
       "documented-package is classified by source Example and exclusion.",
     );
-  });
-
-  test("accepts only the exact reviewed Markdown index for its source", () => {
-    const CLDR = {
-      dependencies: ["cldr-misc-full"],
-      indexKind: "reviewed-markdown",
-      url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
-    } as const;
-    const policy = {
-      dependencies: new Set(["cldr-misc-full"]),
-      exclusions: [],
-    } as const;
-
-    expect(
-      checkDocumentationSourcePolicy({
-        ...policy,
-        sources: { CLDR },
-      }),
-    ).toEqual([]);
-    expect(
-      checkDocumentationSourcePolicy({
-        ...policy,
-        sources: {
-          CLDR: { ...CLDR, url: "https://example.com/tr35.md" },
-        },
-      }),
-    ).toContain("CLDR must use its reviewed HTTPS Markdown index URL.");
-    expect(
-      checkDocumentationSourcePolicy({
-        ...policy,
-        sources: { Mirror: CLDR },
-      }),
-    ).toContain("Mirror must use its reviewed HTTPS Markdown index URL.");
-    expect(
-      checkDocumentationSourcePolicy({
-        ...policy,
-        sources: {
-          CLDR: {
-            dependencies: CLDR.dependencies,
-            url: CLDR.url,
-          },
-        },
-      }),
-    ).toContain("CLDR must use an HTTPS URL ending in /llms.txt.");
   });
 
   test("never fails on time alone and rejects quarantines longer than one month", () => {
