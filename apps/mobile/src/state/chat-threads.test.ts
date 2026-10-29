@@ -12,6 +12,7 @@ import {
   flattenThreadsPage,
   listChatThreads,
   sectionThreads,
+  threadsQuery,
 } from "./chat-threads";
 import type { ChatThreadSummary } from "./chat-threads";
 
@@ -23,6 +24,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 const sourceFor = (fetch: Fetch) =>
@@ -93,6 +95,17 @@ describe("listing chat threads", () => {
     expect(calls).toEqual([
       "https://stella.example.com/v1/chat/threads?cursor=a%20b",
     ]);
+  });
+
+  test("asks for the typed text, trimmed, and keeps it on later pages", () => {
+    expect(threadsQuery({})).toBe("");
+    expect(threadsQuery({ search: "   " })).toBe("");
+    expect(threadsQuery({ search: " lease & rent " })).toBe(
+      "?search=lease%20%26%20rent",
+    );
+    expect(threadsQuery({ cursor: "c 1", search: "Novák" })).toBe(
+      "?search=Nov%C3%A1k&cursor=c%201",
+    );
   });
 
   test("a body this build cannot read is an error, not an empty list", async () => {

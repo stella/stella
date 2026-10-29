@@ -75,12 +75,7 @@ runs:
       # the `web-build` job in ci.yml produces, flags included, so a capture
       # renders the feature-complete surface on every caller.
       if: inputs.web-build-artifact == ''
-      shell: bash
-      env:
-        VITE_PUBLIC_LAW_ENABLED: "true"
-        VITE_PUBLIC_TOOLS_ENABLED: "true"
-        VITE_WORKFLOWS_ENABLED: "true"
-      run: bun --filter @stll/web build
+      uses: ./.github/actions/build-e2e-web
 
     - name: Start docker stack and API server
       id: e2e-stack

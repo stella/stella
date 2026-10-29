@@ -60,6 +60,7 @@ import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { taskDetailOptions } from "@/lib/workspaces/queries/tasks";
 
 export const InspectorRail = ({
   activeId,
@@ -518,6 +519,9 @@ const VerticalTab = (props: VerticalTabProps) => {
   if (tab.type === "chat") {
     return <ChatVerticalTab {...props} tab={tab} />;
   }
+  if (tab.type === "task") {
+    return <TaskVerticalTab {...props} tab={tab} />;
+  }
   if (tab.type !== "view") {
     return <VerticalTabCell {...props} />;
   }
@@ -535,6 +539,21 @@ const VerticalTab = (props: VerticalTabProps) => {
   );
 };
 
+const TaskVerticalTab = ({
+  tab,
+  ...props
+}: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
+  const t = useTranslations();
+  const taskQuery = useQuery(taskDetailOptions(tab.workspaceId, tab.id));
+  const taskView = queryView(taskQuery);
+  useQueryViewError(taskView, "TaskVerticalTab:query");
+  const label =
+    taskView.type === "items"
+      ? taskView.items.name || t("tasks.untitled")
+      : t("common.loading");
+  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
+};
+
 const VerticalTabCell = ({
   onDropTab,
   tab,
@@ -543,7 +562,7 @@ const VerticalTabCell = ({
   onClose,
 }: VerticalTabProps) => {
   const [dragOver, setDragOver] = useState(false);
-  const tooltipLabel = tab.label || tab.id.slice(0, 6);
+  const tooltipLabel = tab.label;
   const tabRef = useRef<HTMLButtonElement>(null);
   const tabNavigate = useNavigate();
   const tabQueryClient = useQueryClient();

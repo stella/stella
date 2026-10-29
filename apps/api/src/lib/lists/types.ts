@@ -1,10 +1,3 @@
-import type { BoundingBoxes } from "@/api/db/schema-validators";
+import type { SpotTarget } from "@stll/api-contract/spot";
 
-export type LegalListSourceLocator =
-  | { type: "document" }
-  | { type: "docx-block"; blockId: string }
-  | {
-      type: "pdf-page";
-      pageNumber: number;
-      boundingBoxes?: BoundingBoxes | undefined;
-    };
+export type LegalListSourceLocator = SpotTarget;

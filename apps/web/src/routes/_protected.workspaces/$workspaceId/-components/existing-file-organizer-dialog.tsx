@@ -414,7 +414,6 @@ export const ExistingFileOrganizerDialog = ({
     const toastId = stellaToast.add({
       type: "loading",
       title: t("workspaces.importOrganizer.applying"),
-      timeout: 0,
     });
 
     const run = async () => {
@@ -513,7 +512,6 @@ export const ExistingFileOrganizerDialog = ({
         stellaToast.update(toastId, {
           type: "success",
           title: t("workspaces.importOrganizer.organized"),
-          timeout: undefined,
         });
         return;
       })
@@ -527,7 +525,6 @@ export const ExistingFileOrganizerDialog = ({
         });
         notifyUserError(error, t("workspaces.importOrganizer.failed"), {
           toastId,
-          timeout: undefined,
         });
       });
   };

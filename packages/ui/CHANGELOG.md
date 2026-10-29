@@ -1,5 +1,55 @@
 # @stll/ui
 
+## 0.55.1
+
+### Patch Changes
+
+- [#6894](https://github.com/stella/stella/pull/6894) [`32cafef`](https://github.com/stella/stella/commit/32cafefeeae7289d6757ed82a22727190a4b46a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh third-party dependencies to their latest minor and patch releases.
+
+- [#7409](https://github.com/stella/stella/pull/7409) [`3de86b1`](https://github.com/stella/stella/commit/3de86b150597e60512d88f053b2ee0c2a9969bbf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve source word breaks in quoted legal text while wrapping oversized tokens in narrow readers and citation cards.
+
+## 0.55.0
+
+### Minor Changes
+
+- [#7254](https://github.com/stella/stella/pull/7254) [`b1db339`](https://github.com/stella/stella/commit/b1db33914f1bd2cb04d1760ffd8ff1a222c806c2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/composer-tokens`: the composer's class tokens (`COMPOSER_BOX_CLASS`, `COMPOSER_SEND_BUTTON_CLASS`, ...) in a module with no React or DOM, so a native app can style its composer with the same classes. `@stll/ui/composer` re-exports them unchanged.
+
+- [#7322](https://github.com/stella/stella/pull/7322) [`5e31c64`](https://github.com/stella/stella/commit/5e31c6433b4bf3400ebb7d137d137e81e419b236) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DocumentIdentityBadge` takes a `caseNumber` identity: a decision named by its case number, drawn as the same width-aware label a statute number uses, with a closing four-digit year cut to two digits in the short form (`25 Cdo 1234/19`).
+
+- [#7299](https://github.com/stella/stella/pull/7299) [`cd78348`](https://github.com/stella/stella/commit/cd7834897fba75056fa30f8351ccc42dd46a16a0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `PreviewPane` takes `overflow="scroll"`: the box keeps its size and scrolls its content vertically instead of clipping it, for previews of text the reader may need to the last line. The default, `clip`, keeps the previous behaviour.
+
+### Patch Changes
+
+- [#7336](https://github.com/stella/stella/pull/7336) [`9c0ea0e`](https://github.com/stella/stella/commit/9c0ea0e95c1e9f9edc9ffaa84cb18e4c43a85d8b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Button can render as unavailable (dimmed, `aria-disabled`, still focusable) while its click and keyboard handlers keep running, so a control can explain why it is unavailable.
+
+- [#6965](https://github.com/stella/stella/pull/6965) [`df53905`](https://github.com/stella/stella/commit/df5390529e1e6bc783d2e442b57bb959ad8acadd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Apply sidebar surface props to the mobile popup and expose its inner panel.
+
+## 0.54.1
+
+### Patch Changes
+
+- [#7228](https://github.com/stella/stella/pull/7228) [`0cfacbc`](https://github.com/stella/stella/commit/0cfacbc4492650dd7ee6c2516de51e5e64aa0c82) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Settled toasts take their own dismissal timing: a loading toast updated to success, error or cancelled no longer keeps the loading toast's infinite lifetime, unless the update names a timeout itself.
+
+## 0.54.0
+
+### Minor Changes
+
+- [#7176](https://github.com/stella/stella/pull/7176) [`dd1480b`](https://github.com/stella/stella/commit/dd1480bd335acd79fe88484b69416410c215786c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DialogPopup` (and `CommandDialogPopup`) replace the `bottomStickOnMobile` boolean with `mobileLayout`: `DIALOG_MOBILE_LAYOUT.bottomSheet` (the default, as before), `centered` (what `bottomStickOnMobile={false}` did) or the new `fullscreen`, which fills the viewport inside the safe areas below `sm`.
+
+- [#7132](https://github.com/stella/stella/pull/7132) [`58b429b`](https://github.com/stella/stella/commit/58b429b124f1a5ff110e20b31a0f8fc6143c8e65) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `PanelTrigger` is the toolbar toggle for a panel docked at either edge (`side="left" | "right"`). `SidebarTrigger` renders the left one, so a host's opposite-edge panel toggle draws the same button and icon size as a mirror image.
+
+### Patch Changes
+
+- [#7097](https://github.com/stella/stella/pull/7097) [`276fe8f`](https://github.com/stella/stella/commit/276fe8f46a263509a6e864505a9bdd75ffa75f56) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Button` turns `aria-label` or `title` into a tooltip only at an icon size; a text-size button gets one only from an explicit `tooltip`. Overlay triggers (`PopoverTrigger`, `MenuTrigger`, dialog, sheet and alert-dialog triggers and closes) no longer derive a tooltip from their own label; rendered as an icon `Button`, they hand it the label.
+
+- [#7144](https://github.com/stella/stella/pull/7144) [`051ed71`](https://github.com/stella/stella/commit/051ed716e83bcc8d822317735bef0b06cd7cd6a0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `LandingLayout` scrolls as one page in a single column: its sections take their rows' height instead of splitting the height left under the hero, which on a phone left each column a sliver shorter than one row under its scroll fade. Side by side, the columns still scroll on their own.
+
+- [#7122](https://github.com/stella/stella/pull/7122) [`85a8893`](https://github.com/stella/stella/commit/85a88937362ad495f74f167b557250608862b77d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ScrollArea` sizes its viewport with flex instead of a percentage height, so an area inside a column bounded only by a max-height scrolls within it instead of growing past it.
+
+- [#7172](https://github.com/stella/stella/pull/7172) [`106c7d6`](https://github.com/stella/stella/commit/106c7d6e21e240156f8d98305315cb5fe1ed1a84) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TabsList` scrolls only along its own axis and clips the other, so a horizontal strip can no longer be dragged up and down on touch screens when a tab or action is slightly taller than the strip.
+
+- [#7094](https://github.com/stella/stella/pull/7094) [`0d610b6`](https://github.com/stella/stella/commit/0d610b62b0101f921a36b37439a0406a40db8797) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use `lucide-react` 1.59.0, the version the document editor depends on, so applications resolve one copy of the icon set.
+
 ## 0.53.0
 
 ### Minor Changes
