@@ -3036,8 +3036,12 @@ const config = defineConfig({
     {
       // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
       // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
-      // fresh array instead (apps/mobile/src/architecture.test.ts).
-      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      // fresh array instead (apps/mobile/src/architecture.test.ts and
+      // packages/transcript/src/portability.test.ts).
+      files: [
+        "apps/mobile/src/**/*.{ts,tsx}",
+        "packages/transcript/src/**/*.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",

@@ -321,8 +321,8 @@ export const mergeTranscripts = (chunks: readonly TranscriptChunk[]) => {
   const order = (a: TimedText, b: TimedText) => a.startMs - b.startMs;
   return validateTranscript({
     durationMs,
-    segments: segments.toSorted(order),
-    ...(hasWords ? { words: words.toSorted(order) } : {}),
+    segments: segments.sort(order),
+    ...(hasWords ? { words: words.sort(order) } : {}),
     ...(languages.size === 1 ? { language: [...languages][0] } : {}),
     ...(models.size === 1 ? { model: [...models][0] } : {}),
   });

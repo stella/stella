@@ -87,7 +87,7 @@ export const budgetVocabulary = ({
 
   const ranked = candidates
     .map((candidate, index) => ({ candidate, index }))
-    .toSorted(
+    .sort(
       (left, right) =>
         right.candidate.weight - left.candidate.weight ||
         (right.candidate.lastUsedAt ?? 0) - (left.candidate.lastUsedAt ?? 0) ||
