@@ -237,6 +237,92 @@ test.each(["ecli", "sheet-number"] as const)(
   },
 );
 
+test.each(["ecli", "sheet-number"] as const)(
+  "full weak publication gains %s evidence on its original UUID",
+  async (evidence) => {
+    const client = await createTestPglite();
+    const db = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+    });
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const sourceId = createSafeId<"caseLawSource">();
+    const publication = (member?: string) =>
+      plainTextIngestionResult({
+        caseNumber: "104 C 16/2024",
+        court: "Okresní soud v Chrudimi",
+        country: "CZE",
+        language: "cs",
+        ecli:
+          evidence === "ecli" && member
+            ? `ECLI:CZ:OSCR:2025:104.C.16.2024.${member}`
+            : undefined,
+        sheetNumber: evidence === "sheet-number" ? member : undefined,
+        fulltext: "Výrok 1.",
+        rawHash: member ?? "listing",
+        metadata: { publicationLabel: "stated publication" },
+        documentAst: EMPTY_AST,
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      });
+    let observationOrder = 0n;
+    const ingest = async (member?: string) => {
+      const outcome = await processDecision({
+        input: publication(member),
+        scopedDb,
+        sourceId,
+        corpus,
+        observationOrder: ++observationOrder,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      });
+      expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+    };
+    const rows = async () =>
+      await db
+        .select({
+          id: caseLawDecisions.id,
+          text: caseLawDecisions.fulltext,
+          strongKey: caseLawDecisions.fallbackIdentityKey,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+    try {
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `evidence-${sourceId}`,
+        name: "Evidence enrichment fixture",
+      });
+      await ingest();
+      const original =
+        (await rows()).at(0) ?? panic("Weak publication must be stored");
+      await ingest("1");
+      await ingest();
+      const enriched = await rows();
+      expect(enriched).toHaveLength(1);
+      expect(enriched.at(0)?.id).toBe(original.id);
+      expect(enriched.at(0)?.text).toBe("Výrok 1.");
+      expect(enriched.at(0)?.strongKey).toContain("case-number:v2:");
+      const aliases = await db
+        .select({ decisionId: caseLawDecisionFallbackIdentities.decisionId })
+        .from(caseLawDecisionFallbackIdentities)
+        .where(eq(caseLawDecisionFallbackIdentities.sourceId, sourceId));
+      expect(aliases).toEqual([{ decisionId: original.id }]);
+      // The expansion keeps the previous index until the separate contract release.
+      await db.execute(
+        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
+      );
+      await ingest("2");
+      await ingest("1");
+      expect(await rows()).toHaveLength(2);
+      expect((await rows()).find(({ id }) => id === original.id)?.text).toBe(
+        "Výrok 1.",
+      );
+    } finally {
+      await client.close();
+    }
+  },
+);
+
 test("sheet and normalized ECLI aliases enrich one row in both observation orders", async () => {
   const client = await createTestPglite();
   const db = drizzle({

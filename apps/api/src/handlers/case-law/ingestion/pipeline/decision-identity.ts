@@ -210,6 +210,8 @@ const IDENTITY_COLUMNS = {
   // The write the row records for its canonical payload, so the corpus
   // upload can refuse re-PUTting objects a settled row already proved.
   contentHash: true,
+  fallbackContentHash: true,
+  fallbackIdentityKey: true,
   textS3Key: true,
   normalizedS3Key: true,
   astS3Key: true,
@@ -558,7 +560,11 @@ export const findFallbackDecisionTx = async (
     return undefined;
   }
   const compatible = publications.filter((row) =>
-    decisionPublicationCompatible(storageIdentity, row),
+    storageIdentity.type === "strong" &&
+    storageIdentity.publishedContentHash !== null &&
+    row.hasStoredDocument
+      ? decisionContentEvidenceCompatible(storageIdentity, row)
+      : decisionPublicationCompatible(storageIdentity, row),
   );
   const candidate = compatible.length === 1 ? compatible.at(0) : undefined;
   return candidate === undefined

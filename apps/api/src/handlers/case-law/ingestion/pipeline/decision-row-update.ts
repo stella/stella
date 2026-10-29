@@ -277,12 +277,22 @@ const fallbackUpdateColumns = (
   }
   if (
     storageIdentity.type === "content" &&
-    storageIdentity.documentState === "metadata-only" &&
-    existing.hasStoredDocument
+    existing.hasStoredDocument &&
+    (storageIdentity.documentState === "metadata-only" ||
+      existing.fallbackIdentityKey !== null)
   ) {
     return {};
   }
-  return decisionFallbackColumns(storageIdentity);
+  const columns = decisionFallbackColumns(storageIdentity);
+  if (
+    storageIdentity.type === "strong" &&
+    existing.hasStoredDocument &&
+    storageIdentity.publishedContentHash !== null
+  ) {
+    // The original weak document remains an exact alias after gaining evidence.
+    return { ...columns, fallbackContentHash: existing.fallbackContentHash };
+  }
+  return columns;
 };
 
 /**

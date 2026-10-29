@@ -395,10 +395,25 @@ const scopedPublicationHash = (
     ]),
   );
 
+const scopedDocumentHash = ({
+  identity,
+  evidence,
+  publishedContentHash,
+}: {
+  identity: Exclude<FallbackDecisionIdentity, { type: "unidentifiable" }>;
+  evidence: ReturnType<typeof publicationEvidence>;
+  publishedContentHash: string;
+}) =>
+  scopedPublicationHash(
+    identity,
+    sha256Hex(JSON.stringify([evidence, publishedContentHash])),
+  );
+
 export type DecisionStorageIdentity =
   | { type: "document"; sourceDocumentId: string }
   | {
       type: "strong";
+      publishedContentHash: string | null;
       identity: Extract<FallbackDecisionIdentity, { type: "decision" }>;
       key: string;
       publicationHash: string;
@@ -423,7 +438,7 @@ export type DecisionStorageIdentity =
     }
   | { type: "unkeyable"; identity: FallbackDecisionIdentity };
 
-/** Publisher ids and strong evidence avoid touching a document's potentially large payload. */
+/** Publisher ids avoid hashing payloads; fallback evidence also carries canonical content proof. */
 export const decisionStorageIdentity = (
   result: IngestionResult,
 ): DecisionStorageIdentity => {
@@ -452,6 +467,11 @@ export const decisionStorageIdentity = (
     }
     return {
       type: "strong",
+      publishedContentHash: payloadCarriesDocument(
+        caseLawCanonicalPayload(result),
+      )
+        ? corpusContentHash(caseLawCanonicalPayload(result))
+        : null,
       identity,
       key,
       aliases,
@@ -481,12 +501,11 @@ export const decisionStorageIdentity = (
             ),
           ),
         )
-      : scopedPublicationHash(
+      : scopedDocumentHash({
           identity,
-          sha256Hex(
-            JSON.stringify([publicationEvidence(result), publishedContentHash]),
-          ),
-        );
+          evidence: publicationEvidence(result),
+          publishedContentHash,
+        });
   return {
     type: "content",
     identity,
@@ -589,7 +608,7 @@ export const decisionStorageIdentityMatch = (
   };
 };
 
-/** A full document can adopt only a textless publication, never another full sibling.
+/** Full documents adopt textless publications or a weak full row with canonical content proof.
  * Metadata-only replay may reuse an unambiguous publication; callers require exactly one candidate.
  */
 export const decisionStorageEnrichmentMatch = (
@@ -617,11 +636,36 @@ export const decisionStorageEnrichmentMatch = (
     OR: [{ fallbackPublicationHash: storage.publicationHash }, legacy],
   };
   if (storage.type === "strong" || storage.documentState === "document") {
-    return {
+    const textless = {
       ...scope,
       fallbackIdentityKey: ABSENT_FIELD,
       RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
         not(rowHoldsDocumentFor(table)),
+    };
+    if (storage.type !== "strong" || storage.publishedContentHash === null) {
+      return textless;
+    }
+    return {
+      OR: [
+        textless,
+        {
+          sourceDocumentId: ABSENT_FIELD,
+          fallbackIdentityKey: ABSENT_FIELD,
+          language: storage.identity.language,
+          caseNumber: storage.identity.caseNumber,
+          ...fallbackDecisionCourtMatch(storage.identity),
+          OR: [
+            { contentHash: storage.publishedContentHash },
+            {
+              fallbackContentHash: scopedDocumentHash({
+                identity: storage.identity,
+                evidence: publicationEvidence({}),
+                publishedContentHash: storage.publishedContentHash,
+              }),
+            },
+          ],
+        },
+      ],
     };
   }
   return {
