@@ -145,7 +145,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving indentation, vertical gaps and sentence boundaries; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own",
+        "paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving indentation, line pitch, short final lines and paragraph gaps; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_US]: {

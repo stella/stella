@@ -454,8 +454,13 @@ export const reflowPrintedText = (rawLines: readonly string[]): string[] => {
 
 const PDF_PARAGRAPH = {
   indentHeightShare: 0.5,
-  // Ordinary line spacing can approach twice the glyph height.
-  verticalGapHeightShare: 1,
+  // Sparse pages still need a bound on ordinary line spacing.
+  maxPitchHeightShare: 2,
+  minPitchObservations: 2,
+  pitchRounding: 2,
+  gapToleranceHeightShare: 0.5,
+  shortLineWidthShare: 0.75,
+  shortLineGapHeightShare: 2,
 } as const;
 
 /** PDF geometry is in points; page coordinates restart on each page. */
@@ -465,49 +470,122 @@ export type PdfPrintedLine = {
     readonly x: number;
     readonly y: number;
     readonly height: number;
+    readonly width: number;
     readonly pageIndex: number;
   };
 };
 
+type PdfPageLayout = {
+  left: number;
+  right: number;
+  height: number;
+  pitch: number;
+  pitches: Map<number, number>;
+};
+
+/** The modal line pitch tolerates extraction jitter without using a paragraph gap. */
+const pdfPageLayouts = (lines: readonly (PdfPrintedLine | null)[]) => {
+  const pages = new Map<number, PdfPageLayout>();
+  let previous: PdfPrintedLine["layout"];
+  for (const line of lines) {
+    const layout = line?.layout;
+    if (layout === undefined) {
+      previous = undefined;
+      continue;
+    }
+    const page = pages.get(layout.pageIndex) ?? {
+      left: layout.x,
+      right: layout.x + layout.width,
+      height: layout.height,
+      pitch: layout.height * PDF_PARAGRAPH.maxPitchHeightShare,
+      pitches: new Map<number, number>(),
+    };
+    page.left = Math.min(page.left, layout.x);
+    page.right = Math.max(page.right, layout.x + layout.width);
+    page.height = Math.max(page.height, layout.height);
+    if (previous?.pageIndex === layout.pageIndex) {
+      const step = Math.abs(layout.y - previous.y);
+      if (step >= Math.max(layout.height, previous.height)) {
+        const pitch =
+          Math.round(step * PDF_PARAGRAPH.pitchRounding) /
+          PDF_PARAGRAPH.pitchRounding;
+        const count = (page.pitches.get(pitch) ?? 0) + 1;
+        page.pitches.set(pitch, count);
+        const modalCount = page.pitches.get(page.pitch) ?? 0;
+        if (
+          count > modalCount ||
+          (count === modalCount && pitch < page.pitch)
+        ) {
+          page.pitch = pitch;
+        }
+      }
+    }
+    pages.set(layout.pageIndex, page);
+    previous = layout;
+  }
+  return pages;
+};
+
 /**
- * PDF extraction already identifies printed lines. Geometry can confirm a
- * continuation without inferring a character margin; paragraph signals always
- * win. Without geometry, the shared text classifier must confirm the wrap.
- * Null entries isolate titles and other display lines from running prose.
+ * PDF geometry, rather than punctuation, decides where printed paragraphs end.
+ * The right margin and ordinary line pitch come from the page's running prose;
+ * null entries isolate titles and other display lines. Without geometry the
+ * shared text classifier and sentence boundaries must decide the wrap.
  */
 export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
   const classification = classifyLineWrap(
     lines.map((line) => line?.text ?? null),
   );
+  const pages = pdfPageLayouts(lines);
   return lines.map((line, index) => {
     const above = index > 0 ? lines.at(index - 1) : null;
     if (above === undefined || above === null || line === null) {
       return LINE_JOIN.BREAK;
     }
-    if (
-      SENTENCE_END_RE.test(above.text) &&
-      OPENS_SENTENCE_RE.test(line.text) &&
-      !PRENOMINAL_TITLE_END_RE.test(above.text)
-    ) {
-      return LINE_JOIN.BREAK;
-    }
     const previousLayout = above.layout;
     const layout = line.layout;
     if (previousLayout === undefined || layout === undefined) {
+      if (
+        SENTENCE_END_RE.test(above.text) &&
+        OPENS_SENTENCE_RE.test(line.text) &&
+        !PRENOMINAL_TITLE_END_RE.test(above.text)
+      ) {
+        return LINE_JOIN.BREAK;
+      }
       return lineJoinOf(classification, above.text, line.text);
     }
+    const page =
+      pages.get(previousLayout.pageIndex) ??
+      panic("PDF line has no page layout");
+    const height = Math.max(previousLayout.height, layout.height);
     if (previousLayout.pageIndex === layout.pageIndex) {
-      const height = Math.max(previousLayout.height, layout.height);
+      const pitchObservations = page.pitches.get(page.pitch) ?? 0;
+      const pitch =
+        pitchObservations >= PDF_PARAGRAPH.minPitchObservations
+          ? page.pitch
+          : Math.min(
+              page.pitch,
+              page.height * PDF_PARAGRAPH.maxPitchHeightShare,
+            );
       const indented =
         layout.x - previousLayout.x > height * PDF_PARAGRAPH.indentHeightShare;
-      const verticalGap = Math.abs(layout.y - previousLayout.y) - height;
+      const verticalGap = Math.abs(layout.y - previousLayout.y);
       if (
         indented ||
-        verticalGap > height * PDF_PARAGRAPH.verticalGapHeightShare
+        verticalGap > pitch + height * PDF_PARAGRAPH.gapToleranceHeightShare
       ) {
         return LINE_JOIN.BREAK;
       }
     }
-    return LINE_JOIN.SPACE;
+    // A short name line can still continue into a lowercase signature role.
+    const shortFinalLine =
+      OPENS_SENTENCE_RE.test(line.text) &&
+      previousLayout.width <
+        (page.right - page.left) * PDF_PARAGRAPH.shortLineWidthShare &&
+      page.right - previousLayout.x - previousLayout.width >
+        height * PDF_PARAGRAPH.shortLineGapHeightShare;
+    return shortFinalLine && !PRENOMINAL_TITLE_END_RE.test(above.text)
+      ? LINE_JOIN.BREAK
+      : LINE_JOIN.SPACE;
   });
 };

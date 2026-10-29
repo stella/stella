@@ -424,7 +424,13 @@ describe("paragraphs across the PDF's line wraps", () => {
           bold: isBold,
           fontSize,
           pageIndex: 0,
-          layout: { x: 70, y: 700 - index * 14, height: 10, pageIndex: 0 },
+          layout: {
+            x: 70,
+            y: 700 - index * 14,
+            height: 10,
+            width: text.length * 5,
+            pageIndex: 0,
+          },
         }),
       ),
       metadata: {
@@ -592,9 +598,16 @@ describe("paragraphs across the PDF's line wraps", () => {
 describe("unnumbered PDF paragraph boundaries", () => {
   test.each([
     {
-      signal: "sentence end and capital",
+      signal: "short final line before a capitalised sentence",
       first: "The first paragraph ends.",
-      next: "Another paragraph starts.",
+      next: "Another paragraph starts with the evidence that the court considered.",
+      x: 70,
+      y: 686,
+    },
+    {
+      signal: "short final line without terminal punctuation",
+      first: "The first paragraph ends here",
+      next: "Another paragraph starts with the evidence that the court considered.",
       x: 70,
       y: 686,
     },
@@ -634,6 +647,72 @@ describe("unnumbered PDF paragraph boundaries", () => {
       ).toEqual([first, next]);
     },
   );
+
+  test.each([{ pitch: 14 }, { pitch: 18 }])(
+    "sentences at a full printed line boundary stay in one paragraph (pitch $pitch)",
+    async ({ pitch }) => {
+      const pdf = PDF.create();
+      const page = pdf.addPage({ size: "letter" });
+      const first = "The court considered the application.";
+      const next = "The court rejected the application.";
+      page.drawText(first, { x: 70, y: 700, size: 10 });
+      page.drawText(next, { x: 70, y: 700 - pitch, size: 10 });
+      const { documentAst } = await parseSkDecisionPdf({
+        pdfBytes: await pdf.save(),
+        caseNumber: "1/2026",
+        court: "Court",
+        ecli: undefined,
+        decisionDate: undefined,
+        decisionType: undefined,
+      });
+      expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+        `${first} ${next}`,
+      ]);
+    },
+  );
+
+  test("an established wide line pitch keeps a multi-sentence paragraph together", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    const text = "The court considered the application.";
+    for (const y of [700, 670, 640]) {
+      page.drawText(text, { x: 70, y, size: 10 });
+    }
+    const { documentAst } = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      `${text} ${text} ${text}`,
+    ]);
+  });
+
+  test("a paragraph gap is measured against the page's ordinary line pitch", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    const first = "The court considered the application";
+    const second = "and reviewed the evidence presented";
+    const next = "another paragraph explains the decision";
+    page.drawText(first, { x: 70, y: 700, size: 10 });
+    page.drawText(second, { x: 70, y: 686, size: 10 });
+    page.drawText(next, { x: 70, y: 666, size: 10 });
+    const { documentAst } = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      `${first} ${second}`,
+      next,
+    ]);
+  });
 
   test("keeps a name after its academic title and a bold continuation inside the paragraph", async () => {
     const pdf = PDF.create();
