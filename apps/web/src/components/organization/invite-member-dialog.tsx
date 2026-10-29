@@ -106,8 +106,8 @@ const InviteMemberForm = ({
   const [isOpen, setIsOpen] = useState(false);
   const inviteMember = useInviteMember();
   const schema = useMemo(
-    () => inviteMemberSchema(currentUserRole),
-    [currentUserRole],
+    () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
+    [currentUserRole, t],
   );
   const defaultValues = useMemo(
     () => ({ email: "", role: defaultRole }),

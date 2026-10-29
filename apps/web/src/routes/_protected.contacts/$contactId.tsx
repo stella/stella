@@ -18,14 +18,16 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
@@ -38,6 +40,9 @@ import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-m
 import { VatPayerSelect } from "@/routes/_protected.contacts/-components/vat-payer-select";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "contact" }),
+  },
   component: ContactDetailPage,
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
@@ -152,7 +157,7 @@ function ContactDetailPage() {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      notifyUserError(undefined, deleteBlockedDescription);
+      notifyUserProblem(deleteBlockedDescription);
       return;
     }
 
@@ -161,6 +166,7 @@ function ContactDetailPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+      <RouteDocumentTitle routeId={Route.id} title={contact.displayName} />
       {/* Header */}
       {/* The breadcrumb already leads back to the list. The actions wrap
           under the name on narrow screens instead of running off the edge. */}

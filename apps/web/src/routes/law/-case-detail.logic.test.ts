@@ -68,6 +68,7 @@ const UNPUBLISHED_DECISION = {
   ],
   judges: [],
   language: "en",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   metadata: {},

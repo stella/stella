@@ -906,8 +906,9 @@ describe("the document", () => {
         detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
         contentXml:
           "<xPart><xRows><xRow><xClmn><xText>Outer cell</xText>" +
-          "<xRows><xRow><xClmn><xText>Nested cell</xText></xClmn></xRow></xRows>" +
-          "</xClmn></xRow></xRows></xPart>",
+          "<xRows><xRow><xClmn><xText>Nested cell</xText></xClmn>" +
+          "<xClmn><xText>Nested side</xText></xClmn></xRow></xRows>" +
+          "</xClmn><xClmn><xText>Side cell</xText></xClmn></xRow></xRows></xPart>",
       }),
     );
 
@@ -1234,11 +1235,11 @@ describe("the document", () => {
     expect(content.unmappedMarkup).toEqual(["xBullet"]);
   });
 
-  test("a superscript stays apart from the number it follows", () => {
+  test("a superscript is rendered as one, for the parser to keep", () => {
     const content = readPlNcourtContent(
       "<xPart><xBlock><xText>art. 353<xSUPx>1</xSUPx> k.c.</xText></xBlock></xPart>",
     );
-    expect(content?.html).toContain("353<sup> 1</sup>");
+    expect(content?.html).toContain("353<sup>1</sup> k.c.");
   });
 
   test("paragraphs left straight in a table or a list, outside its rows and items, are kept in place", () => {

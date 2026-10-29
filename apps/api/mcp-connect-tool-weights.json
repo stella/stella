@@ -25,9 +25,9 @@
       "name": "check_counterparty",
       "nameChars": 18,
       "descriptionChars": 440,
-      "inputSchemaChars": 3772,
-      "totalChars": 4230,
-      "estimatedTokens": 1725
+      "inputSchemaChars": 3727,
+      "totalChars": 4185,
+      "estimatedTokens": 1706
     },
     {
       "name": "compare_documents",
@@ -473,9 +473,9 @@
       "name": "save_contact",
       "nameChars": 12,
       "descriptionChars": 303,
-      "inputSchemaChars": 2245,
-      "totalChars": 2560,
-      "estimatedTokens": 1041
+      "inputSchemaChars": 2200,
+      "totalChars": 2515,
+      "estimatedTokens": 1022
     },
     {
       "name": "save_document",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127453,
-    "estimatedTokens": 50526
+    "characters": 127363,
+    "estimatedTokens": 50488
   }
 }

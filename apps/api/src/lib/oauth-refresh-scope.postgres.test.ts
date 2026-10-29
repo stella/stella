@@ -24,6 +24,8 @@ import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 
+import rootManifest from "../../../../package.json" with { type: "json" };
+
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const tokenSchema = v.object({
   access_token: v.string(),
@@ -52,7 +54,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
     expect(provider.options.refreshTokenReuseInterval).toBe(30);
   });
 
