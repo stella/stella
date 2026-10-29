@@ -146,6 +146,8 @@ const openWindow = async (
     handlers: (data) => ({
       account_get_state: () => data.account,
       account_record_use: () => null,
+      // No connection status: the section stays hidden, as with local agents off.
+      chatgpt_auth_get_status: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,

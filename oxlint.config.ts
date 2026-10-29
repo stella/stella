@@ -16,6 +16,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { CI_INSTALL_PREINSTALL_FILES } from "./scripts/ci-install-preinstall-files.ts";
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
@@ -683,6 +684,12 @@ const browserSurfaceFiles = [
 const noZodImport = {
   name: "zod",
   message: "Use 'valibot' instead of 'zod'.",
+};
+
+// XML is read with saxes, one pass that validates while it reads.
+const noFastXmlParserImport = {
+  name: "fast-xml-parser",
+  message: "Read XML with 'saxes'.",
 };
 
 const noClassicTypeScriptImport = {
@@ -1453,6 +1460,7 @@ const config = defineConfig({
       {
         paths: [
           noZodImport,
+          noFastXmlParserImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
         ],
@@ -2208,6 +2216,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
             ],
@@ -3075,6 +3084,11 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // Pre-install tooling cannot import the workspace path owner before dependencies exist.
+      files: [...CI_INSTALL_PREINSTALL_FILES],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
@@ -4043,6 +4057,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               uiPragmaticDragAdapterImport,
@@ -4063,6 +4078,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               uiPragmaticDragAdapterImport,
@@ -4086,6 +4102,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
             ],
@@ -4115,6 +4132,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               workspaceUiUseIntlFormattingImport,
@@ -4255,6 +4273,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4286,6 +4305,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4325,6 +4345,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
@@ -4555,6 +4576,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4591,6 +4613,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4622,6 +4645,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4661,6 +4685,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4711,6 +4736,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -4759,6 +4785,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
@@ -5007,6 +5034,7 @@ const config = defineConfig({
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
+              "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -5570,6 +5598,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5599,6 +5628,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               {
@@ -5632,6 +5662,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5652,6 +5683,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiSafeIdBrandingImport,
@@ -5675,6 +5707,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -6174,6 +6207,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -6229,6 +6263,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -6302,6 +6337,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,

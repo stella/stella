@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
+    "modelRefused": "Modelis atsisakė atsakyti",
+    "nothingFound": "Nieko nerasta",
     "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
     "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
     "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Perkelti žemyn",
     "moveUp": "Perkelti aukštyn",
     "name": "Pavadinimas",
+    "networkError": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
     "newMatter": "Nauja byla",
     "newRow": "Nauja eilutė",
     "next": "Toliau",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Klientas {index}",
       "skippedDuplicateContactId": "Praleista: pasikartojantis kontakto ID",
       "skippedDuplicateTaxId": "Praleista: pasikartojantis mokesčių mokėtojo kodas",
+      "skippedInFileDuplicate": "Praleista: kartoja ankstesnę failo eilutę",
       "skippedInvalidRow": "Praleista: eilutė neatitinka importo taisyklių",
       "skippedInvalidTaxId": "Praleista: neteisingas mokesčių mokėtojo kodas",
       "skippedLimitReached": "Praleista: pasiektas kontaktų limitas"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "Jei nurodomas adresas, adreso 1 eilutė yra privaloma.",
         "display_name_required": "Nepavyko sukurti rodomo pavadinimo.",
+        "in_file_duplicate": "Ankstesnės šio failo eilutės dublikatas",
         "invalid_email": "El. pašto adresas netinkamas.",
         "invalid_phone": "Telefono numeris netinkamas.",
         "invalid_tags": "Žymos turi būti tekstinės reikšmės.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilijos CPF/CNPJ (kontrolinė suma)",
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
-      "validateFailed": "Nepavyko patikrinti šių kontaktų."
+      "validateFailed": "Nepavyko patikrinti šių kontaktų.",
+      "warning": {
+        "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
+        "possible_in_file_duplicate": "Galimas {row} eilutės dublikatas; sutampa tik vardas."
+      }
     },
     "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
     "invalidNationalityCodes": "Įveskite galiojančius pilietybės kodus.",
@@ -2760,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
+      "configurationIncomplete": "Šis veiksmas nėra visiškai sukonfigūruotas. Kreipkitės į administratorių.",
       "contact": "Susisiekite su mumis",
       "featureDisabled": "Ši funkcija laikinai išjungta.",
+      "leaseLost": "Veiksmo rezervacijos galiojimas baigėsi. Bandykite dar kartą.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
-      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
+      "organizationStateUnreadable": "Nepavyko patikrinti organizacijos prieigos. Netrukus bandykite dar kartą.",
+      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas.",
+      "storeUnavailable": "Paslauga laikinai nepasiekiama. Netrukus bandykite dar kartą."
     },
     "actionFailed": "Nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "api": {
@@ -3297,7 +3309,6 @@
       "simple": "Supaprastintas žymėjimas"
     },
     "moreFormatting": "Daugiau formatavimo",
-    "networkError": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
     "nextChange": "Kitas keitimas",
     "numberedList": "Numeruotas sąrašas",
     "parseError": "Nepavyko apdoroti dokumento. Jis gali būti sugadintas arba nepalaikomo formato.",
@@ -5989,6 +6000,9 @@
       "title": "Vertimas paruoštas"
     }
   },
+  "transportErrors": {
+    "timeout": "Užklausa truko per ilgai. Bandykite dar kartą."
+  },
   "validation": {
     "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
@@ -6186,20 +6200,18 @@
         "notOpeningConnect": "Neatsidaro? Prijunkite stella desktop",
         "notPickedUpDescription": "stella desktop gali būti nepaleista arba neprijungta prie šios paskyros. Prijunkite ją ir bandykite dar kartą.",
         "notPickedUpTitle": "stella desktop neatidarė PDF",
+        "placementAttachmentsOnly": "Šiame rodinyje rodomi PDF priedai, todėl spaudo čia padėti negalima. Pasirašykite be spaudo.",
         "placementBox": "Spaudo vieta",
-        "placementConfirm": "Atidaryti stella desktop",
-        "placementDescription": "Pasirinkite, kaip parašas bus rodomas PDF faile.",
+        "placementDrawTooLarge": "Per didelis spaudui. Atleiskite, kad būtų naudojamas didžiausias dydis.",
+        "placementDrawTooSmall": "Per mažas spaudui. Atleiskite, kad būtų naudojamas mažiausias dydis.",
         "placementHint": "Vilkite spaudą, kad jį perkeltumėte, arba jo kampą, kad pakeistumėte dydį. Kai spaudas pažymėtas, rodyklių klavišai jį perkelia, o Shift su rodyklės klavišu keičia jo dydį.",
-        "placementInvisible": "Nematomas parašas",
-        "placementInvisibleDescription": "Parašas įrašomas į failą be jokios žymos puslapiuose.",
-        "placementPageLabel": "Spaudo puslapis",
-        "placementPageOption": "{page, number} psl. iš {count, number}",
-        "placementPreview": "{page, number} psl. peržiūra",
-        "placementPreviewFailed": "Nepavyko įkelti puslapio peržiūros.",
+        "placementModeHint": "Vilkite puslapyje, kad nupieštumėte spaudą, arba spustelėkite, kad jį padėtumėte.",
+        "placementPlaceOnLastPage": "Padėti paskutiniame puslapyje",
+        "placementRedrawHint": "Vilkite spaudą, kad jį pakoreguotumėte, arba nupieškite naują bet kuriame puslapyje.",
+        "placementSignInvisible": "Pasirašyti be spaudo",
+        "placementSignVisible": "Pasirašyti su spaudu",
         "placementTitle": "Pasirašyti PDF",
         "placementTooSmall": "Šis puslapis per mažas spaudui. Pasirinkite kitą puslapį.",
-        "placementVisible": "Matomas spaudas",
-        "placementVisibleDescription": "Rėmelis puslapyje rodo, kas ir kada pasirašė.",
         "preparingDescription": "PDF ruošiamas stella desktop.",
         "readOnlyDescription": "Šis dokumentas yra tik skaitomas.",
         "signedDescription": "Parašas išsaugotas kaip {versionNumber, number} versija.",

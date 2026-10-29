@@ -171,7 +171,7 @@ describe.skipIf(!enabled)(
               panic("Expected the original lease-loss reason");
             }
             expect(outcome.error).toBe(expectedReason);
-            expect(outcome.error.code).toBe("action_admission_unavailable");
+            expect(outcome.error.code).toBe("action_admission_lease_lost");
             expect(cancellationCode).toBeNull();
             expect(
               await withMcpPublicReadAdmission({

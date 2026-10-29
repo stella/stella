@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} kolumn × {rows} wierszy = {answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}. Odpowiedzi zużywają budżet.",
+    "modelRefused": "Model odmówił odpowiedzi",
+    "nothingFound": "Nic nie znaleziono",
     "refusedBudget": "Nie uruchomiono: budżet odpowiedzi niedostępny",
     "rerunAllPage": "Uruchom wszystko ponownie (ta strona)",
     "rerunColumnPage": "Uruchom kolumnę ponownie (ta strona)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Przesuń w dół",
     "moveUp": "Przesuń w górę",
     "name": "Nazwa",
+    "networkError": "Błąd sieci. Sprawdź połączenie z internetem i spróbuj ponownie.",
     "newMatter": "Nowa sprawa",
     "newRow": "Nowy wiersz",
     "next": "Dalej",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Pominięto: zduplikowany identyfikator kontaktu",
       "skippedDuplicateTaxId": "Pominięto: zduplikowany CPF/CNPJ",
+      "skippedInFileDuplicate": "Pominięto: powtarza wcześniejszy wiersz pliku",
       "skippedInvalidRow": "Pominięto: wiersz nie spełnia reguł importu",
       "skippedInvalidTaxId": "Pominięto: nieprawidłowy CPF/CNPJ",
       "skippedLimitReached": "Pominięto: osiągnięto limit kontaktów"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "Jeśli podano adres, jego pierwszy wiersz jest wymagany.",
         "display_name_required": "Nie udało się utworzyć nazwy wyświetlanej.",
+        "in_file_duplicate": "Duplikat wcześniejszego wiersza w tym pliku",
         "invalid_email": "Adres e-mail jest nieprawidłowy.",
         "invalid_phone": "Numer telefonu jest nieprawidłowy.",
         "invalid_tags": "Tagi muszą być wartościami tekstowymi.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazylijski CPF/CNPJ (suma kontrolna)",
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
-      "validateFailed": "Nie udało się sprawdzić tych kontaktów."
+      "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
+      "warning": {
+        "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",
+        "possible_in_file_duplicate": "Możliwy duplikat wiersza {row}; zgadza się tylko nazwa."
+      }
     },
     "invalidDateOfBirth": "Wprowadź prawidłową datę urodzenia.",
     "invalidNationalityCodes": "Wprowadź prawidłowe kody narodowości.",
@@ -2760,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "configurationIncomplete": "Ta czynność nie jest w pełni skonfigurowana. Skontaktuj się z administratorem.",
       "contact": "Skontaktuj się z nami",
       "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
+      "leaseLost": "Rezerwacja czynności wygasła. Spróbuj ponownie.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
-      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+      "organizationStateUnreadable": "Nie udało się sprawdzić dostępu organizacji. Spróbuj ponownie za chwilę.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji.",
+      "storeUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie za chwilę."
     },
     "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
@@ -3297,7 +3309,6 @@
       "simple": "Prosta adiustacja"
     },
     "moreFormatting": "Więcej formatowania",
-    "networkError": "Błąd sieci. Sprawdź połączenie z internetem i spróbuj ponownie.",
     "nextChange": "Następna zmiana",
     "numberedList": "Lista numerowana",
     "parseError": "Nie udało się przetworzyć dokumentu. Może być uszkodzony lub w nieobsługiwanym formacie.",
@@ -5989,6 +6000,9 @@
       "title": "Tłumaczenie gotowe"
     }
   },
+  "transportErrors": {
+    "timeout": "Żądanie trwało zbyt długo. Spróbuj ponownie."
+  },
   "validation": {
     "invalidEmail": "Wpisz prawidłowy adres e-mail.",
     "organizationNameRequired": "Nazwa organizacji jest wymagana",
@@ -6186,20 +6200,18 @@
         "notOpeningConnect": "Nic się nie otwiera? Połącz stella desktop",
         "notPickedUpDescription": "stella desktop może nie być uruchomiony lub połączony z tym kontem. Połącz go i spróbuj ponownie.",
         "notPickedUpTitle": "stella desktop nie otworzył pliku PDF",
+        "placementAttachmentsOnly": "Ten widok pokazuje załączniki PDF, więc nie można tu umieścić pieczęci. Podpisz bez pieczęci.",
         "placementBox": "Położenie pieczęci",
-        "placementConfirm": "Otwórz stella desktop",
-        "placementDescription": "Wybierz, jak podpis ma wyglądać w pliku PDF.",
+        "placementDrawTooLarge": "Za duża na pieczęć. Puść, aby użyć największego rozmiaru.",
+        "placementDrawTooSmall": "Za mała na pieczęć. Puść, aby użyć najmniejszego rozmiaru.",
         "placementHint": "Przeciągnij pieczęć, aby ją przesunąć, albo jej róg, aby zmienić rozmiar. Gdy pieczęć jest zaznaczona, strzałki ją przesuwają, a Shift ze strzałką zmienia jej rozmiar.",
-        "placementInvisible": "Niewidoczny podpis",
-        "placementInvisibleDescription": "Podpis zostanie zapisany w pliku bez znaku na żadnej stronie.",
-        "placementPageLabel": "Strona pieczęci",
-        "placementPageOption": "Strona {page, number} z {count, number}",
-        "placementPreview": "Podgląd strony {page, number}",
-        "placementPreviewFailed": "Nie udało się wczytać podglądu strony.",
+        "placementModeHint": "Przeciągnij po stronie, aby narysować pieczęć, albo kliknij, aby ją umieścić.",
+        "placementPlaceOnLastPage": "Umieść na ostatniej stronie",
+        "placementRedrawHint": "Przeciągnij pieczęć, aby ją dopasować, albo narysuj nową na dowolnej stronie.",
+        "placementSignInvisible": "Podpisz bez pieczęci",
+        "placementSignVisible": "Podpisz z pieczęcią",
         "placementTitle": "Podpisz PDF",
         "placementTooSmall": "Ta strona jest za mała na pieczęć. Wybierz inną stronę.",
-        "placementVisible": "Widoczna pieczęć",
-        "placementVisibleDescription": "Ramka na stronie pokazuje, kto i kiedy podpisał.",
         "preparingDescription": "Przygotowywanie pliku PDF dla stella desktop.",
         "readOnlyDescription": "Ten dokument jest tylko do odczytu.",
         "signedDescription": "Podpis zapisano jako wersję {versionNumber, number}.",

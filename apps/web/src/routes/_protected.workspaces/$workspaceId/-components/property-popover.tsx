@@ -112,7 +112,7 @@ export const PropertyPopover = ({
     availablePageRowIdSet.has(row.original.entityId),
   );
   const pageStates = pageRows.map((row) =>
-    propertyAiCellState(row.original.fields[id]?.content),
+    propertyAiCellState(row.original.fields[id]),
   );
   const runMenuItems = aiColumnRunMenu(pageStates);
   const selectedRowIds = Object.keys(rowSelection);
@@ -127,7 +127,7 @@ export const PropertyPopover = ({
   );
   const scopedStates = tableRows
     .filter((row) => availableScopeRowIds.has(row.original.entityId))
-    .map((row) => propertyAiCellState(row.original.fields[id]?.content));
+    .map((row) => propertyAiCellState(row.original.fields[id]));
   const headerRunAction = aiColumnRunMenu(scopedStates).at(0);
   const headerRunTargetIds =
     headerRunAction === undefined

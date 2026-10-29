@@ -1,4 +1,5 @@
 name: Release health
+run-name: Release health ${{ inputs.release_ref }}
 
 # Dispatched by release.yml once production serves a stable release: wait out
 # the post-release window, compare the release's failure fingerprints with the

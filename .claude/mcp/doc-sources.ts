@@ -286,6 +286,10 @@ export const DOC_SOURCES = {
     dependencies: ["lefthook"],
     url: "https://lefthook.dev/llms.txt",
   },
+  AgentDevice: {
+    dependencies: ["agent-device"],
+    url: "https://agent-device.dev/llms.txt",
+  },
 } as const satisfies Record<string, DocSource>;
 
 const NO_LLMS_TXT_CHECKED_AT = "2026-10-25T00:00:00.000Z";
@@ -905,14 +909,6 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     dependency: "ajv-formats",
     explanation:
       "https://ajv.js.org/llms.txt returns no llms.txt. The Ajv project publishes no llms.txt. Use the format list in the README at https://github.com/ajv-validator/ajv-formats directly.",
-    expiresAt: "2026-11-25T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-26T00:00:00.000Z",
-    dependency: "fast-xml-parser",
-    explanation:
-      "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
     expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
