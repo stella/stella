@@ -10,8 +10,8 @@ test("history reporting has a deadline and preserves timeout warnings", () => {
   const spawn = spyOn(childProcess, "spawnSync").mockReturnValue({
     pid: 0,
     output: [],
-    stdout: null,
-    stderr: null,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
     status: null,
     signal: "SIGTERM",
     error: Object.assign(new TypeError("history deadline exceeded"), {
@@ -31,7 +31,7 @@ test("history reporting has a deadline and preserves timeout warnings", () => {
     reportFlakyTestQuarantine();
     const options = spawn.mock.calls.at(0)?.at(2);
     expect(
-      typeof options === "object" && options !== null && "timeout" in options
+      typeof options === "object" && "timeout" in options
         ? options.timeout
         : undefined,
     ).toBe(120_000);
