@@ -304,6 +304,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "document_processing_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "document_review_finding_decisions.actor_id":
+    "Retained attribution or request history; this column grants no matter membership.",
   "document_review_findings.decided_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "document_review_findings.applied_by":
