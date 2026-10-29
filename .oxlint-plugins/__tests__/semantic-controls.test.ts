@@ -22,6 +22,8 @@ const hiddenTriggerCases = [
       'import { MenuTrigger, MenuAnchor } from "@stll/ui/menu";',
       "const a = <MenuAnchor />;",
       "const b = <MenuTrigger render={<button />} />;",
+      'const c = <MenuTrigger render={<button><span className="hidden" /></button>} />;',
+      'const d = <MenuTrigger render={<button><svg aria-hidden="true" /></button>} />;',
     ].join("\n"),
     lines: [],
   },

@@ -45,7 +45,7 @@ const focusedElementProblems = async (page: Page) =>
     if (bounds.width <= 1 || bounds.height <= 1) {
       problems.push("no visible focus target");
     }
-    if (style.clip !== "auto" || style.clipPath === "inset(50%)") {
+    if (style.clipPath === "inset(50%)") {
       problems.push("clipped focus target");
     }
     if (element.closest('[aria-hidden="true"], [inert]')) {

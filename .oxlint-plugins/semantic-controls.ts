@@ -44,8 +44,9 @@ const valueOf = (attribute: AstNode | undefined) => {
     : value;
 };
 
-const hasHiddenAnchor = (opening: AstNode) =>
-  everyNode(opening).some((node) => {
+const hasHiddenAttribute = (opening: AstNode) =>
+  Array.isArray(opening.attributes) &&
+  opening.attributes.some((node) => {
     if (node.type !== "JSXAttribute") {
       return false;
     }
@@ -59,6 +60,19 @@ const hasHiddenAnchor = (opening: AstNode) =>
           .some((token) => token === "sr-only" || token === "hidden"))
     );
   });
+
+const hasHiddenAnchor = (opening: AstNode) => {
+  if (hasHiddenAttribute(opening)) {
+    return true;
+  }
+  const render = valueOf(attributeOf(opening, "render"));
+  return (
+    isAstNode(render) &&
+    render.type === "JSXElement" &&
+    isAstNode(render.openingElement) &&
+    hasHiddenAttribute(render.openingElement)
+  );
+};
 
 const hasGenericLabel = (value: unknown) =>
   everyNode(value).some((node) => {

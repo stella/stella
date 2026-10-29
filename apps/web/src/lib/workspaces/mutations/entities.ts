@@ -204,6 +204,21 @@ export const useRenameEntity = (
   inspectorStore?: StoreApi<InspectorTabsStore>,
 ) => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  return useRenameEntityForUser({
+    activeOrganizationId,
+    inspectorStore,
+    userId,
+  });
+};
+
+type RenameEntityForUserOptions = {
+  activeOrganizationId: string;
+  inspectorStore: StoreApi<InspectorTabsStore> | undefined;
+  userId: string;
+};
+
+export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
+  const { activeOrganizationId, inspectorStore, userId } = options;
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();

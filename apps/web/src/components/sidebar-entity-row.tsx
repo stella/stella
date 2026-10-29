@@ -16,9 +16,10 @@ import { SidebarMenuSubItem } from "@/components/sidebar";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
-import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
+import { useRenameEntityForUser } from "@/lib/workspaces/mutations/entities";
 
 type SidebarEntityRowProps = {
+  activeOrganizationId: string;
   children: ReactNode;
   entityId: string;
   entityKind: string;
@@ -26,10 +27,12 @@ type SidebarEntityRowProps = {
   name: string;
   onOpen: () => void;
   workspaceId: string;
+  userId: string;
 };
 
 /** Activity summaries have identity, but no full row or file-cell payload. */
 export const SidebarEntityRow = ({
+  activeOrganizationId,
   children,
   entityId,
   entityKind,
@@ -37,10 +40,15 @@ export const SidebarEntityRow = ({
   name,
   onOpen,
   workspaceId,
+  userId,
 }: SidebarEntityRowProps) => {
   const t = useTranslations();
   const returnFocus = useRef<HTMLButtonElement | null>(null);
-  const renameEntity = useRenameEntity();
+  const renameEntity = useRenameEntityForUser({
+    activeOrganizationId,
+    inspectorStore: undefined,
+    userId,
+  });
   const canRename = usePermissions({ entity: ["update"] });
   const canDelete = usePermissions({ entity: ["delete"] });
   const rename = useInlineRename({
