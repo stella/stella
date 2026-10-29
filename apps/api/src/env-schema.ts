@@ -28,6 +28,7 @@ import {
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
 import { emailAddressSchema } from "@/api/lib/email/normalized-email";
+import { converterSettingsSchema } from "@/api/lib/files/converter-settings";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -375,9 +376,7 @@ export const envApiServerSchema = {
   ),
   FRONTEND_URL: v.pipe(v.string(), v.url()),
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-  GOTENBERG_URL: v.pipe(v.string(), v.url()),
-  GOTENBERG_USERNAME: v.string(),
-  GOTENBERG_PASSWORD: v.string(),
+  ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,

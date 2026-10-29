@@ -315,619 +315,619 @@ case_law_decision_aliases.canonical_decision_id  safeUuid     fk,not null       
 case_law_decision_aliases.created_at             timestamptz  default,not null  case-law.ts:1435
 ```
 
-## case_law_decision_alias_moved_identities · `caseLawDecisionAliasMovedIdentities` · case-law.ts:1457 · rls
+## case_law_decision_alias_moved_identities · `caseLawDecisionAliasMovedIdentities` · case-law.ts:1464 · rls
 
 Exact source identities moved by a reversible decision-alias repair.
 
 ```text
-case_law_decision_alias_moved_identities.retired_decision_id  safeUuid  fk,not null  case-law.ts:1460
-case_law_decision_alias_moved_identities.source_id            safeUuid  not null     case-law.ts:1463
-case_law_decision_alias_moved_identities.source_document_id   varchar   not null     case-law.ts:1464
+case_law_decision_alias_moved_identities.retired_decision_id  safeUuid  fk,not null  case-law.ts:1467
+case_law_decision_alias_moved_identities.source_id            safeUuid  not null     case-law.ts:1470
+case_law_decision_alias_moved_identities.source_document_id   varchar   not null     case-law.ts:1471
 ```
 
-## case_law_decision_supplements · `caseLawDecisionSupplements` · case-law.ts:1497 · rls
+## case_law_decision_supplements · `caseLawDecisionSupplements` · case-law.ts:1504 · rls
 
 Documents a publisher serves under their own id that belong inside another decision's document: SAOS publishes the written reasons of a ruling apart from it.
 
 ```text
-case_law_decision_supplements.source_id                safeUuid     fk,not null       case-law.ts:1500
-case_law_decision_supplements.source_document_id       varchar      not null          case-law.ts:1501
-case_law_decision_supplements.kind                     varchar      not null          case-law.ts:1504
-case_law_decision_supplements.case_number              varchar      not null          case-law.ts:1505
-case_law_decision_supplements.court                    varchar      not null          case-law.ts:1506
-case_law_decision_supplements.language                 varchar      not null          case-law.ts:1507
-case_law_decision_supplements.latest_decision_date     date         null              case-law.ts:1509  The supplement's own date, and so the latest its judgment can carry.
-case_law_decision_supplements.judgment_decision_types  varchar      array,not null    case-law.ts:1511  The decision types a judgment it joins may carry.
-case_law_decision_supplements.fulltext                 text         null              case-law.ts:1515
-case_law_decision_supplements.document_ast             jsonb        not null          case-law.ts:1516
-case_law_decision_supplements.source_hash              varchar      not null          case-law.ts:1519
-case_law_decision_supplements.source_url               varchar      null              case-law.ts:1520
-case_law_decision_supplements.document_url             varchar      null              case-law.ts:1521
-case_law_decision_supplements.metadata                 jsonb        not null          case-law.ts:1522
-case_law_decision_supplements.source_raw_s3_key        varchar      null              case-law.ts:1523
-case_law_decision_supplements.source_raw_content_type  varchar      null              case-law.ts:1524
-case_law_decision_supplements.decision_id              safeUuid     fk,null           case-law.ts:1527
-case_law_decision_supplements.merged_source_hash       varchar      null              case-law.ts:1528
-case_law_decision_supplements.observed_at              timestamptz  not null          case-law.ts:1529
-case_law_decision_supplements.created_at               timestamptz  default,not null  case-law.ts:1530
-case_law_decision_supplements.updated_at               timestamptz  default,not null  case-law.ts:1531
+case_law_decision_supplements.source_id                safeUuid     fk,not null       case-law.ts:1507
+case_law_decision_supplements.source_document_id       varchar      not null          case-law.ts:1508
+case_law_decision_supplements.kind                     varchar      not null          case-law.ts:1511
+case_law_decision_supplements.case_number              varchar      not null          case-law.ts:1512
+case_law_decision_supplements.court                    varchar      not null          case-law.ts:1513
+case_law_decision_supplements.language                 varchar      not null          case-law.ts:1514
+case_law_decision_supplements.latest_decision_date     date         null              case-law.ts:1516  The supplement's own date, and so the latest its judgment can carry.
+case_law_decision_supplements.judgment_decision_types  varchar      array,not null    case-law.ts:1518  The decision types a judgment it joins may carry.
+case_law_decision_supplements.fulltext                 text         null              case-law.ts:1522
+case_law_decision_supplements.document_ast             jsonb        not null          case-law.ts:1523
+case_law_decision_supplements.source_hash              varchar      not null          case-law.ts:1526
+case_law_decision_supplements.source_url               varchar      null              case-law.ts:1527
+case_law_decision_supplements.document_url             varchar      null              case-law.ts:1528
+case_law_decision_supplements.metadata                 jsonb        not null          case-law.ts:1529
+case_law_decision_supplements.source_raw_s3_key        varchar      null              case-law.ts:1530
+case_law_decision_supplements.source_raw_content_type  varchar      null              case-law.ts:1531
+case_law_decision_supplements.decision_id              safeUuid     fk,null           case-law.ts:1534
+case_law_decision_supplements.merged_source_hash       varchar      null              case-law.ts:1535
+case_law_decision_supplements.observed_at              timestamptz  not null          case-law.ts:1536
+case_law_decision_supplements.created_at               timestamptz  default,not null  case-law.ts:1537
+case_law_decision_supplements.updated_at               timestamptz  default,not null  case-law.ts:1538
 ```
 
-## case_law_corpus_upload_intents · `caseLawCorpusUploadIntents` · case-law.ts:1583 · rls
+## case_law_corpus_upload_intents · `caseLawCorpusUploadIntents` · case-law.ts:1590 · rls
 
 Exact corpus-object keys reserved before an external PUT.
 
 ```text
-case_law_corpus_upload_intents.id                     pUuid        pk,not null       case-law.ts:1586
-case_law_corpus_upload_intents.decision_id            safeUuid     not null          case-law.ts:1587
-case_law_corpus_upload_intents.text_s3_key            varchar      not null          case-law.ts:1588
-case_law_corpus_upload_intents.normalized_s3_key      varchar      not null          case-law.ts:1589
-case_law_corpus_upload_intents.ast_s3_key             varchar      not null          case-law.ts:1594
-case_law_corpus_upload_intents.pack_key               varchar      null              case-law.ts:1601  The pack the three addresses above are members of, or null when they name standalone objects.
-case_law_corpus_upload_intents.status                 varchar      default,not null  case-law.ts:1602
-case_law_corpus_upload_intents.lease_expires_at       timestamptz  not null          case-law.ts:1609
-case_law_corpus_upload_intents.cleanup_attempt_count  integer      default,not null  case-law.ts:1610
-case_law_corpus_upload_intents.next_cleanup_at        timestamptz  null              case-law.ts:1614
-case_law_corpus_upload_intents.created_at             timestamptz  default,not null  case-law.ts:1615
+case_law_corpus_upload_intents.id                     pUuid        pk,not null       case-law.ts:1593
+case_law_corpus_upload_intents.decision_id            safeUuid     not null          case-law.ts:1594
+case_law_corpus_upload_intents.text_s3_key            varchar      not null          case-law.ts:1595
+case_law_corpus_upload_intents.normalized_s3_key      varchar      not null          case-law.ts:1596
+case_law_corpus_upload_intents.ast_s3_key             varchar      not null          case-law.ts:1601
+case_law_corpus_upload_intents.pack_key               varchar      null              case-law.ts:1608  The pack the three addresses above are members of, or null when they name standalone objects.
+case_law_corpus_upload_intents.status                 varchar      default,not null  case-law.ts:1609
+case_law_corpus_upload_intents.lease_expires_at       timestamptz  not null          case-law.ts:1616
+case_law_corpus_upload_intents.cleanup_attempt_count  integer      default,not null  case-law.ts:1617
+case_law_corpus_upload_intents.next_cleanup_at        timestamptz  null              case-law.ts:1621
+case_law_corpus_upload_intents.created_at             timestamptz  default,not null  case-law.ts:1622
 ```
 
-## case_law_corpus_pack_refs · `caseLawCorpusPackRefs` · case-law.ts:1658 · rls
+## case_law_corpus_pack_refs · `caseLawCorpusPackRefs` · case-law.ts:1665 · rls
 
 Which pack each stored corpus pointer addresses.
 
 ```text
-case_law_corpus_pack_refs.decision_id  safeUuid     not null          case-law.ts:1661
-case_law_corpus_pack_refs.kind         varchar      not null          case-law.ts:1662
-case_law_corpus_pack_refs.pack_key     varchar      not null          case-law.ts:1665
-case_law_corpus_pack_refs.location     varchar      not null          case-law.ts:1666
-case_law_corpus_pack_refs.created_at   timestamptz  default,not null  case-law.ts:1667
+case_law_corpus_pack_refs.decision_id  safeUuid     not null          case-law.ts:1668
+case_law_corpus_pack_refs.kind         varchar      not null          case-law.ts:1669
+case_law_corpus_pack_refs.pack_key     varchar      not null          case-law.ts:1672
+case_law_corpus_pack_refs.location     varchar      not null          case-law.ts:1673
+case_law_corpus_pack_refs.created_at   timestamptz  default,not null  case-law.ts:1674
 ```
 
-## case_law_corpus_tombstones · `caseLawCorpusTombstones` · case-law.ts:1696 · rls
+## case_law_corpus_tombstones · `caseLawCorpusTombstones` · case-law.ts:1703 · rls
 
 Locations a reader must refuse, whatever the object behind them still holds.
 
 ```text
-case_law_corpus_tombstones.location     varchar      pk,not null       case-law.ts:1699
-case_law_corpus_tombstones.pack_key     varchar      not null          case-law.ts:1705  The pack the denied address sits in.
-case_law_corpus_tombstones.decision_id  safeUuid     not null          case-law.ts:1706
-case_law_corpus_tombstones.reason       varchar      not null          case-law.ts:1707
-case_law_corpus_tombstones.created_at   timestamptz  default,not null  case-law.ts:1710
+case_law_corpus_tombstones.location     varchar      pk,not null       case-law.ts:1706
+case_law_corpus_tombstones.pack_key     varchar      not null          case-law.ts:1712  The pack the denied address sits in.
+case_law_corpus_tombstones.decision_id  safeUuid     not null          case-law.ts:1713
+case_law_corpus_tombstones.reason       varchar      not null          case-law.ts:1714
+case_law_corpus_tombstones.created_at   timestamptz  default,not null  case-law.ts:1717
 ```
 
-## case_law_raw_sweeps · `caseLawRawSweeps` · case-law.ts:1742 · rls
+## case_law_raw_sweeps · `caseLawRawSweeps` · case-law.ts:1749 · rls
 
 Decisions whose raw objects are owed a sweep.
 
 ```text
-case_law_raw_sweeps.decision_id      safeUuid     pk,not null       case-law.ts:1745
-case_law_raw_sweeps.source_id        safeUuid     not null          case-law.ts:1746
-case_law_raw_sweeps.settle_after     timestamptz  not null          case-law.ts:1747
-case_law_raw_sweeps.next_attempt_at  timestamptz  not null          case-law.ts:1748
-case_law_raw_sweeps.attempt_count    integer      default,not null  case-law.ts:1749
-case_law_raw_sweeps.created_at       timestamptz  default,not null  case-law.ts:1750
+case_law_raw_sweeps.decision_id      safeUuid     pk,not null       case-law.ts:1752
+case_law_raw_sweeps.source_id        safeUuid     not null          case-law.ts:1753
+case_law_raw_sweeps.settle_after     timestamptz  not null          case-law.ts:1754
+case_law_raw_sweeps.next_attempt_at  timestamptz  not null          case-law.ts:1755
+case_law_raw_sweeps.attempt_count    integer      default,not null  case-law.ts:1756
+case_law_raw_sweeps.created_at       timestamptz  default,not null  case-law.ts:1757
 ```
 
-## case_law_coverage_slices · `caseLawCoverageSlices` · case-law.ts:1771 · rls
+## case_law_coverage_slices · `caseLawCoverageSlices` · case-law.ts:1778 · rls
 
 Per-slice crawl coverage: what a court said a slice contains against what the crawl stored for it.
 
 ```text
-case_law_coverage_slices.id          pUuid        pk,not null       case-law.ts:1774
-case_law_coverage_slices.source_id   safeUuid     fk,not null       case-law.ts:1775
-case_law_coverage_slices.slice       varchar      not null          case-law.ts:1779  The crawl slice, e.g. an ISO day for date-cursor adapters.
-case_law_coverage_slices.reported    integer      null              case-law.ts:1784  The source's own count for this slice; null while the slice has never been listed successfully (see `walkError`).
-case_law_coverage_slices.collected   integer      null              case-law.ts:1786  What the crawl produced for it; null with `reported`.
-case_law_coverage_slices.checked_at  timestamptz  default,not null  case-law.ts:1787
-case_law_coverage_slices.walk_error  text         null              case-law.ts:1794  Why the last listing walk of this slice failed, null when it listed.
+case_law_coverage_slices.id          pUuid        pk,not null       case-law.ts:1781
+case_law_coverage_slices.source_id   safeUuid     fk,not null       case-law.ts:1782
+case_law_coverage_slices.slice       varchar      not null          case-law.ts:1786  The crawl slice, e.g. an ISO day for date-cursor adapters.
+case_law_coverage_slices.reported    integer      null              case-law.ts:1791  The source's own count for this slice; null while the slice has never been listed successfully (see `walkError`).
+case_law_coverage_slices.collected   integer      null              case-law.ts:1793  What the crawl produced for it; null with `reported`.
+case_law_coverage_slices.checked_at  timestamptz  default,not null  case-law.ts:1794
+case_law_coverage_slices.walk_error  text         null              case-law.ts:1801  Why the last listing walk of this slice failed, null when it listed.
 ```
 
-## case_law_reconciliation_items · `caseLawReconciliationItems` · case-law.ts:1848 · rls
+## case_law_reconciliation_items · `caseLawReconciliationItems` · case-law.ts:1855 · rls
 
 ```text
-case_law_reconciliation_items.id               pUuid        pk,not null       case-law.ts:1851
-case_law_reconciliation_items.source_id        safeUuid     fk,not null       case-law.ts:1852
-case_law_reconciliation_items.slice            varchar      not null          case-law.ts:1856  The slice the item was listed in; matches `case_law_coverage_slices`.
-case_law_reconciliation_items.identity_key     varchar      not null          case-law.ts:1858  `document:<id>` or `case-number:<language>:<docket>`; see `listingIdentityKey`.
-case_law_reconciliation_items.payload          jsonb        not null          case-law.ts:1860  The listing item verbatim, so a retry needs no second listing walk.
-case_law_reconciliation_items.payload_hash     varchar      null              case-law.ts:1862  Lazy listing revision fingerprint; null is a row written before revision tracking.
-case_law_reconciliation_items.revival_count    integer      default,not null  case-law.ts:1864  Lifetime terminal revivals; ordinary retry failures do not consume revivals.
-case_law_reconciliation_items.status           varchar      default,not null  case-law.ts:1865
-case_law_reconciliation_items.attempts         integer      default,not null  case-law.ts:1869
-case_law_reconciliation_items.next_attempt_at  timestamptz  null              case-law.ts:1870
-case_law_reconciliation_items.last_error       text         null              case-law.ts:1872  Error tags only; a raw message may carry more than an operator asked for.
-case_law_reconciliation_items.first_seen_at    timestamptz  default,not null  case-law.ts:1873
-case_law_reconciliation_items.last_attempt_at  timestamptz  null              case-law.ts:1874
+case_law_reconciliation_items.id               pUuid        pk,not null       case-law.ts:1858
+case_law_reconciliation_items.source_id        safeUuid     fk,not null       case-law.ts:1859
+case_law_reconciliation_items.slice            varchar      not null          case-law.ts:1863  The slice the item was listed in; matches `case_law_coverage_slices`.
+case_law_reconciliation_items.identity_key     varchar      not null          case-law.ts:1865  `document:<id>` or `case-number:<language>:<docket>`; see `listingIdentityKey`.
+case_law_reconciliation_items.payload          jsonb        not null          case-law.ts:1867  The listing item verbatim, so a retry needs no second listing walk.
+case_law_reconciliation_items.payload_hash     varchar      null              case-law.ts:1869  Lazy listing revision fingerprint; null is a row written before revision tracking.
+case_law_reconciliation_items.revival_count    integer      default,not null  case-law.ts:1871  Lifetime terminal revivals; ordinary retry failures do not consume revivals.
+case_law_reconciliation_items.status           varchar      default,not null  case-law.ts:1872
+case_law_reconciliation_items.attempts         integer      default,not null  case-law.ts:1876
+case_law_reconciliation_items.next_attempt_at  timestamptz  null              case-law.ts:1877
+case_law_reconciliation_items.last_error       text         null              case-law.ts:1879  Error tags only; a raw message may carry more than an operator asked for.
+case_law_reconciliation_items.first_seen_at    timestamptz  default,not null  case-law.ts:1880
+case_law_reconciliation_items.last_attempt_at  timestamptz  null              case-law.ts:1881
 ```
 
-## case_law_removal_reconciliation_items · `caseLawRemovalReconciliationItems` · case-law.ts:1920 · rls
+## case_law_removal_reconciliation_items · `caseLawRemovalReconciliationItems` · case-law.ts:1927 · rls
 
 Removal work is physically separate from every listing worker version.
 
 ```text
-case_law_removal_reconciliation_items.id               pUuid        pk,not null       case-law.ts:1923
-case_law_removal_reconciliation_items.source_id        safeUuid     fk,not null       case-law.ts:1924
-case_law_removal_reconciliation_items.decision_id      safeUuid     fk,not null       case-law.ts:1925
-case_law_removal_reconciliation_items.kind             varchar      not null          case-law.ts:1926
-case_law_removal_reconciliation_items.payload          jsonb        not null          case-law.ts:1927
-case_law_removal_reconciliation_items.attempts         integer      default,not null  case-law.ts:1928
-case_law_removal_reconciliation_items.next_attempt_at  timestamptz  not null          case-law.ts:1929
-case_law_removal_reconciliation_items.last_error       text         not null          case-law.ts:1930
-case_law_removal_reconciliation_items.first_seen_at    timestamptz  default,not null  case-law.ts:1931
-case_law_removal_reconciliation_items.last_attempt_at  timestamptz  not null          case-law.ts:1932
+case_law_removal_reconciliation_items.id               pUuid        pk,not null       case-law.ts:1930
+case_law_removal_reconciliation_items.source_id        safeUuid     fk,not null       case-law.ts:1931
+case_law_removal_reconciliation_items.decision_id      safeUuid     fk,not null       case-law.ts:1932
+case_law_removal_reconciliation_items.kind             varchar      not null          case-law.ts:1933
+case_law_removal_reconciliation_items.payload          jsonb        not null          case-law.ts:1934
+case_law_removal_reconciliation_items.attempts         integer      default,not null  case-law.ts:1935
+case_law_removal_reconciliation_items.next_attempt_at  timestamptz  not null          case-law.ts:1936
+case_law_removal_reconciliation_items.last_error       text         not null          case-law.ts:1937
+case_law_removal_reconciliation_items.first_seen_at    timestamptz  default,not null  case-law.ts:1938
+case_law_removal_reconciliation_items.last_attempt_at  timestamptz  not null          case-law.ts:1939
 ```
 
-## case_law_citations · `caseLawCitations` · case-law.ts:1970 · rls
+## case_law_citations · `caseLawCitations` · case-law.ts:1977 · rls
 
 ```text
-case_law_citations.id                           pUuid        pk,not null       case-law.ts:1973
-case_law_citations.citing_decision_id           safeUuid     fk,not null       case-law.ts:1974
-case_law_citations.cited_decision_id            safeUuid     fk,null           case-law.ts:1977
-case_law_citations.citation_text                varchar      not null          case-law.ts:1982
-case_law_citations.citation_key                 varchar      null              case-law.ts:1984  `citationText` under `bareCitationKey`; joins to a decision's own key.
-case_law_citations.identifier_type              varchar      null              case-law.ts:1986  Typed lookup identity; null only on rows written before its rollout.
-case_law_citations.normalized_identifier_value  varchar      null              case-law.ts:1989
-case_law_citations.kind                         varchar      default,not null  case-law.ts:2003  Whether this citation invokes authority or names the case's own procedural history.
-case_law_citations.cited_decision_type_hint     varchar      null              case-law.ts:2012  The decision-type word the citing text introduced the number with ("nález sp.
-case_law_citations.cited_court_hint             varchar      null              case-law.ts:2022  The court phrase the citing text named, verbatim ("Krajského soudu v Českých Budějovicích"); null when the sentence did not take the standard form.
-case_law_citations.cited_sheet_number           varchar      null              case-law.ts:2033  The sheet within the case file the citing text named ("č.
-case_law_citations.cited_decision_date          date         null              case-law.ts:2042  The decision date the citing sentence named ("ze dne 17.
-case_law_citations.resolution_status            text         default,not null  case-law.ts:2050  Outcome of the last resolution attempt.
-case_law_citations.resolution_attempted_at      timestamptz  null              case-law.ts:2055  When that outcome was decided; null until the row is first examined.
-case_law_citations.resolution_rule_id           varchar      null              case-law.ts:2062  The rule that drew the edge of a `resolved` row; null otherwise, and cleared whenever the row is reopened.
-case_law_citations.section_index                integer      null              case-law.ts:2063
-case_law_citations.polarity                     varchar      null              case-law.ts:2064
-case_law_citations.doctrinal_treatment          varchar      null              case-law.ts:2066  Reviewed doctrinal action; null until the citation is read.
-case_law_citations.polarity_rule_id             safeUuid     fk,null           case-law.ts:2070
-case_law_citations.created_at                   timestamptz  default,not null  case-law.ts:2075
+case_law_citations.id                           pUuid        pk,not null       case-law.ts:1980
+case_law_citations.citing_decision_id           safeUuid     fk,not null       case-law.ts:1981
+case_law_citations.cited_decision_id            safeUuid     fk,null           case-law.ts:1984
+case_law_citations.citation_text                varchar      not null          case-law.ts:1989
+case_law_citations.citation_key                 varchar      null              case-law.ts:1991  `citationText` under `bareCitationKey`; joins to a decision's own key.
+case_law_citations.identifier_type              varchar      null              case-law.ts:1993  Typed lookup identity; null only on rows written before its rollout.
+case_law_citations.normalized_identifier_value  varchar      null              case-law.ts:1996
+case_law_citations.kind                         varchar      default,not null  case-law.ts:2010  Whether this citation invokes authority or names the case's own procedural history.
+case_law_citations.cited_decision_type_hint     varchar      null              case-law.ts:2019  The decision-type word the citing text introduced the number with ("nález sp.
+case_law_citations.cited_court_hint             varchar      null              case-law.ts:2029  The court phrase the citing text named, verbatim ("Krajského soudu v Českých Budějovicích"); null when the sentence did not take the standard form.
+case_law_citations.cited_sheet_number           varchar      null              case-law.ts:2040  The sheet within the case file the citing text named ("č.
+case_law_citations.cited_decision_date          date         null              case-law.ts:2049  The decision date the citing sentence named ("ze dne 17.
+case_law_citations.resolution_status            text         default,not null  case-law.ts:2057  Outcome of the last resolution attempt.
+case_law_citations.resolution_attempted_at      timestamptz  null              case-law.ts:2062  When that outcome was decided; null until the row is first examined.
+case_law_citations.resolution_rule_id           varchar      null              case-law.ts:2069  The rule that drew the edge of a `resolved` row; null otherwise, and cleared whenever the row is reopened.
+case_law_citations.section_index                integer      null              case-law.ts:2070
+case_law_citations.polarity                     varchar      null              case-law.ts:2071
+case_law_citations.doctrinal_treatment          varchar      null              case-law.ts:2073  Reviewed doctrinal action; null until the citation is read.
+case_law_citations.polarity_rule_id             safeUuid     fk,null           case-law.ts:2077
+case_law_citations.created_at                   timestamptz  default,not null  case-law.ts:2082
 ```
 
-## case_law_provision_citations · `caseLawProvisionCitations` · case-law.ts:2199 · rls
+## case_law_provision_citations · `caseLawProvisionCitations` · case-law.ts:2206 · rls
 
 ```text
-case_law_provision_citations.id                                         pUuid        pk,not null       case-law.ts:2202
-case_law_provision_citations.decision_id                                safeUuid     fk,not null       case-law.ts:2203
-case_law_provision_citations.jurisdiction                               varchar      not null          case-law.ts:2204
-case_law_provision_citations.work_identifier                            text         not null          case-law.ts:2205
-case_law_provision_citations.work_number                                integer      default,not null  case-law.ts:2207  Legacy rollout slots stay non-null until all deployed readers use EU identity columns.
-case_law_provision_citations.work_year                                  smallint     default,not null  case-law.ts:2208
-case_law_provision_citations.eu_work_number                             integer      null              case-law.ts:2210  EU act number; null for treaty and Charter work identities.
-case_law_provision_citations.eu_work_year                               smallint     null              case-law.ts:2212  EU act year; null for treaty and Charter work identities.
-case_law_provision_citations.work_collection                            text         not null          case-law.ts:2213
-case_law_provision_citations.work_eli                                   text         null              case-law.ts:2214
-case_law_provision_citations.unit                                       text         not null          case-law.ts:2215
-case_law_provision_citations.section                                    integer      not null          case-law.ts:2216
-case_law_provision_citations.section_suffix                             text         null              case-law.ts:2217
-case_law_provision_citations.subsection                                 text         null              case-law.ts:2218
-case_law_provision_citations.letter                                     text         null              case-law.ts:2219
-case_law_provision_citations.point                                      text         null              case-law.ts:2220
-case_law_provision_citations.sentence                                   text         null              case-law.ts:2221
-case_law_provision_citations.open_ended                                 boolean      default,not null  case-law.ts:2222
-case_law_provision_citations.anchor                                     text         not null          case-law.ts:2223
-case_law_provision_citations.version_valid_from                         date         null              case-law.ts:2225  The decision-date consolidation is an inferred candidate only.
-case_law_provision_citations.applied_version_basis                      text         null              case-law.ts:2226
-case_law_provision_citations.applied_version_date                       date         null              case-law.ts:2229
-case_law_provision_citations.applied_version_date_relation              text         null              case-law.ts:2230
-case_law_provision_citations.applied_version_amendment_work_identifier  text         null              case-law.ts:2233
-case_law_provision_citations.applied_version_expression_date            date         null              case-law.ts:2236
-case_law_provision_citations.applied_version_expression_eli             text         null              case-law.ts:2237
-case_law_provision_citations.version_evidence_start                     integer      null              case-law.ts:2238
-case_law_provision_citations.version_evidence_end                       integer      null              case-law.ts:2239
-case_law_provision_citations.version_evidence_kind                      text         null              case-law.ts:2240
-case_law_provision_citations.decision_date                              date         null              case-law.ts:2248  The citing decision's date, copied at write time.
-case_law_provision_citations.sentence_text                              text         not null          case-law.ts:2249
-case_law_provision_citations.span_start                                 integer      not null          case-law.ts:2250
-case_law_provision_citations.span_end                                   integer      not null          case-law.ts:2251
-case_law_provision_citations.work_source                                text         null              case-law.ts:2252
-case_law_provision_citations.confidence                                 numeric      not null          case-law.ts:2253
-case_law_provision_citations.created_at                                 timestamptz  default,not null  case-law.ts:2256
-case_law_provision_citations.span_role                                  text         null              case-law.ts:2265  The exact characters a row links, as UTF-16 offsets into the text of one reader piece (`projectionPieces` in `@stll/legal-ast`).
-case_law_provision_citations.print_piece_id                             varchar      null              case-law.ts:2266
-case_law_provision_citations.print_start                                integer      null              case-law.ts:2267
-case_law_provision_citations.print_end                                  integer      null              case-law.ts:2268
-case_law_provision_citations.print_text                                 varchar      null              case-law.ts:2269
-case_law_provision_citations.name_piece_id                              varchar      null              case-law.ts:2271  The act's name as printed, when the chain names it in the text.
-case_law_provision_citations.name_start                                 integer      null              case-law.ts:2272
-case_law_provision_citations.name_end                                   integer      null              case-law.ts:2273
-case_law_provision_citations.name_text                                  varchar      null              case-law.ts:2274
-case_law_provision_citations.selection                                  text         null              case-law.ts:2275
-case_law_provision_citations.printed_work_identifier                    text         null              case-law.ts:2276
-case_law_provision_citations.target_document_id                         safeUuid     null              case-law.ts:2277
-case_law_provision_citations.target_status                              text         null              case-law.ts:2278
+case_law_provision_citations.id                                         pUuid        pk,not null       case-law.ts:2209
+case_law_provision_citations.decision_id                                safeUuid     fk,not null       case-law.ts:2210
+case_law_provision_citations.jurisdiction                               varchar      not null          case-law.ts:2211
+case_law_provision_citations.work_identifier                            text         not null          case-law.ts:2212
+case_law_provision_citations.work_number                                integer      default,not null  case-law.ts:2214  Legacy rollout slots stay non-null until all deployed readers use EU identity columns.
+case_law_provision_citations.work_year                                  smallint     default,not null  case-law.ts:2215
+case_law_provision_citations.eu_work_number                             integer      null              case-law.ts:2217  EU act number; null for treaty and Charter work identities.
+case_law_provision_citations.eu_work_year                               smallint     null              case-law.ts:2219  EU act year; null for treaty and Charter work identities.
+case_law_provision_citations.work_collection                            text         not null          case-law.ts:2220
+case_law_provision_citations.work_eli                                   text         null              case-law.ts:2221
+case_law_provision_citations.unit                                       text         not null          case-law.ts:2222
+case_law_provision_citations.section                                    integer      not null          case-law.ts:2223
+case_law_provision_citations.section_suffix                             text         null              case-law.ts:2224
+case_law_provision_citations.subsection                                 text         null              case-law.ts:2225
+case_law_provision_citations.letter                                     text         null              case-law.ts:2226
+case_law_provision_citations.point                                      text         null              case-law.ts:2227
+case_law_provision_citations.sentence                                   text         null              case-law.ts:2228
+case_law_provision_citations.open_ended                                 boolean      default,not null  case-law.ts:2229
+case_law_provision_citations.anchor                                     text         not null          case-law.ts:2230
+case_law_provision_citations.version_valid_from                         date         null              case-law.ts:2232  The decision-date consolidation is an inferred candidate only.
+case_law_provision_citations.applied_version_basis                      text         null              case-law.ts:2233
+case_law_provision_citations.applied_version_date                       date         null              case-law.ts:2236
+case_law_provision_citations.applied_version_date_relation              text         null              case-law.ts:2237
+case_law_provision_citations.applied_version_amendment_work_identifier  text         null              case-law.ts:2240
+case_law_provision_citations.applied_version_expression_date            date         null              case-law.ts:2243
+case_law_provision_citations.applied_version_expression_eli             text         null              case-law.ts:2244
+case_law_provision_citations.version_evidence_start                     integer      null              case-law.ts:2245
+case_law_provision_citations.version_evidence_end                       integer      null              case-law.ts:2246
+case_law_provision_citations.version_evidence_kind                      text         null              case-law.ts:2247
+case_law_provision_citations.decision_date                              date         null              case-law.ts:2255  The citing decision's date, copied at write time.
+case_law_provision_citations.sentence_text                              text         not null          case-law.ts:2256
+case_law_provision_citations.span_start                                 integer      not null          case-law.ts:2257
+case_law_provision_citations.span_end                                   integer      not null          case-law.ts:2258
+case_law_provision_citations.work_source                                text         null              case-law.ts:2259
+case_law_provision_citations.confidence                                 numeric      not null          case-law.ts:2260
+case_law_provision_citations.created_at                                 timestamptz  default,not null  case-law.ts:2263
+case_law_provision_citations.span_role                                  text         null              case-law.ts:2272  The exact characters a row links, as UTF-16 offsets into the text of one reader piece (`projectionPieces` in `@stll/legal-ast`).
+case_law_provision_citations.print_piece_id                             varchar      null              case-law.ts:2273
+case_law_provision_citations.print_start                                integer      null              case-law.ts:2274
+case_law_provision_citations.print_end                                  integer      null              case-law.ts:2275
+case_law_provision_citations.print_text                                 varchar      null              case-law.ts:2276
+case_law_provision_citations.name_piece_id                              varchar      null              case-law.ts:2278  The act's name as printed, when the chain names it in the text.
+case_law_provision_citations.name_start                                 integer      null              case-law.ts:2279
+case_law_provision_citations.name_end                                   integer      null              case-law.ts:2280
+case_law_provision_citations.name_text                                  varchar      null              case-law.ts:2281
+case_law_provision_citations.selection                                  text         null              case-law.ts:2282
+case_law_provision_citations.printed_work_identifier                    text         null              case-law.ts:2283
+case_law_provision_citations.target_document_id                         safeUuid     null              case-law.ts:2284
+case_law_provision_citations.target_status                              text         null              case-law.ts:2285
 ```
 
-## case_law_statute_citation_memberships · `caseLawStatuteCitationMemberships` · case-law.ts:2432 · rls
+## case_law_statute_citation_memberships · `caseLawStatuteCitationMemberships` · case-law.ts:2439 · rls
 
 One distinct citing decision per statute target.
 
 ```text
-case_law_statute_citation_memberships.decision_id   safeUuid     fk,not null       case-law.ts:2435
-case_law_statute_citation_memberships.source_id     safeUuid     fk,not null       case-law.ts:2436
-case_law_statute_citation_memberships.jurisdiction  varchar      not null          case-law.ts:2437
-case_law_statute_citation_memberships.work_eli      varchar      not null          case-law.ts:2438
-case_law_statute_citation_memberships.target_type   text         not null          case-law.ts:2439
-case_law_statute_citation_memberships.anchor        varchar      not null          case-law.ts:2442
-case_law_statute_citation_memberships.created_at    timestamptz  default,not null  case-law.ts:2443
+case_law_statute_citation_memberships.decision_id   safeUuid     fk,not null       case-law.ts:2442
+case_law_statute_citation_memberships.source_id     safeUuid     fk,not null       case-law.ts:2443
+case_law_statute_citation_memberships.jurisdiction  varchar      not null          case-law.ts:2444
+case_law_statute_citation_memberships.work_eli      varchar      not null          case-law.ts:2445
+case_law_statute_citation_memberships.target_type   text         not null          case-law.ts:2446
+case_law_statute_citation_memberships.anchor        varchar      not null          case-law.ts:2449
+case_law_statute_citation_memberships.created_at    timestamptz  default,not null  case-law.ts:2450
 ```
 
-## case_law_statute_citation_counts · `caseLawStatuteCitationCounts` · case-law.ts:2485 · rls
+## case_law_statute_citation_counts · `caseLawStatuteCitationCounts` · case-law.ts:2492 · rls
 
 Exact distinct-decision totals maintained from the membership table.
 
 ```text
-case_law_statute_citation_counts.source_id       safeUuid     fk,not null       case-law.ts:2488
-case_law_statute_citation_counts.jurisdiction    varchar      not null          case-law.ts:2489
-case_law_statute_citation_counts.work_eli        varchar      not null          case-law.ts:2490
-case_law_statute_citation_counts.target_type     text         not null          case-law.ts:2491
-case_law_statute_citation_counts.anchor          varchar      not null          case-law.ts:2494
-case_law_statute_citation_counts.decision_count  integer      not null          case-law.ts:2495
-case_law_statute_citation_counts.updated_at      timestamptz  default,not null  case-law.ts:2496
+case_law_statute_citation_counts.source_id       safeUuid     fk,not null       case-law.ts:2495
+case_law_statute_citation_counts.jurisdiction    varchar      not null          case-law.ts:2496
+case_law_statute_citation_counts.work_eli        varchar      not null          case-law.ts:2497
+case_law_statute_citation_counts.target_type     text         not null          case-law.ts:2498
+case_law_statute_citation_counts.anchor          varchar      not null          case-law.ts:2501
+case_law_statute_citation_counts.decision_count  integer      not null          case-law.ts:2502
+case_law_statute_citation_counts.updated_at      timestamptz  default,not null  case-law.ts:2503
 ```
 
-## case_law_statute_citation_count_state · `caseLawStatuteCitationCountState` · case-law.ts:2539 · rls
+## case_law_statute_citation_count_state · `caseLawStatuteCitationCountState` · case-law.ts:2546 · rls
 
 Completeness of the initial corpus pass.
 
 ```text
-case_law_statute_citation_count_state.key                 varchar      pk,not null       case-law.ts:2542
-case_law_statute_citation_count_state.status              text         default,not null  case-law.ts:2543
-case_law_statute_citation_count_state.cursor_decision_id  safeUuid     null              case-law.ts:2547
-case_law_statute_citation_count_state.updated_at          timestamptz  default,not null  case-law.ts:2548
+case_law_statute_citation_count_state.key                 varchar      pk,not null       case-law.ts:2549
+case_law_statute_citation_count_state.status              text         default,not null  case-law.ts:2550
+case_law_statute_citation_count_state.cursor_decision_id  safeUuid     null              case-law.ts:2554
+case_law_statute_citation_count_state.updated_at          timestamptz  default,not null  case-law.ts:2555
 ```
 
-## case_law_sitemap_country_generations · `caseLawSitemapCountryGenerations` · case-law.ts:2588 · rls
+## case_law_sitemap_country_generations · `caseLawSitemapCountryGenerations` · case-law.ts:2595 · rls
 
 Persistent country epochs fence counts staged after a corpus removal.
 
 ```text
-case_law_sitemap_country_generations.country     varchar  pk,not null       case-law.ts:2591
-case_law_sitemap_country_generations.generation  bigint   default,not null  case-law.ts:2592
+case_law_sitemap_country_generations.country     varchar  pk,not null       case-law.ts:2598
+case_law_sitemap_country_generations.generation  bigint   default,not null  case-law.ts:2599
 ```
 
-## case_law_sitemap_shards · `caseLawSitemapShards` · case-law.ts:2605 · rls
+## case_law_sitemap_shards · `caseLawSitemapShards` · case-law.ts:2612 · rls
 
 ```text
-case_law_sitemap_shards.country           varchar      not null  case-law.ts:2608
-case_law_sitemap_shards.year              varchar      not null  case-law.ts:2609
-case_law_sitemap_shards.month             varchar      not null  case-law.ts:2610
-case_law_sitemap_shards.bucket            varchar      not null  case-law.ts:2611
-case_law_sitemap_shards.total             integer      not null  case-law.ts:2612
-case_law_sitemap_shards.last_modified_at  timestamptz  not null  case-law.ts:2613
+case_law_sitemap_shards.country           varchar      not null  case-law.ts:2615
+case_law_sitemap_shards.year              varchar      not null  case-law.ts:2616
+case_law_sitemap_shards.month             varchar      not null  case-law.ts:2617
+case_law_sitemap_shards.bucket            varchar      not null  case-law.ts:2618
+case_law_sitemap_shards.total             integer      not null  case-law.ts:2619
+case_law_sitemap_shards.last_modified_at  timestamptz  not null  case-law.ts:2620
 ```
 
-## case_law_sitemap_shard_counts · `caseLawSitemapShardCounts` · case-law.ts:2636 · rls
+## case_law_sitemap_shard_counts · `caseLawSitemapShardCounts` · case-law.ts:2643 · rls
 
 One country's month counts, staged by the sitemap refresh until every public country is counted and `case_law_sitemap_shards` is replaced whole.
 
 ```text
-case_law_sitemap_shard_counts.country     varchar      pk,not null  case-law.ts:2639
-case_law_sitemap_shard_counts.months      jsonb        not null     case-law.ts:2640
-case_law_sitemap_shard_counts.pages       integer      not null     case-law.ts:2641
-case_law_sitemap_shard_counts.counted_at  timestamptz  not null     case-law.ts:2642
+case_law_sitemap_shard_counts.country     varchar      pk,not null  case-law.ts:2646
+case_law_sitemap_shard_counts.months      jsonb        not null     case-law.ts:2647
+case_law_sitemap_shard_counts.pages       integer      not null     case-law.ts:2648
+case_law_sitemap_shard_counts.counted_at  timestamptz  not null     case-law.ts:2649
 ```
 
-## case_law_browse_facet_counts · `caseLawBrowseFacetCounts` · case-law.ts:2669 · rls
+## case_law_browse_facet_counts · `caseLawBrowseFacetCounts` · case-law.ts:2676 · rls
 
 Per-source browse counts, so source redistribution is checked at read time.
 
 ```text
-case_law_browse_facet_counts.kind       text      not null     case-law.ts:2672
-case_law_browse_facet_counts.country    varchar   not null     case-law.ts:2673
-case_law_browse_facet_counts.source_id  safeUuid  fk,not null  case-law.ts:2674
-case_law_browse_facet_counts.value      varchar   not null     case-law.ts:2677
-case_law_browse_facet_counts.total      integer   not null     case-law.ts:2678
+case_law_browse_facet_counts.kind       text      not null     case-law.ts:2679
+case_law_browse_facet_counts.country    varchar   not null     case-law.ts:2680
+case_law_browse_facet_counts.source_id  safeUuid  fk,not null  case-law.ts:2681
+case_law_browse_facet_counts.value      varchar   not null     case-law.ts:2684
+case_law_browse_facet_counts.total      integer   not null     case-law.ts:2685
 ```
 
-## case_law_source_arrivals · `caseLawSourceArrivals` · case-law.ts:2715 · rls
+## case_law_source_arrivals · `caseLawSourceArrivals` · case-law.ts:2722 · rls
 
 What became public for each source in the seven days before `counted_at`, replaced as one snapshot by the scheduler so the coverage page never counts a week of…
 
 ```text
-case_law_source_arrivals.source_id        safeUuid     pk,fk,not null  case-law.ts:2718
-case_law_source_arrivals.added_last_week  integer      not null        case-law.ts:2721
-case_law_source_arrivals.counted_at       timestamptz  not null        case-law.ts:2722
+case_law_source_arrivals.source_id        safeUuid     pk,fk,not null  case-law.ts:2725
+case_law_source_arrivals.added_last_week  integer      not null        case-law.ts:2728
+case_law_source_arrivals.counted_at       timestamptz  not null        case-law.ts:2729
 ```
 
-## case_law_coverage_summaries · `caseLawCoverageSummaries` · case-law.ts:2750 · rls
+## case_law_coverage_summaries · `caseLawCoverageSummaries` · case-law.ts:2757 · rls
 
 The complete coverage answer, replaced atomically by the governed refresh.
 
 ```text
-case_law_coverage_summaries.key            text         pk,not null  case-law.ts:2753
-case_law_coverage_summaries.source_policy  text         not null     case-law.ts:2754
-case_law_coverage_summaries.answer         jsonb        not null     case-law.ts:2755
-case_law_coverage_summaries.generated_at   timestamptz  not null     case-law.ts:2756
+case_law_coverage_summaries.key            text         pk,not null  case-law.ts:2760
+case_law_coverage_summaries.source_policy  text         not null     case-law.ts:2761
+case_law_coverage_summaries.answer         jsonb        not null     case-law.ts:2762
+case_law_coverage_summaries.generated_at   timestamptz  not null     case-law.ts:2763
 ```
 
-## case_law_citation_resolution_progress · `caseLawCitationResolutionProgress` · case-law.ts:2787 · rls
+## case_law_citation_resolution_progress · `caseLawCitationResolutionProgress` · case-law.ts:2794 · rls
 
 Where the standing resolution walk had got to.
 
 ```text
-case_law_citation_resolution_progress.scope                      text         pk,not null       case-law.ts:2791  One lane today; the column exists so a second can land as a row.
-case_law_citation_resolution_progress.cursor_citing_decision_id  safeUuid     null              case-law.ts:2793  The `(citing decision, citation)` pair the last batch stopped on.
-case_law_citation_resolution_progress.cursor_citation_id         safeUuid     null              case-law.ts:2796
-case_law_citation_resolution_progress.updated_at                 timestamptz  default,not null  case-law.ts:2797
+case_law_citation_resolution_progress.scope                      text         pk,not null       case-law.ts:2798  One lane today; the column exists so a second can land as a row.
+case_law_citation_resolution_progress.cursor_citing_decision_id  safeUuid     null              case-law.ts:2800  The `(citing decision, citation)` pair the last batch stopped on.
+case_law_citation_resolution_progress.cursor_citation_id         safeUuid     null              case-law.ts:2803
+case_law_citation_resolution_progress.updated_at                 timestamptz  default,not null  case-law.ts:2804
 ```
 
-## case_law_citation_authority_sweep · `caseLawCitationAuthoritySweep` · case-law.ts:2828 · rls
+## case_law_citation_authority_sweep · `caseLawCitationAuthoritySweep` · case-law.ts:2835 · rls
 
 Where the citation-authority sweep is in its current pass.
 
 ```text
-case_law_citation_authority_sweep.scope               text         pk,not null       case-law.ts:2831
-case_law_citation_authority_sweep.cursor_decision_id  safeUuid     null              case-law.ts:2832
-case_law_citation_authority_sweep.pass_started_at     timestamptz  null              case-law.ts:2833
-case_law_citation_authority_sweep.updated_at          timestamptz  default,not null  case-law.ts:2834
+case_law_citation_authority_sweep.scope               text         pk,not null       case-law.ts:2838
+case_law_citation_authority_sweep.cursor_decision_id  safeUuid     null              case-law.ts:2839
+case_law_citation_authority_sweep.pass_started_at     timestamptz  null              case-law.ts:2840
+case_law_citation_authority_sweep.updated_at          timestamptz  default,not null  case-law.ts:2841
 ```
 
-## case_law_citation_resolution_census_runs · `caseLawCitationResolutionCensusRuns` · case-law.ts:2858 · rls
+## case_law_citation_resolution_census_runs · `caseLawCitationResolutionCensusRuns` · case-law.ts:2865 · rls
 
 One pass of the citation-resolution census: a snapshot of the resolver's populations, taken in bounded steps.
 
 ```text
-case_law_citation_resolution_census_runs.id                         pUuid        pk,not null       case-law.ts:2861
-case_law_citation_resolution_census_runs.status                     text         not null          case-law.ts:2862
-case_law_citation_resolution_census_runs.started_at                 timestamptz  default,not null  case-law.ts:2863
-case_law_citation_resolution_census_runs.finished_at                timestamptz  null              case-law.ts:2864
-case_law_citation_resolution_census_runs.keys_scanned               integer      default,not null  case-law.ts:2866  Ambiguous keys classified so far, over every batch of the run.
-case_law_citation_resolution_census_runs.cursor_citing_decision_id  safeUuid     null              case-law.ts:2872  Where the baseline walk over precedent citations stands: the last `(citing_decision_id, id)` counted, the resolver's own keyset axis.
-case_law_citation_resolution_census_runs.cursor_citation_id         safeUuid     null              case-law.ts:2875
-case_law_citation_resolution_census_runs.cursor_key                 varchar      null              case-law.ts:2877  The last ambiguous key classified; null before the first batch.
-case_law_citation_resolution_census_runs.updated_at                 timestamptz  default,not null  case-law.ts:2878
+case_law_citation_resolution_census_runs.id                         pUuid        pk,not null       case-law.ts:2868
+case_law_citation_resolution_census_runs.status                     text         not null          case-law.ts:2869
+case_law_citation_resolution_census_runs.started_at                 timestamptz  default,not null  case-law.ts:2870
+case_law_citation_resolution_census_runs.finished_at                timestamptz  null              case-law.ts:2871
+case_law_citation_resolution_census_runs.keys_scanned               integer      default,not null  case-law.ts:2873  Ambiguous keys classified so far, over every batch of the run.
+case_law_citation_resolution_census_runs.cursor_citing_decision_id  safeUuid     null              case-law.ts:2879  Where the baseline walk over precedent citations stands: the last `(citing_decision_id, id)` counted, the resolver's own keyset axis.
+case_law_citation_resolution_census_runs.cursor_citation_id         safeUuid     null              case-law.ts:2882
+case_law_citation_resolution_census_runs.cursor_key                 varchar      null              case-law.ts:2884  The last ambiguous key classified; null before the first batch.
+case_law_citation_resolution_census_runs.updated_at                 timestamptz  default,not null  case-law.ts:2885
 ```
 
-## case_law_citation_resolution_census · `caseLawCitationResolutionCensus` · case-law.ts:2920 · rls
+## case_law_citation_resolution_census · `caseLawCitationResolutionCensus` · case-law.ts:2927 · rls
 
 One counted population of one run: precedent citations from decisions of (`country`, `court`), split by `kind` into a status, the rule that resolved them, or t…
 
 ```text
-case_law_citation_resolution_census.run_id     safeUuid  fk,not null       case-law.ts:2923
-case_law_citation_resolution_census.country    varchar   not null          case-law.ts:2924
-case_law_citation_resolution_census.court      text      not null          case-law.ts:2925
-case_law_citation_resolution_census.kind       text      not null          case-law.ts:2926
-case_law_citation_resolution_census.bucket     varchar   not null          case-law.ts:2928  A status, a rule id or a shape, as `kind` says.
-case_law_citation_resolution_census.keys       integer   default,not null  case-law.ts:2929
-case_law_citation_resolution_census.citations  integer   default,not null  case-law.ts:2930
+case_law_citation_resolution_census.run_id     safeUuid  fk,not null       case-law.ts:2930
+case_law_citation_resolution_census.country    varchar   not null          case-law.ts:2931
+case_law_citation_resolution_census.court      text      not null          case-law.ts:2932
+case_law_citation_resolution_census.kind       text      not null          case-law.ts:2933
+case_law_citation_resolution_census.bucket     varchar   not null          case-law.ts:2935  A status, a rule id or a shape, as `kind` says.
+case_law_citation_resolution_census.keys       integer   default,not null  case-law.ts:2936
+case_law_citation_resolution_census.citations  integer   default,not null  case-law.ts:2937
 ```
 
-## case_law_polarity_rules · `caseLawPolarityRules` · case-law.ts:2973 · rls
+## case_law_polarity_rules · `caseLawPolarityRules` · case-law.ts:2980 · rls
 
 ```text
-case_law_polarity_rules.id             pUuid            pk,not null       case-law.ts:2976
-case_law_polarity_rules.pattern        varchar          not null          case-law.ts:2977
-case_law_polarity_rules.polarity       varchar          not null          case-law.ts:2978
-case_law_polarity_rules.language       varchar          not null          case-law.ts:2979
-case_law_polarity_rules.source         varchar          default,not null  case-law.ts:2980
-case_law_polarity_rules.confidence     doublePrecision  default,not null  case-law.ts:2985
-case_law_polarity_rules.match_count    integer          default,not null  case-law.ts:2986
-case_law_polarity_rules.surface_forms  jsonb            default,null      case-law.ts:2987
-case_law_polarity_rules.created_at     timestamptz      default,not null  case-law.ts:2988
-case_law_polarity_rules.updated_at     timestamptz      default,not null  case-law.ts:2989
+case_law_polarity_rules.id             pUuid            pk,not null       case-law.ts:2983
+case_law_polarity_rules.pattern        varchar          not null          case-law.ts:2984
+case_law_polarity_rules.polarity       varchar          not null          case-law.ts:2985
+case_law_polarity_rules.language       varchar          not null          case-law.ts:2986
+case_law_polarity_rules.source         varchar          default,not null  case-law.ts:2987
+case_law_polarity_rules.confidence     doublePrecision  default,not null  case-law.ts:2992
+case_law_polarity_rules.match_count    integer          default,not null  case-law.ts:2993
+case_law_polarity_rules.surface_forms  jsonb            default,null      case-law.ts:2994
+case_law_polarity_rules.created_at     timestamptz      default,not null  case-law.ts:2995
+case_law_polarity_rules.updated_at     timestamptz      default,not null  case-law.ts:2996
 ```
 
-## case_law_citation_reviews · `caseLawCitationReviews` · case-law.ts:3078 · rls
+## case_law_citation_reviews · `caseLawCitationReviews` · case-law.ts:3085 · rls
 
 A reviewed polarity for one citation of one decision.
 
 ```text
-case_law_citation_reviews.id                                      pUuid     pk,not null  case-law.ts:3081
-case_law_citation_reviews.citing_decision_id                      safeUuid  fk,not null  case-law.ts:3082
-case_law_citation_reviews.citation_key                            varchar   not null     case-law.ts:3085  Same key as `case_law_citations.citation_key`.
-case_law_citation_reviews.polarity                                varchar   not null     case-law.ts:3086
-case_law_citation_reviews.{...citationReviewProvenanceColumns()}  spread                 case-law.ts:3090
+case_law_citation_reviews.id                                      pUuid     pk,not null  case-law.ts:3088
+case_law_citation_reviews.citing_decision_id                      safeUuid  fk,not null  case-law.ts:3089
+case_law_citation_reviews.citation_key                            varchar   not null     case-law.ts:3092  Same key as `case_law_citations.citation_key`.
+case_law_citation_reviews.polarity                                varchar   not null     case-law.ts:3093
+case_law_citation_reviews.{...citationReviewProvenanceColumns()}  spread                 case-law.ts:3097
 ```
 
-## case_law_citation_doctrine_reviews · `caseLawCitationDoctrineReviews` · case-law.ts:3117 · rls
+## case_law_citation_doctrine_reviews · `caseLawCitationDoctrineReviews` · case-law.ts:3124 · rls
 
 Reviewed doctrine keyed to survive citation refreshes.
 
 ```text
-case_law_citation_doctrine_reviews.id                                      pUuid     pk,not null  case-law.ts:3120
-case_law_citation_doctrine_reviews.citing_decision_id                      safeUuid  fk,not null  case-law.ts:3121
-case_law_citation_doctrine_reviews.citation_key                            varchar   not null     case-law.ts:3124  Same key as `case_law_citations.citation_key`.
-case_law_citation_doctrine_reviews.doctrinal_treatment                     varchar   not null     case-law.ts:3125
-case_law_citation_doctrine_reviews.evidence_quote                          text      null         case-law.ts:3132  Verbatim passage supporting a distinguishes or limits finding.
-case_law_citation_doctrine_reviews.{...citationReviewProvenanceColumns()}  spread                 case-law.ts:3133
+case_law_citation_doctrine_reviews.id                                      pUuid     pk,not null  case-law.ts:3127
+case_law_citation_doctrine_reviews.citing_decision_id                      safeUuid  fk,not null  case-law.ts:3128
+case_law_citation_doctrine_reviews.citation_key                            varchar   not null     case-law.ts:3131  Same key as `case_law_citations.citation_key`.
+case_law_citation_doctrine_reviews.doctrinal_treatment                     varchar   not null     case-law.ts:3132
+case_law_citation_doctrine_reviews.evidence_quote                          text      null         case-law.ts:3139  Verbatim passage supporting a distinguishes or limits finding.
+case_law_citation_doctrine_reviews.{...citationReviewProvenanceColumns()}  spread                 case-law.ts:3140
 ```
 
-## case_law_matter_links · `caseLawMatterLinks` · case-law.ts:3174
+## case_law_matter_links · `caseLawMatterLinks` · case-law.ts:3181
 
 --------------------------------------------------------------------------- Case Law — Tenant-scoped tables ---------------------------------------------------…
 
 ```text
-case_law_matter_links.id            pUuid            pk,not null       case-law.ts:3177
-case_law_matter_links.decision_id   safeUuid         fk,not null       case-law.ts:3178
-case_law_matter_links.workspace_id  safeWorkspaceId  fk,not null       case-law.ts:3181
-case_law_matter_links.note          text             null              case-law.ts:3184
-case_law_matter_links.linked_by     text             fk,not null       case-law.ts:3185
-case_law_matter_links.created_at    timestamptz      default,not null  case-law.ts:3189
+case_law_matter_links.id            pUuid            pk,not null       case-law.ts:3184
+case_law_matter_links.decision_id   safeUuid         fk,not null       case-law.ts:3185
+case_law_matter_links.workspace_id  safeWorkspaceId  fk,not null       case-law.ts:3188
+case_law_matter_links.note          text             null              case-law.ts:3191
+case_law_matter_links.linked_by     text             fk,not null       case-law.ts:3192
+case_law_matter_links.created_at    timestamptz      default,not null  case-law.ts:3196
 ```
 
-## case_law_research_columns · `caseLawResearchColumns` · case-law.ts:3222 · rls
+## case_law_research_columns · `caseLawResearchColumns` · case-law.ts:3229 · rls
 
 One question the organization asks of every decision it looks at.
 
 ```text
-case_law_research_columns.id               pUuid               pk,not null       case-law.ts:3225
-case_law_research_columns.organization_id  safeOrganizationId  not null          case-law.ts:3226
-case_law_research_columns.created_by       text                fk,null           case-law.ts:3228  Who asked the question; every member of the organization sees it.
-case_law_research_columns.position         integer             not null          case-law.ts:3229
-case_law_research_columns.question         varchar             not null          case-law.ts:3230
-case_law_research_columns.content          jsonb               not null          case-law.ts:3231
-case_law_research_columns.tool             jsonb               not null          case-law.ts:3232
-case_law_research_columns.created_at       timestamptz         default,not null  case-law.ts:3233
-case_law_research_columns.updated_at       timestamptz         default,not null  case-law.ts:3234
+case_law_research_columns.id               pUuid               pk,not null       case-law.ts:3232
+case_law_research_columns.organization_id  safeOrganizationId  not null          case-law.ts:3233
+case_law_research_columns.created_by       text                fk,null           case-law.ts:3235  Who asked the question; every member of the organization sees it.
+case_law_research_columns.position         integer             not null          case-law.ts:3236
+case_law_research_columns.question         varchar             not null          case-law.ts:3237
+case_law_research_columns.content          jsonb               not null          case-law.ts:3238
+case_law_research_columns.tool             jsonb               not null          case-law.ts:3239
+case_law_research_columns.created_at       timestamptz         default,not null  case-law.ts:3240
+case_law_research_columns.updated_at       timestamptz         default,not null  case-law.ts:3241
 ```
 
-## case_law_research_answers · `caseLawResearchAnswers` · case-law.ts:3268 · rls
+## case_law_research_answers · `caseLawResearchAnswers` · case-law.ts:3275 · rls
 
 One cell: a column's answer for one decision.
 
 ```text
-case_law_research_answers.column_id        safeUuid            fk,not null       case-law.ts:3271
-case_law_research_answers.organization_id  safeOrganizationId  fk,not null       case-law.ts:3272
-case_law_research_answers.decision_id      safeUuid            not null          case-law.ts:3273
-case_law_research_answers.state            text                not null          case-law.ts:3274
-case_law_research_answers.claim_id         safeUuid            null              case-law.ts:3281  Which run owns this cell while it is `pending`.
-case_law_research_answers.answer           jsonb               null              case-law.ts:3283  The same content a workspace field holds, in the column's kind.
-case_law_research_answers.run              jsonb               null              case-law.ts:3284
-case_law_research_answers.failure_reason   varchar             null              case-law.ts:3286  A short reason class for `failed`; never the provider's message.
-case_law_research_answers.created_at       timestamptz         default,not null  case-law.ts:3290
-case_law_research_answers.updated_at       timestamptz         default,not null  case-law.ts:3291
+case_law_research_answers.column_id        safeUuid            fk,not null       case-law.ts:3278
+case_law_research_answers.organization_id  safeOrganizationId  fk,not null       case-law.ts:3279
+case_law_research_answers.decision_id      safeUuid            not null          case-law.ts:3280
+case_law_research_answers.state            text                not null          case-law.ts:3281
+case_law_research_answers.claim_id         safeUuid            null              case-law.ts:3288  Which run owns this cell while it is `pending`.
+case_law_research_answers.answer           jsonb               null              case-law.ts:3290  The same content a workspace field holds, in the column's kind.
+case_law_research_answers.run              jsonb               null              case-law.ts:3291
+case_law_research_answers.failure_reason   varchar             null              case-law.ts:3293  A short reason class for `failed`; never the provider's message.
+case_law_research_answers.created_at       timestamptz         default,not null  case-law.ts:3297
+case_law_research_answers.updated_at       timestamptz         default,not null  case-law.ts:3298
 ```
 
-## case_law_court_weights · `caseLawCourtWeights` · case-law.ts:3335 · rls
+## case_law_court_weights · `caseLawCourtWeights` · case-law.ts:3342 · rls
 
 --------------------------------------------------------------------------- Case Law — Search index (global, no tenant column) --------------------------------…
 
 ```text
-case_law_court_weights.id             pUuid            pk,default,not null  case-law.ts:3340  Seed migrations draw ids from gen_random_uuid(); see 20261004120000_case_law_court_weight_id_default.
-case_law_court_weights.country        varchar          not null             case-law.ts:3343
-case_law_court_weights.court_pattern  varchar          not null             case-law.ts:3344
-case_law_court_weights.tier           integer          not null             case-law.ts:3345
-case_law_court_weights.tier_label     varchar          not null             case-law.ts:3346
-case_law_court_weights.weight         doublePrecision  not null             case-law.ts:3347
-case_law_court_weights.created_at     timestamptz      default,not null     case-law.ts:3348
+case_law_court_weights.id             pUuid            pk,default,not null  case-law.ts:3347  Seed migrations draw ids from gen_random_uuid(); see 20261004120000_case_law_court_weight_id_default.
+case_law_court_weights.country        varchar          not null             case-law.ts:3350
+case_law_court_weights.court_pattern  varchar          not null             case-law.ts:3351
+case_law_court_weights.tier           integer          not null             case-law.ts:3352
+case_law_court_weights.tier_label     varchar          not null             case-law.ts:3353
+case_law_court_weights.weight         doublePrecision  not null             case-law.ts:3354
+case_law_court_weights.created_at     timestamptz      default,not null     case-law.ts:3355
 ```
 
-## case_law_court_directory_ranks · `caseLawCourtDirectoryRanks` · case-law.ts:3361 · rls
+## case_law_court_directory_ranks · `caseLawCourtDirectoryRanks` · case-law.ts:3368 · rls
 
 ```text
-case_law_court_directory_ranks.country   text      not null  case-law.ts:3364
-case_law_court_directory_ranks.court_id  text      not null  case-law.ts:3365
-case_law_court_directory_ranks.tier      smallint  not null  case-law.ts:3366
-case_law_court_directory_ranks.weight    smallint  not null  case-law.ts:3367
+case_law_court_directory_ranks.country   text      not null  case-law.ts:3371
+case_law_court_directory_ranks.court_id  text      not null  case-law.ts:3372
+case_law_court_directory_ranks.tier      smallint  not null  case-law.ts:3373
+case_law_court_directory_ranks.weight    smallint  not null  case-law.ts:3374
 ```
 
-## case_law_fts_configs · `caseLawFtsConfigs` · case-law.ts:3387 · rls
+## case_law_fts_configs · `caseLawFtsConfigs` · case-law.ts:3394 · rls
 
 ```text
-case_law_fts_configs.language      varchar  pk,not null       case-law.ts:3390
-case_law_fts_configs.regconfig     varchar  not null          case-law.ts:3391
-case_law_fts_configs.use_unaccent  boolean  default,not null  case-law.ts:3392
+case_law_fts_configs.language      varchar  pk,not null       case-law.ts:3397
+case_law_fts_configs.regconfig     varchar  not null          case-law.ts:3398
+case_law_fts_configs.use_unaccent  boolean  default,not null  case-law.ts:3399
 ```
 
-## case_law_search_documents · `caseLawSearchDocuments` · case-law.ts:3397 · rls
+## case_law_search_documents · `caseLawSearchDocuments` · case-law.ts:3404 · rls
 
 ```text
-case_law_search_documents.decision_id         safeUuid     pk,fk,not null    case-law.ts:3400
-case_law_search_documents.title               text         default,not null  case-law.ts:3405
-case_law_search_documents.searchable_text     text         default,not null  case-law.ts:3406
-case_law_search_documents.language            varchar      null              case-law.ts:3407
-case_law_search_documents.regconfig           varchar      default,not null  case-law.ts:3408
-case_law_search_documents.preview_generation  uuid         null              case-law.ts:3409
-case_law_search_documents.tsv                 tsvector     null              case-law.ts:3410
-case_law_search_documents.updated_at          timestamptz  default,not null  case-law.ts:3411
+case_law_search_documents.decision_id         safeUuid     pk,fk,not null    case-law.ts:3407
+case_law_search_documents.title               text         default,not null  case-law.ts:3412
+case_law_search_documents.searchable_text     text         default,not null  case-law.ts:3413
+case_law_search_documents.language            varchar      null              case-law.ts:3414
+case_law_search_documents.regconfig           varchar      default,not null  case-law.ts:3415
+case_law_search_documents.preview_generation  uuid         null              case-law.ts:3416
+case_law_search_documents.tsv                 tsvector     null              case-law.ts:3417
+case_law_search_documents.updated_at          timestamptz  default,not null  case-law.ts:3418
 ```
 
-## case_law_search_backfill_failures · `caseLawSearchBackfillFailures` · case-law.ts:3430 · rls
+## case_law_search_backfill_failures · `caseLawSearchBackfillFailures` · case-law.ts:3437 · rls
 
 ```text
-case_law_search_backfill_failures.decision_id        safeUuid     pk,fk,not null  case-law.ts:3433
-case_law_search_backfill_failures.source_updated_at  timestamptz  not null        case-law.ts:3434
-case_law_search_backfill_failures.attempt_count      integer      not null        case-law.ts:3435
-case_law_search_backfill_failures.last_error_class   varchar      not null        case-law.ts:3436
-case_law_search_backfill_failures.status             varchar      not null        case-law.ts:3437
-case_law_search_backfill_failures.next_eligible_at   timestamptz  null            case-law.ts:3440
-case_law_search_backfill_failures.last_failed_at     timestamptz  not null        case-law.ts:3441
+case_law_search_backfill_failures.decision_id        safeUuid     pk,fk,not null  case-law.ts:3440
+case_law_search_backfill_failures.source_updated_at  timestamptz  not null        case-law.ts:3441
+case_law_search_backfill_failures.attempt_count      integer      not null        case-law.ts:3442
+case_law_search_backfill_failures.last_error_class   varchar      not null        case-law.ts:3443
+case_law_search_backfill_failures.status             varchar      not null        case-law.ts:3444
+case_law_search_backfill_failures.next_eligible_at   timestamptz  null            case-law.ts:3447
+case_law_search_backfill_failures.last_failed_at     timestamptz  not null        case-law.ts:3448
 ```
 
-## case_law_analysis_failures · `caseLawAnalysisFailures` · case-law.ts:3486 · rls
+## case_law_analysis_failures · `caseLawAnalysisFailures` · case-law.ts:3493 · rls
 
 How a reader's last analysis run of a decision failed, one row per decision and reader key.
 
 ```text
-case_law_analysis_failures.decision_id          safeUuid     fk,not null  case-law.ts:3489
-case_law_analysis_failures.key_tag              text         not null     case-law.ts:3490
-case_law_analysis_failures.input_fingerprint    text         not null     case-law.ts:3491
-case_law_analysis_failures.code                 text         not null     case-law.ts:3492
-case_law_analysis_failures.key_source           text         not null     case-law.ts:3493
-case_law_analysis_failures.provider             text         null         case-law.ts:3496
-case_law_analysis_failures.provider_diagnostic  jsonb        null         case-law.ts:3498  Redacted provider reason, visible only to the organization whose run failed.
-case_law_analysis_failures.recorded_at          timestamptz  not null     case-law.ts:3501
-case_law_analysis_failures.retry_after          timestamptz  null         case-law.ts:3503  Time the provider asked not to be called before; no run starts until then.
+case_law_analysis_failures.decision_id          safeUuid     fk,not null  case-law.ts:3496
+case_law_analysis_failures.key_tag              text         not null     case-law.ts:3497
+case_law_analysis_failures.input_fingerprint    text         not null     case-law.ts:3498
+case_law_analysis_failures.code                 text         not null     case-law.ts:3499
+case_law_analysis_failures.key_source           text         not null     case-law.ts:3500
+case_law_analysis_failures.provider             text         null         case-law.ts:3503
+case_law_analysis_failures.provider_diagnostic  jsonb        null         case-law.ts:3505  Redacted provider reason, visible only to the organization whose run failed.
+case_law_analysis_failures.recorded_at          timestamptz  not null     case-law.ts:3508
+case_law_analysis_failures.retry_after          timestamptz  null         case-law.ts:3510  Time the provider asked not to be called before; no run starts until then.
 ```
 
-## case_law_search_document_preview_passages · `caseLawSearchDocumentPreviewPassages` · case-law.ts:3535 · rls
+## case_law_search_document_preview_passages · `caseLawSearchDocumentPreviewPassages` · case-law.ts:3542 · rls
 
 ```text
-case_law_search_document_preview_passages.decision_id  safeUuid  fk,not null  case-law.ts:3538
-case_law_search_document_preview_passages.generation   uuid      not null     case-law.ts:3543
-case_law_search_document_preview_passages.ordinal      integer   not null     case-law.ts:3544
-case_law_search_document_preview_passages.content      text      not null     case-law.ts:3545
-case_law_search_document_preview_passages.tsv          tsvector  not null     case-law.ts:3546
+case_law_search_document_preview_passages.decision_id  safeUuid  fk,not null  case-law.ts:3545
+case_law_search_document_preview_passages.generation   uuid      not null     case-law.ts:3550
+case_law_search_document_preview_passages.ordinal      integer   not null     case-law.ts:3551
+case_law_search_document_preview_passages.content      text      not null     case-law.ts:3552
+case_law_search_document_preview_passages.tsv          tsvector  not null     case-law.ts:3553
 ```
 
-## case_law_ingestion_events · `caseLawIngestionEvents` · case-law.ts:3565 · rls
+## case_law_ingestion_events · `caseLawIngestionEvents` · case-law.ts:3572 · rls
 
 --------------------------------------------------------------------------- Case Law — Ingestion observability ------------------------------------------------…
 
 ```text
-case_law_ingestion_events.id                      pUuid        pk,not null       case-law.ts:3568
-case_law_ingestion_events.source_id               safeUuid     fk,not null       case-law.ts:3569
-case_law_ingestion_events.status                  varchar      not null          case-law.ts:3572
-case_law_ingestion_events.inserted                integer      default,not null  case-law.ts:3573
-case_law_ingestion_events.skipped                 integer      default,not null  case-law.ts:3574
-case_law_ingestion_events.search_vector_failures  integer      default,not null  case-law.ts:3575
-case_law_ingestion_events.pages_processed         integer      default,not null  case-law.ts:3579
-case_law_ingestion_events.cursor_before           text         null              case-law.ts:3580
-case_law_ingestion_events.cursor_after            text         null              case-law.ts:3581
-case_law_ingestion_events.duration_ms             integer      not null          case-law.ts:3582
-case_law_ingestion_events.error_message           varchar      null              case-law.ts:3583
-case_law_ingestion_events.started_at              timestamptz  not null          case-law.ts:3584
-case_law_ingestion_events.finished_at             timestamptz  default,not null  case-law.ts:3585
+case_law_ingestion_events.id                      pUuid        pk,not null       case-law.ts:3575
+case_law_ingestion_events.source_id               safeUuid     fk,not null       case-law.ts:3576
+case_law_ingestion_events.status                  varchar      not null          case-law.ts:3579
+case_law_ingestion_events.inserted                integer      default,not null  case-law.ts:3580
+case_law_ingestion_events.skipped                 integer      default,not null  case-law.ts:3581
+case_law_ingestion_events.search_vector_failures  integer      default,not null  case-law.ts:3582
+case_law_ingestion_events.pages_processed         integer      default,not null  case-law.ts:3586
+case_law_ingestion_events.cursor_before           text         null              case-law.ts:3587
+case_law_ingestion_events.cursor_after            text         null              case-law.ts:3588
+case_law_ingestion_events.duration_ms             integer      not null          case-law.ts:3589
+case_law_ingestion_events.error_message           varchar      null              case-law.ts:3590
+case_law_ingestion_events.started_at              timestamptz  not null          case-law.ts:3591
+case_law_ingestion_events.finished_at             timestamptz  default,not null  case-law.ts:3592
 ```
 
-## case_law_ingestion_failures · `caseLawIngestionFailures` · case-law.ts:3597 · rls
+## case_law_ingestion_failures · `caseLawIngestionFailures` · case-law.ts:3604 · rls
 
 ```text
-case_law_ingestion_failures.id               pUuid        pk,not null       case-law.ts:3600
-case_law_ingestion_failures.source_id        safeUuid     fk,not null       case-law.ts:3601
-case_law_ingestion_failures.case_number      varchar      not null          case-law.ts:3604
-case_law_ingestion_failures.language         varchar      null              case-law.ts:3605
-case_law_ingestion_failures.error_type       varchar      not null          case-law.ts:3606
-case_law_ingestion_failures.error_message    varchar      not null          case-law.ts:3607
-case_law_ingestion_failures.cursor           text         null              case-law.ts:3608
-case_law_ingestion_failures.record_identity  varchar      null              case-law.ts:3613  The failing record's stable identity where its caller names one; a record written again with the same identity keeps its one row.
-case_law_ingestion_failures.created_at       timestamptz  default,not null  case-law.ts:3614
+case_law_ingestion_failures.id               pUuid        pk,not null       case-law.ts:3607
+case_law_ingestion_failures.source_id        safeUuid     fk,not null       case-law.ts:3608
+case_law_ingestion_failures.case_number      varchar      not null          case-law.ts:3611
+case_law_ingestion_failures.language         varchar      null              case-law.ts:3612
+case_law_ingestion_failures.error_type       varchar      not null          case-law.ts:3613
+case_law_ingestion_failures.error_message    varchar      not null          case-law.ts:3614
+case_law_ingestion_failures.cursor           text         null              case-law.ts:3615
+case_law_ingestion_failures.record_identity  varchar      null              case-law.ts:3620  The failing record's stable identity where its caller names one; a record written again with the same identity keeps its one row.
+case_law_ingestion_failures.created_at       timestamptz  default,not null  case-law.ts:3621
 ```
 
-## case_law_index_jobs · `caseLawIndexJobs` · case-law.ts:3635 · rls
+## case_law_index_jobs · `caseLawIndexJobs` · case-law.ts:3642 · rls
 
 Append-only audit trail for search-index mutations across the object-store + corpus index boundary.
 
 ```text
-case_law_index_jobs.id             pUuid        pk,not null       case-law.ts:3638
-case_law_index_jobs.decision_id    safeUuid     fk,null           case-law.ts:3639
-case_law_index_jobs.generation     varchar      null              case-law.ts:3648  The generation an operation targeted, where it targeted one.
-case_law_index_jobs.operation      varchar      not null          case-law.ts:3649
-case_law_index_jobs.status         varchar      not null          case-law.ts:3653
-case_law_index_jobs.content_hash   varchar      null              case-law.ts:3654
-case_law_index_jobs.error_message  varchar      null              case-law.ts:3655
-case_law_index_jobs.detail         varchar      null              case-law.ts:3662  Why a succeeded operation was performed, in the caller's own words.
-case_law_index_jobs.created_at     timestamptz  default,not null  case-law.ts:3663
+case_law_index_jobs.id             pUuid        pk,not null       case-law.ts:3645
+case_law_index_jobs.decision_id    safeUuid     fk,null           case-law.ts:3646
+case_law_index_jobs.generation     varchar      null              case-law.ts:3655  The generation an operation targeted, where it targeted one.
+case_law_index_jobs.operation      varchar      not null          case-law.ts:3656
+case_law_index_jobs.status         varchar      not null          case-law.ts:3660
+case_law_index_jobs.content_hash   varchar      null              case-law.ts:3661
+case_law_index_jobs.error_message  varchar      null              case-law.ts:3662
+case_law_index_jobs.detail         varchar      null              case-law.ts:3669  Why a succeeded operation was performed, in the caller's own words.
+case_law_index_jobs.created_at     timestamptz  default,not null  case-law.ts:3670
 ```
 
-## case_law_decision_citation_stats · `caseLawDecisionCitationStats` · case-law.ts:3703 · rls
+## case_law_decision_citation_stats · `caseLawDecisionCitationStats` · case-law.ts:3710 · rls
 
 Aggregates retain the far source and country so read policy changes are immediate.
 
 ```text
-case_law_decision_citation_stats.decision_id        safeUuid  fk,not null  case-law.ts:3706
-case_law_decision_citation_stats.direction          text      not null     case-law.ts:3707
-case_law_decision_citation_stats.related_year       integer   not null     case-law.ts:3708
-case_law_decision_citation_stats.related_country    varchar   null         case-law.ts:3709
-case_law_decision_citation_stats.related_source_id  uuid      null         case-law.ts:3710
-case_law_decision_citation_stats.polarity           varchar   not null     case-law.ts:3711
-case_law_decision_citation_stats.count              bigint    not null     case-law.ts:3712
+case_law_decision_citation_stats.decision_id        safeUuid  fk,not null  case-law.ts:3713
+case_law_decision_citation_stats.direction          text      not null     case-law.ts:3714
+case_law_decision_citation_stats.related_year       integer   not null     case-law.ts:3715
+case_law_decision_citation_stats.related_country    varchar   null         case-law.ts:3716
+case_law_decision_citation_stats.related_source_id  uuid      null         case-law.ts:3717
+case_law_decision_citation_stats.polarity           varchar   not null     case-law.ts:3718
+case_law_decision_citation_stats.count              bigint    not null     case-law.ts:3719
 ```
 
-## case_law_decision_citation_stats_state · `caseLawDecisionCitationStatsState` · case-law.ts:3772 · rls
+## case_law_decision_citation_stats_state · `caseLawDecisionCitationStatsState` · case-law.ts:3779 · rls
 
 Missing state means pending; an empty exact projection is a truthful zero.
 
 ```text
-case_law_decision_citation_stats_state.decision_id  safeUuid  pk,fk,not null    case-law.ts:3775
-case_law_decision_citation_stats_state.status       text      default,not null  case-law.ts:3776
+case_law_decision_citation_stats_state.decision_id  safeUuid  pk,fk,not null    case-law.ts:3782
+case_law_decision_citation_stats_state.status       text      default,not null  case-law.ts:3783
 ```
