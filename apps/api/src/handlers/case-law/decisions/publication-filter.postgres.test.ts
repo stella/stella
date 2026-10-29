@@ -148,6 +148,7 @@ if (!databaseUrl || !runPostgresTests) {
             languageGroupKey: LANGUAGE_GROUP,
             metadata: {},
             redactedAt: NOW,
+            textState: null,
             createdAt: new Date("2026-10-11T08:00:00.000Z"),
             updatedAt: new Date("2026-10-12T10:00:00.000Z"),
             decisionDate: "2026-10-10",
@@ -419,6 +420,7 @@ if (!databaseUrl || !runPostgresTests) {
             visibility: false,
             metadata: {},
             redactedAt: NOW,
+            textState: null,
           },
           {
             kind: "listing-only-and-erased",
@@ -427,6 +429,7 @@ if (!databaseUrl || !runPostgresTests) {
               _stellaPartialObservation: { isListingOnly: true },
             },
             redactedAt: NOW,
+            textState: null,
           },
         ] as const;
         const rows = states.map((state) => ({
@@ -438,6 +441,7 @@ if (!databaseUrl || !runPostgresTests) {
           language: "cs",
           metadata: state.metadata,
           redactedAt: state.redactedAt,
+          textState: state.redactedAt === null ? undefined : null,
         }));
         await tx.insert(caseLawDecisions).values(rows);
 

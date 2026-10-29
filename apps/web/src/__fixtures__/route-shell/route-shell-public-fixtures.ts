@@ -45,6 +45,7 @@ const decision = {
   hasDocument: true,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   documentUrl: null,
   ecli: null,

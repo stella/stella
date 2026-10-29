@@ -1237,6 +1237,12 @@
       "oldestUnavailable": "Vyhľadávanie radí výsledky podľa relevantnosti alebo od najnovších. Ak chcete zobraziť najskôr najstaršie rozhodnutia, vymažte vyhľadávanie.",
       "relevance": "Najrelevantnejšie"
     },
+    "textState": {
+      "textFetchFailed": "Načítanie textu zlyhalo",
+      "textMetadataOnlySource": "Zdroj poskytuje iba metadáta",
+      "textNotPublished": "Text nebol zverejnený",
+      "textPending": "Text čaká na načítanie"
+    },
     "viewer": {
       "abstract": "Abstrakt",
       "appliedVersionNotStated": "Použité znenie neuvedené",

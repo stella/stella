@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
+import { caseLawTextStatusSchema } from "@stll/api-contract/case-law-fulltext-state";
 import {
   DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_AVAILABILITY,
@@ -113,6 +114,7 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  textState: v.nullable(caseLawTextStatusSchema),
   textAvailability: v.picklist(Object.values(DECISION_TEXT_AVAILABILITY)),
   // Whether the decision holds every word of the query, or only some of them
   // (appended after the others when few decisions held every word).

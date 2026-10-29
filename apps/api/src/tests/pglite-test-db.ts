@@ -30,6 +30,7 @@ import {
   installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawCountryShape,
   installPgliteCaseLawCoverageSummary,
+  installPgliteCaseLawFulltextStateGuard,
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
   installPgliteCaseLawSitemapChanges,
@@ -855,6 +856,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
+  await installPgliteCaseLawFulltextStateGuard(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPgliteCaseLawSitemapChanges(db);
   await installPglitePdfSigningTokenScopes(db);

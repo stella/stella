@@ -54,6 +54,7 @@ const UNPUBLISHED_DECISION = {
   hasDocument: false,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   documentUrl: null,
   ecli: null,

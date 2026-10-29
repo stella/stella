@@ -3,6 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   hasUsableAst,
@@ -56,6 +58,10 @@ import {
   corpusCarriesDocument,
   publicRowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
+import {
+  decisionTextAvailability,
+  decisionTextStateStatusColumn,
+} from "@/api/lib/case-law/text-state-projection";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
@@ -359,6 +365,7 @@ export const decisionRecordQuery = (
       metadata: publishedCaseLawDecisions.metadata,
       createdAt: publishedCaseLawDecisions.createdAt,
       updatedAt: publishedCaseLawDecisions.updatedAt,
+      textState: decisionTextStateStatusColumn(publishedCaseLawDecisions),
       versionTimestamp: pgTimestampCursorValue(
         publishedCaseLawDecisions.updatedAt,
       ),
@@ -603,8 +610,17 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     });
 
     return {
-      documentPending,
-      hasDocument: decision.hasDocument,
+      documentPending:
+        decision.textState === CASE_LAW_TEXT_STATUS.PUBLISHER_HAS_NO_TEXT ||
+        decision.textState === CASE_LAW_TEXT_STATUS.METADATA_ONLY_BY_SOURCE
+          ? false
+          : documentPending,
+      textState: decision.textState,
+      hasDocument:
+        astIsUsable ||
+        Boolean(fulltext) ||
+        decisionTextAvailability(decision.textState, decision.hasDocument) ===
+          DECISION_TEXT_AVAILABILITY.AVAILABLE,
       documentReadFailed,
       documentUnavailable,
       id: decision.id,

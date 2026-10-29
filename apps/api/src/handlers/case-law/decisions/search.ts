@@ -8,7 +8,6 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import {
   type DecisionQueryIntent,
   parseDecisionQuery,
@@ -164,6 +163,11 @@ import {
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
 import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import {
+  decisionTextAvailability,
+  decisionTextStateStatusColumn,
+  readDecisionTextStateStatus,
+} from "@/api/lib/case-law/text-state-projection";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -673,6 +677,7 @@ export const caseLawSearchPlan = ({
       d.decision_date,
       d.decision_type,
       d.source_url,
+      d.text_state ->> 'status' AS text_state_status,
       ${publicRowHoldsDocumentFor(alias(publishedCaseLawDecisions, "d"))} AS has_document,
       coalesce((src.descriptor ->> 'allowsDerivedAi')::boolean, true) AS allows_derived_ai,
       ${publisherHeadnoteMetadataSql(sql.raw("d.metadata"))} AS headnote,
@@ -971,6 +976,7 @@ const presentPostgresSearchPage = async ({
     const caseNumberType = primaryReferenceTypeFromStored(
       row["case_number_type"],
     );
+    const textState = readDecisionTextStateStatus(row["text_state_status"]);
     return {
       decisionId: String(row["decision_id"]),
       caseNumber: String(row["case_number"]),
@@ -991,9 +997,11 @@ const presentPostgresSearchPage = async ({
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
-      textAvailability: readSearchDocumentPresence(row["has_document"])
-        ? DECISION_TEXT_AVAILABILITY.AVAILABLE
-        : DECISION_TEXT_AVAILABILITY.METADATA_ONLY,
+      textState,
+      textAvailability: decisionTextAvailability(
+        textState,
+        readSearchDocumentPresence(row["has_document"]),
+      ),
       textWithheldReason: decisionTextWithheldReason({
         allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
       }),
@@ -1683,6 +1691,9 @@ export const pageDecisionRowsStatement = (
   const eligibleRows = tx
     .select({
       ...columns,
+      textState: decisionTextStateStatusColumn(publishedCaseLawDecisions).as(
+        "text_state_status",
+      ),
       hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions).as(
         "has_document",
       ),
@@ -2212,9 +2223,11 @@ export const decisionHitsPage = ({
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
-        textAvailability: row.hasDocument
-          ? DECISION_TEXT_AVAILABILITY.AVAILABLE
-          : DECISION_TEXT_AVAILABILITY.METADATA_ONLY,
+        textState: row.textState,
+        textAvailability: decisionTextAvailability(
+          row.textState,
+          row.hasDocument,
+        ),
         textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
         keywords: readDecisionKeywords(row.keywords),
         headnote: readDecisionHeadnote({

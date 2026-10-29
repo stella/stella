@@ -29,6 +29,7 @@ const decision = {
   documentAstSource: null,
   projectionDigest: null,
   hasDocument: true,
+  textState: null,
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,

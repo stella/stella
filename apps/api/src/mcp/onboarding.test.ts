@@ -539,6 +539,7 @@ describe("empty-result onboarding next step", () => {
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
           textAvailability: "available",
+          textState: null,
           matchingPassages: 1,
           match: "all_terms",
           sourceUrl: "https://example.test",

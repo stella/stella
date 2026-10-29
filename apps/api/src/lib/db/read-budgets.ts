@@ -45,7 +45,7 @@ export const READ_BUDGETS = {
     surface: "scheduled-job",
     pages: 12_500,
     reason:
-      "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation and three single-row queue probes. The run reads the same pages whatever the generation's size.",
+      "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation, three single-row queue probes and two eligible full-text partial-index probes per registered source (one missing-state row and at most failedThreshold + 1 failed rows). Both walks stay bounded as their corpora grow.",
   },
   "scheduled.caseLaw.refreshSitemapShards": {
     surface: "scheduled-job",

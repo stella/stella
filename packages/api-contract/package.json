@@ -74,6 +74,8 @@
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-answer-completeness": "./src/case-law-answer-completeness.ts",
+    "./case-law-text-status": "./src/case-law-text-status.ts",
+    "./case-law-fulltext-state": "./src/case-law-fulltext-state.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
     "./decision-document-role": "./src/decision-document-role.ts",
     "./decision-paragraph-range": "./src/decision-paragraph-range.ts",

@@ -421,6 +421,11 @@ const readFailureError = ({
         url,
         message: `${label}: body over ${cause.maxBytes} bytes`,
       });
+    case "parser-refusal":
+      return new FetchBoundaryError({
+        url,
+        message: `${label}: parser refused ${cause.code}`,
+      });
     default:
       cause satisfies never;
       return panic(`Unhandled read cause: ${String(cause)}`);

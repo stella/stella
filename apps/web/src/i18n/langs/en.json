@@ -1237,6 +1237,12 @@
       "oldestUnavailable": "A search is ordered by relevance or newest first. Clear the search to list the oldest decisions first.",
       "relevance": "Most relevant"
     },
+    "textState": {
+      "textFetchFailed": "Text retrieval failed",
+      "textMetadataOnlySource": "Metadata-only source",
+      "textNotPublished": "No text published",
+      "textPending": "Text pending"
+    },
     "viewer": {
       "abstract": "Abstract",
       "appliedVersionNotStated": "Applied version not stated",

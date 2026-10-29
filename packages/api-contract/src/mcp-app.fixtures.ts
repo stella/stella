@@ -50,6 +50,7 @@ export const APP_SEARCH_FIXTURE = {
       language: "cs",
       matchedQueries: [0],
       matchingPassages: 1,
+      textState: null,
       textAvailability: "available" as const,
       match: "all_terms" as const,
       sourceUrl: "https://example.test/decision",
@@ -74,6 +75,7 @@ export const APP_RESOLVE_FIXTURE = {
   status: "resolved" as const,
   document: {
     kind: "decision" as const,
+    textState: null,
     decisionId: "00000000-0000-4000-8000-0000000d0041",
     identifier: "ECLI:CZ:US:2024:1.US.123.24.1",
     country: "CZE",
@@ -97,6 +99,7 @@ export const APP_RESOLVE_STATUS_FIXTURES = [
     status: "ambiguous" as const,
     candidates: [
       {
+        textState: null,
         decisionId: APP_RESOLVE_FIXTURE.document.decisionId,
         identifier: "I. ÚS 123/24",
         label: "Ústavní soud, 2024-04-15",

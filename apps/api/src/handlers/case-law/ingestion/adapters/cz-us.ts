@@ -1,3 +1,4 @@
+// parser-output-unchanged: Exhaustively classify the new parser-refusal error without changing a successfully parsed NALUS record.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
@@ -2194,6 +2195,10 @@ const unreadNalusFailure = ({
       return new NalusResponseError({
         message: `NALUS ${subject} body exceeded ${cause.maxBytes} bytes`,
       });
+    case "parser-refusal":
+      return new NalusResponseError({
+        message: `NALUS ${subject} parser refused ${cause.code}`,
+      });
     default:
       cause satisfies never;
       return panic(`Unhandled NALUS read failure: ${String(cause)}`);
@@ -2235,7 +2240,11 @@ export const fetchNalusRecordCard = async (
       }
       return {
         type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
-        status: read.cause.kind === "too-large" ? null : read.cause.status,
+        status:
+          read.cause.kind === "too-large" ||
+          read.cause.kind === "parser-refusal"
+            ? null
+            : read.cause.status,
       };
     default:
       read satisfies never;
@@ -2543,7 +2552,10 @@ const fetchListedDecision = async (
             : {
                 type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
                 status:
-                  card.cause.kind === "too-large" ? null : card.cause.status,
+                  card.cause.kind === "too-large" ||
+                  card.cause.kind === "parser-refusal"
+                    ? null
+                    : card.cause.status,
               };
         unreadPart = storedPartReadOutcome(card);
         break;

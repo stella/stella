@@ -1,3 +1,4 @@
+// parser-output-unchanged: Handle the new typed parser-refusal failure before parsing; successful publisher bodies and parser results are unchanged.
 // parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
 // parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**
@@ -295,6 +296,12 @@ const unavailableReadError = ({
     case "too-large":
       return new AdapterFetchError({
         message: `${message}: body over ${cause.maxBytes} bytes`,
+        adapterKey,
+        cursor,
+      });
+    case "parser-refusal":
+      return new AdapterFetchError({
+        message: `${message}: parser refused ${cause.code}`,
         adapterKey,
         cursor,
       });

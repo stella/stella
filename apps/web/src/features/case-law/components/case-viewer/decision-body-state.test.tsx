@@ -16,7 +16,11 @@ const renderPane = (reason: MissingBodyReason): string =>
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <WebReaderPresentationProvider>
-          <MissingDecisionBody onRetry={() => undefined} reason={reason} />
+          <MissingDecisionBody
+            onRetry={() => undefined}
+            reason={reason}
+            textState={null}
+          />
         </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,

@@ -3,6 +3,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import {
   APP_RESOLVE_FIXTURE,
@@ -623,6 +624,28 @@ describe("MCP app registry and contracts", () => {
         type: "search",
         results: [{ type: "search", textAvailability }],
       });
+    },
+  );
+  test.each([null, ...Object.values(CASE_LAW_TEXT_STATUS)])(
+    "browser validation preserves persisted text state %s",
+    (textState) => {
+      const parse = createCaseLawParser();
+      const view = parse(
+        {
+          ...APP_SEARCH_FIXTURE,
+          results: APP_SEARCH_FIXTURE.results.map((row) => ({
+            ...row,
+            textState,
+          })),
+        },
+        { country: "CZE" },
+      );
+      if (view?.type !== "search") {
+        throw new TypeError("Expected parsed browser search results");
+      }
+      expect(view.results.map((row) => row.textState)).toEqual(
+        APP_SEARCH_FIXTURE.results.map(() => textState),
+      );
     },
   );
   test("browser validation strips fields the app does not render", () => {

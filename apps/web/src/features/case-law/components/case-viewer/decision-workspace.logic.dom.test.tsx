@@ -237,6 +237,7 @@ const rangeDecision = {
   documentAst: rangeAst,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   fulltext: null,
   judges: [],

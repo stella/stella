@@ -48,6 +48,7 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
+import { hasVerifiedCorpusText } from "@/api/lib/case-law/fulltext-state";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import {
@@ -405,6 +406,7 @@ const planCorpusPayload = ({
     existing !== undefined &&
     modePlan.type !== "postgres-only" &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
+    hasVerifiedCorpusText(existing.textState, existing.contentHash) &&
     corpusCarriesDocument(existing.contentHash) &&
     planCorpusDocumentWrite({
       ...corpusPayload,

@@ -352,6 +352,7 @@ export const decisionsPageOptions = ({
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            textState: h.textState,
             textAvailability: h.textAvailability,
             match: h.match,
             anchorId: h.anchorId,

@@ -132,6 +132,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
   "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
   "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/case-law-text-status.ts",
   "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
   "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
   "$TURBO_ROOT$/packages/portable-path/src/index.ts",

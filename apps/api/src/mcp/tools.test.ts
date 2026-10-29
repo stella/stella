@@ -638,6 +638,7 @@ const createCitationDigest = (
 });
 
 const createReadDecisionResult = () => ({
+  textState: null,
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -2825,6 +2826,7 @@ describe("OpenAI-compatible MCP tools", () => {
             },
             keywords: null,
             textAvailability,
+            textState: null,
             matchingPassages: 4,
             match: "all_terms",
             languageAlternates: [
@@ -2952,6 +2954,7 @@ describe("OpenAI-compatible MCP tools", () => {
             },
             keywords: null,
             textAvailability,
+            textState: null,
             matchingPassages: 4,
             match: "all_terms",
             snippet: 'Relevant holding on "smlouva"',
@@ -3024,6 +3027,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
       keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
       textAvailability: "available",
+      textState: null,
       matchingPassages: 1,
       match: "all_terms",
       languageAlternates: [],
@@ -3216,6 +3220,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
           textAvailability: "available",
+          textState: null,
           matchingPassages: 1,
           match: "all_terms",
           slug: "stable-official-slug",
@@ -3275,6 +3280,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: null,
           keywords: null,
           textAvailability: "available",
+          textState: null,
           matchingPassages: 1,
           match: "all_terms",
           snippet: "Relevant holding",
@@ -3312,6 +3318,7 @@ describe("OpenAI-compatible MCP tools", () => {
       headnote: { type: "absent", reason: "not_published" },
       keywords: null,
       textAvailability: "available",
+      textState: null,
       matchingPassages: 1,
       match: "all_terms",
       slug: "stable-official-slug",
@@ -3536,6 +3543,7 @@ describe("OpenAI-compatible MCP tools", () => {
     headnote: { type: "absent", reason: "not_published" },
     keywords: null,
     textAvailability: "available",
+    textState: null,
     matchingPassages: 1,
     match: "all_terms",
     slug: `slug-${decisionId}`,
@@ -4082,6 +4090,7 @@ describe("OpenAI-compatible MCP tools", () => {
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               textAvailability: "available",
+              textState: null,
               matchingPassages: 1,
               match: "all_terms",
               slug: "stable-official-slug",
@@ -6679,6 +6688,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           status: "found",
           decision: {
+            textState: null,
             decisionId: DECISION_ID,
             caseNumber: "29 Cdo 123/2024",
             // The shared link contract: the reader's page, and beside it the
@@ -6811,6 +6821,7 @@ describe("OpenAI-compatible MCP tools", () => {
           documentPending: false,
           hasDocument: true,
           documentReadFailed: false,
+          textState: null,
           documentUnavailable: false,
           courtId: null,
           courtTier: "other",

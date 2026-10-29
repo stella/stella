@@ -11,9 +11,11 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { DECISION_TEXT_FAILURE } from "@stll/api-contract/case-law-fulltext-state";
+
+import { readAbsent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
-  DOCUMENT_FETCH_FAILURE,
   fetchPdfBytes,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
   MAX_DOCUMENT_PDF_BYTES,
@@ -36,7 +38,7 @@ const compileOrder = (fragments: readonly SQL[]) =>
   fragments.map((fragment) => dialect.sqlToQuery(fragment).sql).join(", ");
 
 describe("deferred document queue shape", () => {
-  test("treats a persisted out-of-boundary URL as unavailable", async () => {
+  test("records a persisted out-of-boundary URL as a parser refusal", async () => {
     const result = await fetchPdfBytes({
       documentUrl: "http://legacy.invalid/document.pdf",
       // The boundary is checked before anything is downloaded, so a fetcher
@@ -45,7 +47,14 @@ describe("deferred document queue shape", () => {
       signal: new AbortController().signal,
     });
 
-    expect(result).toEqual({ type: "absent" });
+    expect(result).toEqual({
+      type: "failed",
+      cause: {
+        kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+        code: "untrusted_document_url",
+      },
+      detail: "untrusted-document-url",
+    });
   });
 
   test("the remaining tier stops handing out a decision at the parking threshold", () => {
@@ -129,7 +138,13 @@ describe("one document's download", () => {
       if (status === 404 || status === 410) {
         expect({ status, outcome }).toEqual({
           status,
-          outcome: { resolved: { type: "absent" } },
+          outcome: {
+            resolved: {
+              type: "failed",
+              cause: { kind: DECISION_TEXT_FAILURE.HTTP, status },
+              detail: `http-${status}`,
+            },
+          },
         });
         continue;
       }
@@ -139,7 +154,7 @@ describe("one document's download", () => {
           outcome: {
             resolved: {
               type: "failed",
-              failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+              cause: { kind: DECISION_TEXT_FAILURE.HTTP, status },
               detail: `http-${status}`,
             },
           },
@@ -160,12 +175,12 @@ describe("one document's download", () => {
 
     expect(result).toEqual({
       type: "failed",
-      failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+      cause: { kind: DECISION_TEXT_FAILURE.HTTP, status: 204 },
       detail: "http-204",
     });
   });
 
-  test("a URL the gate refuses is nothing to fetch", async () => {
+  test("a URL the gate refuses records a parser refusal", async () => {
     const result = await fetchPdfBytes({
       documentUrl: PUBLISHER_URL,
       fetchDocument: async () =>
@@ -176,17 +191,62 @@ describe("one document's download", () => {
       signal: new AbortController().signal,
     });
 
-    expect(result).toEqual({ type: "absent" });
+    expect(result).toEqual({
+      type: "failed",
+      cause: {
+        kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+        code: "refused_document_target",
+      },
+      detail: "refused-document-target",
+    });
   });
 
-  test("not found and gone mean there is nothing to fetch", async () => {
+  test("not found and gone remain HTTP failures with their actual status", async () => {
     for (const status of [404, 410]) {
       const result = await download(
         async () => await Promise.resolve(new Response(null, { status })),
       );
 
-      expect(result).toEqual({ type: "absent" });
+      expect(result).toEqual({
+        type: "failed",
+        cause: { kind: DECISION_TEXT_FAILURE.HTTP, status },
+        detail: `http-${status}`,
+      });
     }
+  });
+
+  test("a publisher-typed absence remains distinct from an HTTP failure", async () => {
+    const result = await fetchPdfBytes({
+      documentUrl: PUBLISHER_URL,
+      fetchDocument: async () =>
+        await Promise.resolve(readAbsent("publisher-typed-absence")),
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({ type: "absent" });
+  });
+
+  test("a parser refusal remains unparseable rather than a network failure", async () => {
+    const result = await fetchPdfBytes({
+      documentUrl: PUBLISHER_URL,
+      fetchDocument: async () =>
+        await Promise.resolve(
+          readUnavailable({
+            kind: "parser-refusal",
+            code: "invalid_pdf_base64",
+          }),
+        ),
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({
+      type: "failed",
+      cause: {
+        kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+        code: "invalid_pdf_base64",
+      },
+      detail: "invalid_pdf_base64",
+    });
   });
 
   test("a download that never got an answer throws, so the walk backs off", async () => {
@@ -218,7 +278,10 @@ describe("one document's download", () => {
 
     expect(result).toEqual({
       type: "failed",
-      failure: DOCUMENT_FETCH_FAILURE.NETWORK,
+      cause: {
+        kind: DECISION_TEXT_FAILURE.NETWORK,
+        code: "TypeError:ECONNRESET",
+      },
       detail: "TypeError:ECONNRESET",
     });
   });
@@ -237,7 +300,10 @@ describe("one document's download", () => {
 
     expect(result).toEqual({
       type: "failed",
-      failure: DOCUMENT_FETCH_FAILURE.NETWORK,
+      cause: {
+        kind: DECISION_TEXT_FAILURE.TIMEOUT,
+        timeoutMs: expect.any(Number),
+      },
       detail: "TimeoutError",
     });
   });

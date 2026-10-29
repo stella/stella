@@ -190,13 +190,25 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
         close();
       }
       const text = inlinesToPlainText(lineInlines);
+      const hasContent = text.trim().length > 0;
       if (open === null) {
-        open = { inlines: [...lineInlines], text, fontSize };
+        open = {
+          inlines: [...lineInlines],
+          text,
+          fontSize: hasContent ? fontSize : DEFAULT_FONT_SIZE,
+        };
         continue;
+      }
+      // A trailing break retains a blank line, not its span's title style.
+      // Whitespace-only runs must neither lend nor preserve a font signal.
+      if (hasContent) {
+        open.fontSize =
+          open.text.trim().length === 0
+            ? fontSize
+            : Math.max(open.fontSize, fontSize);
       }
       open.inlines.push(...lineInlines);
       open.text += text;
-      open.fontSize = Math.max(open.fontSize, fontSize);
     }
   };
 
@@ -821,6 +833,7 @@ type BlockBuilder = {
   readonly blocks: Block[];
   section: Section;
   blockCount: number;
+  titleCount: number;
   paragraph: MarkupLine | null;
   /** The court's paragraph number the next numbered paragraph should carry. */
   nextCourtNumber: number;
@@ -926,7 +939,13 @@ const readPartMarker = (builder: BlockBuilder, line: MarkupLine): boolean => {
     (line.fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(line.text))
   ) {
     flushParagraph(builder);
-    pushHeading(builder, line, 1, "h-title");
+    builder.titleCount += 1;
+    pushHeading(
+      builder,
+      line,
+      1,
+      builder.titleCount === 1 ? "h-title" : `h-title-${builder.titleCount}`,
+    );
     return true;
   }
   // The holding precedes the reasoning; a `takto rozhodol:` inside the
@@ -1144,6 +1163,7 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
     blocks: [],
     section: "preamble",
     blockCount: 0,
+    titleCount: 0,
     paragraph: null,
     nextCourtNumber: 1,
   };

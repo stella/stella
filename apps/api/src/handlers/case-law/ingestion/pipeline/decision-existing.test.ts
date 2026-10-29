@@ -65,6 +65,7 @@ const stored = (result: IngestionResult): ExistingDecision => ({
   sourceObservationHash: result.rawHash,
   redactedAt: null,
   corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+  textState: null,
   contentHash: null,
   textS3Key: null,
   normalizedS3Key: null,

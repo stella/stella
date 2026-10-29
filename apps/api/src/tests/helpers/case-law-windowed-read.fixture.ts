@@ -143,6 +143,7 @@ export const caseLawWindowFixture = async (
               ast,
               decision: {
                 id: decisionId,
+                textState: null,
                 caseNumberType: "case-number",
                 caseNumber: "1 Test",
                 courtAbbreviation: null,

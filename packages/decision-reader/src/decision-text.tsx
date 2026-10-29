@@ -1272,6 +1272,7 @@ export const DecisionText = ({
           topMatter={topMatter}
         />
         {adapters.renderBodyUnavailable({
+          textState: decision.textState,
           decisionId: decision.id,
           reason: missingBodyReason(decision),
         })}

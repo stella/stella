@@ -140,12 +140,19 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           SELECT gen_random_uuid(), sources.id, 'excluded/' || status || '/' || endpoint,
             'Plan court', 'CZE', 'cs', endpoint,
             CASE WHEN status = 'listing-only' THEN 'Excluded text' END,
-            CASE WHEN status = 'withdrawn' THEN TIMESTAMPTZ '2026-01-01 00:00:00+00' END,
+            NULL,
             CASE WHEN status = 'listing-only' THEN
               '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
           FROM case_law_sources sources
           CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2010-01-01')) endpoints(endpoint)
-          CROSS JOIN (VALUES ('withdrawn'), ('listing-only')) statuses(status)`);
+          CROSS JOIN (VALUES ('listing-only')) statuses(status)`);
+        await db.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, court, country, language, decision_date, redacted_at, text_state, metadata)
+          SELECT gen_random_uuid(), sources.id, 'excluded/withdrawn/' || endpoint,
+            'Plan court', 'CZE', 'cs', endpoint,
+            TIMESTAMPTZ '2026-01-01 00:00:00+00', NULL, '{}'::jsonb
+          FROM case_law_sources sources
+          CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2010-01-01')) endpoints(endpoint)`);
         await db.execute(sql`INSERT INTO case_law_search_documents
           (decision_id, language, regconfig, searchable_text, tsv)
           SELECT id, 'cs', 'simple', fulltext, to_tsvector('simple', fulltext)

@@ -4,6 +4,10 @@ import type { ReactNode } from "react";
 import { DirectionProvider } from "@base-ui/react/direction-provider";
 import { createFormatter } from "use-intl";
 
+import {
+  DECISION_TEXT_AVAILABILITY,
+  decisionTextStatusMarker,
+} from "@stll/api-contract/case-law-text-field";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
@@ -238,6 +242,36 @@ const McpReaderStatus = ({
   </>
 );
 
+const McpDecisionTextStatus = ({
+  metadata,
+  document,
+  opening,
+  messages,
+}: {
+  metadata: ReaderPager["metadata"] | undefined;
+  document: ReaderPager | null;
+  opening: OpenDecision | undefined;
+  messages: ReturnType<typeof appLocale>["messages"];
+}) => {
+  if (metadata === undefined) {
+    return null;
+  }
+  const marker = decisionTextStatusMarker(
+    metadata.textState,
+    document?.status === "unavailable" || opening?.status === "unavailable"
+      ? DECISION_TEXT_AVAILABILITY.METADATA_ONLY
+      : DECISION_TEXT_AVAILABILITY.AVAILABLE,
+  );
+  if (marker === null) {
+    return null;
+  }
+  return (
+    <p role="status" className="text-muted-foreground text-xs">
+      {messages[marker]}
+    </p>
+  );
+};
+
 export const ReaderView = ({
   host,
   onBack,
@@ -316,6 +350,12 @@ export const ReaderView = ({
             host={host}
             formattingLocale={formattingLocale}
             openInStella={messages.openInStella}
+          />
+          <McpDecisionTextStatus
+            metadata={metadata}
+            document={state.document}
+            opening={opened}
+            messages={messages}
           />
           {(state.requestStatus === "conflict" ||
             state.documentRevision > 0) && (

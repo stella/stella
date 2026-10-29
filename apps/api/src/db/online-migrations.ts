@@ -41,6 +41,7 @@ import {
   BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
 } from "./billing-activity-hour-cap-constraint-validation";
+import { CASE_LAW_TEXT_STATE_INDEXES } from "./case-law-fulltext-state";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -248,6 +249,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  ...CASE_LAW_TEXT_STATE_INDEXES,
   {
     name: "chat_run_log_entries_message_snapshot_idx",
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },

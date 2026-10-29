@@ -1237,6 +1237,12 @@
       "oldestUnavailable": "Wyniki wyszukiwania są sortowane według trafności lub od najnowszych. Aby zobaczyć najpierw najstarsze orzeczenia, wyczyść wyszukiwanie.",
       "relevance": "Najtrafniejsze"
     },
+    "textState": {
+      "textFetchFailed": "Nie udało się pobrać tekstu",
+      "textMetadataOnlySource": "Źródło udostępnia tylko metadane",
+      "textNotPublished": "Tekst nie został opublikowany",
+      "textPending": "Tekst oczekuje na pobranie"
+    },
     "viewer": {
       "abstract": "Streszczenie",
       "appliedVersionNotStated": "Nie podano zastosowanego brzmienia",

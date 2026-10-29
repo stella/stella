@@ -23,6 +23,7 @@ import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
   recordParsedGenerationTx,
+  recordRowTextStateTx,
   writeDecisionJudges,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
@@ -175,6 +176,7 @@ const finishInsertedRowTx = async (
   await writeDecisionJudges(tx, write, insertedId);
 
   await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
+  await recordRowTextStateTx(tx, write, insertedId);
 
   switch (citations.disposition) {
     case "annotation-only":

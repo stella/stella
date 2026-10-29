@@ -10,6 +10,7 @@ import {
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+import type { DecisionTextState } from "@stll/api-contract/case-law-fulltext-state";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -100,6 +101,7 @@ import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconcili
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
+import { caseLawTextStateSchemaRules } from "../case-law-fulltext-state";
 import {
   caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
@@ -811,9 +813,15 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /** Verified full-text lifecycle; legacy rows remain unclassified until reconciliation. */
+    textState: jsonb("text_state").$type<DecisionTextState>()
+      .default(sql`jsonb_build_object('status', 'fetch_pending', 'attemptCount', 0,
+      'nextAttemptAt', to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'lastAttemptAt', NULL, 'recovery', jsonb_build_object('type', 'verify_storage'))`),
   },
   (t) => [
     parsedSourceComplete(t),
+    ...caseLawTextStateSchemaRules(t),
     p.check(
       "case_law_decisions_projection_epoch_nonnegative",
       sql`${t.projectionEpoch} >= 0`,

@@ -2,6 +2,10 @@ import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
+import {
+  CASE_LAW_TEXT_STATUS,
+  type CaseLawTextStatus,
+} from "@stll/api-contract/case-law-text-status";
 import { missingBodyRetryable } from "@stll/decision-reader/decision-body-state.logic";
 import type { MissingBodyReason } from "@stll/decision-reader/decision-body-state.logic";
 import { Button } from "@stll/ui/button";
@@ -33,24 +37,33 @@ export const MissingDecisionBody = ({
   busy = false,
   onRetry,
   reason,
+  textState,
 }: {
   busy?: boolean | undefined;
   onRetry: () => void;
   reason: MissingBodyReason;
+  textState: CaseLawTextStatus | null;
 }) => {
   const t = useTranslations();
+  const retryable =
+    missingBodyRetryable(reason) ||
+    textState === CASE_LAW_TEXT_STATUS.FETCH_PENDING ||
+    textState === CASE_LAW_TEXT_STATUS.FETCH_FAILED;
 
   return (
     <div className="reader-chrome flex flex-col items-center gap-3 py-16">
-      {!missingBodyRetryable(reason) && (
-        <DecisionTextAvailabilityMarker
-          availability={DECISION_TEXT_AVAILABILITY.METADATA_ONLY}
-        />
-      )}
+      <DecisionTextAvailabilityMarker
+        textState={textState}
+        availability={
+          missingBodyRetryable(reason)
+            ? DECISION_TEXT_AVAILABILITY.AVAILABLE
+            : DECISION_TEXT_AVAILABILITY.METADATA_ONLY
+        }
+      />
       <p className="text-muted-foreground text-sm text-balance">
         {t(MISSING_BODY_MESSAGE[reason])}
       </p>
-      {missingBodyRetryable(reason) && (
+      {retryable && (
         <Button loading={busy} onClick={onRetry} size="sm" variant="outline">
           {t("common.retry")}
         </Button>
@@ -73,9 +86,11 @@ export const MissingDecisionBody = ({
 export const DecisionBodyUnavailable = ({
   decisionId,
   reason,
+  textState,
 }: {
   decisionId: string;
   reason: MissingBodyReason;
+  textState: CaseLawTextStatus | null;
 }) => {
   const queryClient = useQueryClient();
   const filter = publicDecisionReadFilter(decisionId);
@@ -90,6 +105,7 @@ export const DecisionBodyUnavailable = ({
         );
       }}
       reason={reason}
+      textState={textState}
     />
   );
 };

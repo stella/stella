@@ -20,6 +20,7 @@ const identityFields = [
   "source_url",
   "match",
   "textAvailability",
+  "textState",
 ] as const;
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,

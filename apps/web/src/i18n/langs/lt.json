@@ -1237,6 +1237,12 @@
       "oldestUnavailable": "Paieškos rezultatai rikiuojami pagal aktualumą arba nuo naujausių. Norėdami pirmiausia matyti seniausius sprendimus, išvalykite paiešką.",
       "relevance": "Tinkamiausi"
     },
+    "textState": {
+      "textFetchFailed": "Nepavyko gauti teksto",
+      "textMetadataOnlySource": "Šaltinis pateikia tik metaduomenis",
+      "textNotPublished": "Tekstas nepaskelbtas",
+      "textPending": "Tekstas laukia gavimo"
+    },
     "viewer": {
       "abstract": "Santrauka",
       "appliedVersionNotStated": "Taikyta redakcija nenurodyta",

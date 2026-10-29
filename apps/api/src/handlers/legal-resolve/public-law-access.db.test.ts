@@ -91,6 +91,7 @@ const decision = {
   status: "resolved",
   document: {
     kind: "decision",
+    textState: null,
     decisionId: "fixture-decision",
     identifier: "fixture",
     country: "CZE",

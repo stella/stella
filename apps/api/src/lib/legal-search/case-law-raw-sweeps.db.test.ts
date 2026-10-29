@@ -68,6 +68,7 @@ beforeAll(async () => {
       country: "CZE",
       language: "cs",
       redactedAt: new Date("2026-09-28T00:00:00Z"),
+      textState: null,
       sourceRawS3Key: legacyKey,
     },
   ]);

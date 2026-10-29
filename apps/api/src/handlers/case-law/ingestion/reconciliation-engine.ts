@@ -54,11 +54,14 @@ import {
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
+import type { SourceRegistration } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   recordSliceCoverage,
   recordSliceWalkFailure,
   touchSliceCoverages,
 } from "@/api/handlers/case-law/ingestion/coverage-ledger";
+import { runDecisionFulltextRecoveryUnit } from "@/api/handlers/case-law/ingestion/fulltext-reconciler";
+import type { FulltextRecoveryUnitOutcome } from "@/api/handlers/case-law/ingestion/fulltext-reconciler";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
@@ -2298,4 +2301,86 @@ export const runReconciliationWorkUnit = async ({
     return panic("Promise rejection unexpectedly resolved");
   }
   return executed.value;
+};
+
+type SourceReconciliationWorkUnitOptions = Omit<
+  ReconciliationWorkUnitOptions,
+  "adapterKey" | "reconciliation" | "reparseStoredRaw" | "signal"
+> & {
+  registration: SourceRegistration;
+  publisherAccess: "enabled" | "disabled";
+  signal: AbortSignal;
+};
+
+type SourceReconciliationUnitOutcome =
+  | Extract<FulltextRecoveryUnitOutcome, { type: "failed" }>
+  | ReconciliationUnitOutcome
+  | {
+      type: "fulltext-worked";
+      summary: Extract<
+        FulltextRecoveryUnitOutcome,
+        { type: "worked" }
+      >["summary"];
+    };
+
+/** Full-text repair and listing reconciliation share one fair source turn.
+ * Each child releases its source lease before the next phase starts.
+ */
+export const runSourceReconciliationWorkUnit = async ({
+  registration,
+  publisherAccess,
+  sourceId,
+  scopedDb,
+  now,
+  signal,
+  readStoredRaw,
+  ...listingOptions
+}: SourceReconciliationWorkUnitOptions): Promise<SourceReconciliationUnitOutcome> => {
+  const fulltext = await runDecisionFulltextRecoveryUnit({
+    sourceId,
+    registration,
+    publisherAccess,
+    scopedDb,
+    now,
+    signal,
+    ...(readStoredRaw === undefined ? {} : { readRaw: readStoredRaw }),
+  });
+  switch (fulltext.type) {
+    case "leased":
+      return { type: "leased" };
+    case "aborted":
+      return { type: "aborted" };
+    case "failed":
+      return fulltext;
+    case "worked":
+      logger.info("case_law.fulltext_reconciliation.unit", {
+        source: registration.key,
+        ...fulltext.summary,
+      });
+      break;
+    case "idle":
+      break;
+    default:
+      fulltext satisfies never;
+      return panic("Unhandled full-text recovery unit");
+  }
+  if (registration.capability !== "crawl" || publisherAccess === "disabled") {
+    return fulltext.type === "worked"
+      ? { type: "fulltext-worked", summary: fulltext.summary }
+      : { type: "idle" };
+  }
+  const regular = await runReconciliationWorkUnit({
+    ...listingOptions,
+    adapterKey: registration.source.key,
+    sourceId,
+    reconciliation: registration.source.reconciliation,
+    reparseStoredRaw: registration.source.reparseStoredRaw,
+    scopedDb,
+    now,
+    signal,
+    ...(readStoredRaw === undefined ? {} : { readStoredRaw }),
+  });
+  return regular.type === "idle" && fulltext.type === "worked"
+    ? { type: "fulltext-worked", summary: fulltext.summary }
+    : regular;
 };

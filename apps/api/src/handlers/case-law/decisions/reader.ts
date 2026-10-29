@@ -321,6 +321,7 @@ export const readDecisionReaderSource = defineWindowedRead(
       decision: {
         id: decision.id,
         caseNumber: decision.caseNumber,
+        textState: decision.textState,
         caseNumberType: decision.caseNumberType,
         courtAbbreviation: decision.courtAbbreviation,
         courtTier: decision.courtTier,

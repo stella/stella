@@ -55,6 +55,7 @@ import {
   readPlTkCasePage,
   readPlTkRuling,
 } from "../apps/api/src/handlers/case-law/ingestion/parsers/pl-tk";
+import { readUnavailable } from "../apps/api/src/lib/errors/read-outcome";
 import { isRecord } from "../apps/api/src/lib/type-guards";
 
 /** Replay recorded responses through the same pure builders as ingestion. */
@@ -628,7 +629,10 @@ const collectSnListings = async ({
       const built = await assemblePlSnDecision({
         item: normalizePlSnListingItem(row),
         detail: null,
-        documentBytes: undefined,
+        documentRead: readUnavailable({
+          kind: "parser-refusal",
+          code: "document_response_not_stored",
+        }),
         rawParts: { listing: JSON.stringify(row) },
       });
       if (built.type === "unkeyable") {

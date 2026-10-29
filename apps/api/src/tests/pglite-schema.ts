@@ -273,9 +273,36 @@ const READER_ANNOTATION_MATTER_ROW_FUNCTIONS = [
   "legal_reader_annotation_document_held",
 ] as const;
 
+const FULLTEXT_STATE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261030004000_case_law_fulltext_state",
+  "migration.sql",
+);
+
+export const installPgliteCaseLawFulltextStateGuard = async (
+  db: PgliteSchemaDb,
+) => {
+  const statement =
+    readMigrationStatements(FULLTEXT_STATE_MIGRATION_PATH).find((source) =>
+      executableSql(source).startsWith(
+        "CREATE TRIGGER case_law_decisions_text_state_guard",
+      ),
+    ) ?? panic("Missing full-text state guard migration");
+  await db.execute(sql.raw(statement));
+};
+
 export const installPgliteSchemaPrerequisites = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
+  for (const statement of readMigrationStatements(
+    FULLTEXT_STATE_MIGRATION_PATH,
+  )) {
+    if (
+      executableSql(statement).startsWith("CREATE FUNCTION public.case_law_")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
+  }
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
   await db.execute(sql.raw(arabicNormalizeFunctionSql()));
   await db.execute(sql.raw(unaccentPgliteSql()));

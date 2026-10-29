@@ -64,6 +64,7 @@ type DecisionIdentity = Omit<
 
 const identity = {
   kind: "decision",
+  textState: null,
   decisionId: "00000000-0000-4000-8000-0000000d0041",
   identifier: "ECLI:CZ:NS:2026:1.CDO.1.2026.1",
   country: "CZE",
@@ -130,6 +131,7 @@ const responses = {
       reason: "not_at_this_court",
       otherCourtCandidates: [
         {
+          textState: null,
           decisionId: identity.decisionId,
           identifier: "52 A 6/2023",
           label: "Krajský soud v Hradci Králové, rozsudek, 2023-06-01",
@@ -150,6 +152,7 @@ const responses = {
       status: "ambiguous",
       candidates: [
         {
+          textState: null,
           decisionId: identity.decisionId,
           identifier: "1 Cdo 1/2026",
           label: "Synthetic court",

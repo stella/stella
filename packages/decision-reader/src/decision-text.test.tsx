@@ -164,6 +164,7 @@ const decision = {
   documentAst: ast,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   fulltext: null,
   id: "fixture-decision",

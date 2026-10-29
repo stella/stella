@@ -56,6 +56,7 @@ const context = {
 
 const missingBody = {
   reason: MISSING_BODY_REASON.unavailable,
+  textState: null,
   onRetry: () => undefined,
 } satisfies ComponentProps<typeof MissingDecisionBody>;
 

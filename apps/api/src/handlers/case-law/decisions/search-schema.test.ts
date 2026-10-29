@@ -83,6 +83,7 @@ const validResponse = {
       citationAuthority: 0,
       textWithheldReason: null,
       textAvailability: "available",
+      textState: null,
       matchingPassages: 1,
       match: "all_terms",
       createdAt: "2026-01-01T00:00:00.000Z",

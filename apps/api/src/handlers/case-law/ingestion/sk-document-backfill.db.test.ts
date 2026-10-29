@@ -12,6 +12,7 @@ import { PDF } from "@libpdf/core";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { DECISION_TEXT_FAILURE } from "@stll/api-contract/case-law-fulltext-state";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -189,6 +190,7 @@ if (!databaseUrl || !runPostgresTests) {
           documentFetchRequestedAt: true,
           documentFetchAttemptedAt: true,
           documentFetchAttempts: true,
+          textState: true,
         },
       });
 
@@ -354,6 +356,8 @@ if (!databaseUrl || !runPostgresTests) {
           ],
         },
         scopedDb,
+        transfer: null,
+        mode: "off",
       });
 
       const row = await db.query.caseLawDecisions.findFirst({
@@ -363,12 +367,17 @@ if (!databaseUrl || !runPostgresTests) {
           documentAst: true,
           sections: true,
           parserVersion: true,
+          textState: true,
         },
       });
 
       expect(row?.fulltext).toContain("Odôvodnenie");
       expect(row?.sections).toHaveLength(1);
       expect(row?.parserVersion).toBe(PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS]);
+      expect(row?.textState).toMatchObject({
+        status: "stored",
+        storage: "postgres",
+      });
       expect(
         row?.documentAst && "blocks" in row.documentAst
           ? row.documentAst.blocks.length
@@ -961,6 +970,10 @@ if (!databaseUrl || !runPostgresTests) {
         expect(outcome).toEqual({
           status: "parked",
           failure: DOCUMENT_FETCH_FAILURE.UNPARSEABLE,
+          cause: {
+            kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+            code: "UnrecoverableParseError",
+          },
           detail: "UnrecoverableParseError",
         });
         const row = await readFetchState(id);
@@ -992,6 +1005,10 @@ if (!databaseUrl || !runPostgresTests) {
         expect(outcome).toEqual({
           status: "parked",
           failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+          cause: {
+            kind: DECISION_TEXT_FAILURE.SIZE,
+            limitBytes: MAX_DOCUMENT_PDF_BYTES,
+          },
           detail: `over-${MAX_DOCUMENT_PDF_BYTES}-bytes`,
         });
         const row = await readFetchState(id);
@@ -1036,7 +1053,12 @@ if (!databaseUrl || !runPostgresTests) {
         expect(outcome).toEqual({
           status: "deferred",
           failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+          cause: { kind: DECISION_TEXT_FAILURE.HTTP, status: 400 },
           detail: "http-400",
+        });
+        expect((await readFetchState(id))?.textState).toMatchObject({
+          status: "fetch_failed",
+          cause: { kind: DECISION_TEXT_FAILURE.HTTP, status: 400 },
         });
         const queue = await loadPendingDocuments({
           scopedDb,
@@ -1073,6 +1095,10 @@ if (!databaseUrl || !runPostgresTests) {
         expect(outcome).toEqual({
           status: "parked",
           failure: DOCUMENT_FETCH_FAILURE.NETWORK,
+          cause: {
+            kind: DECISION_TEXT_FAILURE.NETWORK,
+            code: "TypeError:ECONNRESET",
+          },
           detail: "TypeError:ECONNRESET",
         });
       });

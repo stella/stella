@@ -183,6 +183,7 @@ const fullDecision = {
   hasDocument: false,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   documentUrl: null,
   fulltext: null,
@@ -226,6 +227,7 @@ const canonicalSearchHit = {
   citationAuthority: 0,
   citationCount: 0,
   textAvailability: "available",
+  textState: null,
   matchingPassages: 1,
   match: "all_terms",
 } satisfies PublicLawData<

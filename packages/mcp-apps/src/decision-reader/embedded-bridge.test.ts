@@ -8,6 +8,7 @@ type ParentTransport = Parameters<typeof createEmbeddedReaderBridge>[0];
 type ToolResponse = Awaited<ReturnType<ParentTransport["requestTool"]>>;
 type ToolRequest = Parameters<ParentTransport["requestTool"]>[0];
 const metadata = {
+  textState: null,
   decisionId: "00000000-0000-4000-8000-000000000001",
   caseNumber: "1 C 1/2026",
   caseNumberType: "case-number",

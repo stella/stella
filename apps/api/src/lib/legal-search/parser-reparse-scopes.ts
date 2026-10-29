@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Recompute paragraph text, anonymization and heading identities from stored markup, preserving empty title-run fonts alongside letter-spaced text handling.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -165,11 +165,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 10,
+    version: 11,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read stored Supreme Court responses to retain typed document-read outcomes and raw bodies when PDF decoding or parsing fails.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {

@@ -49,6 +49,7 @@ const PARSED_GENERATION_COLUMNS = {
   decisionType: "parse-input-or-output",
   fulltext: "parse-input-or-output",
   textlessDetailRecheckedAt: "bookkeeping",
+  textState: "bookkeeping",
   sections: "parse-input-or-output",
   documentAst: "parse-input-or-output",
   analysis: "bookkeeping",

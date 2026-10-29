@@ -2599,6 +2599,7 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    textState: hit.textState,
     textAvailability: hit.textAvailability,
     match,
     ...(hit.textWithheldReason === null
@@ -3439,6 +3440,7 @@ const decisionItemResult = ({
     return {
       decisionId,
       message: pendingDocumentMessage(documentHydration),
+      textState: read.textState,
       status: DECISION_READ_STATUS.pending,
     };
   }
@@ -3501,6 +3503,7 @@ const decisionItemResult = ({
     status: DECISION_READ_STATUS.found,
     decision: {
       decisionId: read.id,
+      textState: read.textState,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
       ...decisionStaticFields({ url, digest, includedFields, read }),

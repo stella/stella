@@ -3,6 +3,10 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawSources, corpusIndexProjectionStates } from "@/api/db/schema";
+import {
+  type DecisionTextSourceHealth,
+  readCaseLawFulltextHealthTx,
+} from "@/api/lib/case-law/fulltext-health";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -17,6 +21,8 @@ import {
   buildCaseLawProjectionBacklogMetric,
   buildCaseLawProjectionConvergenceMetric,
   buildCaseLawSourceSyncAgeMetric,
+  buildCaseLawTextFailedOverThresholdMetric,
+  buildCaseLawTextStateMissingMetric,
   writeMetricLine,
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
@@ -41,6 +47,7 @@ type CaseLawOldestUnpublishedAge =
   | { type: "incomplete" };
 
 type CaseLawFreshnessReport = {
+  fulltextHealth: readonly DecisionTextSourceHealth[];
   /** Capped at `CASE_LAW_FRESHNESS_SCAN_CAP`. */
   backlogItems: number;
   /** Whether the queue held more rows than the report reads. */
@@ -204,7 +211,7 @@ const oldestUnpublishedAgeOf = (
 export const readCaseLawFreshnessReportTx = async (
   tx: Transaction,
 ): Promise<CaseLawFreshnessReport> => {
-  const [sourceRows, serving] = await Promise.all([
+  const [sourceRows, serving, fulltextHealth] = await Promise.all([
     tx
       .select({
         source: caseLawSources.adapterKey,
@@ -218,6 +225,7 @@ export const readCaseLawFreshnessReportTx = async (
         ),
       ),
     readServedCorpusIndexGenerationsTx(tx, "case_law"),
+    readCaseLawFulltextHealthTx(tx),
   ]);
   const served = Result.isOk(serving) ? serving.value : null;
   const backlog =
@@ -238,6 +246,7 @@ export const readCaseLawFreshnessReportTx = async (
     backlogCapped: backlog.capped,
     oldestUnpublishedAge: oldestUnpublishedAgeOf(backlog, backlog.capped),
     sourceAges: sourceRows,
+    fulltextHealth,
     convergence,
   };
 };
@@ -269,6 +278,20 @@ export const emitCaseLawFreshnessReport = (
   for (const source of report.sourceAges) {
     writeMetricLine(
       buildCaseLawSourceSyncAgeMetric(source.source, source.ageSeconds),
+    );
+  }
+  for (const source of report.fulltextHealth) {
+    writeMetricLine(
+      buildCaseLawTextStateMissingMetric(
+        source.source,
+        source.missingState ? 1 : 0,
+      ),
+    );
+    writeMetricLine(
+      buildCaseLawTextFailedOverThresholdMetric(
+        source.source,
+        source.failed.count > source.failedThreshold ? 1 : 0,
+      ),
     );
   }
   if (report.convergence !== null) {

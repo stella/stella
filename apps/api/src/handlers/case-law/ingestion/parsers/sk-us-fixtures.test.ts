@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   type Block,
+  documentAstSchema,
   type HeadingBlock,
   type ParagraphBlock,
   projectPlainText,
@@ -25,7 +27,7 @@ const parsedFixture = async (name: string, caseNumber: string) => {
       ? payload.content
       : "";
   expect(content).not.toBe("");
-  return parseSkUsDocumentXhtml({
+  const parsed = parseSkUsDocumentXhtml({
     xhtml: Buffer.from(content, "base64").toString("utf-8"),
     caseNumber,
     ecli: undefined,
@@ -33,7 +35,9 @@ const parsedFixture = async (name: string, caseNumber: string) => {
     decisionDate: undefined,
     decisionType: undefined,
     documentUrl: "https://www.ustavnysud.sk/docDownload/fixture",
-  }).documentAst.blocks;
+  });
+  expect(v.safeParse(documentAstSchema, parsed.documentAst).success).toBe(true);
+  return parsed.documentAst.blocks;
 };
 
 /** What search and the reader see: the text the stored inlines project to. */
@@ -208,7 +212,7 @@ describe("PL. ÚS 10/2014", () => {
       .map((block) => ("inlines" in block ? textOf(block) : ""))
       .join("\n");
     expect(text).not.toContain(String.fromCodePoint(0xad));
-    expect(headings(blocks, 1)).toContain("PL. ÚS 10/2014-78");
+    expect(text).toContain("PL. ÚS 10/2014-78");
     expect(text).toContain("peer-to-peer (P2P)");
     expect(text).toContain("C-293/12 a C-594/12");
     // Hyphens at a line's end are the court's too: a compound and a docket.

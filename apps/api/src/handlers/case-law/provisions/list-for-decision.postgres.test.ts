@@ -125,13 +125,13 @@ if (!databaseUrl || !runPostgresTests) {
           VALUES (${decisionId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
             'Court', ${decisionId}, ${"a".repeat(64)})`;
         await owner`INSERT INTO case_law_decisions
-          (id, source_id, country, language, court, case_number, content_hash, metadata, redacted_at)
+          (id, source_id, country, language, court, case_number, content_hash, metadata, redacted_at, text_state)
           VALUES
             (${listingOnlyId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
               'Court', ${listingOnlyId}, ${"b".repeat(64)},
-              '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb, NULL),
+              '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb, NULL, DEFAULT),
             (${redactedId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
-              'Court', ${redactedId}, NULL, '{}'::jsonb, now())`;
+              'Court', ${redactedId}, NULL, '{}'::jsonb, now(), NULL)`;
         for (const id of [listingOnlyId, redactedId]) {
           expect(
             await withRedistributableSubject(

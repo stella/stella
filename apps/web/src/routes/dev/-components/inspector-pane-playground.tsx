@@ -173,6 +173,7 @@ const BENCH_DECISION = {
   documentAst: BENCH_DOCUMENT_AST,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   fulltext: null,
   id: toSafeId<"caseLawDecision">("bench-decision"),

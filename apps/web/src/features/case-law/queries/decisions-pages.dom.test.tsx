@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import {
   DECISION_SEARCH_MATCHES,
   SEARCH_PAGE_END,
@@ -80,6 +82,11 @@ const installSearch = (searchFacets: SearchFacets | null = null) => {
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         pageReach: SEARCH_PAGE_REACH.REACHED,
         hits: ranks.map((rank) => ({
+          textState:
+            Object.values(CASE_LAW_TEXT_STATUS).at(
+              rank % Object.values(CASE_LAW_TEXT_STATUS).length,
+            ) ?? panic("Missing text-status fixture"),
+          textAvailability: "metadata_only",
           match: DECISION_SEARCH_MATCHES.at(
             rank % DECISION_SEARCH_MATCHES.length,
           ),
@@ -217,6 +224,22 @@ describe("a page of case-law results", () => {
       language: facets.language,
       source: facets.source,
     });
+  });
+
+  test("search pages preserve every persisted text status for result rows", async () => {
+    installSearch();
+    const page = await makeClient().query(
+      decisionsPageOptions({ filters: FILTERS, page: 1, pageSize: PAGE_SIZE }),
+    );
+    const statuses = page.decisions.map((decision) => {
+      if (!("textState" in decision)) {
+        throw new TypeError("Expected a search hit with persisted text status");
+      }
+      return decision.textState;
+    });
+    expect(new Set(statuses)).toEqual(
+      new Set(Object.values(CASE_LAW_TEXT_STATUS)),
+    );
   });
 
   test("search pages preserve every match classification for the result rows", async () => {

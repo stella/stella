@@ -303,6 +303,7 @@ if (!databaseUrl || !runPostgresTests) {
             return Result.ok(undefined);
           },
         },
+        mode: "dual-write",
       });
 
       const stored = await db.query.caseLawDecisions.findFirst({
@@ -313,6 +314,7 @@ if (!databaseUrl || !runPostgresTests) {
           normalizedS3Key: true,
           astS3Key: true,
           contentHash: true,
+          textState: true,
         },
       });
 
@@ -337,6 +339,11 @@ if (!databaseUrl || !runPostgresTests) {
       expect(stored?.normalizedS3Key).toEqual(packedUnder("SVK"));
       expect(stored?.astS3Key).toEqual(packedUnder("SVK"));
       expect(stored?.contentHash).toBe(documentContentHash);
+      expect(stored?.textState).toMatchObject({
+        status: "stored",
+        storage: "corpus",
+        contentHash: documentContentHash,
+      });
     });
 
     test("writes the columns alone where corpus storage is off", async () => {

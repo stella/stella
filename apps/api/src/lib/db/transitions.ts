@@ -1,11 +1,13 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   and,
   eq,
   getColumns,
+  getColumnTable,
   inArray,
   isNull,
   isSQLWrapper,
+  or,
   sql,
 } from "drizzle-orm";
 import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
@@ -18,6 +20,7 @@ import type {
   PgTable,
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -37,9 +40,109 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { isRecord } from "@/api/lib/type-guards";
 
 const TRANSITION_INSERT_BATCH_SIZE = 128;
+
+type StructuredStateChange<TIdentity extends AnyPgColumn> = {
+  id: GetColumnData<TIdentity>;
+  value: unknown;
+  fence: SQL;
+};
+
+type CompareAndSetStructuredStateOptions<
+  TTx extends Pick<Transaction, "update">,
+  TColumn extends AnyPgColumn<{ data: object }>,
+  TIdentity extends AnyPgColumn<{ notNull: true }>,
+> = {
+  tx: TTx;
+  column: TColumn;
+  identity: TIdentity;
+  schema: v.GenericSchema<unknown, NoInfer<GetColumnData<TColumn>> & object>;
+  changes: readonly StructuredStateChange<TIdentity>[];
+  recordTransitionAuditEvent: (
+    tx: TTx,
+    ids: readonly GetColumnData<TIdentity>[],
+  ) => Promise<void>;
+};
+
+/** Validate the complete bounded batch before its fenced write; audit only winners. */
+export const compareAndSetStructuredState = async <
+  TTx extends Pick<Transaction, "update">,
+  TColumn extends AnyPgColumn<{ data: object }>,
+  TIdentity extends AnyPgColumn<{ notNull: true }>,
+>({
+  tx,
+  column,
+  identity,
+  schema,
+  changes,
+  recordTransitionAuditEvent,
+}: CompareAndSetStructuredStateOptions<TTx, TColumn, TIdentity>) => {
+  if (column.getSQLType() !== "jsonb") {
+    return panic("Structured state requires a JSONB column");
+  }
+  const table = getColumnTable(column);
+  if (
+    getColumnTable(identity) !== table ||
+    (!identity.primary && !identity.isUnique)
+  ) {
+    return panic("Structured state requires its table's unique row identity");
+  }
+  if (changes.length > TRANSITION_INSERT_BATCH_SIZE) {
+    return panic("Structured state batch exceeds its transition bound");
+  }
+  const [key] =
+    Object.entries(getColumns(table)).find(
+      ([, candidate]) => candidate === column,
+    ) ?? panic("Structured state column is not declared by its table");
+  const seen = new Set<GetColumnData<TIdentity>>();
+  const validated = [];
+  for (const change of changes) {
+    if (seen.has(change.id)) {
+      return panic("Structured state batch repeats a row identity");
+    }
+    seen.add(change.id);
+    const parsed = v.safeParse(schema, change.value);
+    if (!parsed.success) {
+      return {
+        type: "schema-rejected",
+        issueCount: parsed.issues.length,
+      } as const;
+    }
+    const encoded = Result.try(() => JSON.stringify(parsed.output));
+    if (encoded.isErr() || encoded.value === undefined) {
+      return { type: "schema-rejected", issueCount: 1 } as const;
+    }
+    validated.push({
+      id: change.id,
+      encoded: encoded.value,
+      predicate: and(eq(identity, change.id), change.fence),
+    });
+  }
+  if (validated.length === 0) {
+    return { type: "updated", ids: [] } as const;
+  }
+  const next = sqlCaseFragment({
+    branches: validated.map(
+      ({ predicate, encoded }) =>
+        sql`WHEN ${predicate} THEN ${encoded}::text::jsonb`,
+    ),
+    fallback: sql`${column}`,
+  });
+  const rows = await tx
+    .update(table)
+    .set({ [key]: next })
+    .where(or(...validated.map(({ predicate }) => predicate)))
+    .returning({ id: identity });
+  if (rows.length === 0) {
+    return { type: "stale-fence" } as const;
+  }
+  const ids = rows.map(({ id }) => id);
+  await recordTransitionAuditEvent(tx, ids);
+  return { type: "updated", ids } as const;
+};
 
 const returnedTransitionRows = (result: unknown) =>
   executedRows(result).map((row) => {

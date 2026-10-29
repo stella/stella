@@ -64,6 +64,7 @@ const sourceOf = (
   ({
     status: "read",
     decision: {
+      textState: null,
       id: brandPersistedCaseLawDecisionId(id),
       caseNumberType: "case-number",
       courtAbbreviation: "ÚS",

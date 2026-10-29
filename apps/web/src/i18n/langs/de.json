@@ -1237,6 +1237,12 @@
       "oldestUnavailable": "Eine Suche wird nach Relevanz oder mit den neuesten zuerst sortiert. Leeren Sie die Suche, um die ältesten Entscheidungen zuerst anzuzeigen.",
       "relevance": "Beste Treffer"
     },
+    "textState": {
+      "textFetchFailed": "Textabruf fehlgeschlagen",
+      "textMetadataOnlySource": "Quelle liefert nur Metadaten",
+      "textNotPublished": "Kein Text veröffentlicht",
+      "textPending": "Text wird abgerufen"
+    },
     "viewer": {
       "abstract": "Zusammenfassung",
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",

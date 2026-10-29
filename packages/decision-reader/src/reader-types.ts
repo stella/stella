@@ -2,6 +2,7 @@ import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
+import type { CaseLawTextStatus } from "@stll/api-contract/case-law-text-status";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import type { HeadingLevel } from "@stll/legal-ast/document-ast";
 
@@ -10,6 +11,7 @@ import type { StatuteCitationAnchor } from "./fallback-legal-anchors";
 import type { ProvisionAnchorSource } from "./provision-anchors";
 
 export type ReaderDecision = {
+  textState: CaseLawTextStatus | null;
   caseNumber: string;
   caseNumberType: DecisionPrimaryReferenceType;
   country: string;

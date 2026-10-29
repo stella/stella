@@ -45,6 +45,7 @@ const unavailable = {
   documentAst: null,
   fulltext: null,
   hasDocument: false,
+  textState: null,
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: true,

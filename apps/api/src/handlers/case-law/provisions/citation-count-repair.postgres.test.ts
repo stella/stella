@@ -99,6 +99,7 @@ if (!databaseUrl || !runPostgresTests) {
                 transition === "restore"
                   ? new Date("2026-01-01T00:00:00Z")
                   : null,
+              textState: transition === "restore" ? null : undefined,
             });
             const first = firstClient.begin(async (client) => {
               await client`SET LOCAL statement_timeout = '5s'`;

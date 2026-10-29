@@ -14,6 +14,7 @@ import type { DecisionIdentityLocator } from "@/api/handlers/case-law/decisions/
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { decisionTextStateStatusColumn } from "@/api/lib/case-law/text-state-projection";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -144,6 +145,9 @@ export const listCaseFileDocuments = async ({
   END`;
   const versions = tx
     .select({
+      textState: decisionTextStateStatusColumn(publishedCaseLawDecisions).as(
+        "text_state_status",
+      ),
       id: publishedCaseLawDecisions.id,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       country: publishedCaseLawDecisions.country,

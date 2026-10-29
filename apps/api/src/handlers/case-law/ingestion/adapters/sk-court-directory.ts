@@ -1,3 +1,4 @@
+// parser-output-unchanged: Map the new parser-refusal cause to a registry error; successful court resolution is unchanged.
 // parser-output-unchanged: listing-stage labels do not alter directory parsing.
 import { panic, Result } from "better-result";
 
@@ -257,6 +258,7 @@ export const createSkCourtRegistryReader = (
           case "thrown":
             return Result.err(registryError(cause.error));
           case "too-large":
+          case "parser-refusal":
             return Result.err(registryError(cause));
           // A served answer with no record in it states nothing about the
           // court; the page is read again rather than stored without it.

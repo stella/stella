@@ -325,6 +325,7 @@ describe("corpus sample reader role", () => {
             country: "CZE",
             language: "cs",
             redactedAt: new Date("2026-09-01T00:00:00.000Z"),
+            textState: null,
             textS3Key: `text/${redactedId}`,
           },
         ]);

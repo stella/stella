@@ -15,6 +15,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import { editorialSupplementBlocks } from "@stll/decision-reader/decision-text.logic";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -72,6 +73,7 @@ const textDecision = (overrides: Partial<TextDecision> = {}): TextDecision => ({
   documentAst: ast,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   fulltext: null,
   id: toSafeId<"caseLawDecision">("9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
@@ -1000,4 +1002,26 @@ describe("a caption stored run on", () => {
     expect(markup).not.toContain("<header>");
     expect(markup).toContain("ČESKÉ REPUBLIKY\t              21 Cdo 1484/2004");
   });
+});
+
+test("a pending verification marker never hides already readable court text", () => {
+  const markup = renderToStaticMarkup(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <QueryClientProvider client={new QueryClient()}>
+            <DecisionText
+              surface="development"
+              decisionId={textDecision().id}
+              decision={textDecision({
+                textState: CASE_LAW_TEXT_STATUS.FETCH_PENDING,
+              })}
+            />
+          </QueryClientProvider>
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  expect(markup).toContain("Court text.");
+  expect(markup).toContain(messages.caseLaw.textState.textPending);
 });

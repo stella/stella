@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+import { and, eq, inArray, sql } from "drizzle-orm";
 /**
  * Resolving a published case reference to the decisions that answer to it.
  *
@@ -23,11 +25,9 @@
  * country is outside the public list, whose source may not be redistributed,
  * or which is listing-only, does not exist for this caller either.
  */
-
-import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
+import type { CaseLawTextStatus } from "@stll/api-contract/case-law-text-status";
 import {
   type DecisionDocketSelector,
   decisionDocketTailSpellings,
@@ -69,6 +69,7 @@ import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { decisionTextStateStatusColumn } from "@/api/lib/case-law/text-state-projection";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -174,6 +175,7 @@ const IDENTIFIER_TYPE_OF_LOCATOR_KIND = {
  * every name the decision answers to and not only its primary one.
  */
 export type DecisionIdentityRow = {
+  textState: CaseLawTextStatus | null;
   caseNumber: string;
   /** What kind of reference `caseNumber` is. */
   caseNumberType: DecisionPrimaryReferenceType;
@@ -506,6 +508,7 @@ export const lookupDecisionsByIdentity = async ({
     const familyKey = await docketFamilyKeyToRead({ country, locator, tx });
     const decisions = await tx
       .select({
+        textState: decisionTextStateStatusColumn(publishedCaseLawDecisions),
         caseNumber: publishedCaseLawDecisions.caseNumber,
         caseNumberType: publishedCaseLawDecisions.caseNumberType,
         country: publishedCaseLawDecisions.country,

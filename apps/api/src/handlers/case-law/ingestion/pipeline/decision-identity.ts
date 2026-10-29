@@ -216,6 +216,7 @@ const IDENTITY_COLUMNS = {
   // The write the row records for its canonical payload, so the corpus
   // upload can refuse re-PUTting objects a settled row already proved.
   contentHash: true,
+  textState: true,
   textS3Key: true,
   normalizedS3Key: true,
   astS3Key: true,

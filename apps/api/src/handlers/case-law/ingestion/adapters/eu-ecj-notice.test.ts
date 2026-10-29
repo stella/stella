@@ -373,6 +373,7 @@ describe("notice publication outcomes", () => {
       redactedAt: null,
       corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
       contentHash: "stored-complete-document",
+      textState: null,
       textS3Key: "stored/text",
       normalizedS3Key: "stored/normalized",
       astS3Key: "stored/ast",

@@ -1237,6 +1237,12 @@
       "oldestUnavailable": "Una búsqueda se ordena por relevancia o de la más reciente a la más antigua. Borre la búsqueda para ver primero las resoluciones más antiguas.",
       "relevance": "Más relevantes"
     },
+    "textState": {
+      "textFetchFailed": "Error al recuperar el texto",
+      "textMetadataOnlySource": "La fuente solo proporciona metadatos",
+      "textNotPublished": "Texto no publicado",
+      "textPending": "Texto pendiente de recuperación"
+    },
     "viewer": {
       "abstract": "Resumen",
       "appliedVersionNotStated": "Versión aplicada no indicada",

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { caseLawTextStatusSchema } from "@stll/api-contract/case-law-fulltext-state";
 import {
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
@@ -11,6 +12,7 @@ import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-ident
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
 const readerMetadataSchema = v.strictObject({
+  textState: v.nullable(caseLawTextStatusSchema),
   decisionId: v.string(),
   caseNumber: v.string(),
   caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),

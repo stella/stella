@@ -110,6 +110,8 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
+// parser-output-unchanged: Court-reference policy moved to a side-effect-free source-owned helper.
+import { plUodoIsCourtReference } from "./pl-uodo.text-policy";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -731,7 +733,7 @@ export const plUodoListingIdentity = (row: PlUodoRow): ListingIdentity => {
  */
 export const plUodoHeldWithoutDetail = (identity: ListingIdentity): boolean =>
   identity.type === "document" &&
-  (identity.sourceDocumentId.startsWith("urn:ndoc:court:pl:") ||
+  (plUodoIsCourtReference(identity.sourceDocumentId) ||
     isQuarantineId(identity.sourceDocumentId));
 
 const collapse = (value: string): string => value.replace(/\s+/gu, " ").trim();
@@ -1308,7 +1310,7 @@ const recordMetadata = (row: PlUodoRow): Record<string, unknown> => ({
 const citedDocketsOf = (row: PlUodoRow): string[] =>
   row.refs.flatMap((ref) =>
     ref.name !== undefined &&
-    (ref.refid?.startsWith("urn:ndoc:court:pl:") === true ||
+    ((ref.refid !== undefined && plUodoIsCourtReference(ref.refid)) ||
       ref.refid?.startsWith("urn:ndoc:gov:pl:uodo:") === true)
       ? [ref.name]
       : [],

@@ -5,6 +5,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
+  DECISION_TEXT_RECOVERY,
+  type DecisionTextState,
+} from "@stll/api-contract/case-law-fulltext-state";
+import type { DecisionTextAvailability } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
+import {
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -2282,55 +2288,117 @@ test.each(["off", "bm25-ratio"] as const)(
   },
 );
 
-test.each([
+const TEXT_STATE_OBSERVED_AT = "2026-10-28T00:00:00.000Z";
+const TEXT_STATE_HASH = "a".repeat(64);
+const TEXT_STATE_CORPUS_POINTERS = {
+  fulltext: null,
+  textS3Key: "text-key",
+  normalizedS3Key: "normalized-key",
+  astS3Key: "ast-key",
+  contentHash: TEXT_STATE_HASH,
+};
+const TEXT_STATE_NO_POINTERS = {
+  fulltext: null,
+  textS3Key: null,
+  normalizedS3Key: null,
+  astS3Key: null,
+  contentHash: null,
+};
+const TEXT_STATE_FIXTURES = [
   {
-    name: "publisher summary alone",
+    name: "PostgreSQL stored text",
     payload: {
-      fulltext: null,
-      textS3Key: null,
-      normalizedS3Key: null,
-      astS3Key: null,
-    },
-    expected: "metadata_only",
-  },
-  {
-    name: "empty document",
-    payload: {
-      fulltext: "",
-      textS3Key: null,
-      normalizedS3Key: null,
-      astS3Key: null,
-    },
-    expected: "metadata_only",
-  },
-  {
-    name: "stored text",
-    payload: {
+      ...TEXT_STATE_NO_POINTERS,
       fulltext: "sampleword decision text",
-      textS3Key: null,
-      normalizedS3Key: null,
-      astS3Key: null,
+    },
+    state: {
+      status: CASE_LAW_TEXT_STATUS.STORED,
+      storage: "postgres",
+      contentHash: TEXT_STATE_HASH,
+      verifiedAt: TEXT_STATE_OBSERVED_AT,
     },
     expected: "available",
   },
   {
-    name: "completed object-storage document",
-    payload: {
-      fulltext: null,
-      textS3Key: "text-key",
-      normalizedS3Key: "normalized-key",
-      astS3Key: "ast-key",
+    name: "verified corpus text",
+    payload: TEXT_STATE_CORPUS_POINTERS,
+    state: {
+      status: CASE_LAW_TEXT_STATUS.STORED,
+      storage: "corpus",
+      contentHash: TEXT_STATE_HASH,
+      verifiedAt: TEXT_STATE_OBSERVED_AT,
     },
     expected: "available",
   },
-] as const)(
+  {
+    name: "publisher absence with evidence",
+    payload: TEXT_STATE_NO_POINTERS,
+    state: {
+      status: CASE_LAW_TEXT_STATUS.PUBLISHER_HAS_NO_TEXT,
+      observedAt: TEXT_STATE_OBSERVED_AT,
+      evidence: {
+        recordUrl: "https://publisher.example/record",
+        sourceHash: TEXT_STATE_HASH,
+        field: "decisionText",
+        kind: "explicit_statement",
+      },
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "pending verification despite pointers",
+    payload: TEXT_STATE_CORPUS_POINTERS,
+    state: {
+      status: CASE_LAW_TEXT_STATUS.FETCH_PENDING,
+      attemptCount: 0,
+      nextAttemptAt: TEXT_STATE_OBSERVED_AT,
+      lastAttemptAt: null,
+      recovery: { type: DECISION_TEXT_RECOVERY.VERIFY_STORAGE },
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "failed retrieval despite pointers",
+    payload: TEXT_STATE_CORPUS_POINTERS,
+    state: {
+      status: CASE_LAW_TEXT_STATUS.FETCH_FAILED,
+      attemptCount: 1,
+      nextAttemptAt: TEXT_STATE_OBSERVED_AT,
+      lastAttemptAt: TEXT_STATE_OBSERVED_AT,
+      cause: { kind: "http", status: 503 },
+      recovery: { type: DECISION_TEXT_RECOVERY.VERIFY_STORAGE },
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "metadata-only source despite pointers",
+    payload: TEXT_STATE_CORPUS_POINTERS,
+    state: {
+      status: CASE_LAW_TEXT_STATUS.METADATA_ONLY_BY_SOURCE,
+      observedAt: TEXT_STATE_OBSERVED_AT,
+      policy: "fixture_metadata_only",
+    },
+    expected: "metadata_only",
+  },
+] as const satisfies readonly {
+  name: string;
+  payload: Pick<
+    typeof caseLawDecisions.$inferInsert,
+    "fulltext" | "textS3Key" | "normalizedS3Key" | "astS3Key" | "contentHash"
+  >;
+  state: DecisionTextState;
+  expected: DecisionTextAvailability;
+}[];
+
+test.each(TEXT_STATE_FIXTURES)(
   "search reports text availability for $name on both providers",
-  async ({ payload, expected }) => {
+  async ({ payload, state, expected }) => {
     const db = drizzle({ client });
     await db
       .update(caseLawDecisions)
       .set({
         ...payload,
+        textState: state,
         metadata: { legalSentence: "sampleword publisher summary" },
       })
       .where(eq(caseLawDecisions.id, czechId));
@@ -2357,6 +2425,7 @@ test.each([
       total: SEARCH_TOTAL_NOT_COUNTED,
       match: "all_terms",
     });
+    expect(page.hits.map((hit) => hit.textState)).toEqual([state.status]);
     expect(page.hits.map((hit) => hit.textAvailability)).toEqual([expected]);
     expect(page.hits.at(0)?.headnote.type).toBe("present");
     resetPublicCaseLawConfigForTesting(caseLawDb);
@@ -2372,6 +2441,9 @@ test.each([
         postgres.hits.find((hit) => hit.decisionId === czechId)
           ?.textAvailability,
       ).toBe(expected);
+      expect(
+        postgres.hits.find((hit) => hit.decisionId === czechId)?.textState,
+      ).toBe(state.status);
     } finally {
       resetPublicCaseLawConfigForTesting();
     }

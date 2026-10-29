@@ -11,7 +11,12 @@ import {
 
 import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
+import type { DecisionTextAvailability } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_AVAILABILITY,
+  decisionTextStatusMarker,
+} from "@stll/api-contract/case-law-text-field";
+import type { CaseLawTextStatus } from "@stll/api-contract/case-law-text-status";
 import {
   formatDecisionParagraphRange,
   parseDecisionParagraphFragment,
@@ -92,6 +97,20 @@ type OpenReader = (
   trigger: HTMLElement,
 ) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
+
+const TextStateMarker = ({
+  textState,
+  availability,
+}: {
+  textState: CaseLawTextStatus | null;
+  availability: DecisionTextAvailability;
+}) => {
+  const t = useTranslations();
+  const key = decisionTextStatusMarker(textState, availability);
+  return key === null ? null : (
+    <span className="text-muted-foreground text-xs">{t(key)}</span>
+  );
+};
 
 const ResultTableRow = ({
   row,
@@ -197,13 +216,14 @@ const ResultTableRow = ({
               )}
             </PreviewCardPopup>
           </PreviewCard>
-          {row.type === "search" &&
-            row.textAvailability ===
-              DECISION_TEXT_AVAILABILITY.METADATA_ONLY && (
-              <span className="text-muted-foreground text-xs">
-                {t("noDecisionText")}
-              </span>
-            )}
+          <TextStateMarker
+            textState={row.textState}
+            availability={
+              row.type === "search"
+                ? row.textAvailability
+                : DECISION_TEXT_AVAILABILITY.AVAILABLE
+            }
+          />
           {row.type === "search" && row.match === "some_terms" && (
             <span className="text-muted-foreground text-xs">
               {t("partialMatch")}
@@ -856,6 +876,10 @@ const ResolveResults = ({
                 >
                   <bdi>{candidate.identifier}</bdi>
                 </Button>
+                <TextStateMarker
+                  textState={candidate.textState}
+                  availability={DECISION_TEXT_AVAILABILITY.AVAILABLE}
+                />
                 <p className="text-muted-foreground text-sm">
                   {candidate.label}
                 </p>

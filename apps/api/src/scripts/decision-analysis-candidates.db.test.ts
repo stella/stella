@@ -155,6 +155,7 @@ describe("analysis candidate paging", () => {
                       citationAuthority: fixture.citationAuthority,
                       citationCount: fixture.citationCount,
                       redactedAt: fixture.redacted ? new Date() : null,
+                      textState: fixture.redacted ? null : undefined,
                     };
                   }),
                 )
