@@ -2476,6 +2476,8 @@
       "aresNotFound": "Ehhez az IČO-hoz nem található cég.",
       "aresTitle": "Cseh nyilvántartás (ARES)",
       "contactName": "Kapcsolat neve",
+      "displayNameOrganizationHint": "Opcionális felülírás; egyébként a szervezet nevéből jön létre.",
+      "displayNamePersonHint": "Opcionális felülírás; egyébként az utó- és vezetéknévből jön létre.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Adjon meg egy 8 számjegyű IČO-t."
     },

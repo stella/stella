@@ -2476,6 +2476,8 @@
       "aresNotFound": "No se encontró ninguna empresa para este IČO.",
       "aresTitle": "Registro checo (ARES)",
       "contactName": "Nombre del contacto",
+      "displayNameOrganizationHint": "Sustitución opcional; de lo contrario, se genera a partir del nombre de la organización.",
+      "displayNamePersonHint": "Sustitución opcional; de lo contrario, se genera a partir del nombre y apellido.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Introduce un IČO de 8 dígitos."
     },
