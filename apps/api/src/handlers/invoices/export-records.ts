@@ -30,7 +30,7 @@ import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
  * counted, which is the one that reached its total. An invoice marked paid
  * before payments were recorded carries only the moment it was marked.
  */
-const exportPaidDate = (
+export const exportPaidDate = (
   invoice: {
     status: string;
     paidAt: Date | null;

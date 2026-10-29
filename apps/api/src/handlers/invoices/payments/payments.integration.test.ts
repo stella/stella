@@ -20,7 +20,6 @@ import {
   invoicePayments,
   invoices,
   organizationSettings,
-  sellerProfiles,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -34,6 +33,7 @@ import {
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -44,7 +44,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { loadInvoiceExport, toExportRecords } from "../export-records";
+import { exportPaidDate } from "../export-records";
 import readInvoiceById from "../get";
 import readInvoices from "../list";
 import transitionInvoice from "../transition";
@@ -614,18 +614,6 @@ describe("invoice payments", () => {
       const settings = await testDb.query.organizationSettings.findFirst({
         where: { organizationId: { eq: ids.orgA } },
       });
-      const sellerId = createSafeId<"sellerProfile">();
-      await testDb.insert(sellerProfiles).values({
-        id: sellerId,
-        organizationId: ids.orgA,
-        legalName: "Export test seller",
-        country: "CZ",
-        defaultCurrency: "USD",
-      });
-      await testDb
-        .update(invoices)
-        .set({ sellerProfileId: sellerId })
-        .where(eq(invoices.id, invoiceId));
       const timeZone =
         zoneSource === "explicit"
           ? (parseTimeZoneId("Europe/Prague") ??
@@ -652,21 +640,23 @@ describe("invoice payments", () => {
           ids.orgA,
           ids.userA1,
         );
-        const loaded = await scopedDb(
-          async (tx) =>
-            await loadInvoiceExport(tx, {
-              organizationId: ids.orgA,
-              workspaceId: ids.wsA1,
-              invoiceIds: [invoiceId],
-            }),
-        );
-        const exported = toExportRecords(loaded, [invoiceId]);
-        if (exported.isErr()) {
-          return panic("Expected exportable legacy invoice", {
-            error: exported.error,
-          });
-        }
-        return exported.value.at(0)?.paidDate;
+        return await scopedDb(async (tx) => {
+          const invoice =
+            (await tx.query.invoices.findFirst({
+              where: { id: { eq: invoiceId } },
+              columns: { status: true, paidAt: true },
+              with: { payments: { columns: { paidOn: true, voidedAt: true } } },
+            })) ?? panic("Expected legacy invoice");
+          const storedSettings =
+            (await tx.query.organizationSettings.findFirst({
+              where: { organizationId: { eq: ids.orgA } },
+              columns: { timeZone: true, practiceJurisdictions: true },
+            })) ?? panic("Expected organization settings");
+          return exportPaidDate(
+            invoice,
+            effectiveOrganizationTimeZone(storedSettings),
+          );
+        });
       };
       try {
         expect(paidAt.toISOString().slice(0, 10)).toBe("2026-07-01");
@@ -678,13 +668,6 @@ describe("invoice payments", () => {
         });
         expect(await exportDate()).toBe(before);
       } finally {
-        await testDb
-          .update(invoices)
-          .set({ sellerProfileId: null })
-          .where(eq(invoices.id, invoiceId));
-        await testDb
-          .delete(sellerProfiles)
-          .where(eq(sellerProfiles.id, sellerId));
         if (settings === undefined) {
           await testDb
             .delete(organizationSettings)
