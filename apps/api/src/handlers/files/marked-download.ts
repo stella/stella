@@ -27,18 +27,26 @@ import { displayedPdfFileId, fileFieldQuery } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readAllVisibleMatterDocumentMarks } from "@/api/lib/legal-search/reader-annotations/matter-document-list";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MARKED_DOWNLOAD_READ_TIMEOUT_MS = 60 * 1000;
+const MARKED_DOWNLOAD_FAILURE = failureSink({
+  event: "files.marked_download.failed",
+  expected: [],
+});
 
 type MarkedDownloadOptions = {
   fieldId: SafeId<"field">;
   mode: MarkedPdfExportMode;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
+  requestSignal: AbortSignal;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
@@ -50,6 +58,7 @@ export const readMarkedDownload = async function* ({
   mode,
   organizationId,
   recordAuditEvent,
+  requestSignal,
   safeDb,
   scopedDb,
   userId,
@@ -71,71 +80,97 @@ export const readMarkedDownload = async function* ({
     );
   }
   const content = row.content;
-  if (
-    content.mimeType !== PDF_MIME_TYPE ||
-    content.encrypted ||
-    content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document
-  ) {
+  if (content.mimeType !== PDF_MIME_TYPE) {
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Only a readable PDF downloads with its highlights.",
-        hint: "Download the original file instead.",
-      }),
+      new HandlerError({ status: 400, message: "The file is not a PDF." }),
     );
   }
-
-  // Marks anchor to the PDF the viewer shows; only when that is the upload
-  // itself do their offsets index these bytes.
-  let marks: readonly PdfMark[] = [];
-  if (displayedPdfFileId(content) === content.id) {
-    const visible = yield* readAllVisibleMatterDocumentMarks({
-      entityId: row.entityId,
-      fieldId,
-      organizationId,
-      safeDb,
-      userId,
-      workspaceId,
-    });
-    marks = yield* visible;
-  }
-
-  const stored = yield* Result.await(
-    Result.tryPromise(
+  const key = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId: content.id,
+    mimeType: content.mimeType,
+  });
+  const marked = (
+    await Result.tryPromise(
       async () =>
-        await withTimeout(
-          async (signal) =>
-            await readStoredFile({
-              key: createFileKey({
-                organizationId,
-                workspaceId,
-                fileId: content.id,
-                mimeType: content.mimeType,
-              }),
-              mimeType: content.mimeType,
-              maxBytes: FILE_SIZE_LIMIT_BYTES.document,
-              signal,
-            }),
-          {
-            label: "Marked download storage read",
-            timeoutMs: MARKED_DOWNLOAD_READ_TIMEOUT_MS,
-          },
-        ),
-    ),
-  );
-  const source = new Uint8Array(stored.bytes);
-  const marked = yield* Result.await(
-    Result.tryPromise(
-      async () =>
-        await writeMarksIntoPdf({
-          marks,
-          mode,
-          source,
-          viewedFieldId: fieldId,
+        await Result.gen(async function* () {
+          if (
+            content.encrypted ||
+            content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document
+          ) {
+            return Result.ok(null);
+          }
+          // Marks anchor to the PDF the viewer shows; only the upload itself
+          // has offsets that index these bytes.
+          let marks: readonly PdfMark[] = [];
+          if (displayedPdfFileId(content) === content.id) {
+            const visible = yield* readAllVisibleMatterDocumentMarks({
+              entityId: row.entityId,
+              fieldId,
+              organizationId,
+              safeDb,
+              userId,
+              workspaceId,
+            });
+            marks = yield* visible;
+          }
+          if (marks.length === 0) {
+            return Result.ok(null);
+          }
+          const stored = yield* Result.await(
+            Result.tryPromise(
+              async () =>
+                await withTimeout(
+                  async (signal) =>
+                    await readStoredFile({
+                      key,
+                      mimeType: content.mimeType,
+                      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+                      signal: AbortSignal.any([signal, requestSignal]),
+                    }),
+                  {
+                    label: "Marked download storage read",
+                    timeoutMs: MARKED_DOWNLOAD_READ_TIMEOUT_MS,
+                  },
+                ),
+            ),
+          );
+          const copy = yield* Result.await(
+            Result.tryPromise(
+              async () =>
+                await writeMarksIntoPdf({
+                  marks,
+                  mode,
+                  source: new Uint8Array(stored.bytes),
+                  viewedFieldId: fieldId,
+                }),
+            ),
+          );
+          return Result.ok(copy.status === "marked" ? copy : null);
         }),
-    ),
-  );
-  const bytes = marked.status === "marked" ? marked.bytes : source;
+    )
+  ).andThen((result) => result);
+  if (marked.isErr()) {
+    observeFailure(marked.error, {
+      sink: MARKED_DOWNLOAD_FAILURE,
+      ctx: { mode },
+    });
+  }
+  // Every unavailable marking outcome serves the same authorized original.
+  // Streaming keeps the processing ceiling from becoming a download ceiling.
+  const copy = marked.unwrapOr(null);
+  const download =
+    copy === null
+      ? yield* Result.await(
+          Result.tryPromise(
+            async () => await openS3ObjectStreamWithSignal(key, requestSignal),
+          ),
+        )
+      : {
+          body: copy.bytes.slice().buffer,
+          contentLength: copy.bytes.byteLength,
+        };
 
   // Recorded once the copy exists, as the other download paths do: a failed
   // read must not leave a download in the trail that never happened.
@@ -151,8 +186,7 @@ export const readMarkedDownload = async function* ({
               metadata: {
                 fieldId,
                 mimeType: content.mimeType,
-                annotations:
-                  marked.status === "marked" ? marked.annotationCount : 0,
+                annotations: copy?.annotationCount ?? 0,
                 markExport: mode,
               },
             }),
@@ -160,14 +194,10 @@ export const readMarkedDownload = async function* ({
     ),
   );
 
-  // Copied into its own ArrayBuffer so the body is a plain `BodyInit`.
-  const body = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(body).set(bytes);
-
   return Result.ok(
     secureDocumentResponse({
-      body,
-      contentLength: body.byteLength,
+      body: download.body,
+      contentLength: download.contentLength,
       contentType: PDF_MIME_TYPE,
       disposition: "attachment",
       fileName: sanitizeFilename(content.fileName),
