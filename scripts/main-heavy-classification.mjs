@@ -45,7 +45,9 @@ const RUNNER_INFRASTRUCTURE_STEPS = new Set([
 /** @param {string} uses */
 const infrastructureAction = (uses) => {
   const action = uses.split("@").at(0);
-  if (action === undefined) return false;
+  if (action === undefined) {
+    return false;
+  }
   return (
     INFRASTRUCTURE_ACTIONS.includes(action) ||
     Object.hasOwn(LOCAL_INFRASTRUCTURE_ACTIONS, action)
@@ -67,29 +69,37 @@ export const infrastructureStepsByJob = (source) => {
       inJobs = true;
       continue;
     }
-    if (!inJobs) continue;
-    const jobMatch = /^  ([A-Za-z0-9_-]+):\s*$/u.exec(line);
+    if (!inJobs) {
+      continue;
+    }
+    const jobMatch = /^ {2}([A-Za-z0-9_-]+):\s*$/u.exec(line);
     if (jobMatch) {
       job = jobMatch.at(1);
-      if (job === undefined) continue;
+      if (job === undefined) {
+        continue;
+      }
       jobs.set(job, { displayName: job, steps: new Set() });
       stepName = undefined;
       continue;
     }
-    if (!job) continue;
-    const displayName = /^    name:\s*["']?([^"']+?)["']?\s*$/u.exec(line);
+    if (!job) {
+      continue;
+    }
+    const displayName = /^ {4}name:\s*["']?([^"']+?)["']?\s*$/u.exec(line);
     const display = displayName?.at(1);
     if (display && !display.includes("${{")) {
       const definition = jobs.get(job);
-      if (definition) definition.displayName = display;
+      if (definition) {
+        definition.displayName = display;
+      }
       continue;
     }
-    const name = /^      - name:\s*["']?([^"']+?)["']?\s*$/u.exec(line);
+    const name = /^ {6}- name:\s*["']?([^"']+?)["']?\s*$/u.exec(line);
     if (name) {
       stepName = name.at(1);
       continue;
     }
-    const uses = /^        uses:\s*([^\s#]+)/u.exec(line);
+    const uses = /^ {8}uses:\s*([^\s#]+)/u.exec(line);
     const action = uses?.at(1);
     const definition = jobs.get(job);
     if (stepName && action && definition && infrastructureAction(action)) {
@@ -109,8 +119,9 @@ const jobInfrastructureSteps = (name, definitions) => {
       normalized.startsWith(`${id} (`) ||
       normalized === definition.displayName ||
       normalized.startsWith(`${definition.displayName} (`)
-    )
+    ) {
       return definition.steps;
+    }
   }
   return new Set();
 };
@@ -166,8 +177,9 @@ export const classifyMainHeavyFailures = ({
       );
     if (allInfrastructure) {
       const firstFailedStep = failedSteps.at(0);
-      if (firstFailedStep === undefined)
+      if (firstFailedStep === undefined) {
         throw new TypeError("Missing failed step");
+      }
       return {
         name: job.name,
         type: "INFRA",
