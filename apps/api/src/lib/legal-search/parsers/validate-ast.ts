@@ -9,12 +9,12 @@
 /**
  * AST sanity checker.
  *
- * Every parser MUST call `validateAst` after producing blocks.
- * It checks for content loss, structural anomalies, and
- * formatting issues. Violations are logged as warnings;
- * in tests, the result can be asserted.
+ * The ingestion pipeline compares parsed blocks with an independent
+ * projection of stored publisher text. The oracle classifies content loss,
+ * structural anomalies and formatting issues; the caller reports the verdict.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag } from "domhandler";
 
