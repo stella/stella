@@ -73,9 +73,10 @@ describe("subheadings a publisher marks with a dash", () => {
 
   test("only dash-led headings change, and only their level", () => {
     const nested = withDashSubheadingLevels(APPEAL);
-    for (const [index, block] of nested.entries()) {
-      const stored = APPEAL[index];
-      if (stored?.type === "heading" && block.type === "heading") {
+    expect(nested).toHaveLength(APPEAL.length);
+    for (const [index, stored] of APPEAL.entries()) {
+      const block = nested[index];
+      if (stored.type === "heading" && block?.type === "heading") {
         expect({ ...block, level: stored.level }).toEqual(stored);
         if (!stored.plainText.startsWith("–")) {
           expect(block).toBe(stored);
