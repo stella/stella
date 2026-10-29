@@ -6,7 +6,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import * as agentSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
-import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/lib/user-attribution-retention";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 import {
   ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
