@@ -33,6 +33,7 @@
     0 0 0 1px rgb(0 0 0 / 0.02), 0 1px 2px rgb(0 0 0 / 0.03),
     0 8px 20px rgb(0 0 0 / 0.05);
   --color-background: var(--background);
+  --color-auth-gradient-end: var(--auth-gradient-end);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

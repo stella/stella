@@ -10,7 +10,8 @@
         "packages/ui/src/styles/theme.css",
         "apps/landing/src/styles/global.css",
         "apps/landing/src/styles/docs.css",
-        "apps/extension/src/entrypoints/popup/theme.css"
+        "apps/extension/src/entrypoints/popup/theme.css",
+        "apps/mobile/ui-theme.gen.css"
       ],
       "rules": {
         "color-named": null,

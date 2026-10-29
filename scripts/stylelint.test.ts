@@ -37,6 +37,11 @@ const THEME_STYLESHEETS = [
     reason:
       "The browser extension popup's tokens; the popup loads no app stylesheet.",
   },
+  {
+    file: "apps/mobile/ui-theme.gen.css",
+    reason:
+      "The generated native theme resolves the shared semantic tokens to sRGB.",
+  },
 ] as const;
 
 const COLOUR_RULES = [
