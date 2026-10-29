@@ -19,7 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 const REASON_LIMIT = 2048;
 
 type WithdrawalAuditEvent = {
-  decisionId: SafeId<"caseLawDecision">;
+  decisionId: SafeId<"caseLawDecision"> | readonly SafeId<"caseLawDecision">[];
   /** Generation the row is filed under. */
   /** Why the document was taken back, in the caller's own words. */
   reason: string;
@@ -37,13 +37,18 @@ export const recordCorpusWithdrawalAuditEvent = async (
   tx: Transaction,
   { decisionId, reason }: WithdrawalAuditEvent,
 ): Promise<void> => {
-  await tx.insert(caseLawIndexJobs).values({
-    decisionId,
-    operation: "withdraw",
-    status: "succeeded",
-    contentHash: null,
-    // `detail`, not `error_message`: the row succeeded, and a reason filed
-    // in the failure column reads as a failure that never happened.
-    detail: reason.slice(0, REASON_LIMIT),
-  });
+  const decisionIds =
+    typeof decisionId === "string" ? [decisionId] : decisionId;
+  if (decisionIds.length === 0) {
+    return;
+  }
+  await tx.insert(caseLawIndexJobs).values(
+    decisionIds.map((id) => ({
+      decisionId: id,
+      operation: "withdraw" as const,
+      status: "succeeded" as const,
+      contentHash: null,
+      detail: reason.slice(0, REASON_LIMIT),
+    })),
+  );
 };

@@ -11,7 +11,11 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawIndexJobs,
+  caseLawSources,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -299,6 +303,16 @@ test("an applied run requeues each qualifying decision into the walk once", asyn
           actor === "test" && reason === "requeue for the fixed parser",
       ),
   ).toBe(true);
+
+  const audit = await testDb
+    .select({
+      id: caseLawIndexJobs.decisionId,
+      operation: caseLawIndexJobs.operation,
+    })
+    .from(caseLawIndexJobs)
+    .where(inArray(caseLawIndexJobs.decisionId, requeued));
+  expect(audit.map(({ id }) => id).toSorted()).toEqual(requeued);
+  expect(audit.every(({ operation }) => operation === "withdraw")).toBe(true);
 
   const stored = await testDb
     .select({

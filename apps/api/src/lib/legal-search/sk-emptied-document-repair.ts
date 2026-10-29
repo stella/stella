@@ -17,6 +17,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
+import { recordCorpusWithdrawalAuditEvent } from "@/api/lib/legal-search/corpus-index-job-audit";
 import {
   CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
   lockActiveCorpusProjectionSourceByIdTx,
@@ -56,7 +57,7 @@ const storedAstHasNoBlocks = sql`coalesce(
 ) = 0`;
 
 /** A decision settled as having no document, by a fetch at or after `since`. */
-export const emptiedDocumentPredicate = (since: Date) =>
+const emptiedDocumentPredicate = (since: Date) =>
   and(
     isNull(caseLawDecisions.redactedAt),
     isNotNull(caseLawDecisions.documentUrl),
@@ -151,7 +152,7 @@ export const scanEmptiedDocuments = async ({
 };
 
 /** Each requested row has an explicit terminal outcome in the results file. */
-export type EmptiedDocumentRequeueOutcome =
+type EmptiedDocumentRequeueOutcome =
   | { type: "requeued" }
   | { type: "no-longer-eligible" }
   | { type: "quarantined"; reason: "projection-or-update-failed" };
@@ -197,11 +198,14 @@ const requeueEmptiedDocumentBatchTx = async (
     .limit(decisionIds.length);
   const ids = eligible.map(({ id }) => id);
   if (ids.length > 0) {
-    // audit: skip — operator requeue of public case-law documents; no user action
     await tx
       .update(caseLawDecisions)
       .set({ fulltext: null, documentFetchAttempts: 0 })
       .where(inArray(caseLawDecisions.id, ids));
+    await recordCorpusWithdrawalAuditEvent(tx, {
+      decisionId: ids,
+      reason: "Requeue settled empty documents for deferred PDF parsing",
+    });
     if (lock !== null) {
       await synchronizeLockedCaseLawProjectionBatchTx(tx, {
         lock,

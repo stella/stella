@@ -8,6 +8,7 @@
  */
 import { Result, TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -24,7 +25,7 @@ const DEFAULT_SCAN = 10_000;
 const MIN_REASON_LENGTH = 8;
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu;
 
-export const EMPTIED_DOCUMENT_REPAIR_USAGE = `Usage: bun run src/scripts/requeue-sk-emptied-documents.ts --since <instant> [options]
+const EMPTIED_DOCUMENT_REPAIR_USAGE = `Usage: bun run src/scripts/requeue-sk-emptied-documents.ts --since <instant> [options]
 
   --since <instant>  Required. Only decisions whose last fetch attempt is at
                      or after this ISO instant (2026-01-01T00:00:00Z).
@@ -133,11 +134,13 @@ const readScan = (raw: string | undefined): ParseResult<number> => {
   if (raw === undefined) {
     return Result.ok(DEFAULT_SCAN);
   }
-  const scan = Number(raw);
-  return /^[1-9]\d*$/u.test(raw) &&
-    Number.isSafeInteger(scan) &&
-    scan <= MAX_EMPTIED_DOCUMENT_SCAN
-    ? Result.ok(scan)
+  const scan = parseIntegerToken(raw, {
+    sign: "unsigned",
+    min: 1,
+    max: MAX_EMPTIED_DOCUMENT_SCAN,
+  });
+  return /^[1-9]\d*$/u.test(raw) && scan.isOk()
+    ? Result.ok(scan.value)
     : invalid(
         `--scan must be an integer from 1 to ${String(MAX_EMPTIED_DOCUMENT_SCAN)}, got: ${raw}`,
       );

@@ -516,27 +516,68 @@ const lockProjectionInput = async (
   }
 };
 
-const setCanonicalProjectionEpoch = async (
-  tx: Transaction,
+type CanonicalProjectionEpochUpdate =
+  | {
+      family: "case_law";
+      epochs: readonly { id: SafeId<"caseLawDecision">; epoch: bigint }[];
+    }
+  | {
+      family: "legislation";
+      entityId: SafeId<"legislationDocument">;
+      epoch: bigint;
+    };
+
+const projectionEpochUpdate = (
   subject: CorpusIndexProjectionSubject,
   epoch: bigint,
-): Promise<void> => {
+): CanonicalProjectionEpochUpdate => {
   switch (subject.family) {
     case "case_law":
+      return { family: "case_law", epochs: [{ id: subject.entityId, epoch }] };
+    case "legislation":
+      return { family: "legislation", entityId: subject.entityId, epoch };
+    default:
+      subject satisfies never;
+      return panic("Unhandled projection subject");
+  }
+};
+
+const setCanonicalProjectionEpoch = async (
+  tx: Transaction,
+  update: CanonicalProjectionEpochUpdate,
+): Promise<void> => {
+  switch (update.family) {
+    case "case_law":
+      if (update.epochs.length === 0) {
+        return;
+      }
       await tx
         .update(caseLawDecisions)
-        .set({ projectionEpoch: epoch })
-        .where(eq(caseLawDecisions.id, subject.entityId));
+        .set({
+          projectionEpoch: sqlCaseFragment({
+            branches: update.epochs.map(
+              ({ id, epoch }) =>
+                sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
+            ),
+            fallback: sql`${caseLawDecisions.projectionEpoch}`,
+          }),
+        })
+        .where(
+          inArray(
+            caseLawDecisions.id,
+            update.epochs.map(({ id }) => id),
+          ),
+        );
       return;
     case "legislation":
       await tx
         .update(legislationDocuments)
-        .set({ projectionEpoch: epoch })
-        .where(eq(legislationDocuments.id, subject.entityId));
+        .set({ projectionEpoch: update.epoch })
+        .where(eq(legislationDocuments.id, update.entityId));
       return;
     default:
-      subject satisfies never;
-      return panic(`Unhandled subject: ${String(subject)}`);
+      update satisfies never;
+      return panic(`Unhandled projection epoch update: ${String(update)}`);
   }
 };
 
@@ -883,7 +924,7 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   }
 
   const epoch = locked.epoch + 1n;
-  await setCanonicalProjectionEpoch(tx, subject, epoch);
+  await setCanonicalProjectionEpoch(tx, projectionEpochUpdate(subject, epoch));
   await writeDesiredStates(
     tx,
     projections.map(({ generation, descriptor }) =>
@@ -994,7 +1035,10 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
     projections,
   });
   if (epoch !== locked.epoch) {
-    await setCanonicalProjectionEpoch(tx, subject, epoch);
+    await setCanonicalProjectionEpoch(
+      tx,
+      projectionEpochUpdate(subject, epoch),
+    );
   }
   await writeDesiredStates(tx, values);
   return {
@@ -1049,7 +1093,7 @@ export const synchronizeRetiredCaseLawProjectionDesiredStateTx = async (
     return;
   }
   const epoch = locked.epoch + 1n;
-  await setCanonicalProjectionEpoch(tx, subject, epoch);
+  await setCanonicalProjectionEpoch(tx, projectionEpochUpdate(subject, epoch));
   await writeDesiredStates(
     tx,
     manifests.map(({ generation }) =>
@@ -1134,7 +1178,10 @@ export const ensureCorpusProjectionDesiredStateTx = async (
 
   const epoch = locked.epoch === 0n ? 1n : locked.epoch;
   if (epoch !== locked.epoch) {
-    await setCanonicalProjectionEpoch(tx, subject, epoch);
+    await setCanonicalProjectionEpoch(
+      tx,
+      projectionEpochUpdate(subject, epoch),
+    );
   }
   await writeDesiredStates(tx, [
     buildCorpusIndexProjectionDesiredStateValues({
@@ -1316,25 +1363,9 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     values.push(...plan.values);
   }
 
-  if (advanced.length > 0) {
-    // audit: skip — public corpus projection reconciliation; no user action
-    await tx
-      .update(caseLawDecisions)
-      .set({
-        projectionEpoch: sqlCaseFragment({
-          branches: advanced.map(
-            ({ id, epoch }) =>
-              sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
-          ),
-          fallback: sql`${caseLawDecisions.projectionEpoch}`,
-        }),
-      })
-      .where(
-        inArray(
-          caseLawDecisions.id,
-          advanced.map(({ id }) => id),
-        ),
-      );
-  }
+  await setCanonicalProjectionEpoch(tx, {
+    family: "case_law",
+    epochs: advanced,
+  });
   await writeDesiredStates(tx, values);
 };
