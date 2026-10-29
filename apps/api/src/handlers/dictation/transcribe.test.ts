@@ -70,8 +70,8 @@ const fixture = () => {
         fetch: async (url, init) => {
           requests.push({
             url: String(url),
-            body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
-            key: new Headers(init?.headers).get("authorization"),
+            body: typeof init.body === "string" ? JSON.parse(init.body) : null,
+            key: new Headers(init.headers).get("authorization"),
           });
           return Response.json({
             text: TEXT,

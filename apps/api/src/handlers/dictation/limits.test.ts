@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
@@ -59,7 +61,7 @@ test("limits each user independently and shares the organization budget", async 
       })
     ).isOk(),
   ).toBe(true);
-  await context.kill();
+  context.kill();
 });
 
 test("unavailable counters fail closed without echoing their error", async () => {
@@ -77,6 +79,6 @@ test("unavailable counters fail closed without echoing their error", async () =>
   if (result.isOk()) {
     throw new TypeError("Expected limiter refusal");
   }
-  expect(result.error).toMatchObject({ status: 503, retryable: true });
+  expect(result.error).toMatchObject(LIMITER_STORE_UNAVAILABLE);
   expect(JSON.stringify(result)).not.toContain("fixture private payload");
 });

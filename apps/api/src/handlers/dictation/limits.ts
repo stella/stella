@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
@@ -62,13 +64,7 @@ export const consumeDictationLimit = async ({
           return false;
         }),
       ),
-    catch: () =>
-      new HandlerError({
-        status: 503,
-        code: "limiter_store_unavailable",
-        message: "Request admission is unavailable",
-        retryable: true,
-      }),
+    catch: () => new HandlerError(LIMITER_STORE_UNAVAILABLE),
   });
   if (counters.isErr()) {
     return Result.err(counters.error);

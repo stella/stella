@@ -66,11 +66,19 @@ const input = () => ({
 describe("transcription request contract", () => {
   test("the transport owner accepts only exact regional transcription endpoints", async () => {
     const originalFetch = globalThis.fetch;
-    const transport = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async () => Response.json({ text: TEXT, usage: { seconds: 1 } }),
-        { preconnect: originalFetch.preconnect },
-      ),
+    const requests: {
+      input: string | URL | Request;
+      init: RequestInit | undefined;
+    }[] = [];
+    const transport = Object.assign(
+      async (
+        requestInput: string | URL | Request,
+        requestInit?: RequestInit,
+      ) => {
+        requests.push({ input: requestInput, init: requestInit });
+        return Response.json({ text: TEXT, usage: { seconds: 1 } });
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
     );
     const init = {
       method: "POST",
@@ -78,20 +86,22 @@ describe("transcription request contract", () => {
       redirect: "follow",
       timeout: { type: "headers", ms: 60_000 },
     } as const;
+    globalThis.fetch = transport;
     try {
+      expect(globalThis.fetch.preconnect).toBeTypeOf("function");
       for (const host of ["eu.openrouter.ai", "us.openrouter.ai"]) {
         const target = `https://${host}/api/v1/audio/transcriptions`;
         await fetchManagedOpenRouterTranscription(target, init);
-        expect(transport).toHaveBeenLastCalledWith(
-          new URL(target),
-          expect.objectContaining({
+        expect(requests.at(-1)).toEqual({
+          input: new URL(target),
+          init: expect.objectContaining({
             redirect: "error",
             method: "POST",
             body: "fixture",
           }),
-        );
+        });
       }
-      transport.mockClear();
+      requests.length = 0;
       for (const target of [
         "https://openrouter.ai/api/v1/audio/transcriptions",
         "https://eu.openrouter.ai/api/v1/audio/transcriptions/extra",
@@ -105,10 +115,12 @@ describe("transcription request contract", () => {
           message: "Transcription target is outside the provider policy.",
         });
       }
-      expect(transport).not.toHaveBeenCalled();
+      expect(requests).toHaveLength(0);
     } finally {
-      transport.mockRestore();
+      globalThis.fetch = originalFetch;
     }
+    expect(globalThis.fetch).toBe(originalFetch);
+    expect(globalThis.fetch.preconnect).toBe(originalFetch.preconnect);
   });
 
   test("every model carries the mandatory policy, vocabulary, and supported timestamps", () => {

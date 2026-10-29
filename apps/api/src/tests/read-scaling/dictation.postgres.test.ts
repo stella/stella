@@ -72,7 +72,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           );
           expect(response).toBeInstanceOf(HttpStatusResponse);
           if (!(response instanceof HttpStatusResponse)) {
-            return panic("An exhausted allowance must return an HTTP refusal");
+            panic("An exhausted allowance must return an HTTP refusal");
           }
           expect(response.code).toBe(402);
           expect(JSON.stringify(response.response)).toContain(

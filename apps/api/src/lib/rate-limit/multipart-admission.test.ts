@@ -5,6 +5,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createResponseSet } from "@/api/http/context";
 import type { RequestContext } from "@/api/http/context";
+import { readBody } from "@/api/http/input";
 import {
   admitMultipartRequest,
   MULTIPART_REQUEST_MAX_BYTES,
@@ -137,7 +138,7 @@ describe("multipart admission route limits", () => {
       multipartContext(request, 3),
       async () => {
         parsed = true;
-        await request.formData();
+        await readBody(request, "auto");
         return new Response(null, { status: 204 });
       },
     );
@@ -179,7 +180,7 @@ describe("multipart admission route limits", () => {
         multipartContext(request, 3),
         async () => {
           parsed = true;
-          await request.formData();
+          await readBody(request, "auto");
           return new Response(null, { status: 204 });
         },
       );
@@ -209,8 +210,8 @@ describe("multipart admission route limits", () => {
     const ctx = multipartContext(request, bytes.byteLength);
     const response = await multipartAdmission(ctx, async (replacement) => {
       const admitted = replacement ?? ctx;
-      const parsed = await admitted.request.formData();
-      return Response.json({ name: parsed.get("name") });
+      const parsed = await readBody(admitted.request, "auto");
+      return Response.json(parsed);
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ name: "Žaneta Hrubá" });

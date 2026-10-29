@@ -35,6 +35,7 @@ import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy"
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { transcriptionUsageUnits } from "@/api/lib/usage/unit-model";
 import {
@@ -49,6 +50,9 @@ const config = {
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
+  realtime: noResourceSetUpdates(
+    "Transcription text is transient; this operation changes no shared matter or document resources.",
+  ),
   actionAdmission: { type: "handler", actionKind: "dictation.transcribe" },
   mcp: { type: "capability", reason: "assistant_chat", consumesServices: true },
   contentDelivery: {
