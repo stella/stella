@@ -2,4 +2,4 @@
 "@stll/cli": minor
 ---
 
-Add country-scoped search history list and clear options.
+Clear law history for the selected country.
