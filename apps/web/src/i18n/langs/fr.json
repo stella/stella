@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Dépenses liées",
       "linkedTimeEntries": "Entrées de temps liées",
-      "markPaid": "Marquer comme payée",
       "noEntries": "Aucune entrée liée à cette facture",
       "noInvoices": "Aucune facture",
       "paidAt": "Payée le",
+      "payments": {
+        "amountTooHigh": "Le montant dépasse le reste dû de {amount}.",
+        "confirmVoid": "Le paiement reste enregistré comme annulé et n'est plus imputé sur cette facture.",
+        "empty": "Aucun paiement enregistré pour l'instant",
+        "method": "Mode de paiement",
+        "methods": {
+          "bank_transfer": "Virement bancaire",
+          "card": "Carte",
+          "cash": "Espèces",
+          "other": "Autre mode"
+        },
+        "outstandingAmount": "Reste dû {amount}",
+        "paidOn": "Date du paiement",
+        "partiallyPaid": "Payée partiellement",
+        "record": "Enregistrer un paiement",
+        "summary": "Payé {paid}, reste dû {outstanding}",
+        "title": "Paiements",
+        "void": "Annuler le paiement",
+        "voided": "Annulé"
+      },
       "removeEntries": "Retirer les entrées",
       "send": "Envoyer",
       "statuses": {
