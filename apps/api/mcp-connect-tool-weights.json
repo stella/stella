@@ -16,10 +16,10 @@
     {
       "name": "case_law_coverage",
       "nameChars": 17,
-      "descriptionChars": 547,
+      "descriptionChars": 389,
       "inputSchemaChars": 457,
-      "totalChars": 1021,
-      "estimatedTokens": 379
+      "totalChars": 863,
+      "estimatedTokens": 326
     },
     {
       "name": "check_counterparty",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127613,
-    "estimatedTokens": 50571
+    "characters": 127455,
+    "estimatedTokens": 50518
   }
 }

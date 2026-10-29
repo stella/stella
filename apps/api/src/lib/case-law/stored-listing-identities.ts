@@ -8,12 +8,12 @@ import {
   caseLawDecisionSourceIdentities,
   caseLawDecisionSupplements,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import {
   republishedRulingCourtPredicate,
   rulingCourtNameKeySql,
-} from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
-import type { SafeId } from "@/api/lib/branded-types";
-import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+} from "@/api/lib/case-law/ruling-identity-match";
 import {
   rowHoldsDocumentFor,
   supplementIsMergedFor,
