@@ -4,6 +4,7 @@ import { cp, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// timeout: cold real Astro compiler spin-up may exceed the Bun 5 s default; the test awaits compiler completion, no sleeps
 test("base layout keeps compiler syntax valid", async () => {
   const root = fileURLToPath(new URL("../../", import.meta.url));
   const directory = await mkdtemp(path.join(root, ".base-check-"));
@@ -34,4 +35,4 @@ test("base layout keeps compiler syntax valid", async () => {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-});
+}, 30_000);
