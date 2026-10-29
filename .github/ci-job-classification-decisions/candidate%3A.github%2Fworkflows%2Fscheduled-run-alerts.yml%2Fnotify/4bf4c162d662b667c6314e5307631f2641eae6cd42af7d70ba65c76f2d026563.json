@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment.",
+  "reviewedDigest": "4bf4c162d662b667c6314e5307631f2641eae6cd42af7d70ba65c76f2d026563"
+}

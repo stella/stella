@@ -1,6 +1,7 @@
 import {
   CAPABILITY_RUNTIME_INPUTS,
   CI_GENERATED_OUTPUTS,
+  MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
 } from "../packages/scripts/src/generated-files";
 
@@ -148,6 +149,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/invoicing/src/profiles/pdf-labels.ts",
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
+    "packages/locales/src/*",
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
@@ -172,6 +174,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
+  "mobile-icons": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -421,6 +424,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
     "packages/locales/src/*",
+    "packages/mcp-apps/src/app-document.ts",
+    "packages/mcp-apps/src/bundles.ts",
     "packages/mcp-apps/src/manifest.ts",
     "packages/mcp-apps/src/resource-uri.ts",
     "packages/mcp-kit/package.json",
@@ -433,6 +438,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
+    "packages/parameter-store/src/read-parameter.ts",
     "packages/permissions/src/index.ts",
     "packages/redis-config/src/connection.ts",
     "packages/redis-config/src/store-policy.ts",
@@ -520,6 +526,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "mcp-app-contracts": [
     "apps/api/package.json",
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
@@ -588,6 +595,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
@@ -705,6 +713,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/invoicing/src/profiles/pdf-labels.ts",
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
+    "packages/locales/src/*",
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
@@ -810,6 +819,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/invoicing/src/profiles/pdf-labels.ts",
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
+    "packages/locales/src/*",
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
@@ -1023,7 +1033,10 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "mobile-ui-theme",
     outputKind: "committed",
-    outputs: ["apps/mobile/src/ui-theme.gen.ts"],
+    outputs: [
+      "apps/mobile/src/ui-theme.gen.ts",
+      "apps/mobile/ui-theme.gen.css",
+    ],
     inputs: [
       "packages/ui/src/styles/theme.css",
       "scripts/generate-mobile-ui-theme.ts",
@@ -1040,6 +1053,35 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-mobile-ui-theme.ts", "--write"],
     check: ["bun", "scripts/generate-mobile-ui-theme.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "mobile-icons",
+    outputKind: "committed",
+    outputs: [
+      "apps/mobile/src/icons.gen.ts",
+      "apps/mobile/src/brand.gen.ts",
+      "apps/mobile/src/bar-glyphs.gen.ts",
+      "apps/mobile/assets/bar-glyphs/**",
+    ],
+    inputs: [
+      "packages/ui/src/icons.ts",
+      "packages/ui/src/components/stella-wordmark.tsx",
+      "scripts/generate-mobile-icons.ts",
+      // lucide-static's outlined glyphs, at the version the lockfile pins.
+      "apps/mobile/package.json",
+      "bun.lock",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-icons"],
+    ],
+    write: ["bun", "scripts/generate-mobile-icons.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-icons.ts"],
     autofix: true,
     after: [],
   },
@@ -1359,7 +1401,9 @@ const GENERATOR_DECLARATIONS = [
     id: "mcp-app-bundles",
     outputKind: "derived",
     outputs: [
-      "packages/mcp-apps/src/*/generated/app.html.txt",
+      ...MCP_APP_DIRECTORY_OUTPUTS.map(
+        (file) => `packages/mcp-apps/src/*/generated/${file}`,
+      ),
       ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
@@ -1367,6 +1411,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1689,6 +1734,23 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "withdrawn-decision-labels",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json"],
+    inputs: [
+      "apps/web/src/i18n/langs/*.json",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+    ],
+    write: ["bun", "apps/web/scripts/sync-withdrawn-decision-labels.ts"],
+    check: [
+      "bun",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+      "--check",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "i18n-messages-web",
     outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
@@ -1824,6 +1886,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/collab/src/env*.ts",
       // Read by the generator: build args and catalog helpers.
       "apps/web/Dockerfile",
+      "apps/api/src/db-components.ts",
       "apps/api/src/db-url.ts",
       "apps/api/src/lib/configuration-placeholders.ts",
       "apps/api/src/lib/rate-limit/budget-config-schema.ts",

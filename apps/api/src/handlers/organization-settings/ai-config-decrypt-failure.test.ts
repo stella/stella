@@ -4,10 +4,12 @@ import { describe, expect, spyOn, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import * as aiConfigCrypto from "@/api/lib/ai-config-crypto";
 import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import * as captureModule from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
+import * as errorUtils from "@/api/lib/errors/utils";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -17,7 +19,10 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { assertSettingsFailureConfidential } from "@/api/tests/helpers/settings-failure-confidentiality";
+import {
+  assertClassifiedSettingsFailure,
+  assertSettingsFailureConfidential,
+} from "@/api/tests/helpers/settings-failure-confidentiality";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import readAIConfig from "./read-ai-config";
@@ -124,9 +129,30 @@ describe("AI config handlers with an undecryptable stored config", () => {
         envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
           reason === "missing-key" ? undefined : key;
         for (const reader of ["read", "update"] as const) {
+          const classified: unknown[] = [];
+          const decryptAIConfig = aiConfigCrypto.decryptAIConfig;
+          const decrypt = spyOn(
+            aiConfigCrypto,
+            "decryptAIConfig",
+          ).mockImplementation(
+            async (...args: Parameters<typeof decryptAIConfig>) => {
+              const result = await decryptAIConfig(...args);
+              if (result.isErr()) {
+                classified.push(result.error);
+              }
+              return result;
+            },
+          );
+          const logServerDevError = errorUtils.logServerDevError;
+          const devLog = spyOn(
+            errorUtils,
+            "logServerDevError",
+          ).mockImplementation((error, context) =>
+            logServerDevError(error, context),
+          );
           const analytics = installRecordingAnalytics();
           const logs = installRecordingLogger();
-          const capture = spyOn(captureModule, "captureError");
+          const capture = spyOn(captureModule, "captureObservedError");
           const devErrors = spyOn(console, "error").mockImplementation(
             () => undefined,
           );
@@ -156,15 +182,20 @@ describe("AI config handlers with an undecryptable stored config", () => {
                 analyticsEvents: analytics.events,
                 captureEntries: capture.mock.calls,
                 developmentEntries: devErrors.mock.calls,
+                developmentLogInputs: devLog.mock.calls,
                 groupIdentifies: analytics.groupIdentifies,
                 logRecords: logs.records,
                 returned,
               },
             });
+            expect(classified).toHaveLength(1);
+            assertClassifiedSettingsFailure(classified.at(0), reason);
             if (reader === "update") {
               expect(db.operationCount()).toBe(1);
             }
           } finally {
+            decrypt.mockRestore();
+            devLog.mockRestore();
             devErrors.mockRestore();
             capture.mockRestore();
             logs.restore();

@@ -24,6 +24,18 @@
       "p95Seconds": 5,
       "p99Seconds": 5
     },
+    "Web raw JSON API census self-test": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Web raw JSON API census": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
     "Test subject reachability census": {
       "minutes": 18,
       "samples": 19,
@@ -947,6 +959,10 @@
       "samples": 11,
       "p95Seconds": 0,
       "p99Seconds": 0
+    },
+    "Test staging proof readiness": {
+      "minutes": 30,
+      "samples": 0
     },
     "Test depth repository scripts": {
       "minutes": 30,

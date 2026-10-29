@@ -103,6 +103,12 @@ const advisoryAcquisitions = () => {
   const workspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
   return {
+    caseLawSitemapMonth: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "caseLawSitemapMonth",
+        id: { country: "CZE", year: "2024", month: "01" },
+        tx,
+      }),
     organizationObjectIntent: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "organizationObjectIntent",

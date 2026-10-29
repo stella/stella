@@ -28,6 +28,10 @@ type ReadBudget = {
    * stay above the budget, so the entry is removed as soon as it passes.
    */
   overBudget?: { reason: string };
+  /** Per-statement database deadline for a scheduled job. */
+  statementDeadlineMs?: number;
+  /** Wall-clock work budget; the job stops at its next durable boundary. */
+  runBudgetMs?: number;
 };
 
 export const READ_BUDGETS = {
@@ -37,11 +41,25 @@ export const READ_BUDGETS = {
     reason:
       "Fixed 200 full-text matches: up to 12 pages each for eligibility and ranking, then 11 returned rows at up to 256 pages each for decision/search-document/identifier lookups and wide TOAST-backed section bodies, with 784 pages for the full-text probe and index depth. Body reads must depend on the returned page, not all matches.",
   },
+  "statement.caseLaw.coverageSources": {
+    surface: "statement",
+    pages: 256,
+    reason:
+      "Four fixture sources: eight date endpoint seeks at eight pages each (64), ninety precomputed court rows at two pages each (180), and twelve pages for the twenty-row uncached court source and grouped pending-text read: 256 pages total. Rejected filing dates must cost no heap walk.",
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,
     reason:
       "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation and three single-row queue probes. The run reads the same pages whatever the generation's size.",
+  },
+  "scheduled.caseLaw.refreshSitemapShards": {
+    surface: "scheduled-job",
+    pages: 18_000,
+    statementDeadlineMs: 30_000,
+    runBudgetMs: 15 * 60 * 1000,
+    reason:
+      "One 500-row change-log window, one indexed country-month decision range, and the replacement shard rows per step. A run stops between months after fifteen minutes, leaving the scheduler ceiling room for its current month, and every statement has a thirty-second database deadline.",
   },
   "statement.legislation.candidateRows": {
     surface: "statement",

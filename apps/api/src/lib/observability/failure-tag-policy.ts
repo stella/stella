@@ -10,6 +10,7 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
  * The generated census contains no policy, so a new tag requires a decision.
  */
 export const TAGGED_FAILURE_REASON = {
+  AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",
@@ -56,6 +57,7 @@ export const TAGGED_FAILURE_REASON = {
   CaseLawServingFlipNotAttestedError: "tagged_failure",
   CaseLawServingFlipNotBuildingError: "tagged_failure",
   CaseLawServingFlipUndeclaredError: "tagged_failure",
+  CaseLawWithdrawalReadError: "tagged_failure",
   CatalogSnapshotError: "tagged_failure",
   CatalogSnapshotRefreshTimeoutError: "tagged_failure",
   ChatAnonInputLimitError: "tagged_failure",
@@ -315,6 +317,7 @@ export const TAGGED_FAILURE_REASON = {
   OrganizationStorageTeardownBoundError: "tagged_failure",
   OrganizationStorageTeardownStateError: "tagged_failure",
   OwnerAccessLostError: "tagged_failure",
+  ParameterStoreError: "tagged_failure",
   ParseXmlError: "tagged_failure",
   PartnerClientOperatorError: "tagged_failure",
   PatternError: "tagged_failure",
@@ -424,6 +427,7 @@ export const TAGGED_FAILURE_REASON = {
   StartRuntimeError: "tagged_failure",
   StatuteSlugPageError: "tagged_failure",
   StoreUnavailableError: "tagged_failure",
+  StoredCorpusValidationError: "tagged_failure",
   StoredAstDegradedError: "tagged_failure",
   StoredRawReadError: "tagged_failure",
   StragglerCatchUpError: "tagged_failure",

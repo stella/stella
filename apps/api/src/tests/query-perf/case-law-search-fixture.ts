@@ -5,9 +5,9 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { globalCaseLawHitsStatement } from "@/api/lib/search/index-global";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
-import { capturedStatementQuery } from "./scheduled-run";
+import { capturedStatementQuery } from "./statement-measurement";
 
-export const CASE_LAW_SEARCH_MATCHES = 200;
+const CASE_LAW_SEARCH_MATCHES = 200;
 export const CASE_LAW_SEARCH_FETCH_LIMIT = 11;
 export const CASE_LAW_SEARCH_SIZES = [3000, 30_000] as const;
 const SOURCE_ID = "01990000-00b0-7000-8000-000000000001";
@@ -51,9 +51,9 @@ export const seedCaseLawSearch = async (
     // Wide, incompressible sections exercise TOAST reads before/after LIMIT.
     // Only matches need large bodies; unrelated rows still grow the indexes.
     await tx.execute(sql`INSERT INTO case_law_decisions
-    (id, source_id, case_number, court, country, language, sections, updated_at)
+    (id, source_id, case_number, docket_family_key, court, country, language, sections, updated_at)
     SELECT ('01990000-00b1-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-      ${SOURCE_ID}, n || ' As 1/2025', 'Nejvyšší správní soud', 'CZE', 'cs',
+      ${SOURCE_ID}, n || ' As 1/2025', n || 'as1/2025', 'Nejvyšší správní soud', 'CZE', 'cs',
       CASE WHEN n <= ${CASE_LAW_SEARCH_MATCHES} THEN (
         SELECT jsonb_agg(jsonb_build_object('index', section, 'type', 'paragraph',
           'text', 'smlouva ' || (SELECT string_agg(md5(n || ':' || section || ':' || word), ' ') FROM generate_series(1, 16) words(word))))

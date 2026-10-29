@@ -299,7 +299,7 @@
     "moreOptions": "További lehetőségek",
     "moreItemActions": "További műveletek a(z) {number}. elemhez",
     "noResults": "Nincs egyező kivágás",
-    "noResultsDescription": "Szeretné inkább a nyilvántartásokban keresni ezt: „{query}”?",
+    "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "noGroup": "Nincs csoport",
     "newGroupOption": "Új csoport…",
     "copyItem": "{number}. elem másolása",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "A {shortcut} megnyomásával böngészhet az előzmények között és kiválaszthat egy kivágást.",
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
-    "welcomeTitle": "Ismerje meg a vágólapot"
+    "welcomeTitle": "Ismerje meg a vágólapot",
+    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}."
   },
   "activity": {
     "title": "Tevékenység",

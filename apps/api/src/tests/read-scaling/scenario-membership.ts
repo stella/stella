@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Expression, parseSource } from "@stll/scripts/src/syntax-tree";
 
 type HandlerOwner = { file: string; exportName: string };
 
@@ -10,7 +11,7 @@ export type ScenarioMembership =
 
 type ImportBinding = { specifier: string; exportName: string };
 type RegistryModule = {
-  values: Map<string, ts.Expression>;
+  values: Map<string, Expression>;
   imports: Map<string, ImportBinding>;
 };
 type RegistryReader = {
@@ -23,16 +24,16 @@ type RegistryContext = {
   active: ReadonlySet<string>;
   kind: ScenarioMembership["kind"];
 };
-type RegistryExpression = { file: string; expression: ts.Expression };
+type RegistryExpression = { file: string; expression: Expression };
 
 const unsupported = (detail: string): never =>
   panic(`Unsupported scaling scenario registry: ${detail}`);
 
-const unwrap = (expression: ts.Expression): ts.Expression => {
+const unwrap = (expression: Expression): Expression => {
   if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression)
+    expression.type === "ParenthesizedExpression" ||
+    expression.type === "TSAsExpression" ||
+    expression.type === "TSSatisfiesExpression"
   ) {
     return unwrap(expression.expression);
   }
@@ -66,13 +67,8 @@ const readModule = (reader: RegistryReader, file: string): RegistryModule => {
   if (cached !== undefined) {
     return cached;
   }
-  const source = ts.createSourceFile(
-    file,
-    reader.readSource(file),
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const values = new Map<string, ts.Expression>();
+  const { program } = parseSource(file, reader.readSource(file));
+  const values = new Map<string, Expression>();
   const imports = new Map<string, ImportBinding>();
   const names = new Set<string>();
   const declare = (name: string) => {
@@ -81,54 +77,45 @@ const readModule = (reader: RegistryReader, file: string): RegistryModule => {
     }
     names.add(name);
   };
-  for (const statement of source.statements) {
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name)) {
+  for (const statement of program.body) {
+    const declared =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    if (declared?.type === "VariableDeclaration") {
+      for (const declaration of declared.declarations) {
+        if (declaration.id.type !== "Identifier") {
           continue;
         }
-        declare(declaration.name.text);
-        if (
-          statement.declarationList.getFirstToken(source)?.kind ===
-            ts.SyntaxKind.ConstKeyword &&
-          declaration.initializer !== undefined
-        ) {
-          values.set(declaration.name.text, declaration.initializer);
+        declare(declaration.id.name);
+        if (declared.kind === "const" && declaration.init !== null) {
+          values.set(declaration.id.name, declaration.init);
         }
       }
     }
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
     ) {
       continue;
     }
-    const clause = statement.importClause;
-    if (
-      clause === undefined ||
-      clause.phaseModifier === ts.SyntaxKind.TypeKeyword
-    ) {
-      continue;
-    }
-    const specifier = statement.moduleSpecifier.text;
+    const specifier = statement.source.value;
     const add = (name: string, exportName: string) => {
       declare(name);
       imports.set(name, { specifier, exportName });
     };
-    if (clause.name !== undefined) {
-      add(clause.name.text, "default");
-    }
-    const bindings = clause.namedBindings;
-    if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-      add(bindings.name.text, "*");
-    } else if (bindings !== undefined) {
-      for (const binding of bindings.elements) {
-        if (!binding.isTypeOnly) {
-          add(
-            binding.name.text,
-            binding.propertyName?.text ?? binding.name.text,
-          );
-        }
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportDefaultSpecifier") {
+        add(binding.local.name, "default");
+      } else if (binding.type === "ImportNamespaceSpecifier") {
+        add(binding.local.name, "*");
+      } else if (binding.importKind !== "type") {
+        add(
+          binding.local.name,
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value,
+        );
       }
     }
   }
@@ -154,31 +141,33 @@ const handlerOwner = (
 ): HandlerOwner => {
   const owner = unwrap(expression);
   const module = readModule(context.reader, file);
-  if (ts.isIdentifier(owner)) {
-    const imported = module.imports.get(owner.text);
+  if (owner.type === "Identifier") {
+    const imported = module.imports.get(owner.name);
     if (imported !== undefined && imported.exportName !== "*") {
       return {
         file: moduleFile({ file, specifier: imported.specifier }),
         exportName: imported.exportName,
       };
     }
-    const value = module.values.get(owner.text);
+    const value = module.values.get(owner.name);
     if (value !== undefined) {
       return handlerOwner(
         { file, expression: value },
-        enterReference({ file, symbol: owner.text }, context),
+        enterReference({ file, symbol: owner.name }, context),
       );
     }
   }
   if (
-    ts.isPropertyAccessExpression(owner) &&
-    ts.isIdentifier(owner.expression)
+    owner.type === "MemberExpression" &&
+    !owner.computed &&
+    owner.object.type === "Identifier" &&
+    owner.property.type === "Identifier"
   ) {
-    const imported = module.imports.get(owner.expression.text);
+    const imported = module.imports.get(owner.object.name);
     if (imported?.exportName === "*") {
       return {
         file: moduleFile({ file, specifier: imported.specifier }),
-        exportName: owner.name.text,
+        exportName: owner.property.name,
       };
     }
   }
@@ -189,42 +178,54 @@ const scenario = (
   { file, expression }: RegistryExpression,
   context: RegistryContext,
 ): ScenarioMembership => {
-  if (!ts.isObjectLiteralExpression(expression)) {
+  if (expression.type !== "ObjectExpression") {
     return unsupported(`scenario must be a literal in ${file}`);
   }
-  const properties = new Map<string, ts.Expression>();
+  const properties = new Map<string, Expression>();
   for (const property of expression.properties) {
     if (
-      !ts.isPropertyAssignment(property) ||
-      (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name))
+      property.type !== "Property" ||
+      property.kind !== "init" ||
+      property.method ||
+      property.shorthand ||
+      property.computed
     ) {
       return unsupported(`computed, spread or accessor scenario in ${file}`);
     }
-    const name = property.name.text;
+    const { key } = property;
+    let name: string;
+    if (key.type === "Identifier") {
+      name = key.name;
+    } else if (key.type === "Literal" && typeof key.value === "string") {
+      name = key.value;
+    } else {
+      return unsupported(`computed, spread or accessor scenario in ${file}`);
+    }
     if (properties.has(name)) {
       return unsupported(`duplicate scenario property ${name} in ${file}`);
     }
-    properties.set(name, property.initializer);
+    properties.set(name, property.value);
   }
   const name = properties.get("name");
   const literal = name === undefined ? undefined : unwrap(name);
   if (
-    literal === undefined ||
-    !ts.isStringLiteral(literal) ||
+    literal?.type !== "Literal" ||
+    typeof literal.value !== "string" ||
     !properties.has("measure")
   ) {
     return unsupported(
       `scenario needs a literal name and measurement in ${file}`,
     );
   }
+  const scenarioName = literal.value;
   if (context.kind === "mcp") {
-    return { kind: "mcp", name: literal.text };
+    return { kind: "mcp", name: scenarioName };
   }
   const definition = properties.get("definition");
   if (definition !== undefined) {
     return {
       kind: "api",
-      name: literal.text,
+      name: scenarioName,
       handlerOwner: handlerOwner(
         { file, expression: unwrap(definition) },
         context,
@@ -235,9 +236,10 @@ const scenario = (
   const handler = properties.get("handler");
   const value = handler === undefined ? undefined : unwrap(handler);
   if (
-    value === undefined ||
-    !ts.isPropertyAccessExpression(value) ||
-    value.name.text !== "handler"
+    value?.type !== "MemberExpression" ||
+    value.computed ||
+    value.property.type !== "Identifier" ||
+    value.property.name !== "handler"
   ) {
     return unsupported(
       `API scenario needs the imported owner's definition in ${file}`,
@@ -245,8 +247,8 @@ const scenario = (
   }
   return {
     kind: "api",
-    name: literal.text,
-    handlerOwner: handlerOwner({ file, expression: value.expression }, context),
+    name: scenarioName,
+    handlerOwner: handlerOwner({ file, expression: value.object }, context),
   };
 };
 
@@ -283,20 +285,19 @@ const resolveExpression = (
   context: RegistryContext,
 ): ScenarioMembership[] => {
   const value = unwrap(expression);
-  if (ts.isIdentifier(value)) {
-    return resolveReference({ file, symbol: value.text }, context);
+  if (value.type === "Identifier") {
+    return resolveReference({ file, symbol: value.name }, context);
   }
-  if (ts.isArrayLiteralExpression(value)) {
+  if (value.type === "ArrayExpression") {
     return value.elements.flatMap((element) => {
-      if (ts.isOmittedExpression(element)) {
+      if (element === null) {
         return unsupported(`sparse registry in ${file}`);
       }
       return resolveExpression(
         {
           file,
-          expression: ts.isSpreadElement(element)
-            ? element.expression
-            : element,
+          expression:
+            element.type === "SpreadElement" ? element.argument : element,
         },
         context,
       );

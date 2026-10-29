@@ -1,15 +1,28 @@
 Run `bun run test:perf` from `apps/api` with `DATABASE_URL` pointing to a
 fresh, migrated PostgreSQL 18 database. The suite measures every read budget
 in `apps/api/src/lib/db/read-budgets.ts` with `EXPLAIN (ANALYZE, BUFFERS)` and
-fails when a measurement exceeds its budget. Budgets are absolute: nothing is
+fails when a measurement exceeds its budget or has a plan shape that cannot
+scale. Budgets are absolute: nothing is
 recorded, and nothing is compared with an earlier run, so a statement that has
 been expensive for weeks fails as surely as a new one. The primary metric is
 the root shared hit-plus-read block count; child counters already contribute
-to the root and are not added again. Execution time is only a hang guard
-(10 seconds). It does not use the in-process database.
+to the root and are not added again.
 
-Each profile runs in its own fresh database cloned from the migrated
-template; the fixture database is dropped after its clients close.
+The analyzer walks every measured statement. It rejects sequential scans on
+large (or undeclared) relations, lossy bitmap heap scans, nested loops with
+more than 1,000 unbounded outer rows, sort/hash spills, and execution time
+that would exceed one quarter of the measured owner's runtime statement
+deadline after scaling. Every measurement also has a fixed 10-second execution-
+time guard. An owner without its own deadline is a typed finding.
+The fixture represents 1% of the production-shape population, so its
+documented scale factor is 100. Time is a coarse deadline guard rather than a
+benchmark; pages and plan shape are the deterministic gates. The suite does
+not use the in-process database.
+
+Tenant and corpus profiles run in fresh databases cloned from the migrated
+template; each fixture database is dropped after its clients close. The
+coverage profile uses an isolated schema with a single connection and drops
+it before closing the connection.
 
 - Tenant profiles (`small`, `growth`, `seed.ts`): document search as `stella`
   under row security, with 3,000 and 100,000 documents and 200 matches in
@@ -44,6 +57,18 @@ template; the fixture database is dropped after its clients close.
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
 its budget, and the census-readiness revision checks must fail the scale rule.
+
+The coverage profile (`coverage.test.ts`) clones the production source, decision
+and facet tables into an isolated schema. It runs the actual coverage source
+reader at 60,000 and 120,000 decisions per large source, including a source
+whose every date precedes its docket filing year. Court facets cover the large
+sources; a fourth source has twenty decisions and no cached facets, exercising
+the exact fallback at both sizes. Every statement the reader issues is captured
+and measured with `EXPLAIN (ANALYZE, BUFFERS)` under the refresh's 30-second
+statement timeout. Combined reads must fit 256 pages and remain constant at
+both sizes. Court rows must sum to the published totals, valid sources retain
+their date endpoints, and rejected dates produce null bounds. The production
+online coverage indexes are installed from their owning DDL exports.
 
 A budget marked `overBudget` documents a statement that is over its budget
 while a change is in progress; the suite then requires it to stay over, so the
