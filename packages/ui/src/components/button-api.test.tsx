@@ -26,7 +26,8 @@ describe("Button selected", () => {
       </Button>,
     );
 
-    expect(markup).not.toContain("data-pressed");
+    // The classes name the state; the attribute that turns it on is absent.
+    expect(markup).not.toContain('data-pressed=""');
   });
 
   test.each([

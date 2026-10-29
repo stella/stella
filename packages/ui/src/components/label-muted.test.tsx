@@ -12,7 +12,8 @@ describe("Label muted variant", () => {
       </Label>,
     );
 
-    expect(markup).toContain('<label for="action"');
+    expect(markup).toStartWith("<label");
+    expect(markup).toContain('for="action"');
     expect(markup).toContain("text-muted-foreground");
     expect(markup).toContain("text-xs/4");
     expect(markup).not.toContain("text-foreground ");
