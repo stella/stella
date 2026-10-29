@@ -24,11 +24,11 @@ test("stored LegalDocML is measured independently, and missing judgment text fai
   );
   const decision = await buildCaseLawFixture(ukFclFixture());
   if (!hasUsableAst(decision.documentAst) || decision.sourceRaw === undefined) {
-    return panic("the fixture must have parsed blocks and stored raw");
+    panic("the fixture must have parsed blocks and stored raw");
   }
   const projection = await project(decision.sourceRaw);
   if (projection.type !== "source") {
-    return panic("the fixture must have publisher text");
+    panic("the fixture must have publisher text");
   }
   expect(validateAst(projection.source, decision.documentAst.blocks).ok).toBe(
     true,

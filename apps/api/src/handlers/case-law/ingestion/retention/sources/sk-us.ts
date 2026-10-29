@@ -42,6 +42,7 @@ const projectSkUs = (sourceRaw: string): RetentionProjection => {
   return {
     type: "source",
     source: { type: "paragraphs", paragraphs: htmlParagraphs(document) },
+    options: { wordBoundaries: "publisher-fragments" },
   };
 };
 

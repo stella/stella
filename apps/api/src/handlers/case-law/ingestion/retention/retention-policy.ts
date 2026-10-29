@@ -32,6 +32,7 @@ type RetentionCheckOptions = Pick<
   | "maxMissingWords"
   | "minRetainedPct"
   | "wordComparisonText"
+  | "wordBoundaries"
 >;
 
 /**

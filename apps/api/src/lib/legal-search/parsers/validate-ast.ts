@@ -1,3 +1,4 @@
+// parser-output-unchanged: Opt-in publisher-fragment comparison changes retention diagnostics only; parser output and default comparisons are unchanged.
 // parser-output-unchanged: hyphenatedLineBreaks is a new option no parser passes; every existing verdict is computed exactly as before.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
@@ -181,6 +182,73 @@ export const extractValidationWords = (text: string): Set<string> => {
   return words;
 };
 
+/** Bound recovery work even when a publisher splits every letter. */
+const MAX_WORD_BOUNDARY_FRAGMENTS = 64;
+
+type WordTrie = { children: Map<string, WordTrie>; terminal: boolean };
+
+type RecoverWordFragmentsOptions = {
+  source: string;
+  words: ReadonlySet<string>;
+  options: { wordBoundaries?: "exact" | "publisher-fragments" } | undefined;
+};
+
+/** Only a complete word present in the AST can account for source fragments. */
+const recoveredWordFragments = ({
+  source,
+  words,
+  options,
+}: RecoverWordFragmentsOptions): Set<string> | undefined => {
+  if (options?.wordBoundaries !== "publisher-fragments") {
+    return undefined;
+  }
+  const root: WordTrie = { children: new Map(), terminal: false };
+  for (const word of words) {
+    let node = root;
+    for (const letter of word) {
+      let child = node.children.get(letter);
+      if (child === undefined) {
+        child = { children: new Map(), terminal: false };
+        node.children.set(letter, child);
+      }
+      node = child;
+    }
+    node.terminal = true;
+  }
+  const fragments = source
+    .split(/\s+/u)
+    .map((token) => trimNonLetters(token.replace(/[[\]]/gu, "")));
+  const recovered = new Set<string>();
+  for (let start = 0; start < fragments.length; start += 1) {
+    let node: WordTrie | undefined = root;
+    for (
+      let end = start;
+      end < Math.min(fragments.length, start + MAX_WORD_BOUNDARY_FRAGMENTS);
+      end += 1
+    ) {
+      const fragment = fragments[end];
+      if (fragment === undefined || fragment.length === 0) {
+        break;
+      }
+      for (const letter of fragment) {
+        node = node?.children.get(letter);
+        if (node === undefined) {
+          break;
+        }
+      }
+      if (node === undefined) {
+        break;
+      }
+      if (end > start && node.terminal) {
+        for (const covered of fragments.slice(start, end + 1)) {
+          recovered.add(covered);
+        }
+      }
+    }
+  }
+  return recovered;
+};
+
 // NSS renders decorative figures with the alt text "obrázek" (Czech for
 // "image"). When one sits flush against its neighbour — as bracketless
 // text, or across an inline-element boundary that cheerio's .text()
@@ -305,6 +373,8 @@ export const validateAst = (
     maxMissingWords?: number;
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
+    /** Fragmented publisher typography may join only into complete AST words. */
+    wordBoundaries?: "exact" | "publisher-fragments";
     /**
      * The source keeps words a typesetter broke at a line end (a PDF line
      * ending "rozpo-" before one starting "znaniu"). A parser may faithfully
@@ -457,9 +527,14 @@ export const validateAst = (
   // the same rule extractWords applies. Peeling only ever clears a
   // phantom: a genuinely absent meaningful word keeps a remainder that is
   // meaningful and not in the AST, so real loss is still reported.
+  const recoveredFragments = recoveredWordFragments({
+    source: originalText,
+    words: astWords,
+    options,
+  });
   const missingFrom = (words: Set<string>): string[] =>
     [...words].filter((w) => {
-      if (astWords.has(w)) {
+      if (astWords.has(w) || recoveredFragments?.has(w) === true) {
         return false;
       }
       const peeled = peelDecorativeMarkers(w);
@@ -475,10 +550,18 @@ export const validateAst = (
       ? originalWords
       : extractValidationWords(normalizeValidationText(wordComparisonText));
   const missingWords = missingFrom(comparisonWords);
-  const boundaryWhitespaceWords =
-    comparisonWords === originalWords
-      ? []
-      : missingFrom(originalWords).filter((word) => !comparisonWords.has(word));
+  const boundaryWhitespaceWords = [
+    ...new Set([
+      ...(comparisonWords === originalWords
+        ? []
+        : missingFrom(originalWords).filter(
+            (word) => !comparisonWords.has(word),
+          )),
+      ...[...originalWords].filter(
+        (word) => recoveredFragments?.has(word) === true && !astWords.has(word),
+      ),
+    ]),
+  ];
 
   if (retainedPct < minRetainedPct) {
     issues.push({
