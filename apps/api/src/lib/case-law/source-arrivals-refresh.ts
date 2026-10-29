@@ -1,8 +1,9 @@
 import { panic } from "better-result";
-import { sql, type SQLWrapper } from "drizzle-orm";
+import { eq, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawSourceArrivals } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { SOURCE_ARRIVALS_WINDOW_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
@@ -83,3 +84,14 @@ export const refreshCaseLawSourceArrivals = async (
     signal?.throwIfAborted();
     return { sources: summary.sources };
   });
+
+/** A changed source has no arrivals snapshot until its next recount. */
+export const invalidateCaseLawSourceArrivalsTx = async (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  // audit: skip — arrivals invalidation belongs to the canonical removal audit.
+  await tx
+    .delete(caseLawSourceArrivals)
+    .where(eq(caseLawSourceArrivals.sourceId, sourceId));
+};

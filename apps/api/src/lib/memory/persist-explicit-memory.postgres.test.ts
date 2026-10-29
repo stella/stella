@@ -1,10 +1,22 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { aiMemories } from "@/api/db/schema";
+import {
+  aiMemories,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+  workspaces,
+} from "@/api/db/schema";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
@@ -15,7 +27,20 @@ import {
 import type { PersistExplicitMemoryResult } from "@/api/lib/memory/persist-explicit-memory";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+// timeout: Boot the shared PGlite engine and complete schema before assertions.
+setDefaultTimeout(120_000);
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -132,6 +157,17 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Memory settings",
             email: `${userId}@example.test`,
           });
+          await deletionDb.insert(organizationAccessStates).values({
+            organizationId,
+            state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+          });
+          await deletionDb.insert(member).values({
+            createdAt: new Date(),
+            id: mintAuthProviderIdValue(),
+            organizationId,
+            role: "owner",
+            userId,
+          });
           const scope = resolveMemoryWriteScope({
             accessibleWorkspaces: [],
             authority: sessionMemberRole("owner"),
@@ -211,6 +247,9 @@ if (!databaseUrl || !runPostgresTests) {
             );
 
           expect(result.type).toBe("created");
+          if (result.type !== "created") {
+            panic("Expected the retried memory write to create a row");
+          }
           expect(result.id).not.toBe(original.id);
           expect(stored).toEqual([
             { id: result.id, content: "Keep the procedural history concise" },
@@ -232,6 +271,78 @@ if (!databaseUrl || !runPostgresTests) {
           await deletionDb.delete(user).where(eq(user.id, userId));
         }
       });
+    });
+  });
+}
+
+if (databaseUrl && runPostgresTests) {
+  describe("explicit memory write authority (postgres)", () => {
+    let testDb: TestDatabase;
+    let ids: TestIds;
+
+    beforeAll(async () => {
+      const fixture = await getRlsFixture();
+      testDb = fixture.testDb;
+      ids = fixture.ids;
+    });
+
+    afterAll(async () => {
+      await releaseRlsFixture();
+    });
+
+    test("refuses a cached matter authorization after the matter is archived", async () => {
+      const content = `stale matter memory ${Bun.randomUUIDv7()}`;
+      const scope = resolveMemoryWriteScope({
+        accessibleWorkspaces: [{ id: ids.wsA2, status: "active" }],
+        authority: sessionMemberRole("member"),
+        organizationId: ids.orgA,
+        request: { scope: "workspace", kind: "fact", workspaceId: ids.wsA2 },
+        userId: ids.userA1,
+      }).unwrap();
+
+      try {
+        await testDb.transaction(async (rawTx) => {
+          const tx = asTestRaw<Transaction>(rawTx);
+          await tx
+            .update(workspaces)
+            .set({ status: "archived" })
+            .where(eq(workspaces.id, ids.wsA2));
+
+          const outcome = await persistExplicitMemory({
+            tx,
+            recordAuditEvent: async () => undefined,
+            scope,
+            memory: {
+              content,
+              language: null,
+              pinned: false,
+              source: "user",
+              sourceDataWorkspaceIds: [],
+            },
+          });
+
+          expect(outcome.type).toBe("authority_unavailable");
+          expect(
+            await tx
+              .select({ id: aiMemories.id })
+              .from(aiMemories)
+              .where(
+                and(
+                  eq(aiMemories.organizationId, ids.orgA),
+                  eq(aiMemories.content, content),
+                ),
+              ),
+          ).toHaveLength(0);
+          rawTx.rollback();
+        });
+      } catch (error) {
+        if (error instanceof TransactionRollbackError) {
+          return;
+        }
+        throw error;
+      }
+
+      throw new Error("Expected the integration test transaction to roll back");
     });
   });
 }

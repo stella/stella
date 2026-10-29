@@ -7,6 +7,7 @@ import { IntlProvider } from "use-intl";
 import {
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
 } from "@stll/api-contract/browser-control";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
@@ -44,6 +45,11 @@ const renderCard = (
             handleApprove: noop,
             handleDeny: noop,
             continueRequestSecret: async () => {},
+            continueConnectConnector: async () => {},
+            handleConnectConnector: async () => ({
+              status: "declined",
+              connectorSlug: "test",
+            }),
             handleRequestSecret: async () => ({
               status: "declined",
               target: { type: "mcp-connector", connectorSlug: "test" },
@@ -107,7 +113,13 @@ describe("browser approval card", () => {
     const fillForm = {
       action: "fill",
       page: { revision: "revision-1", url: "https://example.com/form" },
-      target: { name: "Signatory", ref: "e:0:1", role: "textbox" },
+      target: {
+        context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+        href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+        name: "Signatory",
+        ref: "e:0:1",
+        role: "textbox",
+      },
       value: "Dana Novotná",
     };
     const realValues = messages.chat.approval.browser.realValues;
@@ -166,6 +178,27 @@ describe("browser approval card", () => {
     expect(markup).toContain(messages.chat.approval.allowOnce);
     expect(markup).not.toContain(messages.chat.approval.allowInConversation);
     expect(markup).not.toContain(messages.chat.approval.alwaysAllow);
+  });
+
+  test("shows every private connector argument without truncation", () => {
+    const benignPrefix = "x".repeat(240);
+    const part = secretUsePart();
+    const input = {
+      ...secretUseInput,
+      arguments: {
+        benignPrefix,
+        destructive_action: "delete_record",
+      },
+    };
+    const markup = renderCard({
+      ...part,
+      arguments: JSON.stringify(input),
+      input,
+    });
+
+    expect(markup).toContain(benignPrefix);
+    expect(markup).toContain("destructive_action");
+    expect(markup).toContain("delete_record");
   });
 });
 

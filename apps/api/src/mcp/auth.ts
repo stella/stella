@@ -12,16 +12,19 @@ import { OAUTH_GRANT_ID_CLAIM } from "@/api/lib/auth/oauth-grant-identity";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
+import { isTokenRejectionError } from "@/api/lib/auth/token-verification-errors";
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
-import { isRecord } from "@/api/lib/type-guards";
-import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
-import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import type { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
-import { getMcpResourceUrl, MCP_MEMBER_ID_CLAIM } from "@/api/mcp/constants";
+import {
+  AGENT_RUN_TOKEN_PURPOSE,
+  getMcpResourceUrl,
+  MCP_MEMBER_ID_CLAIM,
+} from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpTokenVerificationError,
@@ -67,13 +70,17 @@ export type McpSession = {
 /** Which kind of credential opened a session, for telemetry and reporting. */
 export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
 
-let verifyBearerToken:
-  | ReturnType<
-      ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
-    >["verifyBearerToken"]
-  | undefined;
+export type VerifyBearerToken = ReturnType<
+  ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
+>["verifyBearerToken"];
 
-const getVerifyBearerToken = () => {
+let verifyBearerToken: VerifyBearerToken | undefined;
+
+/**
+ * The OAuth provider's bearer verifier, shared by every resource this API
+ * serves so the provider's resource client is acquired in one place.
+ */
+export const getVerifyBearerToken = (): VerifyBearerToken => {
   verifyBearerToken ??=
     oauthProviderResourceClient().getActions().verifyBearerToken;
   return verifyBearerToken;
@@ -196,19 +203,6 @@ export const extractMcpSession = (
 };
 
 /**
- * A genuine token rejection surfaces as a better-call `APIError` with an
- * `UNAUTHORIZED` (401) status: `verifyBearerToken` maps expired tokens, invalid
- * signatures, wrong audience/issuer, no-matching-key, and a missing payload to
- * that shape. Everything else the verifier can throw is an infrastructure fault
- * (a JWKS fetch/network error re-thrown as a plain `Error`, or a jose JWKS
- * timeout/invalid error) and must not be reported to the caller as a bad token.
- */
-const isTokenRejectionError = (error: unknown): boolean =>
-  isRecord(error) &&
-  error["name"] === "APIError" &&
-  (error["status"] === "UNAUTHORIZED" || error["statusCode"] === 401);
-
-/**
  * Classify a failure thrown while resolving the bearer token. A genuine token
  * rejection (bad claims from `extractMcpSession`, or an `UNAUTHORIZED` verifier
  * error) becomes an `McpAuthenticationError` (surfaces as 401). An
@@ -256,7 +250,7 @@ export type McpAuthenticationFailure =
 
 type VerifyMcpAccessTokenOptions = {
   mode: McpMode;
-  verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+  verifyToken?: VerifyBearerToken;
 };
 
 export const verifyMcpAccessToken = async (
@@ -272,20 +266,24 @@ export const verifyMcpAccessToken = async (
     catch: classifyMcpTokenVerificationError,
   });
 
+/**
+ * The caller supplies the API key resolver: it reads members through the auth
+ * module, which reaches this one for the bearer verifier, so importing it here
+ * would close an import cycle.
+ */
 export const authenticateMcpRequest = async (
   bearerToken: string,
   {
     mode = "default",
-    resolveApiKeySession = defaultResolveMachineApiKeySession,
+    resolveApiKeySession,
     reviewAccount = getReviewAccountConfig(),
     verifyToken,
   }: {
     mode?: McpMode | undefined;
     reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
-    resolveApiKeySession?:
-      typeof defaultResolveMachineApiKeySession | undefined;
-    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
-  } = {},
+    resolveApiKeySession: typeof resolveMachineApiKeySession;
+    verifyToken?: VerifyBearerToken;
+  },
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {
   const authenticated = isMachineApiKeyCredential(bearerToken)
     ? await Result.tryPromise({

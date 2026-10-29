@@ -1,9 +1,11 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  baselineEnvironment,
   buildQuery,
   evaluateRelease,
   gatePromotion,
@@ -16,6 +18,16 @@ import {
 const FIXTURES = path.join(import.meta.dir, "__fixtures__/release-health");
 const RELEASE = "v1.4.1";
 const PREVIOUS_RELEASE = "v1.4.0";
+/** Published after environments were recorded: read for production alone. */
+const RECORDED_BASELINE = {
+  ref: PREVIOUS_RELEASE,
+  publishedAt: "2026-10-29T05:00:00Z",
+};
+/** Its window closed before environments were recorded. */
+const LEGACY_BASELINE = {
+  ref: PREVIOUS_RELEASE,
+  publishedAt: "2026-10-27T11:51:20Z",
+};
 const CHECKED_AT = "2026-10-17T13:00:00Z";
 
 const recorded = (name: string): unknown =>
@@ -185,20 +197,124 @@ describe("post-release regression check", () => {
     expect(summary).not.toContain("10");
   });
 
+  test("the generated environment predicate excludes staging RC traffic", () => {
+    const { query } = buildQuery({
+      release: RELEASE,
+      previous: RECORDED_BASELINE,
+      until: CHECKED_AT,
+    });
+    const predicate = query.query
+      .split("\n")
+      .find((line) => line.includes("properties.deploy_environment"));
+    expect(predicate).toBe("AND properties.deploy_environment = {environment}");
+    if (predicate === undefined) {
+      throw new TypeError(
+        "Release health query has no deployment environment predicate",
+      );
+    }
+    const environment = query.values["environment"];
+    if (environment === undefined) {
+      throw new TypeError("Release health query has no environment binding");
+    }
+    const database = new Database(":memory:");
+    try {
+      database.run(
+        "CREATE TABLE properties (deploy_environment TEXT, occurrences INTEGER)",
+      );
+      database.run(
+        "INSERT INTO properties VALUES ('staging', 999), ('production', 7), (NULL, 500)",
+      );
+      const rows = database
+        .query(
+          `SELECT SUM(occurrences) AS occurrences FROM properties WHERE ${predicate.replace(/^AND /u, "").replace("{environment}", "$environment")}`,
+        )
+        .all({ $environment: environment });
+      expect(rows).toEqual([{ occurrences: 7 }]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("a legacy baseline counts its unrecorded events, the checked release never does", () => {
+    const { query } = buildQuery({
+      release: RELEASE,
+      previous: LEGACY_BASELINE,
+      until: CHECKED_AT,
+    });
+    const predicate = query.query
+      .split("\n")
+      .find((line) => line.includes("properties.deploy_environment"));
+    if (predicate === undefined) {
+      throw new TypeError(
+        "Release health query has no deployment environment predicate",
+      );
+    }
+    const database = new Database(":memory:");
+    try {
+      database.run(
+        "CREATE TABLE properties (deploy_environment TEXT, app_version TEXT, occurrences INTEGER)",
+      );
+      database.run(
+        "INSERT INTO properties VALUES ('staging', '1.4.0', 999), ('production', '1.4.0', 7), (NULL, '1.4.0', 500), (NULL, '1.4.1', 300), ('production', '1.4.1', 2)",
+      );
+      const sql = predicate
+        .replace(/^AND /u, "")
+        .replaceAll("properties.", "")
+        .replaceAll("{environment}", "$environment")
+        .replaceAll("{version_1}", "$baseline");
+      const sum = (version: string) =>
+        database
+          .query(
+            `SELECT SUM(occurrences) AS occurrences FROM properties WHERE app_version = $version AND ${sql}`,
+          )
+          .all({
+            $environment: "production",
+            $baseline: "1.4.0",
+            $version: version,
+          });
+      expect(sum("1.4.0")).toEqual([{ occurrences: 507 }]);
+      expect(sum("1.4.1")).toEqual([{ occurrences: 2 }]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("only a baseline whose window closed before environments were recorded is legacy", () => {
+    expect(baselineEnvironment(LEGACY_BASELINE)).toBe("unrecorded");
+    expect(baselineEnvironment(RECORDED_BASELINE)).toBe("recorded");
+    // Its window closes after the cutoff, so it stays production-only.
+    expect(
+      baselineEnvironment({
+        ref: PREVIOUS_RELEASE,
+        publishedAt: "2026-10-29T04:00:00Z",
+      }),
+    ).toBe("recorded");
+    const recordedQuery = buildQuery({
+      release: RELEASE,
+      previous: RECORDED_BASELINE,
+      until: CHECKED_AT,
+    });
+    expect(recordedQuery.query.query).not.toContain("IS NULL");
+  });
+
   test("versions travel as placeholders, without the tag prefix", () => {
     const { query } = buildQuery({
       release: RELEASE,
-      previous: "v1.4.0",
+      previous: RECORDED_BASELINE,
       until: CHECKED_AT,
     });
 
     expect(query.values).toEqual({
       event: "release_failure_window",
+      environment: "production",
       until: CHECKED_AT,
       version_0: "1.4.1",
       version_1: "1.4.0",
     });
     expect(query.query).not.toContain("1.4");
+    expect(query.query).toContain(
+      "AND properties.deploy_environment = {environment}",
+    );
     expect(() =>
       buildQuery({ release: "v1.4.1'", previous: null, until: CHECKED_AT }),
     ).toThrow("is not a stable release ref");

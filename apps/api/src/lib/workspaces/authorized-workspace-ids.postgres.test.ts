@@ -11,6 +11,7 @@ import {
   activeAuthorizedWorkspaceQuery,
   authorizedWorkspaceIds,
   authorizedWorkspaceIdSubquery,
+  readAuthorizedWorkspaceExecutionAccess,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -98,6 +99,9 @@ describe.skipIf(!runPostgresTests)(
           });
           const outcome = await scopedDb(async (tx) => ({
             set: await readAuthorizedWorkspaces(tx, { organizationId }),
+            executionAccess: await readAuthorizedWorkspaceExecutionAccess(tx, {
+              organizationId,
+            }),
             ids: await authorizedWorkspaceIds(tx, {
               organizationId,
               workspaceIds: [assignedId, closingId, otherId],
@@ -115,7 +119,11 @@ describe.skipIf(!runPostgresTests)(
             ),
           }));
 
-          if (outcome.set.isErr() || outcome.ids.isErr()) {
+          if (
+            outcome.set.isErr() ||
+            outcome.ids.isErr() ||
+            outcome.executionAccess.isErr()
+          ) {
             panic("Authorized workspace read failed");
           }
           expect(outcome.set.value.workspaces).toHaveLength(2);
@@ -125,6 +133,25 @@ describe.skipIf(!runPostgresTests)(
               { id: closingId, status: "deleting" },
             ]),
           );
+          expect(outcome.executionAccess.value.accessibleWorkspaces).toEqual(
+            expect.arrayContaining([
+              { id: assignedId, status: "active" },
+              { id: closingId, status: "deleting" },
+            ]),
+          );
+          expect(
+            outcome.executionAccess.value.accessibleWorkspaces,
+          ).toHaveLength(2);
+          for (const id of [assignedId, closingId]) {
+            expect(
+              outcome.executionAccess.value.pinServerValidatedWorkspaceId(id),
+            ).toBe(true);
+          }
+          expect(
+            outcome.executionAccess.value.pinServerValidatedWorkspaceId(
+              otherId,
+            ),
+          ).toBe(false);
           expect([...outcome.ids.value]).toEqual([assignedId]);
           expect(outcome.assigned).toEqual([{ id: assignedId }]);
           expect(outcome.other).toEqual([]);

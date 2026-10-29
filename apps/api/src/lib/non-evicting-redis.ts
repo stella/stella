@@ -162,7 +162,7 @@ export const nonEvictingRedis = ({
             return Result.err(
               new ActionAdmissionError({
                 message: NON_EVICTING_STORE_MESSAGE,
-                reason: "unavailable",
+                reason: "configuration_incomplete",
               }),
             );
           case "allowed":
@@ -172,7 +172,7 @@ export const nonEvictingRedis = ({
               catch: (cause) =>
                 new ActionAdmissionError({
                   message: "Admission storage is unavailable",
-                  reason: "unavailable",
+                  reason: "store_unavailable",
                   cause,
                 }),
             });

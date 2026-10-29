@@ -6,8 +6,17 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript6";
 import * as v from "valibot";
+
+import {
+  type CallExpression,
+  isObjectLiteralProperty,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { env } from "@/api/env";
 import {
@@ -57,79 +66,107 @@ const createTestAuth = (sessionForKeys = false) =>
     ],
   });
 
-const issuanceProperty = (object: ts.ObjectLiteralExpression, name: string) =>
+/** A `name: value` entry's name when it is an identifier or a string. */
+const assignedName = (entry: Node): string | undefined => {
+  if (
+    entry.type !== "Property" ||
+    entry.kind !== "init" ||
+    entry.method ||
+    entry.shorthand ||
+    entry.computed
+  ) {
+    return undefined;
+  }
+  if (entry.key.type === "Identifier") {
+    return entry.key.name;
+  }
+  return entry.key.type === "Literal" && typeof entry.key.value === "string"
+    ? entry.key.value
+    : undefined;
+};
+
+const issuanceProperty = (object: ObjectExpression, name: string) =>
   object.properties.find(
-    (entry) =>
-      ts.isPropertyAssignment(entry) &&
-      (ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name)) &&
-      entry.name.text === name,
+    (entry): entry is ObjectProperty => assignedName(entry) === name,
   );
+
+const isNullLiteral = (node: Node) =>
+  node.type === "Literal" && node.value === null && !("regex" in node);
+
+const isIssuanceMember = (node: Node) =>
+  node.type === "MemberExpression" &&
+  (node.computed
+    ? node.property.type === "Literal" && node.property.value === "createApiKey"
+    : node.property.type === "Identifier" &&
+      node.property.name === "createApiKey");
 
 type IssuanceContext = {
   filename: string;
-  ast: ts.SourceFile;
   isMachineOwner: boolean;
 };
 const assertIssuanceReference = (
-  node: ts.Node,
+  node: Node,
+  ancestors: readonly Node[],
   { filename, isMachineOwner }: IssuanceContext,
 ) => {
+  const parent = ancestors.at(-1);
   // An operation-name constant such as `REVIEW_ACCOUNT_OPERATION.createApiKey`
   // holds a label, not the provider issuance function.
   const isConstantLabel =
-    (ts.isPropertyAccessExpression(node) ||
-      ts.isElementAccessExpression(node)) &&
-    ts.isIdentifier(node.expression) &&
-    /^[A-Z][A-Z0-9_]*$/u.test(node.expression.text);
-  const isMemberReference =
-    !isConstantLabel &&
-    ((ts.isPropertyAccessExpression(node) &&
-      node.name.text === "createApiKey") ||
-      (ts.isElementAccessExpression(node) &&
-        ts.isStringLiteral(node.argumentExpression) &&
-        node.argumentExpression.text === "createApiKey"));
+    node.type === "MemberExpression" &&
+    node.object.type === "Identifier" &&
+    /^[A-Z][A-Z0-9_]*$/u.test(node.object.name);
+  const isMemberReference = !isConstantLabel && isIssuanceMember(node);
   const isBareReference =
-    ts.isIdentifier(node) &&
-    node.text === "createApiKey" &&
+    node.type === "Identifier" &&
+    node.name === "createApiKey" &&
     !(
-      ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+      parent?.type === "MemberExpression" &&
+      !parent.computed &&
+      parent.property === node
     ) &&
     // A property key names a slot; its value is checked as its own reference.
-    !(ts.isPropertyAssignment(node.parent) && node.parent.name === node);
+    !(
+      parent !== undefined &&
+      isObjectLiteralProperty(parent, ancestors.at(-2)) &&
+      parent.kind === "init" &&
+      !parent.method &&
+      !parent.shorthand &&
+      parent.key === node
+    );
   if (isMemberReference || isBareReference) {
     const directCall =
-      ts.isCallExpression(node.parent) && node.parent.expression === node;
+      parent?.type === "CallExpression" && parent.callee === node;
     // The machine owner takes its writer as a required parameter: its callers
     // pass the fenced in-transaction writer, never the provider function.
-    const machineParameter = ts.isParameter(node.parent) ? node.parent : null;
+    const isParameter =
+      parent !== undefined &&
+      "params" in parent &&
+      parent.params.some((parameter) => parameter === node);
     const machineAlias =
       isMachineOwner &&
-      machineParameter !== null &&
-      ts.isIdentifier(machineParameter.name) &&
-      machineParameter.name.text === "createApiKey" &&
-      machineParameter.initializer === undefined;
+      (isParameter ||
+        (parent?.type === "TSParameterProperty" && parent.parameter === node));
     if (!directCall && !machineAlias) {
       throw new TypeError(`${filename}: issuance function cannot be aliased`);
     }
   }
 };
 const assertIssuanceCall = (
-  node: ts.CallExpression,
+  node: CallExpression,
   { filename, isMachineOwner }: IssuanceContext,
 ) => {
   const request = node.arguments.at(0);
-  if (!request || !ts.isObjectLiteralExpression(request)) {
+  if (request?.type !== "ObjectExpression") {
     throw new TypeError(`${filename}: issuance must declare its body`);
   }
   const requestNames: string[] = [];
   for (const entry of request.properties) {
-    if (
-      !ts.isPropertyAssignment(entry) ||
-      !(ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name))
-    ) {
+    const name = assignedName(entry);
+    if (name === undefined) {
       throw new TypeError(`${filename}: issuance request must be explicit`);
     }
-    requestNames.push(entry.name.text);
+    requestNames.push(name);
   }
   if (new Set(requestNames).size !== requestNames.length) {
     throw new TypeError(
@@ -137,24 +174,22 @@ const assertIssuanceCall = (
     );
   }
   const bodyProperty = issuanceProperty(request, "body");
-  if (
-    !bodyProperty ||
-    !ts.isPropertyAssignment(bodyProperty) ||
-    !ts.isObjectLiteralExpression(bodyProperty.initializer)
-  ) {
+  if (bodyProperty?.value.type !== "ObjectExpression") {
     throw new TypeError(`${filename}: issuance must declare its body`);
   }
-  const body = bodyProperty.initializer;
+  const body = bodyProperty.value;
   const config = issuanceProperty(body, "configId");
-  if (!config || !ts.isPropertyAssignment(config)) {
+  if (!config) {
     throw new TypeError(`${filename}: issuance config must be explicit`);
   }
   let configName: string | null = null;
-  if (
-    ts.isIdentifier(config.initializer) ||
-    ts.isStringLiteral(config.initializer)
+  if (config.value.type === "Identifier") {
+    configName = config.value.name;
+  } else if (
+    config.value.type === "Literal" &&
+    typeof config.value.value === "string"
   ) {
-    configName = config.initializer.text;
+    configName = config.value.value;
   }
   if (configName === "MACHINE_API_KEY_CONFIG_ID" || configName === "machine") {
     return false;
@@ -172,12 +207,13 @@ const assertIssuanceCall = (
   }
   // The provider endpoint commits on its own connection, outside the
   // account's credential fence that an access reset serializes against.
-  const callee = node.expression;
+  const callee = node.callee;
   if (
-    (ts.isPropertyAccessExpression(callee) ||
-      ts.isElementAccessExpression(callee)) &&
-    ts.isPropertyAccessExpression(callee.expression) &&
-    callee.expression.name.text === "api"
+    callee.type === "MemberExpression" &&
+    callee.object.type === "MemberExpression" &&
+    !callee.object.computed &&
+    callee.object.property.type === "Identifier" &&
+    callee.object.property.name === "api"
   ) {
     throw new TypeError(
       `${filename}: desktop issuance must write under the credential fence`,
@@ -186,15 +222,13 @@ const assertIssuanceCall = (
 
   const names: string[] = [];
   for (const entry of body.properties) {
-    if (
-      !ts.isPropertyAssignment(entry) ||
-      !(ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name))
-    ) {
+    const name = assignedName(entry);
+    if (name === undefined) {
       throw new TypeError(
         `${filename}: issuance cannot hide expiry in dynamic fields`,
       );
     }
-    names.push(entry.name.text);
+    names.push(name);
   }
   if (new Set(names).size !== names.length) {
     throw new TypeError(
@@ -202,32 +236,30 @@ const assertIssuanceCall = (
     );
   }
   const expiry = issuanceProperty(body, "expiresIn");
-  if (
-    !expiry ||
-    !ts.isPropertyAssignment(expiry) ||
-    expiry.initializer.kind !== ts.SyntaxKind.NullKeyword
-  ) {
+  if (!expiry || !isNullLiteral(expiry.value)) {
     throw new TypeError(`${filename}: desktop provider expiry must be null`);
   }
   const metadata = issuanceProperty(body, "metadata");
   if (
-    !metadata ||
-    !ts.isPropertyAssignment(metadata) ||
-    !ts.isObjectLiteralExpression(metadata.initializer) ||
-    !issuanceProperty(metadata.initializer, "inactivityExpiresAt")
+    metadata?.value.type !== "ObjectExpression" ||
+    !issuanceProperty(metadata.value, "inactivityExpiresAt")
   ) {
     throw new TypeError(
       `${filename}: issuance must persist its inactivity deadline`,
     );
   }
   if (
-    metadata.initializer.properties.some(
-      (entry) => !ts.isPropertyAssignment(entry),
+    metadata.value.properties.some(
+      (entry) =>
+        entry.type !== "Property" ||
+        entry.kind !== "init" ||
+        entry.method ||
+        entry.shorthand,
     )
   ) {
     throw new TypeError(`${filename}: inactivity metadata must be explicit`);
   }
-  if (!issuanceProperty(metadata.initializer, "deviceJkt")) {
+  if (!issuanceProperty(metadata.value, "deviceJkt")) {
     throw new TypeError(
       `${filename}: issuance must persist its device key binding`,
     );
@@ -241,37 +273,28 @@ const censusIssuanceSource = ({
   filename: string;
   source: string;
 }) => {
-  const ast = ts.createSourceFile(
-    filename,
+  // The census reads TypeScript whatever the fixture's name.
+  const { program } = parseSource(
+    filename.endsWith(".ts") ? filename : `${filename}.ts`,
     source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
   );
   const context = {
     filename,
-    ast,
     isMachineOwner:
       filename.replace(/^\.\//u, "") === "handlers/api-keys/mint.ts",
   };
   let issuers = 0;
-  const visit = (node: ts.Node) => {
-    assertIssuanceReference(node, context);
+  walk(program, (node, ancestors) => {
+    assertIssuanceReference(node, ancestors, context);
     if (
-      ts.isCallExpression(node) &&
-      ((ts.isIdentifier(node.expression) &&
-        node.expression.text === "createApiKey") ||
-        (ts.isPropertyAccessExpression(node.expression) &&
-          node.expression.name.text === "createApiKey") ||
-        (ts.isElementAccessExpression(node.expression) &&
-          ts.isStringLiteral(node.expression.argumentExpression) &&
-          node.expression.argumentExpression.text === "createApiKey"))
+      node.type === "CallExpression" &&
+      ((node.callee.type === "Identifier" &&
+        node.callee.name === "createApiKey") ||
+        isIssuanceMember(node.callee))
     ) {
       issuers += assertIssuanceCall(node, context) ? 1 : 0;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  });
   return issuers;
 };
 const assertDesktopIssuance = (
