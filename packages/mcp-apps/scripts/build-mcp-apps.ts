@@ -737,6 +737,21 @@ const linkAppScript = async (
     }
   }
   const linked = [...declarations, body + code.slice(position)].join("\n");
+  // Bun names a module's namespace object `exports_<name>`; one that is used
+  // but never declared means a bundled module re-exports a shared one.
+  const declaredNamespaces = new Set(
+    [...linked.matchAll(/\bvar (exports_\w+)/gu)].map(([, name]) => name),
+  );
+  const undeclared = [
+    ...new Set(
+      [...linked.matchAll(/\b(exports_\w+)\b/gu)]
+        .map(([, name]) => name)
+        .filter((name) => !declaredNamespaces.has(name)),
+    ),
+  ];
+  if (undeclared.length > 0) {
+    panic(`${label} uses undeclared namespaces: ${undeclared.join(", ")}`);
+  }
   if (linked.includes(SHARED_IMPORT)) {
     panic(
       `${label} loads a shared module without a static import; the runtime cannot provide it`,
@@ -756,6 +771,74 @@ const linkAppScript = async (
   return await onlyOutput(label, outputs, ".js");
 };
 
+// Modules Bun skipped while analysing, imported but never read: unused
+// modules, and barrels whose re-exports Bun followed past them.
+const analysedModules = new Set(
+  apps.flatMap(({ graph }) => [...graph.imports.keys()]),
+);
+const skippedBarrels = new Set(
+  [...resolutions.values()].filter(
+    (file) =>
+      !analysedModules.has(file) && !isStylesheet(file) && existsSync(file),
+  ),
+);
+const barrelTargets = new Map<string, string[]>();
+const readBarrelTargets = async (barrel: string): Promise<string[]> => {
+  const known = barrelTargets.get(barrel);
+  if (known !== undefined) {
+    return known;
+  }
+  const { module, program } = parseSource(
+    barrel,
+    await Bun.file(barrel).text(),
+  );
+  // A module with code of its own is not a barrel; Bun skipped it as unused.
+  const reExportsOnly = program.body.every(
+    (statement) =>
+      statement.type === "ImportDeclaration" ||
+      statement.type === "ExportAllDeclaration" ||
+      (statement.type === "ExportNamedDeclaration" &&
+        statement.declaration === null),
+  );
+  if (!reExportsOnly) {
+    barrelTargets.set(barrel, []);
+    return [];
+  }
+  const targets = [
+    ...module.staticImports.map(({ moduleRequest }) => moduleRequest.value),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest }) =>
+        moduleRequest === null ? [] : [moduleRequest.value],
+      ),
+    ),
+  ].flatMap((specifier) => resolveAnalysed(barrel, specifier) ?? []);
+  barrelTargets.set(barrel, targets);
+  return targets;
+};
+
+/**
+ * A skipped barrel that re-exports a shared module is shared too. Bundled
+ * into an app, it would refer to a namespace object that Bun never emits
+ * once its target is external.
+ */
+const withSharedBarrels = async (
+  shared: ReadonlySet<string>,
+): Promise<ReadonlySet<string>> => {
+  const result = new Set(shared);
+  for (let size = -1; size !== result.size;) {
+    size = result.size;
+    for (const barrel of skippedBarrels) {
+      if (
+        !result.has(barrel) &&
+        (await readBarrelTargets(barrel)).some((file) => result.has(file))
+      ) {
+        result.add(barrel);
+      }
+    }
+  }
+  return result;
+};
+
 /**
  * Splits the apps into one runtime of the modules every app includes and one
  * script per app. A module that only the runtime's copy of a shared module
@@ -766,6 +849,7 @@ const splitScripts = async () => {
   for (const { graph } of apps) {
     shared = shared.intersection(graph.included);
   }
+  shared = await withSharedBarrels(shared);
   for (let round = 1; ; round += 1) {
     const roundShared = shared;
     const scripts = await Promise.all(
@@ -822,7 +906,7 @@ const splitScripts = async () => {
         `MCP app scripts still duplicate runtime modules: ${[...duplicated].join(", ")}`,
       );
     }
-    shared = shared.union(duplicated);
+    shared = await withSharedBarrels(shared.union(duplicated));
   }
 };
 
