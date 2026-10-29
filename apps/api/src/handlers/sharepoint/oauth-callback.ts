@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
+import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
@@ -97,10 +98,7 @@ const OAUTH_STATE_FIELDS = {
 type PrepareSharepointGrantOptions = {
   code: string;
   dependencies: SharepointOAuthCallbackDependencies;
-  row: Pick<
-    typeof sharepointOAuthState.$inferSelect,
-    keyof typeof OAUTH_STATE_FIELDS
-  >;
+  row: SelectResultFields<typeof OAUTH_STATE_FIELDS>;
   signal: AbortSignal;
 };
 
