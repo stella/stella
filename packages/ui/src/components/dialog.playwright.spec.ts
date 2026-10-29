@@ -212,3 +212,13 @@ for (const name of ["Close", "Cancel"]) {
     await expect(page.getByLabel("Stored draft")).toHaveText("Stored question");
   });
 }
+
+test("the popup carries its size", async ({ page }) => {
+  await page.goto("/src/components/fixtures/dialog.fixture.html", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.getByRole("button", { name: "Open editor", exact: true }).click();
+  const popup = page.locator('[data-slot="dialog-popup"]');
+  await expect(popup).toHaveAttribute("data-size", "default");
+  await expect(popup).toHaveClass(/(?:^| )max-w-lg(?: |$)/u);
+});

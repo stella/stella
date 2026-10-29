@@ -368,6 +368,7 @@ const DialogPanel = ({
 export type { DialogLabels, DialogMobileLayout, DialogSize };
 export {
   DIALOG_MOBILE_LAYOUT,
+  DIALOG_SIZE_CLASS_NAMES,
   DialogCreateHandle,
   DialogProvider,
   Dialog,
