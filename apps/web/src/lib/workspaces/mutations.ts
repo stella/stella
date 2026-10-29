@@ -75,7 +75,6 @@ export const useCreateWorkspace = () => {
 };
 
 type WorkspaceUpdateValueByType = {
-  clientId: string;
   color: string | null;
   leadUserId: string | null;
   name: string;
@@ -84,12 +83,14 @@ type WorkspaceUpdateValueByType = {
 
 type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
 
-export type WorkspaceUpdate = {
-  [Type in WorkspaceUpdateType]: {
-    type: Type;
-    value: WorkspaceUpdateValueByType[Type];
-  };
-}[WorkspaceUpdateType];
+export type WorkspaceUpdate =
+  | { type: "clientId"; value: string; expectedClientId: string | null }
+  | {
+      [Type in WorkspaceUpdateType]: {
+        type: Type;
+        value: WorkspaceUpdateValueByType[Type];
+      };
+    }[WorkspaceUpdateType];
 
 type WorkspaceUpdateRefreshScope = "query-cache" | "route-metadata";
 
@@ -115,7 +116,13 @@ export const workspaceUpdateRefreshScope = (update: WorkspaceUpdate) =>
 export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
   switch (update.type) {
     case "clientId":
-      return { clientId: toSafeId<"contact">(update.value) };
+      return {
+        clientId: toSafeId<"contact">(update.value),
+        expectedClientId:
+          update.expectedClientId === null
+            ? null
+            : toSafeId<"contact">(update.expectedClientId),
+      };
     case "color":
       return { color: update.value };
     case "leadUserId":

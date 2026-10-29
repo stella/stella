@@ -48,7 +48,11 @@ export const useMatterClientDropState = (
     updateWorkspace.mutate(
       {
         workspaceId: drop.matterId,
-        update: { type: "clientId", value: drop.clientId },
+        update: {
+          type: "clientId",
+          value: drop.clientId,
+          expectedClientId: drop.type === "move" ? drop.previousClientId : null,
+        },
       },
       {
         onSuccess: () => {
@@ -70,6 +74,7 @@ export const useMatterClientDropState = (
                           update: {
                             type: "clientId",
                             value: drop.previousClientId,
+                            expectedClientId: drop.clientId,
                           },
                         },
                         {

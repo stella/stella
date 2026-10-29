@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
+
 import type { AcceptedMatterClientDrop } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -41,6 +43,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 const mount = () => {
+  let currentClientId: string | null = MOVE.previousClientId;
   const calls: Call[] = [];
   const client = new QueryClient();
   const context = { client, meta: undefined, mutationKey: undefined };
@@ -67,13 +70,23 @@ const mount = () => {
       );
     });
   };
-  const fail = async (call: Call | undefined) => {
+  const fail = async (call: Call | undefined, conflict = false) => {
     if (!call) {
       throw new Error("Expected a pending client assignment");
     }
     await act(async () => {
       call.callbacks?.onError?.(
-        toAPIError({ status: 500, value: { message: "Private failure" } }),
+        toAPIError(
+          conflict
+            ? {
+                status: 409,
+                value: {
+                  code: API_VERSION_CONFLICT_ERROR_CODE,
+                  message: "Client changed",
+                },
+              }
+            : { status: 500, value: { message: "Private failure" } },
+        ),
         call.variables,
         undefined,
         context,
@@ -82,12 +95,34 @@ const mount = () => {
     await waitFor(() => {
       expect(
         [...document.querySelectorAll('[data-slot="toast-title"]')].some(
-          (node) => node.textContent === messages.errors.actionFailed,
+          (node) =>
+            node.textContent ===
+            (conflict
+              ? messages.errors.apiCodes.versionConflict
+              : messages.errors.actionFailed),
         ),
       ).toBe(true);
     });
   };
-  return { calls, result, succeed, fail };
+  const apply = async (call: Call | undefined) => {
+    if (!call || call.variables.update.type !== "clientId") {
+      throw new Error("Expected a client assignment");
+    }
+    if (call.variables.update.expectedClientId !== currentClientId) {
+      await fail(call, true);
+      return;
+    }
+    currentClientId = call.variables.update.value;
+    await succeed(call);
+  };
+  return {
+    calls,
+    result,
+    succeed,
+    fail,
+    apply,
+    currentClientId: () => currentClientId,
+  };
 };
 
 afterEach(async () => {
@@ -109,7 +144,11 @@ test("a moved matter offers Undo and sends its original client", async () => {
   expect(harness.calls.map(({ variables }) => variables)).toEqual([
     {
       workspaceId: MOVE.matterId,
-      update: { type: "clientId", value: MOVE.clientId },
+      update: {
+        type: "clientId",
+        value: MOVE.clientId,
+        expectedClientId: MOVE.previousClientId,
+      },
     },
   ]);
   await harness.succeed(harness.calls.at(0));
@@ -125,7 +164,11 @@ test("a moved matter offers Undo and sends its original client", async () => {
   });
   expect(harness.calls.at(1)?.variables).toEqual({
     workspaceId: MOVE.matterId,
-    update: { type: "clientId", value: MOVE.previousClientId },
+    update: {
+      type: "clientId",
+      value: MOVE.previousClientId,
+      expectedClientId: MOVE.clientId,
+    },
   });
   await harness.fail(harness.calls.at(1));
   expect(
@@ -172,4 +215,34 @@ test("promoting a personal matter waits for confirmation and offers no Undo", as
   expect(
     document.querySelector('[data-slot="toast-title"]')?.textContent,
   ).toContain(MOVE.matterName);
+});
+
+test("Undo from an earlier move cannot replace a newer client assignment", async () => {
+  const harness = mount();
+  act(() => harness.result.current.onMatterDrop(MOVE));
+  await harness.apply(harness.calls.at(0));
+  const earlierUndo = document.querySelector<HTMLButtonElement>(
+    '[data-slot="toast-action"]',
+  );
+  if (!earlierUndo) {
+    throw new Error("Expected the first move's Undo action");
+  }
+  act(() =>
+    harness.result.current.onMatterDrop({
+      ...MOVE,
+      previousClientId: MOVE.clientId,
+      clientId: "client-third",
+      clientName: "Third client",
+    }),
+  );
+  await harness.apply(harness.calls.at(1));
+  expect(harness.currentClientId()).toBe("client-third");
+  act(() => fireEvent.click(earlierUndo));
+  expect(harness.calls.at(2)?.variables.update).toEqual({
+    type: "clientId",
+    value: MOVE.previousClientId,
+    expectedClientId: MOVE.clientId,
+  });
+  await harness.apply(harness.calls.at(2));
+  expect(harness.currentClientId()).toBe("client-third");
 });
