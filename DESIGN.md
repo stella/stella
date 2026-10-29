@@ -210,18 +210,23 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 - **muted:** muted text, foreground text and accent on hover (quiet
   actions in toolbars and rows)
 - **destructive-ghost:** destructive text, transparent, tinted on hover
+- **muted-destructive:** muted text until hovered, then destructive: a
+  delete beside quiet row actions
 - **link:** underline, no background
 - **plain:** no box at all: a click target whose look is its content
   (a card, a thumbnail, a cell). It keeps the button's disabled
   disposition, tooltip and focus ring, lays out like a native button
-  (`inline-block`, content from the start), takes its radius from the
-  caller so the ring follows the content's shape, and ignores `size`.
+  (`inline-block`, content from the start), and ignores `size`.
+  `shape` (`box`, the container radius; `round`, an avatar or pill)
+  sets the outline its focus ring follows.
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
-`row` (a menu-list row), `inline` (an action inside a line of text:
-no height, padding or type of its own, wraps with the line; quiet
-variants drop their hover fill).
+`icon-2xs` (a 16px glyph action in a dense row; the touch target
+still grows to 44px under a coarse pointer), `row` (a menu-list row),
+`inline` (an action inside a line of text: no height, padding or type
+of its own, wraps with the line; quiet variants drop their hover fill,
+and with no variant it is an underlined link).
 
 These are the only variants and sizes. A screen that seems to need
 another (a card button, a tile, a hint) composes `plain` with the
@@ -238,8 +243,26 @@ caller's. A row of exclusive options (filter tabs, view modes) is a
 **Focus ring.** Drawn outside the box with a gap by default;
 `focusRing="inside"` draws it within the box, for a target that fills
 an `overflow-hidden` container where an outside ring would be clipped.
-A small control renders small type itself; do not add `text-xs` to
-a `sm` button, select, or input.
+
+### One Name per Concept
+
+When a screen needs a look the components lack, add it once here and in
+`packages/ui`, under these names:
+
+| Concept                                                            | API                                                             |
+| ------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)               |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default) |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options     |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                              |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                 |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                      |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                  |
+| Borderless field in a line of text                                 | `Input inline`                                                  |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                  |
+| Unit after a number                                                | `NumberInput suffix`                                            |
+| A small control renders small type itself; do not add `text-xs` to |
+| a `sm` button, select, or input.                                   |
 
 ### Menu Rows & Sections
 
