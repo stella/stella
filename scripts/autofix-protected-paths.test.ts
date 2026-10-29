@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -49,10 +50,22 @@ test("every committed baseline and decision ledger is protected", () => {
     isAutofixProtectedPath("scripts/ratchet-allowances/new-budget.json"),
   ).toBe(true);
   expect(isAutofixProtectedPath(".changeset/new-release.md")).toBe(true);
+  expect(isAutofixProtectedPath(".changeset/README.md")).toBe(false);
+  for (const file of [
+    ".changeset/README.md.md",
+    ".changeset/readme.md",
+    ".changeset/nested/README.md",
+  ]) {
+    expect(isAutofixProtectedPath(file), file).toBe(true);
+  }
 });
 
 test("workflow rejects every protected edit despite broad changed-path and generator grants", () => {
   const root = mkdtempSync(path.join(tmpdir(), "autofix-protected-"));
+  const runnerTemp = mkdtempSync(
+    path.join(tmpdir(), "autofix-protected-runner-"),
+  );
+  const repository = path.resolve(import.meta.dirname, "..");
   const workflow = readFileSync(
     new URL("../.github/workflows/autofix.yml", import.meta.url),
     "utf-8",
@@ -102,6 +115,25 @@ test("workflow rejects every protected edit despite broad changed-path and gener
         readFileSync(new URL(file, import.meta.url), "utf-8"),
       );
     }
+    const workflowTooling = path.join(runnerTemp, "workflow-tooling");
+    for (const file of [
+      "scripts/generated-conflicts.ts",
+      "scripts/autofix-protected-paths.ts",
+      "scripts/baseline-paths.ts",
+      "scripts/bun-lock-text.ts",
+      "scripts/generated-files.ts",
+      "packages/scripts/src/generated-files.ts",
+    ]) {
+      const destination = path.join(workflowTooling, file);
+      mkdirSync(path.dirname(destination), { recursive: true });
+      copyFileSync(path.join(repository, file), destination);
+    }
+    const fixtureLock = '{"packages": {}, "workspaces": {}}\n';
+    write("bun.lock", fixtureLock);
+    writeFileSync(
+      path.join(runnerTemp, "autofix-frozen-bun.lock"),
+      fixtureLock,
+    );
     write("changed.ts", "original\n");
     const commit = () => {
       git(["add", "."]);
@@ -121,14 +153,18 @@ test("workflow rejects every protected edit despite broad changed-path and gener
     let head = commit();
     let base = head;
     const run = (file: string) => {
-      writeFileSync(path.join(root, "autofix-changed-paths"), `${file}\0`);
+      writeFileSync(
+        path.join(runnerTemp, "autofix-changed-paths"),
+        `${file}\0`,
+      );
       return Bun.spawnSync(["bash", "-c", command], {
         cwd: root,
         env: {
           ...process.env,
           HEAD_SHA: head,
           BASE_SHA: base,
-          RUNNER_TEMP: root,
+          GITHUB_WORKSPACE: root,
+          RUNNER_TEMP: runnerTemp,
           GENERATOR_ALLOWED: "**",
           TAURI_ALLOWED: "unused",
         },
@@ -147,6 +183,13 @@ test("workflow rejects every protected edit despite broad changed-path and gener
       );
       write(file, "original\n");
     }
+    write(".changeset/README.md", "generated documentation\n");
+    const readme = run(".changeset/README.md");
+    expect(
+      readme.exitCode,
+      `${readme.stdout.toString()}\n${readme.stderr.toString()}`,
+    ).toBe(0);
+    rmSync(path.join(root, ".changeset/README.md"));
     write("changed.ts", "allowed\n");
     expect(run("changed.ts").exitCode).toBe(0);
     const added = "scripts/ratchet-allowances/new.json";
@@ -192,5 +235,6 @@ test("workflow rejects every protected edit despite broad changed-path and gener
     expect(run("changed.ts").exitCode).toBe(1);
   } finally {
     rmSync(root, { recursive: true, force: true });
+    rmSync(runnerTemp, { recursive: true, force: true });
   }
 }, 20_000);

@@ -27,6 +27,7 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
 };
 

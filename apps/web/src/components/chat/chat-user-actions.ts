@@ -57,6 +57,11 @@ export const CHAT_USER_ACTIONS = {
     handler: "continueRequestSecret",
     via: "session",
   },
+  /** Resumes the chat with a confirmed connector receipt. */
+  "continue-connector-request": {
+    handler: "continueConnectConnector",
+    via: "session",
+  },
   copy: { via: "page" },
   "delete-thread": { via: "request" },
   deny: { handler: "handleDeny", via: "session" },
@@ -89,6 +94,11 @@ export const CHAT_USER_ACTIONS = {
   "select-matters": { via: "page" },
   "select-model": { via: "request" },
   send: { handler: "sendMessage", via: "session" },
+  /** Reports a connector card's outcome; the server confirms the connection. */
+  "submit-connector-request": {
+    handler: "handleConnectConnector",
+    via: "session",
+  },
   "submit-private-input": { handler: "handleRequestSecret", via: "session" },
   /** Moves a queued message to the front and stops the running turn. */
   "send-queued-message-now": {

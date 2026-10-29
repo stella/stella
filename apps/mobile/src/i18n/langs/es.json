@@ -8,7 +8,34 @@
   "chat": {
     "description": "Ten a mano el trabajo en curso y continúa desde cualquier dispositivo.",
     "emptyTitle": "Aún no hay conversaciones",
-    "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes."
+    "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes.",
+    "noMatchesTitle": "No hay chats coincidentes",
+    "noMatchesDescription": "Ningún título de chat ni asunto contiene «{search}».",
+    "search": "Buscar chats",
+    "loadFailed": "No se pudieron cargar sus conversaciones.",
+    "retry": "Reintentar",
+    "untitled": "Conversación sin título",
+    "loadMoreFailed": "Cargar más",
+    "loadOlderFailed": "Cargar mensajes anteriores",
+    "toolUsed": "Usado: {tool}",
+    "threadTitle": "Conversación",
+    "threadLoadFailed": "No se pudo cargar esta conversación.",
+    "threadEmptyDescription": "Esta conversación aún no tiene mensajes.",
+    "sections": {
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "week": "Últimos 7 días",
+      "earlier": "Anteriores"
+    },
+    "newChat": "Nueva conversación",
+    "composerPlaceholder": "Pregunta a stella",
+    "send": "Enviar",
+    "stop": "Detener",
+    "sendFailed": "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+    "answerWorking": "Trabajando…",
+    "answerStopped": "Detenido.",
+    "answerNeedsInput": "Esta respuesta necesita tu intervención. Continúala en stella en la web.",
+    "answerFailed": "No se pudo completar la respuesta."
   },
   "tasks": {
     "description": "Consulta lo que requiere atención sin abrir todo el espacio de trabajo.",

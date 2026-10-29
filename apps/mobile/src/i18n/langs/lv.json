@@ -8,7 +8,34 @@
   "chat": {
     "description": "Turiet iesākto darbu pa rokai un turpiniet no jebkuras ierīces.",
     "emptyTitle": "Sarunu vēl nav",
-    "emptyDescription": "Šeit tiks parādītas jaunās sarunas un nesenie pavedieni."
+    "emptyDescription": "Šeit tiks parādītas jaunās sarunas un nesenie pavedieni.",
+    "noMatchesTitle": "Nav atbilstošu tērzēšanu",
+    "noMatchesDescription": "Neviens tērzēšanas nosaukums vai lieta nesatur “{search}”.",
+    "search": "Meklēt tērzēšanas",
+    "loadFailed": "Jūsu sarunas neizdevās ielādēt.",
+    "retry": "Mēģināt vēlreiz",
+    "untitled": "Saruna bez nosaukuma",
+    "loadMoreFailed": "Ielādēt vairāk",
+    "loadOlderFailed": "Ielādēt agrākās ziņas",
+    "toolUsed": "Izmantots: {tool}",
+    "threadTitle": "Saruna",
+    "threadLoadFailed": "Šo sarunu neizdevās ielādēt.",
+    "threadEmptyDescription": "Šajā sarunā vēl nav ziņu.",
+    "sections": {
+      "today": "Šodien",
+      "yesterday": "Vakar",
+      "week": "Pēdējās 7 dienas",
+      "earlier": "Agrāk"
+    },
+    "newChat": "Jauna saruna",
+    "composerPlaceholder": "Jautājiet stellai",
+    "send": "Sūtīt",
+    "stop": "Apturēt",
+    "sendFailed": "Ziņojumu neizdevās nosūtīt. Mēģiniet vēlreiz.",
+    "answerWorking": "Strādāju…",
+    "answerStopped": "Apturēts.",
+    "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
+    "answerFailed": "Atbildi neizdevās pabeigt."
   },
   "tasks": {
     "description": "Skatiet, kam nepieciešama uzmanība, neatverot visu darbvietu.",

@@ -175,7 +175,7 @@ describe("publish package selection", () => {
       `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
     );
     expect(workflow).toContain(
-      "The reusable workflow verifies that a resumed artifact comes from this",
+      "uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
     );
   });
 

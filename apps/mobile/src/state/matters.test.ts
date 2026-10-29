@@ -16,6 +16,7 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
 };
 
@@ -106,12 +107,12 @@ describe("listing matters", () => {
     ]);
 
     const refused = server(() => new Response(null, { status: 401 }));
-    expect(await outcome(refused.fetch)).toBe("MattersRequestError");
+    expect(await outcome(refused.fetch)).toBe("ApiRequestError");
     expect(refused.calls).toHaveLength(3);
   });
 
   test("a response in a shape this build cannot read is an error, not an empty list", async () => {
     const { fetch } = server(() => Response.json({ workspaces: [{ id: 7 }] }));
-    expect(await outcome(fetch)).toBe("MattersRequestError");
+    expect(await outcome(fetch)).toBe("ApiRequestError");
   });
 });

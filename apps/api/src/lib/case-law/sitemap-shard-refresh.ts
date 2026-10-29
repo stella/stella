@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -8,6 +8,7 @@ import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-laun
 import type { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
+  caseLawSitemapCountryGenerations,
   caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSources,
@@ -24,8 +25,12 @@ import {
   decisionMonthSqlFor,
   decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
+  sitemapDocumentRepresentativeFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockCaseLawRemovalSnapshots,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -156,6 +161,8 @@ const afterCursorSql = (
  * the publication gate is its partial predicate, so the page is an index-only
  * range read that stops at the limit. A page with no rows ends the phase; a
  * page whose rows are all withheld still returns its cursor, with no counts.
+ * The bounded page then probes document identities to count only their one
+ * global language representative; the cursor still advances over every row.
  * Exported for the plan test, which holds it to that index.
  */
 export const sitemapRefreshPageSql = ({
@@ -214,8 +221,10 @@ export const sitemapRefreshPageSql = ({
       count(*)::int AS total,
       (extract(epoch FROM max(page.updated_at)) * 1000)::float8 AS last_modified_ms
     FROM page
+    INNER JOIN ${caseLawDecisions} ON ${caseLawDecisions.id} = page.id
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = page.source_id
     WHERE ${redistributableCaseLawSource}
+      AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY page.year, page.month, page.bucket
   ) AS counts ON true
 `;
@@ -292,6 +301,12 @@ type CountCountryOptions = {
   country: string;
 };
 
+type CountCountryResult = {
+  generation: bigint;
+  months: CountryMonths;
+  pages: number;
+};
+
 /**
  * Walk one country's sitemap index entries, a page per statement, inside one
  * read-only REPEATABLE READ transaction: each statement is short, and every
@@ -306,12 +321,20 @@ const countCountryMonths = async ({
   pageSize,
   signal,
   country,
-}: CountCountryOptions): Promise<{ months: CountryMonths; pages: number }> =>
+}: CountCountryOptions): Promise<CountCountryResult> =>
   await withAggregateTransaction(db, async (tx) => {
     await tx.execute(
       sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
     );
     await setTransactionBudget(tx, budget);
+    const generation =
+      (
+        await tx
+          .select({ generation: caseLawSitemapCountryGenerations.generation })
+          .from(caseLawSitemapCountryGenerations)
+          .where(eq(caseLawSitemapCountryGenerations.country, country))
+          .limit(1)
+      ).at(0)?.generation ?? 0n;
     const months: CountryMonths = new Map();
     let pages = 0;
     for (const phase of ["dated", "undated"] as const) {
@@ -330,7 +353,7 @@ const countCountryMonths = async ({
         pages += 1;
       } while (cursor !== null);
     }
-    return { months, pages };
+    return { generation, months, pages };
   });
 
 const stagedMonthSchema = v.strictObject({
@@ -374,6 +397,7 @@ type StageCountryOptions = {
   country: string;
   months: CountryMonths;
   pages: number;
+  generation: bigint;
 };
 
 const stageCountry = async ({
@@ -382,10 +406,25 @@ const stageCountry = async ({
   country,
   months,
   pages,
-}: StageCountryOptions): Promise<void> => {
+  generation,
+}: StageCountryOptions): Promise<boolean> => {
   const staged = JSON.stringify(toStagedMonths(months));
-  await withAggregateTransaction(db, async (tx) => {
+  return await withAggregateTransaction(db, async (tx) => {
     await setTransactionBudget(tx, budget);
+    // Serialize the compare and stage with removal invalidation. A removal
+    // either follows this write and deletes it, or advances the generation first.
+    await lockCaseLawRemovalSnapshots(tx);
+    const currentGeneration =
+      (
+        await tx
+          .select({ generation: caseLawSitemapCountryGenerations.generation })
+          .from(caseLawSitemapCountryGenerations)
+          .where(eq(caseLawSitemapCountryGenerations.country, country))
+          .limit(1)
+      ).at(0)?.generation ?? 0n;
+    if (currentGeneration !== generation) {
+      return false;
+    }
     await tx
       .insert(caseLawSitemapShardCounts)
       .values({
@@ -402,6 +441,7 @@ const stageCountry = async ({
           countedAt: sql`excluded.counted_at`,
         },
       });
+    return true;
   });
 };
 
@@ -567,11 +607,11 @@ const SITEMAP_REFRESH_RUN_BUDGET_MS = 15 * 60 * 1000;
 /** Counts one country in its own snapshot and stages it; answers the pages read. */
 const countAndStageCountry = async (
   options: Parameters<typeof countCountryMonths>[0],
-): Promise<number> => {
+): Promise<{ pages: number; staged: boolean }> => {
   const walked = await countCountryMonths(options);
   const { db, budget, country } = options;
-  await stageCountry({ db, budget, country, ...walked });
-  return walked.pages;
+  const staged = await stageCountry({ db, budget, country, ...walked });
+  return { pages: walked.pages, staged };
 };
 
 type SitemapRefreshOutcome =
@@ -625,14 +665,23 @@ export const refreshCaseLawSitemapShards = async (
   for (const country of pending) {
     throwIfAborted(signal);
     // db-await-in-loop: one snapshot per country; each is staged before the next starts
-    pages += await countAndStageCountry({
+    const countryCount = await countAndStageCountry({
       db,
       budget,
       pageSize,
       signal,
       country,
     });
+    pages += countryCount.pages;
     counted += 1;
+    if (!countryCount.staged) {
+      return {
+        type: "counting",
+        counted,
+        remaining: pending.length - counted + 1,
+        pages,
+      };
+    }
     // Checked after a country, so every run stages at least one and a
     // budget shorter than one country's walk still advances the cycle.
     if (counted < pending.length && clock() - startedAt >= runBudgetMs) {
@@ -681,4 +730,27 @@ export const refreshCaseLawSitemapShards = async (
     });
   }
   return outcome;
+};
+
+/** Retire both staged counts and published shards for the changed country. */
+export const invalidateCaseLawSitemapShardsTx = async (
+  tx: RefreshTransaction,
+  country: string,
+): Promise<void> => {
+  await tx
+    .insert(caseLawSitemapCountryGenerations)
+    .values({ country, generation: 1n })
+    .onConflictDoUpdate({
+      target: caseLawSitemapCountryGenerations.country,
+      set: {
+        generation: sql`${caseLawSitemapCountryGenerations.generation} + 1`,
+      },
+    });
+  // audit: skip — sitemap invalidation belongs to the canonical removal audit.
+  await tx
+    .delete(caseLawSitemapShardCounts)
+    .where(eq(caseLawSitemapShardCounts.country, country));
+  await tx
+    .delete(caseLawSitemapShards)
+    .where(eq(caseLawSitemapShards.country, country));
 };

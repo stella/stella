@@ -12,16 +12,10 @@ import {
   deviceSessionStore,
   openDeviceAuthSession,
 } from "@/connection/platform";
-import {
-  createAccessTokenSource,
-  isCurrentSessionSource,
-} from "@/connection/session";
-import type {
-  AccessToken,
-  AccessTokenSource,
-  SessionGeneration,
-  StoredSession,
-} from "@/connection/session";
+import { restoredSource, sourceFor } from "@/connection/restored-session";
+import { isCurrentSessionSource } from "@/connection/session";
+import type { AccessTokenSource } from "@/connection/session";
+import { signOutSession } from "@/connection/session-actions";
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
@@ -41,63 +35,21 @@ type SessionContextValue = {
     serverUrlInput: string,
   ) => Promise<Result<void, SignInError>>;
   readonly signOut: () => Promise<Result<void, TokenError>>;
-  /** The server refused the session; the person has to sign in again. */
+  /**
+   * The server refused `source`'s session; the person has to sign in again.
+   * A source left over from an earlier sign-in ends nothing.
+   */
   readonly end: (source: AccessTokenSource) => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-/**
- * The session a previous run kept, read once as the app starts. A keychain
- * that cannot be read (the device locked during a background launch) starts
- * signed out; signing in writes a fresh session over whatever was there.
- */
-let restoredSession:
-  | {
-      readonly generation: SessionGeneration;
-      readonly promise: Promise<StoredSession | undefined>;
-    }
-  | undefined;
-
-const sessionToRestore = async () => {
-  const generation = deviceSessionStore.generation();
-  if (restoredSession?.generation === generation) {
-    return await restoredSession.promise;
-  }
-  const promise = Result.tryPromise(
-    async () => await deviceSessionStore.read(generation),
-  ).then((read) => (Result.isOk(read) ? read.value : undefined));
-  restoredSession = { generation, promise };
-  return await promise;
-};
-
-const sourceFor = (
-  session: StoredSession,
-  initialAccess: AccessToken | undefined,
-  generation: SessionGeneration,
-): AccessTokenSource =>
-  createAccessTokenSource({
-    fetch,
-    initialAccess,
-    now: epochMilliseconds,
-    session,
-    generation,
-    store: deviceSessionStore,
-  });
-
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
-  const restored = use(sessionToRestore());
+  const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
-    restored === undefined
+    restored === undefined || restored.session() === undefined
       ? { status: "signed-out", ended: false }
-      : {
-          status: "signed-in",
-          source: sourceFor(
-            restored,
-            undefined,
-            deviceSessionStore.generation(),
-          ),
-        },
+      : { status: "signed-in", source: restored },
   );
 
   const value: SessionContextValue = {
@@ -146,21 +98,27 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ) {
         return Result.ok(undefined);
       }
-      setState({
+      const outcome = stored.value;
+      const next = {
         status: "signed-in",
-        source: sourceFor(
-          signedIn.value.session,
-          signedIn.value.access,
-          stored.value.generation,
-        ),
-      });
+        source: sourceFor({
+          session,
+          initialAccess: signedIn.value.access,
+          generation: outcome.generation,
+        }),
+      } as const satisfies SessionState;
+      setState(
+        (current) =>
+          deviceSessionStore.commit(outcome.generation, () => next) ?? current,
+      );
       return Result.ok(undefined);
     },
-    signOut: async () => {
-      if (state.status === "signed-in") {
-        const session = state.source.session();
-        // Best effort: an unreachable server cannot keep the phone signed in.
-        if (session !== undefined) {
+    signOut: async () =>
+      await signOutSession({
+        store: deviceSessionStore,
+        session:
+          state.status === "signed-in" ? state.source.session() : undefined,
+        revoke: async (session) => {
           (
             await revokeRefreshToken({
               clientId: session.clientId,
@@ -169,32 +127,27 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
               revocationEndpoint: session.revocationEndpoint,
             })
           ).unwrapOr(undefined);
-        }
-      }
-      const transition = deviceSessionStore.begin();
-      restoredSession = undefined;
-      const cleared = await Result.tryPromise({
-        try: async () => await transition.clear(),
-        catch: (cause) =>
-          new TokenError({
-            message: "The keychain kept the session",
-            cause,
-          }),
-      });
-      if (Result.isError(cleared)) {
-        return Result.err(cleared.error);
-      }
-      setState({ status: "signed-out", ended: false });
-      return Result.ok(undefined);
-    },
+        },
+        publish: (generation) =>
+          setState(
+            (current) =>
+              deviceSessionStore.commit(
+                generation,
+                () => ({ status: "signed-out", ended: false }) as const,
+              ) ?? current,
+          ),
+      }),
     end: (source) => {
-      if (
-        state.status !== "signed-in" ||
-        !isCurrentSessionSource(state.source, source)
-      ) {
-        return;
-      }
-      setState({ status: "signed-out", ended: true });
+      const generation = deviceSessionStore.generation();
+      setState(
+        (current) =>
+          deviceSessionStore.commit(generation, () =>
+            current.status === "signed-in" &&
+            isCurrentSessionSource(current.source, source)
+              ? ({ status: "signed-out", ended: true } as const)
+              : current,
+          ) ?? current,
+      );
     },
   };
 

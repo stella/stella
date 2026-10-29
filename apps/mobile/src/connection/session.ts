@@ -11,6 +11,8 @@ import { refreshTokens } from "./tokens";
  * refresh token alone, which the server can revoke and rotates on use.
  */
 export const storedSessionSchema = v.object({
+  /** Local sign-in identity, preserved across refresh-token rotations. */
+  signInId: v.pipe(v.string(), v.minLength(1)),
   serverUrl: v.pipe(v.string(), v.url()),
   issuer: v.pipe(v.string(), v.url()),
   clientId: v.pipe(v.string(), v.minLength(1)),
@@ -24,7 +26,7 @@ export const storedSessionSchema = v.object({
 export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
 
 type SessionPersistence = {
-  /** `null` is a durable sign-out tombstone awaiting deletion. */
+  /** `null` marks an unusable entry (a tombstone or invalid stored shape). */
   readonly read: () => Promise<StoredSession | null | undefined>;
   readonly write: (session: StoredSession) => Promise<void>;
   readonly prepareClear: () => Promise<void>;
@@ -50,6 +52,10 @@ export type SessionStore = {
   readonly read: (
     generation: SessionGeneration,
   ) => Promise<StoredSession | undefined>;
+  readonly commit: <Value>(
+    generation: SessionGeneration,
+    publish: () => Value,
+  ) => Value | undefined;
   readonly generation: () => SessionGeneration;
   readonly advance: () => SessionGeneration;
   readonly begin: () => SessionTransition;
@@ -60,6 +66,7 @@ export type SessionStore = {
   ) => Promise<SessionWriteOutcome>;
   readonly clear: (
     generation: SessionGeneration,
+    expected?: StoredSession,
   ) => Promise<SessionWriteOutcome>;
 };
 
@@ -87,11 +94,21 @@ export const createSessionStore = (
     read: async (captured) => {
       const session = await persistence.read();
       if (session === null) {
-        await persistence.clear();
+        await enqueue(async () => {
+          if (captured !== generation) {
+            return;
+          }
+          const current = await persistence.read();
+          if (captured === generation && current === null) {
+            await persistence.clear();
+          }
+        });
         return undefined;
       }
       return captured === generation ? session : undefined;
     },
+    commit: (captured, publish) =>
+      captured === generation ? publish() : undefined,
     generation: () => generation,
     advance,
     begin: () => {
@@ -113,13 +130,36 @@ export const createSessionStore = (
           ? { type: "committed", generation: captured }
           : { type: "stale" };
       }),
-    clear: async (captured) =>
+    clear: async (captured, expected) =>
       await enqueue(async () => {
         if (captured !== generation) {
           return { type: "stale" };
         }
+        if (expected !== undefined) {
+          const kept = await persistence.read();
+          if (captured !== generation) {
+            return { type: "stale" };
+          }
+          if (
+            kept !== undefined &&
+            (kept === null ||
+              !sameSessionIdentity(kept, expected) ||
+              kept.refreshToken !== expected.refreshToken)
+          ) {
+            return { type: "stale" };
+          }
+        }
         await persistence.prepareClear();
-        await persistence.clear();
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        const current = await persistence.read();
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        if (current === null) {
+          await persistence.clear();
+        }
         return captured === generation
           ? { type: "committed", generation: captured }
           : { type: "stale" };
@@ -186,35 +226,64 @@ export const createAccessTokenSource = ({
   let refreshing:
     Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
-  const refresh = async (): Promise<
-    Result<string, SignedOutError | TokenError>
-  > => {
+  const afterRefusal = async (
+    presented: string,
+    oauthError: string,
+    adopted: boolean,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const kept = await Result.tryPromise(
+      async () => await store.read(generation),
+    );
+    const successor = Result.isOk(kept) ? kept.value : undefined;
+    const sameSession =
+      store.isCurrent(generation) &&
+      successor !== undefined &&
+      sameSessionIdentity(successor, current);
+    if (!adopted && sameSession && successor.refreshToken !== presented) {
+      current = successor;
+      return await refresh(true);
+    }
+    // Only a keychain read as empty or still holding the refused token is
+    // cleared: a newer token another run stored, or a keychain that could
+    // not be read, is left as it is.
+    const refusedKept =
+      Result.isOk(kept) &&
+      (successor === undefined ||
+        (sameSession && successor.refreshToken === presented));
+    if (refusedKept) {
+      (
+        await Result.tryPromise(async () => {
+          await store.clear(generation, current);
+        })
+      ).unwrapOr(undefined);
+    }
+    return Result.err(
+      new SignedOutError({
+        message: `The server ended the session: ${oauthError}`,
+      }),
+    );
+  };
+
+  const refresh = async (
+    adopted = false,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
     if (!store.isCurrent(generation)) {
       return Result.err(
         new SignedOutError({ message: "The session is no longer current" }),
       );
     }
+    const presented = current.refreshToken;
     const refreshed = await refreshTokens({
       fetch,
       clientId: current.clientId,
-      refreshToken: current.refreshToken,
+      refreshToken: presented,
       resource: current.resource,
       tokenEndpoint: current.tokenEndpoint,
     });
     if (Result.isError(refreshed)) {
       const { oauthError } = refreshed.error;
       if (oauthError !== undefined && TERMINAL_REFRESH_ERRORS.has(oauthError)) {
-        const cleared = await store.clear(generation);
-        if (cleared.type === "stale") {
-          return Result.err(
-            new SignedOutError({ message: "The session is no longer current" }),
-          );
-        }
-        return Result.err(
-          new SignedOutError({
-            message: `The server ended the session: ${oauthError}`,
-          }),
-        );
+        return await afterRefusal(presented, oauthError, adopted);
       }
       return Result.err(refreshed.error);
     }
@@ -274,3 +343,16 @@ export const createAccessTokenSource = ({
     },
   };
 };
+
+/** Whether two stored sessions are the same sign-in, whatever their refresh token. */
+function sameSessionIdentity(a: StoredSession, b: StoredSession): boolean {
+  return (
+    a.signInId === b.signInId &&
+    a.serverUrl === b.serverUrl &&
+    a.issuer === b.issuer &&
+    a.clientId === b.clientId &&
+    a.tokenEndpoint === b.tokenEndpoint &&
+    a.revocationEndpoint === b.revocationEndpoint &&
+    a.resource === b.resource
+  );
+}

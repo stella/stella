@@ -12,6 +12,7 @@ import {
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
+import type { ReviewDecision } from "@stll/api-contract/review-decision";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
@@ -114,6 +115,12 @@ export const DOCUMENT_REVIEW_DECISION = {
   ACCEPTED: "accepted",
   DISMISSED: "dismissed",
 } as const satisfies ConstantMap<DocumentReviewDecision>;
+
+export const DOCUMENT_REVIEW_FINDING_DECISION = {
+  open: null,
+  accepted: "accepted",
+  dismissed: "rejected",
+} as const satisfies Record<DocumentReviewDecision, ReviewDecision | null>;
 
 /**
  * Reviewer flags a finding carries, alongside its decision.

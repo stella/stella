@@ -47,8 +47,7 @@ export const deviceSessionStore = createSessionStore({
     // A shape this build cannot read is a session it cannot use; dropping it
     // sends the person to sign in rather than failing every request.
     if (!parsed.success) {
-      await deleteItemAsync(SESSION_KEY, KEYCHAIN);
-      return undefined;
+      return null;
     }
     return parsed.output;
   },

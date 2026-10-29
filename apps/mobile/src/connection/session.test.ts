@@ -21,6 +21,7 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
 };
 
@@ -178,6 +179,142 @@ describe("access tokens", () => {
 
     expect(await token(source)).toBe("SignedOutError");
     expect(memory.stored()).toBeUndefined();
+  });
+
+  test("a grant another run rotated first continues from the token it kept", async () => {
+    const successor = { ...SESSION, refreshToken: "refresh-2" };
+    const memory = memoryStore(successor);
+    const presented: string[] = [];
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        const refreshToken = body.get("refresh_token") ?? "";
+        presented.push(refreshToken);
+        return refreshToken === "refresh-2"
+          ? Response.json({
+              access_token: "access-2",
+              expires_in: 900,
+              refresh_token: "refresh-3",
+              token_type: "Bearer",
+            })
+          : Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+      generation: memory.store.generation(),
+    });
+
+    expect(await token(source)).toBe("access-2");
+    expect(presented).toEqual(["refresh-1", "refresh-2"]);
+    expect(memory.stored()?.refreshToken).toBe("refresh-3");
+  });
+
+  test("a session kept for another server is neither adopted nor cleared", async () => {
+    // A server controls its own discovery document, so it can claim another
+    // server's issuer, client, endpoints and resource; only its URL differs.
+    const other: StoredSession = {
+      ...SESSION,
+      serverUrl: "https://other.example.com",
+      refreshToken: "other-refresh",
+    };
+    const memory = memoryStore(other);
+    const presented: string[] = [];
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        presented.push(body.get("refresh_token") ?? "");
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+      generation: memory.store.generation(),
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(presented).toEqual(["refresh-1"]);
+    expect(memory.stored()).toEqual(other);
+  });
+
+  test("an adopted token refused after another run rotated again keeps the newer one", async () => {
+    // This source adopts refresh-2, which the server then refuses because a
+    // third run has since rotated it and kept refresh-3.
+    const memory = memoryStore({ ...SESSION, refreshToken: "refresh-2" });
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        if (body.get("refresh_token") === "refresh-2") {
+          await memory.store.write(
+            { ...SESSION, refreshToken: "refresh-3" },
+            memory.store.generation(),
+          );
+        }
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+      generation: memory.store.generation(),
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(memory.stored()?.refreshToken).toBe("refresh-3");
+  });
+
+  test("a keychain that cannot be read is not cleared", async () => {
+    let cleared = false;
+    const memory = memoryStore(SESSION);
+    const source = createAccessTokenSource({
+      fetch: async () =>
+        Response.json({ error: "invalid_grant" }, { status: 400 }),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      generation: memory.store.generation(),
+      store: {
+        ...memory.store,
+        read: async () => {
+          throw new Error("The keychain is locked");
+        },
+        clear: async () => {
+          cleared = true;
+        },
+      },
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(cleared).toBe(false);
+  });
+
+  test("a keychain that cannot be cleared still signs the app out", async () => {
+    const memory = memoryStore(SESSION);
+    const source = createAccessTokenSource({
+      fetch: async () =>
+        Response.json({ error: "invalid_grant" }, { status: 400 }),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      generation: memory.store.generation(),
+      store: {
+        ...memory.store,
+        read: async () => SESSION,
+        clear: async () => {
+          throw new Error("The keychain is locked");
+        },
+      },
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
   });
 
   test("an unreachable server keeps the session for the next attempt", async () => {
@@ -513,4 +650,99 @@ describe("access tokens", () => {
       }),
     );
   });
+});
+
+test("a delayed cleanup read preserves a replacement session", async () => {
+  const reached = Promise.withResolvers<undefined>();
+  const resume = Promise.withResolvers<undefined>();
+  let stored: StoredSession | null | undefined = null;
+  let reads = 0;
+  const store = createSessionStore({
+    read: async () => {
+      const observed = stored;
+      if (++reads === 1) {
+        reached.resolve(undefined);
+        await resume.promise;
+      }
+      return observed;
+    },
+    write: async (session) => {
+      stored = session;
+    },
+    prepareClear: async () => {
+      stored = null;
+    },
+    clear: async () => {
+      stored = undefined;
+    },
+  });
+  const restoring = store.read(store.generation());
+  await reached.promise;
+  const replacement = {
+    ...SESSION,
+    signInId: "replacement",
+    refreshToken: "replacement-token",
+  };
+  await store.begin().write(replacement);
+  resume.resolve(undefined);
+  expect(await restoring).toBeUndefined();
+  expect(stored).toEqual(replacement);
+});
+
+test("cleanup checks the persisted value again inside its queue", async () => {
+  let stored: StoredSession | null | undefined = SESSION;
+  let reads = 0;
+  const store = createSessionStore({
+    read: async () => (++reads === 1 ? null : stored),
+    write: async (session) => {
+      stored = session;
+    },
+    prepareClear: async () => {
+      stored = null;
+    },
+    clear: async () => {
+      stored = undefined;
+    },
+  });
+  expect(await store.read(store.generation())).toBeUndefined();
+  expect(stored).toEqual(SESSION);
+});
+
+test("successor recovery requires the same sign-in on a shared server", async () => {
+  const other = {
+    ...SESSION,
+    signInId: "another-sign-in",
+    refreshToken: "other-refresh",
+  };
+  const memory = memoryStore(other);
+  const presented: string[] = [];
+  const source = createAccessTokenSource({
+    fetch: async (_input, init) => {
+      presented.push(
+        new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        ).get("refresh_token") ?? "",
+      );
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    },
+    initialAccess: undefined,
+    now: () => 0,
+    session: SESSION,
+    store: memory.store,
+    generation: memory.store.generation(),
+  });
+  expect(await token(source)).toBe("SignedOutError");
+  expect(presented).toEqual([SESSION.refreshToken]);
+  expect(memory.stored()).toEqual(other);
+});
+
+test("conditional grant cleanup preserves a queued successor", async () => {
+  const memory = memoryStore(SESSION);
+  const generation = memory.store.generation();
+  const successor = { ...SESSION, refreshToken: "successor" };
+  const writing = memory.store.write(successor, generation);
+  const clearing = memory.store.clear(generation, SESSION);
+  await writing;
+  expect(await clearing).toEqual({ type: "stale" });
+  expect(memory.stored()).toEqual(successor);
 });
