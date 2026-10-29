@@ -45,7 +45,7 @@ Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A respo
 
 ${MCP_CASING_RULE}
 
-Errors: failed tools return text \`{"error":{"code","message","hint","retryable"}}\` with isError set. Follow \`hint\`. result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
+Errors: failed tools return text \`{"error":{"code","message","hint","retryable"}}\` with isError set. Follow \`hint\`; result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
 
 First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions.${mode === "advanced" ? " External connector tools follow their owning server's confirmation contract." : ""}
 

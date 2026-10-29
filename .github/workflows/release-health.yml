@@ -1,4 +1,5 @@
 name: Release health
+run-name: Release health ${{ inputs.release_ref }}
 
 # Dispatched by release.yml once production serves a stable release: wait out
 # the post-release window, compare the release's failure fingerprints with the
@@ -89,6 +90,7 @@ jobs:
           {
             echo "window_end=$(bun scripts/release-health.ts window-end --published-at "$published_at")"
             echo "previous=$(jq -r '.tag // empty' <<<"$previous")"
+            echo "previous_published_at=$(jq -r '.publishedAt // empty' <<<"$previous")"
           } >> "$GITHUB_OUTPUT"
 
       - name: Wait out the post-release window
@@ -114,6 +116,7 @@ jobs:
           POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
           POSTHOG_API_HOST: https://eu.posthog.com
           PREVIOUS_REF: ${{ steps.release.outputs.previous }}
+          PREVIOUS_PUBLISHED_AT: ${{ steps.release.outputs.previous_published_at }}
           WINDOW_END: ${{ steps.release.outputs.window_end }}
         run: |
           set -euo pipefail
@@ -124,6 +127,7 @@ jobs:
           bun scripts/release-health.ts query \
             --release "$RELEASE_REF" \
             --previous "$PREVIOUS_REF" \
+            --previous-published-at "$PREVIOUS_PUBLISHED_AT" \
             --until "$WINDOW_END" > "$RUNNER_TEMP/query.json"
           bash scripts/retry.sh curl --fail -sS --max-time 60 \
             -X POST \

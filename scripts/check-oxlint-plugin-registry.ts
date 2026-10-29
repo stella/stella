@@ -20,6 +20,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "network-call.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
+  "public-read-io-provenance.ts",
   "restricted-import.ts",
   "utils.ts",
 ]);

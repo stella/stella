@@ -4,10 +4,11 @@ import type { ReactElement, RefObject } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteEliParts } from "@stll/api-contract/statute-act-number";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
-  splitStatuteTitleCitation,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import {
@@ -139,33 +140,22 @@ const StatuteReaderChat = ({
     </LegalReaderAIChat>
   );
 
-/**
- * Records the act in the reader's recent law, titled `number/year · title`
- * when the stored title carries no citation of its own.
- */
-const useRecordStatuteOpen = ({
-  eli,
-  title,
-}: {
-  eli: string;
-  title: string;
-}) => {
-  const { citation, rest } = splitStatuteTitleCitation(title);
-  const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
-  const year = eliCitation?.at(1);
-  const number = eliCitation?.at(2);
+/** Records the same act identity and subject used by the list and reader. */
+const useRecordStatuteOpen = (
+  statute: Parameters<typeof statuteDisplayLabel>[0],
+) => {
+  const label = statuteDisplayLabel(statute);
+  const { year, number } = statuteEliParts(statute.eli);
   useRecordOpenedLawDocument({
     kind: "statute",
-    documentId: eli,
+    documentId: statute.eli,
     documentIdentity:
-      number === undefined || year === undefined
+      number === null || year === null
         ? { kind: "unknown" }
         : { kind: "statute", number, year },
     title: {
-      identifier:
-        citation ??
-        (year === undefined || number === undefined ? "" : `${number}/${year}`),
-      description: rest,
+      identifier: label.identity ?? "",
+      description: label.subject ?? "",
     },
   });
 };
@@ -201,7 +191,7 @@ export const PublicStatuteViewer = ({
   } = useReaderElement<HTMLDivElement>();
   const panelRef = useRef<HTMLElement>(null);
   const header = statute ?? work;
-  useRecordStatuteOpen({ eli: work.eli, title: header.title });
+  useRecordStatuteOpen(header);
   const find = useInspectorFind({
     contentRef,
     enabled: statute !== null && comparison.compare === undefined,
@@ -345,7 +335,11 @@ export const PublicStatuteViewer = ({
   const activeLegal: ActiveLegalDocument | null =
     statute === null
       ? null
-      : { type: "statute", documentId: statute.id, title: statute.title };
+      : {
+          type: "statute",
+          documentId: statute.id,
+          title: statuteDisplayLabel(statute).text,
+        };
 
   const readerWithChat = (
     <StatuteReaderChat activeLegal={activeLegal}>

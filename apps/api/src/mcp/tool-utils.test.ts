@@ -908,6 +908,44 @@ describe("served corpus text", () => {
     );
   });
 
+  test("a footnote is served under its printed mark, once per note", () => {
+    const note = (label: string, noteId?: string) => ({ label, noteId });
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "paragraph", plainText: "As stated[1], it holds[2]." },
+          { type: "paragraph", plainText: "See point 2.", note: note("[1]") },
+          {
+            type: "paragraph",
+            plainText: "See the letter",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "table",
+            plainText: "of 28 May 2021.",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "paragraph",
+            plainText: "3 Already marked.",
+            note: note("3"),
+          },
+          { type: "paragraph", plainText: "30 days.", note: note("3") },
+        ],
+        fulltext: null,
+      }),
+    ).toBe(
+      [
+        "As stated[1], it holds[2].",
+        "[1] See point 2.",
+        "[2] See the letter",
+        "of 28 May 2021.",
+        "3 Already marked.",
+        "3 30 days.",
+      ].join("\n\n"),
+    );
+  });
+
   test("a heading or a number that is no paragraph number adds nothing", () => {
     expect(
       toPlainCorpusText({

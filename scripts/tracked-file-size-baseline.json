@@ -15,11 +15,6 @@
     "reason": "CJK font subset embedded in signature stamps at runtime; produced by apps/api/src/scripts/subset-stamp-fonts.ts."
   },
   {
-    "path": "apps/web/public/branding/auth-gradient-spikes.webp",
-    "maxBytes": 1900890,
-    "reason": "Branding image served from the web app's public directory."
-  },
-  {
     "path": "provenance/projects/root/sbom.cdx.json",
     "maxBytes": 3145728,
     "reason": "CycloneDX SBOM committed by the provenance refresh (docs/policies/asset-management.md). Its size follows the dependency set, so the ceiling leaves headroom for scheduled refreshes."
