@@ -33,6 +33,8 @@ export type PreCutGate = {
   readonly check: CutGateCheck;
   /** Whether `--allow-unproven-main` lets the cut go on despite a failure. */
   readonly overriddenByAllowUnprovenMain: boolean;
+  /** A non-check effect makes the gate ineligible for a dry run. */
+  readonly writeSide?: string;
 };
 
 export type PostCutGate = {

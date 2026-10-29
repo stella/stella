@@ -1,0 +1,55 @@
+name: Release rehearsal
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    name: Run release checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release-app
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Mint release App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          permission-contents: read
+      - name: Run the release checks
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          STAGING_DEPLOY_REPOSITORY: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+        run: |
+          SECONDS=0
+          status=0
+          bun scripts/release-rehearsal.ts || status=$?
+          echo "### Release rehearsal" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: ${SECONDS}s" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

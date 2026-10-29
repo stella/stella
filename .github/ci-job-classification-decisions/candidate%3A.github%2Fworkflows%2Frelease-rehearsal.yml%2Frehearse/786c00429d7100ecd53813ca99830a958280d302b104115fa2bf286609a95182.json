@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Runs the read-only release gates on trusted main code before release day.",
+  "reviewedDigest": "786c00429d7100ecd53813ca99830a958280d302b104115fa2bf286609a95182"
+}
