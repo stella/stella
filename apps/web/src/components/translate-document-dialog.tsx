@@ -26,6 +26,7 @@ import {
   DialogTrigger,
 } from "@stll/ui/dialog";
 import { LanguagesIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -695,10 +696,7 @@ const RadioCard = ({
   value,
   onChange,
 }: RadioCardProps) => (
-  <label
-    aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-  >
+  <Label aria-label={label} variant="choice-card">
     <input
       checked={checked}
       className="accent-primary mt-0.5 size-4 shrink-0"
@@ -712,5 +710,5 @@ const RadioCard = ({
       <span className="text-sm font-medium">{label}</span>
       <span className="text-muted-foreground text-xs">{description}</span>
     </span>
-  </label>
+  </Label>
 );

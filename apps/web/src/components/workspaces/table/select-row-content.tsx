@@ -125,6 +125,7 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
   };
 
   return (
+    // oxlint-disable-next-line no-native-ui/no-native-button -- the whole first-column cell is this row's checkbox: it shows the row number until the row is hovered, focused or selected, then the drawn box, and reads Shift from the click to select a range; @stll/ui Checkbox is the 16px box alone and cannot be the cell-sized target
     <button
       aria-checked={someSelected ? "mixed" : selected}
       aria-label={label}
@@ -139,6 +140,7 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
           event.stopPropagation();
         }
       }}
+      // oxlint-disable-next-line no-native-ui/no-native-checkbox -- the cell-sized selection target above; its drawn box is the @stll/ui Checkbox, rendered read-only inside it
       role="checkbox"
       type="button"
     >

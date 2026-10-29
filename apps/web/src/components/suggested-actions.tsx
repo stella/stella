@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@stll/ui/button";
 import { HorizontalScroller } from "@stll/ui/horizontal-scroller";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 type SuggestedAction = {
@@ -117,9 +118,8 @@ export const SuggestedActions = ({
             variant={surface === "plain" ? "outline" : "ghost"}
           >
             {action.icon}
-            <span className="min-w-0 truncate" dir="auto" title={action.label}>
-              {action.label}
-            </span>
+            {/* The full label shows only when the chip cuts it short. */}
+            <TruncatedText dir="auto">{action.label}</TruncatedText>
           </Button>
         </SuggestedActionSurface>
       ))}

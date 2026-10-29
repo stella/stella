@@ -16,6 +16,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 
@@ -212,30 +213,34 @@ const ConditionChip = ({
   };
 
   return (
-    <button
+    <Button
       // The badge sits far below the 44px touch target, so the button carries
       // the hit area without changing how big the chip looks.
-      className={cn(
-        "flex min-h-11 w-full min-w-0 cursor-pointer items-center rounded-full transition-opacity",
-        "focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none",
-        pending && "opacity-60",
-      )}
+      className="flex min-h-11 w-full min-w-0 items-center"
       onClick={onToggle}
-      title={t("templates.conditionOverrideHint")}
-      type="button"
+      shape="round"
+      tooltip={t("templates.conditionOverrideHint")}
+      variant="plain"
     >
-      <ReviewStatusBadge
-        // The label gives way before the answer does: a narrow inspector
-        // truncates the condition's name and keeps the verdict readable.
-        className="max-w-full"
-        size="sm"
-        tone={tone}
-        variant={state.kind === "forced" ? "solid" : "outline"}
+      <span
+        className={cn(
+          "flex max-w-full min-w-0 transition-opacity",
+          pending && "opacity-60",
+        )}
       >
-        <span className="text-foreground min-w-0 truncate">{label}</span>
-        <span className="shrink-0 tabular-nums">{answerText()}</span>
-      </ReviewStatusBadge>
-    </button>
+        <ReviewStatusBadge
+          // The label gives way before the answer does: a narrow inspector
+          // truncates the condition's name and keeps the verdict readable.
+          className="max-w-full"
+          size="sm"
+          tone={tone}
+          variant={state.kind === "forced" ? "solid" : "outline"}
+        >
+          <span className="text-foreground min-w-0 truncate">{label}</span>
+          <span className="shrink-0 tabular-nums">{answerText()}</span>
+        </ReviewStatusBadge>
+      </span>
+    </Button>
   );
 };
 

@@ -39,6 +39,7 @@ import {
   TriangleAlertIcon,
   Undo2Icon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   MATTER_TINT_GROUND,
   matterTint,
@@ -666,19 +667,21 @@ const OrganizerPageCard = ({
         dir="ltr"
       >
         <div className="absolute inset-x-2 top-2 z-10 flex items-center justify-between">
-          <label
-            className="bg-background/90 text-foreground flex size-11 cursor-pointer items-center justify-center rounded-md"
-            htmlFor={`pdf-page-select-${page.id}`}
-          >
-            <Checkbox
-              aria-label={tPageEditor("selectPage", {
-                number: pageNumber,
-              })}
-              checked={isSelected}
-              id={`pdf-page-select-${page.id}`}
-              onCheckedChange={() => onSelect(page.id, false, true)}
-            />
-          </label>
+          <div className="bg-background/90 rounded-md">
+            <Label
+              className="flex size-11 cursor-pointer justify-center"
+              htmlFor={`pdf-page-select-${page.id}`}
+            >
+              <Checkbox
+                aria-label={tPageEditor("selectPage", {
+                  number: pageNumber,
+                })}
+                checked={isSelected}
+                id={`pdf-page-select-${page.id}`}
+                onCheckedChange={() => onSelect(page.id, false, true)}
+              />
+            </Label>
+          </div>
           <Button
             aria-label={tPageEditor("reorderPage", {
               number: pageNumber,
@@ -693,20 +696,20 @@ const OrganizerPageCard = ({
             <GripVerticalIcon />
           </Button>
         </div>
-        <button
+        <Button
           aria-pressed={isSelected}
-          className="focus-visible:ring-ring block w-full rounded-sm outline-none focus-visible:ring-2"
+          className="block w-full"
           onClick={(event) =>
             onSelect(page.id, event.shiftKey, event.metaKey || event.ctrlKey)
           }
-          type="button"
+          variant="plain"
         >
           <PageThumbnail
             cleanScan={cleanScan}
             page={page}
             pageInfo={pageInfo}
           />
-        </button>
+        </Button>
         <div className="flex items-center justify-between gap-2 px-1 pt-2 text-xs">
           <span className="font-medium">{pageLabel}</span>
           <span className="text-muted-foreground flex items-center gap-2">

@@ -613,6 +613,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
             "relative flex flex-col text-sm",
             !inlineFlow && !showsEmptyState && "min-h-full",
           )}
+          // oxlint-disable-next-line no-native-ui/no-native-table -- the workspace table is an interactive ARIA grid laid out with CSS grid and windowed with padding spacer rows (sticky header, column drag and resize, one grid-template shared by every row); @stll/ui Table renders native table elements, whose layout cannot host it
           role="grid"
           style={gridStyle}
         >

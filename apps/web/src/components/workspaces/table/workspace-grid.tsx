@@ -19,6 +19,7 @@ export const WorkspaceGridRow = ({
   <div
     className={cn("group/row relative isolate grid border-none", className)}
     data-slot="workspace-grid-row"
+    // oxlint-disable-next-line no-native-ui/no-native-table -- one row of the workspace table's windowed CSS-grid ARIA grid (padding spacer rows stand in for the rows out of view); every row shares one grid-template from a CSS variable, which native table layout and @stll/ui Table (native table elements) cannot host
     role="row"
     style={{
       gridTemplateColumns: WORKSPACE_TABLE_COLUMNS_VAR,
@@ -39,6 +40,7 @@ export const WorkspaceGridHead = ({
       className,
     )}
     data-slot="workspace-grid-head"
+    // oxlint-disable-next-line no-native-ui/no-native-table -- a header cell of the workspace table's windowed CSS-grid ARIA grid (sticky, draggable, resizable columns); @stll/ui TableHead is a native th that the grid's div rows cannot contain
     role="columnheader"
     {...props}
   />
@@ -55,6 +57,7 @@ export const WorkspaceGridCell = ({
       className,
     )}
     data-slot="workspace-grid-cell"
+    // oxlint-disable-next-line no-native-ui/no-native-table -- a cell of the workspace table's CSS-grid ARIA grid; @stll/ui TableCell is a native td that the grid's div rows cannot contain
     role="gridcell"
     {...props}
   />

@@ -123,13 +123,15 @@ export const SearchScopeInput = ({
           <span>
             {t.rich(SCOPE_PLACEHOLDERS[scope], {
               scope: (chunks) => (
-                <button
-                  type="button"
-                  className="hover:text-foreground pointer-events-auto inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-4 focus-visible:outline-2"
+                // An inline word in the placeholder sentence; on a touch
+                // screen the button's own 44px target makes it reachable.
+                <Button
+                  className="pointer-events-auto"
                   onClick={onOpenFilter}
+                  size="inline"
                 >
                   {chunks}
-                </button>
+                </Button>
               ),
             })}
           </span>

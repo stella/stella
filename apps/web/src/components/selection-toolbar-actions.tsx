@@ -193,8 +193,10 @@ export const SelectionCopyMenu = ({
               previewWidth="remaining"
             >
               {READER_COPY_MODES.map((copyMode) => (
-                <button
-                  className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
+                <Button
+                  className="block w-full"
+                  focusRing="inside"
+                  variant="plain"
                   key={copyMode}
                   onClick={() => {
                     copy.write(textFor(copyMode, quote));
@@ -208,10 +210,11 @@ export const SelectionCopyMenu = ({
                   onFocus={() => setPreviewMode(copyMode)}
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setPreviewMode(copyMode)}
-                  type="button"
                 >
-                  {t(`legalReader.copyMenu.${copyMode}`)}
-                </button>
+                  <span className="hover:bg-accent block rounded-sm px-2 py-1.5 text-xs whitespace-nowrap">
+                    {t(`legalReader.copyMenu.${copyMode}`)}
+                  </span>
+                </Button>
               ))}
             </MenuPreviewLayout>
           </div>,

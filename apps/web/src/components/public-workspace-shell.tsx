@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
 import { matterChromeStyle } from "@stll/ui/matter-colors";
+import { SidebarIdentityButton } from "@stll/ui/sidebar";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
@@ -31,7 +32,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
-  sidebarIdentityTriggerClassName,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -382,13 +382,9 @@ const PublicSidebar = ({
               <Tooltip
                 content={isCollapsed ? t("auth.signIn") : null}
                 render={
-                  <button
+                  <SidebarIdentityButton
                     aria-label={t("auth.signIn")}
-                    className={cn(
-                      sidebarIdentityTriggerClassName(sidebarLayout),
-                    )}
                     onClick={() => requestAuth(currentHref)}
-                    type="button"
                   />
                 }
                 side="right"

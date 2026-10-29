@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
@@ -682,12 +683,11 @@ const AnalysisNote = ({
     );
   }
 
+  // The button is placed where the note goes; the note inside draws the
+  // stripe and the type, as the read-only note above does.
   return (
-    <button
-      className={cn(
-        "text-foreground-muted hover:text-foreground-strong-muted border-s-[3px] py-1 ps-2.5 text-start",
-        position.className,
-      )}
+    <Button
+      className={cn("block", position.className)}
       onBlur={() => onHover?.(false)}
       // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
       onClick={onJump}
@@ -695,11 +695,16 @@ const AnalysisNote = ({
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
       ref={(el) => measureRef?.(el, item.id)}
-      style={style}
-      type="button"
+      style={position.style}
+      variant="plain"
     >
-      {body}
-    </button>
+      <span
+        className="text-foreground-muted hover:text-foreground-strong-muted block border-s-[3px] py-1 ps-2.5"
+        style={{ ...style, top: undefined }}
+      >
+        {body}
+      </span>
+    </Button>
   );
 };
 
@@ -747,80 +752,79 @@ const ComposerNote = ({
   };
 
   return (
-    <form
-      className={cn(
-        "flex flex-col gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2",
-        position.className,
-      )}
+    <Form
+      className={cn("gap-0", position.className)}
       onSubmit={(event) => {
         event.preventDefault();
         submit();
       }}
       ref={(el) => measureRef?.(el, item.id)}
-      style={{
-        ...position.style,
-        borderInlineStartColor: "var(--option-sky)",
-      }}
+      style={position.style}
     >
-      <Textarea
-        aria-label={t("folio.comment")}
-        autoFocus
-        className="min-h-14 text-xs"
-        onChange={(event) => setBody(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) {
-            return;
-          }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            item.onCancel();
-            return;
-          }
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            submit();
-          }
-        }}
-        placeholder={t("legalReader.annotations.commentPlaceholder")}
-        value={body}
-      />
-      <div className="flex items-center justify-between gap-1">
-        <AnnotationVisibilityToggle
-          targetType={item.targetType}
-          visibility={visibility}
-          onToggle={() =>
-            setVisibility(visibility === "private" ? "shared" : "private")
-          }
+      <div
+        className="flex flex-col gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2"
+        style={{ borderInlineStartColor: "var(--option-sky)" }}
+      >
+        <Textarea
+          aria-label={t("folio.comment")}
+          autoFocus
+          className="min-h-14 text-xs"
+          onChange={(event) => setBody(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) {
+              return;
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              item.onCancel();
+              return;
+            }
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={t("legalReader.annotations.commentPlaceholder")}
+          value={body}
         />
-        <div className="flex items-center gap-1">
-          <Button
-            className="text-2xs h-6 px-2"
-            onClick={item.onCancel}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            {t("common.cancel")}
-          </Button>
-          {/* An edit emptied of text deletes the comment; otherwise it saves. */}
-          <Button
-            className="text-2xs h-6 px-2"
-            size="sm"
-            {...(draft.type === "edit" && empty
-              ? ({
-                  onClick: draft.onDelete,
-                  type: "button",
-                  variant: "destructive-ghost",
-                } as const)
-              : ({ disabled: empty, type: "submit" } as const))}
-          >
-            {draft.type === "edit" && empty
-              ? t("common.delete")
-              : t("common.save")}
-          </Button>
+        <div className="flex items-center justify-between gap-1">
+          <AnnotationVisibilityToggle
+            targetType={item.targetType}
+            visibility={visibility}
+            onToggle={() =>
+              setVisibility(visibility === "private" ? "shared" : "private")
+            }
+          />
+          <div className="flex items-center gap-1">
+            <Button
+              className="text-2xs h-6 px-2"
+              onClick={item.onCancel}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t("common.cancel")}
+            </Button>
+            {/* An edit emptied of text deletes the comment; otherwise it saves. */}
+            <Button
+              className="text-2xs h-6 px-2"
+              size="sm"
+              {...(draft.type === "edit" && empty
+                ? ({
+                    onClick: draft.onDelete,
+                    type: "button",
+                    variant: "destructive-ghost",
+                  } as const)
+                : ({ disabled: empty, type: "submit" } as const))}
+            >
+              {draft.type === "edit" && empty
+                ? t("common.delete")
+                : t("common.save")}
+            </Button>
+          </div>
         </div>
       </div>
-    </form>
+    </Form>
   );
 };
 
@@ -948,13 +952,15 @@ const CommentNote = ({
           {item.text}
         </p>
       ) : (
-        <button
-          className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[calc(0.75rem*var(--reader-text-scale))] leading-snug"
+        <Button
+          className="mt-0.5 block w-full"
           onClick={onJump}
-          type="button"
+          variant="plain"
         >
-          {item.text}
-        </button>
+          <span className="text-foreground-muted hover:text-foreground-strong-muted block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
+            {item.text}
+          </span>
+        </Button>
       )}
       {controllable && (
         <div
@@ -974,41 +980,31 @@ const CommentNote = ({
             onToggle={item.onToggleVisibility}
           />
           {onEdit !== undefined && (
-            <Tooltip
-              content={t("legalReader.annotations.editComment")}
-              render={
-                <button
-                  aria-label={t("legalReader.annotations.editComment")}
-                  className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
-                  // The ref only returns focus; an icon has no portaled
-                  // descendants to contain.
-                  onClick={containedHandler(null, () => setEditing(true))}
-                  ref={(button) => {
-                    if (button !== null && refocusEdit.current) {
-                      refocusEdit.current = false;
-                      button.focus();
-                    }
-                  }}
-                  type="button"
-                />
-              }
+            <Button
+              aria-label={t("legalReader.annotations.editComment")}
+              // The ref only returns focus; an icon has no portaled
+              // descendants to contain.
+              onClick={containedHandler(null, () => setEditing(true))}
+              ref={(button) => {
+                if (button !== null && refocusEdit.current) {
+                  refocusEdit.current = false;
+                  button.focus();
+                }
+              }}
+              size="icon-2xs"
+              variant="muted"
             >
               <PenIcon className="size-3" />
-            </Tooltip>
+            </Button>
           )}
-          <Tooltip
-            content={t("common.delete")}
-            render={
-              <button
-                aria-label={t("common.delete")}
-                className="text-foreground-disabled hover:text-destructive rounded-sm p-0.5"
-                onClick={item.onDelete}
-                type="button"
-              />
-            }
+          <Button
+            aria-label={t("common.delete")}
+            onClick={item.onDelete}
+            size="icon-2xs"
+            variant="muted-destructive"
           >
             <Trash2Icon className="size-3" />
-          </Tooltip>
+          </Button>
         </div>
       )}
     </div>

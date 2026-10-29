@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { PlusIcon, SplitIcon, XIcon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import {
   Popover,
   PopoverClose,
@@ -153,7 +154,7 @@ export const InlineOptionEditor = ({
         </ul>
       )}
 
-      <label className="hover:bg-muted/40 flex cursor-text items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5">
+      <div className="hover:bg-muted/40 flex items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5 text-sm">
         <Button
           aria-label={t("workspaces.properties.addOption")}
           className="text-foreground-label size-6 shrink-0"
@@ -164,8 +165,8 @@ export const InlineOptionEditor = ({
         >
           <PlusIcon className="size-3" />
         </Button>
-        <input
-          className="placeholder:text-foreground-placeholder flex-1 bg-transparent text-sm focus-visible:outline-none"
+        <Input
+          className="flex-1"
           dir={contentDir(draft)}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -175,9 +176,10 @@ export const InlineOptionEditor = ({
             }
           }}
           placeholder={t("workspaces.properties.addOption")}
+          inline
           value={draft}
         />
-      </label>
+      </div>
 
       {suggestedSplit.length > 1 && (
         <Button
@@ -222,7 +224,7 @@ const OptionRow = ({
   const [draft, setDraft] = useState(option.value);
 
   return (
-    <li className="bg-card group flex items-center gap-2 rounded-[7px] border py-1 ps-1 pe-1.5">
+    <li className="bg-card group flex items-center gap-2 rounded-[7px] border py-1 ps-1 pe-1.5 text-sm">
       <Popover modal>
         <PopoverTrigger
           aria-label={t("workspaces.properties.selectColor")}
@@ -258,8 +260,8 @@ const OptionRow = ({
           </div>
         </PopoverPopup>
       </Popover>
-      <input
-        className="flex-1 bg-transparent text-sm focus-visible:outline-none"
+      <Input
+        className="flex-1"
         dir={contentDir(draft)}
         onBlur={() => onRename(draft.trim())}
         onChange={(e) => setDraft(e.target.value)}
@@ -270,6 +272,7 @@ const OptionRow = ({
             e.currentTarget.blur();
           }
         }}
+        inline
         value={draft}
       />
       <Button

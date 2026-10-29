@@ -381,19 +381,17 @@ const FindColumnRow = ({
   onClick,
   title,
 }: FindColumnRowProps) => (
-  <button
+  <Button
     aria-pressed={checked}
-    className={cn(
-      "flex items-center gap-2 rounded px-2 py-1 text-start text-sm",
-      disabled ? "opacity-56" : "hover:bg-accent cursor-pointer",
-    )}
     disabled={disabled}
     onClick={onClick}
-    title={title}
-    type="button"
+    size="row"
+    // Why a column cannot be searched, reachable while the row is disabled.
+    tooltip={title}
+    variant="ghost"
   >
     {icon}
     <span className="min-w-0 flex-1 truncate">{label}</span>
     {checked && <span className="text-primary">{"✓"}</span>}
-  </button>
+  </Button>
 );

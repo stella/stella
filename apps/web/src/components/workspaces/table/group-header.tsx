@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronDownIcon, ChevronRightIcon } from "@stll/ui/icons";
 import type { KanbanGroup } from "@stll/ui/kanban";
@@ -48,46 +49,50 @@ export const TableGroupHeader = ({
       }}
     >
       {/* The whole header row is the toggle target, not just the chevron. */}
-      <button
+      <Button
         aria-expanded={empty ? undefined : !collapsed}
-        className={cn(
-          "flex min-w-0 flex-1 items-center py-1.5 text-start",
-          !empty && "hover:bg-foreground/[0.04]",
-        )}
+        className="flex min-w-0 flex-1"
         disabled={empty}
         onClick={empty ? undefined : onToggle}
-        type="button"
+        variant="plain"
       >
-        {/* The label stays pinned at the left while the band scrolls
+        <span
+          className={cn(
+            "flex min-w-0 flex-1 items-center py-1.5",
+            !empty && "hover:bg-foreground/[0.04]",
+          )}
+        >
+          {/* The label stays pinned at the left while the band scrolls
             horizontally with the columns. The full-width `bg-muted` band lives
             on the row wrapper, so the pinned label adds no second layer (a
             second translucent `bg-muted` here darkened only the label's span,
             reading as a partial band that stopped mid-row). */}
-        <span className="sticky start-0 flex items-center gap-2 ps-3">
-          {empty ? (
-            <span aria-hidden className="size-3.5 shrink-0" />
-          ) : (
-            <DirectionalIcon
-              icon={ChevronIcon}
-              flip={collapsed}
-              className="text-muted-foreground size-3.5 shrink-0"
-            />
-          )}
-          {group.optionColor !== undefined && (
-            <SelectColorIcon className="size-3.5" color={group.optionColor} />
-          )}
-          <span className="text-foreground text-sm font-medium">
-            {group.label}
-          </span>
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {loading ? (
-              <Skeleton className="h-3 w-10" />
+          <span className="sticky start-0 flex items-center gap-2 ps-3">
+            {empty ? (
+              <span aria-hidden className="size-3.5 shrink-0" />
             ) : (
-              t("workspaces.views.groupItemCount", { count })
+              <DirectionalIcon
+                icon={ChevronIcon}
+                flip={collapsed}
+                className="text-muted-foreground size-3.5 shrink-0"
+              />
             )}
+            {group.optionColor !== undefined && (
+              <SelectColorIcon className="size-3.5" color={group.optionColor} />
+            )}
+            <span className="text-foreground text-sm font-medium">
+              {group.label}
+            </span>
+            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+              {loading ? (
+                <Skeleton className="h-3 w-10" />
+              ) : (
+                t("workspaces.views.groupItemCount", { count })
+              )}
+            </span>
           </span>
         </span>
-      </button>
+      </Button>
     </div>
   );
 };

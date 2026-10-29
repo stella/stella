@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DetailsItem } from "@stll/ui/details-grid";
 import {
   Select,
   SelectItem,
@@ -44,41 +45,38 @@ export const ConsentAccountRows = ({
         onAccountSwitch={onAccountSwitch}
       />
       {organizationName ? (
-        <>
-          <dt className="text-muted-foreground">{tCommon("organization")}</dt>
-          <dd className="min-w-0">
-            {organizations !== undefined && organizations.length > 1 ? (
-              <Select
-                disabled={disabled}
-                onValueChange={(organizationId) => {
-                  if (
-                    typeof organizationId === "string" &&
-                    organizationId !== activeOrganizationId
-                  ) {
-                    onOrganizationSwitch(organizationId);
-                  }
-                }}
-                value={activeOrganizationId}
+        <DetailsItem label={tCommon("organization")}>
+          {organizations !== undefined && organizations.length > 1 ? (
+            <Select
+              disabled={disabled}
+              onValueChange={(organizationId) => {
+                if (
+                  typeof organizationId === "string" &&
+                  organizationId !== activeOrganizationId
+                ) {
+                  onOrganizationSwitch(organizationId);
+                }
+              }}
+              value={activeOrganizationId}
+            >
+              <SelectTrigger
+                aria-label={tOrganization("switchOrganization")}
+                className="min-h-11 w-full"
               >
-                <SelectTrigger
-                  aria-label={tOrganization("switchOrganization")}
-                  className="min-h-11 w-full"
-                >
-                  <SelectValue>{() => organizationName}</SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {organizations.map((organization) => (
-                    <SelectItem key={organization.id} value={organization.id}>
-                      {organization.name}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            ) : (
-              <p className="flex min-h-11 items-center">{organizationName}</p>
-            )}
-          </dd>
-        </>
+                <SelectValue>{() => organizationName}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {organizations.map((organization) => (
+                  <SelectItem key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          ) : (
+            <p className="flex min-h-11 items-center">{organizationName}</p>
+          )}
+        </DetailsItem>
       ) : null}
     </OAuthAccountList>
   );

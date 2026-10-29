@@ -3,6 +3,8 @@
 import { createContext, use, useId, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
 import { panic } from "better-result";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
@@ -678,6 +680,29 @@ const sidebarIdentityTriggerClassName = (layout: SidebarLayout): string =>
     layout === "rail" ? "size-8 justify-center p-0.5" : "w-full gap-2 p-2",
   );
 
+/**
+ * The footer's avatar trigger as a button, laid out for the sidebar's
+ * current layout: the sign-in action, or (through `render`) any overlay
+ * trigger that opens from the identity slot.
+ */
+const SidebarIdentityButton = ({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"button">) => {
+  const layout = useSidebarLayout();
+  const defaultProps = {
+    className: cn(sidebarIdentityTriggerClassName(layout), className),
+    "data-slot": "sidebar-identity-button",
+    type: render === undefined ? ("button" as const) : undefined,
+  };
+  return useRender({
+    defaultTagName: "button",
+    props: mergeProps<"button">(defaultProps, props),
+    render,
+  });
+};
+
 const SidebarMenuButton = ({
   asChild = false,
   isActive = false,
@@ -889,6 +914,7 @@ export {
   SidebarMenuBadge,
   SidebarMenuButton,
   sidebarIdentityTriggerClassName,
+  SidebarIdentityButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarMenuSub,

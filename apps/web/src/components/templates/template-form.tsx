@@ -11,6 +11,11 @@ import { evaluateCondition, isSafeFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import {
   Dialog,
   DialogFooter,
   DialogFormState,
@@ -21,6 +26,7 @@ import {
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import {
   AiActionIcon,
   AlertTriangleIcon,
@@ -38,6 +44,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -540,6 +547,16 @@ const EditFieldButton = ({ onEdit }: { onEdit: () => void }) => {
   );
 };
 
+/** A number field's stored text as the number it shows; empty or unreadable
+ *  text shows an empty field. */
+const numberFieldValue = (value: unknown): number | null => {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 /** Standard field label line: label text, required marker, prefill badge, and
  *  (when an edit handler is present) a trailing pencil. */
 const FieldLabelRow = ({
@@ -605,14 +622,15 @@ const DateQuickChips = ({ onPick }: { onPick: (iso: string) => void }) => {
   return (
     <div className="flex flex-wrap gap-1.5">
       {chips.map((chip) => (
-        <button
-          className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+        <Button
           key={chip.key}
           onClick={() => onPick(chip.iso())}
-          type="button"
+          variant="plain"
         >
-          {chip.label}
-        </button>
+          <span className="bg-accent text-accent-foreground hover:bg-accent/80 block rounded-md px-1.5 py-0.5 text-xs font-medium">
+            {chip.label}
+          </span>
+        </Button>
       ))}
     </div>
   );
@@ -772,17 +790,16 @@ const FieldRenderer = ({
           prefillSnippet={prefillSnippet}
           required={required}
         />
-        <FieldControl
-          render={
-            <Input
-              name={field.path}
-              onBlur={handleBlur}
-              onChange={(e) => onChange(field.path, e.target.value)}
-              placeholder={field.hint}
-              type="number"
-              value={typeof value === "string" ? value : ""}
-            />
+        <NumberInput
+          // Shown as stored: no grouping (years, registry numbers) and no
+          // rounding of the digits the user typed.
+          format={{ maximumFractionDigits: 20, useGrouping: false }}
+          inputProps={{ onBlur: handleBlur, placeholder: field.hint }}
+          name={field.path}
+          onValueChange={(next) =>
+            onChange(field.path, next === null ? "" : String(next))
           }
+          value={numberFieldValue(value)}
         />
         <FieldError message={error} />
       </Field>
@@ -1383,6 +1400,65 @@ const RegistryAutofillControl = ({
   );
 };
 
+/** Directives the template's structure check could not place, folded away
+ *  until the user opens them. */
+const StructureWarnings = ({ errors }: { errors: StructureError[] }) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  if (errors.length === 0) {
+    return null;
+  }
+  return (
+    <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 rounded-lg border p-3">
+      <Collapsible onOpenChange={setOpen} open={open}>
+        <CollapsibleTrigger
+          render={<Button className="w-full" variant="plain" />}
+        >
+          <span className="text-warning-foreground flex items-start gap-2 text-sm">
+            <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+            <span className="flex-1">
+              {t("templates.structureWarnings", {
+                count: errors.length,
+              })}
+            </span>
+            <DirectionalIcon
+              className={cn(
+                "mt-0.5 size-4 shrink-0 transition-transform",
+                open && "rotate-90",
+              )}
+              flip={!open}
+              icon={ChevronRightIcon}
+            />
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <ul className="mt-3 grid gap-2 ps-6">
+            {errors.map((error, index) => (
+              <li
+                className="text-warning-foreground text-sm"
+                // oxlint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
+                key={`${error.paragraphIndex}-${error.directive}-${index}`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+                    {error.directive}
+                  </code>
+                  <span className="text-muted-foreground text-xs">
+                    {t("templates.structureWarningParagraph", {
+                      paragraph: error.paragraphIndex + 1,
+                    })}
+                  </span>
+                </div>
+                <p className="mt-0.5">{error.message}</p>
+              </li>
+            ))}
+          </ul>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
+  );
+};
+
 export const TemplateForm = ({
   fields: allFields,
   conditions,
@@ -1475,7 +1551,6 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
-  const [structureWarningsOpen, setStructureWarningsOpen] = useState(false);
   const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -2350,19 +2425,20 @@ export const TemplateForm = ({
   };
 
   return (
-    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      <DialogFormState
-        dirty={
-          JSON.stringify({ values, clauseOverrides }) !==
-          JSON.stringify({ values: initialFormValues, clauseOverrides: {} })
-        }
-        onDiscard={() => {
-          setValues(initialFormValues);
-          setClauseOverrides({});
-          setTouched({});
-          setErrors({});
-        }}
-      />
+    <Form
+      className="min-h-0 flex-1 gap-0"
+      dirty={
+        JSON.stringify({ values, clauseOverrides }) !==
+        JSON.stringify({ values: initialFormValues, clauseOverrides: {} })
+      }
+      onDiscard={() => {
+        setValues(initialFormValues);
+        setClauseOverrides({});
+        setTouched({});
+        setErrors({});
+      }}
+      onSubmit={handleSubmit}
+    >
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl p-6">
           {/* Transient (upload) fill shows the form header + "upload different";
@@ -2379,50 +2455,7 @@ export const TemplateForm = ({
             </div>
           )}
 
-          {structureErrors.length > 0 && (
-            <details
-              className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3"
-              onToggle={(event) =>
-                setStructureWarningsOpen(event.currentTarget.open)
-              }
-              open={structureWarningsOpen}
-            >
-              <summary className="text-warning-foreground flex cursor-pointer list-none items-start gap-2 text-sm [&::-webkit-details-marker]:hidden">
-                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-                <span className="flex-1">
-                  {t("templates.structureWarnings", {
-                    count: structureErrors.length,
-                  })}
-                </span>
-                <DirectionalIcon
-                  className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-90"
-                  flip={!structureWarningsOpen}
-                  icon={ChevronRightIcon}
-                />
-              </summary>
-              <ul className="mt-3 grid gap-2 ps-6">
-                {structureErrors.map((error, index) => (
-                  <li
-                    className="text-warning-foreground text-sm"
-                    // oxlint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
-                    key={`${error.paragraphIndex}-${error.directive}-${index}`}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
-                        {error.directive}
-                      </code>
-                      <span className="text-muted-foreground text-xs">
-                        {t("templates.structureWarningParagraph", {
-                          paragraph: error.paragraphIndex + 1,
-                        })}
-                      </span>
-                    </div>
-                    <p className="mt-0.5">{error.message}</p>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          <StructureWarnings errors={structureErrors} />
 
           <div className="flex flex-col gap-5">
             {prefill !== undefined && templateId !== undefined && (
@@ -2643,7 +2676,7 @@ export const TemplateForm = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-    </form>
+    </Form>
   );
 };
 
