@@ -3651,7 +3651,7 @@
       "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
-    "closeAllTabs": "Uždaryti visas korteles ({count})",
+    "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} other {visas # kortelių}}",
     "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} other {# kitų kortelių}}",
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
     "conversionRefusal": {

@@ -3651,8 +3651,8 @@
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
-    "closeAllTabs": "إغلاق كل علامات التبويب ({count})",
-    "closeOtherTabs": "إغلاق علامات التبويب الأخرى ({count})",
+    "closeAllTabs": "{count, plural, zero {إغلاق # علامة تبويب} one {إغلاق علامة تبويب واحدة} two {إغلاق علامتَي التبويب} few {إغلاق جميع علامات التبويب (#)} many {إغلاق جميع علامات التبويب (#)} other {إغلاق جميع علامات التبويب (#)}}",
+    "closeOtherTabs": "{count, plural, zero {إغلاق # علامة تبويب أخرى} one {إغلاق علامة تبويب أخرى} two {إغلاق علامتَي تبويب أخريين} few {إغلاق # علامات تبويب أخرى} many {إغلاق # علامة تبويب أخرى} other {إغلاق # علامة تبويب أخرى}}",
     "closeTab": "إغلاق <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
