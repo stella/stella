@@ -33,6 +33,14 @@ template; the fixture database is dropped after its clients close.
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
 
+The corpus fixture uses 60,000-row generations and a 120,000-row twin (a 2x
+scale factor); equal reads at both sizes establish the bound independently of
+the total corpus size. The 10-second per-statement execution guard is below
+the API pool's `DATABASE_STATEMENT_TIMEOUT_MS` source in
+`apps/api/src/env-base-schema.ts`; the query-perf sessions install the same
+30-second upper bound explicitly. Shared buffers, rather than timing, remain
+the acceptance metric.
+
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
 its budget, and the census-readiness revision checks must fail the scale rule.

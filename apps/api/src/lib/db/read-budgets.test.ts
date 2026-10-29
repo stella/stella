@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
+  type ScheduledJobReads,
   UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
 } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
@@ -19,13 +20,24 @@ import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import pendingLedger from "./read-budgets-pending.json";
 import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const LEDGER = "apps/api/src/lib/db/read-budgets-unmeasured.json";
+const PENDING_LEDGER = "apps/api/src/lib/db/read-budgets-pending.json";
 const unmeasured = new Set(
   parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
 );
+const pending = new Set(
+  parseReasonedLedger(JSON.stringify(pendingLedger), "read-budgets-pending"),
+);
+
+type IsAssignable<T, U> = [T] extends [U] ? true : false;
+const bareGovernedReadsAreRejected: IsAssignable<
+  "load-governed",
+  ScheduledJobReads
+> = false;
 
 /**
  * A scheduled job or MCP tool that reads without a declared budget is how an
@@ -35,9 +47,19 @@ const unmeasured = new Set(
  */
 describe("read budget declarations", () => {
   test("every scheduled job declares its reads", () => {
+    expect(bareGovernedReadsAreRejected).toBe(false);
     const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);
+      const pendingBudget = pending.has(`job:${job.id}`);
+      if (job.reads === "pending") {
+        return pendingBudget
+          ? []
+          : [`${job.id}: pending reads need a pending-ledger entry`];
+      }
+      if (pendingBudget) {
+        return [`${job.id}: has a read budget, so remove its pending entry`];
+      }
       if (job.reads === "unmeasured") {
         return listed
           ? []
@@ -48,12 +70,13 @@ describe("read budget declarations", () => {
       if (listed) {
         return [`${job.id}: declares its reads, so remove its ledger entry`];
       }
-      if (job.reads === "load-governed") {
-        return governed.has(job.id)
-          ? []
-          : [
-              `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
-            ];
+      if ("governance" in job.reads && !governed.has(job.id)) {
+        return [
+          `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
+        ];
+      }
+      if ("governance" in job.reads) {
+        return [];
       }
       // Widened: the check holds for every budget a job may declare later.
       const pages: number = READ_BUDGETS[job.reads.budget].pages;
@@ -114,7 +137,11 @@ describe("read budget declarations", () => {
       expect(
         DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
         id,
-      ).toBe("load-governed");
+      ).toSatisfy(
+        (reads) =>
+          reads === "pending" ||
+          (typeof reads === "object" && "governance" in reads),
+      );
     }
   });
 
@@ -148,6 +175,20 @@ describe("read budget declarations", () => {
         parseLedger: parseReasonedLedger,
         label: "read-budgets-unmeasured",
         remediation: "declare a read budget and measure it instead",
+        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
+      }),
+    ).toBe(0);
+  });
+
+  test("the pending ledger contains only the inherited coverage job and only shrinks", () => {
+    expect([...pending]).toEqual([`job:${SCHEDULER_BACKFILL_IDS.coverage}`]);
+    expect(
+      runLedgerMembershipGuard({
+        ledgerRel: PENDING_LEDGER,
+        repoRoot,
+        parseLedger: parseReasonedLedger,
+        label: "read-budgets-pending",
+        remediation: "declare and measure a read budget instead",
         args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
       }),
     ).toBe(0);

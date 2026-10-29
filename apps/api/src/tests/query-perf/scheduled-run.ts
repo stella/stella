@@ -5,6 +5,10 @@ import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import {
+  BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+  createCaseLawProvisionStateBackfillTask,
+} from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
@@ -34,10 +38,15 @@ const leadingKeyword = (text: string) =>
     ?.toLowerCase() ?? "";
 
 const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
-const READ_KEYWORDS: ReadonlySet<string> = new Set([
-  "select",
-  "with",
-  "values",
+const TRANSACTION_KEYWORDS: ReadonlySet<string> = new Set([
+  // PostgreSQL cannot EXPLAIN utility statements. Their validation scans run
+  // under the task's explicit statement timeout; the replay measures every
+  // explainable statement around them.
+  "alter",
+  "begin",
+  "commit",
+  "rollback",
+  "savepoint",
 ]);
 
 /** A captured statement as a Drizzle query with the same bound parameters. */
@@ -67,9 +76,8 @@ const noopTask = () => undefined;
  * rather than a hand-kept list of its statements means a statement added to
  * the job is measured without anyone registering it.
  *
- * Only reading jobs are measured this way: a write would change the fixture
- * the next scenario reads, so a job that writes fails here until its replay
- * runs inside a rolled-back transaction.
+ * Replayed statements run behind savepoints, so measuring a write reports its
+ * reads without changing the fixture the next scenario receives.
  */
 export const measureScheduledJobRun = async ({
   database,
@@ -88,23 +96,55 @@ export const measureScheduledJobRun = async ({
   if (job.task !== taskName) {
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
-  const task =
-    createSchedulerTaskRegistry(
-      noopTask,
-      createCaseLawCoverageRefreshTask({
-        compute: computeCaseLawCoverageAnswer,
-      }),
-    ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const captured: CapturedStatement[] = [];
   const logger: Logger = {
     logQuery: (text, params) => {
       captured.push({ text, params });
     },
   };
-  const { db } = openClient({
+  const { db, sql: rawClient } = openClient({
     connection: QUERY_PERF_CONNECTION_SETTINGS,
     logger,
   });
+  const task =
+    job.task === BACKFILL_CASE_LAW_PROVISION_STATE_TASK
+      ? createCaseLawProvisionStateBackfillTask({
+          withConnection: async (_options, work) =>
+            await work({
+              connection: {
+                unsafe: async (query, params = []) => {
+                  captured.push({ text: query, params });
+                  const result: unknown = await rawClient.unsafe(query, [
+                    ...params,
+                  ]);
+                  return result;
+                },
+              },
+              setTransactionBudget: async ({
+                lockTimeout,
+                statementTimeout,
+              }) => {
+                await rawClient.unsafe(
+                  "SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $2, true)",
+                  [String(lockTimeout), String(statementTimeout)],
+                );
+              },
+            }),
+          readVerdict: async () =>
+            await Promise.resolve({
+              kind: "normal",
+              signals: [],
+            }),
+          observeStatus: noopTask,
+          sleep: async () => await Promise.resolve(),
+        })
+      : (createSchedulerTaskRegistry(
+          noopTask,
+          createCaseLawCoverageRefreshTask({
+            compute: computeCaseLawCoverageAnswer,
+          }),
+        ).get(job.task) ??
+        panic(`No registered task ${job.task} for ${jobId}`));
   const outcome = await task(
     asTestRaw<SchedulerTaskContext>({
       db,
@@ -128,12 +168,7 @@ export const measureScheduledJobRun = async ({
     if (SESSION_KEYWORDS.has(keyword)) {
       return false;
     }
-    if (!READ_KEYWORDS.has(keyword)) {
-      return panic(
-        `${jobId} issued a ${keyword || "blank"} statement; a writing job needs a rolled-back replay before it can be measured`,
-      );
-    }
-    return true;
+    return keyword !== "" && !TRANSACTION_KEYWORDS.has(keyword);
   });
   if (reads.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
@@ -143,7 +178,9 @@ export const measureScheduledJobRun = async ({
     const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
     for (const statement of reads) {
       // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
+      await tx.execute(sql.raw("SAVEPOINT query_perf_statement"));
       const plan = await explainOwnerStatement(tx, asQuery(statement));
+      await tx.execute(sql.raw("ROLLBACK TO SAVEPOINT query_perf_statement"));
       measured.push({
         metrics: metricsFromPlan(plan),
         statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),

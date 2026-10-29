@@ -7,7 +7,10 @@ import type {
   ScheduledJobReadBudgetId,
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -75,6 +78,14 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  [SCHEDULER_BACKFILL_IDS.provisionState]: {
+    task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+    scenarios: [CASE_LAW_SCENARIOS.quiet],
+  },
+  [SCHEDULER_BACKFILL_IDS.expressionIds]: {
+    task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+    scenarios: [CASE_LAW_SCENARIOS.quiet],
+  },
   "caseLaw.reportFreshness.fiveMinute": {
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
@@ -85,7 +96,10 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 type DeclaredJobReads = {
   id: string;
   task: string;
-  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  reads:
+    | { budget: ScheduledJobReadBudgetId; governance?: "load-governed" }
+    | "pending"
+    | "unmeasured";
 };
 
 /**
@@ -123,7 +137,9 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.backfillProvisionState": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
+  "scheduled.legislation.backfillExpressionIds": "corpus",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
 } as const satisfies Record<ReadBudgetId, "corpus" | "tenant">;

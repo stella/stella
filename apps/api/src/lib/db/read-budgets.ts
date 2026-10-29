@@ -31,6 +31,18 @@ type ReadBudget = {
 };
 
 export const READ_BUDGETS = {
+  "scheduled.caseLaw.backfillProvisionState": {
+    surface: "scheduled-job",
+    pages: 13_200,
+    reason:
+      "A completed pass checks the shared backfill checkpoint and the bounded provision-state units. The production-shape corpus fixture measures 8,787 pages; 13,200 pages leaves 50% headroom for production-height indexes.",
+  },
+  "scheduled.legislation.backfillExpressionIds": {
+    surface: "scheduled-job",
+    pages: 1600,
+    reason:
+      "A completed pass checks the shared backfill checkpoint and scans one bounded expression-id page. The production-shape corpus fixture measures 1,057 pages; 1,600 pages leaves 50% headroom for production-height indexes.",
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,
@@ -75,12 +87,20 @@ export const UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING = 20_000;
  *
  * - `{ budget }`: measured per run on the corpus fixture; the run must read
  *   at most the budget, and the same pages at twice the corpus size.
- * - `"load-governed"`: every batch runs under the shared load governor.
+ * - `{ budget, governance: "load-governed" }`: every batch runs under the
+ *   shared load governor and the whole run also stays within its budget.
+ * - `"pending"`: the one pre-budget governed job in the shrink-only pending
+ *   ledger. New jobs cannot use this state.
  * - `"unmeasured"`: a job registered before read budgets, listed with its
  *   reason in `read-budgets-unmeasured.json`; that ledger only shrinks.
  */
 export type ScheduledJobReads =
-  { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  | {
+      budget: ScheduledJobReadBudgetId;
+      governance?: "load-governed";
+    }
+  | "pending"
+  | "unmeasured";
 
 /** The budgets each MCP tool's hot statements are measured against. */
 export const MCP_TOOL_READ_BUDGETS = {
