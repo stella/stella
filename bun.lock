@@ -606,6 +606,7 @@
         "zustand": "^5.0.15",
       },
       "devDependencies": {
+        "@formatjs/icu-messageformat-parser": "3.5.20",
         "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "^1.63.0",
         "@stll/playwright-tools": "workspace:*",

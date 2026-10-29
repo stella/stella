@@ -14,6 +14,8 @@ import {
 import { expect, test } from "bun:test";
 import { createTranslator } from "use-intl/core";
 
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
 type Catalog = Record<string, unknown>;
 type Message = { key: string; value: string };
 type Exemption = {
@@ -92,7 +94,7 @@ const addArgumentType = (
   argumentTypes.set(argument, types);
 };
 
-export const analyzeMessage = (message: string): Analysis => {
+const analyzeMessage = (message: string): Analysis => {
   const analysis: Analysis = {
     arguments: new Set(),
     argumentTypes: new Map(),
@@ -163,7 +165,7 @@ export const analyzeMessage = (message: string): Analysis => {
 
 const sorted = (values: Iterable<string>) => [...values].toSorted();
 
-export const censusErrors = (
+const censusErrors = (
   source: string,
   translation: string,
   locale: string,
@@ -285,7 +287,7 @@ const render = (
   };
 };
 
-export const renderingErrors = (
+const renderingErrors = (
   source: string,
   translation: string,
   locale: string,
@@ -362,20 +364,19 @@ export const renderingErrors = (
   return errors;
 };
 
-const catalogFiles = Array.fromAsync(
-  new Bun.Glob("*.json").scan({
-    cwd: new URL("langs", import.meta.url).pathname,
-    absolute: true,
-  }),
+const catalogFiles = sourceFileIndex(
+  new URL("langs", import.meta.url).pathname,
+  {
+    pattern: "*.json",
+  },
 );
 
-test("every translation preserves source arguments and complete plural forms", async () => {
-  const files = await catalogFiles;
+test("every translation preserves source arguments and complete plural forms", () => {
   const catalogs = new Map<string, Catalog>();
-  for (const file of files) {
+  for (const { relativePath, sourceText } of catalogFiles) {
     catalogs.set(
-      file.slice(file.lastIndexOf("/") + 1, -".json".length),
-      await Bun.file(file).json(),
+      relativePath.slice(0, -".json".length),
+      JSON.parse(sourceText),
     );
   }
 
