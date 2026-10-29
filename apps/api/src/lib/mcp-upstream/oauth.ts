@@ -9,6 +9,7 @@ import { Temporal } from "@stll/time";
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   FetchBoundaryError,
@@ -22,10 +23,7 @@ import {
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  safeOutboundFetchBytes,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,

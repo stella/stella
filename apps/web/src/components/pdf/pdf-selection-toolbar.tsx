@@ -34,7 +34,10 @@ import {
   MarkColorSwatches,
   MarkStyleButtons,
 } from "@/components/selection-toolbar-marks";
-import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
+import {
+  scrollMovesSelection,
+  selectionToolbarAnchor,
+} from "@/components/selection-toolbar.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMessageLocale } from "@/i18n/message-locale";
@@ -207,13 +210,18 @@ export const PdfSelectionToolbar = ({
       }
     };
     const onViewportChange = () => readSelection();
+    const onScroll = (event: Event) => {
+      if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
+        readSelection();
+      }
+    };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
     ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
     ownerDoc.addEventListener("pointerup", onPointerEnd);
-    ownerDoc.addEventListener("scroll", onViewportChange, true);
+    ownerDoc.addEventListener("scroll", onScroll, true);
     ownerDoc.defaultView?.addEventListener("resize", onViewportChange);
     const observer = new ResizeObserver(onViewportChange);
     observer.observe(root);
@@ -226,7 +234,7 @@ export const PdfSelectionToolbar = ({
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
       ownerDoc.removeEventListener("pointerup", onPointerEnd);
-      ownerDoc.removeEventListener("scroll", onViewportChange, true);
+      ownerDoc.removeEventListener("scroll", onScroll, true);
       ownerDoc.defaultView?.removeEventListener("resize", onViewportChange);
     };
   });

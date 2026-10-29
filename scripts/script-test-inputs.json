@@ -68,6 +68,7 @@
       "scripts/ci-job-classification/references.ts",
       "scripts/ci-job-classification/review.ts"
     ],
+    "scripts/check-cli-promotion.test.ts": ["**"],
     "scripts/check-dev-runner-config-guard.test.ts": [
       ".oxlint-plugins/__fixtures__/forbid-dev-runner-config-reads.fixture.ts",
       ".oxlint-plugins/forbid-dev-runner-config-reads.ts"
@@ -88,6 +89,7 @@
       ".github/workflows/publish-npm.yml",
       ".github/workflows/release-tag.yml"
     ],
+    "scripts/check-npm-publish-readiness.test.ts": ["**"],
     "scripts/check-oxlint-fixture-counts.test.ts": ["**"],
     "scripts/check-oxlint-node-loader.test.sh": [
       "scripts/__fixtures__/oxlint-node-loader-error.config.ts",
@@ -95,6 +97,7 @@
       "scripts/check-oxlint-node-loader.sh"
     ],
     "scripts/check-oxlint-plugin-registry.test.ts": ["**"],
+    "scripts/check-public-assets.test.ts": ["**"],
     "scripts/check-registrations.test.ts": [
       ".github/ci-checks/**",
       "apps/api/**"
@@ -228,6 +231,7 @@
     "scripts/disarm-auto-merge.test.ts": [
       ".github/workflows/disarm-auto-merge.yml"
     ],
+    "scripts/draft-release-reads.test.ts": ["**"],
     "scripts/extension-release-step.test.ts": [".github/**"],
     "scripts/failure-tags.test.ts": ["**"],
     "scripts/fast-required-predicates.test.ts": [".github/workflows/ci.yml"],
@@ -254,6 +258,8 @@
       ".node-version",
       "stll-toolchain.json"
     ],
+    "scripts/generate-npm-release-jobs.test.ts": ["**"],
+    "scripts/generate-playwright-devices.test.ts": ["**"],
     "scripts/generated-conflicts-workflows.test.ts": [".github/**"],
     "scripts/generated-files-format.test.ts": ["**"],
     "scripts/generated-files-guard.test.ts": ["**"],
@@ -266,10 +272,13 @@
       "turbo.json"
     ],
     "scripts/gh-retry-processes.test.ts": ["scripts/gh-retry.sh"],
+    "scripts/gitleaks.test.ts": ["**"],
     "scripts/global-rule-inputs.test.ts": ["**"],
     "scripts/hook-dependencies.test.ts": ["**"],
     "scripts/hooks-no-type-aware.test.ts": ["**"],
+    "scripts/install-packed-cli.test.ts": ["**"],
     "scripts/legal-atlas-image-scope.test.ts": ["**"],
+    "scripts/local-readiness-curl.test.ts": ["**"],
     "scripts/main-heavy-classification.test.ts": [".github/workflows/ci.yml"],
     "scripts/main-workflow-cadence.test.ts": [".github/**"],
     "scripts/manual-checks-workflow.test.ts": [
@@ -287,6 +296,7 @@
       ".github/workflows/marketing-screenshots-update.yml",
       ".github/workflows/marketing-screenshots.yml"
     ],
+    "scripts/merge-hold-census.test.ts": ["**"],
     "scripts/merge-web-assets.test.ts": [
       "scripts/merge-web-assets.sh",
       "scripts/validate-previous-web-image.sh"
@@ -301,6 +311,7 @@
       "scripts/changeset-policy.json",
       "scripts/gh-retry.sh"
     ],
+    "scripts/npm-release-summary.test.ts": ["**"],
     "scripts/online-ddl-lock-census.test.ts": [
       "apps/api/drizzle/**",
       "apps/api/src/db/online-ddl.ts"
@@ -310,6 +321,8 @@
     "scripts/oxlint-safe-fixers.test.ts": [".oxlint-plugins/**"],
     "scripts/oxlint-tailwind-design-system.test.ts": ["**"],
     "scripts/oxlint-ui-test-helper-imports.test.ts": ["**"],
+    "scripts/pack-reproducibly.test.ts": ["**"],
+    "scripts/post-staging-verification.test.ts": ["**"],
     "scripts/postgres-test-maintenance-workflow.test.ts": [".github/**"],
     "scripts/pr-regeneration.test.ts": [".github/workflows/autofix.yml"],
     "scripts/pre-push-affected.test.ts": ["**"],
@@ -328,7 +341,10 @@
       "apps/web/public/**"
     ],
     "scripts/production-e2e-inputs.test.ts": ["apps/web/**"],
+    "scripts/proof-run-titles.test.ts": ["**"],
     "scripts/public-law-surface-consumers.test.ts": ["**"],
+    "scripts/publish-declarations.test.ts": ["**"],
+    "scripts/publish-npm-dist-tag.test.ts": ["**"],
     "scripts/publish-package-selection.test.ts": [
       ".github/workflows/publish-npm.yml",
       "packages/**",
@@ -338,6 +354,8 @@
       ".github/workflows/quarantine-prune.yml"
     ],
     "scripts/query-perf-scope.test.ts": ["apps/api/**"],
+    "scripts/raised-timeout-census.test.ts": ["**"],
+    "scripts/realtime-invalidation-census.test.ts": ["**"],
     "scripts/rehearse-better-auth-constraint-retry.test.ts": ["scripts/**"],
     "scripts/rehearse-exact-base-upgrade.test.ts": [
       "scripts/rehearse-exact-base-upgrade.sh",
@@ -347,6 +365,12 @@
       ".github/workflows/ci.yml",
       "scripts/rehearse-migration-upgrade.sh"
     ],
+    "scripts/release-alias-manifest.test.ts": ["**"],
+    "scripts/release-candidate-served-commit.test.ts": ["**"],
+    "scripts/release-failed-rc.test.ts": ["**"],
+    "scripts/release-final-graph.test.ts": ["**"],
+    "scripts/release-finalize-eligibility.test.ts": ["**"],
+    "scripts/release-finalize.test.ts": ["**"],
     "scripts/release-gate.test.ts": [
       ".github/workflows/release-tag.yml",
       "scripts/release-gate.sh"
@@ -361,6 +385,8 @@
     "scripts/release-pull-request-refresh.test.ts": [
       ".github/workflows/release-pr.yml"
     ],
+    "scripts/release-rc-selection.test.ts": ["**"],
+    "scripts/release-tag-order.test.ts": ["**"],
     "scripts/release-tree-proof-policy.test.ts": [
       ".github/workflows/deploy-staging.yml",
       ".github/workflows/main-heavy.yml",
@@ -423,6 +449,8 @@
       ".github/workflows/deploy-staging.yml",
       "scripts/gh-retry.sh"
     ],
+    "scripts/staging-owner.test.ts": ["**"],
+    "scripts/staging-proof-lease.test.ts": ["**"],
     "scripts/staging-source-provenance.test.ts": [
       ".github/actions/provenance/action.yml",
       ".github/workflows/deploy-staging.yml",
@@ -471,6 +499,7 @@
     "scripts/workflow-app-token-permissions.test.ts": ["**"],
     "scripts/workflow-dispatch-run.test.ts": [".github/**"],
     "scripts/workflow-git-environment.test.ts": [".github/**", "turbo.json"],
+    "scripts/workflow-helper-checkout.test.ts": ["**"],
     "scripts/workflow-install-baseline.test.ts": [".github/**"],
     "scripts/workflow-runner-labels.test.ts": [".github/**"],
     "scripts/workflow-skipped-needs.test.ts": [".github/**"],

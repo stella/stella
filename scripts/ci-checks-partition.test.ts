@@ -1251,21 +1251,26 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
       },
     };
   }
-  if (
-    step.name === "Test release policy scripts" &&
-    fields.run?.includes(
-      "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
-    )
-  ) {
-    return {
-      ...step,
-      run: fields.run
+  if (step.name === "Test release policy scripts" && fields.run !== undefined) {
+    let run = fields.run;
+    if (
+      run.includes(
+        "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+      )
+    ) {
+      run = run
         .replace(
           "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
           "bun test scripts/release-version-dispatch.test.ts\n",
         )
-        .replace("bash scripts/release-pending.test.sh\n", ""),
-    };
+        .replace("bash scripts/release-pending.test.sh\n", "");
+    }
+    // A baseline before the release hold retired still carries its shell
+    // suite. Normalize only that removed owner, never another release check.
+    if (!trackedFiles.has("scripts/check-main-merge-hold.test.sh")) {
+      run = run.replace("bash scripts/check-main-merge-hold.test.sh\n", "");
+    }
+    return { ...step, run };
   }
   if (
     step.name === "Test oxlint plugins" &&

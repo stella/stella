@@ -34,15 +34,27 @@ import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
 const declaredInputs = new Map(Object.entries(scriptTestInputs.inputs));
 
 type ScriptTestArguments =
-  | { readonly type: "valid"; readonly timeout: number | undefined }
+  | {
+      readonly type: "valid";
+      readonly timeout: number | undefined;
+      readonly depth: boolean;
+    }
   | { readonly type: "invalid"; readonly message: string };
 
 export const parseScriptTestArguments = (
   args: readonly string[],
 ): ScriptTestArguments => {
   let timeout: number | undefined;
+  let depth = false;
   const argumentsIterator = args.values();
   for (const argument of argumentsIterator) {
+    if (argument === "--depth") {
+      if (depth) {
+        return { type: "invalid", message: "--depth may be supplied once" };
+      }
+      depth = true;
+      continue;
+    }
     if (argument !== "--timeout") {
       return { type: "invalid", message: `unknown argument: ${argument}` };
     }
@@ -65,7 +77,7 @@ export const parseScriptTestArguments = (
     }
     timeout = parsed;
   }
-  return { type: "valid", timeout };
+  return { type: "valid", timeout, depth };
 };
 
 type UnlistedTestCommandOptions = {
@@ -196,6 +208,9 @@ export const prepareStrace = ({
   return installed;
 };
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
+const DEPTH_TESTS = Object.keys(
+  await Bun.file(new URL("depth-script-tests.json", import.meta.url)).json(),
+);
 const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
 export const SCAN_PRELOAD_PATH = "scripts/script-test-scan-preload.ts";
 
@@ -260,7 +275,7 @@ const trackedFiles = (): Set<string> => {
 };
 
 /** Select tests only when HEAD proves their code or declared data changed. */
-export const selectScriptTests = ({
+export const selectAffectedScriptTests = ({
   tests,
   changed,
   root = REPO_ROOT,
@@ -360,6 +375,17 @@ export const unlistedTests = (
 ): string[] => {
   const commands = withoutComments(workflowText);
   return tests.filter((test) => !commands.includes(test)).toSorted();
+};
+
+export const selectScriptTests = (
+  discovered: readonly string[],
+  depthTests: readonly string[],
+  depth: boolean,
+): string[] => {
+  const depthSet = new Set(depthTests);
+  return depth
+    ? depthTests.filter((file) => discovered.includes(file))
+    : discovered.filter((file) => !depthSet.has(file));
 };
 
 const scan = (pattern: string): string[] => [
@@ -967,16 +993,17 @@ if (import.meta.main) {
   const options = parseScriptTestArguments(process.argv.slice(2));
   if (options.type === "invalid") {
     console.error(
-      `Usage: bun scripts/run-unlisted-script-tests.ts [--timeout <positive integer>]\n${options.message}`,
+      `Usage: bun scripts/run-unlisted-script-tests.ts [--depth] [--timeout <positive integer>]\n${options.message}`,
     );
     process.exitCode = 2;
   } else {
     // Pooled checks run their commands from the check pool registries.
     const workflowText = readCiCheckCommandText(REPO_ROOT);
-    const unlisted = unlistedTests(
+    const discovered = unlistedTests(
       scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
       workflowText,
     );
+    const unlisted = selectScriptTests(discovered, DEPTH_TESTS, options.depth);
     const base = comparisonBase();
     const selection =
       base === undefined
@@ -985,7 +1012,7 @@ if (import.meta.main) {
             skipped: 0,
             reason: "no comparison base is available",
           }
-        : selectScriptTests({
+        : selectAffectedScriptTests({
             tests: unlisted,
             changed: changedFilesSince(base),
           });

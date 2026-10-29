@@ -160,6 +160,7 @@ type ButtonProps = {
   loading?: boolean;
   icon?: ReactNode;
   tooltip?: ReactNode;
+  "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -172,6 +173,7 @@ function Button({
   children,
   disabled,
   tooltip,
+  "data-accessible-disabled": accessibleDisabled,
   ...props
 }: ButtonProps) {
   const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
@@ -188,6 +190,7 @@ function Button({
   });
   const isAccessibleDisabled =
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
+  const isActivationPreservingDisabled = accessibleDisabled !== undefined;
 
   const defaultProps = {
     children: (
@@ -208,17 +211,20 @@ function Button({
     ),
     className: cn(
       disposition === BUTTON_DISPOSITION.enabled &&
+        !isActivationPreservingDisabled &&
         size !== "row" &&
         variant !== "link" &&
         buttonPressClass,
       buttonVariants({ className, size, variant }),
-      isAccessibleDisabled && buttonAccessibleDisabledClass,
+      (isAccessibleDisabled || isActivationPreservingDisabled) &&
+        buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",
     "aria-busy": loading || undefined,
-    ...(isAccessibleDisabled
+    ...(isAccessibleDisabled || isActivationPreservingDisabled
       ? { "aria-disabled": true, "data-disabled": "", tabIndex: 0 }
       : { disabled: disposition === BUTTON_DISPOSITION.nativeDisabled }),
+    "data-accessible-disabled": accessibleDisabled,
     type: typeValue,
   };
 

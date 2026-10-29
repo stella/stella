@@ -1340,6 +1340,41 @@ describe("documents.compare capability contract", () => {
     }
   });
 
+  test("a credential without the config grant is refused before any reference read", async () => {
+    const database = visibleReferenceDatabase([
+      DOCUMENT_ID,
+      "55555555-5555-4555-8555-555555555555",
+      TARGET_VERSION_ID,
+    ]);
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "documents.compare",
+        input: {
+          params: { matterId: MATTER_ID, documentId: DOCUMENT_ID },
+          body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
+            selection: { type: "previous", targetVersionId: TARGET_VERSION_ID },
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "accept",
+            output: { type: "version" },
+          },
+        },
+        validate_only: true,
+      },
+      context: createContext({
+        credentialPermissions: { searchHistory: ["read"] },
+        grantedScopes: ["stella:documents_write"],
+        scopedDb: database.scopedDb,
+        workspaceIds: [MATTER_ID],
+      }),
+    });
+
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(database.getCallCount()).toBe(0);
+  });
+
   test("rejects a one-to-many selection above the advertised target bound", async () => {
     const result = await invokeValidation({
       type: "versions",
@@ -2979,6 +3014,9 @@ describe("capability executor file-response gate (fix-6)", () => {
             code,
             message: refusal.message,
             hint,
+            ...(code === "action_concurrency_busy"
+              ? { retryAfterMs: 1250 }
+              : {}),
           }),
         }),
       );
@@ -2988,6 +3026,7 @@ describe("capability executor file-response gate (fix-6)", () => {
           message: refusal.message,
           hint,
           retryable: refusal.retryable,
+          ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
           requestId: "req_refusal",
         }),
       );

@@ -20,6 +20,7 @@ import {
   prepareStrace,
   resolverDirectories,
   SCAN_PRELOAD_PATH,
+  selectAffectedScriptTests,
   selectScriptTests,
   tracedAllowance,
   uncoveredScans,
@@ -126,19 +127,52 @@ describe("unlistedTests", () => {
   });
 });
 
+describe("selectScriptTests", () => {
+  test("partitions depth tests away from the default runner", () => {
+    const discovered = ["scripts/fast.test.ts", "scripts/depth.test.ts"];
+    const depth = ["scripts/depth.test.ts"];
+    expect(selectScriptTests(discovered, depth, false)).toEqual([
+      "scripts/fast.test.ts",
+    ]);
+    expect(selectScriptTests(discovered, depth, true)).toEqual([
+      "scripts/depth.test.ts",
+    ]);
+  });
+});
+
 describe("parseScriptTestArguments", () => {
   test("accepts the default and a positive integer timeout", () => {
     expect(parseScriptTestArguments([])).toEqual({
       type: "valid",
       timeout: undefined,
+      depth: false,
     });
     expect(parseScriptTestArguments(["--timeout", "35000"])).toEqual({
       type: "valid",
       timeout: 35_000,
+      depth: false,
+    });
+  });
+
+  test("accepts depth mode in either position", () => {
+    expect(
+      parseScriptTestArguments(["--depth", "--timeout", "120000"]),
+    ).toEqual({
+      type: "valid",
+      timeout: 120_000,
+      depth: true,
+    });
+    expect(
+      parseScriptTestArguments(["--timeout", "120000", "--depth"]),
+    ).toEqual({
+      type: "valid",
+      timeout: 120_000,
+      depth: true,
     });
   });
 
   test.each([
+    [["--depth", "--depth"], "--depth may be supplied once"],
     [["--unknown"], "unknown argument"],
     [["--timeout"], "requires a positive integer"],
     [["--timeout", "0"], "requires a positive integer"],
@@ -224,7 +258,7 @@ describe("script test impact selection", () => {
     const inputs = { "scripts/reader.test.ts": ["data/**"] };
     try {
       expect(
-        selectScriptTests({
+        selectAffectedScriptTests({
           tests,
           changed: ["scripts/subject.ts"],
           root,
@@ -232,7 +266,7 @@ describe("script test impact selection", () => {
         }).files,
       ).toEqual(["scripts/subject.test.ts"]);
       expect(
-        selectScriptTests({
+        selectAffectedScriptTests({
           tests,
           changed: ["scripts/transitive.ts"],
           root,
@@ -240,11 +274,15 @@ describe("script test impact selection", () => {
         }).files,
       ).toEqual(["scripts/subject.test.ts"]);
       expect(
-        selectScriptTests({ tests, changed: ["data/value.txt"], root, inputs })
-          .files,
+        selectAffectedScriptTests({
+          tests,
+          changed: ["data/value.txt"],
+          root,
+          inputs,
+        }).files,
       ).toEqual(["scripts/reader.test.ts"]);
       expect(
-        selectScriptTests({
+        selectAffectedScriptTests({
           tests,
           changed: ["scripts/reader.test.ts"],
           root,
@@ -269,7 +307,8 @@ describe("script test impact selection", () => {
         "scripts/run-unlisted-script-tests.ts",
       ]) {
         expect(
-          selectScriptTests({ tests, changed: [changed], root, inputs }).files,
+          selectAffectedScriptTests({ tests, changed: [changed], root, inputs })
+            .files,
         ).toEqual(tests);
       }
     } finally {
@@ -281,7 +320,7 @@ describe("script test impact selection", () => {
     const root = makeFixture();
     try {
       expect(() =>
-        selectScriptTests({
+        selectAffectedScriptTests({
           tests: ["scripts/reader.test.ts"],
           changed: [],
           root,
@@ -297,7 +336,7 @@ describe("script test impact selection", () => {
     const root = makeFixture();
     try {
       expect(() =>
-        selectScriptTests({
+        selectAffectedScriptTests({
           tests: ["scripts/reader.test.ts"],
           changed: [],
           root,
@@ -325,7 +364,13 @@ describe("script test impact selection", () => {
     ]);
     try {
       expect(() =>
-        selectScriptTests({ tests, changed: [], root, inputs: {}, tracked }),
+        selectAffectedScriptTests({
+          tests,
+          changed: [],
+          root,
+          inputs: {},
+          tracked,
+        }),
       ).toThrow("unresolved or generated imports");
       mkdirSync(path.join(root, "scripts/generated"));
       writeFileSync(
@@ -333,10 +378,16 @@ describe("script test impact selection", () => {
         "export const value = 1;\n",
       );
       expect(() =>
-        selectScriptTests({ tests, changed: [], root, inputs: {}, tracked }),
+        selectAffectedScriptTests({
+          tests,
+          changed: [],
+          root,
+          inputs: {},
+          tracked,
+        }),
       ).toThrow("unresolved or generated imports");
       expect(
-        selectScriptTests({
+        selectAffectedScriptTests({
           tests,
           changed: ["docs/unrelated.md"],
           root,
@@ -924,7 +975,7 @@ describe("repository script test census", () => {
       [...new Bun.Glob("scripts/**/*.test.{ts,sh}").scanSync({ cwd: root })],
       readCiCheckCommandText(root),
     );
-    const selection = selectScriptTests({
+    const selection = selectAffectedScriptTests({
       tests,
       changed: ["docs/changelog/selection-proof.md"],
       root,
