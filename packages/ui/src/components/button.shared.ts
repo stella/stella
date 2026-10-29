@@ -39,6 +39,12 @@ export const BUTTON_VARIANT_TOKENS = {
   link: { surface: "border-transparent", label: "" },
   // Quiet action: muted until hovered or pressed.
   muted: { surface: "border-transparent", label: "text-muted-foreground" },
+  // Quiet until hovered or pressed, then destructive: a delete beside quiet
+  // actions.
+  "muted-destructive": {
+    surface: "border-transparent",
+    label: "text-muted-foreground",
+  },
   outline: { surface: "border-input bg-popover", label: "text-foreground" },
   secondary: {
     surface: "border-transparent bg-secondary",
@@ -70,6 +76,7 @@ export const BUTTON_SIZES = [
   "icon-lg",
   "icon-sm",
   "icon-xl",
+  "icon-2xs",
   "icon-xs",
   // An action inside a line of text: no box of its own.
   "inline",

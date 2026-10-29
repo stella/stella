@@ -70,6 +70,11 @@ const BUTTON_SIZE_CLASS_NAMES = {
   "icon-sm": "size-8 sm:size-7",
   "icon-xl":
     "size-11 sm:size-10 [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
+  // The smallest square: a glyph-sized action inside a dense row (a
+  // margin note's edit and delete, a tree's disclosure chevron). Its
+  // touch target still grows to 44px under a coarse pointer.
+  "icon-2xs":
+    "size-5 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-4 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3",
   "icon-xs":
     "size-7 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
   // A button that sits in a line of text: a "show more", a citation, an
@@ -102,6 +107,8 @@ const BUTTON_VARIANT_CLASS_NAMES = {
   "destructive-ghost": `${tokens("destructive-ghost")} data-pressed:bg-destructive/14 data-pressed:inset-ring-destructive/32 [:hover:not([data-pressed])]:bg-destructive/10 data-pressed:inset-ring`,
   ghost: `${tokens("ghost")} data-pressed:bg-accent data-pressed:inset-ring-input [:hover:not([data-pressed])]:bg-accent data-pressed:shadow-xs/5 data-pressed:inset-ring`,
   link: `${tokens("link")} underline-offset-4 data-pressed:underline data-pressed:decoration-2 [:hover:not([data-pressed])]:underline`,
+  // Quiet until hovered, then destructive: a delete beside quiet actions.
+  "muted-destructive": `${tokens("muted-destructive")} data-pressed:bg-destructive/14 data-pressed:text-destructive data-pressed:inset-ring-destructive/32 [:hover:not([data-pressed])]:bg-destructive/10 [:hover:not([data-pressed])]:text-destructive data-pressed:inset-ring`,
   // Quiet action: muted until hovered, then the ghost treatment.
   muted: `${tokens("muted")} data-pressed:bg-accent data-pressed:text-foreground data-pressed:inset-ring-input [:hover:not([data-pressed])]:bg-accent [:hover:not([data-pressed])]:text-foreground data-pressed:shadow-xs/5 data-pressed:inset-ring`,
   outline: `${tokens("outline")} dark:bg-input/32 data-pressed:border-primary/48 data-pressed:bg-accent dark:data-pressed:bg-input/64 [:hover:not([data-pressed])]:bg-accent/50 dark:[:hover:not([data-pressed])]:bg-input/64 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none`,
@@ -118,7 +125,20 @@ const buttonVariants = cva(
       {
         className: "[:hover:not([data-pressed])]:bg-transparent",
         size: "inline",
-        variant: ["destructive-ghost", "ghost", "link", "muted"],
+        variant: [
+          "destructive-ghost",
+          "ghost",
+          "link",
+          "muted",
+          "muted-destructive",
+        ],
+      },
+      // A link set in running text is underlined like the links beside it,
+      // not only under the pointer.
+      {
+        className: "underline",
+        size: "inline",
+        variant: "link",
       },
     ],
     defaultVariants: {
@@ -138,13 +158,24 @@ const buttonVariants = cva(
  * class, and keeps the disabled disposition, the tooltip and the focus ring.
  * It lays out like a native button (`inline-block`, content flowing from the
  * start), so a card's children stack as they would in a `div`; `className`
- * places it (`w-full`, `block`). It has no radius of its own, so the focus
- * ring follows the radius the caller gives it to match the content's shape.
- * Like a native button it does not dim when disabled: the content says it is
- * unavailable.
+ * places it (`w-full`, `block`). `shape` gives it the outline its focus ring
+ * follows. Like a native button it does not dim when disabled: the content
+ * says it is unavailable.
  */
 const BUTTON_PLAIN_CLASS =
   "focus-visible:ring-ring focus-visible:ring-offset-background inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default";
+
+/**
+ * The outline a plain button's focus ring follows, matching its content:
+ * `box` for a card, row or block of text (the container radius), `round` for
+ * an avatar, a dot or a pill.
+ */
+const BUTTON_PLAIN_SHAPE_CLASS = {
+  box: "rounded-lg",
+  round: "rounded-full",
+} as const;
+
+type ButtonPlainShape = keyof typeof BUTTON_PLAIN_SHAPE_CLASS;
 
 /**
  * Where the focus ring is drawn. `outside` (the default) rings the box with a
@@ -181,6 +212,7 @@ const BUTTON_SIZE_CONTENT = {
   "icon-lg": BUTTON_CONTENT.icon,
   "icon-sm": BUTTON_CONTENT.icon,
   "icon-xl": BUTTON_CONTENT.icon,
+  "icon-2xs": BUTTON_CONTENT.icon,
   "icon-xs": BUTTON_CONTENT.icon,
   inline: BUTTON_CONTENT.text,
   lg: BUTTON_CONTENT.text,
@@ -219,12 +251,14 @@ const implicitTooltip = (
 type ButtonProps = Omit<ButtonContract, "children" | "disabled"> & {
   tooltip?: ReactNode;
   focusRing?: ButtonFocusRing | undefined;
+  /** `variant="plain"` only: the outline its focus ring follows. */
+  shape?: ButtonPlainShape | undefined;
   "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
 function Button({
   className,
-  variant,
+  variant: variantProp,
   size,
   render,
   loading,
@@ -234,9 +268,13 @@ function Button({
   tooltip,
   selected,
   focusRing = "outside",
+  shape = "box",
   "data-accessible-disabled": accessibleDisabled,
   ...props
 }: ButtonProps) {
+  // An inline action with no variant reads as a link in its sentence; the
+  // filled default would paint a box the line does not have.
+  const variant = variantProp ?? (size === "inline" ? "link" : undefined);
   const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
     ? undefined
     : "button";
@@ -272,7 +310,7 @@ function Button({
     ),
     className: cn(
       variant === BUTTON_PLAIN_VARIANT
-        ? cn(BUTTON_PLAIN_CLASS, className)
+        ? cn(BUTTON_PLAIN_CLASS, BUTTON_PLAIN_SHAPE_CLASS[shape], className)
         : cn(
             disposition === BUTTON_DISPOSITION.enabled &&
               !isActivationPreservingDisabled &&
@@ -319,7 +357,13 @@ function Button({
   });
 }
 
-export type { ButtonFocusRing, ButtonProps, ButtonSize, ButtonVariant };
+export type {
+  ButtonFocusRing,
+  ButtonPlainShape,
+  ButtonProps,
+  ButtonSize,
+  ButtonVariant,
+};
 export {
   Button,
   BUTTON_CONTENT,

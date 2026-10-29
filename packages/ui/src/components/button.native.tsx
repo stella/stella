@@ -34,6 +34,7 @@ const SIZES = {
   "icon-lg": { box: `${CONTROL} size-12 rounded-lg`, label: "", slop: 0 },
   "icon-sm": { box: `${CONTROL} size-8 rounded-lg`, label: "", slop: 6 },
   "icon-xl": { box: `${CONTROL} size-11 rounded-full`, label: "", slop: 0 },
+  "icon-2xs": { box: `${CONTROL} size-5 rounded-md`, label: "", slop: 12 },
   "icon-xs": { box: `${CONTROL} size-7 rounded-md`, label: "", slop: 8 },
   // An action inside a line of text: no height, padding or border of its
   // own, so it sits at the size of its label; `slop` reaches the target.
@@ -79,6 +80,10 @@ const PRESS = {
   ghost: { pressed: "active:bg-accent", selected: "bg-accent" },
   link: { pressed: "active:opacity-60", selected: "" },
   muted: { pressed: "active:bg-accent", selected: "bg-accent" },
+  "muted-destructive": {
+    pressed: "active:bg-destructive/10",
+    selected: "bg-destructive/10",
+  },
   outline: { pressed: "active:bg-accent", selected: "bg-accent" },
   secondary: { pressed: "active:bg-secondary/80", selected: "" },
   // No box to fill: the content dims under the finger.
@@ -118,9 +123,12 @@ export const Button = ({
   loading = false,
   selected: selectedProp,
   size,
-  variant,
+  variant: variantProp,
   ...props
 }: ButtonProps) => {
+  // An inline action with no variant reads as a link in its sentence, as on
+  // the web.
+  const variant = variantProp ?? (size === "inline" ? "link" : undefined);
   const plain = variant === BUTTON_PLAIN_VARIANT;
   const shape = plain ? PLAIN.shape : SIZES[size ?? "default"];
   const tokens = plain

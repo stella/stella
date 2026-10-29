@@ -29,7 +29,13 @@ describe("Button selected", () => {
     expect(markup).not.toContain("data-pressed");
   });
 
-  test.each(["ghost", "muted", "outline", "secondary"] as const)(
+  test.each([
+    "ghost",
+    "muted",
+    "muted-destructive",
+    "outline",
+    "secondary",
+  ] as const)(
     "the %s variant's selected treatment differs from its hover",
     (variant) => {
       const classes = classesOf(
@@ -91,7 +97,7 @@ describe("Button variant plain", () => {
   test("is a box-less target laid out like a native button", () => {
     const classes = classesOf(
       renderToStaticMarkup(
-        <Button className="w-full rounded-lg" variant="plain">
+        <Button className="w-full" variant="plain">
           <span>Card</span>
         </Button>,
       ),
@@ -138,5 +144,49 @@ describe("Button focusRing", () => {
     expect(inside).not.toContain("focus-visible:ring-offset-1");
     expect(outside).toContain("focus-visible:ring-offset-1");
     expect(outside).not.toContain("focus-visible:ring-inset");
+  });
+});
+
+describe("Button consolidated additions", () => {
+  test("an inline action without a variant is an underlined link", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<Button size="inline">retry</Button>),
+    );
+
+    expect(classes).toContain("underline");
+    expect(classes).not.toContain("bg-primary");
+  });
+
+  test("a plain button's ring follows its shape", () => {
+    const box = classesOf(
+      renderToStaticMarkup(<Button variant="plain">Card</Button>),
+    );
+    const round = classesOf(
+      renderToStaticMarkup(
+        <Button shape="round" variant="plain">
+          Avatar
+        </Button>,
+      ),
+    );
+
+    expect(box).toContain("rounded-lg");
+    expect(round).toContain("rounded-full");
+    expect(round).not.toContain("rounded-lg");
+  });
+
+  test("icon-2xs is an icon size, named by its tooltip", () => {
+    const markup = renderToStaticMarkup(
+      <Button
+        aria-label="Delete note"
+        size="icon-2xs"
+        variant="muted-destructive"
+      >
+        <span />
+      </Button>,
+    );
+
+    expect(markup).toContain("size-5");
+    expect(markup).toContain("data-base-ui-tooltip-trigger");
+    expect(markup).toContain("text-muted-foreground");
   });
 });

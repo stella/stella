@@ -71,4 +71,37 @@ describe("details fact sheets", () => {
     expect(markup.match(/min-w-0[^"<>]*wrap-anywhere/gu)).toHaveLength(2);
     expect(markup).not.toContain("truncate");
   });
+
+  test("a horizontal list aligns every label in one shared column", () => {
+    const markup = renderToStaticMarkup(
+      <DetailsGrid variant="list">
+        <DetailsItem label="Account">ada@example.com</DetailsItem>
+        <DetailsItem label="Organization">Analytical Engines</DetailsItem>
+      </DetailsGrid>,
+    );
+
+    // No fact-sheet container: the list sizes to its host.
+    expect(markup).not.toContain("details-grid-container");
+    expect(markup).toContain("grid-cols-[auto_minmax(0,1fr)]");
+    expect(markup.match(/grid-cols-subgrid/gu)).toHaveLength(2);
+    expect(markup).not.toContain("uppercase");
+    expect(markup).toMatch(
+      /<dt[^>]*>Account<\/dt><dd[^>]*>ada@example.com<\/dd>/u,
+    );
+  });
+
+  test("a vertical list puts each label above its value", () => {
+    const markup = renderToStaticMarkup(
+      <DetailsGrid orientation="vertical" variant="list">
+        <DetailsItem label="Authorization server">
+          https://auth.example.com
+        </DetailsItem>
+      </DetailsGrid>,
+    );
+
+    expect(markup).toContain('data-orientation="vertical"');
+    expect(markup).toContain("flex-col");
+    expect(markup.match(/<dt\b/gu)).toHaveLength(1);
+    expect(markup).not.toContain("uppercase");
+  });
 });
