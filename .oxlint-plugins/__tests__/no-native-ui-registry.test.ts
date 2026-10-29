@@ -10,7 +10,10 @@ import {
   stringArray,
 } from "../../scripts/oxlint-config-scopes.ts";
 import { flattenLayers } from "../../scripts/oxlint-effective-config.ts";
-import { DESIGN_SYSTEM_CONSUMER_FILES } from "../../scripts/product-frontend-files.ts";
+import {
+  DESIGN_SYSTEM_CONSUMER_FILES,
+  DESIGN_SYSTEM_TOKEN_ONLY_WORKSPACES,
+} from "../../scripts/product-frontend-files.ts";
 import {
   nativeEntries,
   nativeRuleId,
@@ -161,7 +164,11 @@ describe("no-native-ui production scope", () => {
     ].toSorted();
     const uncovered = workspaces.flatMap((manifestPath) => {
       const manifest = readJson(manifestPath);
-      if (!isRecord(manifest) || manifest.name === UI_PACKAGE) {
+      if (
+        !isRecord(manifest) ||
+        manifest.name === UI_PACKAGE ||
+        path.dirname(manifestPath) in DESIGN_SYSTEM_TOKEN_ONLY_WORKSPACES
+      ) {
         return [];
       }
       const dependsOnUi = [
