@@ -46,6 +46,7 @@ import {
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 const WORK = "89/2012 Sb.";
 const WORK_ELI = "/eli/cz/sb/2012/89";
@@ -124,8 +125,8 @@ const seedCitingDecisions = async (
       k % 10, k % 10 + 5, 0.9
     FROM generate_series(1, ${unrelatedMentions}::integer) AS generated(k)
   `);
-  await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisions}`);
-  await db.execute(sql`VACUUM (ANALYZE) ${caseLawProvisionCitations}`);
+  await vacuumUntilAllVisible({ db, table: "case_law_decisions" });
+  await vacuumUntilAllVisible({ db, table: "case_law_provision_citations" });
 };
 
 // timeout: builds the PGlite schema, then seeds and vacuums 4,800 link rows.

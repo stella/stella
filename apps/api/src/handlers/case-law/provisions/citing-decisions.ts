@@ -223,7 +223,7 @@ const citingPageOrder = (
  *    subtree is one index-only range and no decision row is read. The
  *    cursor applies to the groups, so a decision is never split across
  *    pages. The groups leave this step in page order.
- * 2. The groups joined to their decisions one at a time, in that order,
+ * 2. Each group's decision, read by id one group at a time, in that order,
  *    until the page is full. Only the authority order ranks by a decision
  *    column, so only it reads every candidate's decision first.
  * 3. The earliest mention of each decision on the page, one lookup per row
@@ -247,9 +247,9 @@ export const citingDecisionsPageQuery = ({
   if (cursor !== null) {
     continuation = sql`(${decisionDateCursorSql}, ${caseLawProvisionCitations.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
   }
-  // The groups leave in page order, which is what lets the join below stop
-  // at the limit. The authority order ranks by a decision column, so for it
-  // this order is only the tie-break.
+  // The groups leave in page order, which is what lets the decision lookups
+  // below stop at the limit. The authority order ranks by a decision column,
+  // so for it this order is only the tie-break.
   const citing = tx
     .select({
       decisionId: caseLawProvisionCitations.decisionId,
@@ -269,8 +269,9 @@ export const citingDecisionsPageQuery = ({
     // index alone.
     .groupBy(caseLawProvisionCitations.decisionId)
     .having(continuation)
-    // SAFETY: the groups are a subquery the page below limits; a limit here
-    // would cut candidates the decision filters have not yet judged.
+    // SAFETY: the page below reads these groups in this order and stops at
+    // its limit; a limit here would cut candidates the decision conditions
+    // have not yet judged.
     // oxlint-disable-next-line require-query-limit/require-query-limit -- the enclosing page query applies the limit; see SAFETY above
     .orderBy(
       ...(sort === "citations" ? [sql`count(*)::integer DESC`] : []),
@@ -279,12 +280,12 @@ export const citingDecisionsPageQuery = ({
     )
     .as("citing_decisions");
 
-  const page = tx
+  // One group's decision, when the request admits it. A lateral read of one
+  // row by id runs once per group, in the groups' order, so the page's
+  // limit stops it; a plain join may be hashed instead, which reads every
+  // citing decision before the first page row.
+  const decision = tx
     .select({
-      decisionId: citing.decisionId,
-      decisionDateKey: citing.decisionDateKey,
-      mentionCount: citing.mentionCount,
-      firstSpanStart: citing.firstSpanStart,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       // The decision's own address, so a reader can follow the citation
       // without a second read to resolve one.
@@ -299,19 +300,45 @@ export const citingDecisionsPageQuery = ({
       decisionDate: publishedCaseLawDecisions.decisionDate,
       citationAuthority: publishedCaseLawDecisions.citationAuthority,
     })
-    .from(citing)
-    .innerJoin(
-      publishedCaseLawDecisions,
-      eq(publishedCaseLawDecisions.id, citing.decisionId),
-    )
+    .from(publishedCaseLawDecisions)
     .innerJoin(
       caseLawSources,
       eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
-    .where(and(...conditions.decisions))
+    .where(
+      and(
+        eq(publishedCaseLawDecisions.id, citing.decisionId),
+        ...conditions.decisions,
+      ),
+    )
+    // The id is the key, so this is at most one row; the limit also keeps
+    // the read a per-group lookup the planner cannot fold into a join.
+    .limit(1)
+    .as("citing_decision");
+
+  const page = tx
+    .select({
+      decisionId: citing.decisionId,
+      decisionDateKey: citing.decisionDateKey,
+      mentionCount: citing.mentionCount,
+      firstSpanStart: citing.firstSpanStart,
+      caseNumber: decision.caseNumber,
+      slug: decision.slug,
+      court: decision.court,
+      courtId: decision.courtId,
+      ecli: decision.ecli,
+      sourceUrl: decision.sourceUrl,
+      country: decision.country,
+      language: decision.language,
+      languageGroupKey: decision.languageGroupKey,
+      decisionDate: decision.decisionDate,
+      citationAuthority: decision.citationAuthority,
+    })
+    .from(citing)
+    .innerJoinLateral(decision, sql`true`)
     .orderBy(
       ...citingPageOrder(sort, {
-        citationAuthority: publishedCaseLawDecisions.citationAuthority,
+        citationAuthority: decision.citationAuthority,
         mentionCount: citing.mentionCount,
         decisionDateKey: citing.decisionDateKey,
         decisionId: citing.decisionId,
@@ -348,45 +375,43 @@ export const citingDecisionsPageQuery = ({
     .limit(1)
     .as("citing_decision_first_mention");
 
-  return (
-    tx
-      .select({
-        appliedVersionBasis: firstMention.appliedVersionBasis,
-        appliedVersionDate: firstMention.appliedVersionDate,
-        appliedVersionDateRelation: firstMention.appliedVersionDateRelation,
-        appliedVersionAmendmentWorkIdentifier:
-          firstMention.appliedVersionAmendmentWorkIdentifier,
-        appliedVersionExpressionDate: firstMention.appliedVersionExpressionDate,
-        appliedVersionExpressionEli: firstMention.appliedVersionExpressionEli,
-        versionEvidenceStart: firstMention.versionEvidenceStart,
-        versionEvidenceEnd: firstMention.versionEvidenceEnd,
-        versionEvidenceKind: firstMention.versionEvidenceKind,
-        versionValidFrom: firstMention.versionValidFrom,
-        decisionId: page.decisionId,
-        caseNumber: page.caseNumber,
-        slug: page.slug,
-        court: page.court,
-        courtId: page.courtId,
-        ecli: page.ecli,
-        sourceUrl: page.sourceUrl,
-        country: page.country,
-        language: page.language,
-        languageGroupKey: page.languageGroupKey,
-        decisionDate: page.decisionDate,
-        citationAuthority: page.citationAuthority,
-        sentenceText: firstMention.sentenceText,
-        printText: firstMention.printText,
-        mentionCount: page.mentionCount,
-        spanStart: firstMention.spanStart,
-        spanEnd: firstMention.spanEnd,
-        decisionDateCursor: sql<string>`to_char(${page.decisionDateKey}, 'YYYY-MM-DD')`,
-      })
-      .from(page)
-      .innerJoinLateral(firstMention, sql`true`)
-      // SAFETY: one row per page row, and the page holds at most limit + 1.
-      // oxlint-disable-next-line require-query-limit/require-query-limit -- the page subquery applies the limit; see SAFETY above
-      .orderBy(...citingPageOrder(sort, page))
-  );
+  // One row per page row, so the limit restates the page's own.
+  return tx
+    .select({
+      appliedVersionBasis: firstMention.appliedVersionBasis,
+      appliedVersionDate: firstMention.appliedVersionDate,
+      appliedVersionDateRelation: firstMention.appliedVersionDateRelation,
+      appliedVersionAmendmentWorkIdentifier:
+        firstMention.appliedVersionAmendmentWorkIdentifier,
+      appliedVersionExpressionDate: firstMention.appliedVersionExpressionDate,
+      appliedVersionExpressionEli: firstMention.appliedVersionExpressionEli,
+      versionEvidenceStart: firstMention.versionEvidenceStart,
+      versionEvidenceEnd: firstMention.versionEvidenceEnd,
+      versionEvidenceKind: firstMention.versionEvidenceKind,
+      versionValidFrom: firstMention.versionValidFrom,
+      decisionId: page.decisionId,
+      caseNumber: page.caseNumber,
+      slug: page.slug,
+      court: page.court,
+      courtId: page.courtId,
+      ecli: page.ecli,
+      sourceUrl: page.sourceUrl,
+      country: page.country,
+      language: page.language,
+      languageGroupKey: page.languageGroupKey,
+      decisionDate: page.decisionDate,
+      citationAuthority: page.citationAuthority,
+      sentenceText: firstMention.sentenceText,
+      printText: firstMention.printText,
+      mentionCount: page.mentionCount,
+      spanStart: firstMention.spanStart,
+      spanEnd: firstMention.spanEnd,
+      decisionDateCursor: sql<string>`to_char(${page.decisionDateKey}, 'YYYY-MM-DD')`,
+    })
+    .from(page)
+    .innerJoinLateral(firstMention, sql`true`)
+    .orderBy(...citingPageOrder(sort, page))
+    .limit(limit + 1);
 };
 
 type CitingDecisionRowsOptions = CitingDecisionsPageOptions & {
