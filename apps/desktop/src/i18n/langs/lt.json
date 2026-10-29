@@ -299,7 +299,7 @@
     "moreOptions": "Daugiau parinkčių",
     "moreItemActions": "Daugiau elemento {number} veiksmų",
     "noResults": "Atitinkančių iškarpų nėra",
-    "noResultsDescription": "Ar norite „{query}“ ieškoti registruose?",
+    "noResultsSearchRegistries": "Ieškoti „{query}“ registruose",
     "noGroup": "Be grupės",
     "newGroupOption": "Nauja grupė…",
     "copyItem": "Kopijuoti elementą {number}",
