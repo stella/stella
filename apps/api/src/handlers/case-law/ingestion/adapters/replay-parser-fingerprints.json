@@ -64,8 +64,8 @@
     "version": 3
   },
   "cz-us": {
-    "version": 30,
-    "fingerprint": "970fffc634424e821a97b3384e0be55f6dfd65072b1693dc2c62c6c9a8c12bca"
+    "fingerprint": "970fffc634424e821a97b3384e0be55f6dfd65072b1693dc2c62c6c9a8c12bca",
+    "version": 30
   },
   "eu-ecj": {
     "fingerprint": "016cbb02c9e7637a6d896a7cf5144f2058030473436d4b6e363bd0d54a452a90",
@@ -80,8 +80,8 @@
     "version": 15
   },
   "pl-kio": {
-    "version": 10,
-    "fingerprint": "3d4e28e6ade0577789214d60e39fc50229b623d9c5812defe7af3587bbe718ad"
+    "fingerprint": "3d4e28e6ade0577789214d60e39fc50229b623d9c5812defe7af3587bbe718ad",
+    "version": 10
   },
   "pl-kis": {
     "fingerprint": "af057a5e881b143acd50b38c5f6c37fed4f9c6d650bd2aba141faed7b968a25e",
@@ -116,8 +116,8 @@
     "version": 19
   },
   "sk-us": {
-    "fingerprint": "6672302b6c489771180aaaf2bbd8afbb80918a86110e25d60b69ab7bf93417f9",
-    "version": 14
+    "version": 15,
+    "fingerprint": "cabd39a60649bfbe1850e2579743db03866834ce39da8975673fd17aac08f3bf"
   },
   "uk-fcl": {
     "fingerprint": "a18c90b6cb13f4456e0b5addba6dbcc042e29b4a314212687e9114fa240354d5",
