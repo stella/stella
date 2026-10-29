@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Verknüpfte Ausgaben",
       "linkedTimeEntries": "Verknüpfte Zeiteinträge",
-      "markPaid": "Als bezahlt markieren",
       "noEntries": "Keine Einträge mit dieser Rechnung verknüpft",
       "noInvoices": "Noch keine Rechnungen",
       "paidAt": "Bezahlt am",
+      "payments": {
+        "amountTooHigh": "Der Betrag übersteigt den offenen Betrag von {amount}.",
+        "confirmVoid": "Die Zahlung bleibt als storniert erfasst und wird dieser Rechnung nicht mehr angerechnet.",
+        "empty": "Noch keine Zahlungen erfasst",
+        "method": "Zahlungsart",
+        "methods": {
+          "bank_transfer": "Überweisung",
+          "card": "Karte",
+          "cash": "Bar",
+          "other": "Andere Zahlungsart"
+        },
+        "outstandingAmount": "Offen {amount}",
+        "paidOn": "Zahlungsdatum",
+        "partiallyPaid": "Teilweise bezahlt",
+        "record": "Zahlung erfassen",
+        "summary": "Bezahlt {paid}, offen {outstanding}",
+        "title": "Zahlungen",
+        "void": "Zahlung stornieren",
+        "voided": "Storniert"
+      },
       "removeEntries": "Einträge entfernen",
       "send": "Senden",
       "statuses": {
@@ -2457,6 +2476,8 @@
       "aresNotFound": "Für diese IČO wurde kein Unternehmen gefunden.",
       "aresTitle": "Tschechisches Register (ARES)",
       "contactName": "Kontaktname",
+      "displayNameOrganizationHint": "Optionale Überschreibung; andernfalls aus dem Organisationsnamen erstellt.",
+      "displayNamePersonHint": "Optionale Überschreibung; andernfalls aus Vor- und Nachname erstellt.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Geben Sie eine 8-stellige IČO ein."
     },

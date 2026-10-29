@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
-      "markPaid": "Mark paid",
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
+      "payments": {
+        "amountTooHigh": "The amount is more than the outstanding {amount}.",
+        "confirmVoid": "The payment stays on record as voided and no longer counts towards this invoice.",
+        "empty": "No payments recorded yet",
+        "method": "Payment method",
+        "methods": {
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "cash": "Cash",
+          "other": "Other method"
+        },
+        "outstandingAmount": "Outstanding {amount}",
+        "paidOn": "Payment date",
+        "partiallyPaid": "Partially paid",
+        "record": "Record payment",
+        "summary": "Paid {paid}, outstanding {outstanding}",
+        "title": "Payments",
+        "void": "Void payment",
+        "voided": "Voided"
+      },
       "removeEntries": "Remove entries",
       "send": "Send",
       "statuses": {
@@ -2457,6 +2476,8 @@
       "aresNotFound": "No company found for this IČO.",
       "aresTitle": "Czech registry (ARES)",
       "contactName": "Contact name",
+      "displayNameOrganizationHint": "Optional override; otherwise generated from the organization name.",
+      "displayNamePersonHint": "Optional override; otherwise generated from the first and last name.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Enter an 8-digit IČO."
     },

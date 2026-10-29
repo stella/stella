@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Přiřazené výdaje",
       "linkedTimeEntries": "Přiřazené časové záznamy",
-      "markPaid": "Označit jako zaplaceno",
       "noEntries": "K této faktuře nejsou přiřazeny žádné záznamy",
       "noInvoices": "Zatím žádné faktury",
       "paidAt": "Zaplaceno dne",
+      "payments": {
+        "amountTooHigh": "Částka převyšuje zbývající dlužnou částku {amount}.",
+        "confirmVoid": "Platba zůstane v evidenci jako stornovaná a do úhrady této faktury se už nezapočítá.",
+        "empty": "Zatím nejsou zaznamenány žádné platby",
+        "method": "Způsob platby",
+        "methods": {
+          "bank_transfer": "Bankovní převod",
+          "card": "Platební karta",
+          "cash": "Hotovost",
+          "other": "Jiný způsob"
+        },
+        "outstandingAmount": "Zbývá zaplatit {amount}",
+        "paidOn": "Datum platby",
+        "partiallyPaid": "Částečně zaplaceno",
+        "record": "Zaznamenat platbu",
+        "summary": "Zaplaceno {paid}, zbývá zaplatit {outstanding}",
+        "title": "Platby",
+        "void": "Stornovat platbu",
+        "voided": "Stornováno"
+      },
       "removeEntries": "Odebrat záznamy",
       "send": "Odeslat",
       "statuses": {
@@ -2457,6 +2476,8 @@
       "aresNotFound": "Pro toto IČO jsme nenašli žádnou firmu.",
       "aresTitle": "Český rejstřík (ARES)",
       "contactName": "Název kontaktu",
+      "displayNameOrganizationHint": "Volitelné přepsání; jinak se vytvoří z názvu organizace.",
+      "displayNamePersonHint": "Volitelné přepsání; jinak se vytvoří z jména a příjmení.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Zadejte 8místné IČO."
     },
