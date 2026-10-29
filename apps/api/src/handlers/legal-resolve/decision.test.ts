@@ -825,6 +825,51 @@ describe("a docket at other courts", () => {
       document: { court: "Krajský soud v Českých Budějovicích" },
     });
   });
+  test.each([
+    "soudní rozhodnutí 65 A 3/2025",
+    "rozhodnutí soudu 65 A 3/2025",
+    "súdne rozhodnutie 65 A 3/2025",
+  ])(
+    "a generic court word leaves a unique docket unconstrained: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: readableDecision,
+        },
+      });
+      expect(result).toMatchObject({
+        status: "resolved",
+        document: { court: "Krajský soud v Českých Budějovicích" },
+      });
+    },
+  );
+  test("a seat-only unknown court never resolves another court's holder", async () => {
+    const [budejovice] = regionalHolders();
+    if (budejovice === undefined) {
+      panic("Missing regional fixture");
+    }
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "soud v Neznámově 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([budejovice]),
+        read: async () => panic("An unknown court must not fetch text"),
+      },
+    });
+    expect(result).toMatchObject({
+      status: "not_found",
+      reason: "court_unrecognized",
+    });
+  });
   test("no court leaves a shared docket ambiguous", async () => {
     const result = await resolveDecision({
       admission,

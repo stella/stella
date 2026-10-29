@@ -5,14 +5,53 @@ import {
   apexCourtAbbreviations,
   courtAbbreviation,
 } from "@stll/api-contract/case-law-court-abbreviations";
-import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
+import {
+  CZ_ECLI_COURT_REGISTRY,
+  ECLI_COURT_REGISTRY,
+} from "@stll/api-contract/case-law-courts";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   combineCourtFilters,
+  mentionsCourt,
   readCourtFilter,
   storedCourtIdentities,
 } from "@/api/mcp/case-law-court-filter";
+
+describe("court designations", () => {
+  test.each([
+    "soudní rozhodnutí 65 A 3/2025",
+    "rozhodnutí soudu 65 A 3/2025",
+    "súdne rozhodnutie 65 A 3/2025",
+  ])("a generic or adjectival court word is not a designation: %s", (text) => {
+    expect(mentionsCourt(text)).toBe(false);
+  });
+
+  test.each([
+    "rozsudek Krajského soudu v Českých Budějovicích 65 A 3/2025",
+    "soud v Neznámově 65 A 3/2025",
+    "súdu vo Zvolene 65 A 3/2025",
+    "OS Kolín 65 A 3/2025",
+  ])("a modifier, seat, or short code designates a court: %s", (text) => {
+    expect(mentionsCourt(text)).toBe(true);
+  });
+
+  test("every registered Czech and Slovak court kind is a designation in nominative and genitive", () => {
+    const courts = [
+      ...Object.values(ECLI_COURT_REGISTRY.CZ),
+      ...Object.values(ECLI_COURT_REGISTRY.SK),
+    ];
+    for (const { name } of courts) {
+      const genitive = name.replace(
+        /^(.*?)([ýí]) (soud|súd)\b/u,
+        (_, stem: string, ending: string, noun: string) =>
+          `${stem}${ending === "í" ? "ího" : "ého"} ${noun === "soud" ? "soudu" : "súdu"}`,
+      );
+      expect(mentionsCourt(name), name).toBe(true);
+      expect(mentionsCourt(genitive), genitive).toBe(true);
+    }
+  });
+});
 
 /**
  * Court spellings as publishers store them, per stored country: apex courts

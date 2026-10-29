@@ -154,8 +154,46 @@ const courtShortCodes: ReadonlySet<string> = new Set(
     .filter((shortCode) => shortCode !== "ÚS"),
 );
 
-/** `soud` / `súd` in any inflection: Czech and Slovak for "court". */
-const COURT_NOUN = /(?:^|[^\p{L}])(?:soud|súd)\p{L}*/iu;
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+/**
+ * Adjectival stems that designate a Czech or Slovak court. Court names place
+ * these modifiers immediately before `soud` / `súd`; removing the nominative
+ * ending lets the same registry-derived phrase recognise inflected citations.
+ */
+const courtModifierPatterns = [
+  ...new Set(
+    [
+      ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.CZ),
+      ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.SK),
+    ].flatMap(({ name }) => {
+      const words = name.split(/\s+/u);
+      const nounIndex = words.findIndex((word) =>
+        /^(?:soud|súd)$/iu.test(word),
+      );
+      if (nounIndex < 1) {
+        return [];
+      }
+      return [
+        words
+          .slice(0, nounIndex)
+          .map((word) => `${escapeRegex(word.replace(/[ýí]$/iu, ""))}\\p{L}*`)
+          .join("\\s+"),
+      ];
+    }),
+  ),
+].toSorted((left, right) => right.length - left.length);
+
+const COURT_NOUN_PATTERN = String.raw`(?:soud|súd)(?!n)\p{L}*`;
+const MODIFIED_COURT_DESIGNATION = new RegExp(
+  String.raw`(?:^|[^\p{L}])(?:${courtModifierPatterns.join("|")})\s+${COURT_NOUN_PATTERN}(?=$|[^\p{L}])`,
+  "iu",
+);
+const SEATED_COURT_DESIGNATION = new RegExp(
+  String.raw`(?:^|[^\p{L}])${COURT_NOUN_PATTERN}\s+(?:v|ve|vo)\s+\p{Lu}\p{L}*`,
+  "u",
+);
 
 /**
  * Whether text names a court at all, recognised or not. A court that the
@@ -163,7 +201,8 @@ const COURT_NOUN = /(?:^|[^\p{L}])(?:soud|súd)\p{L}*/iu;
  * an unknown court reads like no court and the docket resolves anywhere.
  */
 export const mentionsCourt = (text: string): boolean =>
-  COURT_NOUN.test(text) ||
+  MODIFIED_COURT_DESIGNATION.test(text) ||
+  SEATED_COURT_DESIGNATION.test(text) ||
   text
     .split(/[^\p{L}]+/u)
     .some((word) => courtShortCodes.has(word.toUpperCase()));
