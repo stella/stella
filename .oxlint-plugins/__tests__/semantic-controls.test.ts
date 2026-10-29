@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -123,4 +124,18 @@ test.each(contextTargetCases)("$title", async ({ source, lines }) => {
       sourcePath: "apps/web/src/source.tsx",
     }),
   ).toEqual(lines);
+});
+
+test("the semantic controls fixture has a clean context-menu case", async () => {
+  const fixture = readFileSync(
+    new URL("../__fixtures__/semantic-controls.fixture.tsx", import.meta.url),
+    "utf-8",
+  );
+
+  expect(
+    await lintSingleRule("require-context-menu-target", fixture, {
+      plugin: "semantic-controls",
+      sourcePath: "apps/web/src/semantic-controls.fixture.tsx",
+    }),
+  ).toEqual([]);
 });

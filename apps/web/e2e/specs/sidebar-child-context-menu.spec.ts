@@ -90,12 +90,14 @@ test("context menus return focus to sidebar rows and matter cards", async ({
 }, testInfo) => {
   const workspace = await createTestWorkspace(request, "menu-focus");
   const childName = "Focus return document";
+  const taskName = "Focus return task";
   const workspaceName = `menu-focus-${workspace.id.slice(0, 8)}`;
   try {
     await apiPut(request, `/entities/${workspace.id}`, {
       kind: "document",
       name: childName,
     });
+    await apiPut(request, `/tasks/${workspace.id}`, { name: taskName });
     await page.context().addCookies((await request.storageState()).cookies);
     await seedSidebarState({
       baseURL,
@@ -122,6 +124,19 @@ test("context menus return focus to sidebar rows and matter cards", async ({
     await expect(page.getByRole("menu")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(sidebarOpener).toBeFocused();
+
+    const upcoming = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Upcoming agenda", exact: true }),
+    });
+    const overviewOpener = upcoming.getByRole("button", {
+      exact: true,
+      name: taskName,
+    });
+    await expect(overviewOpener).toBeVisible();
+    await overviewOpener.click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(overviewOpener).toBeFocused();
 
     await page.goto("/workspaces", { waitUntil: "domcontentloaded" });
     const cardOpener = page.getByRole("link", {

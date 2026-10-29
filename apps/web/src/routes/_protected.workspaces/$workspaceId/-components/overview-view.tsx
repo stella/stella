@@ -666,7 +666,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               setUpcomingMenu((previous) =>
                 open
                   ? { ...previous, open }
-                  : { open: false, anchor: null, opener: null, task: null },
+                  : { ...previous, open: false, anchor: null },
               );
             }}
             open={upcomingMenu.open}
