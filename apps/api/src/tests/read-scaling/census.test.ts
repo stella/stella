@@ -38,11 +38,13 @@ import {
   withNewWriteRoutes,
 } from "./surface";
 import { suggestionRangeScalingScenario } from "./time-suggestion-range";
+import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   matterVocabularyScalingScenario,
+  verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,

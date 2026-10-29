@@ -1,19 +1,14 @@
 import * as v from "valibot";
 
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
-
 import {
-  decisionDocumentState,
   readsSharedPublicLawCorpus,
   STORED_ONLY_DOCUMENT_HYDRATION,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { verifyDecisionQuotation } from "@/api/handlers/case-law/decisions/quotes/verification";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
-import type { LocatedDecisionBlock } from "./case-law-decision-outline";
-import { locateDecisionBlocks } from "./case-law-decision-outline";
-import { decisionParagraphs } from "./case-law-decision-read";
 import {
   defaultReadGatedDecisionWithDocument,
   isReadCaseLawDecisionSuccess,
@@ -21,13 +16,11 @@ import {
 import { defineMcpToolSet } from "./tool-types";
 import type { TypedMcpToolHandler } from "./tool-types";
 import {
-  buildCaseLawDecisionAppUrl,
   handlerStatusOf,
   notFoundResult,
   nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  toPlainCorpusText,
   uuidInputSchema,
   validationErrorResult,
 } from "./tool-utils";
@@ -38,14 +31,13 @@ import {
 import {
   QUOTE_FUZZY_THRESHOLD,
   quoteInputWithinBudget,
-  verifyQuote,
 } from "./verify-quote.logic";
 import { openMcpRead } from "./write-tool-authority";
 
 export const verifyQuoteArgsSchema = nullAsAbsent(
   v.strictObject({
     decision_id: uuidInputSchema(
-      "Decision ID from search_case_law or resolve_case_law_decision.",
+      "ID from search_case_law or resolve_case_law_decision.",
     ),
     text: v.pipe(
       v.string(),
@@ -56,7 +48,7 @@ export const verifyQuoteArgsSchema = nullAsAbsent(
         `Supply nonempty quote segments, at most ${LIMITS.caseLawQuoteMaxSegments} segments and ${LIMITS.caseLawQuoteMaxTokens} total word/punctuation tokens.`,
       ),
       v.description(
-        `Quote to check: at most ${LIMITS.caseLawQuoteMaxChars} characters, ${LIMITS.caseLawQuoteMaxTokens} total word/punctuation tokens and ${LIMITS.caseLawQuoteMaxSegments} nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved.`,
+        `Quote: max ${LIMITS.caseLawQuoteMaxChars} chars, ${LIMITS.caseLawQuoteMaxTokens} word/punctuation tokens, ${LIMITS.caseLawQuoteMaxSegments} nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics.`,
       ),
     ),
   }),
@@ -71,7 +63,7 @@ const passageSchema = v.object({
       position: v.number(),
       label: v.nullable(v.string()),
       headingPath: v.array(v.string()),
-      url: v.optional(v.string()),
+      url: v.exactOptional(v.string()),
     }),
   ),
 });
@@ -129,7 +121,7 @@ const definitions = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: `Check whether a quote occurs in one stored decision. Resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizing whitespace, quotation marks, dashes, soft/line-end hyphens and č. j. spacing; returns every occurrence in ordered ellipsis segments, with paragraph labels and links. Only exact is verified:true. Report fuzzy as an altered quote, never confirmed. Fuzzy returns a closest token-edit passage and similarity >= ${QUOTE_FUZZY_THRESHOLD}; not_found is lower. Differences run passage to quote: added/dropped tokens show alterations. Cannot_verify means unreadable text, never absence of a quote. Offsets are original UTF-16 units. No publisher fetch. Use read_case_law_decision for context.`,
+    description: `Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns all occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= ${QUOTE_FUZZY_THRESHOLD}; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.`,
     inputSchema: verifyQuoteArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["check"],
@@ -181,76 +173,15 @@ const handleVerifyQuote: TypedMcpToolHandler<
       retryable: true,
     });
   }
-  const state = decisionDocumentState(
-    read,
-    (
-      context.testDependencies?.readsSharedPublicLawCorpus ??
-      readsSharedPublicLawCorpus
-    )(),
+  return toolDataResult(
+    verifyDecisionQuotation({
+      read,
+      quote,
+      readSharedCorpus:
+        context.testDependencies?.readsSharedPublicLawCorpus ??
+        readsSharedPublicLawCorpus,
+    }),
   );
-  if (
-    !read.source.allowsDerivedAi ||
-    state !== "available" ||
-    read.documentReadFailed
-  ) {
-    return toolDataResult({
-      status: "cannot_verify",
-      verified: false,
-      decisionId: read.id,
-      textState: (() => {
-        if (!read.source.allowsDerivedAi) {
-          return "withheld" as const;
-        }
-        if (read.documentReadFailed) {
-          return "failed" as const;
-        }
-        return state === "pending"
-          ? ("pending" as const)
-          : ("unavailable" as const);
-      })(),
-      hint: "Open the publisher document through read_case_law_decision; retry verify_quote after stored text becomes available.",
-    });
-  }
-  const parsedBlocks =
-    parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null;
-  const astText =
-    parsedBlocks === null
-      ? null
-      : toPlainCorpusText({ blocks: parsedBlocks, fulltext: null });
-  const blocks = astText !== null && astText.length > 0 ? parsedBlocks : null;
-  const text = blocks === null ? read.fulltext : astText;
-  if (text === null || text.trim().length === 0) {
-    return toolDataResult({
-      status: "cannot_verify",
-      verified: false,
-      decisionId: read.id,
-      textState: "empty",
-      hint: "Use read_case_law_decision to inspect metadata and the publisher URL; no stored text can verify this quote.",
-    });
-  }
-  const url = buildCaseLawDecisionAppUrl({
-    decisionId: read.id,
-    caseNumber: read.caseNumber,
-    country: read.country,
-    court: read.court,
-    language: read.language,
-    languageAlternates: read.languageAlternates,
-    slug: read.slug,
-  });
-  let offset = 0;
-  const located: LocatedDecisionBlock[] =
-    blocks === null
-      ? decisionParagraphs({ located: null, text }).map((paragraph) => {
-          const start = text.indexOf(paragraph.text, offset);
-          offset = start + paragraph.text.length;
-          return { ...paragraph, start, end: offset, type: "paragraph" };
-        })
-      : locateDecisionBlocks(blocks, text);
-  return toolDataResult({
-    decisionId: read.id,
-    textSource: blocks === null ? "fulltext" : "ast",
-    ...verifyQuote({ text, quote, located, url }),
-  });
 };
 
 export const VERIFY_QUOTE_TOOL_SET = defineMcpToolSet(

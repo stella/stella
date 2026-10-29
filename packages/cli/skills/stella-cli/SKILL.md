@@ -200,7 +200,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: input
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
-  - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+  - `--direction` — cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
   - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
 - `stella case-law coverage`
   - optional: --country
@@ -208,17 +208,17 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--decision-id` — Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
   - optional: --paragraphs
 - `stella case-law read`
-  - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
+  - `--decision-ids` — Decisions, max 20/call; each id answered independently, including unknown ids. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
-  - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
+  - `--country` — Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--identifier` — Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella case-law verify-quote`
-  - `--decision-id` — Decision ID from search_case_law or resolve_case_law_decision. (string)
-  - `--text` — Quote to check: at most 4000 characters, 128 total word/punctuation tokens and 16 nonempty segments. Ellipses (..., …, […], (...)) separate ordered segments. Case-sensitive; diacritics are preserved. (string)
+  - `--decision-id` — ID from search_case_law or resolve_case_law_decision. (string)
+  - `--text` — Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics. (string)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -417,7 +417,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 440
+Beyond the curated commands above, the CLI generates 441
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

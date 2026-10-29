@@ -53,6 +53,8 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
           seed.quoteDecisionId,
         ),
       expectedRows: 1,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.caseLaw.quoteRecord"],
     },
     {
       budgetId: "statement.legislation.candidateRows",

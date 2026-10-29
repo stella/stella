@@ -509,6 +509,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/api-keys/revoke": "crud",
   "POST /v1/api-keys/rotate": "crud",
   "POST /v1/case/decisions/search": "search",
+  "POST /v1/case/decisions/quotes/verify": "search",
   "POST /v1/case/decisions/search/expand": "ai",
   "POST /v1/case/decisions/search/refine": "ai",
   "POST /v1/case/matter-links/:workspaceId": "crud",
