@@ -193,6 +193,8 @@ export const TAGGED_FAILURE_REASON = {
   EgressAnonymizerFailedError: "tagged_failure",
   EmailEventsConfigError: "tagged_failure",
   EmailParseError: "tagged_failure",
+  EmptiedDocumentBatchError: "tagged_failure",
+  EmptiedDocumentRepairArgumentsError: "tagged_failure",
   EntityCheckCancelledError: "tagged_failure",
   EntityCheckInputError: "tagged_failure",
   EntityCheckUnavailableError: "tagged_failure",
