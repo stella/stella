@@ -1723,6 +1723,23 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "withdrawn-decision-labels",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json"],
+    inputs: [
+      "apps/web/src/i18n/langs/*.json",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+    ],
+    write: ["bun", "apps/web/scripts/sync-withdrawn-decision-labels.ts"],
+    check: [
+      "bun",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+      "--check",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "i18n-messages-web",
     outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
