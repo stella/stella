@@ -1,11 +1,12 @@
 import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { OnlineStepIntroduction } from "@/api/db/online-migration-connection";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
 } from "@/api/lib/case-law/published-decisions-sql";
-import type { IntroducedMigrationIndex } from "@/api/lib/db/migration-history";
+import type { RequiredMigrationIndex } from "@/api/lib/db/migration-history";
 import { decisionDateNotBeforeFilingYearSql } from "@/api/lib/decision-date-bounds-sql";
 
 export const CASE_LAW_COVERAGE_INDEX = {
@@ -15,7 +16,10 @@ export const CASE_LAW_COVERAGE_INDEX = {
   isUnique: false,
   name: "case_law_decisions_source_decision_date_coverage_idx",
   tableName: "case_law_decisions",
-} as const satisfies IntroducedMigrationIndex & { createSql: string };
+} as const satisfies RequiredMigrationIndex & {
+  createSql: string;
+  introducedBy: OnlineStepIntroduction;
+};
 
 /** Sources without materialized facets aggregate published courts from this index alone. */
 export const CASE_LAW_COVERAGE_COURT_INDEX = {
@@ -25,7 +29,10 @@ export const CASE_LAW_COVERAGE_COURT_INDEX = {
   isUnique: false,
   name: "case_law_decisions_source_court_coverage_idx",
   tableName: "case_law_decisions",
-} as const satisfies IntroducedMigrationIndex & { createSql: string };
+} as const satisfies RequiredMigrationIndex & {
+  createSql: string;
+  introducedBy: OnlineStepIntroduction;
+};
 
 const FILING_DATE_PREDICATE_SQL = new PgDialect().sqlToQuery(
   decisionDateNotBeforeFilingYearSql({
@@ -48,4 +55,7 @@ export const CASE_LAW_COVERAGE_FILING_DATE_INDEX = {
   isUnique: false,
   name: "case_law_decisions_source_filing_date_coverage_idx",
   tableName: "case_law_decisions",
-} as const satisfies IntroducedMigrationIndex & { createSql: string };
+} as const satisfies RequiredMigrationIndex & {
+  createSql: string;
+  introducedBy: OnlineStepIntroduction;
+};
