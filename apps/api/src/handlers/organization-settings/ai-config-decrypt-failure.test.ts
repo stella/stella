@@ -4,8 +4,10 @@ import { describe, expect, spyOn, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import * as captureModule from "@/api/lib/analytics/capture";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -15,6 +17,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { assertSettingsFailureConfidential } from "@/api/tests/helpers/settings-failure-confidentiality";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import readAIConfig from "./read-ai-config";
@@ -85,133 +88,93 @@ const createSettingsDb = (
 };
 
 describe("AI config handlers with an undecryptable stored config", () => {
-  test("every classified read failure stays out of every telemetry sink", async () => {
+  test("every reader exposes only the shared confidentiality allowlist", async () => {
     const key = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    const marker = "stored-ai-config-telemetry-marker";
-    const fixtures = [
-      {
-        reason: "incomplete-envelope",
-        row: {
-          aiConfigEncrypted: Buffer.from(`${marker}-cipher-incomplete`),
-          aiConfigIv: null,
-        },
-        encryptionKey: key,
+    const fixtures = {
+      "incomplete-envelope": {
+        aiConfigEncrypted: Buffer.from("stored-incomplete"),
+        aiConfigIv: null,
       },
-      {
-        reason: "missing-key",
-        row: {
-          aiConfigEncrypted: Buffer.from(`${marker}-cipher-missing-key`),
-          aiConfigIv: Buffer.alloc(12, 21),
-        },
-        encryptionKey: undefined,
+      "missing-key": {
+        aiConfigEncrypted: Buffer.from("stored-missing-key"),
+        aiConfigIv: Buffer.alloc(12, 21),
       },
-      {
-        reason: "decryption-failed",
-        row: {
-          aiConfigEncrypted: Buffer.from(`${marker}-cipher-decryption`),
-          aiConfigIv: Buffer.alloc(12, 22),
-        },
-        encryptionKey: key,
+      "decryption-failed": {
+        aiConfigEncrypted: Buffer.from("stored-decryption"),
+        aiConfigIv: Buffer.alloc(12, 22),
       },
-      {
-        reason: "invalid-json",
-        row: {
-          aiConfigEncrypted: Buffer.from(`{"secret":"${marker}"`),
-          aiConfigIv: Buffer.alloc(12),
-        },
-        encryptionKey: key,
+      "invalid-json": {
+        aiConfigEncrypted: Buffer.from('{"secret":'),
+        aiConfigIv: Buffer.alloc(12),
       },
-      {
-        reason: "invalid-schema",
-        row: {
-          aiConfigEncrypted: Buffer.from(
-            JSON.stringify({
-              [`${marker}-schema-key`]: `${marker}-schema-value`,
-            }),
-          ),
-          aiConfigIv: Buffer.alloc(12),
-        },
-        encryptionKey: key,
+      "invalid-schema": {
+        aiConfigEncrypted: Buffer.from('{"unexpected":"stored"}'),
+        aiConfigIv: Buffer.alloc(12),
       },
-    ] as const;
+    } as const satisfies Record<OrgAIConfigReadFailure, SettingsRow>;
+    const isReason = (value: string): value is keyof typeof fixtures =>
+      Object.hasOwn(fixtures, value);
+    const organizationId = toSafeId<"organization">("org_test");
 
-    for (const fixture of fixtures) {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
-        fixture.encryptionKey;
-      const analytics = installRecordingAnalytics();
-      const logs = installRecordingLogger();
-      const capture = spyOn(captureModule, "captureError");
-      const devErrors = spyOn(console, "error").mockImplementation(
-        () => undefined,
-      );
-      try {
-        const updateDb = createSettingsDb(fixture.row);
-        const updateResult = await updateAIConfig.handler(
-          createTestHandlerContext<UpdateContext>({
-            audit: NO_AUDIT,
-            scopedDb: NO_DB,
-            body: updateBody,
-            safeDb: updateDb.safeDb,
-          }),
-        );
-        const readResult = await readAIConfig.handler(
-          createTestHandlerContext<ReadContext>({
-            audit: NO_AUDIT,
-            scopedDb: NO_DB,
-            safeDb: createSettingsDb(fixture.row).safeDb,
-          }),
-        );
-
-        for (const result of [updateResult, readResult]) {
-          expect(result).toMatchObject({
-            code: 503,
-            response: { code: AI_CONFIG_UNREADABLE_ERROR_CODE },
-          });
+    try {
+      for (const reason of Object.keys(fixtures)) {
+        if (!isReason(reason)) {
+          continue;
         }
-        expect(updateDb.operationCount()).toBe(1);
-        expect(capture).not.toHaveBeenCalled();
-        expect(analytics.events.length).toBeGreaterThan(0);
-        expect(devErrors).toHaveBeenCalledTimes(2);
-        expect(
-          logs.records
-            .filter(
-              ({ message }) => message === "organization_ai_config.read_failed",
-            )
-            .map(({ message, attributes }) => ({ message, attributes })),
-        ).toEqual(
-          Array.from({ length: 2 }, () => ({
-            message: "organization_ai_config.read_failed",
-            attributes: expect.objectContaining({
-              action: "decrypt",
-              reason: fixture.reason,
-              source: "organization_ai_config",
-            }),
-          })),
-        );
-
-        const recorded = JSON.stringify({
-          analytics: analytics.events,
-          captureArguments: capture.mock.calls,
-          development: devErrors.mock.calls,
-          logs: logs.records,
-          responses: [updateResult, readResult],
-        });
-        const stored = [fixture.row.aiConfigEncrypted, fixture.row.aiConfigIv];
-        for (const value of stored) {
-          if (value) {
-            expect(recorded).not.toContain(value.toString("hex"));
-            expect(recorded).not.toContain(value.toString("base64"));
+        envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
+          reason === "missing-key" ? undefined : key;
+        for (const reader of ["read", "update"] as const) {
+          const analytics = installRecordingAnalytics();
+          const logs = installRecordingLogger();
+          const capture = spyOn(captureModule, "captureError");
+          const devErrors = spyOn(console, "error").mockImplementation(
+            () => undefined,
+          );
+          try {
+            const db = createSettingsDb(fixtures[reason]);
+            const returned =
+              reader === "read"
+                ? await readAIConfig.handler(
+                    createTestHandlerContext<ReadContext>({
+                      audit: NO_AUDIT,
+                      scopedDb: NO_DB,
+                      safeDb: db.safeDb,
+                    }),
+                  )
+                : await updateAIConfig.handler(
+                    createTestHandlerContext<UpdateContext>({
+                      audit: NO_AUDIT,
+                      scopedDb: NO_DB,
+                      body: updateBody,
+                      safeDb: db.safeDb,
+                    }),
+                  );
+            assertSettingsFailureConfidential({
+              reason,
+              organizationId,
+              outputs: {
+                analyticsEvents: analytics.events,
+                captureEntries: capture.mock.calls,
+                developmentEntries: devErrors.mock.calls,
+                groupIdentifies: analytics.groupIdentifies,
+                logRecords: logs.records,
+                returned,
+              },
+            });
+            if (reader === "update") {
+              expect(db.operationCount()).toBe(1);
+            }
+          } finally {
+            devErrors.mockRestore();
+            capture.mockRestore();
+            logs.restore();
+            analytics.restore();
           }
         }
-        expect(recorded).not.toContain(marker);
-      } finally {
-        devErrors.mockRestore();
-        capture.mockRestore();
-        logs.restore();
-        analytics.restore();
       }
+    } finally {
+      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = key;
     }
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = key;
   });
 
   test("update fails closed instead of merging onto an empty config", async () => {

@@ -13,32 +13,7 @@ import {
 } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
-
-const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
-  if ((typeof value !== "object" && typeof value !== "function") || !value) {
-    return value;
-  }
-  if (seen.has(value)) {
-    return "[cycle]";
-  }
-  seen.add(value);
-  return Reflect.ownKeys(value).map((key) => {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    return {
-      key: String(key),
-      configurable: descriptor?.configurable,
-      enumerable: descriptor?.enumerable,
-      writable:
-        descriptor && "writable" in descriptor
-          ? descriptor.writable
-          : undefined,
-      value:
-        descriptor && "value" in descriptor
-          ? descriptorGraph(descriptor.value, seen)
-          : "[accessor]",
-    };
-  });
-};
+import { assertSettingsFailureConfidential } from "@/api/tests/helpers/settings-failure-confidentiality";
 
 beforeEach(() => {
   decryptAIConfigMock.mockClear();
@@ -143,50 +118,62 @@ describe("loadOrgAIConfig", () => {
     expect(Object.hasOwn(result.error, "metadata")).toBe(false);
   });
 
-  test("emits one bounded diagnostic for every classified failure", () => {
-    const logger = installRecordingLogger();
-    const reasons = [
-      "missing-key",
-      "decryption-failed",
-      "incomplete-envelope",
-      "invalid-json",
-      "invalid-schema",
-    ] as const satisfies readonly OrgAIConfigReadFailure[];
+  test("emits only the allowlisted output for every classified failure", () => {
+    const reasons = {
+      "missing-key": true,
+      "decryption-failed": true,
+      "incomplete-envelope": true,
+      "invalid-json": true,
+      "invalid-schema": true,
+    } as const satisfies Record<OrgAIConfigReadFailure, true>;
+    const isReason = (value: string): value is keyof typeof reasons =>
+      Object.hasOwn(reasons, value);
 
-    try {
-      for (const reason of reasons) {
-        const error = unreadableOrgAIConfig(organizationId, reason);
-        expect(descriptorGraph(error)).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              key: "message",
-              value: "Decrypted organization AI configuration is unreadable",
-            }),
-            expect.objectContaining({ key: "reason", value: reason }),
-          ]),
-        );
-        expect(Object.hasOwn(error, "cause")).toBe(false);
+    for (const reason of Object.keys(reasons)) {
+      if (!isReason(reason)) {
+        continue;
       }
-
-      expect(logger.records).toHaveLength(reasons.length);
-      expect(
-        logger.records.map(({ message, attributes }) => ({
-          message,
-          attributes,
-        })),
-      ).toEqual(
-        reasons.map((reason) => ({
-          message: "organization_ai_config.read_failed",
-          attributes: {
-            action: "decrypt",
-            organizationId,
-            reason,
-            source: "organization_ai_config",
+      const classifiedReason: OrgAIConfigReadFailure = reason;
+      const logger = installRecordingLogger();
+      try {
+        const error = unreadableOrgAIConfig(organizationId, classifiedReason);
+        assertSettingsFailureConfidential({
+          reason: classifiedReason,
+          organizationId,
+          outputs: {
+            analyticsEvents: [],
+            captureEntries: [],
+            developmentEntries: [],
+            groupIdentifies: [],
+            logRecords: logger.records,
+            returned: error,
           },
-        })),
-      );
-    } finally {
-      logger.restore();
+        });
+      } finally {
+        logger.restore();
+      }
+    }
+  });
+
+  test("the covered reader inventory owns every encrypted settings read", async () => {
+    const sourceFiles = [
+      "src/lib/ai-config-loader.ts",
+      "src/handlers/organization-settings/read-ai-config.ts",
+      "src/handlers/organization-settings/update-ai-config.ts",
+    ] as const;
+    const coveredReaders = [
+      "loadOrgAIConfig",
+      "loadOrgAISettings",
+      "loadOrgSettingsForAuth",
+      "readAIConfig",
+      "updateAIConfig",
+    ] as const;
+    const sources = await Promise.all(
+      sourceFiles.map(async (file) => await Bun.file(file).text()),
+    );
+    expect(sources.join("\n").match(/aiConfigEncrypted/gu)?.length).toBe(8);
+    for (const reader of coveredReaders) {
+      expect(sources.join("\n")).toContain(reader);
     }
   });
 });
