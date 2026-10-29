@@ -40,7 +40,7 @@ const project = (value: unknown, schema: unknown): unknown => {
   if (!isRecord(schema)) {
     return value;
   }
-  const branches = schema["anyOf"];
+  const branches = schema["anyOf"] ?? schema["oneOf"];
   if (isUnknownArray(branches)) {
     const branch = branches.find(
       (candidate) => isRecord(candidate) && matchesBranch(value, candidate),
