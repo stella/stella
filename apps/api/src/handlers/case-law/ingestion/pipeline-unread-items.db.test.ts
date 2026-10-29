@@ -38,6 +38,10 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -432,4 +436,44 @@ describe("a listed item whose read stays unavailable", () => {
       scope: "document",
     });
   });
+});
+
+test("a quarantined record followed by its keyed peer survives as two database rows", async () => {
+  const sourceId = await crawlSource();
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+    stableFields: { docket: "21 Cdo 130/2024" },
+  });
+  const quarantined = {
+    ...fullDecision("130"),
+    sourceDocumentId: quarantine.sourceDocumentId,
+  };
+  const keyed = {
+    ...fullDecision("131"),
+    sourceDocumentIdRepairAliases: quarantine.repairAliases,
+  };
+  const run = await cycle(sourceId, {
+    observations: [],
+    decisions: [quarantined, keyed],
+  });
+  const rows = await db
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+      caseNumber: caseLawDecisions.caseNumber,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(rows.map((row) => row.sourceDocumentId).toSorted()).toEqual(
+    [quarantine.sourceDocumentId, keyed.sourceDocumentId].toSorted(),
+  );
+  expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+  expect(rows.map((row) => row.caseNumber).toSorted()).toEqual(
+    [quarantined.caseNumber, keyed.caseNumber].toSorted(),
+  );
+  expect(run.haltReason).toBeNull();
+  expect((await sourceState(sourceId)).cursor).toBe("page-2");
+  expect(keyed.sourceDocumentIdRepairAliases).toEqual([
+    quarantine.sourceDocumentId,
+  ]);
 });

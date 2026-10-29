@@ -721,10 +721,11 @@ const runScopedIngestionPipeline = async ({
    * quarantine id with different stored bytes are two records one row cannot
    * hold, and the pipeline would let the second replace the first. Reported
    * per id, not stopped: the id is the adapter's to make more specific.
+   * Peer repair candidates are removed before any decision reaches identity resolution.
    */
   const reportPageQuarantineCollisions = (
     decisions: SyncPage["decisions"],
-  ): void => {
+  ): SyncPage["decisions"] => {
     const collisions = countQuarantineCollisions(
       decisions.flatMap(({ sourceDocumentId, rawHash }) =>
         sourceDocumentId === undefined
@@ -743,18 +744,33 @@ const runScopedIngestionPipeline = async ({
     // A keyed record whose repair alias is a quarantine id the same page
     // also stores: two records the fingerprint cannot tell apart, and the
     // alias would merge them.
-    for (const peer of quarantinePeerCollisions(
-      decisions.map((decision) => ({
-        sourceDocumentId: decision.sourceDocumentId ?? "",
-        quarantinePeers: decision.sourceDocumentIdRepairAliases,
-      })),
-    )) {
+    const peers = new Set(
+      quarantinePeerCollisions(
+        decisions.map((decision) => ({
+          sourceDocumentId: decision.sourceDocumentId ?? "",
+          quarantinePeers: decision.sourceDocumentIdRepairAliases,
+        })),
+      ),
+    );
+    for (const peer of peers) {
       logger.warn("case_law.ingestion.quarantine_peer_collision", {
         adapterKey: adapter.key,
         cursor,
         sourceDocumentId: peer,
       });
     }
+    if (peers.size === 0) {
+      return decisions;
+    }
+    // Keep the captured page intact; only the identity-resolution input loses
+    // candidates that would adopt a different record listed on this same page.
+    return decisions.map((decision) => ({
+      ...decision,
+      sourceDocumentIdRepairAliases:
+        decision.sourceDocumentIdRepairAliases?.filter(
+          (alias) => !peers.has(alias),
+        ),
+    }));
   };
 
   /**
@@ -778,9 +794,9 @@ const runScopedIngestionPipeline = async ({
       });
     }
     const s3FailuresBefore = s3UploadFailures;
-    reportPageQuarantineCollisions(page.decisions);
+    const decisions = reportPageQuarantineCollisions(page.decisions);
     const halted = await applyPageDecisions({
-      decisions: page.decisions,
+      decisions,
       observation,
     });
     // After the page's packs are flushed, so a judgment written on this page
