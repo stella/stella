@@ -28,6 +28,7 @@ import {
 } from "@/api/tests/helpers/handler-context";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const REQUEST_FAILURE_CODE = "request_unavailable";
 const ORIGINAL_BODY = { name: "Original" };
 
 const fingerprint = (body: unknown) =>
@@ -189,6 +190,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
             await createContact(database);
             throw new HandlerError({
               status: 503,
+              code: REQUEST_FAILURE_CODE,
               message: "Injected failure",
             });
           }),
@@ -315,6 +317,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
             return Result.err(
               new HandlerError({
                 status: 503,
+                code: REQUEST_FAILURE_CODE,
                 message: "Retry the same intent",
               }),
             );

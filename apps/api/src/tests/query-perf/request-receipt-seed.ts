@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 export type RequestReceiptScenario = {
@@ -8,8 +10,10 @@ export type RequestReceiptScenario = {
   cohort: "expired" | "quiet" | "mixed";
 };
 
-const ORGANIZATION_ID = "01990000-00b0-7000-8000-000000000001";
-const USER_ID = "query-perf-receipt-owner";
+const ORGANIZATION_ID = toSafeId<"organization">(
+  "01990000-00b0-7000-8000-000000000001",
+);
+const USER_ID = toSafeId<"user">("query-perf-receipt-owner");
 
 /** Real receipt rows: a full drain, no eligible work, and sparse pending work. */
 export const seedRequestReceiptScenario = async (
@@ -24,9 +28,12 @@ export const seedRequestReceiptScenario = async (
     ON CONFLICT (id) DO NOTHING`);
   await database.execute(sql`TRUNCATE request_idempotency_receipts`);
   // Receipts are written as their owner, the only writer the table's policies admit.
-  await database.transaction(async (tx) => {
-    await tx.execute(sql`SELECT set_config('app.user_id', ${USER_ID}, true),
-      set_config('app.organization_id', ${ORGANIZATION_ID}, true)`);
+  await createScopedDb(
+    markRlsDatabase(database),
+    [],
+    ORGANIZATION_ID,
+    USER_ID,
+  )(async (tx) => {
     await tx.execute(sql`INSERT INTO request_idempotency_receipts
     (id, organization_id, user_id, idempotency_key, route, request_fingerprint,
      state, response_status, response_body, claimed_at, completed_at)
