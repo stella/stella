@@ -97,8 +97,8 @@ const measureHostedErasureRun = async (
       hostedCustomerErasureDependencies: {
         credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
         provider: "polar",
-        erase: ({ externalCustomerRef }) =>
-          Promise.resolve(
+        erase: async ({ externalCustomerRef }) =>
+          await Promise.resolve(
             externalCustomerRef.endsWith("0")
               ? Result.err(
                   new HostedUsageProviderApiError({
