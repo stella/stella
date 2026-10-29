@@ -234,6 +234,68 @@ test("template cloning refuses and names foreign connections", async () => {
   );
 });
 
+test.each([
+  ["autovacuum worker", "clone"],
+  ["client backend", "refuse"],
+  ["logical replication worker", "refuse"],
+  ["unrecognized", "refuse"],
+  [null, "refuse"],
+])(
+  "template cloning classifies unnamed local %s connections",
+  async (backendType, outcome) => {
+    const fixture = adminFixture();
+    const query = fixture.admin.query;
+    fixture.admin.query = async (sql, parameters) => {
+      if (sql.startsWith("SELECT pid")) {
+        return [
+          {
+            pid: 42,
+            application_name: "",
+            client_addr: null,
+            backend_type: backendType,
+          },
+        ];
+      }
+      return query(sql, parameters);
+    };
+    let workerRuns = 0;
+    const result = runPostgresWorkers({
+      files: ["ordinary.test.ts"],
+      durations: {},
+      exclusivePaths: new Set(),
+      workers: 1,
+      databaseUrl: "postgres://localhost/template_db",
+      admin: fixture.admin,
+      registerSignal: () => () => {},
+      log: () => {},
+      runWorker: () => {
+        workerRuns += 1;
+        return {
+          exited: Promise.resolve(0),
+          exitCode: 0,
+          signalCode: null,
+          kill: () => undefined,
+        };
+      },
+    });
+    if (outcome === "clone") {
+      expect(await result).toBe(0);
+      expect(workerRuns).toBe(1);
+      expect(
+        fixture.calls.some((call) => call.startsWith("CREATE DATABASE")),
+      ).toBe(true);
+      return;
+    }
+    expect(await rejectionOf(result)).toBeInstanceOf(
+      PostgresTemplateConnectionError,
+    );
+    expect(workerRuns).toBe(0);
+    expect(
+      fixture.calls.some((call) => call.startsWith("CREATE DATABASE")),
+    ).toBe(false);
+  },
+);
+
 type AdminFixture = {
   admin: PostgresAdmin;
   calls: string[];

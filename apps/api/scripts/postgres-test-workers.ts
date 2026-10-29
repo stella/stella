@@ -208,10 +208,20 @@ export const runPostgresWorkers = async ({
     [template, applicationName],
   );
   const foreignRows = await admin.query(
-    "SELECT pid, application_name, client_addr::text FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
+    "SELECT pid, application_name, client_addr::text, backend_type FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
     [template],
   );
   const foreign = foreignRows.flatMap((row) => {
+    // CREATE DATABASE stops autovacuum itself while acquiring the template;
+    // every client and unknown backend must still pass the connection check.
+    if (
+      typeof row === "object" &&
+      row !== null &&
+      "backend_type" in row &&
+      row.backend_type === "autovacuum worker"
+    ) {
+      return [];
+    }
     if (
       typeof row !== "object" ||
       row === null ||
