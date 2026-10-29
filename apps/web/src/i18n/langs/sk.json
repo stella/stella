@@ -1580,6 +1580,12 @@
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} other {+# ďalších}}",
+      "dismiss": "Skryť upozornenie na pripojenie",
+      "stoppedWorking": "Vaše pripojenie k službe <name>{server}</name> prestalo fungovať.",
+      "waitingApproval": "Vaše pripojenie k službe <name>{server}</name> čaká na schválenie."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spise",
