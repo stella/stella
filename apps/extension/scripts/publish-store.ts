@@ -15,6 +15,8 @@ const ITEM_NAME = `publishers/${PUBLISHER_ID}/items/${ITEM_ID}`;
 
 const UPLOAD_POLL_ATTEMPTS = 30;
 const UPLOAD_POLL_INTERVAL_MS = 10_000;
+const CHROME_VERSION_COMPONENT_MAX = 65_535;
+const CHROME_VERSION_COMPONENT_COUNT = 4;
 
 const itemStateSchema = v.picklist([
   "ITEM_STATE_UNSPECIFIED",
@@ -93,8 +95,52 @@ const carriesVersion = (
   version: string,
 ): boolean =>
   revision?.distributionChannels.some(
-    ({ crxVersion }) => crxVersion === version,
+    ({ crxVersion }) =>
+      crxVersion !== undefined &&
+      compareChromeVersions(crxVersion, version) === 0,
   ) ?? false;
+
+const chromeVersionParts = (version: string): number[] => {
+  if (!/^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,3}$/u.test(version)) {
+    panic(`Invalid Chrome Web Store version: ${version}`);
+  }
+  const parts = version.split(".").map(Number);
+  if (
+    parts.some((part) => part > CHROME_VERSION_COMPONENT_MAX) ||
+    parts.every((part) => part === 0)
+  ) {
+    panic(`Invalid Chrome Web Store version: ${version}`);
+  }
+  return parts;
+};
+
+const compareChromeVersions = (left: string, right: string): number => {
+  const existing = chromeVersionParts(left);
+  const requested = chromeVersionParts(right);
+  for (let index = 0; index < CHROME_VERSION_COMPONENT_COUNT; index += 1) {
+    const difference = (existing.at(index) ?? 0) - (requested.at(index) ?? 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return 0;
+};
+
+const assertNoNewerRevision = (revision: RevisionStatus, version: string) => {
+  if (revision.distributionChannels.length === 0) {
+    panic("Chrome Web Store revision has no version; refusing to replace it");
+  }
+  for (const { crxVersion } of revision.distributionChannels) {
+    if (crxVersion === undefined) {
+      panic("Chrome Web Store revision has no version; refusing to replace it");
+    }
+    if (compareChromeVersions(crxVersion, version) > 0) {
+      panic(
+        `Refusing to replace newer Chrome Web Store version ${crxVersion} with ${version}`,
+      );
+    }
+  }
+};
 
 type StoreRequest = {
   body?: BodyInit;
@@ -156,6 +202,7 @@ export const publishToStore = async (
   version: string,
   zip: Blob,
 ): Promise<StoreOutcome> => {
+  chromeVersionParts(version);
   const status = await fetchStatus(client);
   if (status.takenDown) {
     panic("The Chrome Web Store item is taken down; publish it manually");
@@ -163,6 +210,9 @@ export const publishToStore = async (
   if (carriesVersion(status.publishedItemRevisionStatus, version)) {
     client.log(`Version ${version} is already published.`);
     return "already-published";
+  }
+  if (status.publishedItemRevisionStatus !== undefined) {
+    assertNoNewerRevision(status.publishedItemRevisionStatus, version);
   }
   const submitted = status.submittedItemRevisionStatus;
   if (
@@ -175,6 +225,7 @@ export const publishToStore = async (
       );
       return "already-submitted";
     }
+    assertNoNewerRevision(submitted, version);
     // The latest release replaces an older one still in review.
     client.log(`Cancelling the older submission (${submitted.state}).`);
     await call(client, v.object({}), {

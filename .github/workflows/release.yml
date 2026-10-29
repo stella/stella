@@ -1217,6 +1217,23 @@ jobs:
           bash apps/extension/scripts/release-zip.sh
           echo "packaged=true" >> "$GITHUB_OUTPUT"
 
+      - name: Write Chrome extension build predicate
+        if: steps.extension-zip.outputs.packaged == 'true'
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          jq -n --arg release_ref "$RELEASE_REF" --arg version "$VERSION" \
+            '{releaseRef: $release_ref, version: $version}' > extension-publication.json
+
+      - name: Attest the built Chrome extension ZIP
+        if: steps.extension-zip.outputs.packaged == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: apps/extension/.output/stella-extension-chrome-${{ needs.resolve.outputs.version }}.zip
+          predicate-type: https://stll.app/attestations/extension-publication/v1
+          predicate-path: extension-publication.json
+
       - name: Create draft GitHub release with the manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1671,6 +1688,9 @@ jobs:
     timeout-minutes: 15
     needs: [resolve, publish-release]
     if: ${{ !cancelled() && needs.resolve.outputs.channel == 'final' && needs.publish-release.result == 'success' }}
+    concurrency:
+      group: chrome-web-store-submit
+      cancel-in-progress: false
     # Only this environment (release tags and main) federates to the store
     # publisher.
     environment: chrome-web-store
@@ -1694,12 +1714,35 @@ jobs:
         run: |
           set -euo pipefail
           asset="stella-extension-chrome-${VERSION}.zip"
-          if ! bash scripts/gh-retry.sh release view "$RELEASE_REF" --json assets --jq '.assets[].name' | grep -Fqx "$asset"; then
+          assets=$(bash scripts/gh-retry.sh release view "$RELEASE_REF" --json assets --jq '.assets[].name')
+          if ! grep -Fx "$asset" <<< "$assets" > /dev/null; then
             echo "::notice::Release $RELEASE_REF has no extension package; nothing to submit."
             exit 0
           fi
           bash scripts/gh-retry.sh release download "$RELEASE_REF" --pattern "$asset" --dir "$RUNNER_TEMP/extension" --clobber
           echo "zip=$RUNNER_TEMP/extension/$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Chrome extension build attestation
+        id: verify-extension
+        if: steps.package.outputs.zip != ''
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RC_REF: ${{ needs.resolve.outputs.rc_ref }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+        run: |
+          set -euo pipefail
+          identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RC_REF//./\\.}|refs/heads/main)\$"
+          verification=$(bash scripts/retry.sh gh attestation verify "$ZIP" \
+            --repo "$GITHUB_REPOSITORY" \
+            --cert-identity-regex "$identity_pattern" \
+            --predicate-type https://stll.app/attestations/extension-publication/v1 \
+            --deny-self-hosted-runners --format json)
+          jq -e --arg rc_ref "$RC_REF" --arg version "$VERSION" \
+            'any(.[].verificationResult.statement.predicate;
+              .releaseRef == $rc_ref and .version == $version)' \
+            <<< "$verification" > /dev/null
 
       - name: Setup Bun
         if: steps.package.outputs.zip != ''

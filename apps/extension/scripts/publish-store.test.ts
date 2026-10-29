@@ -87,6 +87,12 @@ const runStore = async (store: FakeStore) => {
         });
       }
       if (action === "publish") {
+        if (
+          typeof init.body !== "string" &&
+          !(init.body instanceof URLSearchParams)
+        ) {
+          throw new Error("Expected a JSON publish request body");
+        }
         expect(JSON.parse(String(init.body))).toEqual({
           publishType: "DEFAULT_PUBLISH",
         });
@@ -101,7 +107,9 @@ const runStore = async (store: FakeStore) => {
       }
       throw new Error(`Unexpected call ${method} ${path}`);
     },
-    log: (line) => lines.push(line),
+    log: (line) => {
+      lines.push(line);
+    },
     sleep: async () => undefined,
     token: "token-value",
   };
@@ -160,6 +168,82 @@ describe("publishToStore", () => {
       "POST upload",
       "POST publish",
     ]);
+  });
+
+  test.each(["0.9.71", "0.9.100", "0.10.0", "1", "0.9.70.1"])(
+    "a newer version %s is never replaced by an older release",
+    async (version) => {
+      for (const state of ["PENDING_REVIEW", "STAGED", "PUBLISHED"]) {
+        const current = { state, versions: [version] };
+        const run = await runStore({
+          ...(state === "PUBLISHED"
+            ? { published: current }
+            : { submitted: current }),
+          upload: { crxVersion: VERSION, kind: "accepts" },
+        });
+        expect(await rejectionOf(run.outcome)).toMatchObject({
+          message: expect.stringContaining("Refusing to replace newer"),
+        });
+        expect(run.calls).toEqual(["GET fetchStatus"]);
+      }
+    },
+  );
+
+  test.each(["0.9.9", "0.8.100", "0.9.69.65535"])(
+    "an older numeric version %s can be replaced",
+    async (version) => {
+      const run = await runStore({
+        submitted: { state: "PENDING_REVIEW", versions: [version] },
+        upload: { crxVersion: VERSION, kind: "accepts" },
+      });
+      expect(await run.outcome).toBe("submitted");
+      expect(run.calls).toContain("POST cancelSubmission");
+    },
+  );
+
+  test("omitted trailing zero components identify the same submitted version", async () => {
+    const run = await runStore({
+      submitted: { state: "PENDING_REVIEW", versions: [`${VERSION}.0`] },
+      upload: { crxVersion: VERSION, kind: "accepts" },
+    });
+    expect(await run.outcome).toBe("already-submitted");
+    expect(run.calls).toEqual(["GET fetchStatus"]);
+  });
+
+  test.each(
+    [[], [""], ["0.9.70-rc.1"], ["0.9.65536"], ["0.9.071"], ["0.0.0"]].map(
+      (versions) => ({ versions }),
+    ),
+  )(
+    "an active revision with unknown or invalid versions $versions is never replaced",
+    async ({ versions }) => {
+      const run = await runStore({
+        submitted: { state: "PENDING_REVIEW", versions },
+        upload: { crxVersion: VERSION, kind: "accepts" },
+      });
+      expect(await rejectionOf(run.outcome)).toMatchObject({
+        message: expect.stringMatching(
+          /no version|Invalid Chrome Web Store version/u,
+        ),
+      });
+      expect(run.calls).toEqual(["GET fetchStatus"]);
+    },
+  );
+
+  test("an active revision missing its version is never replaced", async () => {
+    const run = await runStore({
+      rawStatus: JSON.stringify({
+        submittedItemRevisionStatus: {
+          distributionChannels: [{}],
+          state: "PENDING_REVIEW",
+        },
+      }),
+      upload: { crxVersion: VERSION, kind: "accepts" },
+    });
+    expect(await rejectionOf(run.outcome)).toMatchObject({
+      message: expect.stringContaining("no version"),
+    });
+    expect(run.calls).toEqual(["GET fetchStatus"]);
   });
 
   test("a rejected older submission is not cancelled", async () => {
