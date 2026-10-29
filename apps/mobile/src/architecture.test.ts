@@ -182,6 +182,43 @@ describe("the app's dates", () => {
   });
 });
 
+describe("the app's dependencies", () => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(SOURCE_ROOT, "..", "package.json"), "utf-8"),
+  ) as { dependencies: Record<string, string> };
+
+  /** `@scope/name/sub` and `name/sub` name the packages `@scope/name` and `name`. */
+  const packageOf = (specifier: string): string =>
+    specifier
+      .split("/")
+      .slice(0, specifier.startsWith("@") ? 2 : 1)
+      .join("/");
+
+  test("reads a scoped package's name from a subpath import", () => {
+    expect(packageOf("@stll/ui/matter-colors")).toBe("@stll/ui");
+    expect(packageOf("expo-router/stack")).toBe("expo-router");
+  });
+
+  // The release jobs install only `@stll/mobile...`, so a package that is
+  // linked at the workspace root but missing here type-checks and bundles
+  // locally, then fails the TestFlight archive.
+  test.each(appModules)(
+    "%s imports only packages the app depends on",
+    (name) => {
+      const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+      expect(
+        importsOf(source)
+          .filter(
+            (specifier) =>
+              !specifier.startsWith(".") && !specifier.startsWith("@/"),
+          )
+          .map(packageOf)
+          .filter((pkg) => !Object.hasOwn(manifest.dependencies, pkg)),
+      ).toEqual([]);
+    },
+  );
+});
+
 describe("the app's colours", () => {
   /**
    * Every bundled module but the generated theme, which is where colours
