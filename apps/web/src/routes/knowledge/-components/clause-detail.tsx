@@ -1529,7 +1529,7 @@ const VariantFormDialogBody = ({
         : await idempotentSubmit.run({
             operation: `clauses.${clauseId}.variants.create`,
             body: payload,
-            send: (creationPayload) =>
+            send: async (creationPayload) =>
               api.clauses({ clauseId }).variants.put(creationPayload),
           });
 

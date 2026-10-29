@@ -1156,7 +1156,8 @@ const PlaybookEditorForm = ({
         ? await idempotentSubmit.run({
             operation: "api.playbooks",
             body: payload,
-            send: (creationPayload) => api.playbooks.post(creationPayload),
+            send: async (creationPayload) =>
+              api.playbooks.post(creationPayload),
           })
         : await api
             .playbooks({

@@ -82,7 +82,7 @@ export const NewEntityViewTask = ({
                       : [toSafeId<"user">(assigneeUserId)],
                 }),
           },
-          send: (body) =>
+          send: async (body) =>
             api
               .tasks({
                 workspaceId: toSafeId<"workspace">(selectedWorkspaceId),

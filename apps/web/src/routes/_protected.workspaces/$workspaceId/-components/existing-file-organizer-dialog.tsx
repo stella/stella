@@ -1591,7 +1591,7 @@ const ensureFolders = async ({
           name: segment,
           parentId: parentSafeId,
         } as const,
-        send: (body) =>
+        send: async (body) =>
           api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .put(body),

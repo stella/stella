@@ -23,6 +23,7 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
+  createOrganizationScopedTestDb,
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
@@ -83,7 +84,10 @@ const receiptFixture = ({ openClient }: Fixture) => {
   const otherOrganizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
   const database = markRlsDatabase(db);
-  const scopedDb = createScopedDb(database, [], organizationId, userId);
+  const scopedDb = createOrganizationScopedTestDb(database, {
+    organizationId,
+    userId,
+  });
   const otherScopedDb = createScopedDb(
     database,
     [],
@@ -811,19 +815,40 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
       expect(
         (await claim(undefined, new Date("2026-10-15T09:57:59Z"))).type,
       ).toBe("claimed");
-      let clockReads = 0;
+      let completedDiscoveryTransactions = 0;
+      const discoveryDb = new Proxy(db, {
+        get(target, property, receiver) {
+          if (property !== "transaction") {
+            return Reflect.get(target, property, receiver);
+          }
+          return new Proxy(target.transaction, {
+            apply(transaction, thisArg, args) {
+              const pending: unknown = Reflect.apply(
+                transaction,
+                thisArg,
+                args,
+              );
+              if (!(pending instanceof Promise)) {
+                panic("Discovery must return a transaction promise");
+              }
+              return pending.then((rows: unknown) => {
+                completedDiscoveryTransactions += 1;
+                return rows;
+              });
+            },
+          });
+        },
+      });
       expect(
         await sweepExpiredRequestReceipts({
-          db,
+          db: discoveryDb,
           now: new Date("2026-10-15T10:00:00Z"),
           signal: new AbortController().signal,
           deadline: 100,
-          elapsedMs: () => {
-            clockReads += 1;
-            return clockReads >= 2 ? 100 : 0;
-          },
+          elapsedMs: () => (completedDiscoveryTransactions >= 2 ? 100 : 0),
         }),
       ).toEqual({ deleted: 0, hasMore: true });
+      expect(completedDiscoveryTransactions).toBe(2);
       expect(await claim()).toEqual({ type: "in_progress" });
       expect(
         await sweepExpiredRequestReceipts({

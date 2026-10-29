@@ -96,7 +96,7 @@ export const ListSourceForm = ({
       return unwrapApiResponse(
         await submit.run({
           operation: `list-source-create:${workspaceId}`,
-          send: (creationPayload) =>
+          send: async (creationPayload) =>
             listApi["item-sources"].post(creationPayload),
           body: {
             listId: toSafeId<"legalList">(listId),

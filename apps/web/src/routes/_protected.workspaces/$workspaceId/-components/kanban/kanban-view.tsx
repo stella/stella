@@ -175,7 +175,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             { workspaceId: toSafeId<"workspace">(workspaceId) },
           ]),
           body,
-          send: (creationPayload) =>
+          send: async (creationPayload) =>
             api
               .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .put(creationPayload),
