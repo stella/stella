@@ -212,7 +212,7 @@ const collectPhoneLayoutProblems = (): string[] => {
       continue;
     }
     // WCAG spacing exception: a small target passes when a 24px circle on its
-    // centre touches no other target.
+    // centre touches neither another target nor another small target's circle.
     const centerX = target.rect.left + target.rect.width / 2;
     const centerY = target.rect.top + target.rect.height / 2;
     const crowdedBy = sized.find((other) => {
@@ -231,7 +231,17 @@ const collectPhoneLayoutProblems = (): string[] => {
         other.rect.top,
         Math.min(centerY, other.rect.bottom),
       );
-      return Math.hypot(centerX - nearestX, centerY - nearestY) < minTarget / 2;
+      if (Math.hypot(centerX - nearestX, centerY - nearestY) < minTarget / 2) {
+        return true;
+      }
+      if (other.size.width >= minTarget && other.size.height >= minTarget) {
+        return false;
+      }
+      const otherCenterX = other.rect.left + other.rect.width / 2;
+      const otherCenterY = other.rect.top + other.rect.height / 2;
+      return (
+        Math.hypot(centerX - otherCenterX, centerY - otherCenterY) < minTarget
+      );
     });
     if (crowdedBy !== undefined) {
       small.push(
