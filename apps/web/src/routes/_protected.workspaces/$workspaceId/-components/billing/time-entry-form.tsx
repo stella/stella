@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -22,10 +22,7 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
-import {
-  majorUnitInput,
-  submittedRateCents,
-} from "@/components/billing/amount-input.logic";
+import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { DurationInput } from "@/components/billing/duration-input";
 import {
   DEFAULT_CURRENCY,
@@ -35,7 +32,6 @@ import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -43,6 +39,9 @@ import { queryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
+
+import { deriveTimeEntryPricing } from "./time-entry-pricing.logic";
+import type { TimeEntryPricingSelection } from "./time-entry-pricing.logic";
 
 export type TimeEntryFormValues = {
   matterId: string;
@@ -88,16 +87,20 @@ const timeEntryFormSchema = (
     billable: v.boolean(),
     taskCode: v.string(),
     activityCode: v.string(),
-    rateAtEntry: v.number(),
-    currency: v.string(),
   });
-const initialRateInput = (entry: TimeEntryFormProps["defaultValues"]) =>
+const initialPricingSelection = (
+  entry: TimeEntryFormProps["defaultValues"],
+): TimeEntryPricingSelection =>
   (entry?.rateAtEntry ?? 0) > 0
-    ? majorUnitInput(
-        entry?.rateAtEntry ?? 0,
-        entry?.currency ?? DEFAULT_CURRENCY,
-      )
-    : "";
+    ? {
+        type: "manual",
+        draft: majorUnitInput(
+          entry?.rateAtEntry ?? 0,
+          entry?.currency ?? DEFAULT_CURRENCY,
+        ),
+        currency: entry?.currency ?? DEFAULT_CURRENCY,
+      }
+    : { type: "automatic" };
 
 const initialTimeEntryValues = (
   entry: TimeEntryFormProps["defaultValues"],
@@ -111,8 +114,6 @@ const initialTimeEntryValues = (
   billable: entry?.billable ?? true,
   taskCode: entry?.taskCode ?? "",
   activityCode: entry?.activityCode ?? "",
-  rateAtEntry: entry?.rateAtEntry ?? 0,
-  currency: entry?.currency ?? DEFAULT_CURRENCY,
 });
 
 const loadedItems = <TData, TError>(view: QueryView<TData, TError>) =>
@@ -131,9 +132,12 @@ export const TimeEntryForm = ({
   const {
     form,
     rateOverride,
-    setRateOverride,
+    beginOverride,
     rateInputValue,
     setRateInputValue,
+    setManualCurrency,
+    resetPricing,
+    pricingStatus,
     taskCodesView,
     activityCodesView,
     taskCodes,
@@ -157,15 +161,14 @@ export const TimeEntryForm = ({
       dirty={dirty}
       onDiscard={() => {
         form.reset();
-        setRateOverride((defaultValues?.rateAtEntry ?? 0) > 0);
-        setRateInputValue(initialRateInput(defaultValues));
+        resetPricing();
       }}
       className="flex flex-col gap-4"
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!rateOverride && resolvedView.type !== "items") {
+        if (pricingStatus !== "ready") {
           return;
         }
         detached(form.handleSubmit(), "time-entry-form.submit");
@@ -223,19 +226,15 @@ export const TimeEntryForm = ({
         </div>
       </div>
 
-      <form.Field name="currency">
-        {(field) => (
-          <TimeEntryRateInput
-            currentCurrency={currentCurrency}
-            currentRate={currentRate}
-            rateOverride={rateOverride}
-            rateInputValue={rateInputValue}
-            onCurrencyChange={field.handleChange}
-            setRateOverride={setRateOverride}
-            setRateInputValue={setRateInputValue}
-          />
-        )}
-      </form.Field>
+      <TimeEntryRateInput
+        currentCurrency={currentCurrency}
+        currentRate={currentRate}
+        rateOverride={rateOverride}
+        rateInputValue={rateInputValue}
+        onCurrencyChange={setManualCurrency}
+        beginOverride={beginOverride}
+        setRateInputValue={setRateInputValue}
+      />
 
       <form.Field name="narrative">
         {(field) => (
@@ -310,10 +309,7 @@ export const TimeEntryForm = ({
             {t("common.cancel")}
           </Button>
         )}
-        <Button
-          type="submit"
-          disabled={!rateOverride && resolvedView.type !== "items"}
-        >
+        <Button type="submit" disabled={pricingStatus !== "ready"}>
           {submitLabel ?? t("common.save")}
         </Button>
       </div>
@@ -327,7 +323,7 @@ const TimeEntryRateInput = ({
   rateOverride,
   rateInputValue,
   onCurrencyChange,
-  setRateOverride,
+  beginOverride,
   setRateInputValue,
 }: {
   currentCurrency: string;
@@ -335,7 +331,7 @@ const TimeEntryRateInput = ({
   rateOverride: boolean;
   rateInputValue: string;
   onCurrencyChange: (value: string) => void;
-  setRateOverride: (value: boolean) => void;
+  beginOverride: () => void;
   setRateInputValue: (value: string) => void;
 }) => {
   const t = useTranslations();
@@ -343,10 +339,10 @@ const TimeEntryRateInput = ({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <Label>{t("billing.rates.hourlyRate")}</Label>
-        {!rateOverride && currentRate > 0 && (
+        {!rateOverride && (
           <button
             className="text-muted-foreground text-xs underline"
-            onClick={() => setRateOverride(true)}
+            onClick={beginOverride}
             type="button"
           >
             {t("billing.rates.override")}
@@ -417,7 +413,7 @@ const TimeEntryCodeSelect = ({
         onValueChange={(selected) => onChange(selected ?? "")}
         value={value || null}
       >
-        <SelectTrigger size="sm">
+        <SelectTrigger aria-label={label} size="sm">
           <SelectValue placeholder={label} />
         </SelectTrigger>
         <SelectPopup>
@@ -440,11 +436,9 @@ const useTimeEntryFormState = ({
   contextState = "available",
 }: TimeEntryFormProps) => {
   const t = useTranslations();
-  const [rateOverride, setRateOverride] = useState(
-    () => (defaultValues?.rateAtEntry ?? 0) > 0,
-  );
-  const [rateInputValue, setRateInputValue] = useState(() =>
-    initialRateInput(defaultValues),
+  const queryClient = useQueryClient();
+  const [pricingSelection, setPricingSelection] = useState(() =>
+    initialPricingSelection(defaultValues),
   );
 
   const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
@@ -462,18 +456,25 @@ const useTimeEntryFormState = ({
       submitValues: "raw",
       defaultValues: initialTimeEntryValues(defaultValues),
       onSubmit: async ({ value }) => {
-        // The rate input holds MAJOR units and the currency input sits beside
-        // it, so an overridden rate is scaled here, against the currency the
-        // form actually submits: 100 typed under USD and submitted under JPY is
-        // 100 yen. A rate that was never overridden already carries its rate
-        // table's currency, in that currency's minor units.
+        // Read the exact submitted lookup again: validation may outlive a render.
+        const pricing = deriveTimeEntryPricing({
+          selection: pricingSelection,
+          lookup: queryClient.getQueryState(
+            resolvedRateOptions({
+              workspaceId,
+              userId,
+              date: value.dateWorked,
+              activityCode: value.activityCode,
+            }).queryKey,
+          ),
+        });
+        if (pricing.status !== "ready") {
+          return;
+        }
         await onSubmit({
           ...value,
-          rateAtEntry: submittedRateCents({
-            draft: rateOverride ? rateInputValue : null,
-            currency: value.currency,
-            resolvedRateCents: value.rateAtEntry,
-          }),
+          rateAtEntry: pricing.rateAtEntry,
+          currency: pricing.currency,
         });
       },
     }),
@@ -492,42 +493,52 @@ const useTimeEntryFormState = ({
     }),
   );
   const resolvedView = queryView(resolvedQuery);
-  const resolved = loadedItems(resolvedView);
+  const pricing = deriveTimeEntryPricing({
+    selection: pricingSelection,
+    lookup: resolvedQuery.isPlaceholderData ? undefined : resolvedQuery,
+  });
+  const currentRate = pricing.rateAtEntry;
+  const currentCurrency = pricing.currency;
+  const rateOverride = pricingSelection.type === "manual";
+  const rateInputValue =
+    pricingSelection.type === "manual" ? pricingSelection.draft : "";
+  const initialSelection = initialPricingSelection(defaultValues);
+  const pricingDirty =
+    pricingSelection.type !== initialSelection.type ||
+    (pricingSelection.type === "manual" &&
+      initialSelection.type === "manual" &&
+      (pricingSelection.draft !== initialSelection.draft ||
+        pricingSelection.currency !== initialSelection.currency));
 
-  // Resolved rates are automatic defaults, not unsaved user changes.
-  // Sync the external form store until the user overrides the rate.
-  useExternalSyncEffect(() => {
-    if (rateOverride) {
-      return;
-    }
-    if (resolved && resolved.hourlyRate !== null && resolved.currency) {
-      form.setFieldValue("rateAtEntry", resolved.hourlyRate);
-      form.setFieldValue("currency", resolved.currency);
-    }
-  }, [resolved, rateOverride, form]);
-
-  const currentRate = useSelector(form.store, (s) => s.values.rateAtEntry);
   const narrativeLanguage = useSelector(
     form.store,
     (s) => s.values.narrativeLanguage,
   );
-  const currentCurrency = useSelector(form.store, (s) => s.values.currency);
   const { formErrors, dirty } = useSelector(form.store, (state) => ({
     formErrors: toFormErrors(state.fieldMeta),
     dirty:
-      Object.entries(state.fieldMeta).some(
-        ([name, meta]) =>
-          !meta.isDefaultValue &&
-          (rateOverride || (name !== "rateAtEntry" && name !== "currency")),
-      ) || rateInputValue !== initialRateInput(defaultValues),
+      Object.values(state.fieldMeta).some((meta) => !meta.isDefaultValue) ||
+      pricingDirty,
   }));
 
   return {
     form,
     rateOverride,
-    setRateOverride,
+    beginOverride: () =>
+      setPricingSelection({
+        type: "manual",
+        currency: currentCurrency,
+        draft:
+          currentRate > 0 ? majorUnitInput(currentRate, currentCurrency) : "",
+      }),
     rateInputValue,
-    setRateInputValue,
+    setRateInputValue: (draft: string) =>
+      setPricingSelection({ type: "manual", currency: currentCurrency, draft }),
+    setManualCurrency: (currency: string) =>
+      setPricingSelection({ type: "manual", currency, draft: rateInputValue }),
+    resetPricing: () =>
+      setPricingSelection(initialPricingSelection(defaultValues)),
+    pricingStatus: pricing.status,
     taskCodesView,
     activityCodesView,
     taskCodes,
