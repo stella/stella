@@ -9,7 +9,8 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
-const { AuditResourceLabel } = await import("./audit-logs");
+const { AuditActionSentence, AuditResourceLabel } =
+  await import("./audit-logs");
 
 afterEach(cleanup);
 afterAll(async () => await unregisterDomEnvironment());
@@ -39,4 +40,23 @@ test("the truncated resource id exposes its full labelled value", () => {
   expect(
     view.getByText(messages.settings.organization.auditLogsUnknownResource),
   ).not.toBeNull();
+});
+
+test("an action the log does not recognise stays visible", () => {
+  const resource = {
+    kind: "contact",
+    id: "resource_1234567890",
+    name: "Acme",
+    available: true,
+  } as const satisfies AuditResource;
+  const view = render(
+    <IntlProvider locale="en" messages={messages}>
+      <AuditActionSentence
+        action="contact.retired_action"
+        resource={resource}
+      />
+    </IntlProvider>,
+  );
+
+  expect(view.getByText("contact.retired_action")).not.toBeNull();
 });

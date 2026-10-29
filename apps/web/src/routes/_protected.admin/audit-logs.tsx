@@ -464,7 +464,7 @@ function AuditLogsTableBody({
   );
 }
 
-function AuditActionSentence({
+export function AuditActionSentence({
   action,
   resource,
 }: {
@@ -474,9 +474,16 @@ function AuditActionSentence({
   const t = useTranslations();
   const label = useAuditResourceLabel(action, resource);
   if (!isAuditAction(action)) {
-    return t("settings.organization.auditLogsSentenceActivity", {
-      resource: label,
-    });
+    // Keep the recorded action visible so retired or newer actions stay
+    // distinguishable in the log.
+    return (
+      <>
+        {t("settings.organization.auditLogsSentenceActivity", {
+          resource: label,
+        })}{" "}
+        <bdi className="text-muted-foreground font-mono">{action}</bdi>
+      </>
+    );
   }
   return t(AUDIT_ACTION_PROJECTIONS[action], { resource: label });
 }
