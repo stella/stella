@@ -69,7 +69,9 @@ test("keeps an active override reachable when UI and document languages match", 
         documentLanguage="en-GB"
         value="fr"
         disabled={false}
-        onChange={(value) => changed.push(value)}
+        onChange={(value) => {
+          changed.push(value);
+        }}
       />
     </IntlProvider>,
   );
