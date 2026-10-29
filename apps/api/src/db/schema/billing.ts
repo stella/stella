@@ -1441,6 +1441,14 @@ export const invoiceSends = p.pgTable(
   },
 );
 
+/** Request writers complete delivery or revoke; the token gate alone stamps access. */
+export const INVOICE_SEND_UPDATE_COLUMNS = [
+  invoiceSends.deliveryStatus,
+  invoiceSends.failedRecipients,
+  invoiceSends.revokedAt,
+  invoiceSends.revokedByUserId,
+] as const;
+
 export const INVOICE_PAYMENT_ORIGIN = {
   LEGACY: "legacy",
   RECORDED: "recorded",

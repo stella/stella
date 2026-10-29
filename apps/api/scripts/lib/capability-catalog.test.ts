@@ -32,6 +32,7 @@ import {
   resolveHandlerKind,
   resolveScope,
   returnsInlineFileResponse,
+  reviewedInvoiceCleanupEndpoints,
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
@@ -41,6 +42,116 @@ import {
   serializeDispatchModule,
   writePrimitivesImportedBy,
 } from "./capability-catalog";
+
+const cleanupFixture = (config: Record<string, unknown> = {}) => {
+  const definition = {
+    config: { permissions: { invoice: ["update"] }, ...config },
+    access: "workspace",
+    run: async () => ({}),
+  } satisfies RouteDefinition;
+  const route = {
+    definition,
+    method: "GET",
+    path: "/invoices/:workspaceId/:invoiceId/sends",
+    middleware: [],
+  } as const satisfies RouteEntry;
+  const endpoint = {
+    file: "apps/api/src/handlers/invoices/sends/list.ts",
+    definition,
+    config: definition.config,
+  };
+  return { route, endpoint };
+};
+
+describe("reviewed invoice cleanup discovery", () => {
+  test("derives exactly the exported group's handlers by definition identity", () => {
+    const fixture = cleanupFixture();
+    const neighbor = cleanupFixture();
+    expect(
+      reviewedInvoiceCleanupEndpoints({
+        routes: [fixture.route],
+        endpoints: [
+          fixture.endpoint,
+          {
+            ...neighbor.endpoint,
+            file: "apps/api/src/handlers/invoices/sends/revoke.ts",
+          },
+        ],
+        classify: () => ({ kind: "other" }),
+      }).map(({ file }) => file),
+    ).toEqual(["apps/api/src/handlers/invoices/sends/list.ts"]);
+  });
+
+  test.each([
+    { permissions: { workspace: ["read"] } },
+    { permissions: { invoice: ["read"] } },
+    { permissions: { invoice: ["update", "delete"] } },
+    { permissions: { invoice: ["update"], workspace: ["read"] } },
+    { featureAccess: { featureId: "time-billing", type: "required" } },
+  ])("rejects a cleanup contract with %j", (config) => {
+    const fixture = cleanupFixture(config);
+    expect(() =>
+      reviewedInvoiceCleanupEndpoints({
+        routes: [fixture.route],
+        endpoints: [fixture.endpoint],
+        classify: () => ({ kind: "other" }),
+      }),
+    ).toThrow("Invoice cleanup requires invoice:update and no feature gates");
+  });
+
+  test("rejects a public cleanup definition", () => {
+    const fixture = cleanupFixture();
+    const definition = {
+      ...fixture.route.definition,
+      access: "public",
+    } as const;
+    expect(() =>
+      reviewedInvoiceCleanupEndpoints({
+        routes: [{ ...fixture.route, definition }],
+        endpoints: [{ ...fixture.endpoint, definition }],
+        classify: () => ({ kind: "other" }),
+      }),
+    ).toThrow("Invoice cleanup requires invoice:update and no feature gates");
+  });
+
+  test.each(["deployment-feature", "feature-access"] as const)(
+    "rejects a %s middleware gate",
+    (kind) => {
+      const fixture = cleanupFixture();
+      const gate = async () => new Response();
+      expect(() =>
+        reviewedInvoiceCleanupEndpoints({
+          routes: [{ ...fixture.route, middleware: [gate] }],
+          endpoints: [fixture.endpoint],
+          classify: () =>
+            kind === "deployment-feature"
+              ? { kind, flag: "FEATURE_TIME_BILLING" }
+              : { kind, featureId: "time-billing" },
+        }),
+      ).toThrow("Invoice cleanup requires invoice:update and no feature gates");
+    },
+  );
+
+  test.each(["missing", "ambiguous"] as const)(
+    "rejects %s discovery identities",
+    (kind) => {
+      const fixture = cleanupFixture();
+      const endpoints =
+        kind === "missing"
+          ? []
+          : [fixture.endpoint, { ...fixture.endpoint, file: "other.ts" }];
+      expect(() =>
+        reviewedInvoiceCleanupEndpoints({
+          routes: [fixture.route],
+          endpoints,
+          classify: () => ({ kind: "other" }),
+        }),
+      ).toThrow(
+        "Every reviewed invoice cleanup route must identify exactly one discovered handler",
+      );
+    },
+  );
+});
 
 describe("deriveCapabilityId", () => {
   test("joins the handler-relative path with dots for a default export", () => {

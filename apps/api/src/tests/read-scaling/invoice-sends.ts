@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -38,6 +38,7 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 const SENDS_PER_INVOICE = 3;
 // Exercise the real handler operation and SQL; only the email provider is replaced.
 const measuredSendInvoice = createSendInvoice({
+  admitEmail: async () => Result.ok(undefined),
   deliver: async () => {
     await Promise.resolve();
   },

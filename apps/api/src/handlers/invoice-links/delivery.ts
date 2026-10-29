@@ -60,11 +60,7 @@ export const deliverInvoiceLink = async <
         return panic("Unhandled invoice link delivery kind");
     }
   })();
-  const live = await caller.db.scoped({
-    organizationId: caller.organizationId,
-    userId: null,
-    workspaceIds: caller.workspaceIds,
-  })(
+  const live = await caller.scopedDb(
     async (tx) =>
       await recordGatedAuditEvent({
         tx,

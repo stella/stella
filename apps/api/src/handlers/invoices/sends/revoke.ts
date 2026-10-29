@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { invoiceSends } from "@/api/db/schema";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { revokeLiveInvoiceSends } from "@/api/lib/billing/invoice-send-revocation";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,7 +17,6 @@ const config = {
     "Revoke the link an invoice email carried, so it no longer opens the invoice. Revoking twice keeps the first revocation; send the invoice again for a new link.",
   permissions: { invoice: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: invoiceRealtimeUpdates,
   mcp: {
     type: "capability",
@@ -32,7 +31,14 @@ const config = {
 
 const revokeInvoiceSend = createSafeHandler(
   config,
-  async function* ({ safeDb, user, workspaceId, params, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    user,
+    session,
+    workspaceId,
+    params,
+    recordAuditEvent,
+  }) {
     const revoked = yield* Result.await(
       safeDb(async (tx) => {
         const invoice = await tx.query.invoices.findFirst({
@@ -46,25 +52,15 @@ const revokeInvoiceSend = createSafeHandler(
           return null;
         }
         const now = new Date();
-        const [updated] = await tx
-          .update(invoiceSends)
-          .set({ revokedAt: now, revokedByUserId: user.id })
-          .where(
-            and(
-              eq(invoiceSends.id, params.sendId),
-              eq(invoiceSends.invoiceId, invoice.id),
-              isNull(invoiceSends.revokedAt),
-            ),
-          )
-          .returning({ revokedAt: invoiceSends.revokedAt });
+        const [updated] = await revokeLiveInvoiceSends(tx, {
+          organizationId: session.activeOrganizationId,
+          invoiceId: invoice.id,
+          actorUserId: user.id,
+          now,
+          recordAuditEvent,
+          target: { type: "send", sendId: params.sendId },
+        });
         if (updated?.revokedAt) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-            resourceId: invoice.id,
-            changes: { linkRevoked: { old: false, new: true } },
-            metadata: { invoiceSendId: params.sendId },
-          });
           return updated.revokedAt;
         }
         const [existing] = await tx

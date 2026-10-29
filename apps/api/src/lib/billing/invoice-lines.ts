@@ -171,7 +171,8 @@ type TimeEntryForLine = {
   id: SafeId<"timeEntry">;
   billedMinutes: number;
   rateAtEntry: CentsAmount;
-  narrative: string;
+  /** Token-authorized document reads carry only invoiceNarrative. */
+  narrative?: string;
   invoiceNarrative: string | null;
   noCharge: boolean;
 };

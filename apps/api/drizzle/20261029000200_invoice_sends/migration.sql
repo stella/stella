@@ -24,7 +24,7 @@ CREATE TABLE "invoice_sends" (
 	CONSTRAINT "invoice_sends_delivery_status_check" CHECK ("invoice_sends"."delivery_status" in ('pending', 'delivered', 'partial', 'failed')),
 	CONSTRAINT "invoice_sends_language_check" CHECK ("invoice_sends"."language" IN ('ar', 'cs', 'de', 'en', 'es', 'et', 'fr', 'hu', 'lt', 'lv', 'pl', 'pt-BR', 'sk')),
 	CONSTRAINT "invoice_sends_recipients_check" CHECK (cardinality("invoice_sends"."recipients") BETWEEN 1 AND 10 AND "invoice_sends"."failed_recipients" <@ "invoice_sends"."recipients"),
-	CONSTRAINT "invoice_sends_message_check" CHECK ("invoice_sends"."message" IS NULL OR length("invoice_sends"."message") BETWEEN 1 AND 2000),
+	CONSTRAINT "invoice_sends_message_check" CHECK ("invoice_sends"."message" IS NULL OR length("invoice_sends"."message") BETWEEN 1 AND 1000),
 	CONSTRAINT "invoice_sends_revoked_check" CHECK ("invoice_sends"."revoked_by_user_id" IS NULL OR "invoice_sends"."revoked_at" IS NOT NULL)
 );
 --> statement-breakpoint
@@ -46,7 +46,7 @@ ALTER TABLE "invoice_sends" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 -- Forced, so the owner login is held to policies too. It only reads a send,
 -- inside the token lookup below; it never writes one.
 ALTER TABLE "invoice_sends" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE ON TABLE "invoice_sends" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ("delivery_status", "failed_recipients", "revoked_at", "revoked_by_user_id") ON TABLE "invoice_sends" TO stella;--> statement-breakpoint
 CREATE POLICY "invoice_sends_organization_select" ON "invoice_sends" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id =
   (SELECT current_setting(
     'app.organization_id', true
@@ -77,13 +77,13 @@ CREATE POLICY "invoice_sends_owner_select" ON "invoice_sends" AS PERMISSIVE FOR 
 -- tenant's ids and the invoice's matters, never a send's contents.
 -- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked and granted to the app role only; it writes nothing and returns only the tenant scope of the one live invoice link whose token hash the caller holds
 CREATE FUNCTION "invoice_link_scope"(p_token_hash text)
-RETURNS TABLE (send_id uuid, organization_id text, user_id text, invoice_id uuid, workspace_ids uuid[], expires_at timestamptz)
+RETURNS TABLE (send_id uuid, organization_id text, invoice_id uuid, workspace_ids uuid[], expires_at timestamptz)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-  SELECT s.id, s.organization_id::text, s.sent_by_user_id, s.invoice_id,
+  SELECT s.id, s.organization_id::text, s.invoice_id,
          ARRAY(
            SELECT DISTINCT matter.workspace_id
              FROM (
@@ -155,10 +155,10 @@ GRANT EXECUTE ON FUNCTION "invoice_link_lines"(text) TO stella;
 --> statement-breakpoint
 -- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; the live token hash authorizes only this invoice's document projection
 CREATE FUNCTION "invoice_link_time"(p_token_hash text)
-RETURNS TABLE ("id" uuid, "workspace_id" uuid, "date_worked" date, "billed_minutes" integer, "rate_at_entry" bigint, "currency" varchar(3), "narrative" text, "invoice_narrative" text, "no_charge" boolean, "status" text, "invoice_attachment" text, "user_id" text, "task_code" varchar(20), "activity_code" varchar(20))
+RETURNS TABLE ("id" uuid, "workspace_id" uuid, "date_worked" date, "billed_minutes" integer, "rate_at_entry" bigint, "invoice_narrative" text, "no_charge" boolean, "invoice_attachment" text)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $$ SELECT r."id", r."workspace_id", r."date_worked", r."billed_minutes", r."rate_at_entry", r."currency", r."narrative", r."invoice_narrative", r."no_charge", r."status", r."invoice_attachment", r."user_id", r."task_code", r."activity_code" FROM public.time_entries r JOIN public.invoice_link_scope(p_token_hash) s ON r.invoice_id = s.invoice_id AND r.organization_id = s.organization_id $$;
+AS $$ SELECT r."id", r."workspace_id", r."date_worked", r."billed_minutes", r."rate_at_entry", r."invoice_narrative", r."no_charge", r."invoice_attachment" FROM public.time_entries r JOIN public.invoice_link_scope(p_token_hash) s ON r.invoice_id = s.invoice_id AND r.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_time"(text) FROM PUBLIC;
 --> statement-breakpoint
@@ -264,3 +264,38 @@ $$;
 REVOKE ALL ON FUNCTION "invoice_link_settlement"(text) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION "invoice_link_settlement"(text) TO stella;
+
+--> statement-breakpoint
+-- Preserve the credential and its target after insertion. Only the table
+-- owner running the live-token gate may stamp the first view; revocation
+-- cannot be removed or moved by any writer, including the owner.
+CREATE FUNCTION "invoice_sends_guard_update"()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.token_hash IS DISTINCT FROM NEW.token_hash
+      OR OLD.invoice_id IS DISTINCT FROM NEW.invoice_id
+      OR OLD.organization_id IS DISTINCT FROM NEW.organization_id
+      OR OLD.expires_at IS DISTINCT FROM NEW.expires_at THEN
+      RAISE EXCEPTION 'Invoice send identity and expiry are immutable' USING ERRCODE = '42501';
+    END IF;
+    IF OLD.revoked_at IS NOT NULL AND OLD.revoked_at IS DISTINCT FROM NEW.revoked_at THEN
+      RAISE EXCEPTION 'Invoice send revocation is immutable' USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  IF ((TG_OP = 'INSERT' AND NEW.first_viewed_at IS NOT NULL)
+      OR (TG_OP = 'UPDATE' AND OLD.first_viewed_at IS DISTINCT FROM NEW.first_viewed_at))
+    AND current_user <> (SELECT pg_catalog.pg_get_userbyid(relowner)
+      FROM pg_catalog.pg_class WHERE oid = 'public.invoice_sends'::regclass) THEN
+    RAISE EXCEPTION 'Invoice send access is recorded by its owner' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION "invoice_sends_guard_update"() FROM PUBLIC;
+--> statement-breakpoint
+CREATE TRIGGER "invoice_sends_immutable"
+BEFORE INSERT OR UPDATE ON "invoice_sends"
+FOR EACH ROW EXECUTE FUNCTION "invoice_sends_guard_update"();

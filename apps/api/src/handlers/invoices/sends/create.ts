@@ -9,7 +9,12 @@ import { Temporal } from "@stll/time";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
-import { INVOICE_STATUS, invoices, invoiceSends } from "@/api/db/schema";
+import {
+  INVOICE_STATUS,
+  INVOICE_STATUSES,
+  invoices,
+  invoiceSends,
+} from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { sendFinalizedInvoice } from "@/api/handlers/invoices/transition";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -33,6 +38,8 @@ import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-he
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { completeInvoiceSendDelivery } from "@/api/lib/billing/invoice-send-delivery";
 import type { InvoiceSendDeliveryOutcome } from "@/api/lib/billing/invoice-send-delivery";
+import { revokeLiveInvoiceSends } from "@/api/lib/billing/invoice-send-revocation";
+import { readInvoiceEmailSender } from "@/api/lib/billing/invoice-send-sender";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -50,6 +57,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+import { admitInvoiceEmail } from "@/api/lib/rate-limit/invoice-email-admission";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /** Issued documents only: a draft has no number, a void one is not owed. */
@@ -97,6 +105,7 @@ type InvoiceLinkDelivery = (message: InvoiceLinkMessage) => Promise<void>;
 type SendInvoiceDependencies = {
   deliver: InvoiceLinkDelivery;
   isDeliveryConfigured: () => boolean;
+  admitEmail: typeof admitInvoiceEmail;
 };
 
 /**
@@ -197,7 +206,6 @@ type PrepareSendOptions = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  userEmail: string;
   recipients: string[];
   message: string | null;
   tokenHash: string;
@@ -227,34 +235,6 @@ const refuseUnsendable = async (
         message: `A ${current.status} invoice cannot be sent`,
         hint: "Finalize the draft first; a void invoice is never sent.",
       });
-};
-
-/** Who the email names and who receives the replies. */
-const readSender = async (
-  tx: Transaction,
-  options: PrepareSendOptions,
-  sellerProfileId: SafeId<"sellerProfile"> | null,
-) => {
-  const seller =
-    sellerProfileId === null
-      ? undefined
-      : await tx.query.sellerProfiles.findFirst({
-          where: {
-            id: { eq: sellerProfileId },
-            organizationId: { eq: options.organizationId },
-          },
-          columns: { legalName: true, email: true },
-        });
-  const [firm] = await tx
-    .select({ name: organization.name })
-    .from(organization)
-    .where(eq(organization.id, options.organizationId));
-  return {
-    firmName: seller?.legalName ?? firm?.name ?? "",
-    // The seller profile's address when it has one, else the sender's own:
-    // a reply always reaches the firm, never the platform.
-    replyTo: seller?.email ?? options.userEmail,
-  };
 };
 
 /**
@@ -304,11 +284,15 @@ export const prepareInvoiceSend = async (
   if (limit !== null) {
     return Result.err(limit);
   }
-  const { firmName, replyTo } = await readSender(
-    tx,
-    options,
-    locked.sellerProfileId,
-  );
+  const sender = await readInvoiceEmailSender(tx, {
+    organizationId: options.organizationId,
+    userId: options.userId,
+    sellerProfileId: locked.sellerProfileId,
+  });
+  if (sender.isErr()) {
+    return Result.err(sender.error);
+  }
+  const { firmName, replyTo } = sender.value;
   const expiresAt = invoiceLinkExpiresAt(options.now);
   const sendId = createSafeId<"invoiceSend">();
   await tx.insert(invoiceSends).values({
@@ -440,25 +424,25 @@ const recordDelivery = async (
   tx: Transaction,
   options: RecordDeliveryOptions,
 ): Promise<Result<{ status: InvoiceStatus }, HandlerError>> => {
-  if (options.deliveryStatus === "failed") {
-    const completed = await completeInvoiceSendDelivery(tx, {
-      sendId: options.prepared.sendId,
-      invoiceId: options.invoiceId,
-      deliveryStatus: options.deliveryStatus,
-      failedRecipients: options.failed,
-      now: options.now,
-      recordAuditEvent: options.recordAuditEvent,
-    });
-    return completed.map(() => ({ status: options.prepared.invoice.status }));
+  const current = await lockInvoiceInStatus(tx, {
+    invoiceId: options.invoiceId,
+    workspaceId: options.workspaceId,
+    status: INVOICE_STATUSES,
+    matterLocks: { type: "acquire" },
+  });
+  if (current === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "The invoice disappeared while its email was being delivered",
+      }),
+    );
   }
-  // A finalized invoice becomes sent through the send transition, which locks
-  // the invoice row before anything else is written.
-  const [current] = await tx
-    .select({ status: invoices.status })
-    .from(invoices)
-    .where(eq(invoices.id, options.invoiceId));
+  // Completion observes the status only after acquiring the invoice owner’s
+  // locks. A different send may already have performed the single send transition.
   const sent =
-    current?.status === INVOICE_STATUS.FINALIZED
+    current.status === INVOICE_STATUS.FINALIZED &&
+    options.deliveryStatus !== "failed"
       ? await sendFinalizedInvoice(tx, {
           actorUserId: options.actorUserId,
           invoiceId: options.invoiceId,
@@ -470,6 +454,26 @@ const recordDelivery = async (
       : null;
   if (sent?.isErr() === true) {
     return Result.err(sent.error);
+  }
+  switch (current.status) {
+    case INVOICE_STATUS.DRAFT:
+    case INVOICE_STATUS.VOID:
+      await revokeLiveInvoiceSends(tx, {
+        organizationId: options.organizationId,
+        invoiceId: options.invoiceId,
+        actorUserId: options.actorUserId,
+        now: options.now,
+        recordAuditEvent: options.recordAuditEvent,
+        target: { type: "send", sendId: options.prepared.sendId },
+      });
+      break;
+    case INVOICE_STATUS.FINALIZED:
+    case INVOICE_STATUS.SENT:
+    case INVOICE_STATUS.PAID:
+      break;
+    default:
+      current.status satisfies never;
+      return panic("Unhandled invoice status during email completion");
   }
   const completed = await completeInvoiceSendDelivery(tx, {
     sendId: options.prepared.sendId,
@@ -488,14 +492,16 @@ const recordDelivery = async (
     .from(invoices)
     .where(eq(invoices.id, options.invoiceId));
   return Result.ok({
-    status: after?.status ?? options.prepared.invoice.status,
+    status:
+      after?.status ??
+      panic("A locked invoice disappeared during email completion"),
   });
 };
 
 const config = {
   contract: "patch",
   description:
-    "Email an issued invoice to the given addresses as a secure stella link to view and download it; replies go to the seller profile's email. A finalized invoice becomes sent. Refused for drafts and void invoices. Each send makes a new link; see invoices.sends.list.",
+    "Email an issued invoice to the given addresses as a secure stella link to view and download it. Replies go to the seller email when it belongs to a verified current organization member, otherwise the sender's verified email. A finalized invoice becomes sent. Refused for drafts and void invoices. Each send makes a new link; see invoices.sends.list.",
   permissions: { invoice: ["update"] },
   // It emails people outside stella, so demo and review accounts cannot.
   accountAccess: ACCOUNT_ACCESS.standard,
@@ -514,6 +520,7 @@ const config = {
 export const createSendInvoice = ({
   deliver = deliverInvoiceLink,
   isDeliveryConfigured = isInvoiceDeliveryConfigured,
+  admitEmail = admitInvoiceEmail,
 }: Partial<SendInvoiceDependencies> = {}) =>
   createSafeHandler(
     config,
@@ -540,6 +547,38 @@ export const createSendInvoice = ({
         );
       }
       const now = new Date();
+      const firm = yield* Result.await(
+        safeDb(async (tx) =>
+          (
+            await tx
+              .select({ createdAt: organization.createdAt })
+              .from(organization)
+              .where(eq(organization.id, session.activeOrganizationId))
+              .limit(1)
+          ).at(0),
+        ),
+      );
+      if (firm === undefined) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 404,
+              message: "Organization not found",
+            }),
+            "not_found",
+          ),
+        );
+      }
+      // Shared counter I/O finishes before acquiring any database aggregate lock.
+      yield* Result.await(
+        admitEmail({
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          organizationCreatedAt: firm.createdAt,
+          recipientCount: body.recipients.length,
+          now,
+        }),
+      );
       const token = createInvoiceLinkToken();
       const message =
         body.message === undefined || body.message === "" ? null : body.message;
@@ -552,7 +591,6 @@ export const createSendInvoice = ({
               workspaceId,
               organizationId: session.activeOrganizationId,
               userId: user.id,
-              userEmail: user.email,
               recipients: body.recipients,
               message,
               tokenHash: hashInvoiceLinkToken(token),

@@ -257,7 +257,7 @@ type InvoicePaymentScope = {
 
 type InvoiceSettlementScope = Pick<
   InvoicePaymentScope,
-  "invoiceId" | "now" | "recordAuditEvent"
+  "invoiceId" | "now" | "recordAuditEvent" | "organizationId" | "userId"
 >;
 
 type InvoicePaymentInput = {
@@ -336,6 +336,12 @@ const moveInvoiceStatus = async (
     return await transition({
       tx,
       spec: TRANSITIONS.invoices,
+      effectContext: {
+        organizationId: scope.organizationId,
+        actorUserId: scope.userId,
+        now: scope.now,
+        recordAuditEvent: scope.recordAuditEvent,
+      },
       id: scope.invoiceId,
       options: {
         from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT],
@@ -355,6 +361,12 @@ const moveInvoiceStatus = async (
     return await transition({
       tx,
       spec: TRANSITIONS.invoices,
+      effectContext: {
+        organizationId: scope.organizationId,
+        actorUserId: scope.userId,
+        now: scope.now,
+        recordAuditEvent: scope.recordAuditEvent,
+      },
       id: scope.invoiceId,
       options: {
         from: [INVOICE_STATUS.PAID],
@@ -368,6 +380,12 @@ const moveInvoiceStatus = async (
     return await transition({
       tx,
       spec: TRANSITIONS.invoices,
+      effectContext: {
+        organizationId: scope.organizationId,
+        actorUserId: scope.userId,
+        now: scope.now,
+        recordAuditEvent: scope.recordAuditEvent,
+      },
       id: scope.invoiceId,
       options: {
         from: [INVOICE_STATUS.PAID],

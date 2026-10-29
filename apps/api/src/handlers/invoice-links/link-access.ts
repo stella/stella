@@ -28,7 +28,7 @@ export const linkUnavailable = () =>
   });
 
 export type InvoiceLinkCaller = InvoiceLinkScope & {
-  db: TokenScopedDatabase;
+  scopedDb: ReturnType<TokenScopedDatabase["scoped"]>;
 };
 
 /** The link in the body proves the caller; it is checked before any schema. */
@@ -61,7 +61,14 @@ export const verifyInvoiceLinkCaller =
         const found = await resolveInvoiceLink(db, token);
         return found === null
           ? Result.err(linkUnavailable())
-          : Result.ok({ ...found, db });
+          : Result.ok({
+              ...found,
+              scopedDb: db.scoped({
+                organizationId: found.organizationId,
+                userId: null,
+                workspaceIds: [],
+              }),
+            });
       },
       catch: (cause) =>
         classifyFailure(
@@ -89,7 +96,7 @@ export const invoiceLinkAuditBindings = (
 ) => ({
   organizationId: caller.organizationId,
   workspaceId,
-  userId: caller.userId ?? "invoice_link",
+  userId: "invoice_link",
   execution: {
     performer: {
       type: "service" as const,

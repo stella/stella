@@ -28,10 +28,6 @@ import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
 import { readInvoiceLinkScope } from "@/api/lib/billing/invoice-links";
 import { invoicePaymentAmounts } from "@/api/lib/billing/invoice-payments";
 import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
-import {
-  selectTimekeeperNames,
-  timekeeperIdsOf,
-} from "@/api/lib/billing/timekeeper-names";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
@@ -96,15 +92,9 @@ export const loadLinkedInvoiceData = async (
         dateWorked: timeEntries.dateWorked,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
-        currency: timeEntries.currency,
-        narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
         noCharge: timeEntries.noCharge,
-        status: timeEntries.status,
         invoiceAttachment: timeEntries.invoiceAttachment,
-        userId: timeEntries.userId,
-        taskCode: timeEntries.taskCode,
-        activityCode: timeEntries.activityCode,
       })
       .from(sql`public.invoice_link_time(${caller.tokenHash}) AS time_entries`)
       .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)),
@@ -176,12 +166,7 @@ export const loadLinkedInvoiceData = async (
         matterMap.get(line.workspaceId) ??
         panic("Linked line matter disappeared"),
     })),
-    timeEntries: time.map((entry) => ({
-      ...entry,
-      workItemId: null,
-      workItemReference: null,
-      workItem: null,
-    })),
+    timeEntries: time,
     expenses: linkedExpenses.map((expense) => ({
       ...expense,
       matterId: null,
@@ -189,13 +174,6 @@ export const loadLinkedInvoiceData = async (
       matter: null,
     })),
   };
-  const timekeepers =
-    time.length === 0
-      ? []
-      : await selectTimekeeperNames(tx, {
-          organizationId: caller.organizationId,
-          userIds: timekeeperIdsOf(time),
-        });
   const timeZone = await readOrganizationTimeZone(tx, caller.organizationId);
   return {
     outstandingAmount: invoicePaymentAmounts({
@@ -231,7 +209,6 @@ export const loadLinkedInvoiceData = async (
           { number: row.invoiceNumber, issueDate: row.invoiceDate },
         ]),
       ),
-      timekeepers: new Map(timekeepers.map((user) => [user.id, user.name])),
       timeZone,
     },
   };

@@ -18,11 +18,11 @@ import listInvoiceSends from "@/api/handlers/invoices/sends/list";
 import revokeInvoiceSend from "@/api/handlers/invoices/sends/revoke";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
-import { routes } from "@/api/http/route";
+import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const invoicesRoute = routes(
+const gatedInvoicesRoute = routes(
   {
     "/": { GET: readInvoices, PUT: createInvoice },
     "/prefill": { GET: prefillInvoice },
@@ -40,8 +40,7 @@ export const invoicesRoute = routes(
       DELETE: deleteInvoiceLine,
     },
     "/:invoiceId/pdf": { POST: exportInvoicePdf },
-    "/:invoiceId/sends": { GET: listInvoiceSends, POST: sendInvoice },
-    "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
+    "/:invoiceId/sends": { POST: sendInvoice },
     "/:invoiceId/payments": {
       GET: listInvoicePayments,
       POST: recordInvoicePayment,
@@ -56,3 +55,17 @@ export const invoicesRoute = routes(
     ],
   },
 );
+
+/** Historical link authority remains manageable after billing access is removed. */
+export const invoiceSendCleanupRoute = routes(
+  {
+    "/:invoiceId/sends": { GET: listInvoiceSends },
+    "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
+  },
+  { prefix: "/invoices/:workspaceId" },
+);
+
+export const invoicesRoute = mount([
+  gatedInvoicesRoute,
+  invoiceSendCleanupRoute,
+]);

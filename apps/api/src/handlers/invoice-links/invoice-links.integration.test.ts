@@ -8,9 +8,11 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import * as v from "valibot";
 
-import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import { INVOICE_LINE_SOURCE, INVOICE_SEND_LIMITS } from "@stll/api-contract";
 import { buildCzechQrPaymentPayload, variableSymbolOf } from "@stll/invoicing";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -24,6 +26,7 @@ import {
   invoices,
   invoiceSends,
   sellerProfiles,
+  workspaces,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import {
@@ -42,10 +45,17 @@ import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
 import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
 import listInvoiceSends from "@/api/handlers/invoices/sends/list";
 import revokeInvoiceSend from "@/api/handlers/invoices/sends/revoke";
+import transitionInvoice from "@/api/handlers/invoices/transition";
+import updateInvoice from "@/api/handlers/invoices/update";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { INVOICE_DOCUMENT_PROJECTION } from "@/api/lib/billing/invoice-detail";
 import {
@@ -63,9 +73,15 @@ import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-he
 import { qrSvg } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS as DATABASE_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  transition as transitionStatus,
+  transitionBatch,
+} from "@/api/lib/db/transitions";
 import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createInvoiceEmailAdmission } from "@/api/lib/rate-limit/invoice-email-admission";
 import {
   createInvoiceLinkTokenAdmission,
   INVOICE_LINK_TOKEN_BUDGET,
@@ -111,6 +127,7 @@ const seededSellerIds: SafeId<"sellerProfile">[] = [];
 const delivered: InvoiceLinkMessage[] = [];
 /** Addresses the fake transport refuses. */
 const refused = new Set<string>();
+const verifiedSellerUserId = mintAuthProviderId<"user">();
 
 const sendInvoice = createSendInvoice({
   deliver: async (message) => {
@@ -120,6 +137,7 @@ const sendInvoice = createSendInvoice({
     delivered.push(message);
   },
   isDeliveryConfigured: () => true,
+  admitEmail: async () => Result.ok(undefined),
 });
 
 const PDF_BYTES = new TextEncoder().encode("%PDF-1.7 invoice");
@@ -202,6 +220,19 @@ beforeAll(async () => {
     .update(authUser)
     .set({ emailVerified: true })
     .where(inArray(authUser.id, [ids.userA1, ids.userB1]));
+  await testDb.insert(authUser).values({
+    id: verifiedSellerUserId,
+    name: "Verified billing contact",
+    email: "billing@firm.example.test",
+    emailVerified: true,
+  });
+  await testDb.insert(member).values({
+    id: mintAuthProviderIdValue(),
+    organizationId: ids.orgA,
+    userId: verifiedSellerUserId,
+    role: "member",
+    createdAt: new Date(),
+  });
   await testDb
     .insert(featureEnrolments)
     .values([
@@ -250,6 +281,7 @@ afterAll(async () => {
   try {
     await server.stop();
     await limitedServer.stop();
+    await testDb.delete(authUser).where(eq(authUser.id, verifiedSellerUserId));
     if (seededInvoiceIds.length > 0) {
       await testDb
         .delete(invoices)
@@ -421,6 +453,28 @@ const revoke = async (
     ),
   );
 
+const transitionLinkedInvoice = async (
+  invoiceId: SafeId<"invoice">,
+  {
+    action,
+    auditEvents = [],
+  }: {
+    action: "finalize" | "revert_to_draft" | "void";
+    auditEvents?: AuditEvent[];
+  },
+) =>
+  await transitionInvoice.handler(
+    asTestRaw<Parameters<typeof transitionInvoice.handler>[0]>(
+      memberContext({
+        tenant: "A",
+        invoiceId,
+        route: "/v1/invoices/:workspaceId/:invoiceId/transition",
+        body: { action },
+        auditEvents,
+      }),
+    ),
+  );
+
 /** The token the last email to `to` carried. */
 const tokenSentTo = (to: string) => {
   const message = delivered.findLast((candidate) => candidate.to === to);
@@ -448,7 +502,10 @@ const sendRows = async (invoiceId: SafeId<"invoice">) =>
     .from(invoiceSends)
     .where(eq(invoiceSends.invoiceId, invoiceId));
 
-const createStandaloneLink = async (invoiceId: SafeId<"invoice">) => {
+const createStandaloneLink = async (
+  invoiceId: SafeId<"invoice">,
+  expiresAt = new Date(Date.now() + 86_400_000),
+) => {
   const token = createInvoiceLinkToken();
   const tokenHash = hashInvoiceLinkToken(token);
   await testDb.insert(invoiceSends).values({
@@ -460,11 +517,45 @@ const createStandaloneLink = async (invoiceId: SafeId<"invoice">) => {
     language: "cs",
     replyTo: "billing@firm.example.test",
     tokenHash,
-    expiresAt: new Date(Date.now() + 86_400_000),
+    expiresAt,
     deliveryStatus: "delivered",
   });
   return { token, tokenHash };
 };
+
+type InvoiceGraph = typeof DATABASE_TRANSITIONS.invoices.edges;
+type InvoiceGraphEdge = {
+  [From in keyof InvoiceGraph]: {
+    from: readonly [From];
+    to: InvoiceGraph[From][number];
+  };
+}[keyof InvoiceGraph];
+
+const isInvoiceGraphEdge = (edge: {
+  from: readonly [string];
+  to: string;
+}): edge is InvoiceGraphEdge =>
+  Object.entries(DATABASE_TRANSITIONS.invoices.edges).some(
+    ([from, targets]) =>
+      from === edge.from[0] && targets.some((to) => to === edge.to),
+  );
+
+const invoiceGraphEdges = Object.entries(DATABASE_TRANSITIONS.invoices.edges)
+  .flatMap(([from, targets]) =>
+    targets.map((to) => ({ from: [from] as const, to })),
+  )
+  .filter(isInvoiceGraphEdge);
+
+const invoiceTransitionRecorder = () =>
+  createBackgroundAuditRecorder({
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    execution: {
+      performer: { type: "user", id: ids.userA1 },
+      trigger: { type: "system", source: "invoice_link_transition_test" },
+    },
+  });
 
 const addPayment = async (
   invoiceId: SafeId<"invoice">,
@@ -516,11 +607,14 @@ const readPublicAndAuthenticatedPaidDates = async (
   if (scope === null) {
     return panic("Expected a resolvable invoice link for settlement parity");
   }
-  const linked = await database.scoped({
+  const publicScope = database.scoped({
     organizationId,
     userId: null,
-    workspaceIds: scope.workspaceIds,
-  })((tx) => loadLinkedInvoiceData(tx, { ...scope, db: database }));
+    workspaceIds: [],
+  });
+  const linked = await publicScope((tx) =>
+    loadLinkedInvoiceData(tx, { ...scope, scopedDb: publicScope }),
+  );
   if (linked === null) {
     return panic("Expected a linked invoice for settlement parity");
   }
@@ -544,11 +638,11 @@ const readPublicAndAuthenticatedPaidDates = async (
 };
 
 const readSettlementFunction = async (tenant: Tenant, tokenHash: string) => {
-  const { organizationId, workspaceId } = tenantOf(tenant);
+  const { organizationId } = tenantOf(tenant);
   return await tokenDb().scoped({
     organizationId,
     userId: null,
-    workspaceIds: [workspaceId],
+    workspaceIds: [],
   })(
     async (tx) =>
       await tx
@@ -569,6 +663,279 @@ const invoiceStatus = async (invoiceId: SafeId<"invoice">) =>
   ).at(0)?.status;
 
 describe("sending an invoice by link", () => {
+  test("unenrolling keeps existing link history and revocation available while refusing new sends", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const firstSend = await send(invoiceId, [
+      "cleanup-after-unenrolment@example.test",
+    ]);
+    if (!("id" in firstSend) || typeof firstSend.id !== "string") {
+      return panic("Expected a successful send before unenrolment");
+    }
+    const sendId = firstSend.id;
+    const existing = {
+      invoiceId,
+      token: tokenSentTo("cleanup-after-unenrolment@example.test"),
+    };
+    const pending = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    await testDb
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, ids.orgA),
+          eq(featureEnrolments.userId, ids.userA1),
+          eq(featureEnrolments.featureId, "time-billing"),
+        ),
+      );
+    try {
+      const listed = await listInvoiceSends.handler(
+        asTestRaw<Parameters<typeof listInvoiceSends.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId: existing.invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          }),
+        ),
+      );
+      expect(listed).toMatchObject({ sends: [{ id: sendId }] });
+      expect(await revoke(existing.invoiceId, sendId)).toMatchObject({
+        id: sendId,
+      });
+      expect(
+        (await sendRows(existing.invoiceId)).at(0)?.revokedAt,
+      ).toBeInstanceOf(Date);
+      expect(
+        (await post(server, "view", { token: existing.token })).status,
+      ).toBe(404);
+      expect(
+        await send(pending, ["still-disabled@example.test"]),
+      ).toMatchObject({ code: 404 });
+      expect(await sendRows(pending)).toEqual([]);
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          featureId: "time-billing",
+        })
+        .onConflictDoNothing();
+    }
+  });
+
+  test.each(["quota", "unavailable"] as const)(
+    "a refused %s email admission creates no send and calls no transport",
+    async (refusal) => {
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+      const transported: InvoiceLinkMessage[] = [];
+      const admitEmail = createInvoiceEmailAdmission({
+        increment: () => {
+          if (refusal === "unavailable") {
+            throw new Error("Shared email counter unavailable");
+          }
+          return { count: 1001, start: 0, nextReset: new Date(86_400_000) };
+        },
+      });
+      const limitedSend = createSendInvoice({
+        isDeliveryConfigured: () => true,
+        admitEmail,
+        deliver: async (message) => {
+          transported.push(message);
+        },
+      });
+      const result = await limitedSend.handler(
+        asTestRaw<Parameters<typeof limitedSend.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+            body: { recipients: ["limited@example.test"] },
+          }),
+        ),
+      );
+      expect(result).toMatchObject({ code: refusal === "quota" ? 429 : 503 });
+      expect(transported).toEqual([]);
+      expect(await sendRows(invoiceId)).toEqual([]);
+      expect(await invoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+    },
+  );
+
+  test("the request note boundary accepts one thousand characters and refuses a longer note", () => {
+    expect(INVOICE_SEND_LIMITS.messageMaxChars).toBe(1000);
+    expect(
+      v.safeParse(sendInvoice.config.body, {
+        recipients: ["note@example.test"],
+        message: "x".repeat(INVOICE_SEND_LIMITS.messageMaxChars),
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(sendInvoice.config.body, {
+        recipients: ["note@example.test"],
+        message: "x".repeat(INVOICE_SEND_LIMITS.messageMaxChars + 1),
+      }).success,
+    ).toBe(false);
+  });
+
+  test.each(["unverified member", "verified nonmember"] as const)(
+    "a seller email owned by an %s falls back to the sender's verified address",
+    async (sellerIdentity) => {
+      const userId = mintAuthProviderId<"user">();
+      const email = `${userId}@seller.example.test`;
+      await testDb.insert(authUser).values({
+        id: userId,
+        name: "Seller contact",
+        email,
+        emailVerified: sellerIdentity === "verified nonmember",
+      });
+      if (sellerIdentity === "unverified member") {
+        await testDb.insert(member).values({
+          id: mintAuthProviderIdValue(),
+          organizationId: ids.orgA,
+          userId,
+          role: "member",
+          createdAt: new Date(),
+        });
+      }
+      try {
+        await testDb
+          .update(sellerProfiles)
+          .set({ email })
+          .where(eq(sellerProfiles.id, sellerA));
+        const [sender] = await testDb
+          .select({ email: authUser.email })
+          .from(authUser)
+          .where(eq(authUser.id, ids.userA1));
+        const invoiceId = await seedInvoice({
+          status: INVOICE_STATUS.FINALIZED,
+        });
+        const recipient = `${userId}@recipient.example.test`;
+        expect(await send(invoiceId, [recipient])).toMatchObject({
+          deliveryStatus: "delivered",
+          replyTo: sender?.email,
+        });
+        expect(delivered.findLast(({ to }) => to === recipient)?.replyTo).toBe(
+          sender?.email,
+        );
+        expect((await sendRows(invoiceId)).at(0)?.replyTo).toBe(sender?.email);
+        const listed = await listInvoiceSends.handler(
+          asTestRaw<Parameters<typeof listInvoiceSends.handler>[0]>(
+            memberContext({
+              tenant: "A",
+              invoiceId,
+              route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+            }),
+          ),
+        );
+        expect(listed).toMatchObject({ replyTo: sender?.email });
+      } finally {
+        await testDb
+          .update(sellerProfiles)
+          .set({ email: "billing@firm.example.test" })
+          .where(eq(sellerProfiles.id, sellerA));
+        await testDb.delete(authUser).where(eq(authUser.id, userId));
+      }
+    },
+  );
+
+  test.each([
+    ["void", INVOICE_STATUS.VOID, "delivered"],
+    ["revert_to_draft", INVOICE_STATUS.DRAFT, "delivered"],
+    ["void", INVOICE_STATUS.VOID, "failed"],
+    ["revert_to_draft", INVOICE_STATUS.DRAFT, "failed"],
+  ] as const)(
+    "completion after %s keeps the invoice %s and records the %s transport outcome without reopening its link",
+    async (action, status, outcome) => {
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+      const auditEvents: AuditEvent[] = [];
+      const transported: InvoiceLinkMessage[] = [];
+      const revokedDuringTransport: Date[] = [];
+      const racingSend = createSendInvoice({
+        isDeliveryConfigured: () => true,
+        admitEmail: async () => Result.ok(undefined),
+        deliver: async (message) => {
+          transported.push(message);
+          const [reserved] = await sendRows(invoiceId);
+          expect(reserved?.deliveryStatus).toBe("pending");
+          expect(reserved?.revokedAt).toBeNull();
+          expect(
+            await transitionLinkedInvoice(invoiceId, { action, auditEvents }),
+          ).toEqual({ id: invoiceId });
+          const [revoked] = await sendRows(invoiceId);
+          if (revoked?.revokedAt === null || revoked?.revokedAt === undefined) {
+            return panic("Invoice transition did not revoke its pending send");
+          }
+          expect(revoked.deliveryStatus).toBe("pending");
+          revokedDuringTransport.push(revoked.revokedAt);
+          if (outcome === "failed") {
+            throw new Error("Mailbox refused the invoice after its transition");
+          }
+          delivered.push(message);
+        },
+      });
+      const recipient = `${action}-${outcome}@example.test`;
+      const result = await racingSend.handler(
+        asTestRaw<Parameters<typeof racingSend.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+            body: { recipients: [recipient] },
+            auditEvents,
+          }),
+        ),
+      );
+      if (outcome === "delivered") {
+        expect(result).toMatchObject({
+          deliveryStatus: outcome,
+          invoiceStatus: status,
+        });
+        expect(delivered).toContainEqual(transported.at(0));
+      } else {
+        expect(result).toMatchObject({ code: 502 });
+        expect(delivered).not.toContainEqual(transported.at(0));
+      }
+      expect(transported).toHaveLength(1);
+      expect(revokedDuringTransport).toHaveLength(1);
+      expect(await invoiceStatus(invoiceId)).toBe(status);
+      const rows = await sendRows(invoiceId);
+      expect(rows).toHaveLength(1);
+      const row = rows.at(0);
+      expect(row?.deliveryStatus).toBe(outcome);
+      expect(row?.failedRecipients).toEqual(
+        outcome === "failed" ? [recipient] : [],
+      );
+      expect(row?.revokedAt).toEqual(revokedDuringTransport.at(0));
+      expect(row?.revokedByUserId).toBe(ids.userA1);
+      expect(
+        auditEvents.filter((event) => event.changes?.linkRevoked?.new === true),
+      ).toMatchObject([{ metadata: { invoiceSendId: row?.id } }]);
+      expect(
+        auditEvents.filter(
+          (event) => event.changes?.emailDelivery !== undefined,
+        ),
+      ).toMatchObject([
+        {
+          changes: { emailDelivery: { old: "pending", new: outcome } },
+          metadata: { invoiceSendId: row?.id },
+        },
+      ]);
+      const token = transported.at(0)?.link.split("#").at(1);
+      if (token === undefined) {
+        return panic("The transport did not receive an invoice link");
+      }
+      expect(row?.tokenHash).toBe(hashInvoiceLinkToken(token));
+      const opened = await post(server, "view", { token });
+      expect(opened.status).toBe(404);
+      expect(await opened.json()).toMatchObject({
+        code: "invoice_link_unavailable",
+      });
+      for (const file of ["pdf", "e_invoice"]) {
+        expect((await post(server, "download", { token, file })).status).toBe(
+          404,
+        );
+      }
+    },
+  );
+
   test("a member without time-billing enrolment cannot create an invoice link", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const deliveredBefore = delivered.length;
@@ -908,6 +1275,55 @@ describe("invoice send row security", () => {
 });
 
 describe("opening an invoice link", () => {
+  test("public token scopes have no matter authority while authenticated matter reads remain available", async () => {
+    const { token } = await sentInvoice("narrow-public-scope@example.test");
+    const base = tokenDb();
+    const authenticated = await base.scoped({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+    })(
+      async (tx) =>
+        await tx
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(eq(workspaces.id, ids.wsA1)),
+    );
+    expect(authenticated).toEqual([{ id: ids.wsA1 }]);
+    let checkedScopes = 0;
+    const database = {
+      tenantless: base.tenantless,
+      scoped: (scope) => {
+        expect(scope.userId).toBeNull();
+        expect(scope.workspaceIds).toEqual([]);
+        return async (read) =>
+          await base.scoped(scope)(async (tx) => {
+            expect(
+              await tx
+                .select({ id: workspaces.id })
+                .from(workspaces)
+                .where(eq(workspaces.id, ids.wsA1)),
+            ).toEqual([]);
+            checkedScopes += 1;
+            return await read(tx);
+          });
+      },
+    } satisfies TokenScopedDatabase;
+    await using target = serveForTest(
+      createHttpApp({
+        routes: linkRoutes({ database, budget: budgetOf(1000) }),
+        middleware: [errorBoundary],
+      }),
+    );
+    expect((await post(target, "view", { token })).status).toBe(200);
+    for (const file of ["pdf", "e_invoice"]) {
+      expect((await post(target, "download", { token, file })).status).toBe(
+        200,
+      );
+    }
+    expect(checkedScopes).toBeGreaterThan(0);
+  });
+
   test("view and both downloads share one token budget while another link remains available", async () => {
     const own = await sentInvoice("shared-token-budget@example.test");
     const other = await sentInvoice("independent-token-budget@example.test");
@@ -1132,19 +1548,35 @@ describe("opening an invoice link", () => {
   ] as const)(
     "%s refuses delivery and access audit when the link becomes %s after its work",
     async (responseKind, invalidation) => {
-      const { invoiceId, token } = await sentInvoice(
-        `${responseKind}-${invalidation}@example.test`,
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+      const expiresAt = new Date(
+        Date.now() + (invalidation === "expired" ? 2000 : 86_400_000),
       );
+      const { token } = await createStandaloneLink(invoiceId, expiresAt);
       let completedWork = false;
       const invalidate = async () => {
-        await testDb
-          .update(invoiceSends)
-          .set(
-            invalidation === "revoked"
-              ? { revokedAt: new Date() }
-              : { expiresAt: new Date(0) },
-          )
-          .where(eq(invoiceSends.invoiceId, invoiceId));
+        if (invalidation === "revoked") {
+          await testDb
+            .update(invoiceSends)
+            .set({ revokedAt: new Date() })
+            .where(eq(invoiceSends.invoiceId, invoiceId));
+        } else {
+          await waitForExternalState({
+            description:
+              "the invoice link passes its stored expiry while its response is prepared",
+            read: async () => {
+              const [clock] = await testDb
+                .select({
+                  expired:
+                    sql`pg_catalog.clock_timestamp() >= ${expiresAt.toISOString()}::timestamptz`.mapWith(
+                      Boolean,
+                    ),
+                })
+                .from(sql`(VALUES (1)) AS clock(value)`);
+              return clock?.expired === true;
+            },
+          });
+        }
         completedWork = true;
       };
       const target = serveForTest(
@@ -1223,11 +1655,11 @@ describe("opening an invoice link", () => {
   });
 
   test("an expired link opens nothing", async () => {
-    const { invoiceId, token } = await sentInvoice("expired@example.test");
-    await testDb
-      .update(invoiceSends)
-      .set({ expiresAt: new Date(Date.now() - 1000) })
-      .where(eq(invoiceSends.invoiceId, invoiceId));
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    const { token } = await createStandaloneLink(
+      invoiceId,
+      new Date(Date.now() - 1000),
+    );
     expect((await post(server, "view", { token })).status).toBe(404);
     expect(
       (await post(server, "download", { token, file: "pdf" })).status,
@@ -1251,6 +1683,249 @@ describe("opening an invoice link", () => {
     expect(
       (await post(server, "download", { token, file: "e_invoice" })).status,
     ).toBe(404);
+  });
+
+  test("the invoice link transition matrix exercises the entire canonical graph", () => {
+    expect(
+      invoiceGraphEdges.map(({ from, to }) => `${from[0]}:${to}`).toSorted(),
+    ).toEqual(
+      Object.entries(DATABASE_TRANSITIONS.invoices.edges)
+        .flatMap(([from, targets]) => targets.map((to) => `${from}:${to}`))
+        .toSorted(),
+    );
+  });
+
+  test.each(invoiceGraphEdges)(
+    "the canonical invoice engine applies link authority for %j",
+    async (edge) => {
+      const invoiceId = await seedInvoice({ status: edge.from[0] });
+      await createStandaloneLink(invoiceId);
+      const pending = await createStandaloneLink(invoiceId);
+      await testDb
+        .update(invoiceSends)
+        .set({ deliveryStatus: "pending" })
+        .where(eq(invoiceSends.tokenHash, pending.tokenHash));
+      const now = new Date();
+      const recordAuditEvent = invoiceTransitionRecorder();
+      const moved = await tokenDb().scoped({
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+      })(
+        async (tx) =>
+          await transitionStatus({
+            tx,
+            spec: DATABASE_TRANSITIONS.invoices,
+            id: invoiceId,
+            options: { ...edge, set: { updatedAt: now } },
+            effectContext: {
+              organizationId: ids.orgA,
+              actorUserId: ids.userA1,
+              now,
+              recordAuditEvent,
+            },
+            recordTransitionAuditEvent: async (auditTx, row) =>
+              await recordAuditEvent(auditTx, {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+                resourceId: row.id,
+                changes: { status: { old: edge.from[0], new: row.status } },
+              }),
+          }),
+      );
+      expect(moved.type).toBe("transitioned");
+      const shouldRevoke =
+        edge.from[0] !== INVOICE_STATUS.DRAFT &&
+        (edge.to === INVOICE_STATUS.DRAFT || edge.to === INVOICE_STATUS.VOID);
+      const rows = await sendRows(invoiceId);
+      for (const row of rows) {
+        expect(row.revokedAt).toEqual(shouldRevoke ? now : null);
+        expect(row.revokedByUserId).toEqual(shouldRevoke ? ids.userA1 : null);
+      }
+      const audits = await testDb
+        .select({ metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, invoiceId));
+      expect(
+        audits.filter(({ metadata }) => metadata?.invoiceSendId !== undefined),
+      ).toHaveLength(shouldRevoke ? 2 : 0);
+    },
+  );
+
+  test("a mixed-source invoice batch revokes only rows that actually leave issued states", async () => {
+    const draftId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    const finalizedId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    await createStandaloneLink(draftId);
+    await createStandaloneLink(finalizedId);
+    const now = new Date();
+    const recordAuditEvent = invoiceTransitionRecorder();
+    const moved = await tokenDb().scoped({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+    })(
+      async (tx) =>
+        await transitionBatch({
+          tx,
+          spec: DATABASE_TRANSITIONS.invoices,
+          ids: [draftId, finalizedId],
+          options: {
+            from: [INVOICE_STATUS.DRAFT, INVOICE_STATUS.FINALIZED],
+            to: INVOICE_STATUS.DRAFT,
+          },
+          effectContext: {
+            organizationId: ids.orgA,
+            actorUserId: ids.userA1,
+            now,
+            recordAuditEvent,
+          },
+          recordTransitionAuditEvent: async (auditTx, rows) =>
+            await recordAuditEvent(
+              auditTx,
+              rows.map((row) => ({
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+                resourceId: row.id,
+                changes: {
+                  status: {
+                    old:
+                      row.id === draftId
+                        ? INVOICE_STATUS.DRAFT
+                        : INVOICE_STATUS.FINALIZED,
+                    new: row.status,
+                  },
+                },
+              })),
+            ),
+        }),
+    );
+    expect(moved).toHaveLength(2);
+    expect((await sendRows(draftId)).at(0)?.revokedAt).toBeNull();
+    expect((await sendRows(finalizedId)).at(0)?.revokedAt).toEqual(now);
+  });
+
+  test("reverting a finalized invoice permanently revokes its historical and pending links before edits and re-finalizing", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    // A historical delivered link may predate the current send owner, which
+    // moves a newly delivered finalized invoice to sent.
+    const original = await createStandaloneLink(invoiceId);
+    const pending = await createStandaloneLink(invoiceId);
+    await testDb
+      .update(invoiceSends)
+      .set({ deliveryStatus: "pending" })
+      .where(eq(invoiceSends.tokenHash, pending.tokenHash));
+    expect((await post(server, "view", { token: original.token })).status).toBe(
+      200,
+    );
+
+    const revocationAudits: AuditEvent[] = [];
+    expect(
+      await transitionLinkedInvoice(invoiceId, {
+        action: "revert_to_draft",
+        auditEvents: revocationAudits,
+      }),
+    ).toEqual({ id: invoiceId });
+    const revoked = await sendRows(invoiceId);
+    expect(revoked).toHaveLength(2);
+    for (const row of revoked) {
+      expect(row.revokedAt).toBeInstanceOf(Date);
+      expect(row.revokedByUserId).toBe(ids.userA1);
+    }
+    expect(
+      revocationAudits
+        .filter(
+          (event) =>
+            event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
+            event.changes?.linkRevoked?.new === true,
+        )
+        .map((event) => event.metadata?.invoiceSendId)
+        .toSorted(),
+    ).toEqual(revoked.map(({ id }) => id).toSorted());
+    expect(
+      await updateInvoice.handler(
+        asTestRaw<Parameters<typeof updateInvoice.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId",
+            body: {
+              reference: "EDITED-REF",
+              notes: "Reissued payment details",
+            },
+          }),
+        ),
+      ),
+    ).toEqual({ id: invoiceId });
+    expect(
+      await transitionLinkedInvoice(invoiceId, { action: "finalize" }),
+    ).toEqual({ id: invoiceId });
+
+    expect((await post(server, "view", { token: original.token })).status).toBe(
+      404,
+    );
+    expect(
+      (await post(server, "download", { token: original.token, file: "pdf" }))
+        .status,
+    ).toBe(404);
+    expect(
+      (
+        await post(server, "download", {
+          token: original.token,
+          file: "e_invoice",
+        })
+      ).status,
+    ).toBe(404);
+    expect((await post(server, "view", { token: pending.token })).status).toBe(
+      404,
+    );
+    expect(await send(invoiceId, ["reissued@example.test"])).toMatchObject({
+      deliveryStatus: "delivered",
+    });
+    const opened = await post(server, "view", {
+      token: tokenSentTo("reissued@example.test"),
+    });
+    expect(opened.status).toBe(200);
+    expect(JSON.stringify(await opened.json())).toContain("EDITED-REF");
+  });
+
+  test("the real sent-to-void transition revokes every send and preserves other invoices' links", async () => {
+    const closed = await sentInvoice("void-transition@example.test");
+    expect(
+      await send(closed.invoiceId, ["void-transition-again@example.test"]),
+    ).toMatchObject({ deliveryStatus: "delivered" });
+    const sibling = await sentInvoice("void-sibling@example.test");
+    const revocationAudits: AuditEvent[] = [];
+    expect(
+      await transitionLinkedInvoice(closed.invoiceId, {
+        action: "void",
+        auditEvents: revocationAudits,
+      }),
+    ).toEqual({ id: closed.invoiceId });
+    const revoked = await sendRows(closed.invoiceId);
+    expect(revoked).toHaveLength(2);
+    for (const row of revoked) {
+      expect(row.revokedAt).toBeInstanceOf(Date);
+    }
+    expect(
+      revocationAudits.filter(
+        (event) =>
+          event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
+          event.changes?.linkRevoked?.new === true,
+      ),
+    ).toHaveLength(2);
+    expect((await post(server, "view", { token: closed.token })).status).toBe(
+      404,
+    );
+    expect(
+      (
+        await post(server, "view", {
+          token: tokenSentTo("void-transition-again@example.test"),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await post(server, "view", { token: sibling.token })).status).toBe(
+      200,
+    );
   });
 
   test("a voided invoice closes the link", async () => {
@@ -1621,14 +2296,10 @@ describe("public invoice settlement projection", () => {
       amount: 100_000,
       paidOn: "2026-10-03",
     });
-    const expired = await createStandaloneLink(expiredInvoice);
-    expect(await readSettlementFunction("A", expired.tokenHash)).toHaveLength(
-      1,
+    const expired = await createStandaloneLink(
+      expiredInvoice,
+      new Date(Date.now() - 1000),
     );
-    await testDb
-      .update(invoiceSends)
-      .set({ expiresAt: new Date(Date.now() - 1000) })
-      .where(eq(invoiceSends.tokenHash, expired.tokenHash));
     expect(await readSettlementFunction("A", expired.tokenHash)).toEqual([]);
 
     const foreignInvoice = await seedInvoice({ status: INVOICE_STATUS.PAID });

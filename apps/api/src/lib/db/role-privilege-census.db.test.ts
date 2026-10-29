@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { INVOICE_SEND_UPDATE_COLUMNS } from "@/api/db/schema";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
@@ -203,8 +204,22 @@ describePostgres("database role privilege census", () => {
   // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
   test("matches every migrated role and effective privilege", async () => {
     const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
-    await withMigratedDatabase(async (_database, actual) => {
+    await withMigratedDatabase(async (database, actual) => {
       assertCensus(expected, actual);
+      // Column grants intentionally do not count as a table-wide UPDATE.
+      const invoiceSendColumns = await database.unsafe(`
+        SELECT attribute.attname AS column
+        FROM pg_catalog.pg_attribute attribute
+        WHERE attribute.attrelid = 'public.invoice_sends'::regclass
+          AND attribute.attnum > 0 AND NOT attribute.attisdropped
+          AND pg_catalog.has_column_privilege('stella', attribute.attrelid, attribute.attnum, 'UPDATE')
+        ORDER BY attribute.attname
+      `);
+      expect(invoiceSendColumns).toEqual(
+        INVOICE_SEND_UPDATE_COLUMNS.map(({ name }) => name)
+          .toSorted()
+          .map((column) => ({ column })),
+      );
     });
   }, 120_000);
 

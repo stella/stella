@@ -58,7 +58,11 @@ import type {
   AcquiredInvoiceMatterLocks,
   InvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
-import { releaseInvoiceTimeEntries } from "@/api/lib/db/transitions";
+import { TRANSITIONS as DATABASE_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  releaseInvoiceTimeEntries,
+  transition as transitionStatus,
+} from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -689,8 +693,7 @@ const applyTransition = async (
       return Result.err(linked);
     }
   }
-  const set: Partial<typeof invoices.$inferInsert> = {
-    status: options.transition.to,
+  const set: Partial<Omit<typeof invoices.$inferInsert, "id" | "status">> = {
     updatedAt: options.now,
   };
   if (options.action === "send") {
@@ -771,19 +774,57 @@ const applyTransition = async (
       set.invoiceNumber = number.value.number;
     }
   }
-  const updated = await tx
-    .update(invoices)
-    .set(set)
-    .where(
-      and(
-        eq(invoices.id, options.invoiceId),
-        invoiceInMatter(invoices, options.workspaceId),
-        inArray(invoices.status, options.transition.from),
-      ),
-    )
-    .returning({ id: invoices.id });
-  const row = updated.at(0);
-  if (!row) {
+  const move = { ...options.transition, set };
+  const updated = await transitionStatus({
+    tx,
+    spec: DATABASE_TRANSITIONS.invoices,
+    id: options.invoiceId,
+    options: move,
+    effectContext: {
+      organizationId: options.organizationId,
+      actorUserId: options.actorUserId,
+      now: options.now,
+      recordAuditEvent: options.recordAuditEvent,
+    },
+    recordTransitionAuditEvent: async (auditTx, row) => {
+      if (options.action === "void") {
+        if (matterLocks.type !== "acquired") {
+          return panic(
+            "Invoice release requires the running guard's acquired locks",
+          );
+        }
+        await releaseInvoiceEntries(auditTx, {
+          matterLocks,
+          previousStatus: existing.status,
+          now: options.now,
+          recordAuditEvent: options.recordAuditEvent,
+        });
+        await recordBillingCapCrossings(auditTx, {
+          workspaceId: options.workspaceId,
+          recordAuditEvent: options.recordAuditEvent,
+        });
+      } else {
+        await options.recordAuditEvent(auditTx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+          resourceId: row.id,
+          changes: {
+            status: { old: existing.status, new: options.transition.to },
+            action: { old: null, new: options.action },
+            ...(set.invoiceNumber !== undefined
+              ? {
+                  invoiceNumber: {
+                    old: existing.invoiceNumber,
+                    new: set.invoiceNumber,
+                  },
+                }
+              : {}),
+          },
+        });
+      }
+    },
+  });
+  if (updated.type === "stale") {
     return Result.err(
       new HandlerError({
         status: 409,
@@ -791,45 +832,17 @@ const applyTransition = async (
       }),
     );
   }
-  if (options.action === "void") {
-    if (matterLocks.type !== "acquired") {
-      return panic(
-        "Invoice release requires the running guard's acquired locks",
-      );
-    }
-    await releaseInvoiceEntries(tx, {
-      matterLocks,
-      previousStatus: existing.status,
-      now: options.now,
-      recordAuditEvent: options.recordAuditEvent,
-    });
-    await recordBillingCapCrossings(tx, {
-      workspaceId: options.workspaceId,
-      recordAuditEvent: options.recordAuditEvent,
-    });
-  } else {
-    await options.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-      resourceId: row.id,
-      changes: {
-        status: { old: existing.status, new: options.transition.to },
-        action: { old: null, new: options.action },
-        ...(set.invoiceNumber !== undefined
-          ? {
-              invoiceNumber: {
-                old: existing.invoiceNumber,
-                new: set.invoiceNumber,
-              },
-            }
-          : {}),
-      },
-    });
-  }
+  const row = updated.row;
   if (options.action === "send") {
     return (
       await settleSentInvoice(tx, {
-        scope: options,
+        scope: {
+          invoiceId: options.invoiceId,
+          now: options.now,
+          recordAuditEvent: options.recordAuditEvent,
+          organizationId: options.organizationId,
+          userId: options.actorUserId,
+        },
         invoice: existing,
       })
     ).map(() => ({ id: row.id }));

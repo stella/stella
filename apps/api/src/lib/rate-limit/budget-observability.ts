@@ -2,6 +2,9 @@ import { logger } from "@/api/lib/observability/logger";
 import { emitRateLimitRejectedMetric } from "@/api/lib/observability/request-metrics";
 
 export const BUDGET_NAMES = [
+  "api.invoice_email.user",
+  "api.invoice_email.platform",
+  "api.invoice_email.young_organization",
   "api.address",
   "api.agent_auth.address",
   "api.agent_auth_confirm.address",

@@ -107,8 +107,8 @@ const TIME_ENTRY_TRANSITIONS = defineTransitions(
 
 // An invoice's lifecycle. Recorded payments move a finalized or sent invoice
 // to paid and back (`lib/billing/invoice-payments`) through this spec;
-// finalize, send, revert and void are still direct writes of the transition
-// handler in the shrinking ledger.
+// finalize, send, revert and void use the same engine. Every move that leaves
+// issued states revokes link authority in its transaction.
 const INVOICE_TRANSITIONS = defineTransitions(
   invoices,
   {
@@ -118,7 +118,7 @@ const INVOICE_TRANSITIONS = defineTransitions(
     paid: ["finalized", "sent", "void"],
     void: [],
   },
-  { terminal: ["void"] },
+  { terminal: ["void"], invoiceLinkAuthority: "revoke-on-leaving-issued" },
 );
 
 // Each email attempt completes once; a resend creates a separate pending row.

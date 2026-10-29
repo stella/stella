@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
+import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
+import { invoiceSends } from "@/api/db/schema";
 import type { InvoiceSendDeliveryStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -38,7 +40,9 @@ export const completeInvoiceSendDelivery = async (
     set: {
       failedRecipients: options.failedRecipients,
       ...(options.deliveryStatus === "failed"
-        ? { revokedAt: options.now }
+        ? {
+            revokedAt: sql`coalesce(${invoiceSends.revokedAt}, ${options.now})`,
+          }
         : {}),
     },
     recordTransitionAuditEvent: async (auditTx) => {

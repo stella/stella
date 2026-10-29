@@ -245,8 +245,31 @@ export const loadInvoiceExport = async (
   };
 };
 
-type LoadedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
-type LoadedInvoice = LoadedExport["invoices"][number];
+type AuthenticatedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
+type AuthenticatedInvoice = AuthenticatedExport["invoices"][number];
+type DocumentSourceAmounts = Parameters<typeof readInvoiceDocumentLines>[0];
+type LoadedInvoice = Omit<AuthenticatedInvoice, "timeEntries" | "expenses"> & {
+  timeEntries: readonly (DocumentSourceAmounts["timeEntries"][number] &
+    Pick<
+      AuthenticatedInvoice["timeEntries"][number],
+      "workspaceId" | "dateWorked"
+    > &
+    Partial<
+      Pick<
+        AuthenticatedInvoice["timeEntries"][number],
+        "userId" | "taskCode" | "activityCode"
+      >
+    >)[];
+  expenses: readonly (DocumentSourceAmounts["expenses"][number] &
+    Pick<
+      AuthenticatedInvoice["expenses"][number],
+      "workspaceId" | "dateIncurred"
+    >)[];
+};
+type LoadedExport = Omit<AuthenticatedExport, "invoices" | "timekeepers"> & {
+  invoices: readonly LoadedInvoice[];
+  timekeepers?: AuthenticatedExport["timekeepers"];
+};
 /** The lines and totals `readInvoiceDocumentLines` computes for a document. */
 type DocumentAmounts = {
   lines: readonly (InvoiceLine & {
@@ -322,7 +345,10 @@ const exportLines = ({
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
-        ? { id: entry.userId, name: loaded.timekeepers.get(entry.userId) ?? "" }
+        ? {
+            id: entry.userId,
+            name: loaded.timekeepers?.get(entry.userId) ?? "",
+          }
         : null,
       taskCode: entry?.taskCode ?? null,
       activityCode: entry?.activityCode ?? null,

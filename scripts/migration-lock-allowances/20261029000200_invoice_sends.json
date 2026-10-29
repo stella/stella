@@ -2,5 +2,6 @@
   "add-column": "The seller profile reply-to address is a nullable column without a default, a catalog-only change that rewrites no rows; the 1s lock_timeout bounds the wait for the brief ACCESS EXCLUSIVE lock on the small seller_profiles table.",
   "add-foreign-key": "Each foreign key is declared on the new, empty invoice_sends table, so validation scans no rows; the referenced organization, invoices and user tables are held only in SHARE ROW EXCLUSIVE for the catalog update, bounded by the 1s lock_timeout and 5s statement_timeout.",
   "row-level-security": "Enabling and forcing row security touches only the new, empty invoice_sends table created in the same migration; no existing relation is locked.",
-  "create-policy": "The policies are created on the new, empty invoice_sends table created in the same migration; the restrictive policy only references invoices in its expression and takes no lock on it."
+  "create-policy": "The policies are created on the new, empty invoice_sends table created in the same migration; the restrictive policy only references invoices in its expression and takes no lock on it.",
+  "create-trigger": "The immutability trigger is installed on the new, empty invoice_sends table created in this migration, before application traffic can reach it; the SHARE ROW EXCLUSIVE lock is bounded by the 1s lock_timeout and scans no rows."
 }

@@ -8,6 +8,7 @@ import { projectInvoiceSend } from "@/api/handlers/invoices/sends/projection";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { readInvoiceEmailSender } from "@/api/lib/billing/invoice-send-sender";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -86,9 +87,8 @@ const config = {
   contract: "patch",
   description:
     "List the emails an invoice was sent with, newest first: recipients, time, delivery, reply-to, and whether its link is active, expired, revoked or failed, with when it was first opened. defaultRecipients are the client's email addresses, primary first; replyTo is where replies to a new send would go.",
-  permissions: { workspace: ["read"] },
+  permissions: { invoice: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  featureAccess: { featureId: "time-billing", type: "required" },
   access: "read",
   mcp: {
     type: "capability",
@@ -101,7 +101,7 @@ const config = {
 
 const listInvoiceSends = createSafeHandler(
   config,
-  async function* ({ safeDb, user, workspaceId, params }) {
+  async function* ({ safeDb, user, session, workspaceId, params }) {
     const loaded = yield* Result.await(
       safeDb(async (tx) => {
         const invoice = await tx.query.invoices.findFirst({
@@ -121,13 +121,11 @@ const listInvoiceSends = createSafeHandler(
                 where: { id: { eq: invoice.clientId } },
                 columns: { emails: true },
               });
-        const seller =
-          invoice.sellerProfileId === null
-            ? undefined
-            : await tx.query.sellerProfiles.findFirst({
-                where: { id: { eq: invoice.sellerProfileId } },
-                columns: { email: true },
-              });
+        const sender = await readInvoiceEmailSender(tx, {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          sellerProfileId: invoice.sellerProfileId,
+        });
         const sends = await readBounded(
           tx
             .select({
@@ -152,7 +150,7 @@ const listInvoiceSends = createSafeHandler(
         return {
           sends,
           clientEmails: client?.emails ?? null,
-          sellerEmail: seller?.email ?? null,
+          sender,
         };
       }),
     );
@@ -169,10 +167,13 @@ const listInvoiceSends = createSafeHandler(
         }),
       );
     }
+    if (loaded.sender.isErr()) {
+      return Result.err(loaded.sender.error);
+    }
     const now = new Date();
     return Result.ok({
       defaultRecipients: defaultRecipientsOf(loaded.clientEmails),
-      replyTo: loaded.sellerEmail ?? user.email,
+      replyTo: loaded.sender.value.replyTo,
       sends: loaded.sends.rows.map(({ sentById, sentByName, ...row }) =>
         projectInvoiceSend(
           {

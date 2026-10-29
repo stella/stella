@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
+import { reviewedInvoiceCleanupEndpoints } from "./capability-catalog";
 import {
   assertFeatureAccessDeclarations,
   parseDeclarationSource,
@@ -61,6 +62,60 @@ const conditional = {
     usesFeature: () => true,
   },
 };
+
+test("reviewed cleanup exempts time billing on that dependency path while ordinary billing and other features retain admission", () => {
+  const cleanupFile = "apps/api/src/routes/feature/cleanup.ts";
+  const ordinaryFile = "apps/api/src/routes/ordinary.ts";
+  const config = { permissions: { invoice: ["update"] } };
+  const definition = {
+    config,
+    access: "workspace",
+    run: async () => ({}),
+  } as const;
+  const cleanup = reviewedInvoiceCleanupEndpoints({
+    routes: [{ method: "GET", path: "/cleanup", middleware: [], definition }],
+    endpoints: [{ file: cleanupFile, definition, config }],
+    classify: () => ({ kind: "other" }),
+  });
+  const invoiceCleanupFiles = new Set(cleanup.map(({ file }) => file));
+  const sources = new Map([
+    ...baseSources,
+    [
+      cleanupFile,
+      'import { run } from "../../feature/core"; export const cleanup = () => run();',
+    ],
+    [
+      ordinaryFile,
+      'import { cleanup } from "./feature/cleanup"; import { run } from "../feature/core"; export const both = () => [cleanup(), run()];',
+    ],
+  ]);
+  const endpoints = [
+    { file: cleanupFile, config },
+    { file: ordinaryFile, config: {} },
+  ];
+  const violations = validateFeatureAccessDeclarations({
+    registry: { "time-billing": registry.fixture },
+    endpoints,
+    sources,
+    invoiceCleanupFiles,
+  });
+  expect(violations.filter(({ file }) => file === cleanupFile)).toEqual([]);
+  expect(violations).toContainEqual({
+    file: ordinaryFile,
+    message: "source ownership requires featureAccess time-billing",
+  });
+  expect(
+    validateFeatureAccessDeclarations({
+      registry: { "time-billing": registry.fixture, fixture: registry.fixture },
+      endpoints: [{ file: cleanupFile, config }],
+      sources,
+      invoiceCleanupFiles,
+    }),
+  ).toContainEqual({
+    file: cleanupFile,
+    message: "source ownership requires featureAccess fixture",
+  });
+});
 
 describe("feature source declarations", () => {
   test.each(["registry", "admitted"] as const)(

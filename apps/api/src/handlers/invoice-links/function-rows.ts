@@ -196,15 +196,9 @@ const timeFunctionRowSchema = v.pick(timeEntriesRowSchema, [
   "dateWorked",
   "billedMinutes",
   "rateAtEntry",
-  "currency",
-  "narrative",
   "invoiceNarrative",
   "noCharge",
-  "status",
   "invoiceAttachment",
-  "userId",
-  "taskCode",
-  "activityCode",
 ]);
 export const parseInvoiceLinkTimeRow = (row: unknown) =>
   v.parse(timeFunctionRowSchema, row);

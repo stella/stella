@@ -31,6 +31,57 @@ import {
 } from "../../src/lib/capability-transport";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
+import { isRecord } from "../../src/lib/type-guards";
+
+type ReviewedInvoiceCleanupOptions<TEndpoint> = {
+  routes: readonly RouteEntry[];
+  endpoints: readonly TEndpoint[];
+  classify: (middleware: Middleware) => RouteGate;
+};
+
+/** Join the reviewed cleanup group to discovery; endpoint filenames are never a second allowlist. */
+export const reviewedInvoiceCleanupEndpoints = <
+  TEndpoint extends {
+    file: string;
+    definition: object;
+    config: Record<string, unknown>;
+  },
+>({
+  routes,
+  endpoints,
+  classify,
+}: ReviewedInvoiceCleanupOptions<TEndpoint>): TEndpoint[] =>
+  routes.map(({ definition, middleware }) => {
+    const permissions = definition.config.permissions;
+    if (
+      definition.access !== "workspace" ||
+      definition.config.featureAccess !== undefined ||
+      !isRecord(permissions) ||
+      Object.keys(permissions).length !== 1 ||
+      !Array.isArray(permissions.invoice) ||
+      permissions.invoice.length !== 1 ||
+      permissions.invoice.at(0) !== "update" ||
+      middleware.some((stage) => classify(stage).kind !== "budget")
+    ) {
+      return panic(
+        "Invoice cleanup requires invoice:update and no feature gates",
+      );
+    }
+    const matching = endpoints.filter(
+      (endpoint) => endpoint.definition === definition,
+    );
+    const endpoint = matching.at(0);
+    if (
+      matching.length !== 1 ||
+      endpoint === undefined ||
+      endpoint.config !== definition.config
+    ) {
+      return panic(
+        "Every reviewed invoice cleanup route must identify exactly one discovered handler",
+      );
+    }
+    return endpoint;
+  });
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
 export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";

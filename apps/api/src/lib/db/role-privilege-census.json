@@ -636,7 +636,6 @@
       "table:public.invoice_sends:INSERT",
       "table:public.invoice_sends:RLS_FORCED:true",
       "table:public.invoice_sends:SELECT",
-      "table:public.invoice_sends:UPDATE",
       "table:public.invoices:DELETE",
       "table:public.invoices:INSERT",
       "table:public.invoices:RLS_FORCED:false",

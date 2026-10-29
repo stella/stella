@@ -89,9 +89,18 @@ export type LoadedInvoiceDocument = NonNullable<
   Awaited<ReturnType<typeof loadInvoiceDocument>>
 >;
 
+/** A document needs billed source amounts, not internal time-entry state or identity. */
+export type InvoiceDocumentSource = Omit<LoadedInvoiceDocument, "invoice"> & {
+  invoice: Omit<LoadedInvoiceDocument["invoice"], "timeEntries" | "expenses"> &
+    Pick<
+      Parameters<typeof readInvoiceDocumentLines>[0],
+      "timeEntries" | "expenses"
+    >;
+};
+
 /** Why a loaded invoice cannot be laid out, or null when it can. */
 export const invoiceDocumentError = (
-  loaded: LoadedInvoiceDocument,
+  loaded: InvoiceDocumentSource,
 ): HandlerError | null => {
   if (loaded.invoice.sellerProfileId !== null && loaded.seller === null) {
     return new HandlerError({
@@ -115,7 +124,7 @@ export const invoiceDocumentError = (
 
 /** The render input for a loaded invoice, with its lines and totals. */
 export const invoiceDocumentRenderOptions = (
-  loaded: LoadedInvoiceDocument,
+  loaded: InvoiceDocumentSource,
 ): RenderInvoicePdfOptions => {
   const amounts = readInvoiceDocumentLines(loaded.invoice);
   return {
@@ -151,7 +160,7 @@ export const invoiceDocumentRenderOptions = (
 
 /** The PDF's file name: its number, or `draft` before it has one. */
 export const invoicePdfFileName = (
-  invoice: LoadedInvoiceDocument["invoice"],
+  invoice: InvoiceDocumentSource["invoice"],
 ) => {
   const number =
     invoice.status === INVOICE_STATUS.DRAFT ? "draft" : invoice.invoiceNumber;
@@ -209,7 +218,7 @@ export type InvoicePdfRenderer = typeof renderInvoiceWithTypst;
 
 /** Lays a loaded invoice out as its PDF bytes. */
 export const renderInvoiceDocumentPdf = async (
-  loaded: LoadedInvoiceDocument,
+  loaded: InvoiceDocumentSource,
   renderInvoice: InvoicePdfRenderer = renderInvoiceWithTypst,
 ): Promise<Result<Uint8Array, HandlerError>> => {
   const outcome = await Result.tryPromise({

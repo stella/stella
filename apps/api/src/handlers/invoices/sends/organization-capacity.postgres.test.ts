@@ -206,7 +206,6 @@ if (!databaseUrl || !runPostgres) {
                     workspaceId: workspaceIds[name],
                     organizationId,
                     userId,
-                    userEmail: `${userId}@example.test`,
                     recipients: ["client@example.test"],
                     message: null,
                     tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),

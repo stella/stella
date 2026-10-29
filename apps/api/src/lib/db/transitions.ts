@@ -34,8 +34,11 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
+import { revokeInvoiceLinksAfterTransition } from "@/api/lib/billing/invoice-send-revocation";
+import type { InvoiceTransitionEffectContext } from "@/api/lib/billing/invoice-send-revocation";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { lockedInvoiceTransitionSource } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -63,6 +66,7 @@ export type TransitionSpec = {
   readonly edges: Readonly<Record<string, readonly string[]>>;
   readonly terminal: readonly string[];
   readonly fence: string | undefined;
+  readonly invoiceLinkAuthority?: "revoke-on-leaving-issued";
   readonly scope?: readonly string[] | undefined;
 };
 
@@ -889,6 +893,7 @@ type DefineKeyedTransitionsArgs<
   TOptions extends {
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
+    invoiceLinkAuthority?: "revoke-on-leaving-issued";
   },
   TScope extends readonly (keyof TTable["_"]["columns"] & string)[] | undefined,
 > = {
@@ -909,6 +914,7 @@ export const defineKeyedTransitions = <
   const TOptions extends {
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
+    invoiceLinkAuthority?: "revoke-on-leaving-issued";
   },
   const TScope extends
     readonly (keyof TTable["_"]["columns"] & string)[] | undefined = undefined,
@@ -965,6 +971,9 @@ export const defineKeyedTransitions = <
     options: Object.freeze(options),
     terminal: Object.freeze([...options.terminal]),
     fence: options.fence,
+    ...(options.invoiceLinkAuthority === undefined
+      ? {}
+      : { invoiceLinkAuthority: options.invoiceLinkAuthority }),
   });
 };
 
@@ -977,6 +986,7 @@ export const defineTransitions = <
   const TOptions extends {
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
+    invoiceLinkAuthority?: "revoke-on-leaving-issued";
   },
 >(
   table: TTable,
@@ -1045,6 +1055,13 @@ export type TransitionTransaction = Pick<
 > &
   Pick<Transaction, "rollback">;
 
+type InvoiceEffectArgs<
+  TTx extends TransitionTransaction,
+  TOptions,
+> = TOptions extends { invoiceLinkAuthority: "revoke-on-leaving-issued" }
+  ? { effectContext: InvoiceTransitionEffectContext<TTx> }
+  : { effectContext?: never };
+
 type TransitionArgs<
   TTx extends TransitionTransaction,
   TTable extends LifecycleTable,
@@ -1063,7 +1080,7 @@ type TransitionArgs<
     tx: TTx,
     row: { id: GetColumnData<TTable["id"]>; status: Status<TTable> },
   ) => Promise<void>;
-};
+} & InvoiceEffectArgs<TTx, TOptions>;
 
 type TransitionScopeOptions = {
   table: StatusTable;
@@ -1100,8 +1117,11 @@ type LifecycleMove = {
   to: string;
 };
 
-type LifecycleUpdateArgs = {
-  tx: TransitionTransaction;
+type LifecycleUpdateArgs<
+  TTx extends TransitionTransaction = TransitionTransaction,
+> = {
+  tx: TTx;
+  invoiceEffect?: { context: InvoiceTransitionEffectContext<TTx> };
   table: PgTable;
   identity: { key: string; column: AnyPgColumn };
   ids: readonly unknown[];
@@ -1120,9 +1140,68 @@ type LifecycleUpdateArgs = {
   ) => Promise<void>;
 };
 
+type LifecycleStatementOptions = Pick<
+  LifecycleUpdateArgs,
+  "table" | "identity" | "ids" | "match" | "moves" | "guard"
+> & {
+  scope: LifecycleUpdateArgs["scope"];
+  assignments: readonly SQL[];
+  fence: AnyPgColumn | undefined;
+  expectedFence: unknown;
+  capturePreviousStatus: "none" | "invoice";
+};
+
+const lifecycleUpdateStatement = ({
+  table,
+  identity,
+  ids,
+  match,
+  moves,
+  scope,
+  guard,
+  assignments,
+  fence,
+  expectedFence,
+  capturePreviousStatus,
+}: LifecycleStatementOptions) => {
+  const scoped = scope === undefined ? sql`` : transitionScopePredicate(scope);
+  const identityMatch =
+    match === "one"
+      ? sql`${identity.column} = ${sql.param(ids[0], identity.column)}`
+      : sql`${identity.column} IN (${sql.join(
+          ids.map((id) => sql`${sql.param(id, identity.column)}`),
+          sql`, `,
+        )})`;
+  const sources = moves.map(
+    ({ column, from }) =>
+      sql`AND ${column} IN (${sql.join(
+        from.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+  );
+  const returned = moves.map(
+    ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
+  );
+  const predicate = sql`${identityMatch} ${scoped} ${sql.join(sources, sql` `)}
+    ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
+    ${guard === undefined ? sql`` : sql`AND (${guard})`}`;
+  if (capturePreviousStatus === "none") {
+    return sql`UPDATE ${table} SET ${sql.join(assignments, sql`, `)}
+      WHERE ${predicate}
+      RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}`;
+  }
+  return sql`WITH transition_source AS MATERIALIZED (${lockedInvoiceTransitionSource(predicate)})
+    UPDATE ${table} SET ${sql.join(assignments, sql`, `)}
+    FROM transition_source
+    WHERE ${identity.column} = transition_source.source_id
+    RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)},
+      transition_source.previous_status AS "previousStatus"`;
+};
+
 /** One conditional update; every moved column's expected sources join its predicate. */
-const lifecycleUpdate = async ({
+const lifecycleUpdate = async <TTx extends TransitionTransaction>({
   tx,
+  invoiceEffect,
   table,
   identity,
   ids,
@@ -1133,7 +1212,7 @@ const lifecycleUpdate = async ({
   fence: { key: fenceKey, value: expectedFence, nextValue: nextFence },
   guard,
   recordTransitionAuditEvent,
-}: LifecycleUpdateArgs) => {
+}: LifecycleUpdateArgs<TTx>) => {
   if (
     moves.length === 0 ||
     moves.some(
@@ -1196,47 +1275,41 @@ const lifecycleUpdate = async ({
   if (ids.length === 0) {
     return [];
   }
-  const scoped = scope === undefined ? sql`` : transitionScopePredicate(scope);
-  const identityMatch =
-    match === "one"
-      ? sql`${identity.column} = ${sql.param(ids[0], identity.column)}`
-      : sql`${identity.column} IN (${sql.join(
-          ids.map((id) => sql`${sql.param(id, identity.column)}`),
-          sql`, `,
-        )})`;
-  const sources = moves.map(
-    ({ column, from }) =>
-      sql`AND ${column} IN (${sql.join(
-        from.map((value) => sql`${value}`),
-        sql`, `,
-      )})`,
+  const executed = await tx.execute(
+    lifecycleUpdateStatement({
+      table,
+      identity,
+      ids,
+      match,
+      moves,
+      scope,
+      guard,
+      assignments,
+      fence,
+      expectedFence,
+      capturePreviousStatus: invoiceEffect === undefined ? "none" : "invoice",
+    }),
   );
-  const returned = moves.map(
-    ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
-  );
-  const executed = await tx.execute(sql`
-    UPDATE ${table}
-    SET ${sql.join(assignments, sql`, `)}
-    WHERE ${identityMatch}
-      ${scoped}
-      ${sql.join(sources, sql` `)}
-      ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
-      ${guard === undefined ? sql`` : sql`AND (${guard})`}
-    RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
-  `);
   const rows = returnedTransitionRows(executed);
   // Stale updates change nothing and record nothing.
   if (rows.length > 0) {
+    if (invoiceEffect !== undefined) {
+      await revokeInvoiceLinksAfterTransition(tx, {
+        context: invoiceEffect.context,
+        rows,
+      });
+    }
     await recordTransitionAuditEvent(rows);
   }
   return rows;
 };
 
-type StatusUpdateArgs = Pick<
-  LifecycleUpdateArgs,
+type StatusUpdateArgs<TTx extends TransitionTransaction> = Pick<
+  LifecycleUpdateArgs<TTx>,
   "tx" | "identity" | "ids" | "match" | "recordTransitionAuditEvent"
 > & {
   spec: TransitionSpec & { table: StatusTable };
+  effectContext?: InvoiceTransitionEffectContext<TTx>;
   scope?: TransitionScopeOptions;
   // Untyped callers still need fence validation when the generic excludes a fence.
   options: {
@@ -1249,7 +1322,7 @@ type StatusUpdateArgs = Pick<
   };
 };
 
-const statusUpdate = async ({
+const statusUpdate = async <TTx extends TransitionTransaction>({
   tx,
   spec,
   identity,
@@ -1258,9 +1331,19 @@ const statusUpdate = async ({
   options,
   scope,
   recordTransitionAuditEvent,
-}: StatusUpdateArgs) =>
+  effectContext,
+}: StatusUpdateArgs<TTx>) =>
   await lifecycleUpdate({
     tx,
+    ...(spec.invoiceLinkAuthority === undefined
+      ? {}
+      : {
+          invoiceEffect: {
+            context:
+              effectContext ??
+              panic("Invoice transitions require bound effect context"),
+          },
+        }),
     table: spec.table,
     identity,
     ids,
@@ -1296,6 +1379,7 @@ export const transition = async <
   spec,
   id,
   options,
+  effectContext,
   recordTransitionAuditEvent,
 }: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
   TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
@@ -1318,6 +1402,7 @@ export const transition = async <
     ids: [id],
     match: "one",
     options,
+    ...(effectContext === undefined ? {} : { effectContext }),
     recordTransitionAuditEvent: async ([changed]) => {
       await recordTransitionAuditEvent(
         tx,
@@ -1382,7 +1467,8 @@ type TransitionBatchArgs<
         [K in TScope[number]]: GetColumnData<TTable["_"]["columns"][K]>;
       };
     }
-  : { scope?: never });
+  : { scope?: never }) &
+  InvoiceEffectArgs<TTx, TOptions>;
 
 /** One conditional update per held batch; only changed rows reach its required audit. */
 export const transitionBatch = async <
@@ -1398,6 +1484,7 @@ export const transitionBatch = async <
   spec,
   ids,
   options,
+  effectContext,
   recordTransitionAuditEvent,
   scope,
 }: TransitionBatchArgs<TTx, TTable, TKey, TEdges, TOptions, TScope>) => {
@@ -1428,6 +1515,7 @@ export const transitionBatch = async <
     ids,
     match: "many",
     options,
+    ...(effectContext === undefined ? {} : { effectContext }),
     recordTransitionAuditEvent: async (changed) => {
       await recordTransitionAuditEvent(tx, decode(changed));
     },

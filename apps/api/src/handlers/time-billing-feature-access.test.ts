@@ -13,7 +13,10 @@ import { env } from "@/api/env";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
-import { invoicesRoute } from "@/api/handlers/invoices/routes";
+import {
+  invoiceSendCleanupRoute,
+  invoicesRoute,
+} from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
@@ -116,7 +119,12 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   billingCodesRoute,
   expensesRoute,
   internalTimeEntriesRoute,
-  invoicesRoute,
+  invoicesRoute: invoicesRoute.filter(
+    (entry) =>
+      !invoiceSendCleanupRoute.some(
+        ({ definition }) => definition === entry.definition,
+      ),
+  ),
   clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
@@ -225,7 +233,7 @@ const timeBillingToolNames = (mode: (typeof MCP_MODES)[number]) =>
     .toSorted();
 
 describe("time billing admission census", () => {
-  test("every deployment-gated route group is exercised and every owned handler requires enrolment", async () => {
+  test("every gated route is exercised and owned handlers require enrolment except reviewed cleanup", async () => {
     // Every served route behind the flag is in the census, and every census
     // route is behind both gates, the flag first.
     const census = Object.values(TIME_BILLING_ROUTES).flat();
@@ -262,10 +270,20 @@ describe("time billing admission census", () => {
         if (!isRecord(module.default) || !isRecord(module.default.config)) {
           continue;
         }
-        expect(module.default.config.featureAccess).toEqual({
-          featureId: FEATURE_ID,
-          type: "required",
-        });
+        const cleanup = invoiceSendCleanupRoute.some(
+          ({ definition }) => definition === module.default,
+        );
+        if (cleanup) {
+          expect(module.default.config.featureAccess).toBeUndefined();
+          expect(module.default.config.permissions).toEqual({
+            invoice: ["update"],
+          });
+        } else {
+          expect(module.default.config.featureAccess).toEqual({
+            featureId: FEATURE_ID,
+            type: "required",
+          });
+        }
       }
     }
     for (const mode of MCP_MODES) {
@@ -274,6 +292,30 @@ describe("time billing admission census", () => {
           expect(definition.featureId).toBe(FEATURE_ID);
         }
       }
+    }
+  });
+
+  test("the exported invoice cleanup group remains authenticated and independent of feature gates", () => {
+    expect(invoiceSendCleanupRoute.length).toBeGreaterThan(0);
+    const served = apiRoutes.filter((entry) =>
+      invoiceSendCleanupRoute.some(
+        ({ definition }) => definition === entry.definition,
+      ),
+    );
+    expect(served).toHaveLength(invoiceSendCleanupRoute.length);
+    for (const entry of served) {
+      expect(entry.definition.access).toBe("workspace");
+      expect(entry.definition.config.permissions).toEqual({
+        invoice: ["update"],
+      });
+      expect(entry.definition.config.featureAccess).toBeUndefined();
+      expect(
+        entry.middleware.some(
+          (stage) =>
+            deploymentFeatureGateFlag(stage) !== undefined ||
+            featureAccessGateFeature(stage) !== undefined,
+        ),
+      ).toBe(false);
     }
   });
 

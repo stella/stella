@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ValiError } from "valibot";
 
-import {
-  EXPENSE_CATEGORIES,
-  INVOICE_LINE_SOURCES,
-  TIME_ENTRY_STATUSES,
-} from "@stll/api-contract";
+import { EXPENSE_CATEGORIES, INVOICE_LINE_SOURCES } from "@stll/api-contract";
 import { VAT_TREATMENTS } from "@stll/invoicing";
 
 import {
@@ -123,15 +119,9 @@ const timeRow = {
   dateWorked: invoiceDate,
   billedMinutes: 60,
   rateAtEntry: 12_345,
-  currency: "EUR",
-  narrative: "Legal services",
   invoiceNarrative: null,
   noCharge: false,
-  status: TIME_ENTRY_STATUSES[0],
   invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
-  userId: null,
-  taskCode: null,
-  activityCode: null,
 };
 
 const expenseRow = {
@@ -186,6 +176,18 @@ const parsedRows: {
 ];
 
 describe("invoice link function rows", () => {
+  test("time document rows omit internal notes, identity, workflow and coding metadata", () => {
+    expect(
+      parseInvoiceLinkTimeRow({
+        ...timeRow,
+        narrative: "Internal privileged note",
+        userId: "internal-timekeeper",
+        status: "approved",
+        taskCode: "private-task",
+        activityCode: "private-activity",
+      }),
+    ).toEqual(timeRow);
+  });
   for (const { name, parse, row } of parsedRows) {
     test(`${name} decoded rows preserve selected fields and strip extras`, () => {
       expect(parse(row)).toEqual(row);

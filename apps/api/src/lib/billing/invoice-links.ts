@@ -14,7 +14,6 @@ import {
   brandPersistedInvoiceId,
   brandPersistedInvoiceSendId,
   brandPersistedOrganizationId,
-  brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 
@@ -60,8 +59,6 @@ export const invoiceLinkExpiresAt = (from: Date): Date =>
 export type InvoiceLinkScope = {
   sendId: SafeId<"invoiceSend">;
   organizationId: SafeId<"organization">;
-  /** The sending member, retained only as nullable history. */
-  userId: SafeId<"user"> | null;
   tokenHash: string;
   invoiceId: SafeId<"invoice">;
   workspaceIds: SafeId<"workspace">[];
@@ -73,7 +70,6 @@ const invoiceLinkScopeRowSchema = v.object({
     v.string(),
     v.transform(brandPersistedOrganizationId),
   ),
-  user_id: v.nullable(v.pipe(v.string(), v.transform(brandPersistedUserId))),
   invoice_id: v.pipe(v.string(), v.transform(brandPersistedInvoiceId)),
   workspace_ids: v.array(
     v.pipe(v.string(), v.transform(brandPersistedWorkspaceId)),
@@ -111,7 +107,6 @@ export const readInvoiceLinkScope = async (
   return {
     sendId: row.send_id,
     organizationId: row.organization_id,
-    userId: row.user_id,
     invoiceId: row.invoice_id,
     workspaceIds: row.workspace_ids,
     expiresAt: row.expires_at,

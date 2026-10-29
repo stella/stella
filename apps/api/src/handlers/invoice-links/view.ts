@@ -109,11 +109,9 @@ const openLinkedInvoice = async (
   caller: InvoiceLinkCaller,
   { context, buildEInvoice }: OpenInvoiceOptions,
 ) => {
-  const linked = await caller.db.scoped({
-    organizationId: caller.organizationId,
-    userId: null,
-    workspaceIds: caller.workspaceIds,
-  })(async (tx) => await loadLinkedInvoiceData(tx, caller));
+  const linked = await caller.scopedDb(
+    async (tx) => await loadLinkedInvoiceData(tx, caller),
+  );
   if (linked === null) {
     return null;
   }

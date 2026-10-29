@@ -57,7 +57,7 @@ export const EXPENSE_CATEGORIES = [
 export const INVOICE_SEND_LIMITS = {
   minRecipients: 1,
   maxRecipients: 10,
-  messageMaxChars: 2000,
+  messageMaxChars: 1000,
 } as const;
 
 /** Languages in which Stella can render an invoice document. */

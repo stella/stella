@@ -7,7 +7,7 @@ import type { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/documen
 import { buildInvoiceExportFile } from "@/api/lib/billing/invoice-export-file";
 import type { INVOICE_EXPORT_FORMATS } from "@/api/lib/billing/invoice-export-file";
 import { toExportRecords } from "@/api/lib/billing/invoice-export-records";
-import type { LoadedInvoiceDocument } from "@/api/lib/billing/invoice-pdf/document";
+import type { InvoiceDocumentSource } from "@/api/lib/billing/invoice-pdf/document";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
@@ -27,7 +27,7 @@ const E_INVOICE_FORMAT = {
   EU: "ubl",
 } as const satisfies Record<InvoiceCountry, InvoiceExportFormat | null>;
 
-const eInvoiceFormatOf = (document: LoadedInvoiceDocument) =>
+const eInvoiceFormatOf = (document: InvoiceDocumentSource) =>
   E_INVOICE_FORMAT[
     invoiceCountryOf(document.seller ?? { country: null, vatId: null })
   ];

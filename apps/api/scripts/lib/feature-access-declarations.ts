@@ -30,6 +30,8 @@ type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
   sources: ReadonlyMap<string, string>;
+  /** Derived from the reviewed route group joined to handler discovery. */
+  invoiceCleanupFiles?: ReadonlySet<string>;
 };
 export type FeatureAccessDeclarationViolation = {
   file: string;
@@ -877,6 +879,7 @@ type EndpointOptions = {
   graph: DeclarationSourceGraph;
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
   modules: ModuleFacts;
+  invoiceCleanupFiles: ReadonlySet<string>;
 };
 const inspectEndpoint = ({
   endpoint,
@@ -884,6 +887,7 @@ const inspectEndpoint = ({
   graph,
   dispatchModules,
   modules,
+  invoiceCleanupFiles,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -892,7 +896,14 @@ const inspectEndpoint = ({
     return violations;
   }
   const required = new Map<string, Set<Requirement>>();
-  const add = (id: string, type: Requirement) => {
+  const add = (
+    id: string,
+    type: Requirement,
+    cleanup = invoiceCleanupFiles.has(endpoint.file),
+  ) => {
+    if (id === "time-billing" && cleanup) {
+      return;
+    }
     const types = required.get(id) ?? new Set<Requirement>();
     types.add(type);
     required.set(id, types);
@@ -907,10 +918,14 @@ const inspectEndpoint = ({
     }
   }
   const visited = new Set<string>();
-  const walk = (module: string) => {
-    if (visited.has(module)) {
+  const walked = new Set<string>();
+  const walk = (module: string, throughCleanup = false) => {
+    const cleanup = throughCleanup || invoiceCleanupFiles.has(module);
+    const walkKey = `${module}:${cleanup ? "cleanup" : "ordinary"}`;
+    if (walked.has(walkKey)) {
       return;
     }
+    walked.add(walkKey);
     visited.add(module);
     // Descriptor registries do not invoke their handlers. Dispatch owners
     // admit the selected descriptor before invocation, not the whole caller.
@@ -924,7 +939,7 @@ const inspectEndpoint = ({
     }
     const boundary = modules.boundary(module);
     for (const [id, type] of boundary) {
-      add(id, type);
+      add(id, type, cleanup);
     }
     if (boundary.size !== 0) {
       return;
@@ -934,10 +949,10 @@ const inspectEndpoint = ({
       violations.push({ file, message });
     }
     for (const target of dependencies.targets) {
-      walk(target);
+      walk(target, cleanup);
     }
     for (const [id, type] of modules.uses(module, ast)) {
-      add(id, type);
+      add(id, type, cleanup);
     }
   };
   walk(file);
@@ -1082,6 +1097,7 @@ export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
+  invoiceCleanupFiles = new Set<string>(),
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
   const graph = new DeclarationSourceGraph(dispatch.sources, registry);
@@ -1137,6 +1153,7 @@ export const validateFeatureAccessDeclarations = ({
         graph,
         dispatchModules: ownership.dispatchModules,
         modules,
+        invoiceCleanupFiles,
       }),
     );
   }
