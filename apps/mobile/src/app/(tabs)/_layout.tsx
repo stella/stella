@@ -1,7 +1,9 @@
 import { NativeTabs } from "expo-router/native-tabs";
+import { Platform } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { BAR_GLYPHS } from "@/bar-glyphs.gen";
+import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useAppColors } from "@/theme";
 
 /**
@@ -28,23 +30,36 @@ const TabLayout = () => {
       unstable_nativeProps={{ ios: { prominentScreenKey: "more" } }}
     >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS["message-square"]} />
+        <NativeTabs.Trigger.Icon {...tabIcon("message-square")} />
         <NativeTabs.Trigger.Label>{t("chat")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tasks">
-        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS["list-todo"]} />
+        <NativeTabs.Trigger.Icon {...tabIcon("list-todo")} />
         <NativeTabs.Trigger.Label>{t("tasks")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="matters">
-        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS.layers} />
+        <NativeTabs.Trigger.Icon {...tabIcon("layers")} />
         <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more">
-        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS["grid-2x2-plus"]} />
+        <NativeTabs.Trigger.Icon {...tabIcon("grid-2x2-plus")} />
         <NativeTabs.Trigger.Label>{t("more")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 };
+
+/**
+ * A tab's glyph: on iOS the asset catalog image, which the bar loads as it is
+ * built; elsewhere, which has no asset catalog, lucide's font draws it.
+ */
+const tabIcon = (glyph: keyof typeof BAR_GLYPHS) =>
+  Platform.OS === "ios"
+    ? { xcasset: BAR_GLYPHS[glyph] }
+    : {
+        src: (
+          <NativeTabs.Trigger.VectorIcon family={LucideGlyphs} name={glyph} />
+        ),
+      };
 
 export default TabLayout;
