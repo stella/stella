@@ -978,11 +978,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
   const quotedStarts = closedQuotationParagraphStarts(
     chunks.map(({ plainText }) => plainText),
-    new Set(
-      chunks.flatMap(({ plainText }, index) =>
-        ODUVODNENI_RE.test(plainText) ? [index] : [],
-      ),
-    ),
+    new Set(),
   );
   for (const [chunkIndex, chunk] of chunks.entries()) {
     const { centered, bold, letterSpacing: _letterSpacing } = chunk;
@@ -1112,7 +1108,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // "Odůvodnění:" separator
-    if (ODUVODNENI_RE.test(plainText)) {
+    if (!quotedStarts.has(chunkIndex) && ODUVODNENI_RE.test(plainText)) {
       phase = DOCUMENT_PHASE.REASONING;
       blockIndex += 1;
       blocks.push({

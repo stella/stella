@@ -689,3 +689,27 @@ describe("#par= links on Czech decisions", () => {
     });
   });
 });
+
+test.each([
+  ["„", "“", "«", "»"],
+  ["«", "»", "„", "“"],
+] as const)(
+  "an unmatched nested %s quote cannot survive its enclosing close %s",
+  (outerOpen, outerClose, innerOpen, innerClose) => {
+    const numbering = extractCourtParagraphNumbers(
+      [
+        "[1] Soud uvážil.",
+        `Soud cituje ${outerOpen}vnější citaci.`,
+        `[117] Citace obsahuje ${innerOpen}nedokončený úryvek.`,
+        `Vnější citace končí.${outerClose}`,
+        "[2] Soud dále uvážil.",
+        `[3] Soud vysvětlil osamocený znak ${innerClose}.`,
+      ].map((text, index) => paragraph(index, text)),
+    );
+    expect(
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      ),
+    ).toEqual([1, null, null, null, 2, 3]);
+  },
+);

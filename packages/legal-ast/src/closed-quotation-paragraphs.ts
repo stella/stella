@@ -47,7 +47,8 @@ export const closedQuotationParagraphStarts = (
       );
       const quotation = open[closing];
       if (quotation !== undefined) {
-        open.splice(closing, 1);
+        // Closing an enclosing quotation also ends any unmatched inner opener.
+        open.splice(closing);
         for (let inside = quotation.start + 1; inside <= bodyIndex; inside++) {
           quoted.add(inside);
         }

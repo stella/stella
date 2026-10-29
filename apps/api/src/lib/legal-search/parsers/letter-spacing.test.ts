@@ -148,3 +148,7 @@ test("ordinary one-letter words beside spaced emphasis remain separate", () => {
   );
   expect(collapseLetterSpacing("s e   mu   v r a c í")).toBe("se mu vrací");
 });
+
+test("a wholly spaced phrase retains the unambiguous emphasis context", () => {
+  expect(collapseLetterSpacing("a i   v e r d i k t")).toBe("ai verdikt");
+});

@@ -1322,3 +1322,26 @@ test("a header-shaped prefix remains prose without a layout boundary", () => {
   );
   expect(documentAst.blocks.map((block) => block.plainText)).toContain(text);
 });
+
+test("a copied reasoning heading cannot reset the quotation surrounding a closing", () => {
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body>
+    <p>Odůvodnění:</p><p>[1] Soud cituje: „Začátek citace.</p>
+    <p>Odůvodnění:</p><p>V Brně dne 1. ledna 2025</p>
+    <p>Odlišné stanovisko soudce Jana Nováka</p><p>Konec citace.“</p>
+    <p>[2] Soud pokračuje v odůvodnění.</p>
+  </body></html>`),
+  );
+  expect(
+    documentAst.blocks.filter(
+      (block) =>
+        "role" in block &&
+        (block.role === "dissent" || block.role === "closing"),
+    ),
+  ).toEqual([]);
+  expect(
+    documentAst.blocks.filter(
+      (block) => block.type === "heading" && block.plainText === "Odůvodnění:",
+    ),
+  ).toHaveLength(1);
+});
