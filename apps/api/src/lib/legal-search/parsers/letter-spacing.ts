@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-us] CZ-US uses default options; its recorded document and adapter outputs remain byte-identical.
 /**
  * Letter-spaced emphasis read back as the words it spells.
  *
