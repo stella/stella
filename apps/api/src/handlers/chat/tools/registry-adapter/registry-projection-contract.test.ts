@@ -26,7 +26,11 @@ import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  type contacts,
+  INVOICE_BILLING_PURPOSE,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
@@ -1470,7 +1474,7 @@ const CONTRACT_CORPUS = {
                     narrative: "Drafted the NDA",
                     invoiceNarrative: null,
                     noCharge: false,
-                    status: "invoiced",
+                    status: BILLING_STATUS.BILLED,
                     invoiceAttachment: "charged",
                     workItem: {
                       id: toSafeId<"entity">(uid(48)),

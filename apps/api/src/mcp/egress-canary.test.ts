@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 import { cents } from "@stll/money";
 
-import { INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import { BILLING_STATUS, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
@@ -1624,7 +1624,7 @@ describe("MCP anonymization canary corpus", () => {
                     currency: "EUR",
                     narrative: teNarrativeSeed,
                     invoiceNarrative: teInvoiceNarrativeSeed,
-                    status: "invoiced",
+                    status: BILLING_STATUS.BILLED,
                     noCharge: false,
                     invoiceAttachment: "charged",
                     workItem: {
