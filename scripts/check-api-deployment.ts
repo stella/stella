@@ -127,7 +127,13 @@ export const readApiDeployment = async ({
           ? Reflect.get(body, readinessField)
           : undefined;
       if (observedEnvironment !== expectedEnvironment) {
-        throw new ApiDeploymentMismatchError(
+        // An unreported environment is a deployment not ready to prove, not
+        // another deployment.
+        const ErrorType =
+          observedEnvironment === undefined || observedEnvironment === null
+            ? ApiDeploymentError
+            : ApiDeploymentMismatchError;
+        throw new ErrorType(
           `${probeUrl.toString()} ${readinessField} must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
         );
       }
