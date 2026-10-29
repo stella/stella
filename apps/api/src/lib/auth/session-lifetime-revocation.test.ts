@@ -10,7 +10,7 @@ import * as v from "valibot";
 import {
   createSessionLifetime,
   SESSION_LIFETIME_FIELDS,
-  SESSION_PRIOR_TOKEN_GRACE_MS,
+  SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
@@ -154,13 +154,13 @@ const createFixture = async (cacheEnabled: boolean) => {
     const oldToken = row.token;
     aliases.set(oldToken, {
       sessionId: row.id,
-      expiresAt: clock.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,
+      expiresAt: clock.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS,
     });
     row.token = Bun.randomUUIDv7();
     Object.assign(row, {
       priorTokenHash: hashSessionToken(oldToken),
       priorTokenExpiresAt: new Date(
-        clock.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,
+        clock.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS,
       ),
     });
     return oldToken;
@@ -264,7 +264,7 @@ describe("session revocation through HTTP", () => {
       ).toBe(true);
       const refreshedCookie = responseCookies(response);
       expect(refreshedCookie).not.toBe(fixture.cookie);
-      fixture.advance(SESSION_PRIOR_TOKEN_GRACE_MS + 1);
+      fixture.advance(SESSION_PRIOR_TOKEN_RECOVERY_MS + 1);
       expect(
         await fixture.auth.api.getSession({
           headers: { cookie: refreshedCookie },
@@ -320,7 +320,7 @@ describe("session revocation through HTTP", () => {
       listed.some((row) => row.id === other.id && row.token === other.token),
     ).toBe(true);
     const oldToken = fixture.rotate(other);
-    fixture.advance(SESSION_PRIOR_TOKEN_GRACE_MS + 1);
+    fixture.advance(SESSION_PRIOR_TOKEN_RECOVERY_MS + 1);
     expect(
       await fixture.context.internalAdapter.findSession(oldToken),
     ).toBeNull();

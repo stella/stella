@@ -381,6 +381,7 @@ const WRAP_ROLE_DISPOSITION = {
   parties: "fixed",
   "front-matter": "fixed",
   apparatus: "fixed",
+  "publisher-note": "fixed",
   syllabus: "fixed",
   headnotes: "fixed",
   summary: "fixed",

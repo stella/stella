@@ -2,18 +2,15 @@ import { Result } from "better-result";
 
 import type { SubprocessError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { LIMITS } from "@/api/lib/limits";
 import {
-  resolveRuntimeWorkerPath,
-  RUNTIME_WORKER_FILES,
-} from "@/api/lib/runtime-worker-path";
+  PDF_WORKER_OPERATION,
+  PDF_WORKER_PARSE_ERROR_EXIT_CODE,
+  pdfWorkerPath,
+} from "@/api/lib/files/pdf-worker-protocol";
+import { LIMITS } from "@/api/lib/limits";
 import { spawnWorker } from "@/api/lib/subprocess";
 
-const WORKER_PATH = resolveRuntimeWorkerPath({
-  outputFile: RUNTIME_WORKER_FILES.pdf,
-  sourceDir: import.meta.dir,
-  sourceFile: "pdf-worker.ts",
-});
+const WORKER_PATH = pdfWorkerPath();
 
 /**
  * What the PDF worker found out about a file's encryption.
@@ -34,7 +31,7 @@ export type PdfEncryptionProbe =
   | { status: "unsure"; cause: SubprocessError | string };
 
 /** The worker's exit code for a parse error (EX_DATAERR); see pdf-worker.ts. */
-export const PDF_WORKER_PARSE_ERROR_EXIT_CODE = 65;
+export { PDF_WORKER_PARSE_ERROR_EXIT_CODE } from "@/api/lib/files/pdf-worker-protocol";
 
 /** A worker failure as a probe outcome: only the parse-error exit is a verdict. */
 export const classifyPdfWorkerFailure = (
@@ -56,6 +53,7 @@ export const isEncryptedPdf = async (
 ): Promise<PdfEncryptionProbe> => {
   const result = await spawnWorker({
     workerPath: WORKER_PATH,
+    args: [PDF_WORKER_OPERATION.encryption],
     stdin: new Blob([buffer]),
     timeoutMs,
   });
