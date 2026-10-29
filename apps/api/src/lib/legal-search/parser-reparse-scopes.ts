@@ -109,51 +109,51 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 15,
-    scope: {
-      type: "all",
-      reason:
-        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NS]: {
-    version: 20,
-    scope: {
-      type: "all",
-      reason:
-        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NSS]: {
-    version: 23,
-    scope: {
-      type: "all",
-      reason:
-        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_US]: {
-    version: 31,
-    scope: {
-      type: "all",
-      reason:
-        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.SK_COURTS]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
-    },
-  },
-  [ADAPTER_KEYS.SK_US]: {
     version: 16,
     scope: {
       type: "all",
       reason:
-        "paragraph text, paragraph numbers and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; letter-spaced words and section markers include uneven chunks witnessed by intact words in the decision; none has feature storage of its own",
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_NS]: {
+    version: 21,
+    scope: {
+      type: "all",
+      reason:
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_NSS]: {
+    version: 24,
+    scope: {
+      type: "all",
+      reason:
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_US]: {
+    version: 32,
+    scope: {
+      type: "all",
+      reason:
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.SK_COURTS]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.SK_US]: {
+    version: 17,
+    scope: {
+      type: "all",
+      reason:
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -338,11 +338,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 4,
+    version: 5,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
+        "Recompute parser-owned text, structure and printed paragraph labels from stored raw: local duplicate or OCR markers no longer invalidate surrounding labels, and separate opinions have independent numbering scopes. Paragraph labels have no separately backfilled feature storage.",
     },
   },
 } as const satisfies ParserVersionScopes<

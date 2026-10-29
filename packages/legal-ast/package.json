@@ -158,6 +158,10 @@
     "./text-spans": {
       "types": "./src/text-spans.ts",
       "import": "./src/text-spans.ts"
+    },
+    "./separate-opinion-heading": {
+      "types": "./src/separate-opinion-heading.ts",
+      "import": "./src/separate-opinion-heading.ts"
     }
   },
   "scripts": {
@@ -169,6 +173,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",

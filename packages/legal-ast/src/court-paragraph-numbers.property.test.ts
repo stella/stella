@@ -6,8 +6,8 @@
  * - Structure-preserving: the same blocks, ids and anchors, in order.
  * - Idempotent: a second pass changes nothing — a re-parse or a replay of a
  *   numbered decision cannot number its nested lists.
- * - Sound: stored numbers come from markers alone, and a rejected or
- *   unnumbered outcome leaves the blocks exactly as they were.
+ * - Sound: stored numbers come from markers alone, and an unnumbered
+ *   outcome leaves the blocks exactly as they were.
  */
 
 import { expect, test } from "bun:test";
@@ -112,72 +112,6 @@ const opensCourtMarker = (
   return /^[\d\p{Ll}]/u.test(text.slice(match[0].length)) ? null : match;
 };
 
-const isBody = (block: Block): block is ParagraphBlock =>
-  block.type === "paragraph" &&
-  (block.role === undefined || block.role === "dissent");
-
-/**
- * The two hard invariants of a stored numbering, checked from the outside:
- * the numbers strictly rise (starting again only at 1), and every marker of
- * the numbering's style left in the text is an item of a list that started
- * at 1 after a numbered paragraph and counts up without a gap.
- */
-const invariantViolations = (
-  before: readonly Block[],
-  after: readonly Block[],
-): string[] => {
-  const numbered = after.flatMap((block, index) =>
-    block.type === "paragraph" && block.number !== undefined
-      ? [{ index, number: block.number }]
-      : [],
-  );
-  const first = numbered.at(0);
-  if (first === undefined) {
-    return [];
-  }
-  const source = before[first.index];
-  const style = (["bracket", "dot", "paren"] as const).find(
-    (candidate) =>
-      source?.type === "paragraph" &&
-      opensCourtMarker(candidate, source.plainText) !== null,
-  );
-  if (style === undefined) {
-    return ["a numbered paragraph had no marker"];
-  }
-  const problems: string[] = [];
-  for (const [position, { number }] of numbered.entries()) {
-    const previous = numbered[position - 1]?.number ?? 0;
-    if (number <= previous && number !== 1) {
-      problems.push(`${String(number)} after ${String(previous)}`);
-    }
-  }
-  let seenNumbered = false;
-  let listLength = 0;
-  for (const block of after) {
-    if (!isBody(block)) {
-      continue;
-    }
-    if (block.number !== undefined) {
-      seenNumbered = true;
-      listLength = 0;
-      continue;
-    }
-    const raw = opensCourtMarker(style, block.plainText)?.groups?.["n"];
-    if (raw === undefined || !seenNumbered) {
-      continue;
-    }
-    const value = Number(raw);
-    if (value === 1) {
-      listLength = 1;
-    } else if (value === listLength + 1) {
-      listLength = value;
-    } else {
-      problems.push(`unassigned marker ${String(value)}`);
-    }
-  }
-  return problems;
-};
-
 test("court paragraph numbers are faithful, structure-preserving and idempotent", () => {
   assertProperty(
     "court paragraph numbers are faithful, structure-preserving and idempotent",
@@ -219,7 +153,6 @@ test("court paragraph numbers are faithful, structure-preserving and idempotent"
       expect(extractCourtParagraphNumbers(numbering.blocks).blocks).toEqual(
         numbering.blocks,
       );
-      expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
     }),
   );
 });
@@ -263,8 +196,8 @@ const numberedWithLists = fc
     }));
     // A list after paragraph i that counts exactly to i reads two ways: the
     // court's i+1, i+2, … carry on, or they are the list's. Nothing after it
-    // tells them apart (a later list only restarts at 1), so the decision
-    // must be rejected.
+    // tells them apart (a later list only restarts at 1), so the ambiguous
+    // markers remain text.
     const ambiguous = lists.some(
       (length, index) => index + 1 < lists.length && length === index + 1,
     );
@@ -276,15 +209,17 @@ test("lists in the court's own marker style never take the court's numbers", () 
     "lists in the court's own marker style never take the court's numbers",
     fc.property(numberedWithLists, ({ blocks, courts, ambiguous }) => {
       const numbering = extractCourtParagraphNumbers(blocks);
-      // Ambiguous: rejected, or — when what is left is too short to be a
-      // numbering at all — unnumbered. Either way, nothing is stored.
-      expect(numbering.type === "numbered").toBe(!ambiguous);
-      expect(
-        numbering.blocks.map((block) =>
-          block.type === "paragraph" ? (block.number ?? null) : null,
-        ),
-      ).toEqual(ambiguous ? courts.map(() => null) : courts);
-      expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
+      const stored = numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      );
+      if (!ambiguous) {
+        expect(stored).toEqual(courts);
+      }
+      for (const [index, number] of stored.entries()) {
+        if (number !== null) {
+          expect(courts[index]).toBe(number);
+        }
+      }
     }),
   );
 });
@@ -340,11 +275,216 @@ test("no layout of same-style lists is read into a wrong court number", () => {
       const stored = numbering.blocks.map((block) =>
         block.type === "paragraph" ? (block.number ?? null) : null,
       );
-      // Either the court's own numbers exactly, or nothing at all.
-      expect(stored).toEqual(
-        numbering.type === "numbered" ? courts : courts.map(() => null),
-      );
-      expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
+      // Uncertain markers stay text; every stored label must still belong
+      // to the court, whatever other local irregularities are present.
+      for (const [index, number] of stored.entries()) {
+        if (number !== null) {
+          expect(courts[index]).toBe(number);
+        }
+      }
     }),
+  );
+});
+
+const printedParagraph = (index: number, marker: string): ParagraphBlock => {
+  const text = `${marker}Soud uvážil věc.`;
+  return {
+    id: `b${String(index)}`,
+    anchorId: `p-${String(index)}`,
+    type: "paragraph",
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  };
+};
+
+const labelsOf = (blocks: readonly Block[]) =>
+  blocks.map((block) =>
+    block.type === "paragraph" ? block.number : undefined,
+  );
+
+const localDefect = fc.record({
+  length: fc.integer({ min: 3, max: 100 }),
+  position: fc.nat(),
+  confusable: fc.constantFrom("l", "I"),
+  gap,
+});
+
+test("one OCR-confusable marker changes at most its own paragraph label", () => {
+  assertProperty(
+    "one OCR-confusable marker changes at most its own paragraph label",
+    fc.property(localDefect, ({ length, position, confusable, gap: space }) => {
+      const blocks = Array.from({ length }, (_, index) =>
+        printedParagraph(index, `${String(index + 1)}.${space}`),
+      );
+      const eligible = blocks.flatMap((_, index) =>
+        String(index + 1).includes("1") ? [index] : [],
+      );
+      const changed = eligible[position % eligible.length];
+      if (changed === undefined) {
+        throw new Error("every generated sequence includes paragraph 1");
+      }
+      const marker = `${String(changed + 1).replace("1", () => confusable)}.${space}`;
+      const mutated = blocks.map((block, index) =>
+        index === changed ? printedParagraph(index, marker) : block,
+      );
+      expect(mutated[changed]?.plainText).not.toBe(blocks[changed]?.plainText);
+      const before = labelsOf(extractCourtParagraphNumbers(blocks).blocks);
+      const result = extractCourtParagraphNumbers(mutated);
+      const after = labelsOf(result.blocks);
+      expect(before).toEqual(Array.from({ length }, (_, index) => index + 1));
+      expect(
+        after.filter((number, index) => number !== before[index]).length,
+      ).toBeLessThanOrEqual(1);
+      expect(after[changed]).toBe(
+        changed + 1 < length ? changed + 1 : undefined,
+      );
+      expect(extractCourtParagraphNumbers(result.blocks).blocks).toEqual(
+        result.blocks,
+      );
+    }),
+  );
+});
+
+test("one duplicate printed marker preserves every other paragraph label", () => {
+  assertProperty(
+    "one duplicate printed marker preserves every other paragraph label",
+    fc.property(localDefect, ({ length, position, gap: space }) => {
+      // A repeated 1 could instead start a nested list. Values above 1 have
+      // no such competing interpretation in this otherwise consecutive run.
+      const repeated = 2 + (position % (length - 1));
+      const blocks = Array.from({ length }, (_, index) =>
+        printedParagraph(index, `${String(index + 1)}.${space}`),
+      );
+      const inserted = printedParagraph(length, `${String(repeated)}.${space}`);
+      const mutated = blocks.toSpliced(repeated, 0, inserted);
+      const result = extractCourtParagraphNumbers(mutated);
+      expect(labelsOf(result.blocks)).toEqual(
+        Array.from({ length }, (_, index) => index + 1).toSpliced(
+          repeated,
+          0,
+          repeated,
+        ),
+      );
+      expect(result).toMatchObject({
+        type: "numbered",
+        evidence: [
+          {
+            type: "duplicate",
+            blockIndex: repeated,
+            number: repeated,
+            previousBlockIndex: repeated - 1,
+          },
+        ],
+      });
+    }),
+  );
+});
+
+test("a gap in printed numbering preserves labels on both sides", () => {
+  assertProperty(
+    "a gap in printed numbering preserves labels on both sides",
+    fc.property(
+      fc.record({
+        length: fc.integer({ min: 4, max: 100 }),
+        position: fc.nat(),
+        skipped: fc.integer({ min: 1, max: 100 }),
+      }),
+      ({ length, position, skipped }) => {
+        // Two consecutive markers following a large gap prove the resumed
+        // run. One isolated outlier has no such proof and remains text.
+        const changed = 1 + (position % (length - 2));
+        const numbers = Array.from(
+          { length },
+          (_, index) => index + 1 + (index >= changed ? skipped : 0),
+        );
+        const blocks = numbers.map((number, index) =>
+          printedParagraph(index, `${String(number)}. `),
+        );
+        expect(labelsOf(extractCourtParagraphNumbers(blocks).blocks)).toEqual(
+          numbers,
+        );
+      },
+    ),
+  );
+});
+
+test("separate opinions choose their own marker style and keep continuation numbering", () => {
+  const majority = Array.from({ length: 10 }, (_, index) =>
+    printedParagraph(index, `[${String(index + 1)}] `),
+  );
+  const heading: Block = {
+    type: "heading",
+    id: "opinion",
+    anchorId: "opinion",
+    level: 2,
+    plainText: "Odlišné stanovisko soudce",
+    inlines: [{ type: "text", text: "Odlišné stanovisko soudce" }],
+  };
+  const dissent = [11, 12].map((number) => ({
+    ...printedParagraph(number, `${String(number)}. `),
+    role: "dissent" as const,
+  }));
+  const blocks = [...majority, heading, ...dissent];
+  expect(labelsOf(extractCourtParagraphNumbers(blocks).blocks)).toEqual([
+    ...Array.from({ length: 10 }, (_, index) => index + 1),
+    undefined,
+    11,
+    12,
+  ]);
+  const numberedMajority = extractCourtParagraphNumbers(majority).blocks;
+  expect(
+    labelsOf(
+      extractCourtParagraphNumbers([...numberedMajority, heading, ...dissent])
+        .blocks,
+    ),
+  ).toEqual([
+    ...Array.from({ length: 10 }, (_, index) => index + 1),
+    undefined,
+    11,
+    12,
+  ]);
+});
+
+test("internal headings do not restart a dissent's numbering scope", () => {
+  const heading: Block = {
+    type: "heading",
+    id: "internal",
+    anchorId: "internal",
+    level: 3,
+    plainText: "II. Posouzení",
+    inlines: [{ type: "text", text: "II. Posouzení" }],
+  };
+  const dissent = [1, 2, 3, 4].map((number) => ({
+    ...printedParagraph(number, `${String(number)}. `),
+    role: "dissent" as const,
+  }));
+  const blocks = [...dissent.slice(0, 2), heading, ...dissent.slice(2)];
+  expect(labelsOf(extractCourtParagraphNumbers(blocks).blocks)).toEqual([
+    1,
+    2,
+    undefined,
+    3,
+    4,
+  ]);
+});
+
+test("partly numbered paragraphs recover labels between numbered neighbours", () => {
+  const blocks = [1, 2, 3].map((number, index) =>
+    printedParagraph(index, `${String(number)}. `),
+  );
+  const anchors = blocks.map((block, index) =>
+    index === 1
+      ? block
+      : {
+          ...block,
+          number: index + 1,
+          plainText: "Soud uvážil věc.",
+          inlines: [{ type: "text" as const, text: "Soud uvážil věc." }],
+        },
+  );
+  const result = extractCourtParagraphNumbers(anchors);
+  expect(labelsOf(result.blocks)).toEqual([1, 2, 3]);
+  expect(extractCourtParagraphNumbers(result.blocks).blocks).toEqual(
+    result.blocks,
   );
 });
