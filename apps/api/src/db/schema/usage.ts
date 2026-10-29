@@ -489,7 +489,7 @@ export const organizationAccessStates = p.pgTable(
     // cannot claim an evaluation it never started or end one twice.
     p.check(
       "organization_access_states_shape",
-      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NOT NULL)) IS TRUE`,
+      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ended_at IS NOT NULL AND ((evaluation_started_at IS NULL AND evaluation_ends_at IS NULL) OR evaluation_ends_at > evaluation_started_at))) IS TRUE`,
     ),
     // Written only by system paths on the owner connection (organization
     // creation, operator transitions); members read their own row.

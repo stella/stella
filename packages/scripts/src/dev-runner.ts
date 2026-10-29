@@ -1421,6 +1421,7 @@ export const createApiEnv = ({
   // balance to read; an older apps/api/.env must not block migrations.
   DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
+  DEPLOY_ENVIRONMENT: "development",
   NODE_ENV: "development",
   // Local development capabilities require an explicit runtime opt-in.
   STELLA_LOCAL_DEV: "1",

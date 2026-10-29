@@ -4,11 +4,9 @@ import { classifyOAuthDestination } from "@/components/oauth-consent/oauth-desti
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 
 const info = (redirectTargets: string[]): OAuthConsentInfo => ({
-  client_name: "Example app",
+  client: { type: "verified_unbranded", name: "Example app" },
   redirectTargets,
   clientIdHost: null,
-  unverified: false,
-  verifiedBrand: null,
 });
 
 describe("OAuth destination classification", () => {

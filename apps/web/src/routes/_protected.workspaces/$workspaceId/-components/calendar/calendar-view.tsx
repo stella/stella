@@ -14,7 +14,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -23,10 +23,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { appToday } from "@/lib/local-iso-date";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
@@ -78,7 +78,7 @@ type HandleDropParams = {
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const weekend = getWeekendDays(locale);
   const queryClient = useQueryClient();
@@ -232,7 +232,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       endDatePropertyId,
     }),
   });
-  const calendarTasksView = useQueryView(calendarTasksQuery);
+  const calendarTasksView = queryView(calendarTasksQuery);
   const calendarTasks =
     calendarTasksView.type === "items" ? calendarTasksView.items : [];
 

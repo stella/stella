@@ -14,6 +14,8 @@
 import type { SystemRunActor } from "./actors";
 
 export const SYSTEM_AUDIT_MODULES = {
+  "apps/api/src/lib/scheduler/tasks/case-law-coverage-refresh.ts":
+    "system:case-law-coverage-refresh",
   "apps/api/src/lib/db/operator-activity/read.ts": "system:operator-activity",
   "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts":
     "system:sanctions-monitoring-fanout",

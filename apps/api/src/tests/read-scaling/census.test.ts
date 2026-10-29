@@ -14,10 +14,15 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
+import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -30,6 +35,7 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -38,7 +44,13 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  suggestionRangeScalingScenario,
+  mobileClientMetadataScalingScenario,
+  ...documentAnnotationScalingScenarios,
+  myOpenTasksScalingScenario,
+  mobileUpdateScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
@@ -159,27 +171,18 @@ test("every MCP scenario names a registered tool", () => {
   }
 });
 
-// The HTTP core lists a route without the trailing slash Elysia gave a
-// prefix's index route; a base ledger may still spell it with one.
-const withoutTrailingSlash = (entries: string[]) =>
-  entries.map((entry) =>
-    entry.endsWith("/") && !entry.endsWith(" /") ? entry.slice(0, -1) : entry,
-  );
-
-for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
+for (const { kind, surface, ledger, measured } of [
   {
     kind: "api",
     surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
-    normalizeBaseEntries: withoutTrailingSlash,
   },
   {
     kind: "mcp",
     surface: mcpScalingSurface(DEFAULT_MCP_TOOL_DEFINITIONS),
     ledger: mcpLedger,
     measured: mcpScalingScenarios.map(({ name }) => name),
-    normalizeBaseEntries: undefined,
   },
 ]) {
   describe(`${kind} scaling census`, () => {
@@ -214,7 +217,7 @@ for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
           // A write route this change mounts may enter with its reason.
           normalizeBaseEntries: (base) =>
             withNewWriteRoutes({
-              base: normalizeBaseEntries?.(base) ?? base,
+              base,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,

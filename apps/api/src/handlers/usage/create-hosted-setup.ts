@@ -560,6 +560,7 @@ const checkoutRefusalError = (refusal: CheckoutRefusal) => {
 const hostedSessionUnavailableError = (cause?: unknown) =>
   new HandlerError({
     status: 502,
+    code: "internal_error",
     message: "Could not create hosted usage setup session",
     cause,
   });
@@ -572,6 +573,7 @@ const createHostedSetup = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "Hosted usage management is not configured on this deployment",
         }),

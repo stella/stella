@@ -618,6 +618,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
         if (Array.isArray(events)) {
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Sample audit unavailable",
           });
         }

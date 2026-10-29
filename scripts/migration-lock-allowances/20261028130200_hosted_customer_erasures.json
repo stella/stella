@@ -1,0 +1,4 @@
+{
+  "row-level-security": "ENABLE and FORCE RLS affect only the erasure intent table created by this migration, which no traffic reads yet; lock acquisition is bounded by 1s and statements by 5s.",
+  "create-policy": "The owner-access and stella deny-all policies install on the erasure intent table created by this migration without reading any application relation, with lock acquisition bounded by 1s."
+}

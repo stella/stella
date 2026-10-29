@@ -5,6 +5,8 @@ import { SKILL_RESOURCE_FOLDERS } from "@stll/skills/format";
 
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -129,6 +131,10 @@ const generateSkillDraft = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -183,6 +189,7 @@ const generateSkillDraft = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not generate skill draft. Please try again.",
           cause,
         });
@@ -197,6 +204,7 @@ const generateSkillDraft = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Skill draft was empty. Please try again.",
         }),
       );

@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, exists, sql } from "drizzle-orm";
 
-import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type {
   ReaderAnswerCitation,
   ReaderAnswerErrorCode,
@@ -297,6 +296,14 @@ export type ReaderAnswerStreamOptions = AnnotationAuthorScope & {
   usageLane?: UsageLaneDecision;
 };
 
+const readerAnswerInterrupted = (cause?: unknown) =>
+  new HandlerError({
+    status: 502,
+    code: "internal_error",
+    message: "Reader answer generation was interrupted",
+    cause,
+  });
+
 /** Admission remains held until the stream settles, including every tool round. */
 export const streamReaderAnswer = ({
   prepared,
@@ -314,8 +321,7 @@ export const streamReaderAnswer = ({
   const encoder = new TextEncoder();
   let partialContent = "";
   let connected = true;
-  let failureCode: ReaderAnswerErrorCode =
-    ACTION_ADMISSION_CODES.admissionUnavailable;
+  let failureCode: ReaderAnswerErrorCode = "internal";
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const emit = (event: ReaderAnswerStreamEvent) => {
@@ -330,17 +336,12 @@ export const streamReaderAnswer = ({
         answerId: prepared.answer.id,
         messageId: prepared.messageId,
       });
-      const interrupted = (cause?: unknown) =>
-        new HandlerError({
-          status: 502,
-          message: "Reader answer generation was interrupted",
-          cause,
-        });
+
       const remainingMs =
         prepared.deadlineAt - Temporal.Now.instant().epochMilliseconds;
       const admitted =
         remainingMs <= 0
-          ? Result.err(interrupted())
+          ? Result.err(readerAnswerInterrupted())
           : await Result.tryPromise({
               try: async () =>
                 await withTimeout(
@@ -360,7 +361,7 @@ export const streamReaderAnswer = ({
                             Temporal.Now.instant().epochMilliseconds >=
                               prepared.deadlineAt;
                           if (expired()) {
-                            return Result.err(interrupted());
+                            return Result.err(readerAnswerInterrupted());
                           }
                           const output = yield* Result.await(
                             runModel({
@@ -418,7 +419,7 @@ export const streamReaderAnswer = ({
                             }),
                           );
                           if (expired()) {
-                            return Result.err(interrupted());
+                            return Result.err(readerAnswerInterrupted());
                           }
                           const validated = validateReaderAnswerCitations({
                             content: output.content,
@@ -442,7 +443,7 @@ export const streamReaderAnswer = ({
                             }),
                           );
                           if (saved === null) {
-                            return Result.err(interrupted());
+                            return Result.err(readerAnswerInterrupted());
                           }
                           emit(saved);
                           return Result.ok(undefined);
@@ -457,7 +458,7 @@ export const streamReaderAnswer = ({
                     timeoutMs: remainingMs,
                   },
                 ),
-              catch: interrupted,
+              catch: readerAnswerInterrupted,
             });
       const outcome = admitted
         .andThen((admission) => admission)

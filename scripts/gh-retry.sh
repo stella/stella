@@ -54,11 +54,14 @@ trap 'cleanup; exit 143' TERM
 args=("$@")
 retryable=false
 transport_retryable=false
+response_retryable=false
 method=GET
 explicit_method=''
 endpoint=''
 query=''
 stdin_needed=false
+paginated=false
+exit_status=false
 # Consume option values as values; filenames after -- are never flags.
 for ((i=1; i<${#args[@]}; i+=1)); do
   arg="${args[i]}"
@@ -72,6 +75,15 @@ for ((i=1; i<${#args[@]}; i+=1)); do
       [[ "${args[i]:-}" != - ]] || stdin_needed=true
       ;;
     --input=*) method=POST; [[ "$arg" != --input=- ]] || stdin_needed=true ;;
+    --paginate) paginated=true ;;
+    --exit-status) exit_status=true ;;
+    --exit-status=*)
+      case "${arg#*=}" in
+        1|t|T|TRUE|true|True) exit_status=true ;;
+        0|f|F|FALSE|false|False) exit_status=false ;;
+        *) exit_status=false ;;
+      esac
+      ;;
     -f|-F|--field|--raw-field)
       flag="$arg"; method=POST; i=$((i+1)); value="${args[i]:-}"
       [[ "$value" != query=* ]] || query="${value#query=}"
@@ -95,16 +107,21 @@ done
 case "${args[0]}" in
   api)
     if [[ "$method" == GET || "$method" == HEAD ]]; then
-      retryable=true; transport_retryable=true
+      retryable=true; transport_retryable=true; response_retryable=true
     elif [[ "$endpoint" == graphql && "$query" =~ ^[[:space:]]*(query[[:space:]\(\{]|\{) && ! "$query" =~ (^|[^[:alnum:]_])mutation([^[:alnum:]_]|$) ]]; then
       # GraphQL queries use POST transport, but do not mutate repository state.
-      retryable=true
+      retryable=true; response_retryable=true
     fi
     ;;
-  run) [[ "${args[1]:-}" != list && "${args[1]:-}" != view && "${args[1]:-}" != watch && "${args[1]:-}" != download ]] || { retryable=true; transport_retryable=true; } ;;
+  run)
+    if [[ "${args[1]:-}" == list || "${args[1]:-}" == view || "${args[1]:-}" == watch || "${args[1]:-}" == download ]]; then
+      retryable=true; transport_retryable=true
+      [[ "$exit_status" == true ]] || response_retryable=true
+    fi
+    ;;
   release)
     case "${args[1]:-}" in
-      view|download) retryable=true; transport_retryable=true ;;
+      view|download) retryable=true; transport_retryable=true; response_retryable=true ;;
       upload)
         # Replacing assets by name is the only admitted write. Partial uploads
         # are replaced; creation, dispatch, status rows and mutations run once.
@@ -213,7 +230,10 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   http=0
   permanent=0
   transient_http=0
+  successful_http=0
   retry_after=-1
+  last_http=0
+  last_after=-1
   while read -r response_http response_after; do
     if [[ "$response_after" =~ ^[0-9]+$ ]]; then
       # Strip decimal padding before Bash arithmetic; large waits exceed the budget.
@@ -235,11 +255,15 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
       fi
     fi
     http=$response_http
+    last_http=$response_http
+    last_after=$response_after
     if ((http >= 500 && http <= 599 || http == 429 || http == 403 && response_after >= 0)); then
       transient_http=$http
       ((response_after <= retry_after)) || retry_after=$response_after
     elif ((http >= 400 && http <= 499)); then
       permanent=$http
+    elif ((http >= 200 && http <= 299)); then
+      successful_http=$http
     fi
   done < <(awk '
     BEGIN { after=-1 }
@@ -252,15 +276,32 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     }
     END { print status+0, after }
   ' "$scratch/trace")
-  if ((permanent > 0)); then
+  if [[ "$paginated" == true && "$method" == GET ]]; then
+    # Only the last response belongs to the page whose processing failed.
+    # An absent status means gh failed between requesting and parsing that page.
+    http=$last_http
+    retry_after=$last_after
+    permanent=0
+    transient_http=0
+  elif ((permanent > 0)); then
     http=$permanent
   elif ((transient_http > 0)); then
     http=$transient_http
+  elif ((successful_http > 0)); then
+    http=$successful_http
   fi
   failure="HTTP $http"
   transient=false
   if ((permanent == 0 && (http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0))); then
     transient=true
+  elif ((http >= 200 && http <= 299)); then
+    if [[ "$response_retryable" == true ]]; then
+      # gh can fail while decoding a successful response, including a later
+      # page of a paginated read. Repeating a read cannot duplicate a write.
+      transient=true
+    else
+      failure="HTTP $http (operation is not safe to retry)"
+    fi
   elif ((http == 0)) && [[ "$transport_retryable" == true ]] && awk '
     # Match Go transport errors logged by gh, not headers, payloads or decoder
     # failures mentioning EOF. Unknown non-HTTP failures stay single-shot.

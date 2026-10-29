@@ -10,19 +10,29 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationOptions } from "@/lib/organization/queries";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/routes/-route-presentation";
 import { OrganizationDangerZone } from "@/routes/_protected.admin/-components/organization-danger-zone";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.admin/-components/organization/jurisdictions-card";
 import { OrganizationProfileCard } from "@/routes/_protected.admin/-components/organization/profile-card";
 import { OrganizationTimeZoneCard } from "@/routes/_protected.admin/-components/organization/time-zone-card";
 
 export const Route = createFileRoute("/_protected/admin/general")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "admin.general",
+      to: "/admin/general",
+    }),
+  },
   loader: async ({ context }) => {
     await ensureRouteQueryData(
       context.queryClient,
       organizationOptions(context.user.activeOrganizationId),
     );
   },
+  head: () => ({ meta: [{ title: pageTitle("admin.general") }] }),
   component: OrganizationGeneralPage,
 });
 
