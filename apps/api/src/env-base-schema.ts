@@ -21,10 +21,8 @@ import * as v from "valibot";
 import { redisSettingsSchema } from "@stll/redis-config";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
-import {
-  DATABASE_COMPONENT_KEYS,
-  hasSecureDatabaseTransport,
-} from "@/api/db-url";
+import { DATABASE_COMPONENT_KEYS } from "@/api/db-components";
+import { hasSecureDatabaseTransport } from "@/api/db-url";
 import { CASE_LAW_DERIVED_AI_MODES } from "@/api/lib/case-law/derived-ai-mode";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
