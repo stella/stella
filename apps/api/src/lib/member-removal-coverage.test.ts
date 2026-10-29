@@ -123,6 +123,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
+  // Terminal AI outcomes contain a run id and timestamp, not a member id; the
+  // refusal reason is a closed literal and cannot carry user-provided text.
+  "fields.ai_settlement",
   "flow_definitions.steps",
   "flow_definitions.trigger",
   "flow_runs.definition_snapshot",
@@ -300,6 +303,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "correspondence_filers.filed_by_user_id":
     "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "document_processing_runs.requested_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "document_review_finding_decisions.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "document_review_findings.decided_by":
     "Retained attribution or request history; this column grants no matter membership.",

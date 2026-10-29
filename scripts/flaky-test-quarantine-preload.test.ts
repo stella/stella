@@ -143,12 +143,14 @@ type RunOptions = {
   // Makes the fixture's unquarantined test fail too.
   failUnquarantined?: boolean;
   reportDir?: "set" | "unset";
+  source?: string;
 };
 
 const run = ({
   names,
   failUnquarantined = false,
   reportDir = "set",
+  source = SOURCE,
 }: RunOptions) => {
   const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-"));
   roots.push(root);
@@ -158,7 +160,7 @@ const run = ({
     path.join(root, "scripts/flaky-test-quarantine.json"),
     serializeRegistry({ entries: names.map(entry) }),
   );
-  writeFileSync(path.join(root, FIXTURE), SOURCE);
+  writeFileSync(path.join(root, FIXTURE), source);
   writeFileSync(path.join(root, "runner.ts"), RUNNER);
   if (failUnquarantined) {
     writeFileSync(path.join(root, "fail-unquarantined"), "");
@@ -281,6 +283,34 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test("reused describe.each registrars restart row IDs for each suite", () => {
+    const names = [
+      "outer > first 0 alpha > case",
+      "outer > first 1 beta > case",
+      "outer > second 0 alpha > case",
+      "outer > second 1 beta > case",
+    ];
+    const result = run({
+      names,
+      source: `import { describe, test } from "bun:test";
+describe("outer", () => {
+  const cases = describe.each(["alpha", "beta"]);
+  cases("first %# %s", () => {
+    test("case", () => { throw new TypeError("fixture failure"); });
+  });
+  cases("second %# %s", () => {
+    test("case", () => { throw new TypeError("fixture failure"); });
+  });
+});`,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(
+      result.records
+        .flatMap((record) => (record.type === "failed" ? [record.id] : []))
+        .toSorted(),
+    ).toEqual(names.map((name) => `${FIXTURE}::${name}`));
+  });
+
   test("preserves Bun receiver semantics for native test and describe forms", () => {
     const native = runReceiverFixture({ preload: false });
     const preloaded = runReceiverFixture({ preload: true });

@@ -133,11 +133,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 29,
+    version: 30,
     scope: {
       type: "all",
       reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -173,11 +173,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
+        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {

@@ -1,0 +1,163 @@
+name: Publish Mobile Update
+run-name: Publish Mobile Update ${{ inputs.variant }} ${{ inputs.platform }}
+
+defaults:
+  run:
+    shell: bash
+
+# Publishes the mobile app's JavaScript as a signed over-the-air update to
+# the downloads CDN, for the builds whose native fingerprint matches this
+# commit (apps/mobile/scripts/fingerprint.ts). Manual only, from main.
+#
+# The manifest is signed here with the update signing key and never again:
+# the API's update route relays it unchanged, and a phone runs it only when
+# the signature verifies against the certificate its build embeds. Immutable
+# objects upload first and the per-build pointer last, so a phone never sees
+# a pointer to an update that is not fully there.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Which builds to update"
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+      platform:
+        description: "Which platforms"
+        required: true
+        type: choice
+        options:
+          - both
+          - ios
+          - android
+        default: both
+
+permissions: {}
+
+concurrency:
+  group: publish-mobile-update-${{ inputs.variant }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.variant }} ${{ inputs.platform }}
+    if: github.ref == 'refs/heads/main'
+    # The update role trusts only this environment, which admits only main.
+    environment: mobile-updates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # OIDC for the downloads bucket, as release-desktop
+    env:
+      APP_VARIANT: ${{ inputs.variant }}
+      PLATFORM_INPUT: ${{ inputs.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      # The signing key reaches only the signing step, never the install. A
+      # cold install, as every release job: a signed update restores no cache
+      # another job wrote.
+      - name: Install mobile dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
+
+      - name: Export each platform's bundle
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          case "$PLATFORM_INPUT" in
+            both) platforms="ios android" ;;
+            ios | android) platforms="$PLATFORM_INPUT" ;;
+            *) echo "unknown platform $PLATFORM_INPUT" >&2; exit 1 ;;
+          esac
+          echo "PLATFORMS=$platforms" >> "$GITHUB_ENV"
+          for platform in $platforms; do
+            runtime="$(bun scripts/fingerprint.ts "$platform")"
+            echo "$runtime" > "$RUNNER_TEMP/runtime-$platform"
+            MOBILE_RUNTIME_VERSION="$runtime" bunx expo export \
+              --platform "$platform" \
+              --output-dir "$RUNNER_TEMP/dist-$platform"
+            MOBILE_RUNTIME_VERSION="$runtime" bunx expo config --type public --json \
+              > "$RUNNER_TEMP/config-$platform.json"
+          done
+
+      - name: Sign each update
+        working-directory: apps/mobile
+        env:
+          SIGNING_KEY: ${{ secrets.MOBILE_UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/update-signing.pem"
+          trap 'rm -f "$key_path"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          for platform in $PLATFORMS; do
+            update_id="$(bun scripts/publish-update.ts \
+              --variant "$APP_VARIANT" \
+              --platform "$platform" \
+              --runtime-version "$(cat "$RUNNER_TEMP/runtime-$platform")" \
+              --dist "$RUNNER_TEMP/dist-$platform" \
+              --expo-config "$RUNNER_TEMP/config-$platform.json" \
+              --base-url https://downloads.stll.app \
+              --key "$key_path" \
+              --out "$RUNNER_TEMP/upload")"
+            echo "- **$platform**: update \`$update_id\` for runtime \`$(cat "$RUNNER_TEMP/runtime-$platform")\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      # A role of its own (stella-infra, environments/production/
+      # mobile-updates.tf): trusted only for the `mobile-updates` environment,
+      # it can write and delete under the bucket's `mobile/` prefix and
+      # invalidate the downloads distribution, and nothing the deploy role can.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_MOBILE_UPDATES }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Repository variables are not masked the way secrets are.
+      - name: Mask downloads CDN identifiers in logs
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+          DIST_ID: ${{ vars.DOWNLOADS_DIST_ID }}
+        run: |
+          echo "::add-mask::$BUCKET"
+          echo "::add-mask::$DIST_ID"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
+
+      - name: Upload the updates, pointers last
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+          DIST_ID: ${{ vars.DOWNLOADS_DIST_ID }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/upload"
+          aws s3 cp --recursive --no-progress . "s3://$BUCKET/" \
+            --exclude "*/latest.json" \
+            --cache-control "public, max-age=31536000, immutable"
+          pointers=()
+          while IFS= read -r pointer; do
+            key="${pointer#./}"
+            aws s3 cp --no-progress "$pointer" "s3://$BUCKET/$key" \
+              --content-type application/json \
+              --cache-control "public, max-age=60, must-revalidate"
+            pointers+=("/$key")
+          done < <(find . -name latest.json)
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "${pointers[@]}" > /dev/null

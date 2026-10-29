@@ -6,6 +6,8 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 
 import { suggestResearchColumnPromptBodySchema } from "@/api/handlers/case-law/research/schema";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
@@ -61,6 +63,7 @@ const config = {
 const suggestResearchColumnPrompt = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     body,
     orgAIConfig,
@@ -71,6 +74,10 @@ const suggestResearchColumnPrompt = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     // The grounding is read here, never sent: the client names decisions and
     // the server quotes them only if this read returns them. A decision the
     // gate withholds — unknown id, or a source whose terms forbid

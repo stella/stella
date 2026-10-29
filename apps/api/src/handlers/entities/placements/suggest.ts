@@ -12,7 +12,9 @@ import {
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -202,6 +204,10 @@ const organizeSuggestionsHandler = async function* ({
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError(undefined));
+  }
+
   yield* requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
@@ -230,24 +236,22 @@ const organizeSuggestionsHandler = async function* ({
     (context) => context.summary === null,
   );
   if (missingContexts.length > 0) {
-    const summariesResult = await generateMissingSummaries({
-      contexts: missingContexts,
-      organizationId,
-      admission,
-      workspaceId,
-      orgAIConfig,
-      managedAIResidency,
-      promptCachingEnabled,
-      safeDb,
-      userId,
-    });
-
-    if (Result.isError(summariesResult)) {
-      return Result.err(summariesResult.error);
-    }
+    const summaries = yield* Result.await(
+      generateMissingSummaries({
+        contexts: missingContexts,
+        organizationId,
+        admission,
+        workspaceId,
+        orgAIConfig,
+        managedAIResidency,
+        promptCachingEnabled,
+        safeDb,
+        userId,
+      }),
+    );
 
     const generatedByEntityId = new Map(
-      summariesResult.value.map((summary) => [summary.entityId, summary]),
+      summaries.map((summary) => [summary.entityId, summary]),
     );
 
     for (const context of missingContexts) {
@@ -1147,6 +1151,10 @@ const organizeSuggestions = createSafeHandler(
     body,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     return yield* organizeSuggestionsHandler({
       admission: configuredModelAdmission({ modelAdmission }),
       safeDb,
