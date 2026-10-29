@@ -26,6 +26,39 @@ describe("createFetchWithTimeout", () => {
     });
   }
 
+  test("a numeric deadline hands back the transport's response unchanged", async () => {
+    const transportResponse = new Response("payload");
+    let received: RequestInit | undefined;
+    const request = createFetchWithTimeout(async (_input, init) => {
+      received = init;
+      return transportResponse;
+    });
+    const response = await request("https://example.com", { timeoutMs: 1000 });
+    expect(response).toBe(transportResponse);
+    expect(await response.text()).toBe("payload");
+    expect(received?.signal?.aborted).toBe(false);
+  });
+
+  test("a numeric deadline still bounds the whole exchange", async () => {
+    let signal: AbortSignal | null | undefined;
+    const request = createFetchWithTimeout(async (_input, init) => {
+      signal = init?.signal;
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal?.reason);
+        });
+      });
+    });
+    const outcome = await request("https://example.com", { timeoutMs: 5 }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(outcome instanceof DOMException ? outcome.name : outcome).toBe(
+      "TimeoutError",
+    );
+  });
+
   test("caller cancellation retains its original reason", async () => {
     const controller = new AbortController();
     const cause = new DOMException("Cycle ended", "AbortError");
@@ -130,7 +163,9 @@ describe("createFetchWithTimeout", () => {
       return new Response(null, { status: 204 });
     });
 
-    await fetchWithTimeout("https://example.com/resource", { timeoutMs: 1 });
+    await fetchWithTimeout("https://example.com/resource", {
+      timeout: { type: "total", ms: 1 },
+    });
     if (!capturedSignal) {
       throw new Error("Missing fetch signal");
     }
