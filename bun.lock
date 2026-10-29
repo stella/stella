@@ -1519,6 +1519,21 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/transcript": {
+      "name": "@stll/transcript",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
     "packages/typescript-config": {
       "name": "@stll/typescript-config",
       "version": "0.0.0",
@@ -3415,6 +3430,8 @@
     "@stll/time": ["@stll/time@0.4.1", "", { "dependencies": { "better-result": "3.0.1", "temporal-polyfill": "1.0.5" } }, "sha512-kfssSdiycaokO9nAT6ItmWf+oQ6Vf3SIrWUQ+FaM7JZp84i0yRg975OBcM7scI1RZTPjHti3PAXJE+wmQRdPLw=="],
 
     "@stll/transactional": ["@stll/transactional@workspace:packages/transactional"],
+
+    "@stll/transcript": ["@stll/transcript@workspace:packages/transcript"],
 
     "@stll/typescript-config": ["@stll/typescript-config@workspace:packages/typescript-config"],
 
