@@ -260,10 +260,15 @@ type DecisionText = {
   sections: Awaited<ReturnType<typeof readDecisionSectionIndex>>;
 };
 
-type DecisionTextRead = {
-  textWithheldReason: DecisionTextWithheldReason | null;
-  text: DecisionText | null;
-};
+const UNAVAILABLE_DECISION_TEXT = { type: "unavailable" } as const;
+
+type DecisionTextRead =
+  | typeof UNAVAILABLE_DECISION_TEXT
+  | {
+      type: "source";
+      textWithheldReason: DecisionTextWithheldReason | null;
+      text: DecisionText | null;
+    };
 
 /** The section a citation row was extracted from, when the row kept one. */
 const sectionBlockIdsAt = (
@@ -379,16 +384,20 @@ const readDecisionTextGroup = async ({
   const textByDecision = new Map<string, DecisionTextRead>(
     pointers.map(({ id, textWithheldReason }) => [
       String(id),
-      { textWithheldReason, text: null },
+      { type: "source" as const, textWithheldReason, text: null },
     ]),
   );
   for (const entry of entries) {
     if (entry?.status === "found") {
       textByDecision.set(entry.id, {
+        type: "source",
         textWithheldReason: null,
         text: entry.text,
       });
     }
+  }
+  for (const id of changed) {
+    textByDecision.set(id, UNAVAILABLE_DECISION_TEXT);
   }
   if (changed.size === 0 || attempt >= PASSAGE_VERSION_ATTEMPTS) {
     return textByDecision;
@@ -402,19 +411,36 @@ const readDecisionTextGroup = async ({
     pointers: fresh,
     attempt: attempt + 1,
   });
-  for (const id of changed) {
-    textByDecision.delete(id);
-  }
   for (const [id, text] of retried) {
     textByDecision.set(id, text);
   }
   return textByDecision;
 };
 
-const readDecisionTextByDecision = async (
-  caseLawDb: CaseLawPublicReadDb,
-  pointers: readonly PassageSourcePointer[],
-): Promise<Map<string, DecisionTextRead>> => {
+type CitationTextRead = {
+  citation: DecisionCitationRow;
+  citingId: string;
+  disposition: DecisionTextRead;
+};
+
+type ReadCitationTextsOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  pointers: readonly PassageSourcePointer[];
+  citations: readonly Omit<CitationTextRead, "disposition">[];
+};
+
+const readCitationTexts = async ({
+  caseLawDb,
+  pointers,
+  citations,
+}: ReadCitationTextsOptions): Promise<CitationTextRead[]> => {
+  const admitted: CitationTextRead[] = citations.map(
+    ({ citation, citingId }) => ({
+      citation,
+      citingId,
+      disposition: UNAVAILABLE_DECISION_TEXT,
+    }),
+  );
   const textByDecision = new Map<string, DecisionTextRead>();
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
     const entries = await readDecisionTextGroup({
@@ -426,7 +452,13 @@ const readDecisionTextByDecision = async (
       textByDecision.set(id, text);
     }
   }
-  return textByDecision;
+  for (const entry of admitted) {
+    const disposition = textByDecision.get(entry.citingId);
+    if (disposition !== undefined) {
+      entry.disposition = disposition;
+    }
+  }
+  return admitted;
 };
 
 export type ReadDecisionCitationsOptions = {
@@ -518,38 +550,59 @@ export const readGatedDecisionCitations = defineWindowedRead(
       return gated;
     }
 
-    const textByDecision = await readDecisionTextByDecision(
+    const resolved = await readCitationTexts({
       caseLawDb,
-      gated.sources,
-    );
-    const items = gated.page.items.map((item): CitationWithPassage => {
-      const citingId =
-        direction === "cites" ? String(decisionId) : String(item.decision?.id);
-      const current = textByDecision.get(citingId);
-      if (current === undefined) {
-        return panic(`No source disposition for citing decision ${citingId}`);
-      }
-      const { text, textWithheldReason } = current;
-      const { evidenceQuote, ...citation } = item;
-      return {
-        ...citation,
-        citationText: textWithheldReason === null ? item.citationText : null,
-        textWithheldReason,
-        passage:
-          textWithheldReason !== null || text === null
-            ? null
-            : citationPassageIn({
-                evidenceQuote:
-                  item.doctrine === "distinguishes" ||
-                  item.doctrine === "limits"
-                    ? evidenceQuote
-                    : null,
-                ast: text.ast,
-                citationText: item.citationText,
-                classifiedBlockIds: sectionBlockIdsAt(text, item.sectionIndex),
-              }),
-      };
+      pointers: gated.sources,
+      citations: gated.page.items.map((citation) => ({
+        citation,
+        citingId:
+          direction === "cites"
+            ? String(decisionId)
+            : String(citation.decision?.id),
+      })),
     });
+    const items = resolved.map(
+      ({ citation: item, disposition }): CitationWithPassage => {
+        const { evidenceQuote, ...citation } = item;
+        switch (disposition.type) {
+          case "unavailable":
+            return {
+              ...citation,
+              citationText: null,
+              textWithheldReason: null,
+              passage: null,
+            };
+          case "source": {
+            const { text, textWithheldReason } = disposition;
+            return {
+              ...citation,
+              citationText:
+                textWithheldReason === null ? item.citationText : null,
+              textWithheldReason,
+              passage:
+                textWithheldReason !== null || text === null
+                  ? null
+                  : citationPassageIn({
+                      evidenceQuote:
+                        item.doctrine === "distinguishes" ||
+                        item.doctrine === "limits"
+                          ? evidenceQuote
+                          : null,
+                      ast: text.ast,
+                      citationText: item.citationText,
+                      classifiedBlockIds: sectionBlockIdsAt(
+                        text,
+                        item.sectionIndex,
+                      ),
+                    }),
+            };
+          }
+          default:
+            disposition satisfies never;
+            return panic("Unexpected citation text disposition");
+        }
+      },
+    );
 
     return {
       page: {

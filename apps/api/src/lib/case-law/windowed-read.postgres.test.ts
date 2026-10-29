@@ -361,6 +361,127 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       });
     });
 
+    test("citation text is withheld when its citing decision is redacted after admission", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const fixture = await prepareFixture(db, 1);
+        let decisionRedacted = false;
+        const readDb = async <T>(
+          read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+          options?: Parameters<CaseLawPublicReadDb>[1],
+        ) => {
+          const result = await fixture.caseLawDb(read, options);
+          // Redact the citing decision after admission closes, before the
+          // lazy payload read observes the publication view again.
+          if (
+            !decisionRedacted &&
+            typeof result === "object" &&
+            result !== null &&
+            "type" in result &&
+            result.type === "page" &&
+            "sources" in result
+          ) {
+            decisionRedacted = true;
+            await db
+              .update(caseLawDecisions)
+              .set({ redactedAt: new Date("2026-01-01T00:00:00Z") })
+              .where(eq(caseLawDecisions.id, fixture.decisionId));
+          }
+          return result;
+        };
+        const caseLawDb = asTestRaw<CaseLawPublicReadDb>(readDb);
+        resetPublicCaseLawConfigForTesting(caseLawDb);
+        try {
+          const result = await readGatedDecisionCitations({
+            caseLawDb,
+            decisionId: fixture.targetId,
+            cursor: undefined,
+            direction: "cited_by",
+            limit: 1,
+            surface: "search",
+          });
+          expect(decisionRedacted).toBe(true);
+          if (result?.type !== "page") {
+            panic("Expected the citation page");
+          }
+          expect(result.page.items).toHaveLength(1);
+          const item = result.page.items.at(0);
+          expect(item?.citationText).toBeNull();
+          expect(item?.passage).toBeNull();
+        } finally {
+          resetPublicCaseLawConfigForTesting();
+        }
+      });
+    });
+
+    test("citation text is withheld when payload versions keep changing through bounded retries", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const fixture = await prepareFixture(db, 1);
+        let versionChanges = 0;
+        const readDb = async <T>(
+          read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+          options?: Parameters<CaseLawPublicReadDb>[1],
+        ) => {
+          const result = await fixture.caseLawDb(read, options);
+          const admittedPage =
+            typeof result === "object" &&
+            result !== null &&
+            "type" in result &&
+            result.type === "page" &&
+            "sources" in result;
+          const refreshedPointers =
+            Array.isArray(result) &&
+            result.some(
+              (pointer: unknown) =>
+                typeof pointer === "object" &&
+                pointer !== null &&
+                "id" in pointer &&
+                pointer.id === fixture.decisionId &&
+                "versionTimestamp" in pointer &&
+                typeof pointer.versionTimestamp === "string",
+            );
+          // Each admitted identity becomes stale before its lazy payload read.
+          if (admittedPage || refreshedPointers) {
+            versionChanges += 1;
+            await db
+              .update(caseLawDecisions)
+              .set({
+                updatedAt: sql`${caseLawDecisions.updatedAt} + interval '1 microsecond'`,
+              })
+              .where(eq(caseLawDecisions.id, fixture.decisionId));
+          }
+          return result;
+        };
+        const caseLawDb = asTestRaw<CaseLawPublicReadDb>(readDb);
+        resetPublicCaseLawConfigForTesting(caseLawDb);
+        try {
+          const result = await readGatedDecisionCitations({
+            caseLawDb,
+            decisionId: fixture.targetId,
+            cursor: undefined,
+            direction: "cited_by",
+            limit: 1,
+            surface: "search",
+          });
+          expect(versionChanges).toBeGreaterThan(1);
+          if (result?.type !== "page") {
+            panic("Expected the citation page");
+          }
+          expect(result.page.items).toHaveLength(1);
+          const item = result.page.items.at(0);
+          expect(item?.citationText).toBeNull();
+          expect(item?.passage).toBeNull();
+        } finally {
+          resetPublicCaseLawConfigForTesting();
+        }
+      });
+    });
+
     test("every case-law window measures its admitted production owner", async () => {
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
