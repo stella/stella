@@ -229,14 +229,16 @@ export const holdCaseLawMaintenanceLane = async ({
 };
 
 type MaintenanceCleanupOptions = {
+  signal?: AbortSignal;
   timeoutMs: number;
   queryTimeoutMs: number;
 };
 
-/** Recovery outlives a cancelled job and retries schema admission on fresh sessions. */
+/** Recovery uses fresh deadlines; bounded queue persistence supplies its operation signal. */
 export const createCaseLawMaintenanceCleanupHandles = async ({
   timeoutMs,
   queryTimeoutMs,
+  signal: operationSignal,
 }: MaintenanceCleanupOptions): Promise<CaseLawScriptHandles> => {
   const [
     { withLongRunningConnection },
@@ -246,7 +248,8 @@ export const createCaseLawMaintenanceCleanupHandles = async ({
     import("@/api/db/scoped"),
   ]);
   const transaction: CaseLawRootHandle["transaction"] = async (work) => {
-    const signal = AbortSignal.timeout(timeoutMs);
+    const signal = operationSignal ?? AbortSignal.timeout(timeoutMs);
+    signal.throwIfAborted();
     return await withLongRunningConnection(
       { statementTimeout: queryTimeoutMs, lockTimeout: queryTimeoutMs, signal },
       async ({ db }) =>

@@ -9,6 +9,8 @@ import "@/api/tests/setup-env";
 import { AI_PROVIDERS } from "@stll/ai-catalog";
 import { compareCodeUnit } from "@stll/collation";
 
+import { VISITED_REPLAY_DROP_REASON } from "@/api/handlers/case-law/ingestion/visited-replay";
+import type { VisitedReplayDropReason } from "@/api/handlers/case-law/ingestion/visited-replay";
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
@@ -25,7 +27,9 @@ import {
   emitChatRunLogMetric,
   emitPromptCacheMetric,
   emitReasoningReplayDroppedMetric,
+  emitRequestDurationMetric,
   emitVerificationRunFailureMetric,
+  recordVisitedReplayHintDrop,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -174,6 +178,73 @@ test("reasoning replay drops emit only bounded provider and reason dimensions", 
           },
         ],
       },
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("visited replay drops count every typed reason without request-side output and drain once", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  const completeRequest = () =>
+    emitRequestDurationMetric({
+      requestClass: "batch",
+      durationMs: 1,
+      statusCode: 200,
+      route: "/request-only-fixture",
+    });
+  const records = () =>
+    lines
+      .map((line) =>
+        v.parse(v.record(v.string(), v.unknown()), JSON.parse(line)),
+      )
+      .filter((record) => Object.hasOwn(record, "CaseLawReplayHintDrops"));
+  try {
+    const expectedCounts = {
+      "source-ceiling": 2,
+      "pending-ceiling": 3,
+      "rate-ceiling": 4,
+    } as const satisfies Record<VisitedReplayDropReason, number>;
+    for (const reason of Object.values(VISITED_REPLAY_DROP_REASON)) {
+      for (let index = 0; index < expectedCounts[reason]; index += 1) {
+        recordVisitedReplayHintDrop(reason);
+      }
+    }
+    expect(lines).toHaveLength(0);
+    completeRequest();
+    expect(records()).toHaveLength(Object.keys(expectedCounts).length);
+    for (const reason of Object.values(VISITED_REPLAY_DROP_REASON)) {
+      expect(records().find((record) => record["reason"] === reason)).toEqual({
+        event: "case_law.replay.hint_drops",
+        reason,
+        policy: "drop-new",
+        CaseLawReplayHintDrops: expectedCounts[reason],
+        _aws: {
+          Timestamp: expect.any(Number),
+          CloudWatchMetrics: [
+            {
+              Namespace: "Stella/Api",
+              Dimensions: [["reason", "policy"]],
+              Metrics: [{ Name: "CaseLawReplayHintDrops", Unit: "Count" }],
+            },
+          ],
+        },
+      });
+    }
+    completeRequest();
+    expect(records()).toHaveLength(3);
+    const linesBeforeRecord = lines.length;
+    recordVisitedReplayHintDrop(VISITED_REPLAY_DROP_REASON.PENDING_CEILING);
+    expect(lines).toHaveLength(linesBeforeRecord);
+    completeRequest();
+    expect(records()).toHaveLength(4);
+    expect(records().at(-1)).toMatchObject({
+      reason: VISITED_REPLAY_DROP_REASON.PENDING_CEILING,
+      policy: "drop-new",
+      CaseLawReplayHintDrops: 1,
     });
   } finally {
     resetMetricLineSinkForTesting();

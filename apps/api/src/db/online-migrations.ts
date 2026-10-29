@@ -222,6 +222,15 @@ const chatContentV3Index = ({ table: tableName }: ChatContentV3IndexSource) =>
   }) satisfies OnlineIndex;
 
 export const ONLINE_MIGRATION_INDEXES = [
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_replay_hint_completion_idx" ON public."case_law_replay_reported_decisions" (completed_at, source_id, decision_id, target_parser_version) WHERE completed_at IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_replay_reported_decisions USING btree (completed_at, source_id, decision_id, target_parser_version) WHERE (completed_at IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_replay_hint_completion_idx",
+    tableName: "case_law_replay_reported_decisions",
+  },
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:

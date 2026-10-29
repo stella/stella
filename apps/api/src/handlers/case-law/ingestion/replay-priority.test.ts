@@ -11,13 +11,13 @@ test("reported rows outrank every parser wave and parser waves outrank remaining
     for (const lastFullReplayParserVersion of [null, 1, currentParserVersion]) {
       expect(
         replayPriority({
-          reportedDecisionPending: true,
+          pendingHint: REPLAY_PRIORITY.REPORTED,
           currentParserVersion,
           lastFullReplayParserVersion,
         }),
       ).toBe(REPLAY_PRIORITY.REPORTED);
       const other = replayPriority({
-        reportedDecisionPending: false,
+        pendingHint: null,
         currentParserVersion,
         lastFullReplayParserVersion,
       });
@@ -32,6 +32,19 @@ test("reported rows outrank every parser wave and parser waves outrank remaining
       );
     }
   }
+  expect(replayPriorityRank(REPLAY_PRIORITY.REPORTED)).toBeLessThan(
+    replayPriorityRank(REPLAY_PRIORITY.VISITED),
+  );
+  expect(replayPriorityRank(REPLAY_PRIORITY.VISITED)).toBeLessThan(
+    replayPriorityRank(REPLAY_PRIORITY.PARSER_BUMP),
+  );
+  expect(
+    replayPriority({
+      pendingHint: REPLAY_PRIORITY.VISITED,
+      currentParserVersion: 2,
+      lastFullReplayParserVersion: 1,
+    }),
+  ).toBe(REPLAY_PRIORITY.VISITED);
   expect(replayPriorityRank(REPLAY_PRIORITY.PARSER_BUMP)).toBeLessThan(
     replayPriorityRank(REPLAY_PRIORITY.REMAINING),
   );

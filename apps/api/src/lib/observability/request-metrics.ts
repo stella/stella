@@ -4,6 +4,7 @@ import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
+import type { VisitedReplayDropReason } from "@/api/handlers/case-law/ingestion/visited-replay";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import { getApiLatencyAdmission } from "@/api/lib/observability/api-latency-admission";
 import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
@@ -35,6 +36,44 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+const VISITED_REPLAY_HINT_DROPS_METRIC = "CaseLawReplayHintDrops";
+
+const visitedReplayHintDrops = new Map<VisitedReplayDropReason, number>();
+
+/** Request paths only count discarded hints; completion drains the bounded reason set. */
+export const recordVisitedReplayHintDrop = (
+  reason: VisitedReplayDropReason,
+): void => {
+  visitedReplayHintDrops.set(
+    reason,
+    (visitedReplayHintDrops.get(reason) ?? 0) + 1,
+  );
+};
+
+const emitVisitedReplayHintDrops = (timestamp: number): void => {
+  const pending = Array.from(visitedReplayHintDrops);
+  visitedReplayHintDrops.clear();
+  for (const [reason, count] of pending) {
+    writeMetricLine({
+      event: "case_law.replay.hint_drops",
+      reason,
+      policy: "drop-new",
+      [VISITED_REPLAY_HINT_DROPS_METRIC]: count,
+      _aws: {
+        Timestamp: timestamp,
+        CloudWatchMetrics: [
+          {
+            Namespace: METRIC_NAMESPACE,
+            Dimensions: [["reason", "policy"]],
+            Metrics: [
+              { Name: VISITED_REPLAY_HINT_DROPS_METRIC, Unit: "Count" },
+            ],
+          },
+        ],
+      },
+    });
+  }
+};
 
 const REQUEST_STAGE_FAMILIES = {
   legislation_search: [
@@ -603,12 +642,14 @@ export const emitRequestDurationMetric = (
   input: EmitRequestDurationMetricInput,
 ): void => {
   getApiLatencyAdmission().observe(input.requestClass, input.durationMs);
+  const timestamp = Temporal.Now.instant().epochMilliseconds;
   writeMetricLine(
     buildRequestDurationRecord({
       ...input,
-      timestamp: Temporal.Now.instant().epochMilliseconds,
+      timestamp,
     }).record,
   );
+  emitVisitedReplayHintDrops(timestamp);
 };
 
 export type OpenRouterTokenExchangeOutcome =

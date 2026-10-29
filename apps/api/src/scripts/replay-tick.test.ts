@@ -15,7 +15,10 @@ import {
   REPLAY_HEALTH_CONFIG,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
 import {
   assertReplaySlot,
   createReplayPreflightGate,
@@ -43,6 +46,39 @@ const report = (
   retryExhausted: 0,
   retryTerminal: 0,
   heldTooLong: false,
+});
+
+describe("visited hint flush admission", () => {
+  test("disabled and cold-latency invocations load no database runtime", async () => {
+    for (const enabled of ["false", "true"]) {
+      const child = Bun.spawn({
+        cmd: [
+          process.execPath,
+          "--no-env-file",
+          "--eval",
+          'import { runEnabledVisitedReplayFlush } from "./src/scripts/replay-tick-command.ts"; console.log(JSON.stringify(await runEnabledVisitedReplayFlush()));',
+        ],
+        cwd: new URL("../..", import.meta.url).pathname,
+        env: {
+          PATH: process.env["PATH"],
+          NODE_ENV: "test",
+          CASE_LAW_REPLAY_ENABLED: enabled,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exit] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      expect(exit).toBe(0);
+      expect(stderr).toBe("");
+      expect(JSON.parse(stdout)).toEqual({
+        status: enabled === "true" ? "held" : "disabled",
+      });
+    }
+  });
 });
 
 describe("scheduled replay entrypoint", () => {
@@ -356,7 +392,11 @@ describe("scheduled replay entrypoint", () => {
     }
     for (const policy of [
       { mode: "off" },
-      { mode: "enrolled", reviewedDryRun: "fixture review" },
+      {
+        mode: "enrolled",
+        reviewedDryRun: "fixture review",
+        reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+      },
     ] as const) {
       expect(
         await runReplayTickScript({

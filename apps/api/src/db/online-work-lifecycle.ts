@@ -14,6 +14,7 @@ export const FINALIZED = {
 // One `name: PENDING` or `name: FINALIZED` line per entry: that check reads
 // this file's history line by line.
 export const ONLINE_WORK_LIFECYCLE = {
+  case_law_replay_hint_completion_idx: PENDING,
   legal_reader_annotations_matter_document_idx: PENDING,
   legal_reader_annotations_matter_document_shape: PENDING,
   case_law_decisions_country_court_date_published_idx: PENDING,

@@ -33,6 +33,7 @@ import {
   caseLawReplayDailyRows,
   caseLawReplayReportedDecisions,
   caseLawReplaySourceProgress,
+  caseLawReplayVisitedQuotas,
   caseLawSources,
   databaseBackfillStates,
   type ReplayDryRunDiffSample,
@@ -46,19 +47,27 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import {
   buildCaseLawReplayCompactionQuery,
+  buildCaseLawReplayHintCompactionQuery,
+  buildCaseLawReplayVisitedQuotaCompactionQuery,
   lockCaseLawDecisionRows,
   lockCaseLawReplayBatch,
   lockCaseLawReplayPendingBatch,
+  lockCaseLawReplayVisitedQuota,
 } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionLifecycle } from "@/api/lib/db/transitions";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
 import {
+  dueCaseLawReplayPendingReceipt,
+  REPLAY_PENDING_RECEIPT_STATUSES,
+} from "@/api/lib/legal-search/case-law-replay-pending";
+import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import { getAdapter } from "./adapters/adapter-registry";
@@ -89,14 +98,20 @@ import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   type ReplayEnrolment,
-  validateReplayEnrolment,
+  replayWaveAdmission,
 } from "./replay-enrolment";
 import {
   REPLAY_PREVIEW_FAILURE,
   type ReplayFailure,
   replayFailure,
 } from "./replay-failure";
-import { replayPriority, replayPriorityRank } from "./replay-priority";
+import {
+  REPLAY_HINT_TIERS,
+  REPLAY_PRIORITY,
+  replayPriorityRank,
+  replaySourcePriorityOrder,
+  VISITED_REPLAY_ADMISSION_LIMITS,
+} from "./replay-priority";
 
 const withReplayTransaction = async <T>(
   db: CaseLawRootHandle,
@@ -221,7 +236,7 @@ const markFullReplayCompleted = async (
         and(
           eq(caseLawReplayBatches.sourceId, source.id),
           eq(caseLawReplayBatches.parserVersionTo, source.currentParserVersion),
-          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
+          inArray(caseLawReplayBatches.status, REPLAY_PENDING_RECEIPT_STATUSES),
         ),
       )
       .limit(1);
@@ -286,7 +301,7 @@ type ReadReportedSourcesOptions = {
   ordered: readonly BackgroundReplaySource["adapterKey"][];
   gateStates: ReadonlyMap<string, BatchState>;
 };
-const readReportedSources = async (
+const readReplayHintPriorities = async (
   { db, enrolment, now, sourceEnabled }: ReplayStoreContext,
   { sources, ordered, gateStates }: ReadReportedSourcesOptions,
 ) => {
@@ -297,6 +312,11 @@ const readReportedSources = async (
       source === undefined ||
       policy.mode === "off" ||
       sourceEnabled?.(adapterKey) === false
+    ) {
+      return [];
+    }
+    if (
+      replayWaveAdmission(policy, PARSER_VERSIONS[adapterKey]).status === "held"
     ) {
       return [];
     }
@@ -325,7 +345,11 @@ const readReportedSources = async (
   });
   const reported = await withReplayTransaction(db, async (tx) => {
     const [first, second, ...rest] = candidates.map((source) =>
-      reportedDecisionQuery(tx, source),
+      hintDecisionQuery(tx, {
+        type: "source-priority",
+        source,
+        now: new Date(now()),
+      }),
     );
     if (first === undefined) {
       return [];
@@ -334,7 +358,7 @@ const readReportedSources = async (
       ? await first
       : await unionAll(first, second, ...rest);
   });
-  return new Set(reported.map((row) => row.sourceId));
+  return new Map(reported.map((row) => [row.sourceId, row.tier]));
 };
 
 const chooseSource = async (
@@ -405,17 +429,7 @@ const chooseSource = async (
                     caseLawReplayBatches.sourceId,
                     availableSources.map((source) => source.id),
                   ),
-                  inArray(caseLawReplayBatches.status, [
-                    "reserved",
-                    "retry-exhausted",
-                  ]),
-                  or(
-                    isNull(caseLawReplayBatches.retryAt),
-                    lte(
-                      caseLawReplayBatches.retryAt,
-                      sql`${new Date(now())}::timestamptz`,
-                    ),
-                  ),
+                  dueCaseLawReplayPendingReceipt(new Date(now())),
                 ),
               );
       return {
@@ -426,32 +440,30 @@ const chooseSource = async (
       };
     },
   );
-  const reportedSources = await readReportedSources(context, {
+  const reportedSources = await readReplayHintPriorities(context, {
     sources: availableSources,
     ordered,
     gateStates,
   });
-  ordered.sort((left, right) => {
-    const priorityOf = (adapterKey: keyof typeof PARSER_VERSIONS) => {
-      const source = sourceByAdapter.get(adapterKey);
-      return replayPriorityRank(
-        replayPriority({
-          reportedDecisionPending:
-            source === undefined ? false : reportedSources.has(source.id),
-          currentParserVersion: PARSER_VERSIONS[adapterKey],
-          lastFullReplayParserVersion:
-            source?.lastFullReplayParserVersion ?? null,
-        }),
-      );
-    };
-    return priorityOf(left) - priorityOf(right);
+  const priorityOrder = replaySourcePriorityOrder({
+    adapterOrder: ordered,
+    sources: availableSources,
+    parserVersions: PARSER_VERSIONS,
+    pendingHints: reportedSources,
   });
-  for (const adapterKey of ordered) {
+  for (const adapterKey of priorityOrder) {
     const policy = enrolment[adapterKey];
     if (policy.mode === "off" || sourceEnabled?.(adapterKey) === false) {
       continue;
     }
-    validateReplayEnrolment(policy);
+    const wave = replayWaveAdmission(policy, PARSER_VERSIONS[adapterKey]);
+    if (wave.status === "held") {
+      logger.info("case_law_replay.wave_held", {
+        adapterKey,
+        reason: wave.reason,
+      });
+      continue;
+    }
     const adapter = getAdapter(adapterKey);
     if (!adapter || replayCapability(adapter).type === "unsupported") {
       panic("Enrolled adapter cannot replay stored raw");
@@ -541,14 +553,66 @@ type SelectNextOptions = {
   after: BackgroundReplayBatch["decisionId"] | null;
 };
 
-const reportedDecisionQuery = (
+type HintDecisionQueryOptions =
+  | { type: "source-priority"; source: BackgroundReplaySource; now: Date }
+  | { type: "unreserved-row"; source: BackgroundReplaySource };
+
+const hintDecisionQuery = (
   tx: Transaction,
-  source: BackgroundReplaySource,
-) =>
-  tx
+  options: HintDecisionQueryOptions,
+) => {
+  const { source } = options;
+  const duePending = (() => {
+    switch (options.type) {
+      case "unreserved-row":
+        return undefined;
+      case "source-priority":
+        return source.mode === "enrolled"
+          ? sql`EXISTS (${tx
+              .select({ present: sql`1` })
+              .from(caseLawReplayBatches)
+              .where(
+                and(
+                  dueCaseLawReplayPendingReceipt(options.now),
+                  eq(
+                    caseLawReplayBatches.sourceId,
+                    caseLawReplayReportedDecisions.sourceId,
+                  ),
+                  eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
+                  eq(
+                    caseLawReplayBatches.sourceRawS3Key,
+                    caseLawDecisions.sourceRawS3Key,
+                  ),
+                  eq(
+                    caseLawReplayBatches.parserVersionTo,
+                    source.currentParserVersion,
+                  ),
+                  lte(
+                    caseLawReplayReportedDecisions.targetParserVersion,
+                    caseLawReplayBatches.parserVersionTo,
+                  ),
+                  or(
+                    isNull(caseLawDecisions.parserVersion),
+                    lte(
+                      caseLawDecisions.parserVersion,
+                      source.currentParserVersion,
+                    ),
+                    parsedReplayInputPredicate(source.currentParserVersion),
+                  ),
+                ),
+              )
+              .limit(1)})`
+          : undefined;
+      default:
+        options satisfies never;
+        return panic("Unknown replay hint query purpose");
+    }
+  })();
+  return tx
     .select({
       id: caseLawDecisions.id,
       sourceId: caseLawReplayReportedDecisions.sourceId,
+      tier: caseLawReplayReportedDecisions.tier,
     })
     .from(caseLawReplayReportedDecisions)
     .innerJoin(
@@ -571,27 +635,38 @@ const reportedDecisionQuery = (
           : undefined,
         isNull(caseLawDecisions.redactedAt),
         isNotNull(caseLawDecisions.sourceRawS3Key),
-        replaySelectionPredicate(
-          {
-            type: "background",
-            adapterKey: source.adapterKey,
-            currentParserVersion: source.currentParserVersion,
-            mode: source.mode,
-          },
-          tx,
+        or(
+          replaySelectionPredicate(
+            {
+              type: "background",
+              adapterKey: source.adapterKey,
+              currentParserVersion: source.currentParserVersion,
+              mode: source.mode,
+            },
+            tx,
+          ),
+          duePending,
         ),
       ),
     )
     .orderBy(
+      sqlCaseFragment({
+        operand: sql`${caseLawReplayReportedDecisions.tier}`,
+        branches: REPLAY_HINT_TIERS.map(
+          (tier) => sql`WHEN ${tier} THEN ${replayPriorityRank(tier)}`,
+        ),
+        fallback: sql`NULL::integer`,
+      }),
       asc(caseLawReplayReportedDecisions.queuedAt),
       asc(caseLawReplayReportedDecisions.decisionId),
     )
     .limit(1);
+};
 
-const selectReportedDecision = async (
+const selectHintDecision = async (
   tx: Transaction,
   source: BackgroundReplaySource,
-) => (await reportedDecisionQuery(tx, source)).at(0);
+) => (await hintDecisionQuery(tx, { type: "unreserved-row", source })).at(0);
 
 const selectNext = async (
   tx: Transaction,
@@ -605,7 +680,7 @@ const selectNext = async (
     currentParserVersion: source.currentParserVersion,
     mode: source.mode,
   } as const;
-  const reported = await selectReportedDecision(tx, source);
+  const reported = await selectHintDecision(tx, source);
   if (reported !== undefined) {
     return (
       (
@@ -2137,6 +2212,44 @@ export const buildReplayRetirementQuery = (tx: Transaction, limit: number) => {
     .limit(limit);
 };
 
+const compactReplayHints = async (tx: Transaction, limit: number) => {
+  const quotaPage = await buildCaseLawReplayVisitedQuotaCompactionQuery(tx, {
+    cutoff: sql`clock_timestamp() - (${VISITED_REPLAY_ADMISSION_LIMITS.minuteMs * 2}::bigint * interval '1 millisecond')`,
+    limit,
+  });
+  const hintPage = await buildCaseLawReplayHintCompactionQuery(tx, {
+    cutoff: sql`clock_timestamp() - (${BACKGROUND_REPLAY_LIMITS.receiptRetentionDays}::integer * interval '1 day')`,
+    limit,
+  });
+  if (quotaPage.length > 0) {
+    await tx.delete(caseLawReplayVisitedQuotas).where(
+      inArray(
+        caseLawReplayVisitedQuotas.sourceId,
+        quotaPage.map(({ sourceId }) => sourceId),
+      ),
+    );
+  }
+  if (hintPage.length > 0) {
+    await tx
+      .delete(caseLawReplayReportedDecisions)
+      .where(
+        or(
+          ...hintPage.map(({ sourceId, decisionId, targetParserVersion }) =>
+            and(
+              eq(caseLawReplayReportedDecisions.sourceId, sourceId),
+              eq(caseLawReplayReportedDecisions.decisionId, decisionId),
+              eq(
+                caseLawReplayReportedDecisions.targetParserVersion,
+                targetParserVersion,
+              ),
+            ),
+          ),
+        ),
+      );
+  }
+  return { compactedHints: hintPage.length, compactedQuotas: quotaPage.length };
+};
+
 const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
   if (
     !Number.isSafeInteger(limit) ||
@@ -2146,6 +2259,7 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     panic("Replay compaction limit must be a bounded positive integer");
   }
   return await withReplayTransaction(db, async (tx) => {
+    const hintCompaction = await compactReplayHints(tx, limit);
     const stale = buildReplayRetirementQuery(tx, limit);
     // Discover older terminal generations independently of new reservations.
     await tx
@@ -2175,7 +2289,12 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
       )
       .limit(limit)
       .for("update");
-    if (old.length === 0 && auditPage.length === 0) {
+    if (
+      old.length === 0 &&
+      auditPage.length === 0 &&
+      hintCompaction.compactedHints === 0 &&
+      hintCompaction.compactedQuotas === 0
+    ) {
       return 0;
     }
     if (auditPage.length > 0) {
@@ -2193,6 +2312,7 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
         details: {
           compactedReceipts: 0,
           compactedAuditEvents: auditPage.length,
+          ...hintCompaction,
         },
         createdAt: new Date(now()),
       });
@@ -2216,6 +2336,7 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
       details: {
         compactedReceipts: compacted,
         compactedAuditEvents: auditPage.length,
+        ...hintCompaction,
       },
       createdAt: new Date(now()),
     });
@@ -2456,9 +2577,17 @@ const enqueueReportedDecision = async (
         decisionId,
         targetParserVersion,
         queuedAt: new Date(now()),
+        tier: REPLAY_PRIORITY.REPORTED,
         completedAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [
+          caseLawReplayReportedDecisions.sourceId,
+          caseLawReplayReportedDecisions.decisionId,
+          caseLawReplayReportedDecisions.targetParserVersion,
+        ],
+        set: { tier: REPLAY_PRIORITY.REPORTED, completedAt },
+      });
     await recordReplayMaintenanceAuditEvent(tx, {
       sourceId,
       action: "reported-decision-queued",
@@ -2468,6 +2597,168 @@ const enqueueReportedDecision = async (
     });
     return { type: completedAt === null ? "queued" : "current" } as const;
   });
+
+type EnqueueVisitedDecisionsOptions = {
+  sourceId: BackgroundReplaySource["id"];
+  decisionIds: readonly BackgroundReplayBatch["decisionId"][];
+};
+
+const lockVisitedAdmission = async (
+  tx: Transaction,
+  sourceId: BackgroundReplaySource["id"],
+) => {
+  await tx
+    .insert(caseLawReplayVisitedQuotas)
+    .values({
+      sourceId,
+      windowStartedAt: sql`date_trunc('minute', clock_timestamp())`,
+    })
+    .onConflictDoUpdate({
+      target: caseLawReplayVisitedQuotas.sourceId,
+      set: { sourceId },
+    });
+  const locked = await lockCaseLawReplayVisitedQuota(tx, sourceId);
+  if (locked === undefined) {
+    panic("Visited replay quota disappeared before admission");
+  }
+  // Read the database clock after acquiring the fleet lock, never before a lock wait.
+  const admittedAt =
+    (
+      await tx.execute<{ minute: string }>(
+        sql`SELECT clock_timestamp()::text AS minute`,
+      )
+    ).at(0)?.minute ??
+    panic("Database clock did not return a visited replay admission minute");
+  const quota = (
+    await tx
+      .update(caseLawReplayVisitedQuotas)
+      .set({
+        windowStartedAt: sql`date_trunc('minute', ${admittedAt}::timestamptz)`,
+        admittedRows: sql`CASE WHEN ${caseLawReplayVisitedQuotas.windowStartedAt} = date_trunc('minute', ${admittedAt}::timestamptz) THEN ${caseLawReplayVisitedQuotas.admittedRows} ELSE 0 END`,
+      })
+      .where(eq(caseLawReplayVisitedQuotas.sourceId, sourceId))
+      .returning({ admittedRows: caseLawReplayVisitedQuotas.admittedRows })
+  ).at(0);
+  return {
+    remaining:
+      VISITED_REPLAY_ADMISSION_LIMITS.rowsPerSourceMinute -
+      (quota?.admittedRows ?? panic("Locked visited replay quota disappeared")),
+    admittedAt,
+  };
+};
+
+const enqueueVisitedDecisions = async (
+  { db, now, sourceEnabled }: ReplayStoreContext,
+  { sourceId, decisionIds }: EnqueueVisitedDecisionsOptions,
+) => {
+  if (decisionIds.length > VISITED_REPLAY_ADMISSION_LIMITS.batchRows) {
+    panic("Visited replay admission exceeds the bounded hint batch");
+  }
+  const ids = [...new Set(decisionIds)];
+  if (ids.length === 0) {
+    return { type: "queued", inserted: 0, deferred: 0 } as const;
+  }
+  return await withReplayTransaction(db, async (tx) => {
+    const source = (
+      await tx
+        .select({ adapterKey: caseLawSources.adapterKey })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId))
+        .limit(1)
+    ).at(0);
+    const adapterKey = Object.values(ADAPTER_KEYS).find(
+      (key) => key === source?.adapterKey,
+    );
+    if (adapterKey === undefined || sourceEnabled?.(adapterKey) === false) {
+      return { type: "unavailable" } as const;
+    }
+    const targetParserVersion = PARSER_VERSIONS[adapterKey];
+    const { remaining, admittedAt } = await lockVisitedAdmission(tx, sourceId);
+    if (remaining === 0) {
+      return { type: "queued", inserted: 0, deferred: ids.length } as const;
+    }
+    const inserted = await tx
+      .insert(caseLawReplayReportedDecisions)
+      .select(
+        tx
+          .select({
+            sourceId: caseLawDecisions.sourceId,
+            decisionId: caseLawDecisions.id,
+            targetParserVersion: sql`${targetParserVersion}::integer`.as(
+              "target_parser_version",
+            ),
+            tier: sql`${REPLAY_PRIORITY.VISITED}::text`.as("tier"),
+            queuedAt: sql`${admittedAt}::timestamptz`.as("queued_at"),
+            previewedAt: sql`NULL::timestamptz`.as("previewed_at"),
+            completedAt: sql`NULL::timestamptz`.as("completed_at"),
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              inArray(caseLawDecisions.id, ids),
+              isNull(caseLawDecisions.redactedAt),
+              isNotNull(caseLawDecisions.sourceRawS3Key),
+              // The apply selector owns input-proof and receipt eligibility even before a wave enrols.
+              replaySelectionPredicate(
+                {
+                  type: "background",
+                  adapterKey,
+                  currentParserVersion: targetParserVersion,
+                  mode: "enrolled",
+                },
+                tx,
+              ),
+              sql`NOT EXISTS (${tx
+                .select({ present: sql`1` })
+                .from(caseLawReplayReportedDecisions)
+                .where(
+                  and(
+                    eq(caseLawReplayReportedDecisions.sourceId, sourceId),
+                    eq(
+                      caseLawReplayReportedDecisions.decisionId,
+                      caseLawDecisions.id,
+                    ),
+                    eq(
+                      caseLawReplayReportedDecisions.targetParserVersion,
+                      targetParserVersion,
+                    ),
+                  ),
+                )
+                .limit(1)})`,
+            ),
+          )
+          .orderBy(asc(caseLawDecisions.id))
+          .limit(remaining),
+      )
+      .onConflictDoNothing()
+      .returning({ decisionId: caseLawReplayReportedDecisions.decisionId });
+    // Only newly inserted rows spend quota. A duplicate or concurrent operator elevation spends none.
+    if (inserted.length > 0) {
+      await tx
+        .update(caseLawReplayVisitedQuotas)
+        .set({
+          admittedRows: sql`${caseLawReplayVisitedQuotas.admittedRows} + ${inserted.length}`,
+        })
+        .where(eq(caseLawReplayVisitedQuotas.sourceId, sourceId));
+      await recordReplayMaintenanceAuditEvent(tx, {
+        sourceId,
+        action: "visited-decisions-queued",
+        resourceId: sourceId,
+        details: {
+          parserVersion: targetParserVersion,
+          queuedRows: inserted.length,
+        },
+        createdAt: new Date(now()),
+      });
+    }
+    return {
+      type: "queued",
+      inserted: inserted.length,
+      deferred: ids.length - inserted.length,
+    } as const;
+  });
+};
 
 /** Owner-only state for a public-corpus maintenance task; no tenant data. */
 export const createBackgroundReplayStore = ({
@@ -2501,6 +2792,8 @@ export const createBackgroundReplayStore = ({
       source: BackgroundReplaySource,
       sample: ReplayDryRunDiffSample,
     ) => await recordDryRunDiffSample(context, { source, sample }),
+    enqueueVisitedDecisions: async (options: EnqueueVisitedDecisionsOptions) =>
+      await enqueueVisitedDecisions(context, options),
     enqueueReportedDecision: async (options: EnqueueReportedDecisionOptions) =>
       await enqueueReportedDecision(context, options),
     chooseSource: async () => await chooseSource(context),

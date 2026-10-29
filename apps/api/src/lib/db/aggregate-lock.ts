@@ -9,7 +9,6 @@ import {
   inArray,
   is,
   isNotNull,
-  isNull,
   lte,
   or,
   SQL,
@@ -34,6 +33,8 @@ import type {
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawReplayBatches,
+  caseLawReplayReportedDecisions,
+  caseLawReplayVisitedQuotas,
   entities,
   entityVersions,
   fields,
@@ -46,6 +47,7 @@ import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-ti
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { dueCaseLawReplayPendingReceipt } from "@/api/lib/legal-search/case-law-replay-pending";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -2259,6 +2261,70 @@ export const lockCaseLawReplayBatch = async ({
       .limit(1)
   ).at(0);
 
+/** Serializes visited-hint admission across API tasks for one source. */
+export const lockCaseLawReplayVisitedQuota = async (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+) =>
+  (
+    await tx
+      .select({ sourceId: caseLawReplayVisitedQuotas.sourceId })
+      .from(caseLawReplayVisitedQuotas)
+      .where(eq(caseLawReplayVisitedQuotas.sourceId, sourceId))
+      .limit(1)
+      .for("update")
+  ).at(0);
+
+type ReplayHintCompactionQueryOptions = { cutoff: SQL; limit: number };
+export const buildCaseLawReplayHintCompactionQuery = (
+  tx: Transaction,
+  { cutoff, limit }: ReplayHintCompactionQueryOptions,
+) =>
+  tx
+    .select({
+      sourceId: caseLawReplayReportedDecisions.sourceId,
+      decisionId: caseLawReplayReportedDecisions.decisionId,
+      targetParserVersion: caseLawReplayReportedDecisions.targetParserVersion,
+    })
+    .from(caseLawReplayReportedDecisions)
+    .where(
+      and(
+        isNotNull(caseLawReplayReportedDecisions.completedAt),
+        lte(
+          caseLawReplayReportedDecisions.completedAt,
+          sql`${sql`(${cutoff})`}::timestamptz`,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayReportedDecisions.completedAt),
+      asc(caseLawReplayReportedDecisions.sourceId),
+      asc(caseLawReplayReportedDecisions.decisionId),
+      asc(caseLawReplayReportedDecisions.targetParserVersion),
+    )
+    .limit(limit)
+    .for("update", { skipLocked: true });
+
+export const buildCaseLawReplayVisitedQuotaCompactionQuery = (
+  tx: Transaction,
+  { cutoff, limit }: ReplayHintCompactionQueryOptions,
+) =>
+  tx
+    .select({ sourceId: caseLawReplayVisitedQuotas.sourceId })
+    .from(caseLawReplayVisitedQuotas)
+    .where(
+      lte(
+        caseLawReplayVisitedQuotas.windowStartedAt,
+        sql`${sql`(${cutoff})`}::timestamptz`,
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayVisitedQuotas.windowStartedAt),
+      asc(caseLawReplayVisitedQuotas.sourceId),
+    )
+    .limit(limit)
+    .for("update", { skipLocked: true });
+
 type ReplayPendingBatchLockOptions = {
   tx: Transaction;
   sourceId: SafeId<"caseLawSource">;
@@ -2280,11 +2346,7 @@ export const lockCaseLawReplayPendingBatch = async ({
       .where(
         and(
           eq(caseLawReplayBatches.sourceId, sourceId),
-          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
-          or(
-            isNull(caseLawReplayBatches.retryAt),
-            lte(caseLawReplayBatches.retryAt, sql`${now}::timestamptz`),
-          ),
+          dueCaseLawReplayPendingReceipt(now),
         ),
       )
       .orderBy(

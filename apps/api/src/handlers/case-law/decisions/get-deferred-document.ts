@@ -26,6 +26,7 @@ import {
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
+import { offerVisitedReplayCandidate } from "@/api/handlers/case-law/ingestion/visited-replay-dispatch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
@@ -286,11 +287,18 @@ export const readGatedDecisionWithDocument = async ({
     async (subject) => await readDecisionHandler({ citationsCursor, subject }),
   );
 
-  return read === null
-    ? null
-    : await hydrateDeferredDocument(
-        read,
-        caller === "attributed",
-        documentHydration,
-      );
+  if (read === null) {
+    return null;
+  }
+  if ("documentPending" in read) {
+    offerVisitedReplayCandidate({
+      sourceId: read.source.id,
+      decisionId: read.id,
+    });
+  }
+  return await hydrateDeferredDocument(
+    read,
+    caller === "attributed",
+    documentHydration,
+  );
 };

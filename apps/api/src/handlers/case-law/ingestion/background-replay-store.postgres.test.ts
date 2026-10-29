@@ -349,10 +349,19 @@ if (!databaseUrl || !enabled) {
       ]);
       const enrolment = {
         ...REPLAY_ENROLMENT,
-        [ADAPTER_KEYS.EU_ECJ]: { mode: "enrolled", reviewedDryRun: "fixture" },
-        [ADAPTER_KEYS.CZ_NSS]: { mode: "enrolled", reviewedDryRun: "fixture" },
+        [ADAPTER_KEYS.EU_ECJ]: {
+          mode: "enrolled",
+          reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+          reviewedDryRun: "fixture",
+        },
+        [ADAPTER_KEYS.CZ_NSS]: {
+          mode: "enrolled",
+          reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
+          reviewedDryRun: "fixture",
+        },
         [ADAPTER_KEYS.SK_COURTS]: {
           mode: "enrolled",
+          reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
           reviewedDryRun: "fixture",
         },
       } as const;
@@ -843,7 +852,7 @@ if (!databaseUrl || !enabled) {
         [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run" },
         [ADAPTER_KEYS.CZ_NSS]: {
           mode: "enrolled",
-
+          reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
           reviewedDryRun: "fixture",
         },
       } as const;
@@ -3175,7 +3184,7 @@ if (!databaseUrl || !enabled) {
         ...REPLAY_ENROLMENT,
         [ADAPTER_KEYS.EU_ECJ]: {
           mode: "enrolled",
-
+          reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
           reviewedDryRun: "fixture",
         },
       } as const;

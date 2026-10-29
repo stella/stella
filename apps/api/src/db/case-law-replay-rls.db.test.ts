@@ -13,6 +13,13 @@ const decisionId = "00000000-0000-0000-0000-000000000002";
 const receipts = [
   {
     prepare: null,
+    table: "case_law_replay_visited_quotas",
+    insert: `INSERT INTO case_law_replay_visited_quotas (source_id, window_started_at) VALUES ('${sourceId}', date_trunc('minute', now()))`,
+    update:
+      "UPDATE case_law_replay_visited_quotas SET admitted_rows = 1 RETURNING source_id",
+  },
+  {
+    prepare: null,
     table: "case_law_replay_batches",
     insert: `INSERT INTO case_law_replay_batches (id, source_id, first_decision_id, last_decision_id, parser_version_to, budget_day, status, attempted, gate_verdict) VALUES ('receipt', '${sourceId}', '${decisionId}', '${decisionId}', 2, '2026-10-02', 'reserved', 1, '{"kind":"normal","signals":[]}')`,
     update:
@@ -131,6 +138,19 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
           statement.includes("public.case_law_replay_reported_decisions"),
         )
         .join("--> statement-breakpoint");
+      const visitedMigration = (
+        await Bun.file(
+          new URL(
+            "../../drizzle/20261029010000_visited_decision_replay/migration.sql",
+            import.meta.url,
+          ),
+        ).text()
+      )
+        .split("--> statement-breakpoint")
+        .filter((statement) =>
+          statement.includes("public.case_law_replay_visited_quotas"),
+        )
+        .join("--> statement-breakpoint");
       await client.unsafe("BEGIN");
       try {
         const version = await client.unsafe<{ version: number }[]>(
@@ -155,7 +175,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
         await client.unsafe(
           `INSERT INTO case_law_sources VALUES ('${sourceId}')`,
         );
-        for (const statement of `${migration}--> statement-breakpoint${completionMigration}--> statement-breakpoint${reportedMigration}`
+        for (const statement of `${migration}--> statement-breakpoint${completionMigration}--> statement-breakpoint${reportedMigration}--> statement-breakpoint${visitedMigration}`
           .replaceAll(
             '"public"."case_law_sources"',
             () => `"${schema}"."case_law_sources"`,

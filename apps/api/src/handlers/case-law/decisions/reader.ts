@@ -8,6 +8,8 @@ import { projectionPieces } from "@stll/legal-ast/projection-digest";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 
+import type { VisitedReplayCandidate } from "@/api/handlers/case-law/ingestion/visited-replay";
+import { offerVisitedReplayCandidate } from "@/api/handlers/case-law/ingestion/visited-replay-dispatch";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { attachDecisionProvisionPreviews } from "@/api/handlers/case-law/provisions/previews-for-decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,6 +46,7 @@ export type ReaderSourceOptions = {
   surface: PublicCountrySurface;
   /** The per-source reader setting; a test seam over the source registry. */
   appReaderTextOf?: (adapterKey: string) => AppReaderText;
+  offerReplayCandidate?: (candidate: VisitedReplayCandidate) => void;
 };
 
 type ReaderTextAccessOptions = {
@@ -186,6 +189,7 @@ export const readDecisionReaderSource = async ({
   audience,
   surface,
   appReaderTextOf = appReaderTextForSource,
+  offerReplayCandidate = offerVisitedReplayCandidate,
   caseLawDb = caseLawPublicReadDb,
   legislationDb = legislationPublicReadDb,
 }: ReaderSourceOptions) => {
@@ -230,12 +234,22 @@ export const readDecisionReaderSource = async ({
               },
             })
           : null;
-      return { decision, ast, textAccess, citations, provisions };
+      return {
+        decision,
+        ast,
+        textAccess,
+        citations,
+        provisions,
+      };
     },
   );
   if (read === null) {
     return null;
   }
+  offerReplayCandidate({
+    sourceId: read.decision.source.id,
+    decisionId: read.decision.id,
+  });
   const { decision, ast, textAccess, citations, provisions } = read;
   const citationAnchors: {
     pieceId: string;
