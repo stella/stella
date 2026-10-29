@@ -1,7 +1,15 @@
 # Local file creation
 
 `local_store` owns application file creation, opening and publication. Its
-platform backends implement the native filesystem operations.
+platform backends implement the native filesystem operations. Harness archives
+use owner-only files (0700 for executables, 0600 otherwise) and directories;
+release directories are published through the same storage owner.
+
+`local_store::token_broker` owns the private channel directory and socket
+permissions, and Windows pipe client options. Its short-lived Unix directory
+is under the platform temporary directory; its socket is 0600 inside a 0700
+directory. Windows clients retain identification-only security quality of
+service. These channel operations do not use application-data file opens.
 
 The approved roots are Stella's platform data, local-data, cache and state
 directories, plus its macOS log directory. The macOS LaunchAgents directory

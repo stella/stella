@@ -111,13 +111,13 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   let temporary_anchor = false;
   let relative = path
     .strip_prefix(&root_path)
-    .map_err(|_| invalid_path())?
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?
     .to_path_buf();
   static ROOTS: OnceLock<Mutex<HashMap<PathBuf, Arc<File>>>> = OnceLock::new();
   let mut opened = ROOTS
     .get_or_init(Mutex::default)
     .lock()
-    .map_err(|_| io::Error::other("local directory registry unavailable"))?;
+    .map_err(|error| io::Error::other(error.to_string()))?;
   // A root moved or deleted while the app runs leaves the cached handle on an
   // unlinked directory; reuse it only while the path still names that inode.
   let cached = opened.get(&root_path).filter(|directory| {
@@ -136,7 +136,9 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     if restrict {
       fs::fchmod(directory, DIRECTORY_MODE)?;
     }
-    return Ok((Arc::clone(directory), relative));
+    let directory = Arc::clone(directory);
+    drop(opened);
+    return Ok((directory, relative));
   }
   opened.remove(&root_path);
   // Only the platform-supplied temporary anchor may contain a system alias.
@@ -168,7 +170,18 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   }
   let directory = Arc::new(directory);
   opened.insert(root_path, Arc::clone(&directory));
+  drop(opened);
   Ok((directory, relative))
+}
+
+pub(super) fn create_directory_new(path: &Path) -> io::Result<()> {
+  let parent = Parent::at(path)?;
+  fs::mkdirat(&parent.directory, &parent.name, DIRECTORY_MODE)?;
+  let directory = child_directory(&parent.directory, &parent.name, false, true)?;
+  fs::fsync(&directory)?;
+  drop(directory);
+  fs::fsync(&parent.directory)?;
+  Ok(())
 }
 
 pub(super) fn create_directory(path: &Path) -> io::Result<()> {
@@ -236,6 +249,22 @@ impl Parent {
     }
     check_owner(&file)?;
     Ok(file)
+  }
+
+  pub(super) fn rename_directory_to(&self, destination: &Self) -> io::Result<()> {
+    let directory = child_directory(&self.directory, &self.name, false, true)?;
+    destination.check_entry()?;
+    fs::renameat(
+      &self.directory,
+      &self.name,
+      &destination.directory,
+      &destination.name,
+    )?;
+    fs::fsync(&directory)?;
+    drop(directory);
+    fs::fsync(&destination.directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
   }
 
   fn check_entry(&self) -> io::Result<()> {

@@ -5,6 +5,10 @@ use std::{
   path::{Path, PathBuf},
 };
 
+pub(super) fn create_directory_new(path: &Path) -> io::Result<()> {
+  fs::create_dir(path)
+}
+
 pub(super) fn create_directory(path: &Path) -> io::Result<()> {
   fs::create_dir_all(path)
 }
@@ -61,6 +65,10 @@ impl Parent {
       }
     }
     options.open(&self.path)
+  }
+
+  pub(super) fn rename_directory_to(&self, destination: &Self) -> io::Result<()> {
+    self.rename_to(destination)
   }
 
   pub(super) fn rename_to(&self, destination: &Self) -> io::Result<()> {

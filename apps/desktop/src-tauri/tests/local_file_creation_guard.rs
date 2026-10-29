@@ -26,6 +26,7 @@ mod unix {
       configured, probes,
       "every configured writer must have a compile-fail probe"
     );
+    // kit-allow: real cargo clippy compile-fail check that the disallowed file-creation lint fires; the process boundary is the subject of the test
     let output = Command::new("cargo")
       .current_dir(env!("CARGO_MANIFEST_DIR"))
       .args([

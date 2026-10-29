@@ -24,6 +24,8 @@ use std::{
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::logging::log_json_error;
 
+pub(crate) mod token_broker;
+
 const ENVELOPE_VERSION: u8 = 1;
 const NONCE_BYTES: usize = 12;
 
@@ -231,6 +233,18 @@ pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
   platform::create_directory(directory)
 }
 
+pub(crate) fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
+  platform::create_directory_new(path)
+}
+
+#[cfg(test)]
+pub(crate) fn write_test_fixture(
+  path: impl AsRef<Path>,
+  bytes: impl AsRef<[u8]>,
+) -> Result<(), String> {
+  write_private_atomic(path.as_ref(), bytes.as_ref())
+}
+
 pub fn open_private(mode: OpenMode, path: &Path) -> std::io::Result<fs::File> {
   #[cfg(unix)]
   {
@@ -256,6 +270,27 @@ fn open_private_with(
 #[cfg(unix)]
 fn restrict_private_file(file: &fs::File) -> std::io::Result<()> {
   rustix::fs::fchmod(file, rustix::fs::Mode::from_raw_mode(0o600)).map_err(Into::into)
+}
+
+pub(crate) fn create_harness_file(
+  path: &Path,
+  executable: bool,
+) -> std::io::Result<fs::File> {
+  let file = open_private(OpenMode::CreateNew, path)?;
+  #[cfg(unix)]
+  if executable {
+    rustix::fs::fchmod(&file, rustix::fs::Mode::from_raw_mode(0o700))?;
+  }
+  #[cfg(not(unix))]
+  let _ = executable;
+  Ok(file)
+}
+
+pub(crate) fn publish_harness_directory(
+  source: &Path,
+  destination: &Path,
+) -> std::io::Result<()> {
+  platform::Parent::at(source)?.rename_directory_to(&platform::Parent::at(destination)?)
 }
 
 pub fn rename_private(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -287,9 +322,7 @@ pub fn install_update(
   update: &tauri_plugin_updater::Update,
   package: &[u8],
 ) -> Result<(), String> {
-  update
-    .install(package)
-    .map_err(|error| error.to_string())
+  update.install(package).map_err(|error| error.to_string())
 }
 
 // Repository code generation writes a fixed source artifact, outside application data.
@@ -471,6 +504,9 @@ mod tests {
     let directory_link = root.join("directory");
     symlink(&outside, &directory_link).unwrap();
     assert_link_error(create_private_dir(&directory_link).unwrap_err());
+    assert_link_error(
+      publish_harness_directory(&directory_link, &root.join("published")).unwrap_err(),
+    );
     assert!(write_private_atomic(&directory_link.join("file"), b"value").is_err());
     let middle = root.join("middle");
     create_private_dir(&middle).unwrap();
@@ -486,6 +522,24 @@ mod tests {
     );
     assert!(!outside.join("nested").exists());
     assert!(!outside.join("file").exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn harness_directories_are_created_once_and_published_whole() {
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let staged = root.join("staged");
+    create_private_dir_new(&staged).unwrap();
+    assert_eq!(
+      create_private_dir_new(&staged).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    write_private_atomic(&staged.join("record"), b"complete").unwrap();
+    let published = root.join("published");
+    publish_harness_directory(&staged, &published).unwrap();
+    assert!(!staged.exists());
+    assert_eq!(fs::read(published.join("record")).unwrap(), b"complete");
     fs::remove_dir_all(root).unwrap();
   }
 
