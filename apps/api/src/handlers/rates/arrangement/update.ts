@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { BILLING_CAP_MINUTES_MAX } from "@stll/api-contract/billing";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { billingArrangements } from "@/api/db/schema";
@@ -63,7 +64,7 @@ const updateBillingArrangement = createSafeHandler(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(2_147_483_647),
+          v.maxValue(BILLING_CAP_MINUTES_MAX),
         ),
         alertThresholdBps: v.pipe(
           v.number(),

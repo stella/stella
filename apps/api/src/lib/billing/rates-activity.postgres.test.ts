@@ -22,7 +22,8 @@ import {
 import { resolveRate } from "./rates";
 
 const databaseUrl = process.env["DATABASE_URL"];
-if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
+const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+if (!databaseUrl || !runPostgres) {
   describe.skip("activity rate precedence (postgres)", () => {
     test("requires the Postgres test configuration", () =>
       expect(true).toBe(true));

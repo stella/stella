@@ -1,18 +1,13 @@
 import { useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
-import {
-  queryOptions,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
+import type * as v from "valibot";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { BPS_PER_PERCENTAGE_POINT } from "@stll/api-contract/billing";
-import { currencyCodeSchema } from "@stll/api-contract/currency-code";
-import { tryToMinorUnits } from "@stll/money";
+import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
@@ -22,6 +17,7 @@ import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -29,6 +25,8 @@ import { queryView } from "@/lib/query-view.logic";
 import { ratesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+
+import { hourlyArrangementSchema } from "./billing-arrangement-editor.logic";
 
 const arrangementKeys = { all: ratesQueryRoot };
 
@@ -97,18 +95,27 @@ const HourlyArrangementForm = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const save = useMutation({
+  const save = useCapabilityMutation({
+    capability: "rates.arrangement.update",
+    target: resourceRef({
+      type: RESOURCE_TYPE.WORKSPACE,
+      id: toSafeId<"workspace">(workspaceId),
+    }),
     mutationFn: async (
       body: v.InferOutput<ReturnType<typeof hourlyArrangementSchema>>,
+      request,
     ) =>
       unwrapApiResponse(
         await api
           .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .arrangement.put({
-            mode: "hourly",
-            ...body,
-            ...(arrangement && { revision: arrangement.revision }),
-          }),
+          .arrangement.put(
+            {
+              mode: "hourly",
+              ...body,
+              ...(arrangement && { revision: arrangement.revision }),
+            },
+            request,
+          ),
       ),
     onSuccess: (saved) => {
       queryClient.setQueryData(arrangementOptions(workspaceId).queryKey, {
@@ -133,17 +140,13 @@ const HourlyArrangementForm = ({
       defaultValues: {
         currency,
         capAmount:
-          hourly && "capAmount" in hourly && hourly.capAmount !== undefined
+          hourly && "capAmount" in hourly
             ? majorUnitInput(hourly.capAmount, currency)
             : "",
         capMinutes:
-          hourly && "capMinutes" in hourly && hourly.capMinutes !== undefined
-            ? `${hourly.capMinutes}`
-            : "",
+          hourly && "capMinutes" in hourly ? `${hourly.capMinutes}` : "",
         alertThreshold:
-          hourly &&
-          "alertThresholdBps" in hourly &&
-          hourly.alertThresholdBps !== undefined
+          hourly && "alertThresholdBps" in hourly
             ? `${hourly.alertThresholdBps / BPS_PER_PERCENTAGE_POINT}`
             : "80",
       },
@@ -195,7 +198,9 @@ const HourlyArrangementForm = ({
               <Input
                 dir="ltr"
                 inputMode={mode}
-                maxLength={name === "currency" ? 3 : undefined}
+                maxLength={
+                  name === "currency" ? CURRENCY_CODE_LENGTH : undefined
+                }
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(event) =>
@@ -222,56 +227,3 @@ const HourlyArrangementForm = ({
     </Form>
   );
 };
-
-const hourlyArrangementSchema = (invalidCap: string) =>
-  v.pipe(
-    v.strictObject({
-      currency: currencyCodeSchema,
-      capAmount: v.string(),
-      capMinutes: v.string(),
-      alertThreshold: v.string(),
-    }),
-    v.rawTransform(({ dataset, addIssue, NEVER }) => {
-      const value = dataset.value;
-      const capAmount = value.capAmount
-        ? tryToMinorUnits({ amount: value.capAmount, currency: value.currency })
-        : undefined;
-      const capMinutes = value.capMinutes
-        ? Number(value.capMinutes)
-        : undefined;
-      const alertThresholdBps = value.alertThreshold
-        ? Math.round(Number(value.alertThreshold) * BPS_PER_PERCENTAGE_POINT)
-        : undefined;
-      if (
-        (capAmount !== undefined && (capAmount === null || capAmount <= 0)) ||
-        (capMinutes !== undefined &&
-          (!Number.isSafeInteger(capMinutes) ||
-            capMinutes <= 0 ||
-            capMinutes > 2_147_483_647)) ||
-        ((capAmount !== undefined || capMinutes !== undefined) &&
-          (alertThresholdBps === undefined ||
-            !Number.isInteger(alertThresholdBps) ||
-            alertThresholdBps < 1 ||
-            alertThresholdBps > 10_000))
-      ) {
-        addIssue({ message: invalidCap });
-        return NEVER;
-      }
-      if (capMinutes !== undefined && alertThresholdBps !== undefined) {
-        return {
-          currency: value.currency,
-          capMinutes,
-          alertThresholdBps,
-          ...(capAmount !== undefined && capAmount !== null && { capAmount }),
-        };
-      }
-      if (
-        capAmount !== undefined &&
-        capAmount !== null &&
-        alertThresholdBps !== undefined
-      ) {
-        return { currency: value.currency, capAmount, alertThresholdBps };
-      }
-      return { currency: value.currency };
-    }),
-  );

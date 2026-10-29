@@ -212,3 +212,6 @@ export const INVOICE_LINE_QUANTITY_PATTERN = `^(0|[1-9][0-9]{0,${INVOICE_LINE_IN
 
 /** Basis points represented by one percentage point of a billing cap. */
 export const BPS_PER_PERCENTAGE_POINT = 100;
+
+/** Largest minute cap representable by the persisted PostgreSQL integer column. */
+export const BILLING_CAP_MINUTES_MAX = 2_147_483_647;

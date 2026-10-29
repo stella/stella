@@ -216,7 +216,7 @@ describe("TimeEntryForm activity pricing", () => {
       // The observer must join this in-flight lookup instead of making a request.
       const pending = Result.tryPromise(
         async () =>
-          await client.fetchQuery({
+          await client.query({
             ...options,
             queryFn: async () => await deferred.promise,
           }),

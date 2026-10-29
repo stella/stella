@@ -26,7 +26,8 @@ import {
 import { readBillingUsage, recordBillingCapCrossings } from "./arrangements";
 
 const databaseUrl = process.env["DATABASE_URL"];
-if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
+const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+if (!databaseUrl || !runPostgres) {
   describe.skip("minute cap boundaries and schema combinations (postgres)", () => {
     test("requires the Postgres test configuration", () =>
       expect(true).toBe(true));
@@ -94,9 +95,12 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
   });
   beforeEach(async () => {
     await db.delete(auditLogs).where(eq(auditLogs.workspaceId, workspaceId));
-    await db
-      .delete(invoiceLines)
-      .where(eq(invoiceLines.workspaceId, workspaceId));
+    await scoped(
+      async (tx) =>
+        await tx
+          .delete(invoiceLines)
+          .where(eq(invoiceLines.workspaceId, workspaceId)),
+    );
     await db
       .delete(timeEntries)
       .where(eq(timeEntries.workspaceId, workspaceId));
@@ -375,23 +379,30 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
   };
   const materializeReservation = async (invoiceId: SafeId<"invoice">) => {
     const lineId = createSafeId<"invoiceLine">();
-    await db.insert(invoiceLines).values({
-      id: lineId,
-      invoiceId,
-      workspaceId,
-      organizationId,
-      position: 0,
-      description: "Client work",
-      quantity: "1.0000",
-      unitPrice: cents(1000),
-      netAmount: cents(1000),
-      vatAmount: cents(0),
-      grossAmount: cents(1000),
-      vatRateBps: 0,
-      vatTreatment: "not_vat_payer",
-      source: "time_entry",
-      timeEntryId: entryId,
-    });
+    const inserted = await scoped(
+      async (tx) =>
+        await tx
+          .insert(invoiceLines)
+          .values({
+            id: lineId,
+            invoiceId,
+            workspaceId,
+            organizationId,
+            position: 0,
+            description: "Client work",
+            quantity: "1.0000",
+            unitPrice: cents(1000),
+            netAmount: cents(1000),
+            vatAmount: cents(0),
+            grossAmount: cents(1000),
+            vatRateBps: 0,
+            vatTreatment: "not_vat_payer",
+            source: "time_entry",
+            timeEntryId: entryId,
+          })
+          .returning({ id: invoiceLines.id }),
+    );
+    expect(inserted).toEqual([{ id: lineId }]);
     return lineId;
   };
 
@@ -414,15 +425,21 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
       billingMode: "flat_fee",
     });
     const lineId = await materializeReservation(invoiceId);
-    await db
-      .update(invoiceLines)
-      .set({
-        quantity: "2.0000",
-        unitPrice: cents(2500),
-        netAmount: cents(5000),
-        grossAmount: cents(5000),
-      })
-      .where(eq(invoiceLines.id, lineId));
+    expect(
+      await scoped(
+        async (tx) =>
+          await tx
+            .update(invoiceLines)
+            .set({
+              quantity: "2.0000",
+              unitPrice: cents(2500),
+              netAmount: cents(5000),
+              grossAmount: cents(5000),
+            })
+            .where(eq(invoiceLines.id, lineId))
+            .returning({ id: invoiceLines.id }),
+      ),
+    ).toEqual([{ id: lineId }]);
     await scoped(
       async (tx) =>
         await tx
@@ -469,15 +486,21 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
     expect(legacy).toMatchObject({ billedAmount: 1000n, billedMinutes: 60n });
     const lineId = await materializeReservation(invoiceId);
     expect(await reservedUsage()).toEqual(legacy);
-    await db
-      .update(invoiceLines)
-      .set({
-        quantity: "1.5000",
-        unitPrice: cents(2000),
-        netAmount: cents(3000),
-        grossAmount: cents(3000),
-      })
-      .where(eq(invoiceLines.id, lineId));
+    expect(
+      await scoped(
+        async (tx) =>
+          await tx
+            .update(invoiceLines)
+            .set({
+              quantity: "1.5000",
+              unitPrice: cents(2000),
+              netAmount: cents(3000),
+              grossAmount: cents(3000),
+            })
+            .where(eq(invoiceLines.id, lineId))
+            .returning({ id: invoiceLines.id }),
+      ),
+    ).toEqual([{ id: lineId }]);
     expect(await reservedUsage()).toMatchObject({
       billedAmount: 3000n,
       billedMinutes: 90n,
@@ -498,10 +521,16 @@ if (!databaseUrl || process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
       billedAmount: 3000n,
       billedMinutes: 90n,
     });
-    await db
-      .update(invoiceLines)
-      .set({ releasedAt: new Date() })
-      .where(eq(invoiceLines.id, lineId));
+    expect(
+      await scoped(
+        async (tx) =>
+          await tx
+            .update(invoiceLines)
+            .set({ releasedAt: new Date() })
+            .where(eq(invoiceLines.id, lineId))
+            .returning({ id: invoiceLines.id }),
+      ),
+    ).toEqual([{ id: lineId }]);
     await db
       .update(timeEntries)
       .set({

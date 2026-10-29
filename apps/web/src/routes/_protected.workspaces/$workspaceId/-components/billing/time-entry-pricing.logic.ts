@@ -48,11 +48,7 @@ export const deriveTimeEntryPricing = ({
       };
     case "automatic": {
       const resolved = lookup?.status === "success" ? lookup.data : undefined;
-      if (
-        resolved &&
-        resolved.hourlyRate !== null &&
-        resolved.currency !== null
-      ) {
+      if (resolved && resolved.hourlyRate !== null) {
         return {
           status,
           rateAtEntry: resolved.hourlyRate,
