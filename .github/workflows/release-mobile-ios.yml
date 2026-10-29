@@ -1,0 +1,225 @@
+name: Release Mobile iOS
+run-name: Release Mobile iOS ${{ inputs.variant }}
+
+defaults:
+  run:
+    shell: bash
+
+# Builds the iOS app on a hosted macOS runner and uploads it to TestFlight.
+# Manual only, from main: a person picks the build, `preview` for internal
+# testers or `production` for the store track (apps/mobile/app.config.ts).
+#
+# Signing is explicit: the Apple Distribution certificate and each variant's
+# App Store profile were created once by hand and live in this repository's
+# secrets; CI never creates or changes either. The App Store Connect API key
+# it uploads with has the App Manager role and serves this workflow alone.
+# The build number is this run's number plus 100, which only grows; builds 1
+# to 4 were uploaded by hand before this workflow existed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Which build to upload"
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+
+# Default-deny at the workflow level; the one job reads the repository only.
+permissions: {}
+
+concurrency:
+  group: release-mobile-ios-${{ inputs.variant }}
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: TestFlight ${{ inputs.variant }}
+    if: github.ref == 'refs/heads/main'
+    # The signing secrets live only in this environment, which deploys from
+    # main alone, so a dispatch of an edited workflow on another branch
+    # cannot read them. It needs no reviewer: a release runs on dispatch.
+    environment: mobile-release
+    # Expo SDK 58 builds with Swift 6.2, which only Xcode 26 and later ship.
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      APP_VARIANT: ${{ inputs.variant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The image carries several Xcodes; the default may lag the newest.
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_*.app' ! -iname '*beta*' | sort -V | tail -n 1)"
+          if [ -z "$xcode" ]; then
+            echo "no Xcode on this image" >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$xcode"
+          xcodebuild -version
+
+      - name: Number the build above the hand-uploaded ones
+        run: echo "MOBILE_BUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      # Signing secrets reach only the steps below that sign or upload, never
+      # the install, so no dependency lifecycle script can read them. A cold
+      # install, as every release job: a signed build restores no cache
+      # another job wrote.
+      - name: Install mobile dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
+
+      # The build's runtime version is its native fingerprint, the same value
+      # publish-mobile-update.yml targets, so only updates built for this
+      # native shell ever reach it. Taken before any signing input is set, as
+      # the publish workflow takes it.
+      - name: Stamp the native fingerprint as the runtime version
+        working-directory: apps/mobile
+        run: |
+          fingerprint="$(bun scripts/fingerprint.ts ios)"
+          echo "MOBILE_RUNTIME_VERSION=$fingerprint" >> "$GITHUB_ENV"
+          echo "Runtime version: \`$fingerprint\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # The profile is a public record of what may be signed, not a key; the
+      # app config reads its UUID to sign the app target with it.
+      - name: Install the variant's App Store profile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_BASE64: ${{ inputs.variant == 'production' && secrets.MOBILE_PROFILE_PRODUCTION || secrets.MOBILE_PROFILE_PREVIEW }}
+        run: |
+          set -euo pipefail
+          case "$APP_VARIANT" in
+            production) expected="app.stll.mobile" ;;
+            preview) expected="app.stll.mobile.preview" ;;
+            *) echo "no App Store profile for $APP_VARIANT" >&2; exit 1 ;;
+          esac
+          profile="$RUNNER_TEMP/release.mobileprovision"
+          printf '%s' "$PROFILE_BASE64" | base64 -d > "$profile"
+          decoded="$RUNNER_TEMP/release-profile.plist"
+          security cms -D -i "$profile" > "$decoded"
+          identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$decoded")"
+          if [ "$identifier" != "$APPLE_TEAM_ID.$expected" ]; then
+            echo "the $APP_VARIANT profile signs $identifier, not $APPLE_TEAM_ID.$expected" >&2
+            exit 1
+          fi
+          uuid="$(plutil -extract UUID raw -o - "$decoded")"
+          profiles="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$profiles"
+          cp "$profile" "$profiles/$uuid.mobileprovision"
+          {
+            echo "MOBILE_BUNDLE_IDENTIFIER=$expected"
+            echo "MOBILE_PROFILE_UUID=$uuid"
+          } >> "$GITHUB_ENV"
+
+      - name: Generate the native iOS project
+        working-directory: apps/mobile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bunx expo prebuild --platform ios --clean
+
+      - name: Import the distribution certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MOBILE_DISTRIBUTION_CERT_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MOBILE_DISTRIBUTION_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/release-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          certificate="$RUNNER_TEMP/distribution.p12"
+          trap 'rm -f "$certificate"' EXIT
+          printf '%s' "$CERTIFICATE_BASE64" | base64 -d > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" \
+            $(security list-keychains -d user | tr -d '"')
+          echo "MOBILE_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
+      # The archive runs third-party build phases, so its environment carries
+      # no upload key; only the next step authenticates to App Store Connect.
+      - name: Archive
+        working-directory: apps/mobile/ios
+        env:
+          # Expo's bundle phase re-reads the app config, which needs the team
+          # beside the profile UUID; the team id is not a key.
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          workspaces=(*.xcworkspace)
+          if [ "${#workspaces[@]}" -ne 1 ]; then
+            echo "expected one Xcode workspace, found ${#workspaces[@]}" >&2
+            exit 1
+          fi
+          workspace="${workspaces[0]}"
+          scheme="${workspace%.xcworkspace}"
+          archive="$RUNNER_TEMP/stella.xcarchive"
+
+          # Signed by the profile the app config set on the app target; no
+          # provisioning is requested or changed.
+          xcodebuild archive \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$archive" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $MOBILE_SIGNING_KEYCHAIN"
+          echo "MOBILE_ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - name: Upload to TestFlight
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_ISSUER_ID: ${{ secrets.MOBILE_ASC_API_ISSUER_ID }}
+          API_KEY_ID: ${{ secrets.MOBILE_ASC_API_KEY_ID }}
+          API_KEY_BASE64: ${{ secrets.MOBILE_ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          archive="$MOBILE_ARCHIVE"
+          export_options="$RUNNER_TEMP/export-options.plist"
+          plutil -create xml1 "$export_options"
+          plutil -insert method -string app-store-connect "$export_options"
+          plutil -insert destination -string upload "$export_options"
+          plutil -insert signingStyle -string manual "$export_options"
+          plutil -insert signingCertificate -string "Apple Distribution" "$export_options"
+          plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
+          plutil -insert provisioningProfiles -json \
+            "{\"$MOBILE_BUNDLE_IDENTIFIER\":\"$MOBILE_PROFILE_UUID\"}" "$export_options"
+          plutil -insert manageAppVersionAndBuildNumber -bool NO "$export_options"
+
+          key_path="$RUNNER_TEMP/app-store-connect.p8"
+          trap 'rm -f "$key_path"' EXIT
+          printf '%s' "$API_KEY_BASE64" | base64 -d > "$key_path"
+          chmod 600 "$key_path"
+          # The key only authenticates the upload.
+          xcodebuild -exportArchive \
+            -archivePath "$archive" \
+            -exportOptionsPlist "$export_options" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -authenticationKeyPath "$key_path" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Remove the signing keychain
+        if: always() && env.MOBILE_SIGNING_KEYCHAIN != ''
+        run: |
+          set -euo pipefail
+          security delete-keychain "$MOBILE_SIGNING_KEYCHAIN"

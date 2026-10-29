@@ -86,3 +86,14 @@ test("exported shorthand error text is covered without a local toast call", () =
   `);
   expect(entries).toMatchObject([{ kind: "error-options", truncating: true }]);
 });
+
+test("a parameter shadowing a truncating binding is not that binding", () => {
+  const entries = inspectToastSource(`${importedToast}
+    const title = <span className="truncate">{reason}</span>;
+    export const show = (title) => notice.add({ title, type: "error" });
+  `);
+  expect(entries).toMatchObject([
+    { kind: "add", truncating: false },
+    { kind: "error-options", truncating: false },
+  ]);
+});

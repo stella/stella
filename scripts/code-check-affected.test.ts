@@ -62,8 +62,12 @@ const WORKSPACES = new Set([
   "apps/api",
   "apps/landing",
   "apps/web",
+  "packages/api-contract",
+  "packages/auth-model",
   "packages/errors",
+  "packages/portable-path",
   "packages/scripts",
+  "packages/sha256",
   "packages/typescript-config",
   "packages/ui",
 ]);
@@ -510,6 +514,21 @@ describe("affected code-check planning", () => {
       throw new Error("Expected a scoped code-check plan");
     }
     expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
+  // Lint plugins load the shared syntax reader, so editing it changes what
+  // every workspace lint reports.
+  test("a syntax reader change relints every workspace", () => {
+    const changedPath = "packages/scripts/src/syntax-tree.ts";
+    const planned = plan([changedPath], ["packages/scripts"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      `$TURBO_ROOT$/${changedPath}`,
+    );
   });
 
   test.each([

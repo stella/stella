@@ -153,10 +153,11 @@ jobs:
       # replace it. Anything that cannot be decided deploys; the deploy side
       # still refuses a build older than the live site.
       - name: Check whether a newer deploy covers this one
+        timeout-minutes: 5
         id: covered
         run: |
           covered=false
-          if ! git fetch --quiet --filter=blob:none origin main; then
+          if ! bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --quiet --filter=blob:none origin main; then
             echo "::warning::Could not fetch main; deploying."
           else
             main_sha="$(git rev-parse FETCH_HEAD)"

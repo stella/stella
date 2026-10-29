@@ -1,3 +1,5 @@
+import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -13,7 +15,20 @@ const SOCIAL_SIGN_IN_OUTCOMES = [
 
 export type SocialSignInOutcome = (typeof SOCIAL_SIGN_IN_OUTCOMES)[number];
 
-const KNOWN_PROVIDERS = new Set(["google", "microsoft"]);
+const KNOWN_PROVIDERS: ReadonlySet<string> = new Set(AUTH_SOCIAL_PROVIDER_IDS);
+
+/**
+ * Whether the endpoint call completes a social callback. Only the GET does: a
+ * provider's `form_post` (Apple's) is answered with a redirect to that GET,
+ * and counting it would log every such sign-in twice, once as completed.
+ */
+export const completesSocialCallback = ({
+  method,
+  path,
+}: {
+  method?: string | undefined;
+  path?: string | undefined;
+}): boolean => method === "GET" && (path?.startsWith("/callback/") ?? false);
 
 /**
  * Where this callback reports failures, as an absolute URL: the sign-in's own

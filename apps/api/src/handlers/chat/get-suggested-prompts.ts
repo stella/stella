@@ -10,6 +10,7 @@ import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcrip
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -98,7 +99,9 @@ export const latestAssistantTurnAwaitsUser = (
       return true;
     }
     return (
-      (part.name === "ask-user" || part.name === "request_secret") &&
+      (part.name === "ask-user" ||
+        part.name === "request_secret" ||
+        part.name === "connect_connector") &&
       ASK_USER_STATE_AWAITS_USER[part.state]
     );
   });
@@ -152,6 +155,10 @@ const getSuggestedPrompts = createSafeRootHandler(
       session,
       user,
     } = ctx;
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
+
     if (
       Result.isError(
         requireTanStackAIAvailableForTask({

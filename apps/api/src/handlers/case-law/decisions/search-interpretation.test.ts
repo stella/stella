@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type * as v from "valibot";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { CASE_LAW_SEARCH_FACET_NAMES } from "@stll/api-contract/search";
 
 import {
   interpretDecisionQuery,
@@ -191,6 +192,21 @@ describe("narrowingFilters", () => {
       ),
     ).toEqual([]);
   });
+
+  test.each([
+    { facets: [] },
+    ...CASE_LAW_SEARCH_FACET_NAMES.map((facet) => ({ facets: [facet] })),
+  ])(
+    "facet summaries do not narrow or reinterpret the search (%j)",
+    ({ facets }) => {
+      const body = request({ court: "Nejvyšší soud" });
+      const withFacets = { ...body, facets: [...facets] };
+
+      expect(narrowingFilters(withFacets)).toEqual(["court"]);
+      expect(interpret(withFacets)).toEqual(interpret(body));
+      expect(clauseOf(withFacets)).toBe(clauseOf(body));
+    },
+  );
 
   test("country is not a filter a reader can drop", () => {
     expect(narrowingFilters(request())).toEqual([]);

@@ -18,6 +18,7 @@ import { parseArgs } from "node:util";
 import type { FailureReason } from "@stll/errors";
 
 import {
+  RELEASE_ENVIRONMENT_PROPERTY,
   RELEASE_FAILURE_ENTRY_KINDS,
   RELEASE_FAILURE_EVENT,
   RELEASE_FAILURE_FINGERPRINT_KEYS,
@@ -185,7 +186,10 @@ export const buildQuery = ({ release, previous, until }: QueryOptions) => {
   const versions = previous === null ? [release] : [release, previous];
   const versionPlaceholders = versions.map((_, index) => `{version_${index}}`);
   const property = (
-    key: EventProperty | typeof RELEASE_VERSION_PROPERTY,
+    key:
+      | EventProperty
+      | typeof RELEASE_VERSION_PROPERTY
+      | typeof RELEASE_ENVIRONMENT_PROPERTY,
   ): string => `properties.${key}`;
   const select = [
     `${property(RELEASE_VERSION_PROPERTY)} AS release`,
@@ -200,6 +204,7 @@ export const buildQuery = ({ release, previous, until }: QueryOptions) => {
     `SELECT ${select.join(", ")}`,
     "FROM events",
     "WHERE event = {event}",
+    `AND ${property(RELEASE_ENVIRONMENT_PROPERTY)} = {environment}`,
     `AND ${property(RELEASE_VERSION_PROPERTY)} IN (${versionPlaceholders.join(", ")})`,
     "AND timestamp < toDateTime({until})",
     `AND timestamp >= toDateTime({until}) - INTERVAL ${BASELINE_LOOKBACK_DAYS} DAY`,
@@ -208,6 +213,7 @@ export const buildQuery = ({ release, previous, until }: QueryOptions) => {
   ].join("\n");
   const values: Record<string, string> = {
     event: RELEASE_FAILURE_EVENT,
+    environment: "production",
     until,
     ...Object.fromEntries(
       versions.map((ref, index) => [`version_${index}`, releaseVersion(ref)]),

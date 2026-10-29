@@ -160,12 +160,24 @@ const requestFields = (request: Request | undefined): LoggerAttributes => {
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
+const observedStoreRequests = new WeakSet<object>();
+
 const observe = (error: unknown, options: ObserveFailureOptions): void => {
   const { sink, ctx, request, escalation } = options;
   const evidence = readEvidence(error);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
     requestAborted: request?.signal.aborted,
   });
+  const requestContext = getRequestContext();
+  if (
+    grading.reason === "limiter_store_unavailable" &&
+    requestContext !== undefined
+  ) {
+    if (observedStoreRequests.has(requestContext)) {
+      return;
+    }
+    observedStoreRequests.add(requestContext);
+  }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
   const attributes: LoggerAttributes = {
@@ -179,7 +191,7 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
       : {}),
   };
 
-  if (request !== undefined) {
+  if (request !== undefined || grading.reason === "limiter_store_unavailable") {
     recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,

@@ -60,6 +60,16 @@ test("the server awaits initial grants before exposing requests", async () => {
   );
 });
 
+test("the server closes its grants refresh with background workers", async () => {
+  const server = await Bun.file(new URL("server.ts", import.meta.url)).text();
+  expect(server).toMatch(
+    /const stopFeatureAccessGrantsRefresh = await startFeatureAccessGrantsRefresh\(\);/u,
+  );
+  expect(server).toMatch(
+    /closeBackgroundWorkers: async \(\) => \{\s*await stopFeatureAccessGrantsRefresh\?\.\(\);\s*await backgroundWorkers\.close\(\);/u,
+  );
+});
+
 test("test fixtures can replace the snapshot while exercising strict access", () => {
   const initial = readFeatureAccessGrants();
   const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
