@@ -1,3 +1,5 @@
+import type React from "react";
+
 import { describe, expect, test } from "bun:test";
 
 import { UI_LOCALES } from "@stll/locales";
@@ -7,12 +9,14 @@ import { Button } from "../components/button";
 import { Head } from "../components/head";
 import { Html } from "../components/html";
 import { Preview } from "../components/preview";
+import { BRAND_FOOTER_TEXT } from "../emails/_shared";
 import * as BetterAuthOTP from "../emails/better-auth-otp";
 import * as NewDeviceLogin from "../emails/new-device-login";
 import * as OrganizationInvitation from "../emails/organization-invitation";
 import * as ProductFeedback from "../emails/product-feedback";
 import * as ReportExportStatus from "../emails/report-export-status";
-import { toPlainText } from "./plain-text";
+import { getTranslator } from "../i18n/translate";
+import { EmailMarkupError, toPlainText } from "./plain-text";
 import { renderEmail } from "./render";
 
 /**
@@ -163,40 +167,55 @@ describe("plain text of the real templates", () => {
 
   test("every template in every locale converts without markup leaking into the text", () => {
     for (const lang of UI_LOCALES) {
-      const emails = [
-        <BetterAuthOTP.Email
-          key="otp"
-          lang={lang}
-          otp="123456"
-          type="sign-in"
-        />,
-        <NewDeviceLogin.Email
-          key="device"
-          device="Chrome on macOS"
-          ipAddress="203.0.113.42"
-          lang={lang}
-          sessionsUrl="https://app.stella.test/account/sessions"
-          time="Mar 6, 2026, 2:30 PM UTC"
-        />,
-        <OrganizationInvitation.Email
-          key="invitation"
-          invitedByUsername="Jane Doe"
-          inviteLink="https://app.stella.test/accept/tok"
-          lang={lang}
-          organizationName="Acme Inc"
-        />,
-        <ReportExportStatus.Email
-          key="export"
-          appUrl="https://app.stella.test/workspaces"
-          lang={lang}
-          status="completed"
-        />,
+      const t = getTranslator(lang);
+      // Each email with its closing paragraph: the brand footer, or the
+      // translated notice for the email that has no footer.
+      const emails: [React.ReactElement, string][] = [
+        [
+          <BetterAuthOTP.Email
+            key="otp"
+            lang={lang}
+            otp="123456"
+            type="sign-in"
+          />,
+          BRAND_FOOTER_TEXT,
+        ],
+        [
+          <NewDeviceLogin.Email
+            key="device"
+            device="Chrome on macOS"
+            ipAddress="203.0.113.42"
+            lang={lang}
+            sessionsUrl="https://app.stella.test/account/sessions"
+            time="Mar 6, 2026, 2:30 PM UTC"
+          />,
+          t("newDeviceLogin.ignore"),
+        ],
+        [
+          <OrganizationInvitation.Email
+            key="invitation"
+            invitedByUsername="Jane Doe"
+            inviteLink="https://app.stella.test/accept/tok"
+            lang={lang}
+            organizationName="Acme Inc"
+          />,
+          BRAND_FOOTER_TEXT,
+        ],
+        [
+          <ReportExportStatus.Email
+            key="export"
+            appUrl="https://app.stella.test/workspaces"
+            lang={lang}
+            status="completed"
+          />,
+          BRAND_FOOTER_TEXT,
+        ],
       ];
-      for (const email of emails) {
+      for (const [email, closing] of emails) {
         const { text } = renderEmail(email);
         expect(text).not.toMatch(/[<>]|&#?\w+;|mso/u);
         expect(text.split("\n")).toContain(DIVIDER);
-        expect(text).toEndWith("stella | open source legal workspace");
+        expect(text.split("\n").at(-1)).toBe(closing);
       }
     }
   });
@@ -219,6 +238,9 @@ describe("toPlainText on component markup", () => {
   });
 
   test("markup outside the email components is refused, not guessed at", () => {
+    expect(() =>
+      toPlainText("<html><body><ul><li>item</li></ul></body></html>"),
+    ).toThrow(EmailMarkupError);
     expect(() =>
       toPlainText("<html><body><ul><li>item</li></ul></body></html>"),
     ).toThrow("unsupported <ul>");

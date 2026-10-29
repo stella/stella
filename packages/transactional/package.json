@@ -21,7 +21,6 @@
   "dependencies": {
     "@stll/api-contract": "workspace:*",
     "@stll/locales": "workspace:*",
-    "better-result": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"

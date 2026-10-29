@@ -1,13 +1,11 @@
-import { panic } from "better-result";
-
 /**
  * The plain-text part of an email rendered from `../components`.
  *
  * Not a general HTML-to-text converter: it reads only the markup those
  * components produce (headings, paragraphs, presentation tables, links,
- * dividers, images and the preview line) and panics on any other element, so
- * a template that starts using a new one fails its render test instead of
- * sending a garbled text part.
+ * dividers, images and the preview line) and throws `EmailMarkupError` on
+ * any other element, so a template that starts using a new one fails its
+ * render test instead of sending a garbled text part.
  *
  * Blocks are separated the way the `html-to-text` defaults lay them out: a
  * heading is uppercased, paragraphs and tables are set apart by a blank line,
@@ -19,7 +17,7 @@ export const toPlainText = (markup: string): string => {
   const bodyStart = markup.indexOf("<body");
   const bodyEnd = markup.lastIndexOf("</body>");
   if (bodyStart === -1 || bodyEnd < bodyStart) {
-    return panic("toPlainText: the markup has no <body>");
+    return fail("toPlainText: the markup has no <body>");
   }
   const body = markup.slice(bodyStart, bodyEnd + "</body>".length);
 
@@ -43,7 +41,7 @@ export const toPlainText = (markup: string): string => {
     blocks.push(createBlock(leadingLineBreaks));
   };
   const closeBlock = (trailingLineBreaks: number) => {
-    const block = blocks.pop() ?? panic("toPlainText: no block to close");
+    const block = blocks.pop() ?? fail("toPlainText: no block to close");
     addText(
       current(),
       getText(block),
@@ -59,7 +57,7 @@ export const toPlainText = (markup: string): string => {
     token.lastIndex = index;
     const match =
       token.exec(body) ??
-      panic(
+      fail(
         `toPlainText: unreadable markup at ${index}: ${body.slice(index, index + 40)}`,
       );
     index = token.lastIndex;
@@ -82,7 +80,7 @@ export const toPlainText = (markup: string): string => {
     if (closing === "/") {
       const element = elements.pop();
       if (element === undefined || element.name !== name) {
-        return panic(`toPlainText: unexpected </${name}> in email markup`);
+        return fail(`toPlainText: unexpected </${name}> in email markup`);
       }
       switch (element.kind) {
         case "block":
@@ -123,7 +121,7 @@ export const toPlainText = (markup: string): string => {
           closeBlock(DIVIDER.trailing);
           break;
         default:
-          return panic(`toPlainText: unsupported <${name}/> in email markup`);
+          return fail(`toPlainText: unsupported <${name}/> in email markup`);
       }
       continue;
     }
@@ -147,7 +145,7 @@ export const toPlainText = (markup: string): string => {
       case "a": {
         const href = /\shref="([^"]*)"/u.exec(attributes)?.[1];
         if (href === undefined) {
-          return panic("toPlainText: <a> without an href in email markup");
+          return fail("toPlainText: <a> without an href in email markup");
         }
         const link: LinkElement = {
           kind: "link",
@@ -168,11 +166,11 @@ export const toPlainText = (markup: string): string => {
         elements.push({ kind: "inline", name });
         break;
       default:
-        return panic(`toPlainText: unsupported <${name}> in email markup`);
+        return fail(`toPlainText: unsupported <${name}> in email markup`);
     }
   }
   if (elements.length > 0 || blocks.length > 1) {
-    return panic("toPlainText: the markup leaves elements open");
+    return fail("toPlainText: the markup leaves elements open");
   }
   return getText(root);
 };
@@ -325,4 +323,16 @@ function addInline(
   block.stashedSpace =
     (previouslyStashedSpace && !anyWord) || TRAILING_WHITESPACE.test(text);
   block.stashedLineBreaks = 0;
+}
+
+/** The markup is not what the email components produce. */
+export class EmailMarkupError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmailMarkupError";
+  }
+}
+
+function fail(message: string): never {
+  throw new EmailMarkupError(message);
 }

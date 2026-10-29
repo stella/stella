@@ -148,7 +148,7 @@ function convertToPx(value: PaddingValue): number | undefined {
   if (match === null) {
     return 0;
   }
-  const [, amount = "", unit] = match;
+  const [, amount = "", unit = "px"] = match;
   const number = Number.parseFloat(amount);
   switch (unit) {
     case "em":
