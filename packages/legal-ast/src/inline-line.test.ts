@@ -116,6 +116,22 @@ describe("cutting a line's end", () => {
     ]);
   });
 
+  test("a removed space before a retained newline keeps its line break", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first " },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace(" \n", "\n")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ]);
+  });
+
   test("nested children around a line break keep their offsets", () => {
     const inlines: Inline[] = [
       {

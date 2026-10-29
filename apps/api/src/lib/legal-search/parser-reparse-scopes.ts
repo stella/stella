@@ -109,7 +109,7 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 15,
+    version: 14,
     scope: {
       type: "all",
       reason:
@@ -117,7 +117,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 20,
+    version: 19,
     scope: {
       type: "all",
       reason:
@@ -125,7 +125,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 22,
+    version: 21,
     scope: {
       type: "all",
       reason:
@@ -133,7 +133,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 31,
+    version: 30,
     scope: {
       type: "all",
       reason:
@@ -141,7 +141,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 20,
+    version: 19,
     scope: {
       type: "all",
       reason:
@@ -157,7 +157,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 17,
+    version: 16,
     scope: {
       type: "all",
       reason:
@@ -165,7 +165,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 10,
+    version: 9,
     scope: {
       type: "all",
       reason:
@@ -173,7 +173,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 11,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -181,7 +181,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 10,
+    version: 9,
     scope: {
       type: "all",
       reason:
@@ -197,7 +197,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 16,
+    version: 15,
     scope: {
       type: "all",
       reason:
@@ -282,7 +282,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 11,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -290,7 +290,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 18,
+    version: 17,
     scope: {
       type: "all",
       reason:
@@ -298,7 +298,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
-    version: 4,
+    version: 3,
     scope: {
       type: "all",
       reason:
@@ -306,7 +306,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 22,
+    version: 21,
     scope: {
       type: "all",
       reason:
@@ -314,7 +314,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 11,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -322,7 +322,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    version: 15,
+    version: 14,
     scope: {
       type: "all",
       reason:
@@ -330,7 +330,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 12,
+    version: 11,
     scope: {
       type: "all",
       reason:
@@ -338,7 +338,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 4,
+    version: 3,
     scope: {
       type: "all",
       reason:

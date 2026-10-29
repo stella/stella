@@ -240,9 +240,20 @@ const whitespaceEdits = (
   const kept: string[] = [];
   let next = 0;
   // Code units, not code points: the offsets below are a text node's length.
-  for (const char of before.split("")) {
+  const source = before.split("");
+  for (const [index, char] of source.entries()) {
     const target = after[next];
-    if (char === target || (isWhitespace(char) && isWhitespace(target))) {
+    const laterExactWhitespace =
+      isWhitespace(char) &&
+      isWhitespace(target) &&
+      char !== target &&
+      source
+        .slice(index + 1)
+        .find((later) => !isWhitespace(later) || later === target) === target;
+    if (
+      char === target ||
+      (isWhitespace(char) && isWhitespace(target) && !laterExactWhitespace)
+    ) {
       kept.push(target ?? "");
       next += 1;
     } else if (isWhitespace(char)) {
