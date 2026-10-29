@@ -15,8 +15,8 @@ import type {
 } from "./session";
 
 const MIB = 1024 * 1024;
-// Worker start (WASM instantiation, fonts) is slow on a loaded runner; the
-// render limits under test are much shorter than this per-test bound.
+// timeout: Worker startup instantiates WASM and fonts; the render limits under
+// test are much shorter than this per-test bound.
 setDefaultTimeout(60_000);
 // Never finishes: 10^10 iterations of the Typst interpreter.
 const ENDLESS =

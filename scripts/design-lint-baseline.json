@@ -738,7 +738,7 @@
     "apps/api/src/handlers/invoices/entries/remove.ts": 2,
     "apps/api/src/handlers/invoices/lines/create.ts": 2,
     "apps/api/src/handlers/invoices/lines/delete.ts": 2,
-    "apps/api/src/handlers/invoices/transition.ts": 2,
+    "apps/api/src/handlers/invoices/transition.ts": 1,
     "apps/api/src/handlers/invoices/update.ts": 1,
     "apps/api/src/handlers/legislation/ingestion.ts": 1,
     "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 3,

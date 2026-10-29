@@ -100,7 +100,7 @@ export const collectRetentionWrites = ({
         (attribute) =>
           attribute.name.text === "type" &&
           ts.isStringLiteral(attribute.value) &&
-          ["file", "json"].includes(attribute.value.text),
+          ["file", "json", "text"].includes(attribute.value.text),
       )
     ) {
       return undefined;

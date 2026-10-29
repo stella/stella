@@ -9,6 +9,12 @@ import { invoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 
 const getInitialInvoicesPageParam = (): string | undefined => undefined;
 
+type InvoiceSendsQueryScope = {
+  workspaceId: string;
+  invoiceId: string;
+  userId: string;
+};
+
 export const invoicesKeys = {
   all: invoicesQueryRoot,
   infinite: (workspaceId: string, limit: number) => [
@@ -19,6 +25,11 @@ export const invoicesKeys = {
   byId: (workspaceId: string, id: string) => [
     ...invoicesKeys.all(workspaceId),
     id,
+  ],
+  sends: ({ workspaceId, invoiceId, userId }: InvoiceSendsQueryScope) => [
+    ...invoicesKeys.byId(workspaceId, invoiceId),
+    "sends",
+    userId,
   ],
 };
 
@@ -58,9 +69,13 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
  * addresses a new send starts from. Keyed under the invoice, so every
  * invoice invalidation refreshes it.
  */
-export const invoiceSendsOptions = (workspaceId: string, invoiceId: string) =>
+export const invoiceSendsOptions = ({
+  workspaceId,
+  invoiceId,
+  userId,
+}: InvoiceSendsQueryScope) =>
   queryOptions({
-    queryKey: [...invoicesKeys.byId(workspaceId, invoiceId), "sends"],
+    queryKey: invoicesKeys.sends({ workspaceId, invoiceId, userId }),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }) => {
       const response = await api
@@ -75,14 +90,14 @@ export type InvoiceSends = Awaited<
   ReturnType<NonNullable<ReturnType<typeof invoiceSendsOptions>["queryFn"]>>
 >;
 
-export const invoiceSendsInfiniteOptions = (
-  workspaceId: string,
-  invoiceId: string,
-) =>
+export const invoiceSendsInfiniteOptions = ({
+  workspaceId,
+  invoiceId,
+  userId,
+}: InvoiceSendsQueryScope) =>
   infiniteQueryOptions({
     queryKey: [
-      ...invoicesKeys.byId(workspaceId, invoiceId),
-      "sends",
+      ...invoicesKeys.sends({ workspaceId, invoiceId, userId }),
       "infinite",
     ],
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

@@ -69,6 +69,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/invoices/:workspaceId/:invoiceId/sends",
+    "cleanup of live invoice links must work after the firm leaves time billing; invoice:update required",
+  ],
+  [
     "/v1/workspaces/:workspaceId/vocabulary",
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],

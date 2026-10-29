@@ -240,6 +240,37 @@ describe("handler retention declarations", () => {
     ]);
   });
 
+  test.each(["file", "json", "text"])(
+    "treats %s loader imports as data while following the callback's writes",
+    (loader) => {
+      const result = collectRetentionWrites({
+        sources: new Map([
+          [
+            "src/handlers/fixture.ts",
+            'import { callback } from "./helpers"; createSafePublicHandler({}, callback);',
+          ],
+          [
+            "src/handlers/helpers.ts",
+            `import asset from "./asset.svg" with { type: "${loader}" }; import { records } from "../db/schema"; export const callback = () => { render(asset); return db.insert(records); };`,
+          ],
+          [
+            "src/db/schema.ts",
+            'export const records = pgTable("records", {});',
+          ],
+        ]),
+        roots: ["src/handlers/fixture.ts"],
+        routeFiles: [],
+        declarations: new Set(),
+      });
+      expect(result).toEqual({
+        tables: ["records"],
+        issues: [
+          "src/handlers/helpers.ts: missing retention declaration for records",
+        ],
+      });
+    },
+  );
+
   test("follows namespace helpers and callback aliases", () => {
     const result = collectRetentionWrites({
       sources: new Map([

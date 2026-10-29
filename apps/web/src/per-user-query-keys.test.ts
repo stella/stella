@@ -47,6 +47,11 @@ import {
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
 import {
+  invoiceSendsInfiniteOptions,
+  invoiceSendsOptions,
+  invoicesKeys,
+} from "@/lib/workspaces/queries/invoices";
+import {
   legalListActivityOptions,
   legalListItemsOptions,
   legalListKeys,
@@ -126,6 +131,23 @@ const READ_FRESH = "read fresh at each use, never cached";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "invoices/sends/list.ts": {
+    kind: "keyed",
+    calls: ["api.invoices()().sends.get"],
+    files: ["lib/workspaces/queries/invoices.ts"],
+    keys: () => [
+      invoiceSendsOptions({
+        workspaceId: WORKSPACE,
+        invoiceId: "invoice-probe",
+        userId: USER,
+      }).queryKey,
+      invoiceSendsInfiniteOptions({
+        workspaceId: WORKSPACE,
+        invoiceId: "invoice-probe",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
@@ -1215,6 +1237,29 @@ describe("per-user reads", () => {
 
     expect(unkeyed).toEqual([]);
   });
+});
+
+test("invoice send keys isolate caller reply-to metadata and retain invoice invalidation", async () => {
+  const scope = { workspaceId: WORKSPACE, invoiceId: "invoice-probe" };
+  const queryClient = new QueryClient();
+  for (const options of [invoiceSendsOptions, invoiceSendsInfiniteOptions]) {
+    const callerKey = Array.from(options({ ...scope, userId: USER }).queryKey);
+    const otherKey = Array.from(
+      options({ ...scope, userId: "another-user" }).queryKey,
+    );
+    queryClient.setQueryData(callerKey, { replyTo: "caller@example.test" });
+    expect(queryClient.getQueryData(otherKey)).toBeUndefined();
+    queryClient.setQueryData(otherKey, { replyTo: "other@example.test" });
+    expect(queryClient.getQueryData(callerKey)).toEqual({
+      replyTo: "caller@example.test",
+    });
+    await queryClient.invalidateQueries({
+      queryKey: invoicesKeys.byId(scope.workspaceId, scope.invoiceId),
+      refetchType: "none",
+    });
+    expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(true);
+  }
 });
 
 test("list detail keys carry caller identity and retain broad invalidation", async () => {

@@ -32,6 +32,7 @@ import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -89,8 +90,9 @@ export const SendInvoiceForm = ({
   const t = useTranslations("billing.invoices.sending");
   const rootT = useTranslations();
   const queryClient = useQueryClient();
+  const userId = useAuthenticatedUser().id;
   const sends = queryView(
-    useQuery(invoiceSendsOptions(workspaceId, invoiceId)),
+    useQuery(invoiceSendsOptions({ workspaceId, invoiceId, userId })),
     { isEmpty: () => false },
   );
   useQueryViewError(sends, "SendInvoiceForm:query");
@@ -291,8 +293,9 @@ export const InvoiceSendsSection = ({
 }: InvoiceSendsSectionProps) => {
   const t = useTranslations("billing.invoices.sending");
   const rootT = useTranslations();
+  const userId = useAuthenticatedUser().id;
   const sends = useInfiniteQuery(
-    invoiceSendsInfiniteOptions(workspaceId, invoiceId),
+    invoiceSendsInfiniteOptions({ workspaceId, invoiceId, userId }),
   );
   const view = queryView(sends);
   useQueryViewError(view, "InvoiceSendsSection:query");
