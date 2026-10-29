@@ -777,7 +777,7 @@ export const installPglitePdfSigningTokenScopes = async (
 
 const INVOICE_SENDS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261028130000_invoice_sends",
+  "20261029000200_invoice_sends",
   "migration.sql",
 );
 
