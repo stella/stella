@@ -51,7 +51,7 @@ type SharepointPolicy = {
 };
 
 export const capabilityEnabled = (
-  policy: SharepointPolicy | undefined,
+  policy: SharepointPolicy | null | undefined,
   capability: Microsoft365Capability,
 ): boolean => {
   if (!policy) {
@@ -89,7 +89,7 @@ export const grantedCapabilities = (scope: string | null) => {
 type DelegatedScopesOptions = {
   requested: readonly Microsoft365Capability[];
   grantedScope: string | null;
-  policy: SharepointPolicy | undefined;
+  policy: SharepointPolicy | null | undefined;
 };
 
 // Retain only provider grants that the current org policy still permits.
@@ -137,7 +137,7 @@ export const consentedScopes = ({
 }: {
   providerScope: string | undefined;
   requestedScope: string;
-  policy: SharepointPolicy | undefined;
+  policy: SharepointPolicy | null | undefined;
 }): string => {
   // Microsoft may omit the response scope; in that case the token carries
   // the scopes requested in this exact authorization or refresh exchange.

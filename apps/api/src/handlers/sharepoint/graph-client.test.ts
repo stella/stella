@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { readFailureBrand } from "@stll/errors";
+
 import {
   type DriveChildrenResponse,
   fetchAccountLabel,
@@ -10,6 +12,7 @@ import {
 } from "@/api/handlers/sharepoint/graph-client";
 import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -176,5 +179,78 @@ test("invalid Graph account and drive payloads do not enter telemetry or error c
     }
   } finally {
     logs.restore();
+  }
+});
+
+test("Graph drive refusals and rejected transports retain their 502 classification", async () => {
+  const cases = [
+    {
+      message: "Microsoft Graph returned HTTP 429",
+      fetchBytes: async () =>
+        Result.ok({
+          body: new ArrayBuffer(0),
+          headers: new Headers(),
+          ok: false,
+          status: 429,
+        }),
+    },
+    {
+      message: "Failed to reach Microsoft Graph",
+      fetchBytes: async () =>
+        Result.err(
+          new SafeOutboundFetchError({ message: "private provider detail" }),
+        ),
+    },
+    {
+      message: "Provider refusal",
+      fetchBytes: async () => {
+        throw new HandlerError({ status: 403, message: "Provider refusal" });
+      },
+    },
+  ] satisfies { message: string; fetchBytes: typeof safeOutboundFetchBytes }[];
+  for (const { message, fetchBytes } of cases) {
+    const result = await listDriveRootChildren({
+      accessToken: v.parse(secretSchema, "access-token"),
+      cursor: null,
+      fetchBytes,
+      limit: 25,
+      permit: grantThirdPartyOutboundPermit(),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 502,
+        code: "internal_error",
+        message,
+      });
+    }
+  }
+});
+
+test("Graph response failures distinguish availability, credentials and request errors", async () => {
+  for (const { status, reason } of [
+    { status: 429, reason: "upstream_unavailable" },
+    { status: 503, reason: "upstream_unavailable" },
+    { status: 401, reason: "provider_credentials_rejected" },
+    { status: 403, reason: "provider_credentials_rejected" },
+    { status: 400, reason: "provider_request_rejected" },
+  ]) {
+    const result = await listDriveRootChildren({
+      accessToken: v.parse(secretSchema, "access-token"),
+      cursor: null,
+      limit: 25,
+      permit: grantThirdPartyOutboundPermit(),
+      fetchBytes: async () =>
+        Result.ok({
+          body: new ArrayBuffer(0),
+          headers: new Headers(),
+          ok: false,
+          status,
+        }),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(readFailureBrand(result.error)?.reason).toBe(reason);
+    }
   }
 });

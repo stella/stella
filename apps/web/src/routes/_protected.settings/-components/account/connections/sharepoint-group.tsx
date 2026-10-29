@@ -23,10 +23,16 @@ import {
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import {
+  sharepointCapabilities,
+  sharepointConnect,
+  sharepointDisable,
+  sharepointDisconnect,
+} from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { APIError } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { sharepointConnectionOptions } from "@/routes/_protected.settings/-queries/connections";
 
@@ -53,31 +59,24 @@ export const SharepointGroup = () => {
   };
   const connect = useMutation({
     mutationFn: async (capability: Microsoft365Capability) =>
-      unwrapApiResponse(
-        await api.sharepoint.connect.post({ capabilities: [capability] }),
-      ),
+      readQueryResult(await sharepointConnect.start(capability)),
     onSuccess: ({ authorizeUrl }) => window.location.assign(authorizeUrl),
     onError,
   });
   const updateCapabilities = useMutation({
     mutationFn: async (capabilities: Microsoft365Capability[]) =>
-      unwrapApiResponse(
-        await api.sharepoint.capabilities.put({ capabilities }),
-      ),
+      readQueryResult(await sharepointCapabilities.update(capabilities)),
     onSuccess: invalidate,
     onError,
   });
   const disable = useMutation({
-    mutationFn: async () =>
-      unwrapApiResponse(
-        await api.sharepoint.enablement.put({ enabled: false }),
-      ),
+    mutationFn: async () => readQueryResult(await sharepointDisable.disable()),
     onSuccess: invalidate,
     onError,
   });
   const disconnect = useMutation({
     mutationFn: async () =>
-      unwrapApiResponse(await api.sharepoint.connection.delete()),
+      readQueryResult(await sharepointDisconnect.disconnect()),
     onSuccess: invalidate,
     onError,
   });

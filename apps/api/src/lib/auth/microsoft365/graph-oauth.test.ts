@@ -4,14 +4,16 @@ import * as v from "valibot";
 
 import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
 
-import { delegatedReadScopes } from "@/api/handlers/sharepoint/capabilities";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { delegatedReadScopes } from "@/api/lib/auth/microsoft365/capabilities";
 import {
   buildAuthorizeUrl,
   createPkce,
-  refreshAccessToken,
-} from "@/api/handlers/sharepoint/graph-oauth";
-import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+  refreshSharepointAccessToken,
+} from "@/api/lib/auth/microsoft365/graph-oauth";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
 
 describe("buildAuthorizeUrl", () => {
@@ -81,7 +83,7 @@ test("refresh requests only the reviewed scopes through bounded outbound transpo
       status: 200,
     });
   };
-  const result = await refreshAccessToken({
+  const result = await refreshSharepointAccessToken({
     clientId: "client-123",
     clientSecret: "client-secret",
     fetchBytes,
@@ -99,7 +101,7 @@ test("invalid token responses exclude provider secrets from error causes", async
     `{"refresh_token":"${privateText}"`,
     JSON.stringify({ access_token: 123, refresh_token: privateText }),
   ]) {
-    const result = await refreshAccessToken({
+    const result = await refreshSharepointAccessToken({
       clientId: "client-123",
       clientSecret: "client-secret",
       permit: grantThirdPartyOutboundPermit(),
@@ -118,6 +120,53 @@ test("invalid token responses exclude provider secrets from error causes", async
     if (Result.isError(result)) {
       expect(result.error.message).toBe("Invalid Microsoft token response");
       expect(JSON.stringify(result.error)).not.toContain(privateText);
+    }
+  }
+});
+
+test("token refusals and rejected transports retain their 502 classification", async () => {
+  const cases = [
+    {
+      message: "Microsoft token endpoint returned HTTP 401",
+      fetchBytes: async () =>
+        Result.ok({
+          body: new ArrayBuffer(0),
+          headers: new Headers(),
+          ok: false,
+          status: 401,
+        }),
+    },
+    {
+      message: "Failed to reach the Microsoft token endpoint",
+      fetchBytes: async () =>
+        Result.err(
+          new SafeOutboundFetchError({ message: "private provider detail" }),
+        ),
+    },
+    {
+      message: "Provider refusal",
+      fetchBytes: async () => {
+        throw new HandlerError({ status: 403, message: "Provider refusal" });
+      },
+    },
+  ] satisfies { message: string; fetchBytes: typeof safeOutboundFetchBytes }[];
+  for (const { message, fetchBytes } of cases) {
+    const result = await refreshSharepointAccessToken({
+      clientId: "client",
+      clientSecret: "secret",
+      fetchBytes,
+      permit: grantThirdPartyOutboundPermit(),
+      refreshToken: v.parse(secretSchema, "refresh-token"),
+      scope: delegatedReadScopes(["calendar.read"]),
+      tenantId: "tenant",
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 502,
+        code: "internal_error",
+        message,
+      });
     }
   }
 });

@@ -8,7 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { organizationSettings, sharepointConnections } from "@/api/db/schema";
-import { encryptSharepointSecret } from "@/api/handlers/sharepoint/crypto";
+import { encryptSharepointSecret } from "@/api/lib/auth/microsoft365/crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -143,6 +143,7 @@ test("calendar executions use current stored grants, shared result provenance an
     expect(isGrantableChatTool(name)).toBe(true);
     expect(audited[name]?.needsApproval).toBe(true);
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [],
       grants: [
         {

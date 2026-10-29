@@ -7,7 +7,7 @@ import {
   delegatedReadScopes,
   delegatedScopes,
   grantedCapabilities,
-} from "@/api/handlers/sharepoint/capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
 
 test("calendar consent requests only the selected read capability", () => {
   expect(delegatedReadScopes(["calendar.read"])).toBe(
@@ -91,4 +91,21 @@ test("an omitted provider scope inherits only this exchange's requested read sco
       },
     }),
   ).toBe(requestedScope);
+});
+
+test("absent policy never enables or retains a delegated read capability", () => {
+  const requestedScope = delegatedReadScopes(["files.read", "calendar.read"]);
+  for (const policy of [null, undefined]) {
+    expect(capabilityEnabled(policy, "files.read")).toBe(false);
+    expect(capabilityEnabled(policy, "calendar.read")).toBe(false);
+    expect(
+      grantedCapabilities(
+        consentedScopes({
+          policy,
+          providerScope: requestedScope,
+          requestedScope,
+        }),
+      ),
+    ).toEqual([]);
+  }
 });

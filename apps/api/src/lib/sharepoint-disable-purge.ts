@@ -17,6 +17,7 @@
  * org's rows.
  */
 
+import { Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -29,7 +30,7 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockSharepointPolicy } from "@/api/lib/sharepoint-policy-lock";
+import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 
 export type SharepointDisablePurgeResult = {
   purgedConnections: number;
@@ -111,9 +112,24 @@ export const purgeSharepointForOrg = async (
   };
 };
 
-export const disableAndPurgeSharepointForOrg = async (
-  options: PurgeOptions,
-): Promise<SharepointDisablePurgeResult> =>
-  await rootDb.transaction(
-    async (tx) => await purgeSharepointForOrg(tx, options),
-  );
+class SharepointDisablePurgeError extends TaggedError(
+  "SharepointDisablePurgeError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+type DisablePurgeOptions = PurgeOptions & { failureMessage: string };
+
+export const disableAndPurgeSharepointForOrg = async ({
+  failureMessage,
+  ...options
+}: DisablePurgeOptions) =>
+  await Result.tryPromise({
+    try: async () =>
+      await rootDb.transaction(
+        async (tx) => await purgeSharepointForOrg(tx, options),
+      ),
+    catch: (cause) =>
+      new SharepointDisablePurgeError({ message: failureMessage, cause }),
+  });

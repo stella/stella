@@ -1100,7 +1100,7 @@ const bunNativeFiles = [
   "apps/api/src/handlers/legal-resolve/authorization.test.ts",
   "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
   "apps/api/src/handlers/lists/verifications/get.db.test.ts",
-  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/lib/auth/microsoft365/graph-oauth.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.ts",
   "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",

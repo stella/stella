@@ -6,23 +6,23 @@ import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
 import { sharepointConnections, sharepointOAuthState } from "@/api/db/schema";
 import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   capabilityEnabled,
   delegatedScopes,
   LEGACY_FILE_CAPABILITIES,
-} from "@/api/handlers/sharepoint/capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
 import {
   buildAuthorizeUrl,
   createOAuthState,
   createPkce,
   getSharepointOAuthConfig,
   getSharepointRedirectUri,
-} from "@/api/handlers/sharepoint/graph-oauth";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+} from "@/api/lib/auth/microsoft365/graph-oauth";
+import { readLockedSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { readLockedSharepointPolicy } from "@/api/lib/sharepoint-policy-lock";
 
 const requestBody = v.optional(
   v.object({

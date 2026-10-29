@@ -126,3 +126,64 @@ test("another write, even to the same internal route, remains counted", () => {
     ),
   ).toBe(1);
 });
+
+const sharepointUiWrites = `
+export const sharepointConnect = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointConnect,
+  start: async (capability) => apiResponseResult(await api.sharepoint.connect.post({ capabilities: [capability] })),
+} as const;
+export const sharepointCapabilities = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointCapabilities,
+  update: async (capabilities) => apiResponseResult(await api.sharepoint.capabilities.put({ capabilities })),
+} as const;
+export const sharepointDisable = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointDisable,
+  disable: async () => apiResponseResult(await api.sharepoint.enablement.put({ enabled: false })),
+} as const;
+export const sharepointDisconnect = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointDisconnect,
+  disconnect: async () => apiResponseResult(await api.sharepoint.connection.delete()),
+} as const;
+`;
+const sharepointUiSource = internalUiSource + sharepointUiWrites;
+
+test("declared SharePoint UI transports own exactly the declared path, method and body", () => {
+  expect(
+    countUndeclaredApiClientWrites(sharepointUiSource, INTERNAL_UI_OWNER),
+  ).toBe(0);
+  expect(
+    countUndeclaredApiClientWrites(
+      `import { api } from "@/lib/api";\n${sharepointUiWrites}`,
+      "apps/web/src/other.ts",
+    ),
+  ).toBe(4);
+});
+
+test("a SharePoint declaration cannot authorize a different path, method or request body", () => {
+  const mutations = [
+    ["api.sharepoint.connect.post", "api.sharepoint.other.post"],
+    ["api.sharepoint.connect.post", "api.sharepoint.connect.put"],
+    ["{ capabilities: [capability] }", "{ capabilities: [other] }"],
+    ["api.sharepoint.capabilities.put", "api.sharepoint.other.put"],
+    ["api.sharepoint.capabilities.put", "api.sharepoint.capabilities.post"],
+    [
+      ".capabilities.put({ capabilities })",
+      ".capabilities.put({ capabilities, other })",
+    ],
+    ["api.sharepoint.enablement.put", "api.sharepoint.other.put"],
+    ["api.sharepoint.enablement.put", "api.sharepoint.enablement.post"],
+    ["{ enabled: false }", "{ enabled: true }"],
+    ["api.sharepoint.connection.delete", "api.sharepoint.other.delete"],
+    ["api.sharepoint.connection.delete", "api.sharepoint.connection.post"],
+    [".connection.delete()", ".connection.delete({})"],
+    [
+      "route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointConnect",
+      "route: INTERNAL_UI_TRANSPORT_ROUTES.sharepointDisable",
+    ],
+  ] as const;
+  for (const [before, after] of mutations) {
+    const mutated = sharepointUiSource.replace(before, () => after);
+    expect(mutated).not.toBe(sharepointUiSource);
+    expect(countUndeclaredApiClientWrites(mutated, INTERNAL_UI_OWNER)).toBe(1);
+  }
+});

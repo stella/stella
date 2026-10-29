@@ -7,41 +7,41 @@ import { Temporal } from "@stll/time";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { sharepointConnections } from "@/api/db/schema";
 import type { SharepointConnectionStatus } from "@/api/db/schema";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   capabilityEnabled,
   consentedScopes,
   delegatedScopes,
   grantedCapabilities,
   scopeSet,
-} from "@/api/handlers/sharepoint/capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
 import {
   decryptSharepointSecret,
   encryptSharepointSecret,
-} from "@/api/handlers/sharepoint/crypto";
+} from "@/api/lib/auth/microsoft365/crypto";
 import {
   getSharepointOAuthConfig,
-  refreshAccessToken,
+  refreshSharepointAccessToken,
   tokenExpiresAt,
-} from "@/api/handlers/sharepoint/graph-oauth";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+} from "@/api/lib/auth/microsoft365/graph-oauth";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import {
+  lockSharepointPolicy,
+  readLockedSharepointPolicy,
+} from "@/api/lib/db/sharepoint-policy-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AccessToken } from "@/api/lib/secret-brands";
-import {
-  lockSharepointPolicy,
-  readLockedSharepointPolicy,
-} from "@/api/lib/sharepoint-policy-lock";
 
 // Refresh before Graph can observe expiry mid-request.
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 const TOKEN_COLLABORATORS = {
   getSharepointOAuthConfig,
-  refreshAccessToken,
+  refreshAccessToken: refreshSharepointAccessToken,
 };
 
 /** Columns `ensureSharepointAccessToken` needs from a connection row. */
@@ -109,7 +109,7 @@ type TokenOptions = {
   signal?: AbortSignal | undefined;
 };
 
-const refreshSharepointAccessToken = async (
+const refreshStoredSharepointAccessToken = async (
   {
     connection,
     safeDb,
@@ -136,13 +136,15 @@ const refreshSharepointAccessToken = async (
       return Result.err(config.error);
     }
 
-    const refreshToken = await decryptSharepointSecret({
-      purpose: "sharepoint_refresh_token",
-      ciphertext: connection.refreshTokenEncrypted,
-      iv: connection.refreshTokenIv,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
+    const refreshToken = yield* Result.await(
+      decryptSharepointSecret({
+        purpose: "sharepoint_refresh_token",
+        ciphertext: connection.refreshTokenEncrypted,
+        iv: connection.refreshTokenIv,
+        organizationId: connection.organizationId,
+        userId: connection.userId,
+      }),
+    );
 
     const refreshed = await collaborators.refreshAccessToken({
       clientId: config.value.clientId,
@@ -267,13 +269,15 @@ const refreshSharepointAccessToken = async (
 
     // Re-decrypt what we just stored so the returned value is minted through
     // the single brand boundary, rather than casting the raw string here.
-    const accessToken = await decryptSharepointSecret({
-      purpose: "sharepoint_access_token",
-      ciphertext: encryptedAccess.ciphertext,
-      iv: encryptedAccess.iv,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
+    const accessToken = yield* Result.await(
+      decryptSharepointSecret({
+        purpose: "sharepoint_access_token",
+        ciphertext: encryptedAccess.ciphertext,
+        iv: encryptedAccess.iv,
+        organizationId: connection.organizationId,
+        userId: connection.userId,
+      }),
+    );
     return Result.ok(accessToken);
   });
 
@@ -414,18 +418,20 @@ export const ensureSharepointAccessToken = async (
       if (admission === "stale") {
         return Result.err(reconnectRequiredError());
       }
-      const accessToken = await decryptSharepointSecret({
-        purpose: "sharepoint_access_token",
-        ciphertext: connection.accessTokenEncrypted,
-        iv: connection.accessTokenIv,
-        organizationId: connection.organizationId,
-        userId: connection.userId,
-      });
+      const accessToken = yield* Result.await(
+        decryptSharepointSecret({
+          purpose: "sharepoint_access_token",
+          ciphertext: connection.accessTokenEncrypted,
+          iv: connection.accessTokenIv,
+          organizationId: connection.organizationId,
+          userId: connection.userId,
+        }),
+      );
       return Result.ok(accessToken);
     }
 
     const refreshed = yield* Result.await(
-      refreshSharepointAccessToken(
+      refreshStoredSharepointAccessToken(
         {
           connection,
           safeDb,

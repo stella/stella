@@ -8,18 +8,18 @@ import {
 } from "@stll/api-contract/microsoft365";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   calendarEventsInputSchema,
   calendarFreeBusy,
   calendarFreeBusyInputSchema,
   listCalendarEvents,
-} from "@/api/handlers/sharepoint/calendar-client";
+} from "@/api/lib/auth/microsoft365/calendar-client";
 import {
   capabilityEnabled,
   grantedCapabilities,
-} from "@/api/handlers/sharepoint/capabilities";
-import { ensureSharepointAccessToken } from "@/api/handlers/sharepoint/graph-token";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+} from "@/api/lib/auth/microsoft365/capabilities";
+import { ensureSharepointAccessToken } from "@/api/lib/auth/microsoft365/graph-token";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";

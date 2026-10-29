@@ -2,7 +2,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
+
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { graphResponseFailureReason } from "@/api/lib/auth/microsoft365/graph-response-failure";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -108,62 +111,74 @@ export const fetchAccountLabel = async ({
   permit: ThirdPartyOutboundPermit;
   signal?: AbortSignal | undefined;
 }) => {
-  const result = await Result.tryPromise({
-    try: async () => {
-      const url = new URL(`${GRAPH_API_BASE_URL}/me`);
-      url.searchParams.set("$select", "userPrincipalName,displayName,mail");
-      const response = await fetchBytes({
-        url,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-        maxBytes: GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
-        permit,
-        signal,
-        timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
-        redirect: "error",
-      });
-      if (Result.isError(response)) {
-        throw response.error;
-      }
-      if (!response.value.ok) {
-        throw new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: `Microsoft account lookup returned HTTP ${response.value.status}`,
-        });
+  const mapError = (cause: unknown): HandlerError<502> =>
+    new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: HandlerError.is(cause)
+        ? cause.message
+        : "Microsoft account lookup failed",
+      cause,
+    });
+  const url = new URL(`${GRAPH_API_BASE_URL}/me`);
+  url.searchParams.set("$select", "userPrincipalName,displayName,mail");
+  const result = (
+    await Result.tryPromise({
+      try: async () =>
+        await fetchBytes({
+          url,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+          maxBytes: GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
+          permit,
+          signal,
+          timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
+          redirect: "error",
+        }),
+      catch: mapError,
+    })
+  )
+    .andThen((response) => response.mapError(mapError))
+    .andThen((response) => {
+      if (!response.ok) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: `Microsoft account lookup returned HTTP ${response.status}`,
+            }),
+            graphResponseFailureReason(response.status),
+          ),
+        );
       }
       const json = Result.try((): unknown =>
-        JSON.parse(new TextDecoder().decode(response.value.body)),
+        JSON.parse(new TextDecoder().decode(response.body)),
       );
       const parsed = Result.isError(json)
         ? null
         : v.safeParse(meResponseSchema, json.value);
       if (!parsed?.success) {
-        throw new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: "Invalid Microsoft account response",
-        });
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: "Invalid Microsoft account response",
+            }),
+            "response_invalid",
+          ),
+        );
       }
-      return (
+      return Result.ok(
         parsed.output.userPrincipalName ??
-        parsed.output.mail ??
-        parsed.output.displayName ??
-        null
+          parsed.output.mail ??
+          parsed.output.displayName ??
+          null,
       );
-    },
-    catch: (cause) =>
-      new HandlerError({
-        status: 502,
-        code: "internal_error",
-        message: HandlerError.is(cause)
-          ? cause.message
-          : "Microsoft account lookup failed",
-        cause,
-      }),
-  });
+    });
   if (Result.isError(result)) {
     observeFailure(result.error, { sink: ACCOUNT_LABEL_FAILED_SINK });
   }
@@ -184,62 +199,71 @@ export const listDriveRootChildren = async ({
   limit: number;
   permit: ThirdPartyOutboundPermit;
   signal?: AbortSignal | undefined;
-}): Promise<Result<Page<SharepointDriveItem>, HandlerError<502>>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const url = new URL(`${GRAPH_API_BASE_URL}/me/drive/root/children`);
-      url.searchParams.set("$top", String(limit));
-      if (cursor) {
-        url.searchParams.set("$skiptoken", cursor);
+}): Promise<Result<Page<SharepointDriveItem>, HandlerError<502>>> => {
+  const mapError = (cause: unknown): HandlerError<502> =>
+    new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: HandlerError.is(cause)
+        ? cause.message
+        : "Failed to reach Microsoft Graph",
+      cause,
+    });
+  const url = new URL(`${GRAPH_API_BASE_URL}/me/drive/root/children`);
+  url.searchParams.set("$top", String(limit));
+  if (cursor) {
+    url.searchParams.set("$skiptoken", cursor);
+  }
+  return (
+    await Result.tryPromise({
+      try: async () =>
+        await fetchBytes({
+          url,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+          maxBytes: GRAPH_DRIVE_RESPONSE_MAX_BYTES,
+          permit,
+          signal,
+          timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
+          redirect: "error",
+        }),
+      catch: mapError,
+    })
+  )
+    .andThen((response) => response.mapError(mapError))
+    .andThen((response) => {
+      if (!response.ok) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: `Microsoft Graph returned HTTP ${response.status}`,
+            }),
+            graphResponseFailureReason(response.status),
+          ),
+        );
       }
-
-      const response = await fetchBytes({
-        url,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-        maxBytes: GRAPH_DRIVE_RESPONSE_MAX_BYTES,
-        permit,
-        signal,
-        timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
-        redirect: "error",
-      });
-      if (Result.isError(response)) {
-        throw response.error;
-      }
-      if (!response.value.ok) {
-        throw new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: `Microsoft Graph returned HTTP ${response.value.status}`,
-        });
-      }
-
       const json = Result.try((): unknown =>
-        JSON.parse(new TextDecoder().decode(response.value.body)),
+        JSON.parse(new TextDecoder().decode(response.body)),
       );
       const parsed = Result.isError(json)
         ? null
         : v.safeParse(driveChildrenResponseSchema, json.value);
       if (!parsed?.success) {
-        throw new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: "Invalid Microsoft Graph drive response",
-        });
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: "Invalid Microsoft Graph drive response",
+            }),
+            "response_invalid",
+          ),
+        );
       }
-      return mapDriveChildrenToPage(parsed.output, limit);
-    },
-    // Always surface a 502 so the Result error channel unifies to
-    // HandlerError<502>; preserve the message from our own thrown 502.
-    catch: (cause): HandlerError<502> =>
-      new HandlerError({
-        status: 502,
-        code: "internal_error",
-        message: HandlerError.is(cause)
-          ? cause.message
-          : "Failed to reach Microsoft Graph",
-        cause,
-      }),
-  });
+      return Result.ok(mapDriveChildrenToPage(parsed.output, limit));
+    });
+};

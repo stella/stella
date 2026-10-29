@@ -6,6 +6,10 @@ import { Temporal } from "@stll/time";
 
 import { sharepointConnections, sharepointOAuthState } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { fetchAccountLabel } from "@/api/handlers/sharepoint/graph-client";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   capabilityEnabled,
   consentedScopes,
@@ -13,24 +17,20 @@ import {
   grantedCapabilities,
   LEGACY_FILE_CAPABILITIES,
   scopeSet,
-} from "@/api/handlers/sharepoint/capabilities";
-import { encryptSharepointSecret } from "@/api/handlers/sharepoint/crypto";
-import { fetchAccountLabel } from "@/api/handlers/sharepoint/graph-client";
+} from "@/api/lib/auth/microsoft365/capabilities";
+import { encryptSharepointSecret } from "@/api/lib/auth/microsoft365/crypto";
 import {
-  exchangeAuthorizationCode,
+  exchangeSharepointAuthorizationCode,
   getSharepointOAuthConfig,
   tokenExpiresAt,
-} from "@/api/handlers/sharepoint/graph-oauth";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+} from "@/api/lib/auth/microsoft365/graph-oauth";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { readLockedSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { readLockedSharepointPolicy } from "@/api/lib/sharepoint-policy-lock";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -76,7 +76,7 @@ const redirect = (input: CallbackRedirectInput) =>
 export type SharepointOAuthCallbackDependencies = {
   deploymentEnabled: typeof isDeploymentFeatureEnabled;
   getSharepointOAuthConfig?: typeof getSharepointOAuthConfig;
-  exchangeAuthorizationCode?: typeof exchangeAuthorizationCode;
+  exchangeAuthorizationCode?: typeof exchangeSharepointAuthorizationCode;
   fetchAccountLabel?: typeof fetchAccountLabel;
 };
 
@@ -186,7 +186,8 @@ export const createSharepointOAuthCallback = (
 
           const permit = grantThirdPartyOutboundPermit();
           const token = await (
-            dependencies.exchangeAuthorizationCode ?? exchangeAuthorizationCode
+            dependencies.exchangeAuthorizationCode ??
+            exchangeSharepointAuthorizationCode
           )({
             clientId: oauthConfig.value.clientId,
             clientSecret: oauthConfig.value.clientSecret,

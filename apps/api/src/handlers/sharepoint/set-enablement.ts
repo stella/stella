@@ -7,10 +7,10 @@ import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disableAndPurgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
-import { lockSharepointPolicy } from "@/api/lib/sharepoint-policy-lock";
 
 const requestBody = v.object({ enabled: v.boolean() });
 
@@ -37,18 +37,10 @@ const setSharepointEnablement = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
 
     if (!body.enabled) {
-      const purge = await Result.tryPromise({
-        try: async () =>
-          await disableAndPurgeSharepointForOrg({
-            organizationId,
-            recordAuditEvent,
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Failed to disable the SharePoint connection",
-            cause,
-          }),
+      const purge = await disableAndPurgeSharepointForOrg({
+        organizationId,
+        recordAuditEvent,
+        failureMessage: "Failed to disable the SharePoint connection",
       });
       if (Result.isError(purge)) {
         return Result.err(purge.error);

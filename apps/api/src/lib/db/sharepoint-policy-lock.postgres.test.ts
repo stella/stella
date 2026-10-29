@@ -3,9 +3,10 @@ import { eq } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import { organizationSettings } from "@/api/db/schema";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { purgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
-import { lockSharepointPolicy } from "@/api/lib/sharepoint-policy-lock";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
@@ -99,9 +100,17 @@ if (!databaseUrl || !enabled) {
               b: { status: "committed" },
             });
             expect(state).toEqual([{ file: false, calendar: false }]);
-            expect(events).toHaveLength(2);
+            expect(events.map(({ action }) => action)).toEqual([
+              AUDIT_ACTION.CREATE,
+              AUDIT_ACTION.UPDATE,
+              AUDIT_ACTION.DELETE,
+            ]);
             expect(events.at(0)?.metadata).toMatchObject({
               operation: "sharepoint_policy_row_created",
+            });
+            expect(events.at(2)?.metadata).toMatchObject({
+              operation: "sharepoint_oauth_disconnect",
+              scope: "org_disable_purge",
             });
             expect(events.at(1)?.changes).toMatchObject({
               sharepointConnectionEnabled: { old: true, new: false },

@@ -69,6 +69,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/sharepoint/capabilities",
+    "Revoking delegated capabilities remains available when the deployment feature is off; enabling requires the feature inside the handler",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],

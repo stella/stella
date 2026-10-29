@@ -9,6 +9,22 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 
+const readPolicyRow = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) =>
+  (
+    await tx
+      .select({
+        sharepointConnectionEnabled:
+          organizationSettings.sharepointConnectionEnabled,
+        microsoft365CalendarReadEnabled:
+          organizationSettings.microsoft365CalendarReadEnabled,
+      })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, organizationId))
+  ).at(0);
+
 // The optional settings row is also the fence for older API tasks, which
 // update it without taking an advisory lock. Ensure it exists before the
 // locked read: SELECT FOR UPDATE alone cannot serialize first-time writers.
@@ -27,11 +43,16 @@ export const lockSharepointPolicy = async ({
     .onConflictDoNothing({ target: organizationSettings.organizationId })
     .returning({ id: organizationSettings.id });
 
-  const policy = await readLockedSharepointPolicy({
-    tx,
-    organizationId,
+  const lock = await withAggregateLock({
+    aggregate: "sharepointPolicy",
+    id: organizationId,
     mode: "update",
+    tx,
   });
+  if (lock.status !== "locked") {
+    return panic("SharePoint policy row missing after creation");
+  }
+  const policy = await readPolicyRow(tx, organizationId);
   if (created.length > 0) {
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.CREATE,
@@ -70,16 +91,7 @@ export const readLockedSharepointPolicy = async ({
     return panic("Blocking SharePoint policy acquisition returned busy");
   }
   return (
-    (
-      await tx
-        .select({
-          sharepointConnectionEnabled:
-            organizationSettings.sharepointConnectionEnabled,
-          microsoft365CalendarReadEnabled:
-            organizationSettings.microsoft365CalendarReadEnabled,
-        })
-        .from(organizationSettings)
-        .where(eq(organizationSettings.organizationId, organizationId))
-    ).at(0) ?? panic("Locked SharePoint policy row disappeared")
+    (await readPolicyRow(tx, organizationId)) ??
+    panic("Locked SharePoint policy row disappeared")
   );
 };

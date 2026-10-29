@@ -8,17 +8,17 @@ import {
   sharepointConnections,
   sharepointOAuthState,
 } from "@/api/db/schema";
+import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   grantedCapabilities,
   scopeSet,
-} from "@/api/handlers/sharepoint/capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
 import {
   decryptSharepointSecret,
   encryptSharepointSecret,
-} from "@/api/handlers/sharepoint/crypto";
-import { ensureSharepointAccessToken } from "@/api/handlers/sharepoint/graph-token";
-import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
-import type { ApiRoutePath } from "@/api/http/api-route-types";
+} from "@/api/lib/auth/microsoft365/crypto";
+import { ensureSharepointAccessToken } from "@/api/lib/auth/microsoft365/graph-token";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -110,7 +110,7 @@ test("calendar consent stores only the requested grant and consumes its state on
       }),
     exchangeAuthorizationCode: async ({ scope }) => {
       exchanges += 1;
-      expect(scopeSet(scope)).toEqual(["calendars.read", "user.read"]);
+      expect(scopeSet(scope ?? null)).toEqual(["calendars.read", "user.read"]);
       return Result.ok({
         access_token: "calendar-access",
         refresh_token: "calendar-refresh",
@@ -156,13 +156,15 @@ test("calendar consent stores only the requested grant and consumes its state on
   expect(grantedCapabilities(connection.scope)).toEqual(["calendar.read"]);
   expect(
     String(
-      await decryptSharepointSecret({
-        purpose: "sharepoint_access_token",
-        ciphertext: connection.accessTokenEncrypted,
-        iv: connection.accessTokenIv,
-        organizationId: ids.orgA,
-        userId: ids.userA1,
-      }),
+      (
+        await decryptSharepointSecret({
+          purpose: "sharepoint_access_token",
+          ciphertext: connection.accessTokenEncrypted,
+          iv: connection.accessTokenIv,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        })
+      ).unwrap(),
     ),
   ).toBe("calendar-access");
   expect(audit).toMatchObject([
@@ -257,8 +259,8 @@ test("a legacy pending file consent cannot become a calendar grant", async () =>
         tenantId: "tenant",
       }),
     exchangeAuthorizationCode: async ({ scope }) => {
-      expect(scopeSet(scope)).not.toContain("calendars.read");
-      expect(scopeSet(scope)).toContain("files.read.all");
+      expect(scopeSet(scope ?? null)).not.toContain("calendars.read");
+      expect(scopeSet(scope ?? null)).toContain("files.read.all");
       return Result.ok({
         access_token: "legacy-file-access",
         scope: "User.Read Files.Read.All Sites.Read.All Calendars.Read",
@@ -532,7 +534,7 @@ test("a delayed refresh cannot replace newer consent or its ciphertext", async (
           tenantId: "tenant",
         }),
       refreshAccessToken: async ({ scope }) => {
-        expect(scopeSet(scope)).toContain("calendars.read");
+        expect(scopeSet(scope ?? null)).toContain("calendars.read");
         await testDb
           .update(sharepointConnections)
           .set({ accessTokenEncrypted: newerCiphertext, scope: newerScope })
@@ -660,7 +662,7 @@ test("successful refresh retains the original refresh secret and rejects extra p
           tenantId: "tenant",
         }),
       refreshAccessToken: async ({ scope }) => {
-        expect(scopeSet(scope)).not.toContain("files.read.all");
+        expect(scopeSet(scope ?? null)).not.toContain("files.read.all");
         return Result.ok({
           access_token: "fresh-calendar-access",
           scope: "User.Read Calendars.Read Files.Read.All",
@@ -688,13 +690,15 @@ test("successful refresh retains the original refresh secret and rejects extra p
   expect(stored.refreshTokenIv).toEqual(connection.refreshTokenIv);
   expect(
     String(
-      await decryptSharepointSecret({
-        purpose: "sharepoint_access_token",
-        ciphertext: stored.accessTokenEncrypted,
-        iv: stored.accessTokenIv,
-        organizationId: ids.orgA,
-        userId: ids.userAdmin,
-      }),
+      (
+        await decryptSharepointSecret({
+          purpose: "sharepoint_access_token",
+          ciphertext: stored.accessTokenEncrypted,
+          iv: stored.accessTokenIv,
+          organizationId: ids.orgA,
+          userId: ids.userAdmin,
+        })
+      ).unwrap(),
     ),
   ).toBe("fresh-calendar-access");
 });

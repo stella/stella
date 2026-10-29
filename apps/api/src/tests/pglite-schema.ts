@@ -1468,3 +1468,30 @@ export const installPgliteDecisionDocketFilingYear = async (
     await db.execute(sql.raw(statement));
   }
 };
+
+/** Install the policy fence that declarative schema push omits. */
+export const installPgliteSharepointPolicyFence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261029000200_sharepoint_calendar_capability",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE FUNCTION public."sharepoint_legacy_disable_calendar"',
+      ) ||
+      source.startsWith('CREATE TRIGGER "sharepoint_legacy_disable_calendar"')
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the SharePoint policy fence function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};

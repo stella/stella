@@ -4,12 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
 import { sharepointConnections } from "@/api/db/schema";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   capabilityEnabled,
   grantedCapabilities,
-} from "@/api/handlers/sharepoint/capabilities";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+} from "@/api/lib/auth/microsoft365/capabilities";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

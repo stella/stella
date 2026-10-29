@@ -3,6 +3,8 @@ import * as v from "valibot";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+
 /** Delegated read capabilities backed by the user's Microsoft Graph grant. */
 export const MICROSOFT365_CAPABILITIES = [
   "files.read",
@@ -16,8 +18,18 @@ export const MICROSOFT365_CALENDAR_TOTAL_CAP = 200;
 export const MICROSOFT365_CALENDAR_ATTENDEE_CAP = 20;
 
 export const microsoft365CalendarRangeEntries = {
-  start: v.pipe(v.string(), v.maxLength(64), v.isoTimestamp()),
-  end: v.pipe(v.string(), v.maxLength(64), v.isoTimestamp()),
+  start: v.pipe(
+    v.string(),
+    v.maxLength(64),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+  ),
+  end: v.pipe(
+    v.string(),
+    v.maxLength(64),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+  ),
 };
 
 // Timestamp arithmetic is enforced at runtime; JSON Schema has no keyword

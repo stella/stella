@@ -1,4 +1,4 @@
-import { isTaggedError, panic, TaggedError } from "better-result";
+import { isTaggedError, panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -43,6 +43,7 @@ import {
   STATUS_TO_KEY,
   translateError,
 } from "@/lib/errors/localization";
+import { readQueryResult } from "@/lib/errors/query-result";
 
 export class APIError extends TaggedError(API_ERROR_TAG)<{
   code?: string | undefined;
@@ -125,7 +126,22 @@ export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   return response.data;
 }
 
-export const toAPIError = (error: ToAPIErrorProps): APIError => {
+/** Preserve API refusals and malformed-response failures in the typed channel. */
+export const apiResponseResult = <T>(
+  response: ApiResponse<T>,
+): Result<T, APIError | ClientOperationError> => {
+  if (response.error !== null) {
+    return apiErrorResult(response.error).andThen((error) => Result.err(error));
+  }
+  return Result.ok(response.data);
+};
+
+export const toAPIError = (error: ToAPIErrorProps): APIError =>
+  readQueryResult(apiErrorResult(error));
+
+const apiErrorResult = (
+  error: ToAPIErrorProps,
+): Result<APIError, ClientOperationError> => {
   if (error.kind !== undefined) {
     const t = getTranslator();
     let message: string;
@@ -143,12 +159,14 @@ export const toAPIError = (error: ToAPIErrorProps): APIError => {
         error.kind satisfies never;
         panic("Unknown API transport kind", error.kind);
     }
-    return new APIError({
-      status: error.status,
-      transportKind: error.kind,
-      cause: error.cause,
-      message,
-    });
+    return Result.ok(
+      new APIError({
+        status: error.status,
+        transportKind: error.kind,
+        cause: error.cause,
+        message,
+      }),
+    );
   }
   const { status, value } = error;
   const normalized = normalizeApiError({
@@ -179,22 +197,24 @@ export const toAPIError = (error: ToAPIErrorProps): APIError => {
     };
   }
   if (malformedResponse !== null) {
-    throw new ClientOperationError(malformedResponse);
+    return Result.err(new ClientOperationError(malformedResponse));
   }
-  return new APIError({
-    ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
-    ...(code === undefined ? {} : { code }),
-    ...(details === undefined ? {} : { details }),
-    ...(rawMessage === undefined ? {} : { rawMessage }),
-    status: normalized.status,
-    message: countryRefusal?.success
-      ? translateError(
-          PUBLIC_COUNTRY_ERROR_KEYS[countryRefusal.output.domain][
-            countryRefusal.output.reason
-          ],
-        )
-      : localizeAPIError({ code, details, status: normalized.status }),
-  });
+  return Result.ok(
+    new APIError({
+      ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
+      ...(code === undefined ? {} : { code }),
+      ...(details === undefined ? {} : { details }),
+      ...(rawMessage === undefined ? {} : { rawMessage }),
+      status: normalized.status,
+      message: countryRefusal?.success
+        ? translateError(
+            PUBLIC_COUNTRY_ERROR_KEYS[countryRefusal.output.domain][
+              countryRefusal.output.reason
+            ],
+          )
+        : localizeAPIError({ code, details, status: normalized.status }),
+    }),
+  );
 };
 
 const PUBLIC_COUNTRY_ERROR_KEYS = {

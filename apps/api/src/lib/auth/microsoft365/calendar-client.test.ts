@@ -2,13 +2,13 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import {
   calendarEventsInputSchema,
   calendarFreeBusy,
   calendarFreeBusyInputSchema,
   listCalendarEvents,
-} from "@/api/handlers/sharepoint/calendar-client";
-import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+} from "@/api/lib/auth/microsoft365/calendar-client";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";

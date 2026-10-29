@@ -8,6 +8,8 @@
 // here; the ratchet keeps each file's count from growing. The capability-request
 // lint rule checks the shape of the declared writes and shares its client
 // definition (`.oxlint-plugins/api-client-chain.ts`).
+import { panic } from "better-result";
+
 import {
   API_CLIENT_CLIENT_EXPORTS,
   API_CLIENT_CLIENT_MODULES,
@@ -79,14 +81,95 @@ const exactMemberCall = (
   return directProperty(value.callee, name);
 };
 
+type InternalUiRouteKey = keyof typeof INTERNAL_UI_TRANSPORT_ROUTES;
+
+const INTERNAL_UI_DISPATCHES = {
+  mcpConnectorConnect: {
+    routeKey: "mcpConnectorConnect",
+    exportName: "mcpConnectorConnection",
+    actionName: "start",
+  },
+  chatConnectorReceipt: {
+    routeKey: "chatConnectorReceipt",
+    exportName: "chatConnectorReceipt",
+    actionName: "submit",
+  },
+  sharepointConnect: {
+    routeKey: "sharepointConnect",
+    exportName: "sharepointConnect",
+    actionName: "start",
+  },
+  sharepointCapabilities: {
+    routeKey: "sharepointCapabilities",
+    exportName: "sharepointCapabilities",
+    actionName: "update",
+  },
+  sharepointDisable: {
+    routeKey: "sharepointDisable",
+    exportName: "sharepointDisable",
+    actionName: "disable",
+  },
+  sharepointDisconnect: {
+    routeKey: "sharepointDisconnect",
+    exportName: "sharepointDisconnect",
+    actionName: "disconnect",
+  },
+} as const satisfies {
+  [K in InternalUiRouteKey]: {
+    routeKey: K;
+    exportName: string;
+    actionName: string;
+  };
+};
+
+/** Static paths come from the same manifest that binds the mounted API route. */
+const exactStaticApiPath = (value: Expression, routePath: string): boolean => {
+  const segments = routePath.split("/");
+  if (segments.at(0) !== "" || segments.at(1) !== "v1") {
+    return false;
+  }
+  let current: Expression | null = value;
+  for (const segment of segments.slice(2).toReversed()) {
+    if (current === null) {
+      return false;
+    }
+    current = directProperty(current, segment);
+  }
+  return current?.type === "Identifier" && current.name === "api";
+};
+
+const exactSingleCapabilityBody = (body: Expression): boolean => {
+  if (body.type !== "ObjectExpression" || body.properties.length !== 1) {
+    return false;
+  }
+  const capabilities = objectProperty(body, "capabilities");
+  if (
+    capabilities?.type !== "ArrayExpression" ||
+    capabilities.elements.length !== 1
+  ) {
+    return false;
+  }
+  const capability = capabilities.elements.at(0);
+  return capability?.type === "Identifier" && capability.name === "capability";
+};
+
 const exactInternalUiWrite = (
   call: CallExpression,
-  routeId: string,
+  routeKey: InternalUiRouteKey,
 ): boolean => {
-  const methodTarget = directProperty(call.callee, "post");
+  const route = INTERNAL_UI_TRANSPORT_ROUTES[routeKey];
+  const methodTarget = directProperty(call.callee, route.method.toLowerCase());
+  if (methodTarget === null) {
+    return false;
+  }
+  if (routeKey === "sharepointDisconnect") {
+    return (
+      call.arguments.length === 0 &&
+      exactStaticApiPath(methodTarget, route.path)
+    );
+  }
   const body = call.arguments.at(0);
   if (
-    methodTarget === null ||
     call.arguments.length !== 1 ||
     body === undefined ||
     body.type === "SpreadElement" ||
@@ -94,31 +177,58 @@ const exactInternalUiWrite = (
   ) {
     return false;
   }
-  if (routeId === INTERNAL_UI_TRANSPORT_ROUTES.mcpConnectorConnect.id) {
-    const connector = directProperty(methodTarget, "connect");
-    const mcp =
-      connector === null
-        ? null
-        : exactMemberCall(connector, "connectors", "slug");
-    const api = mcp === null ? null : directProperty(mcp, "mcp");
-    return (
-      body.properties.length === 0 &&
-      api?.type === "Identifier" &&
-      api.name === "api"
-    );
+  switch (routeKey) {
+    case "mcpConnectorConnect": {
+      const connector = directProperty(methodTarget, "connect");
+      const mcp =
+        connector === null
+          ? null
+          : exactMemberCall(connector, "connectors", "slug");
+      const api = mcp === null ? null : directProperty(mcp, "mcp");
+      return (
+        body.properties.length === 0 &&
+        api?.type === "Identifier" &&
+        api.name === "api"
+      );
+    }
+    case "chatConnectorReceipt": {
+      const threads = exactMemberCall(methodTarget, "connectors", "toolCallId");
+      const chat =
+        threads === null
+          ? null
+          : exactMemberCall(threads, "threads", "threadId");
+      const api = chat === null ? null : directProperty(chat, "chat");
+      return (
+        shorthandBody(body, "decision") &&
+        api?.type === "Identifier" &&
+        api.name === "api"
+      );
+    }
+    case "sharepointConnect":
+      return (
+        exactStaticApiPath(methodTarget, route.path) &&
+        exactSingleCapabilityBody(body)
+      );
+    case "sharepointCapabilities":
+      return (
+        exactStaticApiPath(methodTarget, route.path) &&
+        shorthandBody(body, "capabilities")
+      );
+    case "sharepointDisable": {
+      const enabled = objectProperty(body, "enabled");
+      return (
+        exactStaticApiPath(methodTarget, route.path) &&
+        body.properties.length === 1 &&
+        enabled?.type === "Literal" &&
+        enabled.value === false
+      );
+    }
+    default:
+      return panic(
+        "Unknown internal UI transport route",
+        routeKey satisfies never,
+      );
   }
-  if (routeId === INTERNAL_UI_TRANSPORT_ROUTES.chatConnectorReceipt.id) {
-    const threads = exactMemberCall(methodTarget, "connectors", "toolCallId");
-    const chat =
-      threads === null ? null : exactMemberCall(threads, "threads", "threadId");
-    const api = chat === null ? null : directProperty(chat, "chat");
-    return (
-      shorthandBody(body, "decision") &&
-      api?.type === "Identifier" &&
-      api.name === "api"
-    );
-  }
-  return false;
 };
 
 const hasDirectNamedImport = (
@@ -255,22 +365,10 @@ const isOwnedInternalUiWrite = (
   ) {
     return false;
   }
-  const dispatches = [
-    [
-      "mcpConnectorConnection",
-      "mcpConnectorConnect",
-      INTERNAL_UI_TRANSPORT_ROUTES.mcpConnectorConnect.id,
-      "start",
-    ],
-    [
-      "chatConnectorReceipt",
-      "chatConnectorReceipt",
-      INTERNAL_UI_TRANSPORT_ROUTES.chatConnectorReceipt.id,
-      "submit",
-    ],
-  ] as const;
-  for (const [name, routeKey, routeId, actionName] of dispatches) {
-    const action = internalUiAction(program, name, routeKey, actionName);
+  for (const { exportName, routeKey, actionName } of Object.values(
+    INTERNAL_UI_DISPATCHES,
+  )) {
+    const action = internalUiAction(program, exportName, routeKey, actionName);
     const nearest = ancestors.findLast((ancestor, index) =>
       isFunctionLike(ancestor, ancestors[index - 1]),
     );
@@ -284,7 +382,7 @@ const isOwnedInternalUiWrite = (
         parents.findLast((parent, index) =>
           isFunctionLike(parent, parents[index - 1]),
         ) === action &&
-        exactInternalUiWrite(node, routeId)
+        exactInternalUiWrite(node, routeKey)
       ) {
         matchingCalls.push(node);
       }

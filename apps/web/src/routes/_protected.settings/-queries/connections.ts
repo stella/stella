@@ -1,11 +1,17 @@
 import { queryOptions } from "@tanstack/react-query";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
+import {
+  apiResponseResult,
+  shouldRetryAPIRequest,
+  unwrapApiResponse,
+} from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const connectedAppsKeys = {
@@ -63,15 +69,17 @@ const currentSharepointFields = v.object({
 
 export const classifySharepointConnectionResponse = <T>(data: T) => {
   if (isLegacySharepointConnectionResponse(data)) {
-    return { type: "upgrade_required" } as const;
+    return Result.ok({ type: "upgrade_required" } as const);
   }
   if (!v.safeParse(currentSharepointFields, data).success) {
-    throw new ClientOperationError({
-      action: "read-sharepoint-connection",
-      message: "Invalid SharePoint connection response",
-    });
+    return Result.err(
+      new ClientOperationError({
+        action: "read-sharepoint-connection",
+        message: "Invalid SharePoint connection response",
+      }),
+    );
   }
-  return { type: "ready", value: data } as const;
+  return Result.ok({ type: "ready", value: data } as const);
 };
 
 export const sharepointConnectionOptions = ({
@@ -91,10 +99,10 @@ export const sharepointConnectionOptions = ({
     ] as const,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
-      const data = unwrapApiResponse(
-        await api.sharepoint.connection.get({ fetch: { signal } }),
-      );
-      return classifySharepointConnectionResponse(data);
-    },
+    queryFn: async ({ signal }) =>
+      readQueryResult(
+        apiResponseResult(
+          await api.sharepoint.connection.get({ fetch: { signal } }),
+        ).andThen(classifySharepointConnectionResponse),
+      ),
   });

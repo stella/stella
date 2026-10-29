@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -6,9 +7,15 @@ import {
 } from "@stll/api-contract";
 
 import messages from "@/i18n/langs/en.json";
+import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
-import { isDisplayableAPIError, toAPIError } from "./api";
+import {
+  APIError,
+  apiResponseResult,
+  isDisplayableAPIError,
+  toAPIError,
+} from "./api";
 
 describe("AI API failures", () => {
   test.each(Object.values(AI_FAILURE_CODES))(
@@ -124,4 +131,44 @@ describe("validation API failures", () => {
       expectedMessage.replace("{limit, number}", "256"),
     );
   });
+});
+
+test("API response results retain nullable data and localized refusal classifications", () => {
+  expect(apiResponseResult({ data: null, error: null })).toEqual(
+    Result.ok(null),
+  );
+  const result = apiResponseResult({
+    data: null,
+    error: {
+      status: 403,
+      value: { code: "forbidden", message: "Server detail" },
+    },
+  });
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isError(result)) {
+    expect(APIError.is(result.error)).toBe(true);
+    expect(result.error).toMatchObject({
+      status: 403,
+      code: "forbidden",
+      message: messages.errors.apiCodes.forbidden,
+    });
+  }
+});
+
+test("API response results preserve malformed refusal errors without throwing", () => {
+  const result = apiResponseResult({
+    data: null,
+    error: {
+      status: 502,
+      value: { message: "Refused", providerDiagnostic: { invalid: true } },
+    },
+  });
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isError(result)) {
+    expect(ClientOperationError.is(result.error)).toBe(true);
+    expect(result.error).toMatchObject({
+      action: "parse-provider-diagnostic",
+      message: "Invalid provider diagnostic response",
+    });
+  }
 });

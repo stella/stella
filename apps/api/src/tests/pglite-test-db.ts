@@ -58,6 +58,7 @@ import {
   installPgliteSchedulerJobPauseLog,
   installPgliteSchemaPrerequisites,
   installPgliteServiceClientCredentialCascade,
+  installPgliteSharepointPolicyFence,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
@@ -830,6 +831,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteSharepointPolicyFence(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);

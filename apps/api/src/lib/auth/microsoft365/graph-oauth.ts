@@ -16,15 +16,17 @@ import { Result } from "better-result";
  */
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import {
   delegatedReadScopes,
   LEGACY_FILE_CAPABILITIES,
-} from "@/api/handlers/sharepoint/capabilities";
-import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+} from "@/api/lib/auth/microsoft365/capabilities";
+import { graphResponseFailureReason } from "@/api/lib/auth/microsoft365/graph-response-failure";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { RefreshToken } from "@/api/lib/secret-brands";
@@ -53,10 +55,13 @@ export const getSharepointOAuthConfig = (): Result<
 
   if (!clientId || !clientSecret || !tenantId) {
     return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Microsoft account connection is not configured",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Microsoft account connection is not configured",
+        }),
+        "tagged_failure",
+      ),
     );
   }
 
@@ -146,53 +151,9 @@ const requestToken = async ({
   permit: ThirdPartyOutboundPermit;
   signal?: AbortSignal | undefined;
   tenantId: string;
-}): Promise<Result<GraphTokenResponse, HandlerError<502>>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const response = await fetchBytes({
-        url: tokenEndpoint(tenantId),
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body,
-        maxBytes: GRAPH_TOKEN_RESPONSE_MAX_BYTES,
-        permit,
-        signal,
-        timeoutMs: GRAPH_OAUTH_TIMEOUT_MS,
-        redirect: "error",
-      });
-      if (Result.isError(response)) {
-        throw response.error;
-      }
-      if (!response.value.ok) {
-        throw new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: `Microsoft token endpoint returned HTTP ${response.value.status}`,
-        });
-      }
-
-      const json = Result.try((): unknown =>
-        JSON.parse(new TextDecoder().decode(response.value.body)),
-      );
-      const parsed = Result.isError(json)
-        ? null
-        : v.safeParse(graphTokenResponseSchema, json.value);
-      if (!parsed?.success) {
-        throw new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: "Invalid Microsoft token response",
-        });
-      }
-      return parsed.output;
-    },
-    // Always surface a 502 so the Result error channel unifies to
-    // HandlerError<502>; preserve the message when the failure is our own
-    // thrown 502 (a non-ok token response).
-    catch: (cause): HandlerError<502> =>
+}): Promise<Result<GraphTokenResponse, HandlerError<502>>> => {
+  const mapError = (cause: unknown): HandlerError<502> =>
+    classifyFailure(
       new HandlerError({
         status: 502,
         code: "internal_error",
@@ -201,9 +162,65 @@ const requestToken = async ({
           : "Failed to reach the Microsoft token endpoint",
         cause,
       }),
-  });
+      "upstream_unavailable",
+    );
+  return (
+    await Result.tryPromise({
+      try: async () =>
+        await fetchBytes({
+          url: tokenEndpoint(tenantId),
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+          },
+          body,
+          maxBytes: GRAPH_TOKEN_RESPONSE_MAX_BYTES,
+          permit,
+          signal,
+          timeoutMs: GRAPH_OAUTH_TIMEOUT_MS,
+          redirect: "error",
+        }),
+      catch: mapError,
+    })
+  )
+    .andThen((response) => response.mapError(mapError))
+    .andThen((response) => {
+      if (!response.ok) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: `Microsoft token endpoint returned HTTP ${response.status}`,
+            }),
+            graphResponseFailureReason(response.status),
+          ),
+        );
+      }
+      const json = Result.try((): unknown =>
+        JSON.parse(new TextDecoder().decode(response.body)),
+      );
+      const parsed = Result.isError(json)
+        ? null
+        : v.safeParse(graphTokenResponseSchema, json.value);
+      if (!parsed?.success) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: "Invalid Microsoft token response",
+            }),
+            "response_invalid",
+          ),
+        );
+      }
+      return Result.ok(parsed.output);
+    });
+};
 
-export const exchangeAuthorizationCode = async ({
+export const exchangeSharepointAuthorizationCode = async ({
   clientId,
   clientSecret,
   code,
@@ -242,7 +259,7 @@ export const exchangeAuthorizationCode = async ({
     }),
   });
 
-export const refreshAccessToken = async ({
+export const refreshSharepointAccessToken = async ({
   clientId,
   clientSecret,
   fetchBytes,
