@@ -20,6 +20,13 @@
       "reason": "The midnight-tail case reads shared current-day fixture activity, so unrelated chat rows change its expected engagement minutes. Keep reporting failures while the fixture date is isolated.",
       "created": "2026-10-28",
       "expires": "2026-11-04"
+    },
+    {
+      "id": "apps/api/src/lib/case-law/sitemap-removal-refresh.postgres.test.ts::monthly sitemap removal fence (postgres) > a concurrent removal cannot be republished by a monthly count",
+      "owner": "stella",
+      "reason": "The unchanged service test assumes two bounded global refresh calls drain its country. Run 40970561177 leaves a whole-country change row while concurrent suites share the queue; retain reporting until the fixture waits for its own scope to drain.",
+      "created": "2026-10-29",
+      "expires": "2026-11-05"
     }
   ]
 }
