@@ -20,7 +20,7 @@ export const REPLAY_HEALTH_CONFIG = {
 export type ReplayEnrolment =
   | { mode: "off" }
   | { mode: "dry-run" }
-  | { mode: "enrolled"; reviewedDryRun: string };
+  | { mode: "enrolled"; reviewedDryRun: string; reviewedParserVersion: number };
 
 // Enrolment is a reviewed code change, never an environment override.
 export const REPLAY_ENROLMENT = {
@@ -70,11 +70,60 @@ export const BACKGROUND_REPLAY_LIMITS = {
 } as const;
 
 export const validateReplayEnrolment = (policy: ReplayEnrolment): void => {
-  if (policy.mode === "off") {
-    return;
+  switch (policy.mode) {
+    case "off":
+    case "dry-run":
+      return;
+    case "enrolled":
+      if (policy.reviewedDryRun.trim().length === 0) {
+        panic("Replay enrolment requires a reviewed dry run");
+      }
+      if (
+        !Number.isSafeInteger(policy.reviewedParserVersion) ||
+        policy.reviewedParserVersion < 1
+      ) {
+        panic("Replay enrolment requires a positive reviewed parser version");
+      }
+      return;
+    default:
+      policy satisfies never;
+      return panic("Unknown replay enrolment mode");
   }
-  if (policy.mode === "enrolled" && policy.reviewedDryRun.trim().length === 0) {
-    panic("Replay enrolment requires a reviewed dry run");
+};
+
+export type ReplayWaveAdmission =
+  | { status: "admit"; mode: "dry-run" | "enrolled" }
+  | { status: "held"; reason: "replay-off" }
+  | {
+      status: "held";
+      reason: "unreviewed-parser-version";
+      reviewedParserVersion: number;
+      currentParserVersion: number;
+    };
+
+/** A reviewed wave authorizes exactly one parser version; later output needs a new review. */
+export const replayWaveAdmission = (
+  policy: ReplayEnrolment,
+  currentParserVersion: number,
+): ReplayWaveAdmission => {
+  validateReplayEnrolment(policy);
+  switch (policy.mode) {
+    case "off":
+      return { status: "held", reason: "replay-off" };
+    case "dry-run":
+      return { status: "admit", mode: "dry-run" };
+    case "enrolled":
+      return policy.reviewedParserVersion === currentParserVersion
+        ? { status: "admit", mode: "enrolled" }
+        : {
+            status: "held",
+            reason: "unreviewed-parser-version",
+            reviewedParserVersion: policy.reviewedParserVersion,
+            currentParserVersion,
+          };
+    default:
+      policy satisfies never;
+      return panic("Unknown replay enrolment mode");
   }
 };
 

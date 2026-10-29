@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript6";
 
 import {
+  CANONICAL_DECISION_READ_CALLERS,
   isCaseLawPublicReadModule,
   moduleRestrictedSchemaReads,
   moduleRestrictedSchemaReadsFromSources,
@@ -35,6 +36,54 @@ const lint = async (
   });
 
 describe.serial("public-law relation scan", () => {
+  test("raw decision reads are confined to post-transaction hint boundaries, including aliased imports", async () => {
+    const cases = [
+      'import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get"; void readDecisionHandler;',
+      'import { readDecisionHandler as read } from "@/api/handlers/case-law/decisions/get"; void read;',
+      'import * as decision from "@/api/handlers/case-law/decisions/get"; void decision.readDecisionHandler;',
+      'export { readDecisionHandler as read } from "@/api/handlers/case-law/decisions/get";',
+      'export * from "@/api/handlers/case-law/decisions/get";',
+      'const decision = await import("@/api/handlers/case-law/decisions/get"); void decision;',
+      'const decision = require("@/api/handlers/case-law/decisions/get"); void decision;',
+      'import { createRequire } from "node:module"; const load = createRequire(import.meta.url); const decision = load("@/api/handlers/case-law/decisions/get"); void decision;',
+      'import { readDecisionHandler as read } from "./decisions/get"; void read;',
+    ];
+    const results = await Promise.all(
+      cases.map(
+        async (source) =>
+          await lint(source, "apps/api/src/handlers/case-law/extra-reader.ts"),
+      ),
+    );
+    expect(results).toEqual(cases.map(() => [1]));
+  });
+
+  test("canonical read owners, tests, type imports and other named getter helpers remain available", async () => {
+    const runtime =
+      'import { readDecisionHandler as read } from "@/api/handlers/case-law/decisions/get"; void read;';
+    const owners = [
+      ...CANONICAL_DECISION_READ_CALLERS,
+      "apps/api/src/handlers/case-law/decisions/get.test.ts",
+      "apps/api/src/tests/helpers/decision-read.ts",
+    ];
+    const typeAndHelperImports = [
+      'import type { readDecisionHandler } from "@/api/handlers/case-law/decisions/get"; export type Read = typeof readDecisionHandler;',
+      'import { type readDecisionHandler as read } from "@/api/handlers/case-law/decisions/get"; export type Read = typeof read;',
+      'export type { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";',
+      'import { readDecisionQuerySchema } from "@/api/handlers/case-law/decisions/get"; void readDecisionQuerySchema;',
+    ];
+    const cases = [
+      ...owners.map((filename) => ({ source: runtime, filename })),
+      ...typeAndHelperImports.map((source) => ({
+        source,
+        filename: "apps/api/src/handlers/case-law/extra-reader.ts",
+      })),
+    ];
+    const results = await Promise.all(
+      cases.map(async ({ source, filename }) => await lint(source, filename)),
+    );
+    expect(results).toEqual(cases.map(() => []));
+  });
+
   test("public case-law reads cannot name the base decision table", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',

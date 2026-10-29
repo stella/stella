@@ -44,6 +44,7 @@ import {
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
 import readDecisionSummaryRoute from "@/api/handlers/case-law/decisions/summary/get";
+import { offerVisitedReplayCandidate } from "@/api/handlers/case-law/ingestion/visited-replay-dispatch";
 import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
@@ -251,6 +252,12 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
   followUp: async (read) => {
+    if ("documentPending" in read) {
+      offerVisitedReplayCandidate({
+        sourceId: read.source.id,
+        decisionId: read.id,
+      });
+    }
     const hydrated = await hydrateDeferredDocument(read, false, {
       type: "on-demand",
       permit: grantThirdPartyOutboundPermit(),
@@ -291,6 +298,12 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   read: async (subject, { query: { citationsCursor } }) =>
     await readDecisionHandler({ subject, citationsCursor }),
   followUp: async (read) => {
+    if ("documentPending" in read) {
+      offerVisitedReplayCandidate({
+        sourceId: read.source.id,
+        decisionId: read.id,
+      });
+    }
     const hydrated = await hydrateDeferredDocument(read, false, {
       type: "on-demand",
       permit: grantThirdPartyOutboundPermit(),

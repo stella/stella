@@ -1194,7 +1194,7 @@ if (!databaseUrl || !enabled) {
             ...REPLAY_ENROLMENT,
             [ADAPTER_KEYS.EU_ECJ]: {
               mode: "enrolled",
-
+              reviewedParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
               reviewedDryRun: "fixture",
             },
           } as const;

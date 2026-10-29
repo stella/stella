@@ -135,6 +135,16 @@ export const readReplayGate = async ({
   return result.isOk() ? result.value : { kind: "unknown", signals: [] };
 };
 
+const readReplaySchedulerPause = async (db: CaseLawRootHandle) =>
+  await readSchedulerJobPause(
+    {
+      execute: async <TRow extends Record<string, unknown>>(
+        query: SQLWrapper | string,
+      ) => await db.execute<TRow>(query),
+    },
+    REPLAY_CASE_LAW_STORED_JOB,
+  );
+
 const CLEANUP_TIMEOUT_MS = 30_000;
 const REPLAY_QUERY_TIMEOUT_MS = 5000;
 
@@ -487,14 +497,7 @@ const runReplayOnSlotSession = async ({
     readVerdict: async () => {
       const [verdict, paused] = await Promise.all([
         fixture.gate === undefined ? readReplayGate(health) : fixture.gate(),
-        readSchedulerJobPause(
-          {
-            execute: async <TRow extends Record<string, unknown>>(
-              query: SQLWrapper | string,
-            ) => await rootDb.execute<TRow>(query),
-          },
-          REPLAY_CASE_LAW_STORED_JOB,
-        ),
+        readReplaySchedulerPause(rootDb),
       ]);
       const latency = latencyAdmission();
       const reason = replayAdmissionHoldReason(paused, latency);
@@ -826,4 +829,87 @@ export const runReplayTickScript = async ({
       : classifyReplayFailure(outcome.error)),
   });
   return 1;
+};
+
+const VISITED_FLUSH_TIMEOUT_MS = 10_000;
+
+/** Persist candidate hints on their serving task; only the scheduler reparses documents. */
+export const runEnabledVisitedReplayFlush = async () => {
+  const environment = readReplayTickEnvironment();
+  if (
+    !environment.CASE_LAW_REPLAY_ENABLED ||
+    environment.CASE_LAW_REPLAY_KILL_SWITCH
+  ) {
+    return { status: "disabled" } as const;
+  }
+  if (readApiLatencyAdmission().status !== "admit") {
+    return { status: "held" } as const;
+  }
+  const signal = AbortSignal.timeout(VISITED_FLUSH_TIMEOUT_MS);
+  const [{ getVisitedReplaySignals }, runtime, { rootDb }] = await Promise.all([
+    import("@/api/handlers/case-law/ingestion/visited-replay"),
+    loadReplayTickRuntime(),
+    createCaseLawMaintenanceCleanupHandles({
+      timeoutMs: VISITED_FLUSH_TIMEOUT_MS,
+      queryTimeoutMs: REPLAY_QUERY_TIMEOUT_MS,
+      signal,
+    }),
+  ]);
+  signal.throwIfAborted();
+  const health = runtime.createScriptBackfillHealthReader({
+    db: rootDb,
+    tableName: "case_law_decisions",
+    clock: now,
+    config: REPLAY_HEALTH_CONFIG,
+  });
+  const store = runtime.createBackgroundReplayStore({
+    db: rootDb,
+    now,
+    sourceEnabled: (key) => !replayKillRequested(key),
+  });
+  const preflight = createReplayPreflightGate({
+    clock: now,
+    loadState: store.loadPreflightGateState,
+    saveState: store.savePreflightGateState,
+    readVerdict: async () => {
+      signal.throwIfAborted();
+      if (
+        readApiLatencyAdmission().status !== "admit" ||
+        (await readReplaySchedulerPause(rootDb))
+      ) {
+        return { kind: "unknown", signals: [] };
+      }
+      const current = readReplayTickEnvironment();
+      if (
+        !current.CASE_LAW_REPLAY_ENABLED ||
+        current.CASE_LAW_REPLAY_KILL_SWITCH
+      ) {
+        return { kind: "unknown", signals: [] };
+      }
+      return await readReplayGate(health);
+    },
+  });
+  try {
+    return await getVisitedReplaySignals().flush({
+      readVerdict: preflight.readVerdict,
+      readLatencyAdmission: readApiLatencyAdmission,
+      maxDurationMs: VISITED_FLUSH_TIMEOUT_MS,
+      enqueueBatch: async (candidates) => {
+        signal.throwIfAborted();
+        const first =
+          candidates.at(0) ??
+          panic("Visited replay batch must contain a candidate");
+        if (candidates.some(({ sourceId }) => sourceId !== first.sourceId)) {
+          panic("Visited replay batch must belong to one source");
+        }
+        const outcome = await store.enqueueVisitedDecisions({
+          sourceId: first.sourceId,
+          decisionIds: candidates.map(({ decisionId }) => decisionId),
+        });
+        log({ event: "case_law.replay.visited_candidates", outcome });
+      },
+    });
+  } finally {
+    await health.settle();
+  }
 };

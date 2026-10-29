@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -14,6 +15,12 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import {
+  createVisitedReplaySignals,
+  VISITED_REPLAY_DROP_REASON,
+  VISITED_REPLAY_LIMITS,
+  type VisitedReplayCandidate,
+} from "@/api/handlers/case-law/ingestion/visited-replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -21,10 +28,12 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   APP_READER_TEXT,
   type AppReaderText,
@@ -51,6 +60,7 @@ import {
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
+import { readDecisionHandler } from "./get";
 import { readDecisionReaderSource } from "./reader";
 import type { ReaderSourceOptions } from "./reader";
 
@@ -123,6 +133,7 @@ const documentAst = ({ blockCount, citationCount }: ReaderAstOptions) =>
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let caseLawDb: CaseLawPublicReadDb;
+let activeReadTransactions = 0;
 let revokeSource: () => Promise<void>;
 let legislationDb: LegislationReadDb;
 let bumpProvisionGeneration: () => Promise<void>;
@@ -138,10 +149,15 @@ beforeAll(
     const readCases = async <T>(
       read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
-      await withPublicLawReaderRole(
-        db,
-        async (tx) => await read(asTestRaw<CaseLawPublicReadTransaction>(tx)),
-      );
+      await withPublicLawReaderRole(db, async (tx) => {
+        await tx.execute(sql`SET TRANSACTION READ ONLY`);
+        activeReadTransactions += 1;
+        try {
+          return await read(asTestRaw<CaseLawPublicReadTransaction>(tx));
+        } finally {
+          activeReadTransactions -= 1;
+        }
+      });
     caseLawDb = Object.assign(readCases, caseLawPublicReadDb);
     legislationDb = async <T>(
       read: (tx: LegislationReadTransaction) => Promise<T>,
@@ -436,6 +452,181 @@ const measuredRead = async (
   });
 
 describe("public decision reader database boundary", () => {
+  test("visited candidates preserve canonical response bytes and carry only readable identities", async () => {
+    const readCanonicalDecision = async () =>
+      await withRedistributableSubject(
+        caseLawDb,
+        "pages",
+        { kind: "id", id: smallId },
+        async (subject) => {
+          const role = executedRows(
+            await subject.tx.execute(sql`SELECT current_user AS role`),
+          ).at(0);
+          expect(role).toEqual({ role: "stella_public_law_reader" });
+          return await readDecisionHandler({ subject });
+        },
+      );
+    const before = await readCanonicalDecision();
+    if (before === null || !("documentPending" in before)) {
+      panic("Expected the readable fixture");
+    }
+    const responseBytes = JSON.stringify(before);
+    const hints = createVisitedReplaySignals({ usesLocalCorpus: () => true });
+    const candidate = { sourceId: before.source.id, decisionId: before.id };
+    expect(hints.offer(candidate)).toBe("buffered");
+    expect(hints.offer(candidate)).toBe("deduplicated");
+    const after = await readCanonicalDecision();
+    expect(JSON.stringify(after)).toBe(responseBytes);
+    let readOffers = 0;
+    const offerReplayCandidate = (offered: VisitedReplayCandidate) => {
+      expect(activeReadTransactions).toBe(0);
+      readOffers += 1;
+      hints.offer(offered);
+    };
+    const readerOptions = {
+      decisionId: smallId,
+      phase: "blocks",
+      audience: "app",
+      surface: "pages",
+      caseLawDb,
+      legislationDb,
+      offerReplayCandidate,
+    } as const satisfies ReaderSourceOptions;
+    const appBefore = await readDecisionReaderSource(readerOptions);
+    const appAfter = await readDecisionReaderSource(readerOptions);
+    expect(JSON.stringify(appAfter)).toBe(JSON.stringify(appBefore));
+    const modelBefore = await readDecisionReaderSource({
+      ...readerOptions,
+      audience: "model",
+    });
+    const modelAfter = await readDecisionReaderSource({
+      ...readerOptions,
+      audience: "model",
+    });
+    expect(JSON.stringify(modelAfter)).toBe(JSON.stringify(modelBefore));
+    expect(readOffers).toBe(4);
+    const offered: string[] = [];
+    expect(
+      await hints.flush({
+        readVerdict: async () => ({ kind: "normal", signals: [] }),
+        readLatencyAdmission: () => ({
+          status: "admit",
+          p95Ms: 1,
+          samples: 20,
+        }),
+        enqueueBatch: async (batch) => {
+          offered.push(...batch.map(({ decisionId }) => decisionId));
+        },
+        maxDurationMs: 1000,
+      }),
+    ).toEqual({ status: "complete", flushed: 1 });
+    expect(offered).toEqual([smallId]);
+    const missing = await withRedistributableSubject(
+      caseLawDb,
+      "pages",
+      { kind: "id", id: missingId },
+      async (subject) => await readDecisionHandler({ subject }),
+    );
+    const redacted = await withRedistributableSubject(
+      caseLawDb,
+      "pages",
+      { kind: "id", id: redactedId },
+      async (subject) => await readDecisionHandler({ subject }),
+    );
+    expect(missing).toBeNull();
+    expect(redacted).toBeNull();
+  });
+
+  test("a full hint buffer and a blocked background flush preserve the reader response and SQL budget", async () => {
+    const options = {
+      caseLawDb,
+      legislationDb,
+      decisionId: smallId,
+      phase: "blocks",
+      audience: "app",
+      surface: "pages",
+    } as const satisfies ReaderSourceOptions;
+    // Warm the canonical registry before comparing deterministic query counts.
+    await readDecisionReaderSource({
+      ...options,
+      offerReplayCandidate: () => {},
+    });
+    const baseline = await runWithQueryCounter(async (counter) => {
+      const result = await readDecisionReaderSource({
+        ...options,
+        offerReplayCandidate: () => {},
+      });
+      return { result, statements: counter.count };
+    });
+    let clock = 0;
+    const hints = createVisitedReplaySignals({
+      usesLocalCorpus: () => true,
+      now: () => clock,
+    });
+    for (
+      let index = 0;
+      index < VISITED_REPLAY_LIMITS.pendingPerSource;
+      index += 1
+    ) {
+      clock += VISITED_REPLAY_LIMITS.windowMs;
+      expect(
+        hints.offer({
+          sourceId,
+          decisionId: createSafeId<"caseLawDecision">(),
+        }),
+      ).toBe("buffered");
+    }
+    const flushReached = Promise.withResolvers<undefined>();
+    const releaseFlush = Promise.withResolvers<undefined>();
+    let flushSettled = false;
+    const backgroundFlush = hints
+      .flush({
+        readVerdict: async () => ({ kind: "normal", signals: [] }),
+        readLatencyAdmission: () => ({
+          status: "admit",
+          p95Ms: 1,
+          samples: 20,
+        }),
+        enqueueBatch: async () => {
+          flushReached.resolve(undefined);
+          await releaseFlush.promise;
+        },
+        maxDurationMs: 1000,
+      })
+      .then((result) => {
+        flushSettled = true;
+        return result;
+      });
+    await flushReached.promise;
+    try {
+      let dropped = 0;
+      const response = await runWithQueryCounter(async (counter) => {
+        const result = await readDecisionReaderSource({
+          ...options,
+          offerReplayCandidate: (candidate) => {
+            expect(activeReadTransactions).toBe(0);
+            expect(hints.offer(candidate)).toBe(
+              VISITED_REPLAY_DROP_REASON.PENDING_CEILING,
+            );
+            dropped += 1;
+            // Returning this pending work proves the read never awaits background persistence.
+            return backgroundFlush;
+          },
+        });
+        return { result, statements: counter.count };
+      });
+      expect(dropped).toBe(1);
+      expect(flushSettled).toBe(false);
+      expect(JSON.stringify(response.result)).toBe(
+        JSON.stringify(baseline.result),
+      );
+      expect(response.statements).toBe(baseline.statements);
+    } finally {
+      releaseFlush.resolve(undefined);
+      await backgroundFlush;
+    }
+  });
+
   test("unpublished, restricted, unavailable-country and missing decisions expose no reader data", async () => {
     for (const decisionId of [
       listingOnlyId,

@@ -8,6 +8,10 @@ import {
   type ReplayFailure,
   type ReplayPreviewFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
+import {
+  REPLAY_HINT_TIERS,
+  VISITED_REPLAY_ADMISSION_LIMITS,
+} from "@/api/handlers/case-law/ingestion/replay-priority";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import { caseLawSources } from "./case-law";
@@ -284,6 +288,7 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
 export const REPLAY_MAINTENANCE_AUDIT_ACTIONS = [
   "source-scheduled",
   "reported-decision-queued",
+  "visited-decisions-queued",
   "daily-row-charged",
   "receipt-superseded",
   "checkpoint-created",
@@ -312,6 +317,9 @@ export type ReplayMaintenanceAuditDetails = {
   ticksWithoutProgress?: number;
   compactedReceipts?: number;
   compactedAuditEvents?: number;
+  queuedRows?: number;
+  compactedHints?: number;
+  compactedQuotas?: number;
 };
 
 // Independent of receipt FKs: audit history survives bounded receipt compaction.
@@ -376,6 +384,7 @@ export const caseLawReplayReportedDecisions = p.pgTable.withRLS(
     sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     targetParserVersion: p.integer("target_parser_version").notNull(),
+    tier: p.text({ enum: REPLAY_HINT_TIERS }).default("reported").notNull(),
     queuedAt: timestamptz("queued_at").defaultNow().notNull(),
     previewedAt: timestamptz("previewed_at"),
     completedAt: timestamptz("completed_at"),
@@ -397,6 +406,17 @@ export const caseLawReplayReportedDecisions = p.pgTable.withRLS(
       .on(t.sourceId, t.targetParserVersion, t.queuedAt, t.decisionId)
       .where(sql`${t.completedAt} IS NULL`),
     p.check(
+      "case_law_replay_hint_tier_check",
+      sql`${t.tier} IN (${sql.join(
+        REPLAY_HINT_TIERS.map((tier) => sql.raw(`'${tier}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_replay_hint_completion_idx")
+      .on(t.completedAt, t.sourceId, t.decisionId, t.targetParserVersion)
+      .where(sql`${t.completedAt} IS NOT NULL`),
+    p.check(
       "case_law_replay_reported_version_check",
       sql`${t.targetParserVersion} > 0`,
     ),
@@ -405,6 +425,42 @@ export const caseLawReplayReportedDecisions = p.pgTable.withRLS(
       to: "public",
       using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_reported_decisions'::regclass)`,
       withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_reported_decisions'::regclass)`,
+    }),
+  ],
+);
+
+/** Fleet admission is serialized by source; this row is never a per-process quota. */
+export const caseLawReplayVisitedQuotas = p.pgTable.withRLS(
+  "case_law_replay_visited_quotas",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    windowStartedAt: timestamptz("window_started_at").notNull(),
+    admittedRows: p.integer("admitted_rows").default(0).notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_replay_visited_quotas_pkey",
+      columns: [t.sourceId],
+    }),
+    p
+      .foreignKey({
+        name: "case_law_replay_visited_quota_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("restrict"),
+    p
+      .index("case_law_replay_visited_quota_expiry_idx")
+      .on(t.windowStartedAt, t.sourceId),
+    p.check(
+      "case_law_replay_visited_quota_rows_check",
+      sql`${t.admittedRows} >= 0 AND ${t.admittedRows} <= ${VISITED_REPLAY_ADMISSION_LIMITS.rowsPerSourceMinute}`,
+    ),
+    p.pgPolicy("case_law_replay_visited_quota_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_visited_quotas'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_visited_quotas'::regclass)`,
     }),
   ],
 );

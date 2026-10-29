@@ -39,7 +39,7 @@
 // CTE set. Lint is the early signal. The enforcement boundary is the reader
 // role itself, whose grants and policies the reader-role suite exercises.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,7 @@ import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public
 import {
   type AstNode,
   canonicalModuleId,
+  dynamicModuleSourceForEnforcement,
   getImportedName,
   getPropertyName,
   isAstNode,
@@ -59,6 +60,7 @@ import {
   isIdentifierReference,
   isImportedFrom,
   isStringLiteral,
+  isTestFile,
   repoRelativeFilename,
   resolveVariable,
   stableInitializer,
@@ -99,6 +101,14 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
   "apps/api/src/lib/legislation-public-read-db",
   "apps/api/src/lib/public-law-read-db",
   "apps/api/src/lib/public-law-shared-query",
+];
+
+const RAW_DECISION_READ_MODULE = "apps/api/src/handlers/case-law/decisions/get";
+/** These boundaries offer visited identities after their public read transaction closes. */
+export const CANONICAL_DECISION_READ_CALLERS: readonly string[] = [
+  "apps/api/src/handlers/case-law/public-routes.ts",
+  "apps/api/src/handlers/case-law/decisions/reader.ts",
+  "apps/api/src/handlers/case-law/decisions/get-deferred-document.ts",
 ];
 
 const SCHEMA_MODULE = "apps/api/src/db/schema";
@@ -1513,6 +1523,8 @@ export default eslintCompatPlugin({
           unredactedView:
             "The unredacted decisions view is reserved for the public subject owner.",
           namedSchemaImport: "Import schema tables by name.",
+          canonicalDecisionRead:
+            "Read decisions through the canonical reader or deferred-document boundary; direct readDecisionHandler values are reserved for the boundaries that offer visited replay hints after their read transaction closes.",
         },
       },
       createOnce(context) {
@@ -1552,6 +1564,30 @@ export default eslintCompatPlugin({
               ? { node, messageId }
               : { node, messageId, data: { relation } },
           );
+        };
+
+        const checkRawDecisionRead = (
+          node: Node,
+          source: string,
+          names: readonly string[] | null,
+        ) => {
+          const moduleId = canonicalModuleId(source, importerRepoPath);
+          const rawDecisionRead =
+            moduleId === RAW_DECISION_READ_MODULE ||
+            moduleId.endsWith(`/${RAW_DECISION_READ_MODULE}`);
+          if (
+            isTestFile(importerRepoPath) ||
+            importerRepoPath.endsWith(`${RAW_DECISION_READ_MODULE}.ts`) ||
+            CANONICAL_DECISION_READ_CALLERS.some((owner) =>
+              importerRepoPath.endsWith(owner),
+            ) ||
+            !rawDecisionRead
+          ) {
+            return;
+          }
+          if (names === null || names.includes("readDecisionHandler")) {
+            context.report({ node, messageId: "canonicalDecisionRead" });
+          }
         };
 
         const checkReference = (
@@ -1637,6 +1673,22 @@ export default eslintCompatPlugin({
             }
           },
           ImportDeclaration(node) {
+            if (
+              node.importKind !== "type" &&
+              typeof node.source.value === "string"
+            ) {
+              for (const specifier of node.specifiers) {
+                if (isAstNode(specifier) && specifier.importKind === "type") {
+                  continue;
+                }
+                const imported = getImportedName(specifier);
+                checkRawDecisionRead(
+                  specifier,
+                  node.source.value,
+                  imported === null ? null : [imported],
+                );
+              }
+            }
             if (!inCaseLawReadBoundary || node.importKind === "type") {
               return;
             }
@@ -1714,6 +1766,33 @@ export default eslintCompatPlugin({
               });
             }
           },
+          ExportNamedDeclaration(node) {
+            if (node.source === null || node.exportKind === "type") {
+              return;
+            }
+            for (const specifier of node.specifiers) {
+              if (specifier.exportKind === "type") {
+                continue;
+              }
+              const local = getPropertyName(specifier.local);
+              checkRawDecisionRead(
+                specifier,
+                node.source.value,
+                local === null ? null : [local],
+              );
+            }
+          },
+          ExportAllDeclaration(node) {
+            if (node.exportKind !== "type") {
+              checkRawDecisionRead(node, node.source.value, null);
+            }
+          },
+          ImportExpression(node) {
+            const source = dynamicModuleSourceForEnforcement(node, context);
+            if (source !== null) {
+              checkRawDecisionRead(node, source, null);
+            }
+          },
           MemberExpression(node) {
             if (!inBoundary) {
               return;
@@ -1737,6 +1816,10 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
+            const source = dynamicModuleSourceForEnforcement(node, context);
+            if (source !== null && isAstNode(node)) {
+              checkRawDecisionRead(node, source, null);
+            }
             if (!readsPublicLaw || !isAstNode(node)) {
               return;
             }
