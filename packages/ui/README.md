@@ -13,6 +13,9 @@ export map below is what "part of the design system" means.
 Peer dependencies: `react`, `react-dom`, `@base-ui/react`, `tailwindcss` (v4),
 and `@tanstack/react-virtual`.
 
+Derived in part from [coss ui](https://github.com/cosscom/ui) (MIT); see
+`THIRD_PARTY_NOTICES`.
+
 ## Import
 
 Every module has its own subpath, and the package declares `sideEffects: false`,
