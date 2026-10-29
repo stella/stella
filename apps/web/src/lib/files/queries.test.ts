@@ -54,7 +54,7 @@ test("an empty document properties answer is a bad gateway", async () => {
 });
 
 test("file writes keep their 60 second request bound", async () => {
-  const timeouts = spyOn(globalThis, "setTimeout");
+  const timeouts = spyOn(AbortSignal, "timeout");
   try {
     await expectBadGateway(
       async () =>
@@ -72,7 +72,7 @@ test("file writes keep their 60 second request bound", async () => {
       value: "Draft agreement",
       workspaceId: "00000000-0000-4000-8000-000000000001",
     });
-    expect(timeouts.mock.calls.map(([, ms]) => ms)).toEqual([60_000, 60_000]);
+    expect(timeouts.mock.calls.map(([ms]) => ms)).toEqual([60_000, 60_000]);
   } finally {
     timeouts.mockRestore();
   }

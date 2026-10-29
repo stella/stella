@@ -26,6 +26,21 @@ export type WebApiRoutes = WebRoutes["v1"];
 
 const WEB_API_REQUEST_TIMEOUT_MS = 30_000;
 
+type WebApiFetcherOwner = typeof fetchWithTimeout;
+type ApiClientFetcher = NonNullable<ApiClientOptions["fetcher"]>;
+
+export const createWebApiFetcher =
+  (fetcher: WebApiFetcherOwner) =>
+  async (
+    url: Parameters<WebApiFetcherOwner>[0],
+    { timeoutMs, signal, ...init }: Parameters<ApiClientFetcher>[1],
+  ) =>
+    await fetcher(url, {
+      ...init,
+      signal: signal ?? undefined,
+      timeoutMs: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
+    });
+
 // Types the API owns and the browser reads by name, re-exported through the
 // generated API types.
 export type {
@@ -53,12 +68,7 @@ export type {
 } from "@/generated/api-routes.gen";
 
 export const webApiClientOptions = {
-  fetcher: async (url, { timeoutMs, signal, ...init }) =>
-    await fetchWithTimeout(url, {
-      ...init,
-      signal: signal ?? undefined,
-      timeoutMs: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
-    }),
+  fetcher: createWebApiFetcher(fetchWithTimeout),
   async onRequest() {
     await waitForSimulatedApiDelay();
   },

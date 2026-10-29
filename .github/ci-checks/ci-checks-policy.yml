@@ -47,10 +47,16 @@ checks:
     run: bun test scripts/ratchet-scan.test.ts
 
   - name: Web raw JSON API census self-test
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     run: bun test scripts/web-raw-json-api-census.test.ts
 
   - name: Web raw JSON API census
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     run: bun scripts/web-raw-json-api-census.ts
 
