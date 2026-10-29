@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { CORRESPONDENCE_CHANNELS } from "@stll/api-contract/correspondence";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { correspondence } from "@/api/db/schema";
@@ -9,7 +10,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
+import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
+import {
+  readCorrespondenceChannel,
+  readCorrespondenceProvenance,
+} from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
@@ -23,6 +28,7 @@ type CorrespondenceRow = typeof correspondence.$inferSelect;
 
 const CORRESPONDENCE_LIST_COLUMNS = {
   id: correspondence.id,
+  direction: correspondence.direction,
   subject: correspondence.subject,
   from: correspondence.from,
   to: correspondence.to,
@@ -31,6 +37,8 @@ const CORRESPONDENCE_LIST_COLUMNS = {
   sentAt: correspondence.sentAt,
   handlingState: correspondence.handlingState,
   assigneeId: correspondence.assigneeId,
+  channel: correspondence.channel,
+  dataBox: correspondence.dataBox,
   source: correspondence.source,
   sourceEntityId: correspondence.sourceEntityId,
   intake: correspondence.intake,
@@ -48,8 +56,6 @@ const UNPROJECTED_LIST_COLUMNS = [
   "workspaceId", // Matter scope comes from the authorized route.
   "contentHash", // Internal content fingerprint for ingestion.
   "dedupKey", // Internal replay identity.
-  "direction", // The compact list uses the detail route for direction metadata.
-  "channel", // The compact list uses the detail route for channel metadata.
   "messageId", // Transport identifiers belong to detail.
   "inReplyTo", // Reply linkage belongs to detail.
   "references", // Thread references belong to detail.
@@ -72,6 +78,9 @@ type UnexpectedListColumn = UnbackedProjectionKeys<
 true satisfies MissingListColumn extends never ? true : never;
 true satisfies UnexpectedListColumn extends never ? true : never;
 
+// Every channel is filterable; the check fails when a channel is added.
+const CHANNEL_FILTER = v.picklist(CORRESPONDENCE_CHANNELS);
+
 const PAGE_SIZE = 30;
 const PAGE_SIZE_MAX = 100;
 const cursorCodec = createTimestampIdCursorCodec({
@@ -82,7 +91,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 const config = {
   contract: "patch",
   description:
-    "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
+    "List correspondence filed in a matter, newest received first; filter by channel (email or data_box). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -104,12 +113,13 @@ const config = {
         ),
       ),
     ),
+    channel: v.optional(CHANNEL_FILTER),
   }),
 } satisfies WorkspaceHandlerConfig;
 
 const listCorrespondence = createSafeHandler(
   config,
-  async function* ({ query, safeDb, workspaceId }) {
+  async function* ({ query, safeDb, workspaceId, session }) {
     const cursor =
       query.cursor === undefined ? null : cursorCodec.decode(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
@@ -121,30 +131,38 @@ const listCorrespondence = createSafeHandler(
       );
     }
     const limit = normalizeTenantPageLimit(query.limit ?? PAGE_SIZE);
-    const rows = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx
-            .select({
-              ...CORRESPONDENCE_LIST_COLUMNS,
-              cursorTimestamp: cursorCodec.cursorValue,
-            })
-            .from(correspondence)
-            .where(
-              and(
-                eq(correspondence.workspaceId, workspaceId),
-                cursor === null
-                  ? undefined
-                  : cursorCodec.keysetAfter({
-                      cursor,
-                      idColumn: correspondence.id,
-                      direction: "descending",
-                    }),
-              ),
-            )
-            .orderBy(desc(correspondence.receivedAt), desc(correspondence.id))
-            .limit(limit + 1),
-      ),
+    const { rows, organizationBoxIds } = yield* Result.await(
+      safeDb(async (tx) => {
+        const selectedRows = await tx
+          .select({
+            ...CORRESPONDENCE_LIST_COLUMNS,
+            cursorTimestamp: cursorCodec.cursorValue,
+          })
+          .from(correspondence)
+          .where(
+            and(
+              eq(correspondence.workspaceId, workspaceId),
+              query.channel === undefined
+                ? undefined
+                : eq(correspondence.channel, query.channel),
+              cursor === null
+                ? undefined
+                : cursorCodec.keysetAfter({
+                    cursor,
+                    idColumn: correspondence.id,
+                    direction: "descending",
+                  }),
+            ),
+          )
+          .orderBy(desc(correspondence.receivedAt), desc(correspondence.id))
+          .limit(limit + 1);
+        const currentBoxIds = selectedRows.some(
+          (row) => row.channel === "data_box",
+        )
+          ? await readOrganizationDataBoxIds(tx, session.activeOrganizationId)
+          : [];
+        return { rows: selectedRows, organizationBoxIds: currentBoxIds };
+      }),
     );
     const page = createCursorPage({
       rows,
@@ -155,6 +173,9 @@ const listCorrespondence = createSafeHandler(
       items: page.items.map(
         ({
           cursorTimestamp: _cursorTimestamp,
+          channel,
+          dataBox,
+          direction,
           source,
           sourceEntityId,
           intake,
@@ -165,20 +186,28 @@ const listCorrespondence = createSafeHandler(
           dmarc,
           alignedIdentifier,
           ...record
-        }) => ({
-          ...record,
-          ...readCorrespondenceProvenance({
-            source,
-            sourceEntityId,
-            intake,
-            originalSignature,
-            authenticatedSenderAddress,
-            spf,
-            dkim,
-            dmarc,
-            alignedIdentifier,
-          }),
-        }),
+        }) => {
+          const { direction: _direction, ...channelContent } =
+            readCorrespondenceChannel(
+              { channel, dataBox, direction },
+              organizationBoxIds,
+            );
+          return {
+            ...record,
+            ...channelContent,
+            ...readCorrespondenceProvenance({
+              source,
+              sourceEntityId,
+              intake,
+              originalSignature,
+              authenticatedSenderAddress,
+              spf,
+              dkim,
+              dmarc,
+              alignedIdentifier,
+            }),
+          };
+        },
       ),
       nextCursor: page.nextCursor,
       limit,

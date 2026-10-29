@@ -162,3 +162,31 @@ test.each([
     );
   },
 );
+
+test("inline gate checks on a new table do not prove its gate pieces are installed", () => {
+  const create = `CREATE TABLE public.items (
+    id uuid PRIMARY KEY,
+    entity_feature_gate text NOT NULL DEFAULT 'pending',
+    CONSTRAINT entity_feature_gate_states_check CHECK (entity_feature_gate IN ('pending', 'open', 'legal-lists', 'missing')),
+    CONSTRAINT entity_feature_gate_ready_check CHECK (entity_feature_gate <> 'pending')
+  );`;
+  const previous = `${trigger()} ${policy()} ${index()} ${grant()}`;
+  const fresh = fold([previous, create]);
+  expect([
+    ...fresh.triggers,
+    ...fresh.policies,
+    ...fresh.indexes,
+    ...fresh.grants,
+  ]).toEqual([]);
+  const guarded = fold([
+    previous,
+    create.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"),
+  ]);
+  expect(guarded.triggers.has("items.entity_feature_gate_write")).toBe(true);
+  expect(guarded.policies.has("items.workspace_entity_feature")).toBe(true);
+  expect(guarded.indexes.has("items.items_ef_gate")).toBe(true);
+  expect(guarded.grants.has("items")).toBe(true);
+  const installed = fold([create, previous]);
+  expect(installed.triggers.has("items.entity_feature_gate_write")).toBe(true);
+  expect(installed.policies.has("items.workspace_entity_feature")).toBe(true);
+});

@@ -125,6 +125,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/list.ts",
   "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/add.ts",
   "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/remove.ts",
+  "apps/api/src/handlers/organization-settings/correspondence/data-boxes/create.ts",
+  "apps/api/src/handlers/organization-settings/correspondence/data-boxes/delete.ts",
   "apps/api/src/handlers/organization-settings/delete-ai-config.ts",
   "apps/api/src/handlers/organization-settings/delete-deepl-key.ts",
   "apps/api/src/handlers/organization-settings/delete-web-search-key.ts",

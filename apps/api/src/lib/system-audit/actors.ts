@@ -120,6 +120,7 @@ export const TENANT_SYSTEM_ACTOR = {
   memoryCurator: "system:memory-curator",
   memoryExtractor: "system:memory-extractor",
   usageProvider: "system:usage-provider",
+  uploadedMail: "system:uploaded-mail",
 } as const;
 
 /** The shape the database CHECK enforces on `system_audit_runs.actor`. */

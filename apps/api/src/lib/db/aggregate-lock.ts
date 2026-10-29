@@ -84,6 +84,7 @@ export const AGGREGATE_LOCKS = {
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
   desktopBatch: { rank: 90, kind: "advisory" },
+  organizationDataBoxes: { rank: 94, kind: "advisory" },
   chatOwnerStoredContentEgress: { rank: 95, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
@@ -220,6 +221,7 @@ export const AGGREGATE_CHAINS = {
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
+  organizationDataBoxes: ["organizationDataBoxes"],
   documentSource: [
     "workspace",
     "entity",
@@ -301,6 +303,7 @@ type AggregateIdentities = {
   organizationObjectIntent: SafeId<"organization">;
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
+  organizationDataBoxes: { organizationId: SafeId<"organization"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -1447,6 +1450,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
           options.id.idempotencyKey,
         ],
+      };
+    case "organizationDataBoxes":
+      return {
+        first: sql`hashtext('data-box-direction')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "sampleCase":
       return {

@@ -15,6 +15,7 @@ import {
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
@@ -49,6 +50,7 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,

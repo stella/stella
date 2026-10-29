@@ -121,6 +121,7 @@ const parsedMessage = (provenance: CorrespondenceDeliveryProvenance) =>
   ({
     direction: "in",
     channel: "email",
+    dataBox: null,
     messageId: `<${Bun.randomUUIDv7()}@example.test>`,
     contentHash: "a".repeat(64),
     from: { address: "sender@example.test", name: null },
@@ -197,6 +198,7 @@ describe("matter correspondence", () => {
     expect(duplicate).toEqual({
       type: "ok",
       id: first.id,
+      contentHash: parsed.contentHash,
       created: false,
       filerAdded: false,
     });
@@ -363,6 +365,7 @@ describe("matter correspondence", () => {
     expect(mailboxFiling).toMatchObject({
       type: "ok",
       id: first.id,
+      contentHash: parsed.contentHash,
       created: false,
       filerAdded: true,
     });

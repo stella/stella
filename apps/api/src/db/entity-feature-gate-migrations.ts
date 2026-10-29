@@ -430,6 +430,18 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     },
   },
   {
+    pattern: pattern(
+      `^CREATE\\s+(?:UNLOGGED\\s+)?TABLE\\s+(IF\\s+NOT\\s+EXISTS\\s+)?${tableId}\\s*\\(`,
+    ),
+    apply: (state, match) => {
+      // Inline columns and checks install no tracked policies, triggers or
+      // grants. A fresh table cannot retain pieces from an older incarnation.
+      if (!group(match, 1)) {
+        dropTable(state, group(match, 2));
+      }
+    },
+  },
+  {
     pattern: pattern(`^DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${tableId}`),
     apply: (state, match) => {
       dropTable(state, group(match, 1));

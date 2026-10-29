@@ -2442,6 +2442,41 @@ type FileCheckResult = {
   acknowledgementErrors: Finding[];
 };
 
+const isCatalogOnlyStatement = ({ text }: Statement): boolean => {
+  if (
+    /^\s*(?:SET(?:\s+LOCAL)?\s+(?:LOCK_TIMEOUT|STATEMENT_TIMEOUT)\s*(?:=|TO\b)|SET(?:\s+LOCAL)?\s+ROLE\b|RESET\s+ROLE\s*$|GRANT\b|REVOKE\b|CREATE\s+(?:POLICY|TRIGGER)\b)/iu.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  // The scanner has masked bodies, comments, literals and quoted identifiers.
+  // Require one unambiguous trusted-language clause; unknown syntax fails closed.
+  return (
+    /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/iu.test(text) &&
+    [...text.matchAll(/\bLANGUAGE\b/giu)].length === 1 &&
+    /\bLANGUAGE\s+(?:SQL|PLPGSQL)\b/iu.test(text)
+  );
+};
+
+const catalogOnlyTriggerDefinitions = (
+  statements: readonly Statement[],
+): ReadonlySet<number> => {
+  const topLevel = statements.filter(
+    ({ enclosingLine }) => enclosingLine === undefined,
+  );
+  if (!topLevel.every(isCatalogOnlyStatement)) {
+    return new Set();
+  }
+  // A stored trigger body is deferred, but a seed INSERT could invoke it in
+  // this migration. Credit the definition only when no executable work exists.
+  return new Set(
+    topLevel
+      .filter(({ text }) => /\)\s+RETURNS\s+TRIGGER\b/iu.test(text))
+      .map(({ line }) => line),
+  );
+};
+
 const SQL_IDENTIFIER_SOURCE = '(?:"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)';
 const SQL_RELATION_SOURCE = `${SQL_IDENTIFIER_SOURCE}(?:\\s*\\.\\s*${SQL_IDENTIFIER_SOURCE})?`;
 const CREATE_TABLE_RELATION_PATTERN = new RegExp(
@@ -2548,6 +2583,7 @@ const checkSource = (
 ): FileCheckResult => {
   const lines = source.split("\n");
   const statements = parseStatements(source);
+  const catalogTriggerDefinitions = catalogOnlyTriggerDefinitions(statements);
   const existingTableUniqueness = existingTableUniquenessStatements(
     file,
     statements,
@@ -2571,6 +2607,14 @@ const checkSource = (
 
   for (const statement of statements) {
     for (const rule of STATEMENT_INVARIANT_RULES) {
+      if (
+        rule.id === "pre-deploy-row-loop" &&
+        statement.deferred &&
+        statement.enclosingLine !== undefined &&
+        catalogTriggerDefinitions.has(statement.enclosingLine)
+      ) {
+        continue;
+      }
       if (rule.matches(statement)) {
         invariantFindings.push({
           file,

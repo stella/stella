@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import {
   CORRESPONDENCE_AUTH_RESULTS,
   CORRESPONDENCE_CHANNELS,
@@ -13,6 +15,7 @@ import {
   type CorrespondenceAddress,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
+import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
 
 import {
   entityFeatureGateChecks,
@@ -68,6 +71,40 @@ export const CORRESPONDENCE_REVIEW_RESET_SETTING = {
 // Resolve the owner through the catalog because deployment login names differ.
 const currentUserOwnsCorrespondence = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence'::regclass)`;
 
+const correspondenceSourceMaintenance = p
+  .pgRole("stella_correspondence_source")
+  .existing();
+
+type SourceMaintenanceScopeColumns = {
+  organizationId: SQLWrapper;
+  workspaceId: SQLWrapper;
+  recordId: SQLWrapper;
+};
+
+const sourceMaintenanceScope = ({
+  organizationId,
+  workspaceId,
+  recordId,
+}: SourceMaintenanceScopeColumns) => sql`
+  ${organizationId} = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND ${workspaceId} = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND ${recordId} = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid
+`;
+
+type SourceEntityMaintenanceScopeColumns = {
+  workspaceId: SQLWrapper;
+  entityId: SQLWrapper;
+};
+
+// The trigger supplies both identifiers from the entity row being deleted.
+const sourceEntityMaintenanceScope = ({
+  workspaceId,
+  entityId,
+}: SourceEntityMaintenanceScopeColumns) => sql`
+  ${workspaceId} = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND ${entityId} = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid
+`;
+
 const offboardingScopeCheck = sql`(
   current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'account'
   or (current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'organization'
@@ -86,16 +123,14 @@ export const correspondence = p.pgTable.withRLS(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    direction: p
-      .text("direction", { enum: CORRESPONDENCE_DIRECTIONS })
-      .notNull(),
+    direction: p.text("direction", { enum: CORRESPONDENCE_DIRECTIONS }),
     channel: p.text("channel", { enum: CORRESPONDENCE_CHANNELS }).notNull(),
     source: p
       .text("source", { enum: CORRESPONDENCE_SOURCES })
       .notNull()
       .default("delivery"),
-    // An upload reads its message from this matter file; deleting the file
-    // deletes the record.
+    // The current uploaded source file; correspondence_sources owns its lifetime.
+    // Removing a copy switches this pointer, deleting the record at its last source.
     sourceEntityId: safeUuid<"entity">("source_entity_id"),
     // Delivery provenance; correspondence_provenance_check binds these
     // columns to the source.
@@ -103,7 +138,10 @@ export const correspondence = p.pgTable.withRLS(
     authenticatedSenderAddress: p.text("authenticated_sender_address"),
     originalSignature:
       jsonb("original_signature").$type<CorrespondenceOriginalSignature>(),
+    // The data-box message ID on the data-box channel.
     messageId: p.text("message_id"),
+    // A data-box message's envelope as stated in its file; null for email.
+    dataBox: jsonb("data_box_envelope").$type<DataBoxStatedEnvelope>(),
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
     from: jsonb("sender").$type<CorrespondenceAddress>().notNull(),
@@ -132,6 +170,29 @@ export const correspondence = p.pgTable.withRLS(
   },
   (table) => [
     ...reviewResetOwnerPolicies("correspondence"),
+    p.pgPolicy("correspondence_source_entity_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceEntityMaintenanceScope({
+        workspaceId: table.workspaceId,
+        entityId: table.sourceEntityId,
+      }),
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("correspondence_source_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.id,
+      }),
+      withCheck: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.id,
+      }),
+    }),
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({
@@ -146,7 +207,7 @@ export const correspondence = p.pgTable.withRLS(
         columns: [table.sourceEntityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
-      .onDelete("cascade"),
+      .onDelete("restrict"),
     p.unique("correspondence_id_ws_unq").on(table.id, table.workspaceId),
     p
       .uniqueIndex("correspondence_ws_dedup_uidx")
@@ -182,11 +243,15 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.check(
       "correspondence_direction_check",
-      sql`${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})`,
+      sql`((${table.channel} = 'email' and ${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})) or (${table.channel} = 'data_box' and ${table.direction} is null)) is true`,
     ),
     p.check(
       "correspondence_channel_check",
       sql`${table.channel} in (${valuesSql(CORRESPONDENCE_CHANNELS)})`,
+    ),
+    p.check(
+      "correspondence_data_box_check",
+      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId} and not (${table.dataBox} ? 'directionBasis')))) is true`,
     ),
     p.check(
       "correspondence_handling_check",
@@ -217,6 +282,78 @@ export const correspondence = p.pgTable.withRLS(
       columns: table,
       references: new Map([
         [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+  ],
+);
+
+// Each uploaded file belongs to one record in its matter, across both channels.
+export const correspondenceSources = p.pgTable.withRLS(
+  "correspondence_sources",
+  {
+    ...entityFeatureGateColumns(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    correspondenceId: safeUuid<"correspondence">("correspondence_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+  },
+  (table) => [
+    ...reviewResetOwnerPolicies("correspondence_sources"),
+    p.pgPolicy("correspondence_source_entity_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceEntityMaintenanceScope({
+        workspaceId: table.workspaceId,
+        entityId: table.entityId,
+      }),
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("correspondence_source_maintenance", {
+      for: "select",
+      to: correspondenceSourceMaintenance,
+      using: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.correspondenceId,
+      }),
+    }),
+    ...entityFeatureGateChecks(table),
+    p.primaryKey({
+      name: "correspondence_sources_pkey",
+      columns: [table.workspaceId, table.entityId],
+    }),
+    p
+      .foreignKey({
+        name: "correspondence_sources_workspace_organization_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_sources_record_workspace_fk",
+        columns: [table.correspondenceId, table.workspaceId],
+        foreignColumns: [correspondence.id, correspondence.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_sources_entity_workspace_fk",
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .index("correspondence_sources_ws_record_entity_idx")
+      .on(table.workspaceId, table.correspondenceId, table.entityId),
+    ...wsOrganizationPolicies("correspondence_sources", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
       ]),
     }),
   ],

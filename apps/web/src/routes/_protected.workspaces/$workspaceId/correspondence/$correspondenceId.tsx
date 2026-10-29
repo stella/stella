@@ -29,6 +29,7 @@ import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceAssigneeField } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
+import { DataBoxEnvelope } from "@/routes/_protected.workspaces/$workspaceId/-components/data-box-envelope";
 import { UploadedSource } from "@/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
@@ -57,7 +58,7 @@ function CorrespondenceDetailPage() {
   const { data } = useSuspenseQuery(
     correspondenceByIdOptions(workspaceId, correspondenceId),
   );
-  const { record, filers, attachments } = data;
+  const { record, filers, attachments, dataBoxContacts } = data;
   const provenance = correspondenceProvenancePresentation(record);
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
@@ -115,47 +116,60 @@ function CorrespondenceDetailPage() {
             </section>
           ) : (
             <UploadedSource
+              channel={record.channel}
               uploader={filers.find((filer) => filer.type === "user")}
               signatureDomain={provenance.signatureDomain}
               sourceEntityId={record.sourceEntityId}
               workspaceId={workspaceId}
             />
           )}
-          <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-            {provenance.assertedHeadersLabel !== null && (
-              <h2 className="text-sm font-medium sm:col-span-2">
-                {t(provenance.assertedHeadersLabel)}
-              </h2>
-            )}
-            {provenance.assertedHeadersLabel !== null && (
-              <DetailField
-                label={t("inspector.metadata.documentProperties.keys.subject")}
-              >
-                <bdi dir="auto">
-                  {record.subject || t("emailViewer.noSubject")}
-                </bdi>
+          {record.channel === "data_box" ? (
+            <DataBoxEnvelope
+              contacts={dataBoxContacts}
+              envelope={record.dataBox}
+            />
+          ) : (
+            <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+              {provenance.assertedHeadersLabel !== null && (
+                <h2 className="text-sm font-medium sm:col-span-2">
+                  {t(provenance.assertedHeadersLabel)}
+                </h2>
+              )}
+              {provenance.assertedHeadersLabel !== null && (
+                <DetailField
+                  label={t(
+                    "inspector.metadata.documentProperties.keys.subject",
+                  )}
+                >
+                  <bdi dir="auto">
+                    {record.subject || t("emailViewer.noSubject")}
+                  </bdi>
+                </DetailField>
+              )}
+              <DetailField label={t(provenance.originalSenderLabel)}>
+                <Address
+                  name={record.from.name}
+                  address={record.from.address}
+                />
               </DetailField>
-            )}
-            <DetailField label={t(provenance.originalSenderLabel)}>
-              <Address name={record.from.name} address={record.from.address} />
-            </DetailField>
-            <DetailField label={t("emailViewer.to")}>
-              <AddressList addresses={record.to} />
-            </DetailField>
-            {record.cc.length > 0 && (
-              <DetailField label={t("emailViewer.cc")}>
-                <AddressList addresses={record.cc} />
+              <DetailField label={t("emailViewer.to")}>
+                <AddressList addresses={record.to} />
               </DetailField>
-            )}
-            {record.sentAt && (
-              <DetailField label={t("correspondence.sentAt")}>
-                {format.dateTime(
-                  new Date(record.sentAt),
-                  MEDIUM_DATE_SHORT_TIME_FORMAT,
-                )}
-              </DetailField>
-            )}
-          </section>
+              {record.cc.length > 0 && (
+                <DetailField label={t("emailViewer.cc")}>
+                  <AddressList addresses={record.cc} />
+                </DetailField>
+              )}
+              {record.sentAt && (
+                <DetailField label={t("correspondence.sentAt")}>
+                  {format.dateTime(
+                    new Date(record.sentAt),
+                    MEDIUM_DATE_SHORT_TIME_FORMAT,
+                  )}
+                </DetailField>
+              )}
+            </section>
+          )}
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
             <DetailField label={t("correspondence.receivedAt")}>
               {format.dateTime(
@@ -172,28 +186,30 @@ function CorrespondenceDetailPage() {
             </DetailField>
           </section>
 
-          <section className="rounded-lg border p-4">
-            <h2 className="mb-3 text-sm font-medium">
-              {t("emailViewer.bodyTitle")}
-            </h2>
-            {record.bodyHtml === null ? (
-              <pre
-                className="text-foreground font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
-                dir="auto"
-              >
-                {record.bodyText}
-              </pre>
-            ) : (
-              <iframe
-                className="h-[28rem] w-full rounded border"
-                referrerPolicy="no-referrer"
-                sandbox=""
-                // safe-html: sanitizeEmailBodyHtml in apps/api/src/lib/files/email-to-html.ts strips active content; the iframe sandbox omits script permission.
-                srcDoc={record.bodyHtml}
-                title={t("emailViewer.bodyTitle")}
-              />
-            )}
-          </section>
+          {record.channel === "email" && (
+            <section className="rounded-lg border p-4">
+              <h2 className="mb-3 text-sm font-medium">
+                {t("emailViewer.bodyTitle")}
+              </h2>
+              {record.bodyHtml === null ? (
+                <pre
+                  className="text-foreground font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
+                  dir="auto"
+                >
+                  {record.bodyText}
+                </pre>
+              ) : (
+                <iframe
+                  className="h-[28rem] w-full rounded border"
+                  referrerPolicy="no-referrer"
+                  sandbox=""
+                  // safe-html: sanitizeEmailBodyHtml in apps/api/src/lib/files/email-to-html.ts strips active content; the iframe sandbox omits script permission.
+                  srcDoc={record.bodyHtml}
+                  title={t("emailViewer.bodyTitle")}
+                />
+              )}
+            </section>
+          )}
 
           {attachments.length > 0 && (
             <section className="rounded-lg border p-4">

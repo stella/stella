@@ -158,6 +158,10 @@ export const contacts = p.pgTable(
         "gin",
         sql`arabic_normalize(${table.organizationName}) gin_trgm_ops`,
       ),
+    // Matches a data-box message's box IDs to contacts.
+    p
+      .index("contacts_data_box_ids_idx")
+      .using("gin", sql`(${table.metadata} -> 'dataBoxes') jsonb_path_ops`),
     p.check(
       "contacts_person_details_check",
       sql`(${table.type} = 'person' OR (${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL AND cardinality(${table.nationalityCodes}) = 0))`,

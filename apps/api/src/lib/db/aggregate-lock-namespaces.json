@@ -13,6 +13,7 @@
   "legislationAmendmentWork": "0x0f10ccad::integer",
   "mcpOAuthState": "0x4d43504f::integer",
   "orgFeatureAdmission": "0x0f10ccaa::integer",
+  "organizationDataBoxes": "hashtext('data-box-direction')",
   "organizationObjectIntent": "0x0f10ccb0::integer",
   "personalCatalog": "hashtext(<identity>)",
   "professionalUseAcceptance": "hashtext('professional-use')",

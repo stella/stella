@@ -1,0 +1,4 @@
+{
+  "create-policy": "The eight source-table policies install the canonical feature, matter, organization and reset-owner fences. Policy creation is catalog-only and scans no rows; this generated migration declares 1s lock_timeout and 10s statement_timeout.",
+  "create-trigger": "The canonical feature write trigger is attached to the new source table without executing row work. This generated migration declares 1s lock_timeout and 10s statement_timeout; it contains only catalog operations."
+}

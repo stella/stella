@@ -11,8 +11,8 @@ const JOB_NAME = "file-uploaded-mail";
 const JOB_ATTEMPTS = 6;
 
 /**
- * Names the stored file, not its bytes: the job reads the object again, so the
- * queue holds no copy of the message.
+ * Names the projected file generation, never its bytes. The job rereads
+ * correspondence files; other channels reconcile metadata without object I/O.
  */
 export type UploadedMailJobData = {
   organizationId: string;
@@ -50,8 +50,8 @@ type EnqueueUploadedMailFilingOptions = {
 };
 
 /**
- * Hands a stored email file to the filing job. The job id names the file, so
- * a replayed extraction run collapses onto the one job.
+ * Reconciles correspondence after every projected file generation. The job id
+ * names the file, so a replayed extraction run collapses onto the one job.
  */
 export const enqueueUploadedMailFiling = async ({
   file,
@@ -62,7 +62,7 @@ export const enqueueUploadedMailFiling = async ({
     data: { ...scope, ...file },
     jobId: createBullMqJobId(JOB_NAME, scope.entityId, file.sourceFileId),
     name: JOB_NAME,
-    // The queue connection opens only when an email file is extracted.
+    // The queue connection opens only when a projected file is handed off.
     queue: queue ?? getQueue(),
   });
 };

@@ -9,7 +9,6 @@ import {
   CORRESPONDENCE_MAX_ATTACHMENTS,
   CORRESPONDENCE_MAX_BODY_CHARACTERS,
 } from "@stll/api-contract/correspondence";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -18,16 +17,155 @@ import {
   correspondence,
   correspondenceAttachments,
   correspondenceFilers,
+  correspondenceSources,
+  entities,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import {
   assertCorrespondenceAccess,
   type CorrespondenceActor,
 } from "@/api/lib/email/correspondence/access";
-import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
+import {
+  persistCorrespondenceContent,
+  prepareCorrespondenceContent,
+} from "./uploaded-content";
+
+type RetireCorrespondenceSourceOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  sourceEntityId: SafeId<"entity">;
+  expectedSourceVersionId: SafeId<"entityVersion"> | null;
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Fences a retired generation without discarding its correspondence history. */
+export const retireCorrespondenceSource = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  sourceEntityId,
+  expectedSourceVersionId,
+  recordAuditEvent,
+}: RetireCorrespondenceSourceOptions) => {
+  const transaction = await abortableTx(safeDb, async (tx) => {
+    const [linked] = await tx
+      .select({ id: correspondenceSources.correspondenceId })
+      .from(correspondenceSources)
+      .where(
+        and(
+          eq(correspondenceSources.organizationId, organizationId),
+          eq(correspondenceSources.workspaceId, workspaceId),
+          eq(correspondenceSources.entityId, sourceEntityId),
+        ),
+      )
+      .unionAll(
+        tx
+          .select({ id: correspondence.id })
+          .from(correspondence)
+          .where(
+            and(
+              eq(correspondence.organizationId, organizationId),
+              eq(correspondence.workspaceId, workspaceId),
+              eq(correspondence.sourceEntityId, sourceEntityId),
+            ),
+          ),
+      )
+      .limit(1);
+    // Filing an older generation is fenced by the immutable source version;
+    // ordinary files without a correspondence link need no aggregate locks.
+    if (linked === undefined) {
+      return Result.ok({ type: "ok" as const });
+    }
+    const matter = await withAggregateLock({
+      tx,
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      mode: "update",
+    });
+    switch (matter.status) {
+      case "missing":
+        return Result.ok({ type: "source_changed" as const });
+      case "busy":
+        return Result.err(matter.error);
+      case "locked":
+        break;
+      default:
+        matter satisfies never;
+        return panic("Unhandled matter lock");
+    }
+    const source = await withAggregateLock({
+      tx,
+      aggregate: "entity",
+      id: { id: sourceEntityId, workspaceId },
+      mode: "share",
+    });
+    switch (source.status) {
+      case "missing":
+        return Result.ok({ type: "source_changed" as const });
+      case "busy":
+        return Result.err(source.error);
+      case "locked":
+        break;
+      default:
+        source satisfies never;
+        return panic("Unhandled source lock");
+    }
+    const [current] = await tx
+      .select({ versionId: entities.currentVersionId })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.id, sourceEntityId),
+          eq(entities.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    if (current?.versionId !== expectedSourceVersionId) {
+      return Result.ok({ type: "source_changed" as const });
+    }
+    const [previous] = await tx
+      .select({ id: correspondence.id })
+      .from(correspondence)
+      .where(
+        and(
+          eq(correspondence.workspaceId, workspaceId),
+          eq(correspondence.sourceEntityId, sourceEntityId),
+        ),
+      )
+      .limit(1);
+    const [associated] = await tx
+      .select({ id: correspondenceSources.correspondenceId })
+      .from(correspondenceSources)
+      .where(
+        and(
+          eq(correspondenceSources.workspaceId, workspaceId),
+          eq(correspondenceSources.entityId, sourceEntityId),
+        ),
+      )
+      .limit(1);
+    const id = associated?.id ?? previous?.id;
+    if (id !== undefined) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
+        resourceId: id,
+        workspaceId,
+        metadata: { sourceRetired: true },
+      });
+    }
+    return Result.ok({ type: "ok" as const });
+  });
+  const result = transaction.andThen((value) => value);
+  return result.isErr()
+    ? { type: "error" as const, error: result.error }
+    : result.value;
+};
 
 type PreparedCorrespondenceAttachment = {
   entityId: SafeId<"entity">;
@@ -71,6 +209,7 @@ const linkAttachments = async ({
 };
 
 type CreateCorrespondenceOptions = {
+  expectedSourceVersionId?: SafeId<"entityVersion"> | null;
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
@@ -103,12 +242,32 @@ const hasAdmissibleProvenance = (parsed: ParsedCorrespondence) => {
   }
 };
 
+// A data-box message is only ever read from an uploaded file, and its record
+// keeps the envelope's message ID.
+const hasConsistentChannel = (parsed: ParsedCorrespondence) => {
+  switch (parsed.channel) {
+    case "email":
+      return true;
+    case "data_box":
+      return (
+        parsed.source === "upload" &&
+        parsed.messageId === parsed.dataBox.messageId
+      );
+    default:
+      parsed satisfies never;
+      return panic("Unhandled correspondence channel");
+  }
+};
+
 const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   if (
     !/^[0-9a-f]{64}$/u.test(parsed.contentHash) ||
     !hasAdmissibleProvenance(parsed)
   ) {
     return { type: "invalid_authentication" as const };
+  }
+  if (!hasConsistentChannel(parsed)) {
+    return { type: "invalid_content" as const };
   }
   if (
     attachments.length > CORRESPONDENCE_MAX_ATTACHMENTS ||
@@ -125,63 +284,9 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   return null;
 };
 
-// The source is part of the key: a delivered message and an uploaded file of
-// the same message stay separate records. Each email file is its own record,
-// so deleting one copy never removes another file's record.
-const correspondenceDedupKey = (parsed: ParsedCorrespondence) => {
-  switch (parsed.source) {
-    case "delivery":
-      return hashSha256Hex(
-        JSON.stringify([
-          parsed.intake,
-          parsed.messageId?.trim() ?? null,
-          parsed.contentHash,
-        ]),
-      );
-    case "upload":
-      return hashSha256Hex(
-        JSON.stringify([parsed.source, parsed.sourceEntityId]),
-      );
-    default:
-      parsed satisfies never;
-      return panic("Unhandled correspondence source");
-  }
-};
-
-const provenanceColumns = (parsed: ParsedCorrespondence) => {
-  switch (parsed.source) {
-    case "delivery":
-      return {
-        source: parsed.source,
-        sourceEntityId: null,
-        intake: parsed.intake,
-        authenticatedSenderAddress: parsed.authenticatedSender.address,
-        originalSignature: parsed.originalSignature,
-        spf: parsed.authenticatedSender.spf,
-        dkim: parsed.authenticatedSender.dkim,
-        dmarc: parsed.authenticatedSender.dmarc,
-        alignedIdentifier: parsed.authenticatedSender.alignedIdentifier,
-      };
-    case "upload":
-      return {
-        source: parsed.source,
-        sourceEntityId: parsed.sourceEntityId,
-        intake: null,
-        authenticatedSenderAddress: null,
-        originalSignature: parsed.originalSignature,
-        spf: null,
-        dkim: null,
-        dmarc: null,
-        alignedIdentifier: null,
-      };
-    default:
-      parsed satisfies never;
-      return panic("Unhandled correspondence source");
-  }
-};
-
 /** Converges concurrent deliveries on one record and one row per filer. */
 export const createCorrespondence = async ({
+  expectedSourceVersionId = null,
   safeDb,
   workspaceId,
   organizationId,
@@ -206,54 +311,70 @@ export const createCorrespondence = async ({
       return access;
     }
 
-    const dedupKey = correspondenceDedupKey(parsed);
-    const inserted = await tx
-      .insert(correspondence)
-      .values({
-        organizationId,
-        workspaceId,
-        direction: parsed.direction,
-        channel: parsed.channel,
-        ...provenanceColumns(parsed),
-        messageId: parsed.messageId,
-        contentHash: parsed.contentHash,
-        dedupKey,
-        from: parsed.from,
-        to: parsed.to,
-        cc: parsed.cc,
-        subject: parsed.subject,
-        sentAt: parsed.sentAt === null ? null : new Date(parsed.sentAt),
-        receivedAt: new Date(parsed.receivedAt),
-        inReplyTo: parsed.inReplyTo,
-        references: parsed.references,
-        bodyText: parsed.bodyText,
-        bodyHtml:
-          parsed.bodyHtml === null
-            ? null
-            : sanitizeEmailBodyHtml(parsed.bodyHtml),
-      })
-      .onConflictDoNothing({
-        target: [correspondence.workspaceId, correspondence.dedupKey],
-      })
-      .returning({ id: correspondence.id });
-    const created = inserted.at(0);
-    const existing =
-      created === undefined
-        ? await tx
-            .select({ id: correspondence.id })
-            .from(correspondence)
-            .where(
-              and(
-                eq(correspondence.workspaceId, workspaceId),
-                eq(correspondence.dedupKey, dedupKey),
-              ),
-            )
-            .limit(1)
-        : [];
-    const correspondenceId = created?.id ?? existing.at(0)?.id;
-    if (correspondenceId === undefined) {
-      return tx.rollback();
+    if (parsed.source === "upload") {
+      // Hold the copy before touching the record: entity deletion must not
+      // race a deduplicated upload into attaching a disappearing source.
+      const source = await withAggregateLock({
+        tx,
+        aggregate: "entity",
+        id: { id: parsed.sourceEntityId, workspaceId },
+        mode: "share",
+      });
+      switch (source.status) {
+        case "locked":
+          break;
+        case "missing":
+          return Result.ok({ type: "invalid_content" as const });
+        case "busy":
+          return Result.err(source.error);
+        default:
+          source satisfies never;
+          return panic("Unhandled correspondence source lock");
+      }
+      const [current] = await tx
+        .select({ versionId: entities.currentVersionId })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.id, parsed.sourceEntityId),
+            eq(entities.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      if (current?.versionId !== expectedSourceVersionId) {
+        return Result.ok({ type: "source_changed" as const });
+      }
     }
+    const persisted = await persistCorrespondenceContent({
+      tx,
+      organizationId,
+      workspaceId,
+      content: prepareCorrespondenceContent(parsed),
+      recordAuditEvent,
+    });
+    if (persisted.isErr()) {
+      return persisted;
+    }
+    if (persisted.value.status === "invalid_content") {
+      return Result.ok({ type: "invalid_content" as const });
+    }
+    const { id: correspondenceId, status } = persisted.value;
+    const created = status === "created";
+    const refreshed = status === "refreshed";
+
+    const sources =
+      parsed.source === "upload"
+        ? await tx
+            .insert(correspondenceSources)
+            .values({
+              organizationId,
+              workspaceId,
+              correspondenceId,
+              entityId: parsed.sourceEntityId,
+            })
+            .onConflictDoNothing()
+            .returning({ entityId: correspondenceSources.entityId })
+        : [];
 
     const filers = await tx
       .insert(correspondenceFilers)
@@ -269,7 +390,7 @@ export const createCorrespondence = async ({
       .onConflictDoNothing()
       .returning({ id: correspondenceFilers.id });
 
-    if (created !== undefined) {
+    if (created || refreshed) {
       await linkAttachments({
         tx,
         organizationId,
@@ -279,20 +400,20 @@ export const createCorrespondence = async ({
       });
     }
 
-    if (created !== undefined || filers.length > 0) {
+    if (!created && !refreshed && (filers.length > 0 || sources.length > 0)) {
       await recordAuditEvent(tx, {
-        action:
-          created !== undefined ? AUDIT_ACTION.CREATE : AUDIT_ACTION.UPDATE,
+        action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
         resourceId: correspondenceId,
         workspaceId,
-        metadata: { subject: parsed.subject },
+        metadata: { subject: parsed.subject, sourceAdded: sources.length > 0 },
       });
     }
     return Result.ok({
       type: "ok" as const,
       id: correspondenceId,
-      created: created !== undefined,
+      contentHash: persisted.value.contentHash,
+      created,
       filerAdded: filers.length > 0,
     });
   });

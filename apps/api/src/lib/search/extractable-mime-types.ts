@@ -11,6 +11,7 @@
  * module at startup, so it must stay free of side effects.
  */
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EMAIL_MIME_TYPES } from "@stll/api-contract/email-mime-types";
 
 import {
@@ -95,6 +96,7 @@ export const canExtractMimeType = (mimeType: string): boolean => {
     normalized === DOCX_MIME_TYPE ||
     isOfficeDocumentMimeType(normalized) ||
     isDirectTextMimeType(normalized) ||
-    normalized in EMAIL_MIME_TYPES
+    normalized in EMAIL_MIME_TYPES ||
+    normalized === DATA_BOX_MESSAGE_MIME_TYPE
   );
 };
