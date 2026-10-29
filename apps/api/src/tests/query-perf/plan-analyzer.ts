@@ -6,14 +6,22 @@ import { isLargeQueryPerfRelation } from "./table-sizes";
 
 /** Fixture rows represent one percent of the production-shape population. */
 export const QUERY_PERF_FIXTURE_SCALE_FACTOR = 100;
-/** The per-statement deadline a request or scheduled read must fit in production. */
-export const QUERY_PERF_STATEMENT_DEADLINE_MS = 30_000;
-/** A single statement may consume at most one quarter of that deadline. */
+/**
+ * PostgreSQL's outer statement bound. A private check pins this value to the
+ * infrastructure setting; measured owners must use their own tighter bound.
+ */
+export const SERVER_STATEMENT_TIMEOUT_MS = 300_000;
+/** A single statement may consume at most one quarter of its owner's deadline. */
 export const QUERY_PERF_TIMEOUT_SHARE = 1 / 4;
 export const NESTED_LOOP_OUTER_ROW_LIMIT = 1000;
 
 export type PlanViolation = {
-  kind: "large-scan" | "unbounded-nested-loop" | "spill" | "scaled-time";
+  kind:
+    | "deadline-missing"
+    | "large-scan"
+    | "unbounded-nested-loop"
+    | "spill"
+    | "scaled-time";
   owner: string;
   statement: string;
   node: Record<string, unknown>;
@@ -41,10 +49,12 @@ const nodeLabel = (node: Record<string, unknown>) => {
 export const analyzePlan = ({
   document,
   owner,
+  ownerDeadlineMs,
   statement,
 }: {
   document: ExplainPlanDocument;
   owner: string;
+  ownerDeadlineMs: number | undefined;
   statement: string;
 }): PlanViolation[] => {
   const violations: PlanViolation[] = [];
@@ -61,6 +71,13 @@ export const analyzePlan = ({
       message: `${owner}: ${detail}; statement: ${statement}; node: ${nodeLabel(node)}`,
     });
   };
+  if (ownerDeadlineMs === undefined) {
+    report(
+      "deadline-missing",
+      document.Plan,
+      "owner applies no statement deadline",
+    );
+  }
   const visit = (node: Record<string, unknown>) => {
     const nodeType = node["Node Type"];
     const relation = node["Relation Name"];
@@ -113,8 +130,12 @@ export const analyzePlan = ({
   };
   visit(document.Plan);
   const executionTime = document["Execution Time"];
-  const allowance = QUERY_PERF_STATEMENT_DEADLINE_MS * QUERY_PERF_TIMEOUT_SHARE;
+  const allowance =
+    ownerDeadlineMs === undefined
+      ? undefined
+      : ownerDeadlineMs * QUERY_PERF_TIMEOUT_SHARE;
   if (
+    allowance !== undefined &&
     typeof executionTime === "number" &&
     executionTime * QUERY_PERF_FIXTURE_SCALE_FACTOR > allowance
   ) {

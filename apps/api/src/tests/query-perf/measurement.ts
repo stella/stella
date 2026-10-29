@@ -191,6 +191,7 @@ type MeasureQueryPerfOptions = {
   seed: Awaited<ReturnType<typeof seedQueryPerf>>;
   query: SQLWrapper;
   owner: string;
+  ownerDeadlineMs: number | undefined;
 };
 
 const statementText = (query: SQLWrapper) =>
@@ -203,6 +204,7 @@ const summarize = (
   samples: readonly QueryPerfMetrics[],
   lastPlan: ExplainPlanDocument | undefined,
   owner: string,
+  ownerDeadlineMs: number | undefined,
   statement: string,
 ) => {
   if (lastPlan === undefined) {
@@ -218,7 +220,12 @@ const summarize = (
       ),
     },
     plan: lastPlan,
-    planViolations: analyzePlan({ document: lastPlan, owner, statement }),
+    planViolations: analyzePlan({
+      document: lastPlan,
+      owner,
+      ownerDeadlineMs,
+      statement,
+    }),
     samples,
   };
 };
@@ -229,6 +236,7 @@ export const measureQueryPerf = async ({
   seed,
   query,
   owner,
+  ownerDeadlineMs,
 }: MeasureQueryPerfOptions) => {
   const samples: QueryPerfMetrics[] = [];
   let lastPlan: ExplainPlanDocument | undefined;
@@ -260,7 +268,13 @@ export const measureQueryPerf = async ({
       samples.push(metricsFromPlan(document));
     }
   }
-  return summarize(samples, lastPlan, owner, statementText(query));
+  return summarize(
+    samples,
+    lastPlan,
+    owner,
+    ownerDeadlineMs,
+    statementText(query),
+  );
 };
 
 const isExplainPlanDocument = (
@@ -296,10 +310,12 @@ export const measureOwnerStatement = async ({
   database,
   build,
   owner,
+  ownerDeadlineMs,
 }: {
   database: GatedTestDb;
   build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
   owner: string;
+  ownerDeadlineMs: number | undefined;
 }) => {
   const samples: QueryPerfMetrics[] = [];
   let lastPlan: ExplainPlanDocument | undefined;
@@ -319,5 +335,5 @@ export const measureOwnerStatement = async ({
       samples.push(metricsFromPlan(document));
     }
   }
-  return summarize(samples, lastPlan, owner, lastStatement);
+  return summarize(samples, lastPlan, owner, ownerDeadlineMs, lastStatement);
 };

@@ -137,6 +137,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   seed,
                   query: entry.query,
                   owner: budgetId,
+                  ownerDeadlineMs: entry.ownerDeadlineMs,
                 }),
             );
             log({
@@ -177,6 +178,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   seed,
                   query: entry.query,
                   owner: budgetId,
+                  ownerDeadlineMs: entry.ownerDeadlineMs,
                 }),
             );
             log({
@@ -249,6 +251,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 database: db,
                 build: entry.build,
                 owner: budgetId,
+                ownerDeadlineMs: entry.ownerDeadlineMs,
               }),
           );
           log({
@@ -357,6 +360,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 database: db,
                 build: () => query,
                 owner: "fixture.unboundedFreshness",
+                ownerDeadlineMs: undefined,
               });
               pages += result.metrics.sharedBlocks;
             }
@@ -391,6 +395,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               database: db,
               build: () => query,
               owner: "fixture.convergenceRevisionChecks",
+              ownerDeadlineMs: undefined,
             });
             pages += result.metrics.sharedBlocks;
           }

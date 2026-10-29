@@ -18,6 +18,7 @@ import {
   type QueryPerfMetrics,
   sumMetrics,
 } from "./measurement";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { analyzePlan, type PlanViolation } from "./plan-analyzer";
 import {
   applyPlannerSettings,
@@ -89,6 +90,10 @@ export const measureScheduledJobRun = async ({
   if (job.task !== taskName) {
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
+  const readBudgetId =
+    typeof job.reads === "object"
+      ? job.reads.budget
+      : panic(`${jobId} has no measured read budget`);
   const task =
     createSchedulerTaskRegistry(
       noopTask,
@@ -155,6 +160,7 @@ export const measureScheduledJobRun = async ({
         planViolations: analyzePlan({
           document: plan,
           owner: jobId,
+          ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
           statement: normalized,
         }),
         statement: normalized,

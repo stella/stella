@@ -4,6 +4,18 @@ import type { PlanViolation } from "./plan-analyzer";
 export const PLAN_EXCEPTIONS = [
   {
     owner: "statement.documents.searchHits",
+    kind: "deadline-missing",
+    reason:
+      "The tenant search request currently relies on the server statement bound.",
+  },
+  {
+    owner: "caseLaw.reportFreshness.fiveMinute",
+    kind: "deadline-missing",
+    reason:
+      "The scheduled report currently relies on the server statement bound.",
+  },
+  {
+    owner: "statement.documents.searchHits",
     kind: "large-scan",
     relation: "member",
     reason: "The RLS membership CTE scans the single seeded membership row.",
@@ -44,7 +56,7 @@ export const PLAN_EXCEPTIONS = [
 ] as const satisfies readonly {
   owner: string;
   kind: PlanViolation["kind"];
-  relation: string;
+  relation?: string;
   reason: string;
 }[];
 
@@ -53,5 +65,6 @@ export const isExceptedPlanViolation = (violation: PlanViolation) =>
     (entry) =>
       entry.owner === violation.owner &&
       entry.kind === violation.kind &&
-      entry.relation === violation.node["Relation Name"],
+      (!("relation" in entry) ||
+        entry.relation === violation.node["Relation Name"]),
   );

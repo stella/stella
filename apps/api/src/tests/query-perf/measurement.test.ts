@@ -24,6 +24,7 @@ test("a sequential scan on a large table fails while a declared small table pass
     analyzePlan({
       document: plan({ "Node Type": "Seq Scan", "Relation Name": "entities" }),
       owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
       statement: "select * from entities",
     }).map(({ kind }) => kind),
   ).toEqual(["large-scan"]);
@@ -34,6 +35,7 @@ test("a sequential scan on a large table fails while a declared small table pass
         "Relation Name": "legislation_sources",
       }),
       owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
       statement: "select * from legislation_sources",
     }),
   ).toEqual([]);
@@ -50,6 +52,7 @@ test("an unbounded nested-loop outer side fails while a limit-bound side passes"
         ],
       }),
       owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
       statement: "select joined rows",
     }).map(({ kind }) => kind);
   expect(analyzeOuter({ "Node Type": "Result", "Actual Rows": 1001 })).toEqual([
@@ -69,27 +72,43 @@ test("an external sort fails the spill rule", () => {
     analyzePlan({
       document: plan({ "Node Type": "Sort", "Sort Method": "external merge" }),
       owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
       statement: "select ordered rows",
     }).map(({ kind }) => kind),
   ).toEqual(["spill"]);
 });
 
-test("scaled execution time over the statement timeout share fails", () => {
+test("scaled execution time is checked against the owner's deadline", () => {
   expect(
     analyzePlan({
-      document: plan({ "Node Type": "Result" }, 76),
+      document: plan({ "Node Type": "Result" }, 20),
       owner: "statement.owner",
+      ownerDeadlineMs: 5000,
       statement: "select 1",
     }).map(({ kind }) => kind),
   ).toEqual(["scaled-time"]);
 });
 
+test("an owner without a statement deadline yields a typed finding", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Result" }),
+      owner: "statement.withoutDeadline",
+      ownerDeadlineMs: undefined,
+      statement: "select 1",
+    }).map(({ kind }) => kind),
+  ).toEqual(["deadline-missing"]);
+});
+
 test("the owner-named plan exception ledger only contains reviewed existing debt", () => {
   expect(
     PLAN_EXCEPTIONS.map(
-      ({ kind, owner, relation }) => `${owner}:${kind}:${relation}`,
+      ({ kind, owner, ...entry }) =>
+        `${owner}:${kind}:${"relation" in entry ? entry.relation : "owner"}`,
     ).toSorted(),
   ).toEqual([
+    "caseLaw.reportFreshness.fiveMinute:deadline-missing:owner",
+    "statement.documents.searchHits:deadline-missing:owner",
     "statement.documents.searchHits:large-scan:entities",
     "statement.documents.searchHits:large-scan:entity_versions",
     "statement.documents.searchHits:large-scan:member",
