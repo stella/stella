@@ -117,7 +117,9 @@ type HeadersOption<THeaders> = unknown extends THeaders
 export type RequestOptions<TRoute extends RouteShape> = QueryOption<
   TRoute["query"]
 > &
-  HeadersOption<TRoute["headers"]> & { readonly fetch?: RequestInit };
+  HeadersOption<TRoute["headers"]> & {
+    readonly fetch?: RequestInit & { readonly timeoutMs?: number };
+  };
 
 type OptionsArgs<TRoute extends RouteShape> =
   NoOptions extends RequestOptions<TRoute>
@@ -177,7 +179,10 @@ export type ApiClientOptions = {
   /** Fetch settings every request starts from; credentials default to `include`. */
   readonly fetch?: RequestInit;
   /** Sends the request; `globalThis.fetch` when absent. */
-  readonly fetcher?: (url: string, init: RequestInit) => Promise<Response>;
+  readonly fetcher?: (
+    url: string,
+    init: RequestInit & { readonly timeoutMs?: number },
+  ) => Promise<Response>;
   /** Headers every request carries, or a function computing them per request. */
   readonly headers?:
     | HeaderValues
@@ -206,14 +211,16 @@ type ClientPath = {
 type CallOptions = {
   readonly query: unknown;
   readonly headers: unknown;
-  readonly fetch: RequestInit | undefined;
+  readonly fetch: (RequestInit & { readonly timeoutMs?: number }) | undefined;
 };
 
-const readRequestInit = (value: unknown): RequestInit | undefined => {
+const readRequestInit = (
+  value: unknown,
+): (RequestInit & { readonly timeoutMs?: number }) | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
-  const init: RequestInit = value;
+  const init: RequestInit & { readonly timeoutMs?: number } = value;
   return init;
 };
 
@@ -411,7 +418,7 @@ const send = async (
 
   const headers = new Headers(clientFetch?.headers);
   setHeaders(headers, options.fetch?.headers);
-  const init: RequestInit = {
+  const init: RequestInit & { readonly timeoutMs?: number } = {
     ...clientFetch,
     ...options.fetch,
     credentials:

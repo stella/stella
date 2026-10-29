@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Appuyez sur {shortcut} pour parcourir l’historique et choisir un extrait.",
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
-    "welcomeTitle": "Découvrez votre presse-papiers"
+    "welcomeTitle": "Découvrez votre presse-papiers",
+    "registryIdentifierSearchHint": "Saisissez {identifiers}."
   },
   "activity": {
     "title": "Activité",

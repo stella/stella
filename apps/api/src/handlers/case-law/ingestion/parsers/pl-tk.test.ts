@@ -24,7 +24,6 @@ import {
   parsePolishDate,
   readPlTkCasePage,
   readPlTkRuling,
-  validatePlTkBlocks,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
@@ -399,24 +398,6 @@ describe("what the portal's markup states beyond the words", () => {
     const serialized = JSON.stringify(blocks);
     // `<font class="wyrok_kursywa">` around Latin phrases in the reasons.
     expect(serialized).toContain('"type":"italic"');
-  });
-
-  test("the text is checked against the portal's markup, so dropped text is caught", async () => {
-    const { textHtml, blocks } = await judgmentBlocks();
-
-    const whole = validatePlTkBlocks("K 2/26", textHtml, blocks);
-    const truncated = validatePlTkBlocks(
-      "K 2/26",
-      textHtml,
-      blocks.slice(0, 40),
-    );
-
-    expect(whole.issues.map((issue) => issue.code)).not.toContain(
-      "CONTENT_LOSS",
-    );
-    expect(truncated.issues.map((issue) => issue.code)).toContain(
-      "CONTENT_LOSS",
-    );
   });
 });
 

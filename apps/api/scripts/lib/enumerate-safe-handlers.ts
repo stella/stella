@@ -1,7 +1,7 @@
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
 import {
@@ -48,33 +48,37 @@ export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
  * Parse actual call expressions: type queries and runtime generic
  * instantiations reference factories without constructing endpoints.
  */
+// Every subtree that holds only types: annotations, type arguments and
+// parameters, aliases, interfaces and `implements` clauses.
+const TYPE_POSITIONS = new Set([
+  "TSTypeAnnotation",
+  "TSTypeParameterInstantiation",
+  "TSTypeParameterDeclaration",
+  "TSTypeAliasDeclaration",
+  "TSInterfaceDeclaration",
+  "TSClassImplements",
+]);
+
 export const inspectSafeHandlerCalls = (source: string) => {
   const kinds = new Set<HandlerKind>();
   let callCount = 0;
   if (!SAFE_HANDLER_FACTORY_NAMES.some((name) => source.includes(name))) {
     return { callCount, kinds: [...kinds] };
   }
-  const file = ts.createSourceFile(
-    "handler.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const visit = (node: ts.Node) => {
-    if (ts.isTypeNode(node)) {
-      return;
+  walk(parseSource("handler.ts", source).program, (node) => {
+    if (TYPE_POSITIONS.has(node.type)) {
+      return "skip-children";
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      isSafeHandlerFactory(node.expression.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      isSafeHandlerFactory(node.callee.name)
     ) {
       callCount += 1;
-      kinds.add(SAFE_HANDLER_FACTORIES[node.expression.text].kind);
+      kinds.add(SAFE_HANDLER_FACTORIES[node.callee.name].kind);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+    return undefined;
+  });
   return { callCount, kinds: [...kinds] };
 };
 

@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -12,8 +21,14 @@ import {
   MOBILE_UPDATES_PATH,
 } from "@stll/api-contract/mobile-updates";
 
-import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+import {
+  appConfigFor,
+  BAR_GLYPHS_FOLDER,
+  copyBarGlyphs,
+  UPDATE_SIGNING_CERTIFICATE,
+} from "../app.config";
 import manifest from "../package.json" with { type: "json" };
+import { BAR_GLYPHS } from "./bar-glyphs.gen";
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -99,12 +114,63 @@ describe("the app's builds", () => {
       expect(
         mobileRedirectUri(variant).startsWith(`${String(config.scheme)}:`),
       ).toBe(true);
-      expect(config.extra).toEqual({ variant });
+      expect(config.extra).toEqual({
+        liveActivities: true,
+        pushNotifications: true,
+        variant,
+      });
       expect(config.ios?.bundleIdentifier).toBe(config.android?.package);
       expect(config.ios?.buildNumber).toBe("7");
       expect(config.android?.versionCode).toBe(7);
     },
   );
+
+  test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: { profileUuid: "profile", teamId: "TEAM" },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: false,
+      pushNotifications: false,
+      variant: "preview",
+    });
+    expect(
+      signed.plugins?.some(
+        (plugin) =>
+          (Array.isArray(plugin) ? plugin[0] : plugin) === "expo-widgets",
+      ),
+    ).toBe(false);
+  });
+
+  test("a release with the widgets profile carries the Live Activity extension", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        profileUuid: "profile",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: true,
+      pushNotifications: true,
+      variant: "preview",
+    });
+    expect(signed.plugins).toContainEqual([
+      "expo-widgets",
+      {
+        bundleIdentifier: "app.stll.mobile.preview.widgets",
+        groupIdentifier: "group.app.stll.mobile.preview",
+      },
+    ]);
+  });
 
   test("no two builds share a store identity, a scheme or a name", () => {
     for (const read of [
@@ -142,6 +208,36 @@ describe("the app's builds", () => {
           variant,
         }).updates,
       ).toEqual({ enabled: false });
+    }
+  });
+});
+
+describe("the bar glyphs", () => {
+  test("prebuild puts every one in the app's asset catalog, replacing an earlier copy", () => {
+    const projectRoot = mkdtempSync(path.join(tmpdir(), "stella-bar-glyphs-"));
+    try {
+      const sourceRoot = path.join(projectRoot, "ios", "stella");
+      const catalog = path.join(sourceRoot, "Images.xcassets", "BarGlyphs");
+      mkdirSync(path.join(catalog, "lucide-dropped.imageset"), {
+        recursive: true,
+      });
+      writeFileSync(path.join(sourceRoot, "AppDelegate.swift"), "");
+      cpSync(
+        path.join(SOURCE_ROOT, "..", BAR_GLYPHS_FOLDER),
+        path.join(projectRoot, BAR_GLYPHS_FOLDER),
+        { recursive: true },
+      );
+
+      copyBarGlyphs(projectRoot);
+
+      expect(readdirSync(catalog).toSorted()).toEqual(
+        [
+          "Contents.json",
+          ...Object.values(BAR_GLYPHS).map((name) => `${name}.imageset`),
+        ].toSorted(),
+      );
+    } finally {
+      rmSync(projectRoot, { force: true, recursive: true });
     }
   });
 });

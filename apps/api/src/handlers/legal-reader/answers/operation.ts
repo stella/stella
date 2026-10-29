@@ -23,6 +23,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import type { ReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
+import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -222,6 +225,7 @@ const regenerateLastReaderAnswer = async ({
 const readReaderAnswerContext = async ({
   command,
   readDecision = readReaderAnswerDecision,
+  readCopies = readWithdrawnCopyProjection,
   ...scope
 }: PrepareReaderAnswerOptions) =>
   await Result.gen(async function* () {
@@ -298,7 +302,32 @@ const readReaderAnswerContext = async ({
       command.type === "create"
         ? createSafeId<"legalReaderAnswer">()
         : command.answerId;
-    return Result.ok({ decision, anchor, answerId });
+    const history =
+      command.type === "create"
+        ? []
+        : yield* Result.await(
+            abortableTx(
+              scope.safeDb,
+              async (tx) => await readReaderAnswerThread(tx, answerId),
+            ),
+          );
+    const projection = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readCopies({ values: history, decisionIds: [decisionId] }),
+      ),
+    );
+    const marker = projection.marker(null, decisionId);
+    if (marker !== null) {
+      return Result.err(new HandlerError({ status: 404, message: marker }));
+    }
+    return Result.ok({
+      decision,
+      anchor,
+      answerId,
+      projection,
+      references: decisionReferencesIn({ decisionId, history }),
+    });
   });
 
 /** A thread past the message cap is refused rather than read truncated. */
@@ -325,11 +354,39 @@ const readReaderAnswerThread = async (
   return thread.rows;
 };
 
+type ProjectCheckedReaderHistoryOptions = {
+  messages: (typeof legalReaderAnswerMessages.$inferSelect)[];
+  decisionId: SafeId<"caseLawDecision">;
+  projection: WithdrawnCopyProjection;
+  references: ReadonlySet<string>;
+};
+const projectCheckedReaderHistory = ({
+  messages,
+  decisionId,
+  projection,
+  references,
+}: ProjectCheckedReaderHistoryOptions) => {
+  if ([...decisionReferencesIn(messages)].some((id) => !references.has(id))) {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Reader answer changed; reload and try again",
+      }),
+    );
+  }
+  return messages.map((row) => projection.answerMessage(row, decisionId));
+};
+
 /** Validation and corpus I/O finish before the locked turn transaction. */
 export const prepareReaderAnswer = async (
   options: PrepareReaderAnswerOptions,
 ) => {
-  const { command, readDecision: _readDecision, ...scope } = options;
+  const {
+    command,
+    readDecision: _readDecision,
+    readCopies: _readCopies,
+    ...scope
+  } = options;
   const context = await readReaderAnswerContext(options);
   if (Result.isError(context)) {
     return Result.err(context.error);
@@ -380,7 +437,12 @@ export const prepareReaderAnswer = async (
         }),
       );
     }
-    const messages = await readReaderAnswerThread(tx, answerId);
+    const messages = projectCheckedReaderHistory({
+      messages: await readReaderAnswerThread(tx, answerId),
+      decisionId,
+      projection: context.value.projection,
+      references: context.value.references,
+    });
     const streaming = messages.find(({ status }) => status === "streaming");
     const now = new Date();
     if (
