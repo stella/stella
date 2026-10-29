@@ -1,3 +1,4 @@
+// parser-output-unchanged: only the sk-us parser calls rewriteInlineWhitespace, and its version is bumped; every other parser reaches only the unchanged helpers in this file.
 // parser-output-unchanged: moved unchanged from the ingestion parsers' shared-inlines so every parser layer can import it.
 /**
  * One line of inline content, trimmed and cut, without losing formatting.
