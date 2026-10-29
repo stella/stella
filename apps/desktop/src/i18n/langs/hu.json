@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "A {shortcut} megnyomásával böngészhet az előzmények között és kiválaszthat egy kivágást.",
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
-    "welcomeTitle": "Ismerje meg a vágólapot"
+    "welcomeTitle": "Ismerje meg a vágólapot",
+    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}."
   },
   "activity": {
     "title": "Tevékenység",

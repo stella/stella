@@ -173,6 +173,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
+  "mobile-icons": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -524,6 +525,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "mcp-app-contracts": [
     "apps/api/package.json",
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
@@ -592,6 +594,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
@@ -1027,7 +1030,10 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "mobile-ui-theme",
     outputKind: "committed",
-    outputs: ["apps/mobile/src/ui-theme.gen.ts"],
+    outputs: [
+      "apps/mobile/src/ui-theme.gen.ts",
+      "apps/mobile/ui-theme.gen.css",
+    ],
     inputs: [
       "packages/ui/src/styles/theme.css",
       "scripts/generate-mobile-ui-theme.ts",
@@ -1044,6 +1050,27 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-mobile-ui-theme.ts", "--write"],
     check: ["bun", "scripts/generate-mobile-ui-theme.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "mobile-icons",
+    outputKind: "committed",
+    outputs: ["apps/mobile/src/icons.gen.ts", "apps/mobile/src/brand.gen.ts"],
+    inputs: [
+      "packages/ui/src/icons.ts",
+      "packages/ui/src/components/stella-wordmark.tsx",
+      "scripts/generate-mobile-icons.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-icons"],
+    ],
+    write: ["bun", "scripts/generate-mobile-icons.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-icons.ts"],
     autofix: true,
     after: [],
   },
@@ -1696,6 +1723,23 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "withdrawn-decision-labels",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json"],
+    inputs: [
+      "apps/web/src/i18n/langs/*.json",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+    ],
+    write: ["bun", "apps/web/scripts/sync-withdrawn-decision-labels.ts"],
+    check: [
+      "bun",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+      "--check",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "i18n-messages-web",
     outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
@@ -1831,6 +1875,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/collab/src/env*.ts",
       // Read by the generator: build args and catalog helpers.
       "apps/web/Dockerfile",
+      "apps/api/src/db-components.ts",
       "apps/api/src/db-url.ts",
       "apps/api/src/lib/configuration-placeholders.ts",
       "apps/api/src/lib/rate-limit/budget-config-schema.ts",

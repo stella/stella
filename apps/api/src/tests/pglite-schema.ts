@@ -79,7 +79,7 @@ const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
 );
 const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261029122634_search_history_country_expand",
+  "20261029193954_search_history_country_expand",
   "migration.sql",
 );
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(

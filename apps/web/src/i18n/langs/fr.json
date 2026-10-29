@@ -1283,7 +1283,8 @@
       "versionAtDecisionDateInferred": "Version à la date de la décision (déduite)",
       "versionBasisInferredCompact": "Date de la décision · déduite",
       "versionBasisInferredExplanation": "La version est déduite de la date de la décision. La décision ne précise pas quelle rédaction s’applique."
-    }
+    },
+    "withdrawnByPublisher": "Retiré par l’éditeur"
   },
   "catalogue": {
     "addCustom": "Ajouter personnalisé",
@@ -1580,6 +1581,12 @@
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
     "loadingEarlierMessages": "Chargement des messages précédents…",
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# de plus} many {+# de plus} other {+# de plus}}",
+      "dismiss": "Masquer l’avis de connexion",
+      "stoppedWorking": "Votre connexion à <name>{server}</name> ne fonctionne plus.",
+      "waitingApproval": "Votre connexion à <name>{server}</name> est en attente d’approbation."
+    },
     "mention": {
       "category": {
         "entities": "Dans ce dossier",

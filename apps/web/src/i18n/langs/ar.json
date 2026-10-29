@@ -1283,7 +1283,8 @@
       "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)",
       "versionBasisInferredCompact": "تاريخ القرار · مستنتج",
       "versionBasisInferredExplanation": "تُستنتج النسخة من تاريخ القرار. لا يحدد القرار الصياغة التي تنطبق."
-    }
+    },
+    "withdrawnByPublisher": "سحبه الناشر"
   },
   "catalogue": {
     "addCustom": "إضافة مخصص",
@@ -1580,6 +1581,12 @@
     "loadEarlierMessagesError": "تعذّر تحميل الرسائل السابقة",
     "loadingEarlierMessages": "جارٍ تحميل الرسائل السابقة…",
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",
+      "dismiss": "إخفاء إشعار الاتصال",
+      "stoppedWorking": "توقف اتصالك بـ <name>{server}</name> عن العمل.",
+      "waitingApproval": "اتصالك بـ <name>{server}</name> بانتظار الموافقة."
+    },
     "mention": {
       "category": {
         "entities": "في هذا الملف القانوني",

@@ -1692,9 +1692,10 @@ const createHarness = ({
           if (query.startsWith('SELECT 1 FROM public."contacts"')) {
             return [];
           }
-          // This fixture has no legacy document rows to classify. The
-          // generic table response below represents other pending repairs.
-          if (query.startsWith("SELECT 1 FROM public.search_history_entries")) {
+          if (
+            query.startsWith("SELECT 1 FROM public.search_history_entries") ||
+            query.startsWith("SELECT 1 FROM public.chat_run_log_entries")
+          ) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.")) {

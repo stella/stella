@@ -1283,7 +1283,8 @@
       "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
       "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
       "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
-    }
+    },
+    "withdrawnByPublisher": "Izdevējs atsaucis"
   },
   "catalogue": {
     "addCustom": "Pievienot pielāgotu",
@@ -1580,6 +1581,12 @@
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",
+      "dismiss": "Paslēpt paziņojumu par savienojumu",
+      "stoppedWorking": "Jūsu savienojums ar <name>{server}</name> vairs nedarbojas.",
+      "waitingApproval": "Jūsu savienojums ar <name>{server}</name> gaida apstiprinājumu."
+    },
     "mention": {
       "category": {
         "entities": "Šajā lietā",

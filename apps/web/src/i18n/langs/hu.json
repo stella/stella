@@ -1283,7 +1283,8 @@
       "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)",
       "versionBasisInferredCompact": "Határozat dátuma · következtetett",
       "versionBasisInferredExplanation": "A változatot a határozat dátumából következtettük ki. A határozat nem jelöli meg az alkalmazandó szövegváltozatot."
-    }
+    },
+    "withdrawnByPublisher": "A közzétevő visszavonta"
   },
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",
@@ -1580,6 +1581,12 @@
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# további} other {+# további}}",
+      "dismiss": "Kapcsolódási értesítés elrejtése",
+      "stoppedWorking": "A(z) <name>{server}</name> szolgáltatáshoz való kapcsolódás nem működik.",
+      "waitingApproval": "A(z) <name>{server}</name> szolgáltatáshoz való kapcsolódás jóváhagyásra vár."
+    },
     "mention": {
       "category": {
         "entities": "Ebben az ügyben",

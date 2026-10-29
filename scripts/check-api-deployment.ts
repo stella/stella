@@ -79,23 +79,23 @@ const readExpectedEnvironment = () => {
   return value;
 };
 
-type ReadDeployedCommitOptions = {
-  apiUrl: string;
-  probePath: string;
-  expectedEnvironment: ReturnType<typeof readExpectedEnvironment>;
-  headers: Headers;
+type ReadApiDeploymentOptions = {
+  url: URL;
+  headers?: Headers;
+  timeoutMs?: number;
+  expectedEnvironment?: ReturnType<typeof readExpectedEnvironment>;
 };
 
-const readDeployedCommit = async ({
-  apiUrl,
-  probePath,
-  expectedEnvironment,
+export const readApiDeployment = async ({
+  url: probeUrl,
   headers,
-}: ReadDeployedCommitOptions) => {
-  const probeUrl = getApiHealthUrl(apiUrl, probePath);
+  timeoutMs = FETCH_TIMEOUT_MS,
+  expectedEnvironment,
+}: ReadApiDeploymentOptions) => {
   const response = await fetch(probeUrl, {
     headers,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
+    cache: "no-store",
   });
   if (!response.ok) {
     throw new ApiDeploymentError(
@@ -125,7 +125,16 @@ const readDeployedCommit = async ({
       }
     }
   }
-  return commit;
+  return {
+    statusCode: response.status,
+    commit,
+    status:
+      typeof body === "object" &&
+      body !== null &&
+      Reflect.get(body, "status") === "ok"
+        ? "ready"
+        : "not-ready",
+  } as const;
 };
 
 const main = async () => {
@@ -167,12 +176,20 @@ const main = async () => {
   let consecutiveMatches = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      lastObservedCommit = await readDeployedCommit({
-        apiUrl,
-        probePath,
+      const probe = await readApiDeployment({
+        url: getApiHealthUrl(apiUrl, probePath),
         expectedEnvironment,
         headers,
       });
+      if (
+        probePath === "ready" &&
+        (probe.statusCode !== 200 || probe.status !== "ready")
+      ) {
+        throw new ApiDeploymentError(
+          "Readiness probe must return HTTP 200 and status ok",
+        );
+      }
+      lastObservedCommit = probe.commit;
       const stability = advanceDeploymentStability({
         consecutiveMatches,
         expectedCommit,
