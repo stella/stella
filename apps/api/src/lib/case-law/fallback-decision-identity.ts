@@ -260,12 +260,12 @@ export const parseFallbackDecisionIdentityKey = (
 };
 
 type PublicationFieldsInput = {
-  decisionDate?: string | null;
-  decisionType?: string | null;
-  judges?: readonly unknown[] | null;
-  sourceUrl?: string | null;
-  documentUrl?: string | null;
-  metadata?: Record<string, unknown> | null;
+  decisionDate?: string | null | undefined;
+  decisionType?: string | null | undefined;
+  judges?: readonly unknown[] | null | undefined;
+  sourceUrl?: string | null | undefined;
+  documentUrl?: string | null | undefined;
+  metadata?: Record<string, unknown> | null | undefined;
   hasStoredDocument?: boolean;
 };
 
