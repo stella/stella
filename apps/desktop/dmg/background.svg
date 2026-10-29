@@ -17,4 +17,5 @@
     <rect x="284" y="182" width="92" height="56" rx="28" fill="url(#glass)" stroke="#ffffff" stroke-opacity="0.92"/>
     <path d="M307 210H350M338 198L350 210L338 222" fill="none" stroke="url(#arrow)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
+  <text x="330" y="354" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" fill="#62666b">Once copied, open stella from Applications.</text>
 </svg>

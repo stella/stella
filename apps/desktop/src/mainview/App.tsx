@@ -51,6 +51,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
@@ -328,6 +329,7 @@ const GeneralPane = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations("settings");
+  const tSubscriptions = useTranslations("agentSubscriptions");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -420,6 +422,11 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
+      <AgentSubscriptionsSection
+        renderGroup={(content) => (
+          <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
       <PanelGroup title={t("permissions")}>
         <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
       </PanelGroup>
