@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 22,
+    version: 23,
     scope: {
       type: "all",
       reason:
-        "Rebuild usable portal documents or archived registry originals and read all detail metadata; discovering an uncaptured original requires a normal re-crawl.",
+        "Rebuild archived originals and read current scalar metadata separately from related-record evidence; retain conflicting scalar values without joining them. Discovering an uncaptured original requires a normal re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {

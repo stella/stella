@@ -9,7 +9,10 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import {
+  czNssAdapter,
+  parseCzNssDetailMetadata,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   decodeNssDocument,
   isNssDocumentPlaceholder,
@@ -17,6 +20,7 @@ import {
   nssRegistryUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import { czNssFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   nssRecoveryFixture,
   nssRecoveryReference,
@@ -94,6 +98,90 @@ describe("NSS document recovery", () => {
           rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
         });
       }
+    }
+  });
+
+  test("scalar detail fields belong to the current decision while related values remain evidence", () => {
+    const detail = parseCzNssDetailMetadata(`
+      <div class="detcard" data-nss="nssview" data-field-id="ecli"><span class="det-textval">ECLI:CZ:NSS:2017:5.As.140.2014.76</span></div>
+      <div class="detcard" data-nss="nssview" data-field-id="datumvydanirozhodnuti"><span class="det-textval">02.02.2017</span></div>
+      <table><tbody><tr>
+        <td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td>
+        <td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td>
+      </tr></tbody></table>`);
+    expect(detail.ecli).toBe("ECLI:CZ:NSS:2017:5.As.140.2014.76");
+    expect(detail.decisionDate).toBe("02.02.2017");
+    expect(detail.detailFieldEvidence).toEqual([
+      {
+        type: "related",
+        field: "ecli",
+        values: ["ECLI:CZ:NSS:2016:5.As.140.2014.53"],
+      },
+      {
+        type: "related",
+        field: "datumvydanirozhodnuti",
+        values: ["26.05.2016"],
+      },
+    ]);
+  });
+
+  test("conflicting current scalar values remain typed evidence without a fabricated value", () => {
+    const detail = parseCzNssDetailMetadata(`
+      <div class="detcard" data-nss="nssview" data-field-id="ecli"><span class="det-textval">ECLI:CZ:NSS:2017:5.As.140.2014.76</span></div>
+      <div class="detcard" data-nss="nssview" data-field-id="ecli"><span class="det-textval">ECLI:CZ:NSS:2016:5.As.140.2014.53</span></div>
+      <div class="detcard" data-nss="nssview" data-field-id="datumvydanirozhodnuti"><span class="det-textval">02.02.2017</span><span class="det-textval">26.05.2016</span></div>`);
+    expect(detail.ecli).toBeUndefined();
+    expect(detail.decisionDate).toBeUndefined();
+    expect(detail.detailFieldEvidence).toEqual([
+      {
+        type: "scalar_conflict",
+        field: "ecli",
+        values: [
+          "ECLI:CZ:NSS:2017:5.As.140.2014.76",
+          "ECLI:CZ:NSS:2016:5.As.140.2014.53",
+        ],
+      },
+      {
+        type: "scalar_conflict",
+        field: "datumvydanirozhodnuti",
+        values: ["02.02.2017", "26.05.2016"],
+      },
+    ]);
+  });
+
+  test("crawl and replay store both conflicting official scalar values", async () => {
+    const html = `<div data-field-id="ecli"><span class="det-textval">ECLI:CZ:NSS:2026:1.Azs.4.2026.1</span><span class="det-textval">ECLI:CZ:NSS:2026:1.Azs.4.2026.2</span></div>
+      <div data-field-id="datumvydanirozhodnuti"><span class="det-textval">01.01.2026</span><span class="det-textval">02.01.2026</span></div>`;
+    const expected = parseCzNssDetailMetadata(html).detailFieldEvidence;
+    expect(expected).toHaveLength(2);
+    const decision = await czNssFixture(html).buildDecision();
+    expect(decision.ecli).toBeUndefined();
+    expect(JSON.stringify(decision.metadata["detailFieldEvidence"])).toBe(
+      JSON.stringify(expected),
+    );
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("NSS replay required");
+    }
+    const replay = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    });
+    expect(replay.type).toBe("parsed");
+    if (replay.type === "parsed") {
+      expect(
+        JSON.stringify(replay.result.metadata["detailFieldEvidence"]),
+      ).toBe(JSON.stringify(expected));
     }
   });
 

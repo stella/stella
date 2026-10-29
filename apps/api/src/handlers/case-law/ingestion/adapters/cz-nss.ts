@@ -1536,7 +1536,7 @@ const listCzNssSourceFields = (parts: SourceRawParts): readonly string[] => [
  * second reader — a backfill that fetches this page for the headnote alone —
  * must bind to the same shape rather than restate its keys.
  */
-export type CzNssDetailMetadata = {
+type CzNssDetailValues = {
   ecli: string | undefined;
   judge: string | undefined;
   senate: string | undefined;
@@ -1556,97 +1556,209 @@ export type CzNssDetailMetadata = {
   conflictingPrecedents: string | undefined;
 };
 
-type ExtractDetailFieldTextOptions = {
-  document: CheerioAPI;
-  divId: string;
-  emptyValue?: "preserve" | "omit";
+const NSS_DETAIL_FIELD_KIND = {
+  SCALAR: "scalar",
+  MULTIPLE: "multiple",
+} as const;
+type DetailFieldDefinition = {
+  field: CzNssSourceField;
+  kind: (typeof NSS_DETAIL_FIELD_KIND)[keyof typeof NSS_DETAIL_FIELD_KIND];
+  emptyValue: "preserve" | "omit";
+};
+const NSS_DETAIL_FIELDS = {
+  ecli: {
+    field: "ecli",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  judge: {
+    field: "soudcezpravodaj",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  senate: {
+    field: "soudsenat",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  legalArea: {
+    field: "oblastupravy",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  decisionType: {
+    field: "druhdokumentuavyrokrozhodnuti",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  decisionDate: {
+    field: "datumvydanirozhodnuti",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  outcome: {
+    field: "vyrokrozhodnuti",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  caseType: {
+    field: "typrizeni",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  parties: {
+    field: "ucastnicirizeniz",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  caseStatus: {
+    field: "stavrizeni",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  administrativeAuthority: {
+    field: "nazevspravnihoorganu",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  citation: {
+    field: "citace",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  legalSentence: {
+    field: "pravnivetaupravena",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "preserve",
+  },
+  title: {
+    field: "nadpis",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  statutes: {
+    field: "vztahkpredpisům",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  publicationDate: {
+    field: "datumvydanivsbnss",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  conflictingPrecedents: {
+    field: "rozpornaprejudikatura",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+} as const satisfies Record<keyof CzNssDetailValues, DetailFieldDefinition>;
+
+type DetailFieldEvidence = {
+  type: "related" | "scalar_conflict";
+  field: (typeof NSS_DETAIL_FIELDS)[keyof typeof NSS_DETAIL_FIELDS]["field"];
+  values: string[];
+};
+export type CzNssDetailMetadata = CzNssDetailValues & {
+  detailFieldEvidence?: DetailFieldEvidence[];
 };
 
-/** Read labelled detail values and table cells through the publisher's field ID. */
+type ExtractDetailFieldTextOptions = {
+  document: CheerioAPI;
+  definition: (typeof NSS_DETAIL_FIELDS)[keyof typeof NSS_DETAIL_FIELDS];
+  evidence: DetailFieldEvidence[];
+};
+
+/** Scalar record cards and related-record table cells have different owners. */
 const extractDetailFieldText = ({
   document: $,
-  divId,
-  emptyValue = "omit",
+  definition: { field: fieldId, kind, emptyValue },
+  evidence,
 }: ExtractDetailFieldTextOptions): string | undefined => {
-  const fields = $(`[id="${divId}"], [data-field-id="${divId}"]`);
+  const fields = $(`[id="${fieldId}"], [data-field-id="${fieldId}"]`);
   const texts: string[] = [];
+  const related: string[] = [];
   let statedValueCount = 0;
   for (const element of fields) {
     const field = $(element);
-    // The detail uses labelled spans and table cells, and repeats fields
-    // for related decisions. Read the values of every occurrence.
     const values = field.hasClass("det-textval")
       ? field
       : field.find(".det-textval");
     for (const value of values) {
+      const cell = $(value);
+      const text = stripHtml(cell.html() ?? "").trim();
+      if (
+        kind === NSS_DETAIL_FIELD_KIND.SCALAR &&
+        cell.closest("table").length > 0
+      ) {
+        if (text) {
+          related.push(text);
+        }
+        continue;
+      }
       statedValueCount += 1;
-      const text = stripHtml($(value).html() ?? "").trim();
       if (text) {
         texts.push(text);
       }
     }
   }
-
-  if (texts.length > 0) {
-    return texts.join(", ");
+  if (related.length > 0) {
+    evidence.push({ type: "related", field: fieldId, values: related });
   }
-
-  return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
+  switch (kind) {
+    case NSS_DETAIL_FIELD_KIND.SCALAR: {
+      const distinct = [...new Set(texts)];
+      if (distinct.length > 1) {
+        evidence.push({
+          type: "scalar_conflict",
+          field: fieldId,
+          values: distinct,
+        });
+        return undefined;
+      }
+      return distinct.at(0);
+    }
+    case NSS_DETAIL_FIELD_KIND.MULTIPLE:
+      if (texts.length > 0) {
+        return texts.join(", ");
+      }
+      return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
+    default:
+      kind satisfies never;
+      return panic(`Unhandled NSS detail field kind: ${String(kind)}`);
+  }
 };
 
-/**
- * Read the detail page's fields out of its markup.
- *
- * Split from the fetch below so a caller that already holds the page — a
- * backfill reading the headnote off it, its own tests — parses it through
- * the adapter rather than through a second copy of these field names.
- */
 export const parseCzNssDetailMetadata = (html: string): CzNssDetailMetadata => {
   const document = load(html);
+  const evidence: DetailFieldEvidence[] = [];
+  const read = (key: keyof typeof NSS_DETAIL_FIELDS) =>
+    extractDetailFieldText({
+      document,
+      definition: NSS_DETAIL_FIELDS[key],
+      evidence,
+    });
+  const values = {
+    ecli: read("ecli"),
+    judge: read("judge"),
+    senate: read("senate"),
+    legalArea: read("legalArea"),
+    decisionType: statedDecisionType(read("decisionType")),
+    decisionDate: read("decisionDate"),
+    outcome: read("outcome"),
+    caseType: read("caseType"),
+    parties: read("parties"),
+    caseStatus: read("caseStatus"),
+    administrativeAuthority: read("administrativeAuthority"),
+    citation: read("citation"),
+    legalSentence: read("legalSentence"),
+    title: read("title"),
+    statutes: read("statutes"),
+    publicationDate: read("publicationDate"),
+    conflictingPrecedents: read("conflictingPrecedents"),
+  } satisfies CzNssDetailValues;
   return {
-    title: extractDetailFieldText({ document, divId: "nadpis" }),
-    statutes: extractDetailFieldText({ document, divId: "vztahkpredpisům" }),
-    publicationDate: extractDetailFieldText({
-      document,
-      divId: "datumvydanivsbnss",
-    }),
-    conflictingPrecedents: extractDetailFieldText({
-      document,
-      divId: "rozpornaprejudikatura",
-    }),
-    ecli: extractDetailFieldText({ document, divId: "ecli" }),
-    judge: extractDetailFieldText({ document, divId: "soudcezpravodaj" }),
-    senate: extractDetailFieldText({ document, divId: "soudsenat" }),
-    legalArea: extractDetailFieldText({ document, divId: "oblastupravy" }),
-    decisionType: statedDecisionType(
-      extractDetailFieldText({
-        document,
-        divId: "druhdokumentuavyrokrozhodnuti",
-      }),
-    ),
-    decisionDate: extractDetailFieldText({
-      document,
-      divId: "datumvydanirozhodnuti",
-    }),
-    outcome: extractDetailFieldText({ document, divId: "vyrokrozhodnuti" }),
-    caseType: extractDetailFieldText({ document, divId: "typrizeni" }),
-    parties: extractDetailFieldText({ document, divId: "ucastnicirizeniz" }),
-    caseStatus: extractDetailFieldText({ document, divId: "stavrizeni" }),
-    administrativeAuthority: extractDetailFieldText({
-      document,
-      divId: "nazevspravnihoorganu",
-    }),
-    citation: extractDetailFieldText({ document, divId: "citace" }),
-    // The headnote the court writes for a decision it selects into its
-    // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
-    // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
-    // and the field is on the detail page alone: neither document
-    // endpoint carries it.
-    legalSentence: extractDetailFieldText({
-      document,
-      divId: "pravnivetaupravena",
-      emptyValue: "preserve",
-    }),
+    ...values,
+    ...(evidence.length === 0 ? {} : { detailFieldEvidence: evidence }),
   };
 };
 
@@ -1800,6 +1912,7 @@ type RowToResultOptions = {
 const detailMetadataFields = (
   detail: CzNssDetailMetadata,
 ): Record<string, unknown> => ({
+  detailFieldEvidence: detail.detailFieldEvidence,
   title: detail.title,
   statutes: detail.statutes === undefined ? undefined : [detail.statutes],
   publicationDate: detail.publicationDate,
