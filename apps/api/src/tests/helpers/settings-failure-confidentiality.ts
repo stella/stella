@@ -1,6 +1,7 @@
 import { expect } from "bun:test";
 
 import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import type {
   OrganizationGroupIdentifyParams,
   ServerAnalyticsCaptureParams,
@@ -83,6 +84,23 @@ const descriptorGraph = (
   return properties;
 };
 
+const SOURCE_LOCATION_KEYS = new Set<PropertyKey>([
+  "column",
+  "line",
+  "originalColumn",
+  "originalLine",
+  "sourceURL",
+  "stack",
+]);
+
+const errorPayload = (error: Error): Record<string, unknown> =>
+  Object.fromEntries(
+    Reflect.ownKeys(error)
+      .filter((key) => typeof key === "string")
+      .filter((key) => !SOURCE_LOCATION_KEYS.has(key))
+      .map((key) => [key, Reflect.get(error, key)]),
+  );
+
 const assertReturnedAllowlist = (returned: unknown): void => {
   const graph = descriptorGraph(returned);
   expect(JSON.stringify(graph)).not.toContain("cause");
@@ -117,11 +135,11 @@ const assertReturnedAllowlist = (returned: unknown): void => {
           "usage",
         ].toSorted(compareKeys),
       );
-      expect(returned).toMatchObject({
-        code: "ai_config_stored_unreadable",
-        message: "Stored AI configuration could not be read",
-        status: 503,
-      });
+      // Every serialized field (error, hint, issues, ...) must equal the
+      // canonical error's, so stored data cannot ride on an allowlisted key.
+      expect(errorPayload(returned)).toStrictEqual(
+        errorPayload(storedAIConfigUnreadableError()),
+      );
       return;
     }
     expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
