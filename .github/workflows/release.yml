@@ -1325,9 +1325,12 @@ jobs:
             [[ -f "$asset" ]] || continue
             bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$asset" --clobber
           done
-          echo "api=$api" >> "$GITHUB_OUTPUT"
-          echo "web=$web" >> "$GITHUB_OUTPUT"
-          echo "web_target=$(jq -er '.webImage.targetEnvironment' release-manifest.json)" >> "$GITHUB_OUTPUT"
+          web_target="$(jq -er '.webImage.targetEnvironment' release-manifest.json)"
+          {
+            echo "api=$api"
+            echo "web=$web"
+            echo "web_target=$web_target"
+          } >> "$GITHUB_OUTPUT"
 
       # The promotion accepts a web image only with a publication attestation
       # naming the release it promotes. The candidate's attestation names the
