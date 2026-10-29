@@ -1,5 +1,6 @@
 // parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing, listed items and page counts are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+// parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -120,10 +121,7 @@ import {
   parsePlDecisionContent,
   PL_DECISION_MARKUP,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import {
-  readPlNcourtContent,
-  validatePlNcourtDocument,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -1105,20 +1103,10 @@ export const assemblePlNcourtDecision = ({
     keywords: listOf(detail, "themePhrases"),
     statutes: listOf(detail, "legalBases"),
   });
+  // The pipeline checks the blocks against the stored XML itself
+  // (retention/sources/pl-ncourt.ts), not against the HTML rendered from it.
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
-  if (content !== null && document !== null) {
-    validatePlNcourtDocument(
-      {
-        parser: ADAPTER_KEYS.PL_NCOURT,
-        caseNumber,
-        language: PL_NCOURT_LANGUAGE,
-        url: contentUrlOf(id),
-      },
-      content,
-      document.documentAst.blocks,
-    );
-  }
 
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: listingXml,

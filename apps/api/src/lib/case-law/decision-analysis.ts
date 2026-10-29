@@ -1,18 +1,24 @@
 import { eq } from "drizzle-orm";
 
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readCachedDecisionAst } from "@/api/lib/case-law/decision-ast-cache";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
+import {
+  type DecisionPayloadRead,
+  readDecisionVersionedPayload,
+} from "@/api/lib/case-law/decision-versioned-payload";
+import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import {
   parsePersistedCorpusAst,
-  readCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -24,7 +30,8 @@ const decisionAnalysisColumns = {
   court: publishedCaseLawDecisions.court,
   country: publishedCaseLawDecisions.country,
   decisionType: publishedCaseLawDecisions.decisionType,
-  documentAst: publishedCaseLawDecisions.documentAst,
+  updatedAt: publishedCaseLawDecisions.updatedAt,
+  versionTimestamp: pgTimestampCursorValue(publishedCaseLawDecisions.updatedAt),
   analysis: publishedCaseLawDecisions.analysis,
   // Object-storage pointers: under canonical corpus storage the row's own
   // `documentAst` is trimmed and the object is the document.
@@ -64,6 +71,26 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
   },
 );
 
+type DecisionAnalysisAstVersion = {
+  decisionId: SafeId<"caseLawDecision">;
+  versionTimestamp: string;
+  contentHash: string | null;
+  astS3Key: string | null;
+};
+
+export type DecisionAnalysisAstColumnRead = DecisionPayloadRead<"documentAst">;
+
+/** Lazy fallback: metadata reads do not transfer an AST served by storage. */
+export const readDecisionAnalysisAstColumn = async (
+  tx: CaseLawPublicReadTransaction,
+  { decisionId, ...version }: DecisionAnalysisAstVersion,
+): Promise<DecisionAnalysisAstColumnRead> =>
+  await readDecisionVersionedPayload(
+    tx,
+    { id: decisionId, ...version },
+    "documentAst",
+  );
+
 type DecisionAstPointers = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
@@ -86,20 +113,25 @@ type DecisionAstPointers = {
 export const readDecisionAnalysisAst = async (
   { astS3Key, contentHash, documentAst, id }: DecisionAstPointers,
   readTombstones: CorpusTombstoneReader,
+  readPgAst?: () => Promise<DocumentAst | EmptyAst | null>,
 ): Promise<DocumentAst | null> => {
+  const readRowAst = async () =>
+    readPgAst === undefined
+      ? parsePersistedCorpusAst(documentAst, id)
+      : await readPgAst();
   if (
     corpusStorageMode === "off" ||
     astS3Key === null ||
     contentHash === null
   ) {
-    return parseCaseLawDecisionAst(parsePersistedCorpusAst(documentAst, id));
+    return parseCachedDecisionAst(await readRowAst());
   }
   const stored = await readCorpusPayloadOrFallback({
     documentId: id,
     key: astS3Key,
     step: "analysis.readDecisionAst",
-    read: async () => await readCorpusAst(astS3Key, { readTombstones }),
-    fallback: () => parsePersistedCorpusAst(documentAst, id),
+    read: async () => await readCachedDecisionAst(astS3Key, readTombstones),
+    fallback: readRowAst,
   });
-  return parseCaseLawDecisionAst(stored);
+  return parseCachedDecisionAst(stored);
 };

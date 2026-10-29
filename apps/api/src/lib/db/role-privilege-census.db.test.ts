@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import {
   readRolePrivilegeCensus,
   type RoleCensus,
@@ -40,8 +43,20 @@ describePostgres("database role privilege census", () => {
   // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
   test("matches every migrated role and effective privilege", async () => {
     const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
-    await withMigratedRolePrivilegeCensus(async (_database, actual) => {
+    await withMigratedRolePrivilegeCensus(async (database, actual) => {
       assertCensus(expected, actual);
+      expect(
+        await database.unsafe(`SELECT
+        has_function_privilege('stella', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS runtime,
+        has_function_privilege('stella_public_law_reader', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS reader`),
+      ).toEqual([{ runtime: true, reader: false }]);
+      const denied = await rejectionOf(
+        database.begin(async (tx) => {
+          await tx.unsafe("SET LOCAL ROLE stella_public_law_reader");
+          await tx.unsafe("SELECT public.stella_chat_run_text_boundaries()");
+        }),
+      );
+      expect(getPgErrorCode(denied)).toBe("42501");
     });
   }, 120_000);
 

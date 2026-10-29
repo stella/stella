@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Serwer",
-    "signOut": "Wyloguj się"
+    "signOut": "Wyloguj się",
+    "deleteAccount": "Usuń konto",
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
   },
   "header": {
     "search": "Szukaj"
@@ -199,7 +201,8 @@
     "retry": "Spróbuj ponownie",
     "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
     "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
-    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie.",
+    "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}"
   },
   "scan": {
     "title": "Zeskanuj dokument",

@@ -941,12 +941,16 @@
         "reasoning": "Arutlus"
       },
       "errors": {
+        "analysisDisabled": "Tehisintellekti analüüside loomine on selles serveris välja lülitatud. Lugege kohtulahendi teksti või proovige hiljem uuesti.",
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
+        "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
+        "languageUnsupported": "Tehisintellekti analüüs ei toeta veel selle kohtulahendi keelt. Lugege kohtulahendi teksti või algallikat.",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",
-        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
-        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
+        "sourceRestricted": "Allikas ei luba tehisintellekti analüüsi. Lugege kohtulahendi teksti või algallikat.",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -1155,7 +1159,7 @@
     "reader": {
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
-      "headMatter": "Päis",
+      "headMatter": "Kohtuasja andmed",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "research": {
@@ -1287,7 +1291,8 @@
       "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
       "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
       "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
-    }
+    },
+    "withdrawnByPublisher": "Avaldaja on tagasi võtnud"
   },
   "catalogue": {
     "addCustom": "Lisa kohandatud",
@@ -4889,7 +4894,9 @@
     "viewOnGithub": "Vaata GitHubis"
   },
   "readerAnswers": {
+    "answerLanguage": "Vastuse keel",
     "budgetError": "Vastuste eelarve on ammendatud.",
+    "documentLanguage": "Dokumendi keel ({language})",
     "expand": "Laienda vastust",
     "explain": "Selgita",
     "followUp": "Esita täpsustav küsimus",

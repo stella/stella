@@ -941,12 +941,16 @@
         "reasoning": "Raisonnement"
       },
       "errors": {
+        "analysisDisabled": "La génération d’analyses par IA est désactivée sur ce serveur. Consultez le texte de la décision ou réessayez plus tard.",
         "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
+        "decisionNotFound": "Cette décision est introuvable. Rouvrez-la depuis la recherche.",
+        "documentUnparseable": "Le texte de la décision n’est pas prêt pour l’analyse. Consultez la source originale.",
+        "languageUnsupported": "L’analyse par IA ne prend pas encore en charge la langue de cette décision. Consultez le texte de la décision ou la source originale.",
         "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
         "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
         "retryAfter": "Vous pourrez réessayer à partir du {time}.",
-        "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
-        "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
+        "sourceRestricted": "La source n’autorise pas l’analyse par IA. Consultez le texte de la décision ou la source originale.",
+        "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}"
       },
       "generate": "Générer les sommaires par IA",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",
@@ -1155,7 +1159,7 @@
     "reader": {
       "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
-      "headMatter": "En-tête",
+      "headMatter": "Informations sur l’affaire",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
     "research": {
@@ -1287,7 +1291,8 @@
       "versionAtDecisionDateInferred": "Version à la date de la décision (déduite)",
       "versionBasisInferredCompact": "Date de la décision · déduite",
       "versionBasisInferredExplanation": "La version est déduite de la date de la décision. La décision ne précise pas quelle rédaction s’applique."
-    }
+    },
+    "withdrawnByPublisher": "Retiré par l’éditeur"
   },
   "catalogue": {
     "addCustom": "Ajouter personnalisé",
@@ -4889,7 +4894,9 @@
     "viewOnGithub": "Voir sur GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Langue de réponse",
     "budgetError": "Le budget consacré aux réponses est épuisé.",
+    "documentLanguage": "Langue du document ({language})",
     "expand": "Développer la réponse",
     "explain": "Expliquer",
     "followUp": "Poser une question complémentaire",
