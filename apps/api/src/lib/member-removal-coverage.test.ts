@@ -238,6 +238,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
   "time_entries.approved_by_user_id": "Billing approval history.",
+  "invoice_payments.recorded_by": "Billing payment attribution history.",
+  "invoice_payments.voided_by": "Billing payment reversal attribution history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",

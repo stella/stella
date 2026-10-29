@@ -143,6 +143,23 @@ export const queryOrganizationFencedRepairBatch = async ({
 }: OrganizationFencedRepairBatchOptions) =>
   await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
+type InvoiceRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  predicate: string;
+  limit: number;
+};
+
+/** Online invoice repairs hold their candidates through the batch transaction. */
+export const lockInvoiceRepairBatch = async ({
+  connection,
+  predicate,
+  limit,
+}: InvoiceRepairBatchOptions) =>
+  await connection.query(
+    `SELECT i.id FROM public.invoices i WHERE ${predicate} ORDER BY i.id LIMIT $1 FOR UPDATE OF i`,
+    [limit],
+  );
+
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
   existing: [
@@ -2794,6 +2811,7 @@ export const lockInvoiceInStatus = async (
       invoiceNumber: invoices.invoiceNumber,
       notes: invoices.notes,
       reference: invoices.reference,
+      sentAt: invoices.sentAt,
       sellerProfileId: invoices.sellerProfileId,
       taxableSupplyDate: invoices.taxableSupplyDate,
       totalAmount: invoices.totalAmount,
