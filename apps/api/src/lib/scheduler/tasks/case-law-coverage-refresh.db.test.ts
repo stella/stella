@@ -1,10 +1,13 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { caseLawCoverageSummaries, schedulerJobs } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
@@ -81,6 +84,65 @@ test("coverage refresh publishes complete answers atomically and retains them on
     }),
   });
   expect((await degraded(context))?.isErr()).toBe(true);
+  expect((await db.select().from(caseLawCoverageSummaries)).at(0)).toEqual(
+    published,
+  );
+  let rejectedRead: unknown;
+  let subsequentReads = 0;
+  const failed = createCaseLawCoverageRefreshTask({
+    createRuntime,
+    compute: async (readDb) => {
+      const read = await Result.tryPromise({
+        try: async () =>
+          await readDb(
+            async (tx) =>
+              await tx.execute(sql`DO $$ BEGIN
+              RAISE EXCEPTION USING ERRCODE = '57014', MESSAGE = 'coverage fixture statement canceled';
+            END $$`),
+          ),
+        catch: (cause) => cause,
+      });
+      if (read.isErr()) {
+        rejectedRead = read.error;
+      }
+      // Assembly may degrade several sections after the first read fails.
+      await Result.tryPromise(
+        async () =>
+          await readDb(async (tx) => {
+            subsequentReads += 1;
+            return await tx.execute(sql`SELECT 1`);
+          }),
+      );
+      return {
+        answer: { message: "Coverage is unavailable" },
+        complete: false,
+      };
+    },
+  });
+  const failure = await failed(context);
+  expect(failure?.isErr()).toBe(true);
+  if (failure === undefined || failure.isOk()) {
+    return panic("Canceled coverage read did not fail the refresh");
+  }
+  const evidence = readEvidence(failure.error);
+  expect(evidence.nodes.some(({ sqlState }) => sqlState === "57014")).toBe(
+    true,
+  );
+  expect(evidence.nodes.some(({ sqlState }) => sqlState === "25P02")).toBe(
+    false,
+  );
+  expect(
+    gradeFailure(
+      evidence,
+      failureSink({ event: "coverage.fixture", expected: [] }),
+    ).reason,
+  ).toBe("pg_query_canceled");
+  expect(
+    readEvidence(rejectedRead).nodes.some(
+      ({ sqlState }) => sqlState === "57014",
+    ),
+  ).toBe(true);
+  expect(subsequentReads).toBe(0);
   expect((await db.select().from(caseLawCoverageSummaries)).at(0)).toEqual(
     published,
   );

@@ -7,7 +7,11 @@ import {
   INVOICE_SENT_AT_BACKFILL,
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
-import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import {
+  CASE_LAW_COVERAGE_COURT_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_INDEX,
+} from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -313,6 +317,8 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName,
   })),
   CASE_LAW_COVERAGE_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_COURT_INDEX,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,

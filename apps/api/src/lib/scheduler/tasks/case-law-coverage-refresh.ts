@@ -27,7 +27,7 @@ export const REFRESH_CASE_LAW_COVERAGE_TASK =
   "caseLaw.refreshCoverage" as const;
 
 /** One admitted summary refresh per run; a failed refresh retains the old answer. */
-const REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
+export const CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
 const REFRESH_RUN_BUDGET_MS = 60_000;
 
 type CoverageRefreshBatch = {
@@ -74,7 +74,7 @@ export const createCaseLawCoverageRefreshTask =
         ...SCHEDULER_BACKFILL_CONFIG,
         minSize: 1,
         maxSize: 1,
-        batchStatementTimeoutMs: REFRESH_STATEMENT_TIMEOUT_MS,
+        batchStatementTimeoutMs: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
       },
       observeStatus: logSchedulerBackfillStatus,
       reporting: "changes",
@@ -89,10 +89,31 @@ export const createCaseLawCoverageRefreshTask =
               await lockCaseLawCoverageSnapshot(tx);
               const policy =
                 await readNonRedistributableCaseLawSourceIdsQuery(tx);
+              const readState: { failure: Result<void, unknown> } = {
+                failure: Result.ok(undefined),
+              };
               const { answer, complete } = await compute(async (read) => {
                 refreshSignal.throwIfAborted();
-                return await read(tx);
+                if (readState.failure.isErr()) {
+                  throw readState.failure.error;
+                }
+                const result = await Result.tryPromise({
+                  try: async () => await read(tx),
+                  catch: (cause) => cause,
+                });
+                if (result.isErr()) {
+                  if (readState.failure.isOk()) {
+                    readState.failure = Result.err(result.error);
+                  }
+                  throw readState.failure.error;
+                }
+                return result.value;
               }, policy);
+              // Assembly can degrade a failed read; PostgreSQL cannot continue
+              // its transaction. Roll back before the runtime writes a checkpoint.
+              if (readState.failure.isErr()) {
+                throw readState.failure.error;
+              }
               refreshSignal.throwIfAborted();
               if (!complete || "message" in answer) {
                 return {

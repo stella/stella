@@ -876,10 +876,20 @@ export const computeCaseLawCoverageAnswer = async (
         return arrivals.value;
       },
       readFacets: async (country) =>
-        await caseLawDb(
-          async (tx) =>
-            await readBrowseFacetsWithin(tx, { country, excludedSourceIds }),
-        ),
+        await Result.tryPromise({
+          try: async () =>
+            await caseLawDb(async (tx) => {
+              const facets = await readBrowseFacetsWithin(tx, {
+                country,
+                excludedSourceIds,
+              });
+              if (facets.isErr()) {
+                throw facets.error;
+              }
+              return facets.value;
+            }),
+          catch: coverageError("reading browse facets failed"),
+        }),
       readCourts: async ({ buckets, country, total }) => {
         const [courtWeights, activity, courtCount] = await Promise.all([
           caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),
