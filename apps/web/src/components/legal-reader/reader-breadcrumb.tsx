@@ -379,7 +379,7 @@ export const ReaderBreadcrumb = ({
   }: {
     label: ReactNode;
     title?: string;
-    width?: number;
+    width?: number | undefined;
   }) => (
     <Popover open={contentsOpen} onOpenChange={setContentsOpen}>
       <PopoverTrigger

@@ -51,7 +51,7 @@ export const splitReaderHeading = (heading: string): ReaderHeadingParts => {
 };
 
 /** One crumb's natural widths, padding included: its label alone, and whole. */
-export type ReaderCrumbWidths = {
+type ReaderCrumbWidths = {
   label: number;
   full: number;
 };
