@@ -5,7 +5,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /**
  * The kind and entity-type checks migration
- * 20261029100000_notification_task_assigned widens to accept the
+ * 20261029190100_notification_task_assigned widens to accept the
  * `task_assigned` kind and its `task` pointer, re-added NOT VALID.
  */
 export const NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS = [
