@@ -99,12 +99,63 @@ describe("the app's builds", () => {
       expect(
         mobileRedirectUri(variant).startsWith(`${String(config.scheme)}:`),
       ).toBe(true);
-      expect(config.extra).toEqual({ variant });
+      expect(config.extra).toEqual({
+        liveActivities: true,
+        pushNotifications: true,
+        variant,
+      });
       expect(config.ios?.bundleIdentifier).toBe(config.android?.package);
       expect(config.ios?.buildNumber).toBe("7");
       expect(config.android?.versionCode).toBe(7);
     },
   );
+
+  test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: { profileUuid: "profile", teamId: "TEAM" },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: false,
+      pushNotifications: false,
+      variant: "preview",
+    });
+    expect(
+      signed.plugins?.some(
+        (plugin) =>
+          (Array.isArray(plugin) ? plugin[0] : plugin) === "expo-widgets",
+      ),
+    ).toBe(false);
+  });
+
+  test("a release with the widgets profile carries the Live Activity extension", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        profileUuid: "profile",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: true,
+      pushNotifications: true,
+      variant: "preview",
+    });
+    expect(signed.plugins).toContainEqual([
+      "expo-widgets",
+      {
+        bundleIdentifier: "app.stll.mobile.preview.widgets",
+        groupIdentifier: "group.app.stll.mobile.preview",
+      },
+    ]);
+  });
 
   test("no two builds share a store identity, a scheme or a name", () => {
     for (const read of [
