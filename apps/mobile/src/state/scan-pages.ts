@@ -4,7 +4,7 @@ import * as v from "valibot";
 import type { ScannedPage } from "@/native/document-scanner";
 
 /** A quarter turn clockwise, in degrees. */
-export type Rotation = 0 | 90 | 180 | 270;
+type Rotation = 0 | 90 | 180 | 270;
 
 /** A scanned page as the review lists it: its image and how far it is turned. */
 export type ReviewPage = ScannedPage & {
