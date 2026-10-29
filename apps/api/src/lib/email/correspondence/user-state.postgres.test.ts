@@ -12,11 +12,13 @@ import {
   correspondenceSources,
   entities,
   entityVersions,
+  fields,
   legalReaderAnnotations,
+  properties,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -50,6 +52,18 @@ if (!databaseUrl || !enabled) {
     const assigneeId = mintAuthProviderId<"user">();
     const workspaceId = createSafeId<"workspace">();
     const safeDb = createSafeDb(db, [workspaceId], organizationId, userId);
+    const actorScopedDb = createScopedDb(
+      db,
+      [workspaceId],
+      organizationId,
+      userId,
+    );
+    const assigneeScopedDb = createScopedDb(
+      db,
+      [workspaceId],
+      organizationId,
+      assigneeId,
+    );
     const recordAuditEvent = createBackgroundAuditRecorder({
       organizationId,
       workspaceId,
@@ -111,14 +125,65 @@ if (!databaseUrl || !enabled) {
       const entityId = createSafeId<"entity">();
       const attachmentId = createSafeId<"entity">();
       const replacementAttachmentId = createSafeId<"entity">();
-      await db.insert(entities).values(
-        [entityId, attachmentId, replacementAttachmentId].map((id) => ({
-          id,
+      const attachmentPropertyId = createSafeId<"property">();
+      const firstVersion = createSafeId<"entityVersion">();
+      const secondVersion = createSafeId<"entityVersion">();
+      const attachmentVersionId = createSafeId<"entityVersion">();
+      const attachmentFieldId = createSafeId<"field">();
+      const attachmentFileId = Bun.randomUUIDv7();
+      await actorScopedDb(async (tx) => {
+        await tx.insert(entities).values(
+          [entityId, attachmentId, replacementAttachmentId].map((id) => ({
+            id,
+            workspaceId,
+            name: "Reviewed source document",
+            createdBy: userId,
+          })),
+        );
+        await tx.insert(entityVersions).values([
+          { id: firstVersion, workspaceId, entityId, versionNumber: 1 },
+          { id: secondVersion, workspaceId, entityId, versionNumber: 2 },
+          {
+            id: attachmentVersionId,
+            workspaceId,
+            entityId: attachmentId,
+            versionNumber: 1,
+          },
+        ]);
+        await tx.insert(properties).values({
+          id: attachmentPropertyId,
           workspaceId,
-          name: "Reviewed source document",
-          createdBy: userId,
-        })),
-      );
+          name: "Evidence file",
+          status: "fresh",
+          content: { version: 1, type: "file" },
+          tool: { version: 1, type: "manual-input" },
+        });
+        await tx.insert(fields).values({
+          id: attachmentFieldId,
+          workspaceId,
+          entityVersionId: attachmentVersionId,
+          propertyId: attachmentPropertyId,
+          content: {
+            version: 1,
+            type: "file",
+            id: attachmentFileId,
+            fileName: "evidence.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 128,
+            encrypted: false,
+            sha256Hex: "d".repeat(64),
+            pdfFileId: null,
+          },
+        });
+        await tx
+          .update(entities)
+          .set({ currentVersionId: firstVersion })
+          .where(eq(entities.id, entityId));
+        await tx
+          .update(entities)
+          .set({ currentVersionId: attachmentVersionId })
+          .where(eq(entities.id, attachmentId));
+      });
       const parsedBox = parseDataBoxMessage(await zfoFile());
       if (parsedBox.isErr()) {
         throw parsedBox.error;
@@ -155,16 +220,6 @@ if (!databaseUrl || !enabled) {
               direction: null,
               messageId: parsedBox.value.envelope.messageId,
             } satisfies ParsedCorrespondence);
-      const firstVersion = createSafeId<"entityVersion">();
-      const secondVersion = createSafeId<"entityVersion">();
-      await db.insert(entityVersions).values([
-        { id: firstVersion, workspaceId, entityId, versionNumber: 1 },
-        { id: secondVersion, workspaceId, entityId, versionNumber: 2 },
-      ]);
-      await db
-        .update(entities)
-        .set({ currentVersionId: firstVersion })
-        .where(eq(entities.id, entityId));
       const attachment = {
         entityId: attachmentId,
         filename: "evidence.pdf",
@@ -188,51 +243,57 @@ if (!databaseUrl || !enabled) {
       if (initial.type !== "ok") {
         return panic(`Initial filing failed: ${initial.type}`);
       }
-      await db
-        .update(correspondence)
-        .set({ handlingState: "handled", assigneeId })
-        .where(eq(correspondence.id, initial.id));
-      await db.insert(correspondenceFilers).values({
-        organizationId,
-        workspaceId,
-        correspondenceId: initial.id,
-        filedByUserId: assigneeId,
-        filedByDisplay: {
-          status: "active",
-          name: "Original filer",
-          email: "filer@example.test",
-        },
-        filedAt: new Date("2026-10-28T00:00:00.000Z"),
+      await actorScopedDb(async (tx) => {
+        await tx
+          .update(correspondence)
+          .set({ handlingState: "handled", assigneeId })
+          .where(eq(correspondence.id, initial.id));
+        await tx
+          .update(entities)
+          .set({
+            name: "User-renamed attachment",
+            status: "reviewed",
+            priority: "high",
+          })
+          .where(eq(entities.id, attachmentId));
       });
-      await db
-        .update(entities)
-        .set({
-          name: "User-renamed attachment",
-          status: "reviewed",
-          priority: "high",
-        })
-        .where(eq(entities.id, attachmentId));
+      await assigneeScopedDb(async (tx) => {
+        await tx.insert(correspondenceFilers).values({
+          organizationId,
+          workspaceId,
+          correspondenceId: initial.id,
+          filedByUserId: assigneeId,
+          filedByDisplay: {
+            status: "active",
+            name: "Original filer",
+            email: "filer@example.test",
+          },
+          filedAt: new Date("2026-10-28T00:00:00.000Z"),
+        });
+      });
       const annotationId = createSafeId<"legalReaderAnnotation">();
-      await db.insert(legalReaderAnnotations).values({
-        id: annotationId,
-        organizationId,
-        workspaceId,
-        userId,
-        targetType: "matter-document",
-        targetId: attachmentId,
-        entityId: attachmentId,
-        pageTextSha256: "c".repeat(64),
-        kind: "comment",
-        blockAnchorId: "page-1",
-        startOffset: 0,
-        endOffset: 8,
-        quote: "Evidence",
-        body: "Preserve this review comment",
+      const annotations = await actorScopedDb(async (tx) => {
+        await tx.insert(legalReaderAnnotations).values({
+          id: annotationId,
+          organizationId,
+          workspaceId,
+          userId,
+          targetType: "matter-document",
+          targetId: attachmentFieldId,
+          entityId: attachmentId,
+          pageTextSha256: "c".repeat(64),
+          kind: "comment",
+          blockAnchorId: "page-1",
+          startOffset: 0,
+          endOffset: 8,
+          quote: "Evidence",
+          body: "Preserve this review comment",
+        });
+        return await tx
+          .select()
+          .from(legalReaderAnnotations)
+          .where(eq(legalReaderAnnotations.entityId, attachmentId));
       });
-      const annotations = await db
-        .select()
-        .from(legalReaderAnnotations)
-        .where(eq(legalReaderAnnotations.entityId, attachmentId));
       return {
         annotations,
         entityId,
@@ -258,19 +319,25 @@ if (!databaseUrl || !enabled) {
           attachment,
           initial,
         } = await setupUpload(channel);
-        const filers = await db
-          .select()
-          .from(correspondenceFilers)
-          .where(eq(correspondenceFilers.correspondenceId, initial.id));
-        const [original] = await db
-          .select()
-          .from(correspondence)
-          .where(eq(correspondence.id, initial.id));
+        const { filers, original } = await actorScopedDb(async (tx) => ({
+          filers: await tx
+            .select()
+            .from(correspondenceFilers)
+            .where(eq(correspondenceFilers.correspondenceId, initial.id)),
+          original: (
+            await tx
+              .select()
+              .from(correspondence)
+              .where(eq(correspondence.id, initial.id))
+          ).at(0),
+        }));
         expect(filers).toHaveLength(2);
-        await db
-          .update(entities)
-          .set({ currentVersionId: secondVersion })
-          .where(eq(entities.id, entityId));
+        await actorScopedDb(async (tx) => {
+          await tx
+            .update(entities)
+            .set({ currentVersionId: secondVersion })
+            .where(eq(entities.id, entityId));
+        });
         const changed = {
           ...parsed,
           contentHash: "b".repeat(64),
@@ -298,12 +365,50 @@ if (!databaseUrl || !enabled) {
           id: initial.id,
           created: false,
         });
-        expect(
-          await db
+        const retainedState = await actorScopedDb(async (tx) => {
+          const record = await tx
             .select()
             .from(correspondence)
-            .where(eq(correspondence.id, initial.id)),
-        ).toMatchObject([
+            .where(eq(correspondence.id, initial.id));
+          const currentFilers = await tx
+            .select()
+            .from(correspondenceFilers)
+            .where(eq(correspondenceFilers.correspondenceId, initial.id));
+          const currentAttachments = await tx
+            .select({ entityId: correspondenceAttachments.entityId })
+            .from(correspondenceAttachments)
+            .where(eq(correspondenceAttachments.correspondenceId, initial.id));
+          const renamedAttachment = await tx
+            .select({
+              name: entities.name,
+              status: entities.status,
+              priority: entities.priority,
+            })
+            .from(entities)
+            .where(eq(entities.id, attachmentId));
+          const currentAnnotations = await tx
+            .select()
+            .from(legalReaderAnnotations)
+            .where(eq(legalReaderAnnotations.entityId, attachmentId));
+          return {
+            record,
+            filers: currentFilers,
+            attachments: currentAttachments,
+            renamedAttachment,
+            annotations: currentAnnotations,
+            sources: await tx
+              .select()
+              .from(correspondenceSources)
+              .where(eq(correspondenceSources.correspondenceId, initial.id)),
+            allAttachments: await tx
+              .select()
+              .from(correspondenceAttachments)
+              .where(
+                eq(correspondenceAttachments.correspondenceId, initial.id),
+              ),
+          };
+        });
+        expect(retainedState.record).toMatchObject([
           {
             id: initial.id,
             createdAt: original?.createdAt,
@@ -314,52 +419,18 @@ if (!databaseUrl || !enabled) {
             contentHash: changed.contentHash,
           },
         ]);
-        expect(
-          await db
-            .select()
-            .from(correspondenceFilers)
-            .where(eq(correspondenceFilers.correspondenceId, initial.id)),
-        ).toEqual(filers);
-        expect(
-          await db
-            .select({ entityId: correspondenceAttachments.entityId })
-            .from(correspondenceAttachments)
-            .where(eq(correspondenceAttachments.correspondenceId, initial.id)),
-        ).toEqual([{ entityId: replacementAttachmentId }]);
-        expect(
-          await db
-            .select({
-              name: entities.name,
-              status: entities.status,
-              priority: entities.priority,
-            })
-            .from(entities)
-            .where(eq(entities.id, attachmentId)),
-        ).toEqual([
+        expect(retainedState.filers).toEqual(filers);
+        expect(retainedState.attachments).toEqual([
+          { entityId: replacementAttachmentId },
+        ]);
+        expect(retainedState.renamedAttachment).toEqual([
           {
             name: "User-renamed attachment",
             status: "reviewed",
             priority: "high",
           },
         ]);
-        expect(
-          await db
-            .select()
-            .from(legalReaderAnnotations)
-            .where(eq(legalReaderAnnotations.entityId, attachmentId)),
-        ).toEqual(annotations);
-        const retainedSources = await db
-          .select()
-          .from(correspondenceSources)
-          .where(eq(correspondenceSources.correspondenceId, initial.id));
-        const retainedAttachments = await db
-          .select()
-          .from(correspondenceAttachments)
-          .where(eq(correspondenceAttachments.correspondenceId, initial.id));
-        const beforeRetirement = await db
-          .select()
-          .from(correspondence)
-          .where(eq(correspondence.id, initial.id));
+        expect(retainedState.annotations).toEqual(annotations);
         expect(
           await retireCorrespondenceSource({
             safeDb,
@@ -370,67 +441,73 @@ if (!databaseUrl || !enabled) {
             recordAuditEvent,
           }),
         ).toMatchObject({ type: "ok" });
-        expect(
-          await db
-            .select()
-            .from(correspondence)
-            .where(eq(correspondence.id, initial.id)),
-        ).toEqual(beforeRetirement);
-        expect(
-          await db
-            .select()
-            .from(correspondenceFilers)
-            .where(eq(correspondenceFilers.correspondenceId, initial.id)),
-        ).toEqual(filers);
-        expect(
-          await db
-            .select()
-            .from(correspondenceSources)
-            .where(eq(correspondenceSources.correspondenceId, initial.id)),
-        ).toEqual(retainedSources);
-        expect(
-          await db
-            .select()
-            .from(correspondenceAttachments)
-            .where(eq(correspondenceAttachments.correspondenceId, initial.id)),
-        ).toEqual(retainedAttachments);
-        await db.delete(entities).where(eq(entities.id, entityId));
-        expect(
-          await db
-            .select()
-            .from(correspondence)
-            .where(eq(correspondence.id, initial.id)),
-        ).toEqual([]);
-        expect(
-          await db
-            .select()
-            .from(correspondenceSources)
-            .where(eq(correspondenceSources.correspondenceId, initial.id)),
-        ).toEqual([]);
-        expect(
-          await db
-            .select()
-            .from(correspondenceFilers)
-            .where(eq(correspondenceFilers.correspondenceId, initial.id)),
-        ).toEqual([]);
-        expect(
-          await db
-            .select()
-            .from(correspondenceAttachments)
-            .where(eq(correspondenceAttachments.correspondenceId, initial.id)),
-        ).toEqual([]);
-        expect(
-          await db
-            .select({ id: entities.id })
-            .from(entities)
-            .where(eq(entities.id, attachmentId)),
-        ).toEqual([{ id: attachmentId }]);
-        expect(
-          await db
-            .select()
-            .from(legalReaderAnnotations)
-            .where(eq(legalReaderAnnotations.entityId, attachmentId)),
-        ).toEqual(annotations);
+        await actorScopedDb(async (tx) => {
+          expect(
+            await tx
+              .select()
+              .from(correspondence)
+              .where(eq(correspondence.id, initial.id)),
+          ).toEqual(retainedState.record);
+          expect(
+            await tx
+              .select()
+              .from(correspondenceFilers)
+              .where(eq(correspondenceFilers.correspondenceId, initial.id)),
+          ).toEqual(filers);
+          expect(
+            await tx
+              .select()
+              .from(correspondenceSources)
+              .where(eq(correspondenceSources.correspondenceId, initial.id)),
+          ).toEqual(retainedState.sources);
+          expect(
+            await tx
+              .select()
+              .from(correspondenceAttachments)
+              .where(
+                eq(correspondenceAttachments.correspondenceId, initial.id),
+              ),
+          ).toEqual(retainedState.allAttachments);
+          await tx.delete(entities).where(eq(entities.id, entityId));
+          expect(
+            await tx
+              .select()
+              .from(correspondence)
+              .where(eq(correspondence.id, initial.id)),
+          ).toEqual([]);
+          expect(
+            await tx
+              .select()
+              .from(correspondenceSources)
+              .where(eq(correspondenceSources.correspondenceId, initial.id)),
+          ).toEqual([]);
+          expect(
+            await tx
+              .select()
+              .from(correspondenceFilers)
+              .where(eq(correspondenceFilers.correspondenceId, initial.id)),
+          ).toEqual([]);
+          expect(
+            await tx
+              .select()
+              .from(correspondenceAttachments)
+              .where(
+                eq(correspondenceAttachments.correspondenceId, initial.id),
+              ),
+          ).toEqual([]);
+          expect(
+            await tx
+              .select({ id: entities.id })
+              .from(entities)
+              .where(eq(entities.id, attachmentId)),
+          ).toEqual([{ id: attachmentId }]);
+          expect(
+            await tx
+              .select()
+              .from(legalReaderAnnotations)
+              .where(eq(legalReaderAnnotations.entityId, attachmentId)),
+          ).toEqual(annotations);
+        });
       },
     );
   });

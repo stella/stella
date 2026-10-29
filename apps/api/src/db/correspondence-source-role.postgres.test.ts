@@ -10,6 +10,14 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
 const role = "stella_correspondence_source";
+const routinePrivilegeQuery = `SELECT routine.proname AS routine, privilege.privilege_type AS privilege
+        FROM pg_catalog.pg_proc routine
+        JOIN pg_catalog.pg_namespace namespace ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL pg_catalog.aclexplode(coalesce(routine.proacl,
+          pg_catalog.acldefault('f', routine.proowner))) privilege
+        WHERE namespace.nspname = 'public'
+          AND privilege.grantee = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = $1)
+        ORDER BY routine.proname, privilege.privilege_type`;
 
 describe.skipIf(!runPostgresTests)(
   "migrated correspondence source role",
@@ -83,6 +91,11 @@ describe.skipIf(!runPostgresTests)(
           [role],
         );
         expect([...columnPrivileges]).toEqual([
+          {
+            table: "correspondence",
+            column: "entity_feature_gate",
+            privilege: "SELECT",
+          },
           { table: "correspondence", column: "id", privilege: "SELECT" },
           {
             table: "correspondence",
@@ -116,6 +129,11 @@ describe.skipIf(!runPostgresTests)(
           },
           {
             table: "correspondence_sources",
+            column: "entity_feature_gate",
+            privilege: "SELECT",
+          },
+          {
+            table: "correspondence_sources",
             column: "entity_id",
             privilege: "SELECT",
           },
@@ -145,21 +163,18 @@ describe.skipIf(!runPostgresTests)(
 
         const routinePrivileges = await admin.unsafe<
           { routine: string; privilege: string }[]
-        >(
-          `SELECT routine_name AS routine, privilege_type AS privilege
-        FROM information_schema.role_routine_grants
-        WHERE routine_schema = 'public' AND grantee = $1
-        ORDER BY routine_name, privilege_type`,
-          [role],
-        );
-        // PostgreSQL records EXECUTE for the three routines owned by this role.
+        >(routinePrivilegeQuery, [role]);
+        // Information-schema grant views hide non-inheriting owner roles from
+        // a non-superuser. Read their owned and explicitly granted ACL entries.
         expect([...routinePrivileges]).toEqual([
+          { routine: "correspondence_has_other_sources", privilege: "EXECUTE" },
           { routine: "next_correspondence_source", privilege: "EXECUTE" },
           { routine: "remove_correspondence_source", privilege: "EXECUTE" },
           {
             routine: "remove_entity_correspondence_sources",
             privilege: "EXECUTE",
           },
+          { routine: "stella_authorized_workspace_ids", privilege: "EXECUTE" },
         ]);
 
         const schemaPrivileges = await admin.unsafe<
