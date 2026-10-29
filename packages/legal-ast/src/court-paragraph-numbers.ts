@@ -196,12 +196,13 @@ type Body = {
 
 /**
  * The quotation pairs of Czech and Slovak text: „…“ (often printed „…”) and
- * »…«. Each pair closes only with its own mark; a straight quote closes
+ * »…« or «…». Each pair closes only with its own mark; a straight quote closes
  * neither, and the English “…” never opens one here.
  */
 const QUOTE_PAIRS = [
   { opening: "„", closing: new Set(["“", "”"]) },
   { opening: "»", closing: new Set(["«"]) },
+  { opening: "«", closing: new Set(["»"]) },
 ] as const;
 
 /** Quotations of each pair a paragraph leaves open, from those it opens at. */
@@ -212,12 +213,17 @@ const openQuotesAfter = (open: readonly number[], text: string): number[] => {
     count: open[pair] ?? 0,
   }));
   for (const character of text) {
-    for (const state of states) {
-      if (character === state.opening) {
-        state.count += 1;
-      } else if (state.count > 0 && state.closing.has(character)) {
-        state.count -= 1;
-      }
+    const closing = states.find(
+      (state) => state.count > 0 && state.closing.has(character),
+    );
+    if (closing !== undefined) {
+      closing.count -= 1;
+      continue;
+    }
+    // The closing guillemet cannot also open the opposite quotation direction.
+    const opening = states.find((state) => state.opening === character);
+    if (opening !== undefined) {
+      opening.count += 1;
     }
   }
   return states.map(({ count }) => count);

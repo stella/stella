@@ -391,6 +391,7 @@ describe("the hard invariants of a numbering", () => {
   test.each([
     ["„ … ”", "„", "”"],
     ["» … «", "»", "«"],
+    ["« … »", "«", "»"],
   ])(
     "a quotation printed %s sets its paragraph numbers apart",
     (_, open, close) => {
@@ -408,6 +409,37 @@ describe("the hard invariants of a numbering", () => {
           block.type === "paragraph" ? (block.number ?? null) : null,
         ),
       ).toEqual([1, 2, null, null, 3]);
+    },
+  );
+
+  test.each(["dot", "paren", "bracket"] as const)(
+    "closed guillemet quotations cannot hide the court's next %s marker",
+    (style) => {
+      const marker = {
+        dot: (number: number) => `${String(number)}.`,
+        paren: (number: number) => `${String(number)})`,
+        bracket: (number: number) => `[${String(number)}]`,
+      }[style];
+      for (const [open, close] of [
+        ["«", "»"],
+        ["»", "«"],
+      ] as const) {
+        const numbering = extractCourtParagraphNumbers(
+          [
+            `${marker(1)} Soud uvážil.`,
+            `${marker(2)} Soud uvedl ${open}první citaci${close}.`,
+            `${marker(3)} Soud uvedl ${open}další citaci.`,
+            `Citace pokračuje a končí.${close}`,
+            `${marker(4)} Soud uzavřel.`,
+          ].map((text, index) => paragraph(index, text)),
+        );
+        expect(
+          numbering.blocks.map((block) =>
+            block.type === "paragraph" ? (block.number ?? null) : null,
+          ),
+          `${open} … ${close}`,
+        ).toEqual([1, 2, 3, null, 4]);
+      }
     },
   );
 
