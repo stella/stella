@@ -48,24 +48,24 @@
     "fingerprint": "a90a9f5ee054351283f7e8e0a6a45dd32a697c18c7f5b620a3974153f2325667"
   },
   "cz-ns": {
-    "version": 20,
-    "fingerprint": "3a0f8470c2ac0d6956044da67c5c5ca3deb98666df4fee69629853915f4d0cb5"
+    "version": 21,
+    "fingerprint": "97f28c0697b8c5642c0b556edd8157c6be61848f1c4561cc61720035c4618815"
   },
   "cz-nss": {
-    "version": 23,
-    "fingerprint": "b943858802f49931ceb4938d2aded88819871ad6f108a01a1dfb3db7d27a2e88"
+    "version": 24,
+    "fingerprint": "d315becfc9fbe7e68973dd09e03bd79fd40238396cae5fb649d92f59dd3d290c"
   },
   "cz-regional": {
-    "version": 15,
-    "fingerprint": "b35709dd6974764f44509c0fb360696d55a5eee44b18fefab5079b47c602661a"
+    "version": 16,
+    "fingerprint": "1f39d8b5f2b7498dd48023ea4d24853c8eb871a8f1a488329a7c802b226b4870"
   },
   "cz-uohs": {
     "version": 4,
     "fingerprint": "f6b52594d6e99c3542ebf447e75fe093e73608b9c05f5fe1a15b1a7352d1493f"
   },
   "cz-us": {
-    "version": 31,
-    "fingerprint": "a7b8080b873c91052b46eabc60b261de1a1ad80cd93f8e5badd25ea730fbcbd2"
+    "version": 32,
+    "fingerprint": "c56603fb8a346b1cdf33b0e3e704eda1ebd00008e99a6176dc091a8ecc3073a9"
   },
   "eu-ecj": {
     "version": 17,
