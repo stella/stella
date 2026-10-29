@@ -109,199 +109,200 @@ member.id                        text         pk,not null       auth-schema.ts:2
 member.organization_id           text         fk,not null       auth-schema.ts:296
 member.user_id                   text         fk,not null       auth-schema.ts:299
 member.role                      text         default,not null  auth-schema.ts:302
-member.last_active_workspace_id  text         null              auth-schema.ts:303
-member.created_at                timestamptz  not null          auth-schema.ts:304
+member.billing_access            boolean      default,not null  auth-schema.ts:304  An additional monetary-visibility grant; management roles hold it independently.
+member.last_active_workspace_id  text         null              auth-schema.ts:305
+member.created_at                timestamptz  not null          auth-schema.ts:306
 ```
 
-## invitation · `invitation` · auth-schema.ts:328 · rls
+## invitation · `invitation` · auth-schema.ts:330 · rls
 
 ```text
-invitation.id               text         pk,not null       auth-schema.ts:331
-invitation.organization_id  text         fk,not null       auth-schema.ts:332
-invitation.email            text         not null          auth-schema.ts:335
-invitation.role             text         null              auth-schema.ts:336
-invitation.status           text         default,not null  auth-schema.ts:337
-invitation.expires_at       timestamptz  not null          auth-schema.ts:338
-invitation.created_at       timestamptz  default,not null  auth-schema.ts:339
-invitation.inviter_id       text         fk,not null       auth-schema.ts:340
+invitation.id               text         pk,not null       auth-schema.ts:333
+invitation.organization_id  text         fk,not null       auth-schema.ts:334
+invitation.email            text         not null          auth-schema.ts:337
+invitation.role             text         null              auth-schema.ts:338
+invitation.status           text         default,not null  auth-schema.ts:339
+invitation.expires_at       timestamptz  not null          auth-schema.ts:340
+invitation.created_at       timestamptz  default,not null  auth-schema.ts:341
+invitation.inviter_id       text         fk,not null       auth-schema.ts:342
 ```
 
-## jwks · `jwks` · auth-schema.ts:358 · rls
+## jwks · `jwks` · auth-schema.ts:360 · rls
 
 ```text
-jwks.id           text         pk,not null  auth-schema.ts:361
-jwks.alg          text         null         auth-schema.ts:362
-jwks.crv          text         null         auth-schema.ts:363
-jwks.public_key   text         not null     auth-schema.ts:364
-jwks.private_key  text         not null     auth-schema.ts:365
-jwks.created_at   timestamptz  not null     auth-schema.ts:366
-jwks.expires_at   timestamptz  null         auth-schema.ts:367
+jwks.id           text         pk,not null  auth-schema.ts:363
+jwks.alg          text         null         auth-schema.ts:364
+jwks.crv          text         null         auth-schema.ts:365
+jwks.public_key   text         not null     auth-schema.ts:366
+jwks.private_key  text         not null     auth-schema.ts:367
+jwks.created_at   timestamptz  not null     auth-schema.ts:368
+jwks.expires_at   timestamptz  null         auth-schema.ts:369
 ```
 
-## apikey · `apikey` · auth-schema.ts:391 · rls
+## apikey · `apikey` · auth-schema.ts:393 · rls
 
 Storage for `@better-auth/api-key`.
 
 ```text
-apikey.id                      text         pk,not null       auth-schema.ts:394
-apikey.config_id               text         default,not null  auth-schema.ts:395
-apikey.name                    text         null              auth-schema.ts:396
-apikey.start                   text         null              auth-schema.ts:397
-apikey.prefix                  text         null              auth-schema.ts:398
-apikey.key                     text         not null          auth-schema.ts:399
-apikey.reference_id            text         fk,not null       auth-schema.ts:400
-apikey.refill_interval         integer      null              auth-schema.ts:403
-apikey.refill_amount           integer      null              auth-schema.ts:404
-apikey.last_refill_at          timestamptz  null              auth-schema.ts:405
-apikey.enabled                 boolean      default,not null  auth-schema.ts:406
-apikey.rate_limit_enabled      boolean      default,not null  auth-schema.ts:407
-apikey.rate_limit_time_window  integer      null              auth-schema.ts:408
-apikey.rate_limit_max          integer      null              auth-schema.ts:409
-apikey.request_count           integer      default,not null  auth-schema.ts:410
-apikey.remaining               integer      null              auth-schema.ts:411
-apikey.last_request            timestamptz  null              auth-schema.ts:412
-apikey.expires_at              timestamptz  null              auth-schema.ts:413
-apikey.created_at              timestamptz  default,not null  auth-schema.ts:414
-apikey.updated_at              timestamptz  default,not null  auth-schema.ts:415
-apikey.permissions             text         null              auth-schema.ts:416
-apikey.metadata                text         null              auth-schema.ts:417
+apikey.id                      text         pk,not null       auth-schema.ts:396
+apikey.config_id               text         default,not null  auth-schema.ts:397
+apikey.name                    text         null              auth-schema.ts:398
+apikey.start                   text         null              auth-schema.ts:399
+apikey.prefix                  text         null              auth-schema.ts:400
+apikey.key                     text         not null          auth-schema.ts:401
+apikey.reference_id            text         fk,not null       auth-schema.ts:402
+apikey.refill_interval         integer      null              auth-schema.ts:405
+apikey.refill_amount           integer      null              auth-schema.ts:406
+apikey.last_refill_at          timestamptz  null              auth-schema.ts:407
+apikey.enabled                 boolean      default,not null  auth-schema.ts:408
+apikey.rate_limit_enabled      boolean      default,not null  auth-schema.ts:409
+apikey.rate_limit_time_window  integer      null              auth-schema.ts:410
+apikey.rate_limit_max          integer      null              auth-schema.ts:411
+apikey.request_count           integer      default,not null  auth-schema.ts:412
+apikey.remaining               integer      null              auth-schema.ts:413
+apikey.last_request            timestamptz  null              auth-schema.ts:414
+apikey.expires_at              timestamptz  null              auth-schema.ts:415
+apikey.created_at              timestamptz  default,not null  auth-schema.ts:416
+apikey.updated_at              timestamptz  default,not null  auth-schema.ts:417
+apikey.permissions             text         null              auth-schema.ts:418
+apikey.metadata                text         null              auth-schema.ts:419
 ```
 
-## oauth_client · `oauthClient` · auth-schema.ts:463 · rls
+## oauth_client · `oauthClient` · auth-schema.ts:465 · rls
 
 ```text
-oauth_client.id                                   text         pk,not null             auth-schema.ts:466
-oauth_client.client_id                            text         unique,not null         auth-schema.ts:467
-oauth_client.client_secret                        text         null                    auth-schema.ts:468
-oauth_client.client_discovery_id                  text         null                    auth-schema.ts:469
-oauth_client.metadata_validated_at                timestamptz  null                    auth-schema.ts:473  When this discovery-owned client's metadata document last passed a fetch and validation.
-oauth_client.registration_origin                  text         default,not null        auth-schema.ts:474
-oauth_client.disabled                             boolean      default,not null        auth-schema.ts:479
-oauth_client.skip_consent                         boolean      null                    auth-schema.ts:480
-oauth_client.enable_end_session                   boolean      null                    auth-schema.ts:481
-oauth_client.subject_type                         text         null                    auth-schema.ts:482
-oauth_client.scopes                               text         array,null              auth-schema.ts:483
-oauth_client.client_credentials_scopes            text         array,default,not null  auth-schema.ts:484
-oauth_client.user_id                              text         fk,null                 auth-schema.ts:488
-oauth_client.created_at                           timestamptz  default,not null        auth-schema.ts:491
-oauth_client.updated_at                           timestamptz  default,not null        auth-schema.ts:492
-oauth_client.name                                 text         null                    auth-schema.ts:496
-oauth_client.uri                                  text         null                    auth-schema.ts:497
-oauth_client.icon                                 text         null                    auth-schema.ts:498
-oauth_client.contacts                             text         array,null              auth-schema.ts:499
-oauth_client.tos                                  text         null                    auth-schema.ts:500
-oauth_client.policy                               text         null                    auth-schema.ts:501
-oauth_client.software_id                          text         null                    auth-schema.ts:502
-oauth_client.software_version                     text         null                    auth-schema.ts:503
-oauth_client.software_statement                   text         null                    auth-schema.ts:504
-oauth_client.redirect_uris                        text         array,not null          auth-schema.ts:505
-oauth_client.post_logout_redirect_uris            text         array,null              auth-schema.ts:506
-oauth_client.backchannel_logout_uri               text         null                    auth-schema.ts:507
-oauth_client.backchannel_logout_session_required  boolean      null                    auth-schema.ts:508
-oauth_client.token_endpoint_auth_method           text         null                    auth-schema.ts:511
-oauth_client.application_type                     text         null                    auth-schema.ts:512
-oauth_client.jwks                                 text         null                    auth-schema.ts:513
-oauth_client.jwks_uri                             text         null                    auth-schema.ts:514
-oauth_client.grant_types                          text         array,null              auth-schema.ts:515
-oauth_client.response_types                       text         array,null              auth-schema.ts:516
-oauth_client.public                               boolean      null                    auth-schema.ts:517
-oauth_client.type                                 text         null                    auth-schema.ts:518
-oauth_client.require_pkce                         boolean      null                    auth-schema.ts:519
-oauth_client.dpop_bound_access_tokens             boolean      default,not null        auth-schema.ts:520
-oauth_client.reference_id                         text         null                    auth-schema.ts:523
-oauth_client.metadata                             jsonb        null                    auth-schema.ts:524
+oauth_client.id                                   text         pk,not null             auth-schema.ts:468
+oauth_client.client_id                            text         unique,not null         auth-schema.ts:469
+oauth_client.client_secret                        text         null                    auth-schema.ts:470
+oauth_client.client_discovery_id                  text         null                    auth-schema.ts:471
+oauth_client.metadata_validated_at                timestamptz  null                    auth-schema.ts:475  When this discovery-owned client's metadata document last passed a fetch and validation.
+oauth_client.registration_origin                  text         default,not null        auth-schema.ts:476
+oauth_client.disabled                             boolean      default,not null        auth-schema.ts:481
+oauth_client.skip_consent                         boolean      null                    auth-schema.ts:482
+oauth_client.enable_end_session                   boolean      null                    auth-schema.ts:483
+oauth_client.subject_type                         text         null                    auth-schema.ts:484
+oauth_client.scopes                               text         array,null              auth-schema.ts:485
+oauth_client.client_credentials_scopes            text         array,default,not null  auth-schema.ts:486
+oauth_client.user_id                              text         fk,null                 auth-schema.ts:490
+oauth_client.created_at                           timestamptz  default,not null        auth-schema.ts:493
+oauth_client.updated_at                           timestamptz  default,not null        auth-schema.ts:494
+oauth_client.name                                 text         null                    auth-schema.ts:498
+oauth_client.uri                                  text         null                    auth-schema.ts:499
+oauth_client.icon                                 text         null                    auth-schema.ts:500
+oauth_client.contacts                             text         array,null              auth-schema.ts:501
+oauth_client.tos                                  text         null                    auth-schema.ts:502
+oauth_client.policy                               text         null                    auth-schema.ts:503
+oauth_client.software_id                          text         null                    auth-schema.ts:504
+oauth_client.software_version                     text         null                    auth-schema.ts:505
+oauth_client.software_statement                   text         null                    auth-schema.ts:506
+oauth_client.redirect_uris                        text         array,not null          auth-schema.ts:507
+oauth_client.post_logout_redirect_uris            text         array,null              auth-schema.ts:508
+oauth_client.backchannel_logout_uri               text         null                    auth-schema.ts:509
+oauth_client.backchannel_logout_session_required  boolean      null                    auth-schema.ts:510
+oauth_client.token_endpoint_auth_method           text         null                    auth-schema.ts:513
+oauth_client.application_type                     text         null                    auth-schema.ts:514
+oauth_client.jwks                                 text         null                    auth-schema.ts:515
+oauth_client.jwks_uri                             text         null                    auth-schema.ts:516
+oauth_client.grant_types                          text         array,null              auth-schema.ts:517
+oauth_client.response_types                       text         array,null              auth-schema.ts:518
+oauth_client.public                               boolean      null                    auth-schema.ts:519
+oauth_client.type                                 text         null                    auth-schema.ts:520
+oauth_client.require_pkce                         boolean      null                    auth-schema.ts:521
+oauth_client.dpop_bound_access_tokens             boolean      default,not null        auth-schema.ts:522
+oauth_client.reference_id                         text         null                    auth-schema.ts:525
+oauth_client.metadata                             jsonb        null                    auth-schema.ts:526
 ```
 
-## oauth_resource · `oauthResource` · auth-schema.ts:548 · rls
+## oauth_resource · `oauthResource` · auth-schema.ts:550 · rls
 
 ```text
-oauth_resource.id                                 text         pk,not null       auth-schema.ts:551
-oauth_resource.identifier                         text         unique,not null   auth-schema.ts:552
-oauth_resource.name                               text         not null          auth-schema.ts:553
-oauth_resource.access_token_ttl                   integer      null              auth-schema.ts:554
-oauth_resource.refresh_token_ttl                  integer      null              auth-schema.ts:555
-oauth_resource.signing_algorithm                  text         null              auth-schema.ts:556
-oauth_resource.signing_key_id                     text         null              auth-schema.ts:557
-oauth_resource.allowed_scopes                     text         array,null        auth-schema.ts:558
-oauth_resource.custom_claims                      jsonb        null              auth-schema.ts:559
-oauth_resource.dpop_bound_access_tokens_required  boolean      default,not null  auth-schema.ts:560
-oauth_resource.disabled                           boolean      default,not null  auth-schema.ts:563
-oauth_resource.created_at                         timestamptz  default,not null  auth-schema.ts:564
-oauth_resource.updated_at                         timestamptz  default,not null  auth-schema.ts:565
-oauth_resource.policy_version                     integer      default,not null  auth-schema.ts:569
-oauth_resource.metadata                           jsonb        null              auth-schema.ts:570
+oauth_resource.id                                 text         pk,not null       auth-schema.ts:553
+oauth_resource.identifier                         text         unique,not null   auth-schema.ts:554
+oauth_resource.name                               text         not null          auth-schema.ts:555
+oauth_resource.access_token_ttl                   integer      null              auth-schema.ts:556
+oauth_resource.refresh_token_ttl                  integer      null              auth-schema.ts:557
+oauth_resource.signing_algorithm                  text         null              auth-schema.ts:558
+oauth_resource.signing_key_id                     text         null              auth-schema.ts:559
+oauth_resource.allowed_scopes                     text         array,null        auth-schema.ts:560
+oauth_resource.custom_claims                      jsonb        null              auth-schema.ts:561
+oauth_resource.dpop_bound_access_tokens_required  boolean      default,not null  auth-schema.ts:562
+oauth_resource.disabled                           boolean      default,not null  auth-schema.ts:565
+oauth_resource.created_at                         timestamptz  default,not null  auth-schema.ts:566
+oauth_resource.updated_at                         timestamptz  default,not null  auth-schema.ts:567
+oauth_resource.policy_version                     integer      default,not null  auth-schema.ts:571
+oauth_resource.metadata                           jsonb        null              auth-schema.ts:572
 ```
 
-## oauth_client_resource · `oauthClientResource` · auth-schema.ts:575 · rls
+## oauth_client_resource · `oauthClientResource` · auth-schema.ts:577 · rls
 
 ```text
-oauth_client_resource.id           text         pk,not null       auth-schema.ts:578
-oauth_client_resource.client_id    text         fk,not null       auth-schema.ts:579
-oauth_client_resource.resource_id  text         fk,not null       auth-schema.ts:582
-oauth_client_resource.metadata     jsonb        null              auth-schema.ts:585
-oauth_client_resource.created_at   timestamptz  default,not null  auth-schema.ts:586
+oauth_client_resource.id           text         pk,not null       auth-schema.ts:580
+oauth_client_resource.client_id    text         fk,not null       auth-schema.ts:581
+oauth_client_resource.resource_id  text         fk,not null       auth-schema.ts:584
+oauth_client_resource.metadata     jsonb        null              auth-schema.ts:587
+oauth_client_resource.created_at   timestamptz  default,not null  auth-schema.ts:588
 ```
 
-## oauth_client_assertion · `oauthClientAssertion` · auth-schema.ts:599 · rls
+## oauth_client_assertion · `oauthClientAssertion` · auth-schema.ts:601 · rls
 
 ```text
-oauth_client_assertion.id          text         pk,not null  auth-schema.ts:602
-oauth_client_assertion.expires_at  timestamptz  not null     auth-schema.ts:603
+oauth_client_assertion.id          text         pk,not null  auth-schema.ts:604
+oauth_client_assertion.expires_at  timestamptz  not null     auth-schema.ts:605
 ```
 
-## oauth_refresh_token · `oauthRefreshToken` · auth-schema.ts:611 · rls
+## oauth_refresh_token · `oauthRefreshToken` · auth-schema.ts:613 · rls
 
 ```text
-oauth_refresh_token.id                          text         pk,not null       auth-schema.ts:614
-oauth_refresh_token.token                       text         unique,not null   auth-schema.ts:615
-oauth_refresh_token.client_id                   text         fk,not null       auth-schema.ts:616
-oauth_refresh_token.session_id                  text         fk,null           auth-schema.ts:621
-oauth_refresh_token.user_id                     text         fk,not null       auth-schema.ts:624
-oauth_refresh_token.reference_id                text         null              auth-schema.ts:629
-oauth_refresh_token.authorization_code_id       text         null              auth-schema.ts:630
-oauth_refresh_token.resources                   text         array,null        auth-schema.ts:631
-oauth_refresh_token.requested_user_info_claims  text         array,null        auth-schema.ts:632
-oauth_refresh_token.expires_at                  timestamptz  not null          auth-schema.ts:633
-oauth_refresh_token.created_at                  timestamptz  default,not null  auth-schema.ts:634
-oauth_refresh_token.revoked                     timestamptz  null              auth-schema.ts:635
-oauth_refresh_token.rotated_at                  timestamptz  null              auth-schema.ts:636
-oauth_refresh_token.rotation_replay_response    text         null              auth-schema.ts:637
-oauth_refresh_token.rotation_replay_expires_at  timestamptz  null              auth-schema.ts:638
-oauth_refresh_token.auth_time                   timestamptz  null              auth-schema.ts:639
-oauth_refresh_token.confirmation                jsonb        null              auth-schema.ts:640
-oauth_refresh_token.scopes                      text         array,not null    auth-schema.ts:641
+oauth_refresh_token.id                          text         pk,not null       auth-schema.ts:616
+oauth_refresh_token.token                       text         unique,not null   auth-schema.ts:617
+oauth_refresh_token.client_id                   text         fk,not null       auth-schema.ts:618
+oauth_refresh_token.session_id                  text         fk,null           auth-schema.ts:623
+oauth_refresh_token.user_id                     text         fk,not null       auth-schema.ts:626
+oauth_refresh_token.reference_id                text         null              auth-schema.ts:631
+oauth_refresh_token.authorization_code_id       text         null              auth-schema.ts:632
+oauth_refresh_token.resources                   text         array,null        auth-schema.ts:633
+oauth_refresh_token.requested_user_info_claims  text         array,null        auth-schema.ts:634
+oauth_refresh_token.expires_at                  timestamptz  not null          auth-schema.ts:635
+oauth_refresh_token.created_at                  timestamptz  default,not null  auth-schema.ts:636
+oauth_refresh_token.revoked                     timestamptz  null              auth-schema.ts:637
+oauth_refresh_token.rotated_at                  timestamptz  null              auth-schema.ts:638
+oauth_refresh_token.rotation_replay_response    text         null              auth-schema.ts:639
+oauth_refresh_token.rotation_replay_expires_at  timestamptz  null              auth-schema.ts:640
+oauth_refresh_token.auth_time                   timestamptz  null              auth-schema.ts:641
+oauth_refresh_token.confirmation                jsonb        null              auth-schema.ts:642
+oauth_refresh_token.scopes                      text         array,not null    auth-schema.ts:643
 ```
 
-## oauth_access_token · `oauthAccessToken` · auth-schema.ts:655 · rls
+## oauth_access_token · `oauthAccessToken` · auth-schema.ts:657 · rls
 
 ```text
-oauth_access_token.id                          text         pk,not null       auth-schema.ts:658
-oauth_access_token.token                       text         unique,not null   auth-schema.ts:659
-oauth_access_token.client_id                   text         fk,not null       auth-schema.ts:660
-oauth_access_token.session_id                  text         fk,null           auth-schema.ts:665
-oauth_access_token.user_id                     text         fk,null           auth-schema.ts:668
-oauth_access_token.reference_id                text         null              auth-schema.ts:671
-oauth_access_token.authorization_code_id       text         null              auth-schema.ts:672
-oauth_access_token.resources                   text         array,null        auth-schema.ts:673
-oauth_access_token.requested_user_info_claims  text         array,null        auth-schema.ts:674
-oauth_access_token.refresh_id                  text         fk,null           auth-schema.ts:675
-oauth_access_token.expires_at                  timestamptz  not null          auth-schema.ts:678
-oauth_access_token.created_at                  timestamptz  default,not null  auth-schema.ts:679
-oauth_access_token.revoked                     timestamptz  null              auth-schema.ts:680
-oauth_access_token.confirmation                jsonb        null              auth-schema.ts:681
-oauth_access_token.scopes                      text         array,not null    auth-schema.ts:682
+oauth_access_token.id                          text         pk,not null       auth-schema.ts:660
+oauth_access_token.token                       text         unique,not null   auth-schema.ts:661
+oauth_access_token.client_id                   text         fk,not null       auth-schema.ts:662
+oauth_access_token.session_id                  text         fk,null           auth-schema.ts:667
+oauth_access_token.user_id                     text         fk,null           auth-schema.ts:670
+oauth_access_token.reference_id                text         null              auth-schema.ts:673
+oauth_access_token.authorization_code_id       text         null              auth-schema.ts:674
+oauth_access_token.resources                   text         array,null        auth-schema.ts:675
+oauth_access_token.requested_user_info_claims  text         array,null        auth-schema.ts:676
+oauth_access_token.refresh_id                  text         fk,null           auth-schema.ts:677
+oauth_access_token.expires_at                  timestamptz  not null          auth-schema.ts:680
+oauth_access_token.created_at                  timestamptz  default,not null  auth-schema.ts:681
+oauth_access_token.revoked                     timestamptz  null              auth-schema.ts:682
+oauth_access_token.confirmation                jsonb        null              auth-schema.ts:683
+oauth_access_token.scopes                      text         array,not null    auth-schema.ts:684
 ```
 
-## oauth_consent · `oauthConsent` · auth-schema.ts:697 · rls
+## oauth_consent · `oauthConsent` · auth-schema.ts:699 · rls
 
 ```text
-oauth_consent.id                          text         pk,not null       auth-schema.ts:700
-oauth_consent.client_id                   text         fk,not null       auth-schema.ts:701
-oauth_consent.user_id                     text         fk,null           auth-schema.ts:706
-oauth_consent.reference_id                text         null              auth-schema.ts:709
-oauth_consent.resources                   text         array,null        auth-schema.ts:710
-oauth_consent.requested_user_info_claims  text         array,null        auth-schema.ts:711
-oauth_consent.scopes                      text         array,not null    auth-schema.ts:712
-oauth_consent.created_at                  timestamptz  default,not null  auth-schema.ts:713
-oauth_consent.updated_at                  timestamptz  default,not null  auth-schema.ts:714
+oauth_consent.id                          text         pk,not null       auth-schema.ts:702
+oauth_consent.client_id                   text         fk,not null       auth-schema.ts:703
+oauth_consent.user_id                     text         fk,null           auth-schema.ts:708
+oauth_consent.reference_id                text         null              auth-schema.ts:711
+oauth_consent.resources                   text         array,null        auth-schema.ts:712
+oauth_consent.requested_user_info_claims  text         array,null        auth-schema.ts:713
+oauth_consent.scopes                      text         array,not null    auth-schema.ts:714
+oauth_consent.created_at                  timestamptz  default,not null  auth-schema.ts:715
+oauth_consent.updated_at                  timestamptz  default,not null  auth-schema.ts:716
 ```
