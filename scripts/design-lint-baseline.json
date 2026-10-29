@@ -1274,7 +1274,6 @@
     "apps/web/src/routes/knowledge/-components/template-studio-fields.tsx": 4,
     "apps/web/src/routes/law/-law-document-crumbs.tsx": 1,
     "packages/chat/src/link.tsx": 2,
-    "packages/decision-reader/src/cited-provision.tsx": 1,
     "packages/decision-reader/src/document-ast-text.tsx": 1,
     "packages/mcp-apps/src/citation-graph/app.tsx": 1
   },

@@ -12,6 +12,7 @@ import {
 } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
@@ -200,28 +201,43 @@ export const ReferencePeekHeader = ({
         className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         data-slot="reference-peek-summary"
       >
-        <BidiText
-          as="span"
-          className="max-w-full shrink-0 truncate text-sm font-medium"
-          data-slot="reference-peek-primary"
-          title={primary}
-        >
-          {primary}
-        </BidiText>
-        {meta.map(({ part, text }, index) => (
-          <span
-            className={cn(
-              "text-muted-foreground min-w-0 truncate text-xs",
-              index === 0 && "max-w-max flex-1 basis-0",
-              SEPARATED_PART,
-            )}
-            data-part={part}
-            data-slot="reference-peek-meta"
-            key={part}
-            title={text}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <BidiText
+                as="span"
+                className="max-w-full shrink-0 truncate text-sm font-medium"
+                data-slot="reference-peek-primary"
+              />
+            }
           >
-            <BidiText>{text}</BidiText>
-          </span>
+            {primary}
+          </TooltipTrigger>
+          <TooltipPopup>
+            <BidiText>{primary}</BidiText>
+          </TooltipPopup>
+        </Tooltip>
+        {meta.map(({ part, text }, index) => (
+          <Tooltip key={part}>
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    "text-muted-foreground min-w-0 truncate text-xs",
+                    index === 0 && "max-w-max flex-1 basis-0",
+                    SEPARATED_PART,
+                  )}
+                  data-part={part}
+                  data-slot="reference-peek-meta"
+                />
+              }
+            >
+              <BidiText>{text}</BidiText>
+            </TooltipTrigger>
+            <TooltipPopup>
+              <BidiText>{text}</BidiText>
+            </TooltipPopup>
+          </Tooltip>
         ))}
       </span>
       {actions.length > 0 && (
