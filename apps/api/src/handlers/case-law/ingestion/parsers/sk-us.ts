@@ -1,4 +1,3 @@
-// parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -57,6 +56,7 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -585,6 +585,43 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
 
+/** Intact document words and section markers recognized by the shared vocabulary. */
+const typographyWords = (lines: readonly MarkupLine[]) => {
+  const words = new Set<string>();
+  const spacedWords = new Set<string>();
+  for (const { text } of lines) {
+    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
+      words.add(normalizeUnicode(word, "NFC").toLowerCase());
+    }
+    const colon = text.indexOf(":");
+    if (colon === -1) {
+      continue;
+    }
+    const chunks = text
+      .slice(0, colon + 1)
+      .trim()
+      .split(/\s+/u);
+    let marker = "";
+    for (const chunk of chunks.toReversed()) {
+      marker = `${chunk} ${marker}`.trim();
+      if (
+        isSkHoldingMarker(marker) ||
+        isSkReasoningMarker(marker) ||
+        isSkStandaloneInstructionMarker(marker)
+      ) {
+        spacedWords.add(
+          normalizeUnicode(
+            marker.replaceAll(/[\s:]/gu, ""),
+            "NFC",
+          ).toLowerCase(),
+        );
+        break;
+      }
+    }
+  }
+  return { attestedWords: words, spacedWords };
+};
+
 /**
  * The court's typography read as the characters it prints.
  *
@@ -599,11 +636,14 @@ const SOFT_HYPHEN = String.fromCodePoint(0xad);
  * is a visible hyphen, the ones at a line's end included (`obrazovo<U+00AD>`
  * / `zvukových`, `C<U+00AD>` / `293/12`).
  */
-const readTypography = (inlines: readonly Inline[]): Inline[] =>
+const readTypography = (
+  inlines: readonly Inline[],
+  evidence: ReturnType<typeof typographyWords>,
+): Inline[] =>
   rewriteInlineWhitespace(
     mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
     // Over the whole line: a wrapper's edge is not a gap between words.
-    (text) => collapseLetterSpacing(text, { setApart: true }),
+    (text) => collapseLetterSpacing(text, { setApart: true, ...evidence }),
   );
 
 type Section = SkDocumentSection;
@@ -1249,8 +1289,9 @@ export const parseSkUsDocumentXhtml = ({
   const $ = cheerio.load(xhtml);
   markHiddenRuns($);
   const lines = removePageFurniture(readMarkupLines($));
+  const words = typographyWords(lines);
   for (const line of lines) {
-    setInlines(line, readTypography(line.inlines));
+    setInlines(line, readTypography(line.inlines, words));
   }
   const blocks = courtParagraphNumbers(classifyLines(lines), {
     parser: "sk-us",

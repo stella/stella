@@ -1,6 +1,7 @@
 import {
   CAPABILITY_RUNTIME_INPUTS,
   CI_GENERATED_OUTPUTS,
+  MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
 } from "../packages/scripts/src/generated-files";
 
@@ -421,6 +422,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
     "packages/locales/src/*",
+    "packages/mcp-apps/src/app-document.ts",
+    "packages/mcp-apps/src/bundles.ts",
     "packages/mcp-apps/src/manifest.ts",
     "packages/mcp-apps/src/resource-uri.ts",
     "packages/mcp-kit/package.json",
@@ -433,6 +436,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
+    "packages/parameter-store/src/read-parameter.ts",
     "packages/permissions/src/index.ts",
     "packages/redis-config/src/connection.ts",
     "packages/redis-config/src/store-policy.ts",
@@ -488,6 +492,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/feature-access/grants-schema.ts",
     "apps/api/src/lib/feature-access/prerequisites.ts",
     "apps/api/src/lib/feature-access/registry.ts",
+    "apps/api/src/lib/files/converter-settings.ts",
     "apps/api/src/lib/files/pdf-signing/timestamp-authority-urls.ts",
     "apps/api/src/lib/hosted-usage-provider/polar/contract.ts",
     "apps/api/src/lib/kill-switches/registry.ts",
@@ -596,6 +601,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/feature-access/grants-schema.ts",
     "apps/api/src/lib/feature-access/prerequisites.ts",
     "apps/api/src/lib/feature-access/registry.ts",
+    "apps/api/src/lib/files/converter-settings.ts",
     "apps/api/src/lib/files/pdf-signing/timestamp-authority-urls.ts",
     "apps/api/src/lib/hosted-usage-provider/polar/contract.ts",
     "apps/api/src/lib/kill-switches/registry.ts",
@@ -1293,6 +1299,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "apps/api/src/lib/case-law/citation-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/files/converter-settings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",
       "packages/mcp-apps/src/manifest.ts",
@@ -1356,7 +1363,9 @@ const GENERATOR_DECLARATIONS = [
     id: "mcp-app-bundles",
     outputKind: "derived",
     outputs: [
-      "packages/mcp-apps/src/*/generated/app.html.txt",
+      ...MCP_APP_DIRECTORY_OUTPUTS.map(
+        (file) => `packages/mcp-apps/src/*/generated/${file}`,
+      ),
       ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
@@ -1364,6 +1373,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",

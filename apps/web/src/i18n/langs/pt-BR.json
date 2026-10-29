@@ -547,6 +547,14 @@
     },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
+    "arrangement": {
+      "alertThreshold": "Limite de alerta (%)",
+      "amountCap": "Limite de honorários",
+      "flatFee": "Honorários fixos",
+      "invalidCap": "Informe limites positivos e um limite de alerta entre 0,01% e 100%.",
+      "minuteCap": "Limite de tempo (minutos)",
+      "title": "Contrato de honorários"
+    },
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
@@ -5059,6 +5067,16 @@
       "preferredNamePlaceholder": "Seu nome",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
+      "signInMethods": {
+        "confirmDescription": "Digite um novo código enviado para seu e-mail para desconectar este método de login.",
+        "confirmTitle": "Desconectar {provider}?",
+        "description": "Conecte contas que usam o mesmo endereço de e-mail verificado.",
+        "emailCode": "Código por e-mail",
+        "emailCodeDescription": "Você sempre pode entrar com um código enviado para seu e-mail.",
+        "lastMethod": "Conecte outra conta antes de desconectar esta.",
+        "title": "Métodos de login",
+        "unavailable": "O envio de e-mails precisa estar configurado para desconectar métodos de login."
+      },
       "timezone": "Fuso horário",
       "timezoneDescription": "Usado para carimbos de data/hora em notificações e e-mails",
       "timezoneSaved": "Fuso horário atualizado",
