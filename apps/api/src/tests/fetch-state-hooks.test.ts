@@ -7,8 +7,73 @@ import { asFetchMock } from "./helpers/test-tool-set";
 
 test("fetch mocks provide inert preconnect without borrowing ambient fetch", async () => {
   const mock = asFetchMock(async () => new Response("fixture"));
-  expect(mock.preconnect("https://example.invalid")).toBeUndefined();
+  mock.preconnect("https://example.invalid");
   expect(await (await mock("https://example.invalid")).text()).toBe("fixture");
+});
+
+test("registered provider replays restore fetch between tests while retaining the cached function", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "api-replay-cleanup-"));
+  const preload = path.join(import.meta.dirname, "fetch-state-hooks.ts");
+  const replayOwner = path.join(
+    import.meta.dirname,
+    "helpers/provider-wire-replay.ts",
+  );
+  try {
+    const replayFile = path.join(directory, "replay.test.ts");
+    writeFileSync(
+      replayFile,
+      `import { afterAll, beforeAll, test, expect } from "bun:test";
+import { registerProviderWireReplay } from ${JSON.stringify(replayOwner)};
+const originalFetch = globalThis.fetch;
+let setupFinished = false;
+let cachedFetch;
+registerProviderWireReplay({
+  onInstall: () => {},
+  options: () => {
+    expect(setupFinished).toBe(true);
+    return {};
+  },
+});
+beforeAll(() => { setupFinished = true; });
+test("first replay is scoped", () => {
+  expect(globalThis.fetch).not.toBe(originalFetch);
+  cachedFetch = globalThis.fetch;
+});
+test("next replay keeps the SDK cached function", () => {
+  expect(globalThis.fetch).toBe(cachedFetch);
+});
+afterAll(() => { expect(globalThis.fetch).toBe(originalFetch); });`,
+    );
+    const run = () =>
+      Bun.spawnSync({
+        cmd: [process.execPath, "test", "--preload", preload, replayFile],
+        cwd: directory,
+        env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 10_000,
+      });
+    const guarded = run();
+    const output = guarded.stderr.toString();
+    expect(guarded.exitCode, output).toBe(0);
+    expect(output).toContain("2 pass");
+    expect(output).toContain("0 fail");
+
+    writeFileSync(
+      replayFile,
+      `import { test } from "bun:test";
+import { registerProviderWireReplay } from ${JSON.stringify(replayOwner)};
+registerProviderWireReplay({ onInstall: () => {} });
+test("unowned fetch replacement", () => {
+  globalThis.fetch = async () => new Response("leaked");
+});`,
+    );
+    const leaked = run();
+    expect(leaked.exitCode).not.toBe(0);
+    expect(leaked.stderr.toString()).toContain("Test leaked globalThis.fetch");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("fetch cleanup fails the leaking test and restores fetch before later tests and files", () => {

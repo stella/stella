@@ -1,4 +1,5 @@
 import { panic, TaggedError } from "better-result";
+import { afterEach, beforeEach } from "bun:test";
 
 import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import {
@@ -20,10 +21,10 @@ class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
 
 // A fetch-level provider: every request an SDK makes goes through
 // `globalThis.fetch`, so replacing it serves cassettes to the real adapters
-// with nothing mocked above the socket. The replacement is installed once
-// and serves whatever is queued now, because some SDK clients keep the fetch
-// they were constructed with. Nothing reaches the network: a request to any
-// other host, or with no exchange queued, is refused and recorded.
+// with nothing mocked above the socket. A fixture reinstalls the same function
+// for each test, because some SDK clients keep the fetch they were constructed
+// with. Requests to another host or with no exchange queued are refused and
+// recorded, so no provider request reaches the network.
 
 /** Hosts the supported provider APIs are served from. */
 const PROVIDER_HOST =
@@ -395,22 +396,24 @@ const responseFor = (
   });
 };
 
-/**
- * Installs the replay as `globalThis.fetch` until `restore`. Queue a
- * cassette with `serve`, run the adapter, then read `takeFindings`.
- */
-export const installProviderWireReplay = ({
-  passThroughOrigins = [],
-  profile,
-  retryAfterMs,
-}: {
+type ProviderWireReplayOptions = {
   /** In-process services (a fake object store) whose requests go through
    *  untouched; nothing else leaves the replay. */
   passThroughOrigins?: readonly string[];
   profile?: ChatHarnessProfile | undefined;
   /** OpenAI/Anthropic retry hints; omitted to preserve recorded headers. */
   retryAfterMs?: number | undefined;
-} = {}) => {
+};
+
+/**
+ * Installs the replay as `globalThis.fetch` until `restore`. Test-local
+ * callers restore in teardown; suites use registerProviderWireReplay.
+ */
+export const installProviderWireReplay = ({
+  passThroughOrigins = [],
+  profile,
+  retryAfterMs,
+}: ProviderWireReplayOptions = {}) => {
   const originalFetch = globalThis.fetch;
   let queue: {
     exchange: ProviderWireExchange;
@@ -594,11 +597,15 @@ export const installProviderWireReplay = ({
       : await profile.measure("replay", answerRequest);
   };
 
-  globalThis.fetch = Object.assign(replayFetch, {
+  const installedFetch = Object.assign(replayFetch, {
     preconnect: () => undefined,
   });
+  globalThis.fetch = installedFetch;
 
   return {
+    install: () => {
+      globalThis.fetch = installedFetch;
+    },
     /** Queues `cassette`'s exchanges, replacing anything still queued. */
     serve: (
       cassette: Pick<ProviderWireCassette, "exchanges" | "model">,
@@ -679,9 +686,35 @@ export const installProviderWireReplay = ({
       return findings;
     },
     restore: () => {
-      globalThis.fetch = originalFetch;
+      if (globalThis.fetch === installedFetch) {
+        globalThis.fetch = originalFetch;
+      }
     },
   };
 };
 
 export type ProviderWireReplay = ReturnType<typeof installProviderWireReplay>;
+
+type RegisterProviderWireReplayOptions = {
+  onInstall: (replay: ProviderWireReplay) => void;
+  options?: () => ProviderWireReplayOptions;
+};
+
+/** Register in suite scope so restoration precedes the global fetch leak guard. */
+export const registerProviderWireReplay = ({
+  onInstall,
+  options = () => ({}),
+}: RegisterProviderWireReplayOptions) => {
+  let replay: ProviderWireReplay | undefined;
+  beforeEach(() => {
+    if (replay === undefined) {
+      replay = installProviderWireReplay(options());
+    } else {
+      replay.install();
+    }
+    onInstall(replay);
+  });
+  afterEach(() => {
+    replay?.restore();
+  });
+};

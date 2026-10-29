@@ -32,7 +32,7 @@ import {
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
 import type { ReplayGate } from "@/api/tests/helpers/provider-wire-gate";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import {
   committedTranscriptFiles,
@@ -84,6 +84,13 @@ let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ retryAfterMs: 1 }),
+});
+
 testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -97,11 +104,9 @@ testState.beforeAll(async () => {
     "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
   );
-  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(async () => {
-  replay.restore();
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
