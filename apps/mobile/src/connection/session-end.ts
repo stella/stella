@@ -5,7 +5,7 @@
 import type { StoredSession } from "./session";
 
 /** `signed-out`: the person chose to; `ended`: the server refused the session. */
-export type SessionEndReason = "signed-out" | "ended";
+type SessionEndReason = "signed-out" | "ended";
 
 export type BeforeSessionEnd = (
   reason: SessionEndReason,
@@ -13,7 +13,7 @@ export type BeforeSessionEnd = (
 ) => Promise<void>;
 
 /** How long the boundary waits for one handler; it never blocks sign-out. */
-export const BEFORE_SESSION_END_TIMEOUT_MS = 2000;
+const BEFORE_SESSION_END_TIMEOUT_MS = 2000;
 
 export type SessionEndBoundary = {
   /** Adds a handler; the returned function removes it again. */
