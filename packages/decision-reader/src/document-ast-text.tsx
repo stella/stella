@@ -64,9 +64,18 @@ export const rangesForPiece = <Range extends ReaderMarkRange>(
 export type TextAnchor = {
   end: number;
   key: string;
-  render: (children: ReactNode) => ReactNode;
+  render: (
+    children: ReactNode,
+    segment: { isRangeStart: boolean },
+  ) => ReactNode;
   start: number;
 };
+
+/** A split range keeps one structural owner: the segment at its start. */
+export const textAnchorSegmentOwnsRange = (
+  anchor: Pick<TextAnchor, "start">,
+  segmentStart: number,
+): boolean => segmentStart === anchor.start;
 
 export const anchorsForPiece = (
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined,
@@ -380,7 +389,9 @@ const renderTextSegment = ({
       }
       children.push(
         <Fragment key={`${anchor.key}-${String(anchorStart)}`}>
-          {anchor.render(highlight(anchorStart, anchorEnd))}
+          {anchor.render(highlight(anchorStart, anchorEnd), {
+            isRangeStart: textAnchorSegmentOwnsRange(anchor, anchorStart),
+          })}
         </Fragment>,
       );
       cursor = anchorEnd;
