@@ -31,13 +31,14 @@ organization/                       part 1 only
   contact-relationships.json / .csv
   clauses.json / .csv               JSON carries versions and variants
   templates.json / .csv             JSON carries versions
+  invoices-without-matter.json / .csv  client invoices with lines, payments and expenses
   time-entries-without-matter.json / .csv
   templates/<name>/<file> (v<n>).<ext>
 matters/<matter name> [<reference>]/
   matter.json                       with linked contacts and their roles
   tasks.json / .csv                 JSON carries assignees
   time-entries.json / .csv
-  invoices.json / .csv              JSON carries invoice lines
+  invoices.json / .csv              JSON carries invoice lines, payments and expenses
   documents/<folders>/<file>        current version of each document
   versions/<folders>/<file> (v<n>).<ext>   earlier versions
 ```

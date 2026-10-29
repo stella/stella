@@ -149,6 +149,7 @@ export type SourceOrganizationRecords = {
   clauses: RecordTable;
   templates: RecordTable;
   unassignedTimeEntries: RecordTable;
+  invoices: RecordTable;
   templateFiles: readonly SourceTemplateFile[];
 };
 
@@ -673,6 +674,7 @@ const organizationEntries = async function* ({
       table: rows,
     });
   const tables = {
+    invoices: table("invoices-without-matter", records.invoices),
     contacts: table("contacts", records.contacts),
     contactRelationships: table(
       "contact-relationships",
@@ -737,6 +739,7 @@ const organizationEntries = async function* ({
     clauses: tables.clauses.ref,
     templates: tables.templates.ref,
     unassignedTimeEntries: tables.unassignedTimeEntries.ref,
+    invoices: tables.invoices.ref,
     templateFiles,
   };
 };

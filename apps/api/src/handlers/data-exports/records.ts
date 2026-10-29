@@ -18,7 +18,9 @@ import type {
   contactRelationships,
   contacts,
   entities,
+  expenses,
   invoiceLines,
+  invoicePayments,
   invoices,
   taskAssignees,
   templates,
@@ -220,7 +222,7 @@ export const INVOICE_COLUMNS = {
   id: "export",
   clientId: "export",
   organizationId: "omit",
-  workspaceId: "omit",
+  workspaceId: "export",
   invoiceNumber: "export",
   documentType: "export",
   originalInvoiceId: "export",
@@ -262,7 +264,7 @@ export const INVOICE_COLUMNS = {
 export const INVOICE_LINE_COLUMNS = {
   id: "export",
   organizationId: "omit",
-  workspaceId: "omit",
+  workspaceId: "export",
   invoiceId: "export",
   billingPurpose: "export",
   recordedDescription: "export",
@@ -288,6 +290,43 @@ export const INVOICE_LINE_COLUMNS = {
   createdAt: "export",
   updatedAt: "export",
 } as const satisfies ColumnMap<typeof invoiceLines>;
+
+export const INVOICE_PAYMENT_COLUMNS = {
+  id: "export",
+  organizationId: "omit",
+  invoiceId: "export",
+  amount: "export",
+  paidOn: "export",
+  method: "export",
+  origin: "export",
+  reference: "export",
+  note: "export",
+  recordedBy: "export",
+  createdAt: "export",
+  voidedAt: "export",
+  voidedBy: "export",
+} as const satisfies ColumnMap<typeof invoicePayments>;
+
+export const EXPENSE_COLUMNS = {
+  id: "export",
+  organizationId: "omit",
+  workspaceId: "export",
+  userId: "export",
+  matterId: "export",
+  dateIncurred: "export",
+  amount: "export",
+  currency: "export",
+  category: "export",
+  description: "export",
+  invoiceDescription: "export",
+  billable: "export",
+  markup: "export",
+  status: "export",
+  invoiceId: "export",
+  receiptFileId: "export",
+  createdAt: "export",
+  updatedAt: "export",
+} as const satisfies ColumnMap<typeof expenses>;
 
 export const CLAUSE_COLUMNS = {
   id: "export",

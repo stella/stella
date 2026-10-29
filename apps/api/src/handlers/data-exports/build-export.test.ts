@@ -203,6 +203,17 @@ const organizationFixture = (): SourceOrganizationRecords => ({
   clauses: emptyTable,
   templates: emptyTable,
   unassignedTimeEntries: emptyTable,
+  invoices: {
+    columns: ["id", "workspaceId"],
+    rows: [
+      {
+        id: "client-invoice-1",
+        workspaceId: null,
+        lines: [{ id: "line-1" }],
+        payments: [{ id: "payment-1" }],
+      },
+    ],
+  },
   templateFiles: [
     {
       templateId: "tpl-1",
@@ -516,6 +527,20 @@ describe("organisation data export builder", () => {
     expect(json).toEqual([{ id: "task-m-1", name: "=SUM(A1)" }]);
     const csv = (await zip.file(tasksRef.csv)?.async("string")) ?? "";
     expect(csv).toContain('"\t=SUM(A1)"');
+    const invoicesRef = partManifests[0]?.organizationRecords?.invoices;
+    expect(invoicesRef?.count).toBe(1);
+    const invoiceJson =
+      invoicesRef === undefined
+        ? undefined
+        : await zip.file(invoicesRef.json)?.async("string");
+    expect(JSON.parse(invoiceJson ?? "null")).toEqual(
+      organizationFixture().invoices.rows,
+    );
+    expect(
+      Object.keys(zip.files).filter((path) =>
+        path.endsWith("invoices-without-matter.json"),
+      ),
+    ).toHaveLength(1);
   });
 
   test("splits parts only at matter boundaries and keeps organisation records in part 1", async () => {

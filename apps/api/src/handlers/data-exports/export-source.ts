@@ -22,6 +22,8 @@ import type { AnyColumn, SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   clauses,
@@ -31,8 +33,10 @@ import {
   contacts,
   entities,
   entityVersions,
+  expenses,
   fields,
   invoiceLines,
+  invoicePayments,
   invoices,
   taskAssignees,
   templates,
@@ -56,15 +60,18 @@ import type {
   SourceTemplateFile,
 } from "@/api/handlers/data-exports/build-export";
 import type { DataExportVersionScope } from "@/api/handlers/data-exports/manifest-schema";
+import { dataExportRecordScope } from "@/api/handlers/data-exports/record-scopes";
 import {
   CLAUSE_COLUMNS,
   CLAUSE_VARIANT_COLUMNS,
   CLAUSE_VERSION_COLUMNS,
   CONTACT_COLUMNS,
   CONTACT_RELATIONSHIP_COLUMNS,
+  EXPENSE_COLUMNS,
   exportedColumnNames,
   INVOICE_COLUMNS,
   INVOICE_LINE_COLUMNS,
+  INVOICE_PAYMENT_COLUMNS,
   MATTER_COLUMNS,
   MATTER_CONTACT_COLUMNS,
   projectRecord,
@@ -409,7 +416,7 @@ const readMatterRecords = async (
           .where(
             and(
               eq(timeEntries.organizationId, organizationId),
-              eq(timeEntries.workspaceId, workspaceId),
+              dataExportRecordScope(timeEntries, workspaceId),
               after(timeEntries.id, cursor),
             ),
           )
@@ -417,6 +424,14 @@ const readMatterRecords = async (
           .limit(DATA_EXPORT_PAGE_SIZE),
     );
   const timeEntryRows = await readAll(readTimeEntryRowsPage);
+  return { contactLinks, assignees, timeEntryRows };
+};
+
+/** Invoice children follow the selected invoice, including lines billed across matters. */
+const readInvoiceRecords = async (
+  { db, organizationId, readAll, readForParents }: PagedReader,
+  workspaceId: SafeId<"workspace"> | null,
+) => {
   const readInvoiceRowsPage = async (cursor: string | null) =>
     await db(
       async (tx) =>
@@ -426,7 +441,7 @@ const readMatterRecords = async (
           .where(
             and(
               eq(invoices.organizationId, organizationId),
-              eq(invoices.workspaceId, workspaceId),
+              dataExportRecordScope(invoices, workspaceId),
               after(invoices.id, cursor),
             ),
           )
@@ -445,13 +460,72 @@ const readMatterRecords = async (
             .where(
               and(
                 eq(invoiceLines.organizationId, organizationId),
-                eq(invoiceLines.workspaceId, workspaceId),
                 inArray(invoiceLines.invoiceId, invoiceIds),
               ),
             ),
       ),
   );
-  return { contactLinks, assignees, timeEntryRows, invoiceRows, lineRows };
+  const paymentRows = await readForParents(
+    invoiceRows.map((row) => row.id),
+    async (invoiceIds) =>
+      await db(
+        async (tx) =>
+          await tx
+            .select()
+            .from(invoicePayments)
+            .where(
+              and(
+                eq(invoicePayments.organizationId, organizationId),
+                inArray(invoicePayments.invoiceId, invoiceIds),
+              ),
+            ),
+      ),
+  );
+  const expenseRows = await readForParents(
+    invoiceRows.map((row) => row.id),
+    async (invoiceIds) =>
+      await db(
+        async (tx) =>
+          await tx
+            .select()
+            .from(expenses)
+            .where(
+              and(
+                eq(expenses.organizationId, organizationId),
+                inArray(expenses.invoiceId, invoiceIds),
+              ),
+            ),
+      ),
+  );
+  return { invoiceRows, lineRows, paymentRows, expenseRows };
+};
+
+const invoiceRecords = (
+  records: Awaited<ReturnType<typeof readInvoiceRecords>>,
+) => {
+  const lines = groupBy(
+    records.lineRows.toSorted((a, b) => a.position - b.position),
+    (row) => row.invoiceId,
+  );
+  const payments = groupBy(
+    records.paymentRows.toSorted((a, b) => compareCodeUnit(a.id, b.id)),
+    (row) => row.invoiceId,
+  );
+  const costs = groupBy(
+    records.expenseRows,
+    (row) => row.invoiceId ?? panic("Exported invoice expense has no invoice"),
+  );
+  return table(INVOICE_COLUMNS, records.invoiceRows, (row) => ({
+    lines: arrayOrEmpty(lines.get(String(row["id"]))).map((line) =>
+      projectRecord(line, INVOICE_LINE_COLUMNS),
+    ),
+    payments: arrayOrEmpty(payments.get(String(row["id"]))).map((payment) =>
+      projectRecord(payment, INVOICE_PAYMENT_COLUMNS),
+    ),
+    expenses: arrayOrEmpty(costs.get(String(row["id"]))).map((cost) =>
+      projectRecord(cost, EXPENSE_COLUMNS),
+    ),
+  }));
 };
 
 type MatterEntityRows = Awaited<ReturnType<typeof readMatterEntities>>;
@@ -556,10 +630,7 @@ const loadMatter = async (
   const assigneesByTask = groupBy(records.assignees, (row) =>
     String(row.entityId),
   );
-  const linesByInvoice = groupBy(
-    records.lineRows.toSorted((a, b) => a.position - b.position),
-    (row) => String(row.invoiceId),
-  );
+  const billing = await readInvoiceRecords(reader, workspaceId);
   return {
     summary: {
       id: String(matter.id),
@@ -594,11 +665,7 @@ const loadMatter = async (
       ),
     })),
     timeEntries: table(TIME_ENTRY_COLUMNS, records.timeEntryRows),
-    invoices: table(INVOICE_COLUMNS, records.invoiceRows, (row) => ({
-      lines: arrayOrEmpty(linesByInvoice.get(String(row["id"]))).map((line) =>
-        projectRecord(line, INVOICE_LINE_COLUMNS),
-      ),
-    })),
+    invoices: invoiceRecords(billing),
   };
 };
 
@@ -695,7 +762,7 @@ const readOrganizationRows = async (reader: PagedReader) => {
       .where(
         and(
           eq(timeEntries.organizationId, organizationId),
-          isNull(timeEntries.workspaceId),
+          dataExportRecordScope(timeEntries, null),
           after(timeEntries.id, cursor),
         ),
       )
@@ -798,6 +865,23 @@ const measureRecords = async (
 ): Promise<RecordBytes> => {
   // What `loadOrganizationRecords` reads, summed over its tables in one query.
   const organizationTables: readonly (readonly [PgTable, SQL | undefined])[] = [
+    [
+      invoices,
+      and(
+        eq(invoices.organizationId, organizationId),
+        dataExportRecordScope(invoices, null),
+      ),
+    ],
+    ...[invoiceLines, invoicePayments, expenses].map(
+      (child) =>
+        [
+          child,
+          and(
+            eq(child.organizationId, organizationId),
+            sql`EXISTS (SELECT 1 FROM ${invoices} WHERE ${invoices.id} = ${child.invoiceId} AND ${invoices.organizationId} = ${organizationId} AND ${dataExportRecordScope(invoices, null)})`,
+          ),
+        ] as const,
+    ),
     [contacts, eq(contacts.organizationId, organizationId)],
     [
       contactRelationships,
@@ -812,7 +896,7 @@ const measureRecords = async (
       timeEntries,
       and(
         eq(timeEntries.organizationId, organizationId),
-        isNull(timeEntries.workspaceId),
+        dataExportRecordScope(timeEntries, null),
       ),
     ],
   ];
@@ -845,7 +929,6 @@ const measureRecords = async (
     [workspaceContacts, workspaceContacts.workspaceId],
     [timeEntries, timeEntries.workspaceId],
     [invoices, invoices.workspaceId],
-    [invoiceLines, invoiceLines.workspaceId],
   ];
   const rows = await readForParents(
     matterIds.map((id) => brandPersistedWorkspaceId(id)),
@@ -860,7 +943,13 @@ const measureRecords = async (
       const result = await db(
         async (tx) =>
           await tx.execute(
-            sql`SELECT workspace_id::text AS workspace_id, COALESCE(SUM(bytes), 0)::bigint::text AS bytes FROM (${perRow}) AS measured GROUP BY workspace_id`,
+            sql`SELECT workspace_id::text AS workspace_id, COALESCE(SUM(bytes), 0)::bigint::text AS bytes FROM (${perRow} UNION ALL ${sql.join(
+              [invoiceLines, invoicePayments, expenses].map(
+                (child) =>
+                  sql`SELECT ${invoices.workspaceId} AS workspace_id, ${expandedTextBytes(child)} AS bytes FROM ${child} INNER JOIN ${invoices} ON ${invoices.id} = ${child.invoiceId} WHERE ${inArray(invoices.workspaceId, ids)} AND ${child.organizationId} = ${organizationId}`,
+              ),
+              sql` UNION ALL `,
+            )}) AS measured GROUP BY workspace_id`,
           ),
       );
       return v.parse(v.array(MatterBytesRow), executedRows(result));
@@ -932,6 +1021,7 @@ const loadOrganizationRecords = async (
       ),
     })),
     unassignedTimeEntries: table(TIME_ENTRY_COLUMNS, rows.unassignedRows),
+    invoices: invoiceRecords(await readInvoiceRecords(reader, null)),
     templateFiles,
   };
 };

@@ -12,6 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 import * as v from "valibot";
 
+import { cents } from "@stll/money";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member } from "@/api/db/auth-schema";
@@ -22,7 +23,13 @@ import {
   DATA_EXPORT_MAX_FAILURES,
   entities,
   entityVersions,
+  expenses,
   fields,
+  INVOICE_PAYMENT_ORIGIN,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoicePayments,
+  invoices,
   organizationDataExports,
   workspaceMembers,
   workspaces,
@@ -865,6 +872,158 @@ describe("starting an export", () => {
 });
 
 describe("run ownership", () => {
+  test("exports a client invoice with its matter line and payments exactly once", async () => {
+    const invoiceId = createSafeId<"invoice">();
+    const lineId = createSafeId<"invoiceLine">();
+    const paymentId = createSafeId<"invoicePayment">();
+    const expenseId = createSafeId<"expense">();
+    const matterInvoiceId = createSafeId<"invoice">();
+    const matterPaymentId = createSafeId<"invoicePayment">();
+    const source = createExportSource({
+      db: createRootMembershipScopedDb(
+        { organizationId: ids.orgA, userId: ids.userAdmin },
+        database,
+      ),
+      organizationId: ids.orgA,
+      signal: new AbortController().signal,
+      pace: async () => {},
+    });
+    const baselineBytes = await source.measureRecords([]);
+    await testDb.insert(invoices).values({
+      id: invoiceId,
+      organizationId: ids.orgA,
+      clientId: ids.contactA,
+      workspaceId: null,
+      invoiceNumber: `INV-EXPORT-${invoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.SENT,
+      totalAmount: cents(121),
+    });
+    await testDb.insert(invoiceLines).values({
+      id: lineId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId,
+      position: 0,
+      description: "Legal services",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(100),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100),
+      vatAmount: cents(21),
+      grossAmount: cents(121),
+      source: "manual",
+    });
+    await testDb.insert(invoicePayments).values({
+      id: paymentId,
+      organizationId: ids.orgA,
+      invoiceId,
+      amount: cents(121),
+      paidOn: "2026-10-02",
+      method: "bank_transfer",
+      origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
+      recordedBy: ids.userAdmin,
+    });
+    await testDb.insert(expenses).values({
+      id: expenseId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      matterId: documentId,
+      dateIncurred: "2026-09-30",
+      amount: cents(121),
+      currency: "EUR",
+      category: "filing_fee",
+      description: "Client invoice expense",
+      invoiceId,
+    });
+    await testDb.insert(invoices).values({
+      id: matterInvoiceId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceNumber: `INV-MATTER-${matterInvoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.SENT,
+      totalAmount: cents(200),
+    });
+    await testDb.insert(invoicePayments).values({
+      id: matterPaymentId,
+      organizationId: ids.orgA,
+      invoiceId: matterInvoiceId,
+      amount: cents(200),
+      paidOn: "2026-10-02",
+      method: "bank_transfer",
+      origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
+      recordedBy: ids.userAdmin,
+    });
+
+    try {
+      const organizationRecords = v.parse(
+        v.object({
+          invoices: v.object({
+            rows: v.array(
+              v.object({
+                id: v.string(),
+                workspaceId: v.nullable(v.string()),
+                lines: v.array(
+                  v.object({
+                    id: v.string(),
+                    workspaceId: v.string(),
+                  }),
+                ),
+                payments: v.array(v.object({ id: v.string() })),
+                expenses: v.array(v.object({ id: v.string() })),
+              }),
+            ),
+          }),
+        }),
+        await source.loadOrganizationRecords(),
+      );
+      const organizationInvoiceRows = organizationRecords.invoices.rows.filter(
+        (row) => row.id === invoiceId,
+      );
+      expect(organizationInvoiceRows).toHaveLength(1);
+      expect(organizationInvoiceRows[0]).toMatchObject({
+        workspaceId: null,
+        lines: [{ id: lineId, workspaceId: ids.wsA1 }],
+        payments: [{ id: paymentId }],
+        expenses: [{ id: expenseId }],
+      });
+      const measured = await source.measureRecords([]);
+      expect(measured.organizationBytes).toBeGreaterThan(
+        baselineBytes.organizationBytes,
+      );
+      expect(measured.matterBytes.size).toBe(0);
+
+      const matters = await Promise.all(
+        [ids.wsA1, ids.wsA2].map(
+          async (workspaceId) => await source.loadMatter(workspaceId, "all"),
+        ),
+      );
+      const matterInvoiceRows = matters.flatMap((matter) =>
+        matter === null ? [] : matter.invoices.rows,
+      );
+      expect(
+        matterInvoiceRows.filter((row) => row["id"] === invoiceId),
+      ).toHaveLength(0);
+      expect(
+        matterInvoiceRows.filter((row) => row["id"] === matterInvoiceId),
+      ).toHaveLength(1);
+      expect(
+        matterInvoiceRows.find((row) => row["id"] === matterInvoiceId),
+      ).toMatchObject({ payments: [{ id: matterPaymentId }] });
+    } finally {
+      await testDb.delete(expenses).where(eq(expenses.id, expenseId));
+      await testDb
+        .delete(invoices)
+        .where(inArray(invoices.id, [invoiceId, matterInvoiceId]));
+    }
+  });
+
   test("measures records by their expanded size, not their compressed storage", async () => {
     // Repetitive text compresses to a sliver of its size on disk; the export
     // still loads and serialises all of it.

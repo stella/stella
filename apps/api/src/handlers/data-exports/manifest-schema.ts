@@ -144,6 +144,7 @@ const organizationRecordsSchema = v.strictObject({
   clauses: recordFileSchema,
   templates: recordFileSchema,
   unassignedTimeEntries: recordFileSchema,
+  invoices: recordFileSchema,
   templateFiles: v.array(templateFileSchema),
 });
 
