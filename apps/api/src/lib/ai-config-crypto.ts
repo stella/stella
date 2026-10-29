@@ -17,8 +17,14 @@ import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
-type OrgAIConfigReadFailure = "invalid-json" | "invalid-schema";
+export type OrgAIConfigReadFailure =
+  | "missing-key"
+  | "decryption-failed"
+  | "incomplete-envelope"
+  | "invalid-json"
+  | "invalid-schema";
 
 /** A content-free description of an unreadable decrypted configuration. */
 export class OrgAIConfigReadError extends TaggedError("OrgAIConfigReadError")<{
@@ -132,10 +138,24 @@ export const encryptAIConfig = async (
  */
 export const decryptAIConfig = async (
   organizationId: SafeId<"organization">,
-  ciphertext: Buffer,
-  iv: Buffer,
+  ciphertext: Buffer | null | undefined,
+  iv: Buffer | null | undefined,
 ): Promise<OrgAIConfig> => {
-  const json = await decryptContent(organizationId, ciphertext, iv);
+  if (!ciphertext || !iv) {
+    throw unreadableConfig("incomplete-envelope");
+  }
+
+  const decrypted = await Result.tryPromise({
+    try: async () => await decryptContent(organizationId, ciphertext, iv),
+    catch: (error: unknown) =>
+      error instanceof ConfigurationError
+        ? unreadableConfig("missing-key")
+        : unreadableConfig("decryption-failed"),
+  });
+  if (decrypted.isErr()) {
+    throw decrypted.error;
+  }
+  const json = decrypted.value;
   const decoded = Result.try({
     try: (): unknown => JSON.parse(json),
     catch: () => unreadableConfig("invalid-json"),

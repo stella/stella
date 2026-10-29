@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
+
+const ownErrorText = (error: object) =>
+  Reflect.ownKeys(error)
+    .map((key) => String(Reflect.getOwnPropertyDescriptor(error, key)?.value))
+    .join(" ");
 
 beforeEach(() => {
   decryptAIConfigMock.mockClear();
@@ -64,23 +70,37 @@ describe("loadOrgAIConfig", () => {
 
   test("treats a row with ciphertext but no IV (or vice versa) as corrupt", async () => {
     const missingIv = await decryptOrgAIConfigRow({
-      decrypt: decryptAIConfigMock,
+      decrypt: decryptAIConfig,
       organizationId,
       row: { aiConfigEncrypted: "\\x0a0b", aiConfigIv: null },
     });
     const missingCiphertext = await decryptOrgAIConfigRow({
-      decrypt: decryptAIConfigMock,
+      decrypt: decryptAIConfig,
       organizationId,
       row: { aiConfigEncrypted: null, aiConfigIv: "\\x0102" },
     });
 
     expect(missingIv.status).toBe("corrupt");
     expect(missingCiphertext.status).toBe("corrupt");
+    if (
+      missingIv.status !== "corrupt" ||
+      missingCiphertext.status !== "corrupt"
+    ) {
+      throw new Error("Expected incomplete envelopes to be corrupt");
+    }
+    expect(missingIv.error.reason).toBe("incomplete-envelope");
+    expect(missingCiphertext.error.reason).toBe("incomplete-envelope");
     expect(decryptAIConfigMock).not.toHaveBeenCalled();
   });
 
   test("reports a corrupt row instead of throwing, for degrade-capable callers", async () => {
-    const decryptError = new Error("invalid config");
+    const marker = "marker-secret-from-provider-settings";
+    const decryptError = Object.assign(
+      new Error(marker, {
+        cause: Object.assign(new Error(marker), { nested: marker }),
+      }),
+      { metadata: marker },
+    );
     const decrypt = mock(async () => {
       throw decryptError;
     });
@@ -91,7 +111,14 @@ describe("loadOrgAIConfig", () => {
       row: { aiConfigEncrypted: "\\x0a0b", aiConfigIv: "\\x0102" },
     });
 
-    expect(result).toEqual({ status: "corrupt", error: decryptError });
+    expect(result.status).toBe("corrupt");
+    if (result.status !== "corrupt") {
+      throw new Error("Expected decryption failure to be corrupt");
+    }
+    expect(result.error.reason).toBe("decryption-failed");
+    expect(ownErrorText(result.error)).not.toContain(marker);
+    expect(Object.hasOwn(result.error, "cause")).toBe(false);
+    expect(Object.hasOwn(result.error, "metadata")).toBe(false);
   });
 });
 

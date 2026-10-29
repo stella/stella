@@ -91,7 +91,7 @@ const readAIConfig = createSafeRootHandler(
       decisionInstanceProvisioned,
     };
 
-    if (ciphertext && iv) {
+    if (ciphertext || iv) {
       const decryptResult = await Result.tryPromise({
         try: async () =>
           await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
@@ -107,7 +107,7 @@ const readAIConfig = createSafeRootHandler(
         );
         // Reporting the default here would present a stored-but-unreadable
         // config as an unconfigured org and invite re-entry of the key.
-        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
 
       const aiConfig = decryptResult.value;

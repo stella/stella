@@ -448,6 +448,7 @@ export const TAGGED_FAILURE_REASON = {
   UnrecognizedProviderStopReasonError: "tagged_failure",
   UnresolvedActCitationError: "tagged_failure",
   UnsupportedAnalysisLanguageError: "tagged_failure",
+  OrgAIConfigReadError: "credentials_token_unreadable",
   UnsupportedCapabilityRefreshError: "tagged_failure",
   UnsupportedOAuthScopesError: "tagged_failure",
   UploadAppError: "tagged_failure",

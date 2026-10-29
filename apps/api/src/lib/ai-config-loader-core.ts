@@ -1,19 +1,20 @@
 import { AI_UNAVAILABLE_REASON } from "@stll/api-contract/organization-ai-availability";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { OrgAIConfigReadError } from "@/api/lib/ai-config-crypto";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type OrgAIConfigRow = {
-  aiConfigEncrypted: string | null | undefined;
-  aiConfigIv: string | null | undefined;
+  aiConfigEncrypted: string | Buffer | null | undefined;
+  aiConfigIv: string | Buffer | null | undefined;
 };
 
 type DecryptOrgAIConfig = (
   organizationId: SafeId<"organization">,
-  ciphertext: Buffer,
-  iv: Buffer,
+  ciphertext: Buffer | null | undefined,
+  iv: Buffer | null | undefined,
 ) => Promise<OrgAIConfig>;
 
 export type DecryptOrgAIConfigRowInput = {
@@ -22,9 +23,12 @@ export type DecryptOrgAIConfigRowInput = {
   row: OrgAIConfigRow | undefined;
 };
 
-const decodeNullableByteaText = (value: string | null | undefined) => {
-  if (!value) {
+const decodeNullableByteaText = (value: string | Buffer | null | undefined) => {
+  if (value === null || value === undefined || value === "") {
     return null;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value;
   }
   const hex = value.startsWith("\\x") ? value.slice(2) : value;
   return Buffer.from(hex, "hex");
@@ -38,7 +42,7 @@ const decodeNullableByteaText = (value: string | null | undefined) => {
  */
 export type DecryptOrgAIConfigRowResult =
   | { status: "ok"; config: OrgAIConfig | null }
-  | { status: "corrupt"; error: unknown };
+  | { status: "corrupt"; error: OrgAIConfigReadError };
 
 /**
  * AI admission in the request context. Absent settings may use instance
@@ -67,34 +71,25 @@ export const decryptOrgAIConfigRow = async ({
     return { status: "ok", config: null };
   }
 
-  // Exactly one of ciphertext/IV present is a malformed row, not "no
-  // config": report it as corrupt so each caller can choose its policy.
-  if (!ciphertext || !iv) {
-    const error = new Error(
-      "organization AI config row has ciphertext or IV but not both",
-    );
-    captureError(
-      error,
-      handlerErrorContext("aiConfig.validateEncryptionFields", {
-        organizationId,
-        source: "loadOrgAIConfig",
-      }),
-    );
-    return { status: "corrupt", error };
-  }
-
   try {
     const config = await decrypt(organizationId, ciphertext, iv);
     return { status: "ok", config };
   } catch (error) {
+    const safeError =
+      error instanceof OrgAIConfigReadError
+        ? error
+        : new OrgAIConfigReadError({
+            message: "Decrypted organization AI configuration is unreadable",
+            reason: "decryption-failed",
+          });
     captureError(
-      error,
+      safeError,
       handlerErrorContext("aiConfig.decrypt", {
         organizationId,
         source: "loadOrgAIConfig",
       }),
     );
-    return { status: "corrupt", error };
+    return { status: "corrupt", error: safeError };
   }
 };
 

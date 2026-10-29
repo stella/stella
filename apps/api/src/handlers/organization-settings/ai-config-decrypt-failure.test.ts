@@ -54,7 +54,15 @@ const writeRejectingTx = asTestRaw<Transaction>({
  * first, so any later operation is the write path a decrypt failure has to
  * prevent; it runs against a transaction that refuses inserts.
  */
-const createSettingsDb = (): {
+type SettingsRow = {
+  aiConfigEncrypted: Buffer | null;
+  aiConfigIv: Buffer | null;
+  ignored?: string;
+};
+
+const createSettingsDb = (
+  settingsRow: SettingsRow = undecryptableRow,
+): {
   safeDb: SafeDb;
   operationCount: () => number;
 } => {
@@ -63,7 +71,7 @@ const createSettingsDb = (): {
     async (operation: (tx: Transaction) => Promise<unknown>) => {
       operationCount += 1;
       return operationCount === 1
-        ? Result.ok(undecryptableRow)
+        ? Result.ok(settingsRow)
         : Result.ok(await operation(writeRejectingTx));
     },
   );
@@ -115,4 +123,40 @@ describe("AI config handlers with an undecryptable stored config", () => {
       code: AI_CONFIG_UNREADABLE_ERROR_CODE,
     });
   });
+
+  test.each([
+    { aiConfigEncrypted: undecryptableRow.aiConfigEncrypted, aiConfigIv: null },
+    { aiConfigEncrypted: null, aiConfigIv: undecryptableRow.aiConfigIv },
+  ])(
+    "incomplete envelopes are unavailable and are never overwritten",
+    async (row) => {
+      const marker = "marker-secret-in-incomplete-envelope";
+      Object.assign(row, { ignored: marker });
+      const updateDb = createSettingsDb(row);
+      const updateResult = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
+          body: updateBody,
+          safeDb: updateDb.safeDb,
+        }),
+      );
+      expect(JSON.stringify(updateResult)).not.toContain(marker);
+      expect(updateDb.operationCount()).toBe(1);
+
+      const readDb = createSettingsDb(row);
+      const readResult = await readAIConfig.handler(
+        createTestHandlerContext<ReadContext>({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
+          safeDb: readDb.safeDb,
+        }),
+      );
+      expect(JSON.stringify(readResult)).not.toContain(marker);
+      expect(readResult).toMatchObject({
+        code: 503,
+        response: { code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+      });
+    },
+  );
 });
