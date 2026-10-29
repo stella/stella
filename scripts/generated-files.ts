@@ -527,6 +527,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "mcp-app-contracts": [
     "apps/api/package.json",
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
@@ -595,6 +596,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
@@ -1758,6 +1760,23 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "withdrawn-decision-labels",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json"],
+    inputs: [
+      "apps/web/src/i18n/langs/*.json",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+    ],
+    write: ["bun", "apps/web/scripts/sync-withdrawn-decision-labels.ts"],
+    check: [
+      "bun",
+      "apps/web/scripts/sync-withdrawn-decision-labels.ts",
+      "--check",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "i18n-messages-web",
     outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
@@ -1893,6 +1912,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/collab/src/env*.ts",
       // Read by the generator: build args and catalog helpers.
       "apps/web/Dockerfile",
+      "apps/api/src/db-components.ts",
       "apps/api/src/db-url.ts",
       "apps/api/src/lib/configuration-placeholders.ts",
       "apps/api/src/lib/rate-limit/budget-config-schema.ts",

@@ -56,6 +56,7 @@ export const TAGGED_FAILURE_REASON = {
   CaseLawServingFlipNotAttestedError: "tagged_failure",
   CaseLawServingFlipNotBuildingError: "tagged_failure",
   CaseLawServingFlipUndeclaredError: "tagged_failure",
+  CaseLawWithdrawalReadError: "tagged_failure",
   CatalogSnapshotError: "tagged_failure",
   CatalogSnapshotRefreshTimeoutError: "tagged_failure",
   ChatAnonInputLimitError: "tagged_failure",

@@ -2180,6 +2180,9 @@ const createHarness = ({
           if (query.startsWith('SELECT 1 FROM public."contacts"')) {
             return [];
           }
+          if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
+            return [];
+          }
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }
