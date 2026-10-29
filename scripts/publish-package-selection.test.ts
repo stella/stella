@@ -285,7 +285,7 @@ describe("publish package selection", () => {
     ).toThrow("Unknown package 'unknown'");
   });
 
-  test("current tooling without installed dependencies follows historical source manifests", () => {
+  test("historical source without unrelated packages supports leaf and dependency dispatches", () => {
     const root = mkdtempSync(path.join(tmpdir(), "publish-source-"));
     try {
       const tooling = path.join(root, "tooling", "scripts");
@@ -301,7 +301,12 @@ describe("publish package selection", () => {
           path.join(tooling, `${script}.ts`),
         );
       }
-      for (const directory of ALL_PACKAGE_ORDER) {
+      for (const directory of [
+        "cli",
+        "agent-input",
+        "stable-stringify",
+        "auth-model",
+      ]) {
         const manifestDir = path.join(source, "packages", directory);
         mkdirSync(manifestDir, { recursive: true });
         writeFileSync(
@@ -337,6 +342,19 @@ describe("publish package selection", () => {
       expect(
         expandPublishPackages({ selected: ["cli"], graph: currentGraph }),
       ).not.toContain("auth-model");
+      const leaf = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(tooling, "publish-package-selection.ts"),
+          "workflow_dispatch",
+          "auth-model",
+          source,
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(new TextDecoder().decode(leaf.stderr)).toBe("");
+      expect(leaf.exitCode).toBe(0);
+      expect(new TextDecoder().decode(leaf.stdout).trim()).toBe("auth-model");
       const result = Bun.spawnSync(
         [
           process.execPath,
@@ -352,9 +370,46 @@ describe("publish package selection", () => {
       expect(
         new TextDecoder().decode(result.stdout).trim().split("\n"),
       ).toEqual(["stable-stringify", "auth-model", "agent-input", "cli"]);
+      rmSync(path.join(source, "packages", "agent-input", "package.json"));
+      const missing = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(tooling, "publish-package-selection.ts"),
+          "workflow_dispatch",
+          "cli",
+          source,
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(missing.exitCode).not.toBe(0);
+      expect(new TextDecoder().decode(missing.stderr)).toContain(
+        "Unable to read source manifest packages/agent-input/package.json",
+      );
+      expect(new TextDecoder().decode(missing.stdout)).toBe("");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  test("reachable source cycles fail while unrelated manifests are never read", () => {
+    const readManifest = (directory: string) => {
+      expect(["cli", "agent-input"]).toContain(directory);
+      return JSON.stringify({
+        name: `@stll/${directory}`,
+        dependencies: {
+          [`@stll/${directory === "cli" ? "agent-input" : "cli"}`]:
+            "workspace:*",
+        },
+      });
+    };
+    expect(() =>
+      selectPublishPackages({
+        eventName: "workflow_dispatch",
+        manualPackage: "cli",
+        changedPaths: [],
+        readManifest,
+      }),
+    ).toThrow("Dependency cycle in npm publishing inventory");
   });
 
   // A merge-queue batch pushes several commits at once; the version commit

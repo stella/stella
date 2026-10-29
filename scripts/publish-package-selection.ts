@@ -78,7 +78,7 @@ export const selectPublishPackages = ({
 
     return expandPublishPackages({
       selected: [manualPackage],
-      graph: readNpmReleaseGraph({ readManifest }),
+      graph: readNpmReleaseGraph({ roots: [manualPackage], readManifest }),
     });
   }
 

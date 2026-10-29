@@ -33,11 +33,13 @@ type NpmReleasePackage = {
 
 type ReadNpmReleaseGraphOptions = {
   directories?: readonly string[];
+  roots?: readonly string[];
   readManifest: (directory: string) => string;
 };
 
 export const readNpmReleaseGraph = ({
   directories = ALL_PACKAGE_ORDER,
+  roots = directories,
   readManifest,
 }: ReadNpmReleaseGraphOptions): readonly NpmReleasePackage[] => {
   const names = new Map(
@@ -51,8 +53,23 @@ export const readNpmReleaseGraph = ({
   if (names.size !== directories.length) {
     panic("Duplicate package in npm publishing inventory");
   }
-  const graph = directories.map((directory) => {
-    const manifest: unknown = JSON.parse(readManifest(directory));
+  const packages = new Map<string, NpmReleasePackage>();
+  const readPackage = (directory: string) => {
+    if (packages.has(directory)) {
+      return;
+    }
+    if (!names.has(`@stll/${directory}`)) {
+      panic(`Unknown package '${directory}'.`);
+    }
+    let source: string;
+    try {
+      source = readManifest(directory);
+    } catch (error) {
+      return panic(
+        `Unable to read source manifest packages/${directory}/package.json: ${String(error)}`,
+      );
+    }
+    const manifest: unknown = JSON.parse(source);
     if (
       !record(manifest) ||
       manifest["name"] !== `@stll/${directory}` ||
@@ -80,13 +97,23 @@ export const readNpmReleaseGraph = ({
         }
       }
     }
-    return {
+    const pkg = {
       directory,
       dependencies: directories.filter((dependency) =>
         dependencies.has(dependency),
       ),
     };
-  });
+    packages.set(directory, pkg);
+    for (const dependency of pkg.dependencies) {
+      readPackage(dependency);
+    }
+  };
+  for (const directory of roots) {
+    readPackage(directory);
+  }
+  const graph = directories.flatMap(
+    (directory) => packages.get(directory) ?? [],
+  );
   const pending = new Map(graph.map((pkg) => [pkg.directory, pkg]));
   while (pending.size > 0) {
     const ready = [...pending.values()].filter(({ dependencies }) =>
