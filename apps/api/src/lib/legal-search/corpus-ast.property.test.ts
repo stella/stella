@@ -18,7 +18,10 @@ const sparseDocument = fc
     })),
   }));
 
-test("every prepared writer AST is readable", () =>
+// A block body keeps this file's frame on the stack: as an expression body,
+// `assertProperty` would be a tail call, and the property harness finds the
+// calling test file from that frame.
+test("every prepared writer AST is readable", () => {
   assertProperty(
     "every prepared writer AST is readable",
     fc.property(fc.oneof(sparseDocument, fc.jsonValue()), (ast) => {
@@ -26,4 +29,5 @@ test("every prepared writer AST is readable", () =>
       const read = parsePersistedCorpusAst(prepared.ast);
       expect(prepareCorpusAst({ ast: read }).ast).toEqual(read);
     }),
-  ));
+  );
+});

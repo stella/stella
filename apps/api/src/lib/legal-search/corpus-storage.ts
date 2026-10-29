@@ -105,12 +105,45 @@ export const parsePersistedCorpusSections = (
   value: unknown,
 ): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
 
+const dotPath = (path: readonly v.IssuePathItem[]): string | null => {
+  const keys: string[] = [];
+  for (const item of path) {
+    if (typeof item.key !== "string" && typeof item.key !== "number") {
+      return null;
+    }
+    keys.push(String(item.key));
+  }
+  return keys.length === 0 ? null : keys.join(".");
+};
+
+/**
+ * Dot paths of every issue, nested union issues included. A union's
+ * sub-issues carry paths relative to the union's own input, so each is
+ * joined to its parent's path. Issue messages and rejected values may
+ * contain decision text, so only paths leave here.
+ */
+const issueDotPaths = (
+  issues: readonly v.BaseIssue<unknown>[],
+  parent: readonly v.IssuePathItem[],
+): string[] =>
+  issues.flatMap((issue) => {
+    const path = [...parent, ...(issue.path ?? [])];
+    const own = dotPath(path);
+    const nested =
+      issue.issues === undefined ? [] : issueDotPaths(issue.issues, path);
+    return own === null ? nested : [own, ...nested];
+  });
+
 /**
  * Malformed stored ASTs raise a classified failure without retaining the payload.
  * Undeclared vocabulary is recoverable: the schema
  * keeps what carries text and degrades the rest, and each degradation is
  * reported here so the row stays visible without costing the reader the
  * document.
+ *
+ * Given `documentId`, this parser is the one reporter of the failure. A
+ * `readCorpusPayloadOrFallback` read parses without it, because that
+ * function reports a failed read itself.
  */
 export const parsePersistedCorpusAst = (
   value: unknown,
@@ -118,21 +151,7 @@ export const parsePersistedCorpusAst = (
 ): DocumentAst | EmptyAst | null => {
   const parsed = v.safeParse(persistedCorpusAstSchema, value);
   if (!parsed.success) {
-    // Union issues nest the useful field paths; issue messages and values may
-    // contain decision text, so neither belongs in the classified error.
-    const paths = new Set<string>();
-    const collectPaths = (issues: readonly v.BaseIssue<unknown>[]): void => {
-      for (const issue of issues) {
-        const path = v.getDotPath(issue);
-        if (path !== null) {
-          paths.add(path);
-        }
-        if (issue.issues !== undefined) {
-          collectPaths(issue.issues);
-        }
-      }
-    };
-    collectPaths(parsed.issues);
+    const paths = new Set(issueDotPaths(parsed.issues, []));
     const error = new StoredCorpusValidationError({
       message: "Stored document AST failed validation",
       code: STORED_CORPUS_VALIDATION_CODE,
@@ -159,7 +178,7 @@ export const parsePersistedCorpusAst = (
 };
 
 /** Correlate a rejected payload without logging its values or validator messages. */
-export const reportStoredCorpusValidation = (
+const reportStoredCorpusValidation = (
   error: StoredCorpusValidationError,
   documentId: string,
 ): void => {
@@ -973,6 +992,31 @@ export const readCorpusAtAuthoritativePointer = async <T>({
   return await read(replacement);
 };
 
+/** `Result.tryPromise` reports a rejection as an `UnhandledException` carrying it. */
+const rejectionCause = (error: unknown): unknown =>
+  error instanceof UnhandledException ? error.cause : error;
+
+/**
+ * The validation failure behind a corpus read error: raised directly by a
+ * row parse, or the cause of the unavailable payload an invalid stored
+ * object left. Its reporter has already recorded it (the parser given a
+ * document id, or `readCorpusPayloadOrFallback`), so a caller that contains
+ * the read must not report it again.
+ */
+export const storedCorpusValidationFailure = (
+  error: unknown,
+): StoredCorpusValidationError | null => {
+  const raised = rejectionCause(error);
+  if (StoredCorpusValidationError.is(raised)) {
+    return raised;
+  }
+  if (!CorpusPayloadUnavailableError.is(raised)) {
+    return null;
+  }
+  const cause = rejectionCause(raised.cause);
+  return StoredCorpusValidationError.is(cause) ? cause : null;
+};
+
 type CorpusReadWithFallbackInput<T> = {
   documentId: string;
   /** The row's key column as stored (object key or packed address). */
@@ -1006,11 +1050,11 @@ export const readCorpusPayloadOrFallback = async <T>({
   if (Result.isOk(payload)) {
     return payload.value;
   }
-  const raised =
-    payload.error instanceof UnhandledException
-      ? payload.error.cause
-      : payload.error;
-  if (StoredCorpusValidationError.is(raised)) {
+  // This function is the one reporter of a stored copy that failed
+  // validation, whether or not a Postgres copy then serves the read.
+  const raised = rejectionCause(payload.error);
+  const invalid = StoredCorpusValidationError.is(raised);
+  if (invalid) {
     reportStoredCorpusValidation(raised, documentId);
   }
   // An erased member is not an outage, so it has no fallback: degrading to
@@ -1028,13 +1072,15 @@ export const readCorpusPayloadOrFallback = async <T>({
         });
   }
 
-  captureError(
-    payload.error,
-    handlerErrorContext(
-      "legalsearch.readCorpusPayloadOrFallback.payload_error",
-      { documentId, step },
-    ),
-  );
+  if (!invalid) {
+    captureError(
+      payload.error,
+      handlerErrorContext(
+        "legalsearch.readCorpusPayloadOrFallback.payload_error",
+        { documentId, step },
+      ),
+    );
+  }
   return postgresCopy;
 };
 

@@ -53,16 +53,13 @@ import {
   publicRowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
-import {
-  CorpusPayloadUnavailableError,
-  StoredCorpusValidationError,
-} from "@/api/lib/errors/tagged-errors";
+import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
-  reportStoredCorpusValidation,
+  storedCorpusValidationFailure,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusTombstoneReaderForTx,
@@ -659,29 +656,26 @@ export const containPayloadUnavailable = async <TPayload>(
     outcome.error instanceof UnhandledException
       ? outcome.error.cause
       : outcome.error;
-  // Validation failures of historical rows use the same visible read-failed
-  // state as unavailable objects; neither means the source published no text.
-  if (
-    !CorpusPayloadUnavailableError.is(raised) &&
-    !StoredCorpusValidationError.is(raised)
-  ) {
+  // An invalid stored payload uses the same visible read-failed state as an
+  // unavailable object; neither means the source published no text. Corpus
+  // storage reported it with its issue paths, so it is not reported here.
+  if (storedCorpusValidationFailure(raised) !== null) {
+    return { payload: null, unavailable: true };
+  }
+  if (!CorpusPayloadUnavailableError.is(raised)) {
     return panic(
       "Corpus read failed for a reason this read cannot contain",
       raised,
     );
   }
 
-  if (StoredCorpusValidationError.is(raised)) {
-    reportStoredCorpusValidation(raised, decisionId);
-  } else {
-    captureError(
-      raised,
-      handlerErrorContext("decisions.containPayloadUnavailable.raised", {
-        decisionId,
-        step: "readDecision.corpusPayloadUnavailable",
-      }),
-    );
-  }
+  captureError(
+    raised,
+    handlerErrorContext("decisions.containPayloadUnavailable.raised", {
+      decisionId,
+      step: "readDecision.corpusPayloadUnavailable",
+    }),
+  );
   return { payload: null, unavailable: true };
 };
 

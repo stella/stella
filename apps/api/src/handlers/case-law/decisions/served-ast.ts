@@ -45,7 +45,8 @@ export const readServedDecisionAst = async ({
   corpusReadEnabled,
   readStore,
 }: ReadServedAstOptions): Promise<ServedAst> => {
-  const rowAst = () => astFrom("row", parsePersistedCorpusAst(pgAst));
+  const rowAst = () =>
+    astFrom("row", parsePersistedCorpusAst(pgAst, decisionId));
   const resolved =
     !corpusReadEnabled || astS3Key === null || contentHash === null
       ? rowAst()
