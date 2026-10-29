@@ -316,59 +316,60 @@ invoice_lines.created_at            timestamptz         default,not null  billin
 invoice_lines.updated_at            timestamptz         default,not null  billing.ts:1226
 ```
 
-## invoice_payments · `invoicePayments` · billing.ts:1321 · rls
+## invoice_payments · `invoicePayments` · billing.ts:1337 · rls
 
 One payment a client made towards an issued invoice, in the invoice's currency.
 
 ```text
-invoice_payments.id               pUuid               pk,not null       billing.ts:1324
-invoice_payments.organization_id  safeOrganizationId  fk,not null       billing.ts:1325
-invoice_payments.invoice_id       safeUuid            fk,not null       billing.ts:1331  Payments exist only on issued invoices, which the application never deletes; the cascade serves the deliberate removals (organization deletion, the review rese…
-invoice_payments.amount           centsColumn         not null          billing.ts:1334
-invoice_payments.paid_on          date                not null          billing.ts:1335
-invoice_payments.method           text                not null          billing.ts:1336
-invoice_payments.reference        varchar             null              billing.ts:1337
-invoice_payments.note             varchar             null              billing.ts:1340
-invoice_payments.recorded_by      text                null              billing.ts:1345  Null only on a settlement recorded for an invoice marked paid before payment records existed (`lib/billing/invoice-payment-backfill`): nobody entered it.
-invoice_payments.created_at       timestamptz         default,not null  billing.ts:1346
-invoice_payments.voided_at        timestamptz         null              billing.ts:1347
-invoice_payments.voided_by        text                null              billing.ts:1348
+invoice_payments.id               pUuid               pk,not null       billing.ts:1340
+invoice_payments.organization_id  safeOrganizationId  fk,not null       billing.ts:1341
+invoice_payments.invoice_id       safeUuid            fk,not null       billing.ts:1347  Payments exist only on issued invoices, which the application never deletes; the cascade serves the deliberate removals (organization deletion, the review rese…
+invoice_payments.amount           centsColumn         not null          billing.ts:1350
+invoice_payments.paid_on          date                not null          billing.ts:1351
+invoice_payments.method           text                not null          billing.ts:1352
+invoice_payments.origin           text                not null          billing.ts:1354  Server-set provenance distinguishes a repaired settlement from a payment entered through the payment owner.
+invoice_payments.reference        varchar             null              billing.ts:1355
+invoice_payments.note             varchar             null              billing.ts:1358
+invoice_payments.recorded_by      text                null              billing.ts:1363  Null only on a settlement recorded for an invoice marked paid before payment records existed (`lib/billing/invoice-payment-backfill`): nobody entered it.
+invoice_payments.created_at       timestamptz         default,not null  billing.ts:1364
+invoice_payments.voided_at        timestamptz         null              billing.ts:1365
+invoice_payments.voided_by        text                null              billing.ts:1366
 ```
 
-## vat_rates · `vatRates` · billing.ts:1370 · rls
+## vat_rates · `vatRates` · billing.ts:1401 · rls
 
 ```text
-vat_rates.id               pUuid               pk,not null       billing.ts:1373
-vat_rates.organization_id  safeOrganizationId  fk,not null       billing.ts:1374
-vat_rates.code             varchar             not null          billing.ts:1377
-vat_rates.name             varchar             not null          billing.ts:1378
-vat_rates.rate_bps         integer             not null          billing.ts:1379
-vat_rates.valid_from       date                not null          billing.ts:1380
-vat_rates.valid_to         date                null              billing.ts:1381
-vat_rates.archived_at      timestamptz         null              billing.ts:1382
-vat_rates.created_at       timestamptz         default,not null  billing.ts:1383
-vat_rates.updated_at       timestamptz         default,not null  billing.ts:1384
+vat_rates.id               pUuid               pk,not null       billing.ts:1404
+vat_rates.organization_id  safeOrganizationId  fk,not null       billing.ts:1405
+vat_rates.code             varchar             not null          billing.ts:1408
+vat_rates.name             varchar             not null          billing.ts:1409
+vat_rates.rate_bps         integer             not null          billing.ts:1410
+vat_rates.valid_from       date                not null          billing.ts:1411
+vat_rates.valid_to         date                null              billing.ts:1412
+vat_rates.archived_at      timestamptz         null              billing.ts:1413
+vat_rates.created_at       timestamptz         default,not null  billing.ts:1414
+vat_rates.updated_at       timestamptz         default,not null  billing.ts:1415
 ```
 
-## time_entry_timer_states · `timeEntryTimerStates` · billing.ts:1448 · rls
+## time_entry_timer_states · `timeEntryTimerStates` · billing.ts:1479 · rls
 
 ```text
-time_entry_timer_states.entry_id         safeUuid            pk,fk,not null  billing.ts:1451
-time_entry_timer_states.organization_id  safeOrganizationId  fk,not null     billing.ts:1454
-time_entry_timer_states.user_id          text                fk,not null     billing.ts:1457
-time_entry_timer_states.state            text                not null        billing.ts:1461
+time_entry_timer_states.entry_id         safeUuid            pk,fk,not null  billing.ts:1482
+time_entry_timer_states.organization_id  safeOrganizationId  fk,not null     billing.ts:1485
+time_entry_timer_states.user_id          text                fk,not null     billing.ts:1488
+time_entry_timer_states.state            text                not null        billing.ts:1492
 ```
 
-## desktop_time_entry_batches · `desktopTimeEntryBatches` · billing.ts:1493 · rls
+## desktop_time_entry_batches · `desktopTimeEntryBatches` · billing.ts:1524 · rls
 
 Receipts survive edits or deletion of individual drafts so a network retry cannot recreate a reviewed batch.
 
 ```text
-desktop_time_entry_batches.organization_id      safeOrganizationId  fk,not null       billing.ts:1496
-desktop_time_entry_batches.user_id              text                fk,not null       billing.ts:1499
-desktop_time_entry_batches.idempotency_key      varchar             not null          billing.ts:1503
-desktop_time_entry_batches.request_fingerprint  varchar             null              billing.ts:1504
-desktop_time_entry_batches.status               text                default,not null  billing.ts:1505
-desktop_time_entry_batches.result               jsonb               null              billing.ts:1509
-desktop_time_entry_batches.created_at           timestamptz         default,not null  billing.ts:1510
+desktop_time_entry_batches.organization_id      safeOrganizationId  fk,not null       billing.ts:1527
+desktop_time_entry_batches.user_id              text                fk,not null       billing.ts:1530
+desktop_time_entry_batches.idempotency_key      varchar             not null          billing.ts:1534
+desktop_time_entry_batches.request_fingerprint  varchar             null              billing.ts:1535
+desktop_time_entry_batches.status               text                default,not null  billing.ts:1536
+desktop_time_entry_batches.result               jsonb               null              billing.ts:1540
+desktop_time_entry_batches.created_at           timestamptz         default,not null  billing.ts:1541
 ```

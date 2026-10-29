@@ -1969,9 +1969,12 @@ const INVOICE_PAYMENTS_OWNER = sql`current_user = (SELECT pg_catalog.pg_get_user
  * FORCE RLS applies to the table owner, which runs the online backfill that
  * records the settlement of invoices marked paid before payment records
  * existed. It reads every payment (so a repaired invoice leaves its selection)
- * and inserts only recorder-less settlements; it never updates or deletes.
+ * and inserts only legacy-origin, recorder-less settlements; it never updates or deletes.
  */
-export const invoicePaymentOwnerBackfillPolicies = () => [
+export const invoicePaymentOwnerBackfillPolicies = (
+  table: { origin: p.AnyPgColumn; recordedBy: p.AnyPgColumn },
+  legacyOrigin: SQL,
+) => [
   p.pgPolicy("invoice_payments_owner_select", {
     for: "select",
     to: "public",
@@ -1980,7 +1983,7 @@ export const invoicePaymentOwnerBackfillPolicies = () => [
   p.pgPolicy("invoice_payments_owner_backfill_insert", {
     for: "insert",
     to: "public",
-    withCheck: sql`${INVOICE_PAYMENTS_OWNER} AND recorded_by IS NULL`,
+    withCheck: sql`${INVOICE_PAYMENTS_OWNER} AND ${table.origin} = ${legacyOrigin} AND ${table.recordedBy} IS NULL`,
   }),
 ];
 

@@ -1296,6 +1296,22 @@ export const invoiceLines = p.pgTable(
   ],
 );
 
+export const INVOICE_PAYMENT_ORIGIN = {
+  LEGACY: "legacy",
+  RECORDED: "recorded",
+} as const;
+
+const INVOICE_PAYMENT_ORIGINS = [
+  INVOICE_PAYMENT_ORIGIN.LEGACY,
+  ...Object.values(INVOICE_PAYMENT_ORIGIN).filter(
+    (origin) => origin !== INVOICE_PAYMENT_ORIGIN.LEGACY,
+  ),
+] as const;
+
+const INVOICE_PAYMENT_ORIGIN_SQL_VALUES = INVOICE_PAYMENT_ORIGINS.map(
+  (origin) => sql.raw(`'${origin}'`),
+);
+
 const INVOICE_PAYMENT_METHOD_SQL_VALUES = INVOICE_PAYMENT_METHODS.map(
   (method) => sql.raw(`'${method}'`),
 );
@@ -1334,6 +1350,8 @@ export const invoicePayments = p.pgTable(
     amount: centsColumn("amount").notNull(),
     paidOn: p.date("paid_on").notNull(),
     method: p.text("method", { enum: INVOICE_PAYMENT_METHODS }).notNull(),
+    // Server-set provenance distinguishes a repaired settlement from a payment entered through the payment owner.
+    origin: p.text("origin", { enum: INVOICE_PAYMENT_ORIGINS }).notNull(),
     reference: p.varchar("reference", {
       length: INVOICE_PAYMENT_INPUT_LIMITS.referenceMaxChars,
     }),
@@ -1356,12 +1374,25 @@ export const invoicePayments = p.pgTable(
       sql`${table.method} in (${sql.join(INVOICE_PAYMENT_METHOD_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
+      "invoice_payments_origin_check",
+      sql`${table.origin} in (${sql.join(INVOICE_PAYMENT_ORIGIN_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
       "invoice_payments_void_check",
       sql`(${table.voidedAt} IS NULL) = (${table.voidedBy} IS NULL)`,
     ),
     completeInvoiceVisibilityPolicy("invoice_payments", table),
+    p.pgPolicy("invoice_payments_recorded_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`${table.origin} = ${sql.raw(`'${INVOICE_PAYMENT_ORIGIN.RECORDED}'`)} AND ${table.recordedBy} IS NOT NULL`,
+    }),
     invoicePaymentNoDeletePolicy(),
-    ...invoicePaymentOwnerBackfillPolicies(),
+    ...invoicePaymentOwnerBackfillPolicies(
+      table,
+      sql.raw(`'${INVOICE_PAYMENT_ORIGIN.LEGACY}'`),
+    ),
     ...reviewResetOwnerPolicies("invoice_payments"),
     ...orgPolicies(),
   ],

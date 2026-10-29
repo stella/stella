@@ -8,14 +8,17 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import fc from "fast-check";
 import * as v from "valibot";
 
+import { assertProperty } from "@stll/property-testing";
 import { parseTimeZoneId, Temporal } from "@stll/time";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
 import {
   featureEnrolments,
+  INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
   invoicePayments,
   invoices,
@@ -460,6 +463,107 @@ describe("invoice payments", () => {
     expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.PAID);
   });
 
+  test("repairing a newly settled finalized invoice preserves its unsent state", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const paymentId = paymentIdOf(
+      await record(invoiceId, {
+        amount: 10_000,
+        note: LEGACY_PAYMENT_NOTE,
+      }),
+    );
+    expect(await readDetail(invoiceId)).toMatchObject({
+      status: INVOICE_STATUS.PAID,
+      sentAt: null,
+    });
+    const before = await readDetail(invoiceId);
+    await runInvoiceBackfills();
+    expect(await readDetail(invoiceId)).toEqual(before);
+    await voidPayment(invoiceId, paymentId);
+    expect(await readDetail(invoiceId)).toMatchObject({
+      status: INVOICE_STATUS.FINALIZED,
+      sentAt: null,
+      paidAt: null,
+    });
+  });
+
+  test("invoice repairs are a fixed point after new-flow sequences", async () => {
+    await assertProperty(
+      "invoice repairs are a fixed point after new-flow sequences",
+      fc.asyncProperty(
+        fc.boolean(),
+        fc.array(fc.constantFrom("send", "pay", "void"), {
+          minLength: 1,
+          maxLength: 8,
+        }),
+        async (zeroTotal, actions) => {
+          const invoiceId = await seedInvoice({
+            status: INVOICE_STATUS.FINALIZED,
+            totalAmount: zeroTotal ? 0 : 10_000,
+          });
+          let paymentId: string | null = null;
+          for (const action of actions) {
+            const stored =
+              (await readStored(invoiceId)) ??
+              panic("Expected generated invoice");
+            switch (action) {
+              case "send":
+                if (stored.status === INVOICE_STATUS.FINALIZED) {
+                  expect(
+                    await run(transitionInvoice, {
+                      params: { invoiceId },
+                      body: { action: "send" },
+                      route: "/v1/invoices/:workspaceId/:invoiceId/transition",
+                    }),
+                  ).toEqual({ id: invoiceId });
+                }
+                break;
+              case "pay":
+                if (
+                  !zeroTotal &&
+                  (stored.status === INVOICE_STATUS.FINALIZED ||
+                    stored.status === INVOICE_STATUS.SENT)
+                ) {
+                  paymentId = paymentIdOf(
+                    await record(invoiceId, { amount: 10_000 }),
+                  );
+                }
+                break;
+              case "void":
+                if (paymentId !== null) {
+                  expect(await voidPayment(invoiceId, paymentId)).toMatchObject(
+                    { id: paymentId },
+                  );
+                  paymentId = null;
+                }
+                break;
+              default:
+                action satisfies never;
+            }
+            const before = await readDetail(invoiceId);
+            await runInvoiceBackfills();
+            expect(await readDetail(invoiceId)).toEqual(before);
+          }
+        },
+      ),
+      { numRuns: 12 },
+    );
+  });
+
+  test("settling a sent invoice without a marker retains its sent state on void", async () => {
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.SENT,
+      legacy: { paidAt: null },
+    });
+    const paymentId = paymentIdOf(await record(invoiceId, { amount: 10_000 }));
+    expect(await readDetail(invoiceId)).toMatchObject({
+      sentAt: expect.any(String),
+    });
+    await voidPayment(invoiceId, paymentId);
+    expect(await readDetail(invoiceId)).toMatchObject({
+      status: INVOICE_STATUS.SENT,
+    });
+  });
+
   test("a finalized invoice takes payments, is paid when settled and returns to finalized", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     await record(invoiceId, { amount: 4000 });
@@ -553,6 +657,24 @@ describe("invoice payments", () => {
     expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.PAID);
     await voidPayment(invoiceId, paymentId);
     expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.SENT);
+  });
+
+  test("a legacy settlement remains eligible when its payment is repaired before its sent marker", async () => {
+    const paidAt = new Date("2026-07-01T10:00:00Z");
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.PAID,
+      legacy: { paidAt },
+    });
+    await INVOICE_LEGACY_PAYMENT_BACKFILL.repair(onlineConnection());
+    expect(await readDetail(invoiceId)).toMatchObject({
+      sentAt: null,
+      paidAmount: 10_000,
+      outstandingAmount: 0,
+    });
+    await INVOICE_SENT_AT_BACKFILL.repair(onlineConnection());
+    expect(await readDetail(invoiceId)).toMatchObject({
+      sentAt: paidAt.toISOString(),
+    });
   });
 
   test("an invoice marked paid before payment records existed gets its settling payment", async () => {
@@ -819,6 +941,7 @@ describe("invoice payments", () => {
           amount: cents(100),
           paidOn: PAID_ON,
           method: "cash",
+          origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
           recordedBy: ids.userB1,
         }),
     );

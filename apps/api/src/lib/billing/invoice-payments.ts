@@ -9,6 +9,7 @@ import { Temporal, todayFor } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   invoicePayments,
@@ -323,10 +324,12 @@ const moveInvoiceStatus = async (
   tx: Transaction,
   {
     scope,
+    invoice,
     to,
     recordTransitionAuditEvent,
   }: {
     scope: InvoiceSettlementScope;
+    invoice: LockedInvoice;
     to: InvoiceStatus;
     recordTransitionAuditEvent: ReturnType<typeof recordSettlement>;
   },
@@ -339,7 +342,13 @@ const moveInvoiceStatus = async (
       options: {
         from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT],
         to: INVOICE_STATUS.PAID,
-        set: { paidAt: scope.now, updatedAt: scope.now },
+        set: {
+          paidAt: scope.now,
+          updatedAt: scope.now,
+          sentAt:
+            invoice.sentAt ??
+            (invoice.status === INVOICE_STATUS.SENT ? scope.now : null),
+        },
       },
       recordTransitionAuditEvent,
     });
@@ -392,6 +401,7 @@ const settleStatus = async (
   }
   const moved = await moveInvoiceStatus(tx, {
     scope,
+    invoice,
     to: next,
     recordTransitionAuditEvent: recordSettlement(scope, status),
   });
@@ -497,6 +507,7 @@ export const recordInvoicePayment = async (
       organizationId: scope.organizationId,
       invoiceId: scope.invoiceId,
       amount: cents(input.amount),
+      origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
       paidOn: input.paidOn,
       method: input.method,
       reference: input.reference,

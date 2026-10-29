@@ -19,6 +19,7 @@ CREATE TABLE "invoice_payments" (
   "amount" bigint NOT NULL,
   "paid_on" date NOT NULL,
   "method" text NOT NULL,
+  "origin" text NOT NULL,
   "reference" varchar(140),
   "note" varchar(1000),
   "recorded_by" text,
@@ -29,6 +30,7 @@ CREATE TABLE "invoice_payments" (
   CONSTRAINT "invoice_payments_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE,
   CONSTRAINT "invoice_payments_amount_check" CHECK ("amount" > 0),
   CONSTRAINT "invoice_payments_method_check" CHECK ("method" in ('bank_transfer', 'card', 'cash', 'other')),
+  CONSTRAINT "invoice_payments_origin_check" CHECK ("origin" in ('legacy', 'recorded')),
   CONSTRAINT "invoice_payments_void_check" CHECK (("voided_at" IS NULL) = ("voided_by" IS NULL))
 );--> statement-breakpoint
 
@@ -48,6 +50,7 @@ CREATE POLICY "invoice_payments_complete_invoice" ON "invoice_payments" AS RESTR
   WITH CHECK (EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_id));--> statement-breakpoint
 -- Reversal is a void, never a delete.
 CREATE POLICY "invoice_payments_no_delete" ON "invoice_payments" AS RESTRICTIVE FOR DELETE TO stella USING (false);--> statement-breakpoint
+CREATE POLICY "invoice_payments_recorded_insert" ON "invoice_payments" AS RESTRICTIVE FOR INSERT TO stella WITH CHECK (origin = 'recorded' AND recorded_by IS NOT NULL);--> statement-breakpoint
 CREATE POLICY "organization_select" ON "invoice_payments" AS PERMISSIVE FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_insert" ON "invoice_payments" AS PERMISSIVE FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_update" ON "invoice_payments" AS PERMISSIVE FOR UPDATE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
@@ -65,12 +68,13 @@ CREATE POLICY "review_reset_owner_delete" ON "invoice_payments" FOR DELETE TO PU
 );--> statement-breakpoint
 
 -- The online backfill (apps/api/src/lib/billing/invoice-payment-backfill.ts) runs as
--- the owner: it reads every payment and inserts only the recorder-less
+-- the owner: it reads every payment and inserts only the legacy-origin, recorder-less
 -- settlement of an invoice marked paid before payment records existed.
 CREATE POLICY "invoice_payments_owner_select" ON "invoice_payments" FOR SELECT TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)
 );--> statement-breakpoint
 CREATE POLICY "invoice_payments_owner_backfill_insert" ON "invoice_payments" FOR INSERT TO PUBLIC WITH CHECK (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)
+  AND origin = 'legacy'
   AND recorded_by IS NULL
 );

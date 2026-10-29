@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -15,7 +17,6 @@ import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { PlusIcon, XCircleIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
@@ -259,6 +260,7 @@ const RecordPaymentForm = ({
 }) => {
   const t = useTranslations();
   const invalidate = useInvalidateInvoices();
+  const paidOnLabelId = useId();
 
   const schema = v.pipe(
     v.strictObject({
@@ -394,22 +396,25 @@ const RecordPaymentForm = ({
               </Field>
             )}
           </form.Field>
-          <div className="flex flex-1 flex-col gap-1.5">
-            <Label>{t("billing.invoices.payments.paidOn")}</Label>
-            <form.Field name="paidOn">
-              {(field) => (
+          <form.Field name="paidOn">
+            {(field) => (
+              <Field className="flex-1" name={field.name}>
+                <FieldLabel id={paidOnLabelId}>
+                  {t("billing.invoices.payments.paidOn")}
+                </FieldLabel>
                 <DatePickerPopover
+                  labelledBy={paidOnLabelId}
                   onChange={(value) => field.handleChange(value ?? "")}
                   value={field.state.value}
                 />
-              )}
-            </form.Field>
-          </div>
+              </Field>
+            )}
+          </form.Field>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>{t("billing.invoices.payments.method")}</Label>
-          <form.Field name="method">
-            {(field) => (
+        <form.Field name="method">
+          {(field) => (
+            <Field name={field.name}>
+              <FieldLabel>{t("billing.invoices.payments.method")}</FieldLabel>
               <Select
                 onValueChange={(value) => {
                   if (value) {
@@ -429,9 +434,9 @@ const RecordPaymentForm = ({
                   ))}
                 </SelectPopup>
               </Select>
-            )}
-          </form.Field>
-        </div>
+            </Field>
+          )}
+        </form.Field>
         <form.Field name="reference">
           {(field) => (
             <Field name={field.name}>

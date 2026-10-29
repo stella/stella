@@ -66,8 +66,8 @@ test("payments are checked, go with their invoice and with their organization", 
   await database.exec(`BEGIN; ${await migrationSql()} COMMIT;`);
   const insertPayment = async (id: string, invoiceId: string) =>
     await database.exec(`
-      INSERT INTO invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, recorded_by)
-      VALUES ('${id}', '${ORGANIZATION}', '${invoiceId}', 2100, '2026-10-20', 'bank_transfer', 'user-1');
+      INSERT INTO invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, origin, recorded_by)
+      VALUES ('${id}', '${ORGANIZATION}', '${invoiceId}', 2100, '2026-10-20', 'bank_transfer', 'recorded', 'user-1');
     `);
   await insertPayment("01a17ebc-0000-7000-8000-0000000000a1", SENT);
   await insertPayment("01a17ebc-0000-7000-8000-0000000000a2", PAID);
@@ -85,18 +85,21 @@ test("payments are checked, go with their invoice and with their organization", 
 
   for (const invalid of [
     // Not positive.
-    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 0, '2026-10-20', 'cash', 'user-1', NULL, NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 0, '2026-10-20', 'cash', 'recorded', 'user-1', NULL, NULL)`,
     // Unknown method.
-    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cheque', 'user-1', NULL, NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cheque', 'recorded', 'user-1', NULL, NULL)`,
+    // Provenance is explicit and closed.
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cash', NULL, 'user-1', NULL, NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cash', 'unknown', 'user-1', NULL, NULL)`,
     // Voided without who voided it.
-    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cash', 'user-1', now(), NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cash', 'recorded', 'user-1', now(), NULL)`,
     // An invoice that does not exist.
-    `(gen_random_uuid(), '${ORGANIZATION}', gen_random_uuid(), 10, '2026-10-20', 'cash', 'user-1', NULL, NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', gen_random_uuid(), 10, '2026-10-20', 'cash', 'recorded', 'user-1', NULL, NULL)`,
   ]) {
     const insert = await Result.tryPromise(
       async () =>
         await database.exec(
-          `INSERT INTO invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, recorded_by, voided_at, voided_by) VALUES ${invalid}`,
+          `INSERT INTO invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, origin, recorded_by, voided_at, voided_by) VALUES ${invalid}`,
         ),
     );
     expect(insert.isErr(), invalid).toBe(true);

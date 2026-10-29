@@ -9,6 +9,7 @@ import type { OnlineMigrationConnection } from "@/api/db/online-migration-connec
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
+  INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
   invoicePayments,
   invoices,
@@ -328,23 +329,50 @@ if (!databaseUrl || !runPostgres) {
               .select({
                 amount: invoicePayments.amount,
                 paidOn: invoicePayments.paidOn,
+                origin: invoicePayments.origin,
                 recordedBy: invoicePayments.recordedBy,
               })
               .from(invoicePayments)
               .where(eq(invoicePayments.invoiceId, invoiceId)),
         ),
       ).toEqual([
-        { amount: cents(TOTAL), paidOn: "2026-07-01", recordedBy: null },
+        {
+          amount: cents(TOTAL),
+          paidOn: "2026-07-01",
+          origin: INVOICE_PAYMENT_ORIGIN.LEGACY,
+          recordedBy: null,
+        },
       ]);
-      // The owner may not insert a payment someone is said to have entered.
-      const forged = await Result.tryPromise(
+      // The owner may insert only legacy settlements without an entered-by actor.
+      for (const [origin, recordedBy] of [
+        [INVOICE_PAYMENT_ORIGIN.RECORDED, null],
+        [INVOICE_PAYMENT_ORIGIN.LEGACY, fixture.userId],
+      ] as const) {
+        const forged = await Result.tryPromise(
+          async () =>
+            await owner.query(
+              `INSERT INTO public.invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, origin, recorded_by) VALUES (gen_random_uuid(), $1, $2, 1, '2026-07-01', 'other', $3, $4) RETURNING id`,
+              [fixture.organizationId, invoiceId, origin, recordedBy],
+            ),
+        );
+        expect(forged.isErr()).toBe(true);
+      }
+      const forgedLegacy = await Result.tryPromise(
         async () =>
-          await owner.query(
-            `INSERT INTO public.invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, recorded_by) VALUES (gen_random_uuid(), $1, $2, 1, '2026-07-01', 'other', 'someone') RETURNING id`,
-            [fixture.organizationId, invoiceId],
+          await asApp(
+            async (tx) =>
+              await tx.insert(invoicePayments).values({
+                organizationId: fixture.organizationId,
+                invoiceId,
+                amount: cents(1),
+                paidOn: "2026-07-01",
+                method: "other",
+                origin: INVOICE_PAYMENT_ORIGIN.LEGACY,
+                recordedBy: fixture.userId,
+              }),
           ),
       );
-      expect(forged.isErr()).toBe(true);
+      expect(forgedLegacy.isErr()).toBe(true);
     });
   }, 60_000); // timeout: real Postgres sessions run the backfill twice
 }

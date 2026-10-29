@@ -1,22 +1,24 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseTimeZoneId, Temporal, todayFor } from "@stll/time";
 
 import type { OnlineRepair } from "@/api/db/online-migration-connection";
+import { INVOICE_PAYMENT_ORIGIN } from "@/api/db/schema";
+import { lockInvoiceRepairBatch } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone";
-import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Online repairs behind migration 20261029000100_invoice_payments, which gave
  * invoices a sent marker (`sent_at`) and payment records. Invoices issued
  * before it keep their meaning:
  *
- * - A sent or paid invoice was marked sent (marking paid was only possible
- *   from sent), so it gets a sent marker. The exact send time was never
- *   stored; the earliest stored time known to follow the send stands in for
- *   it: when it was marked paid, else its last update. Only the marker's
+ * - A sent invoice, or a paid invoice with no explicitly recorded payment,
+ *   was marked sent before payment records existed, so it gets a sent marker.
+ *   The exact send time was never stored; the earliest stored time known to
+ *   follow the send stands in for it: when it was marked paid, else its last update. Only the marker's
  *   presence decides behaviour (a voided payment returns the invoice to sent).
  * - A paid invoice has its settlement recorded as one payment of its whole
  *   total, dated the day it was marked paid, method `other`, with no recorder
@@ -32,17 +34,16 @@ const BATCH_SIZE = 500;
 
 export const LEGACY_PAYMENT_NOTE = "Recorded before payment records existed";
 
-const UNMARKED_SENT_INVOICES = `SELECT i.id FROM public.invoices i WHERE i.status IN ('sent', 'paid') AND i.sent_at IS NULL`;
+// Only provenance distinguishes a legacy paid invoice from one settled by a
+// recorded payment while finalized. Payment metadata is editable and cannot
+// establish that distinction; a voided recorded payment still proves origin.
+const LEGACY_PAID_INVOICE = `i.status = 'paid' AND NOT EXISTS (SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = i.id AND p.origin = '${INVOICE_PAYMENT_ORIGIN.RECORDED}')`;
+const UNMARKED_SENT_PREDICATE = `i.sent_at IS NULL AND (i.status = 'sent' OR (${LEGACY_PAID_INVOICE}))`;
+const UNMARKED_SENT_INVOICES = `SELECT i.id FROM public.invoices i WHERE ${UNMARKED_SENT_PREDICATE}`;
 
 // A zero-total paid invoice owes nothing, so it needs no settling payment.
-const UNSETTLED_PAID_INVOICES = `SELECT i.id FROM public.invoices i WHERE i.status = 'paid' AND i.total_amount <> 0 AND NOT EXISTS (SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = i.id)`;
-
-const returnedIds = (rows: readonly unknown[], repair: string) => {
-  if (rows.some((row) => !isRecord(row) || typeof row["id"] !== "string")) {
-    panic(`${repair} returned invalid rows`);
-  }
-  return rows.length;
-};
+const UNSETTLED_PAID_PREDICATE = `(${LEGACY_PAID_INVOICE}) AND i.total_amount <> 0 AND NOT EXISTS (SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = i.id)`;
+const UNSETTLED_PAID_INVOICES = `SELECT i.id FROM public.invoices i WHERE ${UNSETTLED_PAID_PREDICATE}`;
 
 const pending = (query: string, reason: string) =>
   ({
@@ -52,20 +53,60 @@ const pending = (query: string, reason: string) =>
         : { type: "incomplete", reason },
   }) satisfies Pick<OnlineRepair, "readCompletion">;
 
-/** Repeats `batch` until it moves no row, each statement committing alone. */
+type RepairConnection = Parameters<OnlineRepair["repair"]>[0];
+
+type LockedBackfillBatchOptions = {
+  predicate: string;
+  repair: (lockedIds: string) => Promise<void>;
+};
+
+/**
+ * The online phase supplies a reserved physical session. Lock first, then
+ * repair in a separate READ COMMITTED statement: an UPDATE's row recheck
+ * alone cannot see payment rows committed after its statement snapshot.
+ */
+const lockedBackfillBatch = async (
+  connection: RepairConnection,
+  { predicate, repair }: LockedBackfillBatchOptions,
+) => {
+  await connection.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      const candidates = v.parse(
+        v.array(v.object({ id: v.string() })),
+        await lockInvoiceRepairBatch({
+          connection,
+          predicate,
+          limit: BATCH_SIZE,
+        }),
+      );
+      if (candidates.length > 0) {
+        await repair(candidates.map(({ id }) => id).join(","));
+      }
+      await connection.execute("COMMIT");
+      // Candidates invalidated while waiting on their locks still require a
+      // fresh pending read, even when this batch changed nothing.
+      return candidates;
+    },
+    catch: (cause: unknown) => cause,
+  });
+  if (outcome.isOk()) {
+    return outcome.value;
+  }
+  await connection.execute("ROLLBACK");
+  return abortTransaction(outcome.error);
+};
+
+/** Repeats bounded, separately committed batches until no candidate remains. */
 const untilEmpty = async (
-  connection: Parameters<OnlineRepair["repair"]>[0],
-  repair: string,
-  batch: string | (() => Promise<readonly unknown[]>),
+  connection: RepairConnection,
+  batch: () => ReturnType<typeof lockedBackfillBatch>,
 ) => {
   await connection.execute("SET statement_timeout = '60s'");
   try {
     for (;;) {
-      const rows =
-        typeof batch === "string"
-          ? await connection.query(batch, [BATCH_SIZE])
-          : await batch();
-      if (returnedIds(rows, repair) === 0) {
+      const rows = await batch();
+      if (rows.length === 0) {
         return { type: "complete" } as const;
       }
     }
@@ -80,13 +121,19 @@ export const INVOICE_SENT_AT_BACKFILL = {
   repair: async (connection) =>
     await untilEmpty(
       connection,
-      "Invoice sent marker backfill",
-      // An UPDATE re-checks its own predicate on the row version it locks, so
-      // an invoice voided or marked sent meanwhile is judged on that version.
-      `UPDATE public.invoices i SET sent_at = LEAST(COALESCE(i.paid_at, i.updated_at), i.updated_at)
-   WHERE i.id IN (${UNMARKED_SENT_INVOICES} ORDER BY i.id LIMIT $1)
-     AND i.status IN ('sent', 'paid') AND i.sent_at IS NULL
-   RETURNING i.id`,
+      async () =>
+        await lockedBackfillBatch(connection, {
+          predicate: UNMARKED_SENT_PREDICATE,
+          repair: async (lockedIds) => {
+            await connection.query(
+              `UPDATE public.invoices i SET sent_at = LEAST(COALESCE(i.paid_at, i.updated_at), i.updated_at)
+             WHERE i.id = ANY(string_to_array($1, ',')::uuid[])
+               AND ${UNMARKED_SENT_PREDICATE}
+             RETURNING i.id`,
+              [lockedIds],
+            );
+          },
+        }),
     ),
 } satisfies OnlineRepair;
 
@@ -107,7 +154,8 @@ const legacyDateInputs = v.array(
 );
 
 const legacyPaymentBatch = async (
-  connection: Parameters<OnlineRepair["repair"]>[0],
+  connection: RepairConnection,
+  lockedIds: string,
 ) => {
   const inputs = v.parse(
     legacyDateInputs,
@@ -116,12 +164,13 @@ const legacyPaymentBatch = async (
        s.time_zone, COALESCE(s.practice_jurisdictions, '[]'::jsonb) AS practice_jurisdictions
      FROM public.invoices i
      LEFT JOIN public.organization_settings s ON s.organization_id = i.organization_id
-     WHERE i.id IN (${UNSETTLED_PAID_INVOICES} ORDER BY i.id LIMIT $1)`,
-      [BATCH_SIZE],
+     WHERE i.id = ANY(string_to_array($1, ',')::uuid[])
+       AND ${UNSETTLED_PAID_PREDICATE}`,
+      [lockedIds],
     ),
   );
   if (inputs.length === 0) {
-    return [];
+    return;
   }
   const dates = inputs.map((row) => {
     const timeZone =
@@ -142,9 +191,8 @@ const legacyPaymentBatch = async (
       ).toString(),
     };
   });
-  // The claim retains the invoice lock through the insert and rechecks status,
-  // absence of payments and the timestamp used to derive the day. A concurrent
-  // change invalidates this input; the next batch reads its current value.
+  // The shared batch owns these invoice locks; the predicate and timestamp
+  // are checked again where the settling payments are written.
   await connection.query(
     `WITH dates AS (
        SELECT * FROM jsonb_to_recordset($1::text::jsonb)
@@ -152,20 +200,16 @@ const legacyPaymentBatch = async (
      ), claimed AS (
        UPDATE public.invoices i SET paid_at = i.paid_at
        FROM dates d
-       WHERE i.id = d.id AND i.status = 'paid' AND i.total_amount <> 0
+       WHERE i.id = d.id AND ${UNSETTLED_PAID_PREDICATE}
          AND COALESCE(i.paid_at, i.updated_at) = d.settled_at
-         AND NOT EXISTS (SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = i.id)
        RETURNING i.id, i.organization_id, i.total_amount, i.paid_at, i.updated_at, d.paid_on
      )
-     INSERT INTO public.invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, note, recorded_by, created_at)
+     INSERT INTO public.invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, origin, note, recorded_by, created_at)
      SELECT gen_random_uuid(), c.organization_id, c.id, abs(c.total_amount),
-       c.paid_on, 'other', '${LEGACY_PAYMENT_NOTE}', NULL, COALESCE(c.paid_at, c.updated_at)
+       c.paid_on, 'other', '${INVOICE_PAYMENT_ORIGIN.LEGACY}', '${LEGACY_PAYMENT_NOTE}', NULL, COALESCE(c.paid_at, c.updated_at)
      FROM claimed c RETURNING invoice_id AS id`,
     [JSON.stringify(dates)],
   );
-  // Even if every candidate changed while it was claimed, reread the pending
-  // predicate rather than declaring the repair complete from an empty insert.
-  return inputs;
 };
 
 export const INVOICE_LEGACY_PAYMENT_BACKFILL = {
@@ -177,7 +221,12 @@ export const INVOICE_LEGACY_PAYMENT_BACKFILL = {
   repair: async (connection) =>
     await untilEmpty(
       connection,
-      "Invoice settling payment backfill",
-      async () => await legacyPaymentBatch(connection),
+      async () =>
+        await lockedBackfillBatch(connection, {
+          predicate: UNSETTLED_PAID_PREDICATE,
+          repair: async (lockedIds) => {
+            await legacyPaymentBatch(connection, lockedIds);
+          },
+        }),
     ),
 } satisfies OnlineRepair;
