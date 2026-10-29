@@ -21,10 +21,9 @@ if (import.meta.main) {
       todoReason: "TODO: say why this test waits on the clock",
       remediation:
         "await the work's own completion signal or drive fake timers instead of budgeting a new site",
-      normalizeBaseEntries: (entries, baseCommit) =>
+      normalizeBaseEntries: (options) =>
         relocateLedgerEntries({
-          entries,
-          baseCommit,
+          ...options,
           repoRoot: path.resolve(import.meta.dir, ".."),
           pathIndex: 1,
         }),

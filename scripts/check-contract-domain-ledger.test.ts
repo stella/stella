@@ -73,12 +73,8 @@ test("moving a source preserves existing sites but cannot add or replace constra
         ledgerRel: "ledger.json",
         parseLedger: (text, label) =>
           parseContractDomainLedger(text, label).map(({ id }) => id),
-        normalizeBaseEntries: (baseEntries, resolvedCommit) =>
-          relocateLedgerEntries({
-            entries: baseEntries,
-            baseCommit: resolvedCommit,
-            repoRoot,
-          }),
+        normalizeBaseEntries: (options) =>
+          relocateLedgerEntries({ ...options, repoRoot }),
         label: "fixture",
         remediation: "use the contract",
         args: ["--base", baseCommit],
@@ -101,6 +97,16 @@ test("moving a source preserves existing sites but cannot add or replace constra
     git("add", "-A");
     expect(check([movedEntry])).toBe(0);
 
+    // A source that keeps its site keeps its entry; the copy cannot list the
+    // same site a second time.
+    writeFileSync(
+      path.join(repoRoot, original),
+      "export const bound = 64;\nexport const kept = true;\n",
+    );
+    git("add", "-A");
+    expect(check([originalEntry])).toBe(0);
+    expect(check([movedEntry, originalEntry])).toBe(1);
+
     const reviewedEntry = `${moved}::Form::maxLength:64::2`;
     writeFileSync(
       path.join(repoRoot, "ledger.json"),
@@ -113,12 +119,8 @@ test("moving a source preserves existing sites but cannot add or replace constra
         ledgerRel: "ledger.json",
         parseLedger: (text, label) =>
           parseContractDomainLedger(text, label).map(({ id }) => id),
-        normalizeBaseEntries: (baseEntries, resolvedCommit) =>
-          relocateLedgerEntries({
-            entries: baseEntries,
-            baseCommit: resolvedCommit,
-            repoRoot,
-          }),
+        normalizeBaseEntries: (options) =>
+          relocateLedgerEntries({ ...options, repoRoot }),
         label: "fixture",
         remediation: "use the contract",
         args: ["--base", baseCommit],

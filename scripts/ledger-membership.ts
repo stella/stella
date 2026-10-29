@@ -12,16 +12,29 @@ export const ledgerGitEnv = (): Record<string, string> =>
     ),
   );
 
-type RelocateLedgerEntriesOptions = {
+export type NormalizeBaseEntriesOptions = {
   entries: readonly string[];
   baseCommit: string;
+  /** The ledger being checked: a copy only relocates a site its source no longer lists. */
+  current: readonly string[];
+};
+
+type RelocateLedgerEntriesOptions = NormalizeBaseEntriesOptions & {
   repoRoot: string;
   pathIndex?: number;
+};
+
+const FILE_MOVE = { rename: "rename", copy: "copy" } as const;
+
+type FileMove = {
+  type: (typeof FILE_MOVE)[keyof typeof FILE_MOVE];
+  to: string;
 };
 
 export const relocateLedgerEntries = ({
   entries,
   baseCommit,
+  current,
   repoRoot,
   pathIndex = 0,
 }: RelocateLedgerEntriesOptions): string[] => {
@@ -43,7 +56,7 @@ export const relocateLedgerEntries = ({
     return panic(`Cannot read ledger renames: ${diff.stderr.toString()}`);
   }
   const diffFields = diff.stdout.toString().split("\0");
-  const renames = new Map<string, string>();
+  const moves = new Map<string, FileMove>();
   for (let index = 0; index < diffFields.length - 1; index += 3) {
     const status = diffFields.at(index);
     const from = diffFields.at(index + 1);
@@ -51,15 +64,26 @@ export const relocateLedgerEntries = ({
     if (status === undefined || !/^[CR]\d+$/u.test(status) || !from || !to) {
       return panic("Malformed ledger rename record");
     }
-    renames.set(from, to);
+    const type = status.startsWith("R") ? FILE_MOVE.rename : FILE_MOVE.copy;
+    // A rename moves the source itself; it outranks any copy of it.
+    if (moves.get(from)?.type !== FILE_MOVE.rename) {
+      moves.set(from, { type, to });
+    }
   }
-  // A move or copy keeps every other field; it cannot add a site.
+  const listed = new Set(current);
+  // A move keeps every other field and cannot add a site. A copy is an
+  // extraction only when the source entry is gone; a source that keeps its
+  // site keeps its entry, and the copy cannot list it a second time.
   return entries.map((entry) => {
     const fields = entry.split("::");
-    const renamed = renames.get(fields[pathIndex] ?? "");
-    if (renamed !== undefined) {
-      fields[pathIndex] = renamed;
+    const move = moves.get(fields[pathIndex] ?? "");
+    if (
+      move === undefined ||
+      (move.type === FILE_MOVE.copy && listed.has(entry))
+    ) {
+      return entry;
     }
+    fields[pathIndex] = move.to;
     return fields.join("::");
   });
 };
@@ -89,7 +113,7 @@ type ReadBaseLedgerOptions = {
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
   normalizeBaseEntries?:
-    ((entries: string[], baseCommit: string) => string[]) | undefined;
+    ((options: NormalizeBaseEntriesOptions) => string[]) | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
@@ -140,7 +164,10 @@ const compareLedgerMembership = ({
     });
     return entries === null
       ? []
-      : [normalizeBaseEntries?.(entries, commit) ?? entries];
+      : [
+          normalizeBaseEntries?.({ entries, baseCommit: commit, current }) ??
+            entries,
+        ];
   });
   return {
     type: "compared",

@@ -28,12 +28,8 @@ if (import.meta.main) {
         }
         return entries.map((entry) => entry.id);
       },
-      normalizeBaseEntries: (entries, baseCommit) =>
-        relocateLedgerEntries({
-          entries,
-          baseCommit,
-          repoRoot: REPO_ROOT,
-        }),
+      normalizeBaseEntries: (options) =>
+        relocateLedgerEntries({ ...options, repoRoot: REPO_ROOT }),
       label: "contract-domain",
       remediation:
         "import the contract domain or limit instead of listing a new site",
