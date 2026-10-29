@@ -35,6 +35,34 @@ describe("mentioned broken MCP connections", () => {
     }
   });
 
+  test("matches canonical Latin letter variants", () => {
+    for (const { displayName, mention } of [
+      { displayName: "Straße Archiv", mention: "STRASSE ARCHIV" },
+      { displayName: "Wrocław Registry", mention: "WROCLAW REGISTRY" },
+      { displayName: "Søren Records", mention: "SOREN RECORDS" },
+      { displayName: "ﬁling Archive", mention: "FILING ARCHIVE" },
+    ]) {
+      const candidate = {
+        ...connection,
+        displayName,
+        slug: "unrelated-server",
+      };
+      expect(matchBrokenMcpConnections(mention, [candidate])).toEqual([
+        candidate,
+      ]);
+    }
+  });
+
+  test("rejected short text stays ineligible after Unicode decomposition", () => {
+    const text = "법";
+    const displayName = normalizeUnicode(text, "NFD");
+    expect(Array.from(text)).toHaveLength(1);
+    expect(Array.from(displayName)).toHaveLength(3);
+    const candidate = { ...connection, displayName, slug: "unrelated-server" };
+    expect(canMentionMcpConnection(text)).toBe(false);
+    expect(matchBrokenMcpConnections(text, [candidate])).toEqual([]);
+  });
+
   test("matches each slug separator variant without splitting display names", () => {
     for (const slug of ["legal-records", "legal_records"]) {
       const candidate = { ...connection, displayName: "Legal Records", slug };

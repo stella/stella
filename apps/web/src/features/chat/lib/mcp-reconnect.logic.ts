@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { escapeRegExp, stripDiacritics } from "@stll/text-normalize";
+import { escapeRegExp, foldSearchMatchText } from "@stll/text-normalize";
 
 import type { McpConnectionsResponse } from "@/lib/knowledge/queries";
 
@@ -13,8 +13,6 @@ export type McpReconnectCandidate = Pick<
 };
 
 const MIN_MATCH_LENGTH = 3;
-
-const fold = (text: string) => stripDiacritics(text).toLowerCase();
 
 /** No connection name can match text shorter than the shortest matchable name. */
 export const canMentionMcpConnection = (text: string) =>
@@ -36,7 +34,10 @@ export const matchBrokenMcpConnections = <
   text: string,
   candidates: readonly Candidate[],
 ) => {
-  const foldedText = fold(text);
+  if (!canMentionMcpConnection(text)) {
+    return [];
+  }
+  const foldedText = foldSearchMatchText(text);
   return candidates.filter((candidate) => {
     switch (candidate.status) {
       case "connected":
@@ -52,7 +53,9 @@ export const matchBrokenMcpConnections = <
       candidate.displayName,
       candidate.slug,
       candidate.slug.replace(/[-_]/gu, " "),
-    ].some((name) => containsWholeName(foldedText, fold(name).trim()));
+    ].some((name) =>
+      containsWholeName(foldedText, foldSearchMatchText(name).trim()),
+    );
   });
 };
 
