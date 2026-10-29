@@ -109,7 +109,7 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
@@ -117,7 +117,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 22,
+    version: 23,
     scope: {
       type: "all",
       reason:
@@ -125,7 +125,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 25,
+    version: 26,
     scope: {
       type: "all",
       reason:
@@ -133,7 +133,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 33,
+    version: 34,
     scope: {
       type: "all",
       reason:
