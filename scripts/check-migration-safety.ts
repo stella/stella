@@ -876,7 +876,76 @@ const isRefusedPreDeployCommand = (command: string): boolean =>
       isPreDeployValidateConstraint(statement.text),
   );
 
+const ROUTINE_OPTION_KEYWORDS = new Set([
+  "as",
+  "called",
+  "cost",
+  "external",
+  "immutable",
+  "language",
+  "leakproof",
+  "not",
+  "parallel",
+  "returns",
+  "rows",
+  "security",
+  "set",
+  "stable",
+  "strict",
+  "support",
+  "transform",
+  "volatile",
+  "window",
+]);
+
+const securityDefinerSearchPathEndsWithPgTemp = (
+  statement: Statement,
+): boolean => {
+  const tokens = indexTokens(statement);
+  const isSecurityDefinerFunction = tokens.some(
+    (token, index) =>
+      isIndexKeyword(token, "security") &&
+      isIndexKeyword(tokens[index + 1], "definer"),
+  );
+  if (
+    !isSecurityDefinerFunction ||
+    !tokens.some((token) => isIndexKeyword(token, "function"))
+  ) {
+    return true;
+  }
+
+  const settingIndex = tokens.findIndex(
+    (token, index) =>
+      isIndexKeyword(token, "set") &&
+      tokens[index + 1]?.value.toLowerCase() === "search_path",
+  );
+  if (settingIndex === -1) {
+    return false;
+  }
+
+  const pathStart = settingIndex + 2;
+  const pathEnd = tokens.findIndex(
+    (token, index) =>
+      index >= pathStart &&
+      token.kind !== "punctuation" &&
+      ROUTINE_OPTION_KEYWORDS.has(token.value.toLowerCase()),
+  );
+  const pathTokens = tokens
+    .slice(pathStart, pathEnd === -1 ? undefined : pathEnd)
+    .filter((token) => token.kind !== "punctuation" && token.value !== "to");
+  return pathTokens.at(-1)?.value.toLowerCase() === "pg_temp";
+};
+
 const STATEMENT_INVARIANT_RULES = [
+  {
+    id: "security-definer-search-path",
+    description:
+      "defines a SECURITY DEFINER function without a search_path ending in pg_temp",
+    matches: (statement) =>
+      !statement.deferred &&
+      !securityDefinerSearchPathEndsWithPgTemp(statement),
+    guidance: "Set search_path explicitly and place pg_temp last.",
+  },
   {
     id: "pre-deploy-concurrent-index",
     description: "builds an index concurrently during the pre-deploy phase",

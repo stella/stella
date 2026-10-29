@@ -1,0 +1,44 @@
+SET lock_timeout = '3s';
+SET statement_timeout = '30s';
+
+ALTER FUNCTION public.cascade_member_workspace_memberships() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.chat_turn_run_id_taken(uuid, uuid, text) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.enforce_organization_member_capacity() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.enforce_organization_member_owner() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.enforce_workspace_contact_capacity() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.enforce_workspace_member_organization_member() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.enforce_workspace_organization_members() SET search_path = pg_catalog, public, pg_temp;
+-- stella-migration-safety: reviewed grant-privileges - Temporarily restore the function-owner role switch and revoke it below.
+GRANT stella_entity_gate TO SESSION_USER WITH SET TRUE;
+SET ROLE stella_entity_gate;
+ALTER FUNCTION public.entity_feature_gate_backfill(text, text, integer) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.entity_feature_gate_propagate() SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.entity_feature_gate_repair_missing() SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.entity_feature_gate_value(text, jsonb) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.entity_feature_gate_write() SET search_path = pg_catalog, pg_temp;
+RESET ROLE;
+-- stella-migration-safety: reviewed grant-privileges - Restore the existing no-role-switch membership after metadata updates.
+GRANT stella_entity_gate TO SESSION_USER WITH SET FALSE;
+ALTER FUNCTION public.entity_feature_gate_finish() SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.guard_tree_parent() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.legal_reader_annotations_drop_claim_comments() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.legal_reader_annotations_drop_document_marks() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.lock_agent_skill_for_anchor(uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.pdf_signing_handoff_scope(text) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.pdf_signing_session_scope(uuid, text) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.purge_rebuilding_corpus_index_projection_history(text, text, integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.purge_retired_corpus_index_projection_history(text, text, integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.record_agent_skill_revision() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_address_and_queue_memory_compaction() SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.stella_authorized_workspace_ids(text, text) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_case_law_coverage_summary() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_delete_source_matter_memories() SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.stella_guard_ai_memory_active_users() SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION public.stella_invoice_access(uuid, text, uuid, uuid, uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_invoice_client_guard() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_matter_invoice_count(uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_matter_reserved_charges(uuid, text, uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_matter_reserved_minutes(uuid, uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.stella_matter_reserved_time(uuid, text, uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.sync_chat_turn_workspace_from_thread() SET search_path = pg_catalog, pg_temp;

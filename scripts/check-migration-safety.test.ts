@@ -144,6 +144,38 @@ describe("check-migration-safety", () => {
   });
 
   describe("statement invariants", () => {
+    const reviewedDefiner = (options: string) => `
+      -- stella-migration-safety: reviewed security-definer - Reviewed fixed helper privileges
+      CREATE FUNCTION probe() RETURNS integer
+      LANGUAGE sql SECURITY DEFINER ${options}
+      AS $$ SELECT 1 $$;
+    `;
+
+    it("requires SECURITY DEFINER search paths to end in pg_temp", () => {
+      for (const options of [
+        "",
+        "SET search_path = ''",
+        "SET search_path FROM CURRENT",
+        "SET search_path = pg_catalog, pg_temp, public",
+      ]) {
+        expectFinding(
+          runChecker(reviewedDefiner(options)),
+          "security-definer-search-path",
+        );
+      }
+    });
+
+    it("accepts SECURITY DEFINER search paths ending in pg_temp", () => {
+      expectClean(
+        runChecker(
+          reviewedDefiner("SET search_path = pg_catalog, public, pg_temp"),
+        ),
+      );
+      expectClean(
+        runChecker(reviewedDefiner('SET search_path TO pg_catalog, "pg_temp"')),
+      );
+    });
+
     it("rejects column-target ON CONFLICT clauses", () => {
       const result = runChecker(`
         INSERT INTO "mcp_connectors" ("slug")
@@ -811,7 +843,7 @@ describe("check-migration-safety", () => {
       "a function header owns its review independently of body layout (%j)",
       (separator) => {
         const sql = `-- stella-migration-safety: reviewed security-definer - Reviewed fixed read-only helper privileges
-CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$${separator}SELECT 1;${separator}$$;`;
+CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$${separator}SELECT 1;${separator}$$;`;
         const statements = parseMigrationStatements(sql);
         const header = statements.findIndex(
           (statement) =>
