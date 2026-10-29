@@ -6,7 +6,9 @@ import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * pl-kis against payloads eureka.mf.gov.pl served.
@@ -15,7 +17,10 @@ import {
  * with provenance sidecars. Paging, resuming and the tip are driven through a
  * stubbed transport, because the behaviour under test is the cursor's.
  */
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlKisDecision,
   encodePlKisCursor,
@@ -470,6 +475,61 @@ describe("every ingested category, as the service served it", () => {
       expect(built.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
         pdfBytes,
       );
+      const decision = built.decision;
+      const part = "document-pdf";
+      const input = {
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope(
+            decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+              panic("Missing envelope"),
+            {
+              [part]: {
+                location: part,
+                sha256: legacySha256Hex(pdfBytes),
+                byteLength: pdfBytes.byteLength,
+                contentType: "application/pdf",
+              },
+            },
+          ),
+        ),
+        readObject: async () => Result.ok(pdfBytes),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+        metadata: decision.metadata,
+      } as const satisfies StoredRawReparseInput;
+      const reparse =
+        plKisAdapter.reparseStoredRaw ?? panic("Missing KIS replay");
+      globalThis.fetch = asFetchMock(async () =>
+        panic("Replay must not fetch"),
+      );
+      const replay = await reparse(input);
+      expect(replay).toEqual({ type: "parsed", result: decision });
+      expect(await reparse(input)).toEqual(replay);
+      expect(
+        await reparse({
+          ...input,
+          raw: new TextEncoder().encode(decision.sourceRaw),
+        }),
+      ).toMatchObject({
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        status: "metadata-only",
+      });
+      expect(
+        await reparse({ ...input, readObject: async () => Result.ok(null) }),
+      ).toMatchObject({
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        status: "metadata-only",
+      });
     }
   });
 

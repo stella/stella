@@ -29,6 +29,7 @@ import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/p
 import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   assembleSkCourtsDecision,
+  reparseSkCourtsStoredMetadata,
   SK_COURTS_SOURCE_FIELD_PATHS,
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
@@ -440,7 +441,7 @@ const reparse = (
   stored: StoredDecision,
   caseNumber: string,
 ): StoredRawReparseOutcome => {
-  const outcome = skCourtsAdapter.reparseStoredRaw?.({
+  const outcome = reparseSkCourtsStoredMetadata({
     raw: new TextEncoder().encode(stored.sourceRaw),
     contentType: stored.sourceRawContentType,
     caseNumber,
@@ -454,12 +455,7 @@ const reparse = (
     documentUrl: null,
     metadata: {},
   });
-  if (outcome === undefined) {
-    return panic("sk-courts declares no reparseStoredRaw");
-  }
-  return outcome instanceof Promise
-    ? panic("sk-courts reparseStoredRaw must answer without I/O")
-    : outcome;
+  return outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {

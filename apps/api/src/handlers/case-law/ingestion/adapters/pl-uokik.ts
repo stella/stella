@@ -91,6 +91,7 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -107,6 +108,7 @@ import type {
   SourceTotalCount,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
+  StoredRawReparseValue,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
@@ -137,6 +139,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1856,50 +1859,161 @@ const buildPlUokikDecision = async ({
   return Result.ok({ built, rulings, itemBuildFailures });
 };
 
-/**
- * Re-parse a stored envelope without contacting the register. A decision whose
- * document is a stored PDF is refused: a replay reads the envelope, and the
- * files are objects beside it.
- */
+const isFileStatus = (value: unknown): value is PlUokikFileStatus =>
+  Object.values(PL_UOKIK_FILE_STATUS).some((status) => status === value);
+
+const metadataOnlyPlUokikReplay = (): StoredRawReparseOutcome => ({
+  type: "rejected",
+  rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+  status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+  detail: "the stored row has no complete document object set",
+});
+
+/** Rebuild documents only from the envelope and the objects it names. */
 const reparsePlUokikStoredRaw = async (
   stored: StoredRawReparseInput,
-): Promise<StoredRawReparseOutcome> => {
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
-  if (parts?.[RULING_NAME_PART] !== undefined) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail:
-        "a court ruling is read from its stored PDF, which a replay does not read",
-    };
-  }
+): Promise<StoredRawReparseValue> => {
+  const raw = new TextDecoder().decode(stored.raw);
+  const rulingName = decodeSourceRawEnvelope(raw)?.[RULING_NAME_PART];
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
     identityOf: (listing) => {
       const identity = plUokikListingIdentity(normalizePlUokikRow(listing));
-      return identity.type === "document"
+      if (identity.type !== "document") {
+        return undefined;
+      }
+      return rulingName === undefined
         ? identity.sourceDocumentId
-        : undefined;
+        : plUokikRulingId(identity.sourceDocumentId, rulingName);
     },
   });
   if (read.type === "rejected") {
     return read;
   }
-  const objects = decodeSourceRawEnvelopeObjects(
-    new TextDecoder().decode(stored.raw),
-  );
-  if (objects[FILE_OBJECT] !== undefined) {
+  const detailHtml = read.parts[RAW_PART.DETAIL];
+  const detail =
+    detailHtml === undefined
+      ? undefined
+      : (parsePlUokikDetail(detailHtml) ?? undefined);
+  const listed = fieldFiles(detail, PL_UOKIK_LABEL.DECISION_FILES);
+  const row = normalizePlUokikRow(read.listing);
+  const objects = decodeSourceRawEnvelopeObjects(raw);
+
+  if (rulingName !== undefined) {
+    const readObject = await readStoredDocumentObject(stored, RULING_OBJECT);
+    if (Result.isError(readObject)) {
+      return readObject;
+    }
+    const bytes = readObject.value;
+    if (bytes === null) {
+      return metadataOnlyPlUokikReplay();
+    }
+    const file = fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).find(
+      ({ name }) => name === rulingName,
+    );
+    const ref = objects[RULING_OBJECT];
+    if (
+      file === undefined ||
+      detailHtml === undefined ||
+      row.unid === undefined ||
+      ref === undefined
+    ) {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored ruling is not named by its decision page",
+      };
+    }
+    const parent = await assemblePlUokikDecision({
+      entry: read.listing,
+      rawParts: plUokikRawPartsOf(read.listing, detailHtml),
+    });
+    if (parent.type === "unkeyable") {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored ruling page states no parent decision identity",
+      };
+    }
+    return {
+      type: "parsed",
+      result: await assemblePlUokikRuling({
+        entry: read.listing,
+        detailHtml,
+        unid: row.unid,
+        file,
+        fetched: {
+          name: file.name,
+          status:
+            ref.contentType === PDF_CONTENT_TYPE
+              ? PL_UOKIK_FILE_STATUS.READ
+              : PL_UOKIK_FILE_STATUS.IMAGE,
+          bytes,
+          contentType: ref.contentType,
+        },
+        decision: {
+          sourceDocumentId: row.unid,
+          caseNumber: parent.decision.caseNumber,
+          decisionDate: parent.decision.decisionDate,
+        },
+      }),
+    };
+  }
+
+  if (objects[FILE_OBJECT] === undefined) {
+    return metadataOnlyPlUokikReplay();
+  }
+  const storedFiles = stored.metadata["decisionFiles"];
+  if (!Array.isArray(storedFiles) || storedFiles.length !== listed.length) {
     return {
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail: "the document is the stored PDF, which a replay does not read",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored decision has no ordered attachment statuses",
     };
+  }
+  const files: PlUokikFetchedFile[] = [];
+  let objectIndex = 0;
+  for (const [index, file] of listed.entries()) {
+    const metadata: unknown = storedFiles[index];
+    const status = isRecord(metadata) ? metadata["status"] : undefined;
+    if (!isFileStatus(status)) {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored decision attachment has no fetch status",
+      };
+    }
+    if (
+      status !== PL_UOKIK_FILE_STATUS.READ &&
+      status !== PL_UOKIK_FILE_STATUS.IMAGE
+    ) {
+      files.push({ name: file.name, status });
+      continue;
+    }
+    const part = plUokikFileObjectName(objectIndex);
+    const readObject = await readStoredDocumentObject(stored, part);
+    if (Result.isError(readObject)) {
+      return readObject;
+    }
+    const bytes = readObject.value;
+    const ref = objects[part];
+    if (bytes === null || ref === undefined) {
+      return metadataOnlyPlUokikReplay();
+    }
+    files.push({
+      name: file.name,
+      status,
+      bytes,
+      contentType: ref.contentType,
+    });
+    objectIndex += 1;
   }
   const storedStatus = stored.metadata["detailStatus"];
   const built = await assemblePlUokikDecision({
     entry: read.listing,
     rawParts: read.parts,
+    files,
     ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
   });
   switch (built.type) {

@@ -234,6 +234,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Adapter definitions return typed stored-read failures; the existing replay
+  // callback protocol consumes those failures through Promise rejection.
+  "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
   // The tools/call callback observer preserves the SDK's result/rejection contract;

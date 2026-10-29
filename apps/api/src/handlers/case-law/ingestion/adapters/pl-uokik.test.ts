@@ -18,6 +18,8 @@ import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  withSourceRawObjects,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -55,6 +57,10 @@ import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parser
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  RAW_SOURCE_FAMILY,
+  sourceBinaryRef,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -1204,7 +1210,7 @@ describe("the court rulings a decision page attaches", () => {
     });
   });
 
-  test("a ruling's stored envelope is not replayed as a decision", async () => {
+  test("a ruling without its stored object has a metadata-only replay outcome", async () => {
     serveRegister(await registerWithRulings());
     const { decisions } = await walkCrawl(null);
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
@@ -1222,7 +1228,11 @@ describe("the court rulings a decision page attaches", () => {
       documentUrl: appeal.documentUrl ?? null,
       metadata: appeal.metadata,
     });
-    expect(replayed?.type).toBe("rejected");
+    expect(replayed).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      status: "metadata-only",
+    });
   });
 
   test("a file name too long to key on is keyed by its digest", () => {
@@ -1334,20 +1344,147 @@ describe("replaying a stored envelope", () => {
     metadata: decision.metadata,
   });
 
-  test("rebuilds the decision the crawl built from its row and page", async () => {
-    const entry = entryOf(await capturedEntries(), FILELESS);
-    const decision = decisionOf(await buildFrom(entry, await pageOf(FILELESS)));
-    const replayed = await plUokikAdapter.reparseStoredRaw?.(
-      storedOf(decision),
+  const storedObjectsOf = (decision: IngestionResult) => {
+    const objects = new Map<string, Uint8Array>();
+    const refs = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {})
+        .toReversed()
+        .map(([part, file]) => {
+          const ref = sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: "pl-uokik-fixture",
+            documentId:
+              decision.sourceDocumentId ?? panic("fixture has no identity"),
+            ...file,
+          });
+          objects.set(ref.location, file.bytes);
+          return [part, ref];
+        }),
     );
+    expect(objects.size).toBeGreaterThan(0);
+    return {
+      stored: {
+        ...storedOf(decision),
+        raw: new TextEncoder().encode(
+          withSourceRawObjects(decision.sourceRaw ?? "", refs),
+        ),
+        readObject: async (key: string) => Result.ok(objects.get(key) ?? null),
+      } satisfies StoredRawReparseInput,
+      objects,
+    };
+  };
+
+  test("replays the ordered decision PDFs to the ingestion fixed point without fetching", async () => {
+    const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+    const bytes = await pdfBytes();
+    const secondBytes = new Uint8Array(
+      await Bun.file(
+        new URL("pl-uokik-ruling-vi-aca-527-08.pdf", PARSER_FIXTURES),
+      ).arrayBuffer(),
+    );
+    expect(legacySha256Hex(bytes)).not.toBe(legacySha256Hex(secondBytes));
+    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const decisionCell = $("tr")
+      .filter(
+        (_, element) => $(element).find("b").first().text() === "Decyzja:",
+      )
+      .find("td")
+      .last();
+    decisionCell.html(
+      [
+        '<a href="/$FILE/missing.pdf">missing</a>',
+        '<a href="/$FILE/first.pdf">first</a>',
+        '<a href="/$FILE/second.pdf">second</a>',
+      ].join(""),
+    );
+    const detailHtml = $.html();
+    const detail =
+      parsePlUokikDetail(detailHtml) ?? panic("decision detail missing");
+    const decisionFiles =
+      detail.fields.find(({ label }) => label === PL_UOKIK_LABEL.DECISION_FILES)
+        ?.files ?? [];
+    expect(decisionFiles.map(({ name }) => name)).toEqual([
+      "missing.pdf",
+      "first.pdf",
+      "second.pdf",
+    ]);
+    const decision = decisionOf(
+      await assemblePlUokikDecision({
+        entry,
+        rawParts: plUokikRawPartsOf(entry, detailHtml),
+        files: [
+          { name: "missing.pdf", status: PL_UOKIK_FILE_STATUS.NOT_FOUND },
+          { name: "first.pdf", status: PL_UOKIK_FILE_STATUS.READ, bytes },
+          {
+            name: "second.pdf",
+            status: PL_UOKIK_FILE_STATUS.READ,
+            bytes: secondBytes,
+          },
+        ],
+      }),
+    );
+    expect(decision.fulltext?.length ?? 0).toBeGreaterThan(0);
+    const fixture = storedObjectsOf(decision);
+    globalThis.fetch = asFetchMock(async () => panic("replay must not fetch"));
+    const replayed = await plUokikAdapter.reparseStoredRaw?.(fixture.stored);
     expect(replayed?.type).toBe("parsed");
     if (replayed?.type === "parsed") {
-      expect(replayed.result.rawHash).toBe(decision.rawHash);
-      expect(replayed.result.metadata).toEqual(decision.metadata);
+      expect(replayed.result).toEqual(decision);
+      const again = await plUokikAdapter.reparseStoredRaw?.(
+        storedObjectsOf(replayed.result).stored,
+      );
+      expect(again).toEqual(replayed);
     }
+    fixture.objects.clear();
+    expect(
+      await plUokikAdapter.reparseStoredRaw?.(fixture.stored),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      status: "metadata-only",
+    });
   });
 
-  test("keeps the reason a row was stored without its page", async () => {
+  test("replays the stored court ruling PDF to the ingestion fixed point without fetching", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    const decision = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    expect(decision.fulltext?.length ?? 0).toBeGreaterThan(0);
+    const fixture = storedObjectsOf(decision);
+    globalThis.fetch = asFetchMock(async () => panic("replay must not fetch"));
+    const replayed = await plUokikAdapter.reparseStoredRaw?.(fixture.stored);
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result).toEqual(decision);
+      const again = await plUokikAdapter.reparseStoredRaw?.(
+        storedObjectsOf(replayed.result).stored,
+      );
+      expect(again).toEqual(replayed);
+    }
+    fixture.objects.clear();
+    expect(
+      await plUokikAdapter.reparseStoredRaw?.(fixture.stored),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      status: "metadata-only",
+    });
+  });
+
+  test("a row without a document object yields a metadata-only replay outcome", async () => {
+    const entry = entryOf(await capturedEntries(), FILELESS);
+    const decision = decisionOf(await buildFrom(entry, await pageOf(FILELESS)));
+    globalThis.fetch = asFetchMock(async () => panic("replay must not fetch"));
+    expect(
+      await plUokikAdapter.reparseStoredRaw?.(storedOf(decision)),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      status: "metadata-only",
+    });
+  });
+
+  test("a row stored without its page yields a metadata-only replay outcome", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
     const decision = decisionOf(
       await assemblePlUokikDecision({
@@ -1356,14 +1493,14 @@ describe("replaying a stored envelope", () => {
         detailStatus: PL_UOKIK_DETAIL_STATUS.GONE,
       }),
     );
-    const replayed = await plUokikAdapter.reparseStoredRaw?.(
-      storedOf(decision),
-    );
+    globalThis.fetch = asFetchMock(async () => panic("replay must not fetch"));
     expect(
-      replayed?.type === "parsed" &&
-        replayed.result.metadata["detailStatus"] ===
-          PL_UOKIK_DETAIL_STATUS.GONE,
-    ).toBe(true);
+      await plUokikAdapter.reparseStoredRaw?.(storedOf(decision)),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      status: "metadata-only",
+    });
   });
 });
 

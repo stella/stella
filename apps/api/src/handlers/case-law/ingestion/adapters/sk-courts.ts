@@ -35,6 +35,7 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -49,6 +50,7 @@ import type {
   SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
+  StoredRawReparseValue,
   SyncPage,
   UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -115,6 +117,8 @@ import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
+import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1999,7 +2003,7 @@ const skCourtsStoredDocketMatch = ({
  * are recoverable without asking the publisher again precisely because that
  * record was kept, which is the whole argument for storing it.
  */
-const reparseStoredRaw = (
+export const reparseSkCourtsStoredMetadata = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
   if (
@@ -2097,6 +2101,62 @@ const reparseStoredRaw = (
     type: "parsed",
     result: decision,
     legacyCaseNumber: stored.caseNumber,
+  };
+};
+
+const reparseStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseValue> => {
+  const metadata = reparseSkCourtsStoredMetadata(stored);
+  if (metadata.type !== "parsed") {
+    return metadata;
+  }
+  const readObject = await readStoredDocumentObject(
+    stored,
+    DOCUMENT_RAW_CAPTURE[ADAPTER_KEYS.SK_COURTS].objectPart,
+  );
+  if (Result.isError(readObject)) {
+    return readObject;
+  }
+  const bytes = readObject.value;
+  if (bytes === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail: "Stored metadata has no document PDF object",
+    };
+  }
+  const { result } = metadata;
+  const document = await parsePendingDocument(
+    {
+      caseNumber: result.caseNumber,
+      court: result.court,
+      ecli: result.ecli ?? null,
+      decisionDate: result.decisionDate ?? null,
+      decisionType: result.decisionType ?? null,
+    },
+    bytes,
+  );
+  if (document === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "Stored PDF parsed without document text",
+    };
+  }
+  return {
+    type: "parsed",
+    result: {
+      ...result,
+      ...document,
+      sourceRaw: new TextDecoder().decode(stored.raw),
+      sourceRawContentType:
+        stored.contentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    ...(metadata.legacyCaseNumber === undefined
+      ? {}
+      : { legacyCaseNumber: metadata.legacyCaseNumber }),
   };
 };
 

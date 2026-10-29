@@ -1,3 +1,5 @@
+// parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
+// parser-output-unchanged: Stored-object readers and metadata-only replay outcomes leave ingestion parsing unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
@@ -67,6 +69,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type SourceRawParts,
 } from "@/api/lib/legal-search/source-raw-envelope";
+import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
@@ -854,6 +857,8 @@ export const LEGACY_RAW_SHAPES = {
  */
 export type StoredRawReparseInput = {
   raw: Uint8Array;
+  /** Reads stored envelope objects only; supplied by the replay driver. */
+  readObject?: StoredRawResultReader;
   /** Media type recorded with the payload; null on rows stored without one. */
   contentType: string | null;
   caseNumber: string;
@@ -891,6 +896,18 @@ export const STORED_RAW_REPARSE_REJECTION = {
 export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
+export const STORED_RAW_REPLAY_STATUS = {
+  METADATA_ONLY: "metadata-only",
+} as const;
+
+/** Missing document input, distinguished without changing driver rejection counters. */
+export type StoredRawMetadataOnlyOutcome = {
+  type: "rejected";
+  rejection: typeof STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT;
+  status: typeof STORED_RAW_REPLAY_STATUS.METADATA_ONLY;
+  detail: string;
+};
+
 export type StoredRawReparseOutcome =
   | {
       type: "parsed";
@@ -912,9 +929,15 @@ export type StoredRawReparseOutcome =
   | {
       type: "rejected";
       rejection: StoredRawReparseRejection;
+      status?: never;
       /** Row-specific context for the operator; safe to print. */
       detail: string;
-    };
+    }
+  | StoredRawMetadataOnlyOutcome;
+
+/** Definitions can return a typed read failure; the adapter factory owns callback rejection. */
+export type StoredRawReparseValue =
+  StoredRawReparseOutcome | Result<StoredRawReparseOutcome, StoredRawReadError>;
 
 /** A rejection on its own, for a step that can refuse before a result exists. */
 type StoredRawReparseRejected = Extract<
@@ -1660,10 +1683,15 @@ export type SourceAdapter = {
 
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
-  "country" | "key" | "name" | "observeDocumentStage"
+  "country" | "key" | "name" | "observeDocumentStage" | "reparseStoredRaw"
 > & {
   readonly key: TKey;
   readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
+  reparseStoredRaw?:
+    | ((
+        stored: StoredRawReparseInput,
+      ) => StoredRawReparseValue | Promise<StoredRawReparseValue>)
+    | undefined;
 };
 
 type ScopedCallbacks<TSource> = {
@@ -1715,7 +1743,14 @@ export const defineSourceAdapter = <
     observeDocumentStage,
     getTotalCount: scoped(adapter.getTotalCount),
     reparseStoredRaw:
-      reparseStoredRaw === undefined ? undefined : scoped(reparseStoredRaw),
+      reparseStoredRaw === undefined
+        ? undefined
+        : scoped(function (this: unknown, stored: StoredRawReparseInput) {
+            const value = reparseStoredRaw.call(this, stored);
+            return value instanceof Promise
+              ? value.then(readStoredRawReparseResult)
+              : readStoredRawReparseResult(value);
+          }),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
         fetchPage: async () => {

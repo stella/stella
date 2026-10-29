@@ -1,9 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { decodeSourceRawEnvelopeObjects } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import type { ParserParityEntry } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
@@ -77,7 +78,16 @@ export const parserParityOutput = async (
     return parityOutputOf(decision);
   }
 
+  const refs = decodeSourceRawEnvelopeObjects(decision.sourceRaw);
+  const objects = new Map(
+    Object.entries(decision.sourceRawObjects ?? {}).map(([part, object]) => [
+      refs[part]?.location ??
+        panic(`Fixture document ${part} has no stored reference`),
+      object.bytes,
+    ]),
+  );
   const replayed = await reparse({
+    readObject: async (key) => Result.ok(objects.get(key) ?? null),
     raw: new TextEncoder().encode(decision.sourceRaw),
     contentType: decision.sourceRawContentType ?? null,
     caseNumber: decision.caseNumber,
