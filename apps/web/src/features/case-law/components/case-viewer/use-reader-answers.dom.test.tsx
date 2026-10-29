@@ -367,6 +367,95 @@ test.each(["sk", "cs", "pl"])(
   },
 );
 
+test("a language change queues regeneration behind a busy answer", async () => {
+  const server = fakeServer();
+  const readerFetch = globalThis.fetch;
+  let releaseFollowUp: () => void = () => undefined;
+  const followUpGate = new Promise<void>((resolve) => {
+    releaseFollowUp = resolve;
+  });
+  let holdNextAnswerRequest = false;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (
+        holdNextAnswerRequest &&
+        request.method === "POST" &&
+        !path.endsWith("/auth/update-user")
+      ) {
+        holdNextAnswerRequest = false;
+        await followUpGate;
+      }
+      return await readerFetch(input, init);
+    },
+    { preconnect: readerFetch.preconnect },
+  );
+  const { wrapper, client } = setup();
+  const { sessionOptions, fetchSession } = await import("@/lib/auth-queries");
+  client.setQueryData(
+    sessionOptions.queryKey,
+    () =>
+      ({
+        user: {
+          ...user,
+          readerAnswerLanguage: "document",
+          emailVerified: true,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+          twoFactorEnabled: false,
+        },
+        session: {
+          id: "test-session",
+          userId: user.id,
+          activeOrganizationId: user.activeOrganizationId,
+          expiresAt: new Date("2030-01-01"),
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+          token: "test-token",
+          ipAddress: null,
+          userAgent: null,
+        },
+      }) satisfies NonNullable<Awaited<ReturnType<typeof fetchSession>>>,
+  );
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
+        documentLanguage: "cs",
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(async () => await hook.result.current.createExplain(anchor));
+  holdNextAnswerRequest = true;
+
+  let followUp: Promise<unknown> | undefined;
+  act(() => {
+    followUp = hook.result.current.followUp("answer-1", "Continue");
+  });
+  await waitFor(() =>
+    expect(hook.result.current.busyAnswerIds.has("answer-1")).toBe(true),
+  );
+  let languageChange: Promise<unknown> | undefined;
+  act(() => {
+    languageChange = hook.result.current.setAnswerLanguage("en", "answer-1");
+  });
+  await waitFor(() =>
+    expect(server.preferenceBodies).toEqual([{ readerAnswerLanguage: "en" }]),
+  );
+  expect(server.bodies).toHaveLength(1);
+
+  releaseFollowUp();
+  await act(async () => {
+    await followUp;
+    await languageChange;
+  });
+  expect(server.bodies.at(-1)).toEqual({ locale: "en" });
+  expect(server.bodies).toHaveLength(3);
+});
+
 test("reader answers create, follow up, regenerate, share, reload and delete through the HTTP boundary", async () => {
   const server = fakeServer();
   const { wrapper } = setup();
@@ -690,6 +779,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
   const { AnnotationToolbar } =
     await import("@/components/legal-reader/annotations/annotation-toolbar");
   const { ReaderAnswerCard } = await import("./reader-answer-card");
+  const { ReaderAnswerLanguagePicker } =
+    await import("./reader-answer-language-picker");
   const { ActionCapabilitiesProvider } =
     await import("@/lib/organization/feature-access/capability-actions");
   const { resolveActionCapabilities } =
@@ -717,6 +808,14 @@ test("selecting decision text and clicking Explain opens the persisted margin an
             update: async () => Result.ok(undefined),
           }}
           mode="authenticated"
+          explainLanguagePicker={
+            <ReaderAnswerLanguagePicker
+              disabled={false}
+              documentLanguage="cs"
+              onChange={() => undefined}
+              value="document"
+            />
+          }
           onClearActive={() => undefined}
           onActivateAnnotation={() => undefined}
           scrollContainerRef={root}
@@ -839,6 +938,26 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     const explain = await view.findByRole("button", {
       name: messages.readerAnswers.explain,
     });
+    fireEvent.click(
+      view.getByRole("button", { name: messages.readerAnswers.answerLanguage }),
+    );
+    const english = await view.findByRole("menuitemradio", {
+      name: "English",
+    });
+    if (fireEvent.mouseDown(english)) {
+      selection.removeAllRanges();
+      testDocument.dispatchEvent(new Event("selectionchange"));
+    }
+    fireEvent.click(english);
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+    expect(selection.toString()).toBe(span.quote);
+    expect(
+      view.getByRole("button", { name: messages.readerAnswers.explain }),
+    ).toBe(explain);
     fireEvent.click(explain);
     await waitFor(() => expect(view.getByText("Answer 1")).toBeTruthy());
     expect(view.getByRole("region")).toBeTruthy();

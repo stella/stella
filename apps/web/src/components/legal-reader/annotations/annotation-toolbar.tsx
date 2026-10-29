@@ -740,7 +740,9 @@ export const AnnotationToolbar = ({
       doc={doc}
       onAttach={attachBar}
     >
-      {content}
+      <div onMouseDown={(event) => event.preventDefault()} role="presentation">
+        {content}
+      </div>
     </SelectionToolbar>
   );
 };

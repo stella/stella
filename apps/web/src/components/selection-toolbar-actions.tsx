@@ -143,7 +143,6 @@ export const SelectionCopyMenu = ({
           setPreviewMode(null);
           onOpenChange(!open);
         }}
-        onMouseDown={(event) => event.preventDefault()}
         size="sm"
         variant="ghost"
       >
@@ -206,7 +205,6 @@ export const SelectionCopyMenu = ({
                       ?.focus();
                   }}
                   onFocus={() => setPreviewMode(copyMode)}
-                  onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setPreviewMode(copyMode)}
                   type="button"
                 >
