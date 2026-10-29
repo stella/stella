@@ -143,7 +143,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.9",
+    specifier: "^0.9.11",
   },
   compilerApi: {
     dependency: "typescript6",
