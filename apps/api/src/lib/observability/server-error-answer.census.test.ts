@@ -177,7 +177,7 @@ const constructedStatuses = (
   // The owner's own constructors take the status beside the cause.
   if (
     name !== undefined &&
-    /Response$/u.test(name) &&
+    name.endsWith("Response") &&
     !OWNER_CONSTRUCTORS.has(name)
   ) {
     return args.flatMap((arg) => {
@@ -200,11 +200,11 @@ const hasExportModifier = (node: ts.Node): boolean =>
 const parameterOwner = (
   identifier: ts.Identifier,
 ): { helper: Helper; position: number } | undefined => {
-  let node: ts.Node | undefined = identifier.parent;
-  while (node !== undefined && !ts.isFunctionLike(node)) {
+  let node = identifier.parent;
+  while (!ts.isSourceFile(node) && !ts.isFunctionLike(node)) {
     node = node.parent;
   }
-  if (node === undefined) {
+  if (!ts.isFunctionLike(node)) {
     return undefined;
   }
   const position = node.parameters.findIndex(

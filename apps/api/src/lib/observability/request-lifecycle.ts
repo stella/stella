@@ -4,6 +4,7 @@
  * `requestCompletion` writes each request's one log record and duration
  * metric from its final answer.
  */
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import {
   classifyFailure,
   failureGradeOf,
@@ -40,6 +41,7 @@ import {
   observeShadow,
   SHADOW_SINKS,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import { NO_ERROR_IDENTITY } from "@/api/lib/observability/release-failures";
 import {
@@ -121,6 +123,21 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
     routeTemplate: routeName,
   } as const;
   recordRequestExceptionScope(ctx.request, scope);
+  if (answer.code === LIMITER_STORE_UNAVAILABLE.code) {
+    observeLimiterAdmissionFailure(error, "limiter");
+    if (claimRequestRecord()) {
+      emitRequestDurationMetric({
+        durationMs: elapsedMs(),
+        requestClass: requestClassAtCompletion({
+          method: ctx.request.method,
+          route: routeName,
+        }),
+        statusCode,
+        route: routeName,
+      });
+    }
+    return toResponse(status(statusCode, httpFailureBody(answer)), ctx.set);
+  }
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
@@ -356,17 +373,19 @@ export const requestCompletion: Middleware = async (ctx, inner) => {
       statusCode >= 400
         ? completionFailure(ctx.request, statusCode, ctx.route)
         : undefined;
-    logger.request({
-      ...buildRequestLogDetails({
-        durationMs,
-        request: ctx.request,
-        route: ctx.route,
-        statusCode,
-      }),
-      ...(failure === undefined ? {} : { failure }),
-      message: "request.completed",
-      severity: severityFor(statusCode, failure),
-    });
+    if (failure?.reason !== "limiter_store_unavailable") {
+      logger.request({
+        ...buildRequestLogDetails({
+          durationMs,
+          request: ctx.request,
+          route: ctx.route,
+          statusCode,
+        }),
+        ...(failure === undefined ? {} : { failure }),
+        message: "request.completed",
+        severity: severityFor(statusCode, failure),
+      });
+    }
     emitRequestDurationMetric({
       durationMs,
       requestClass: requestClassAtCompletion({

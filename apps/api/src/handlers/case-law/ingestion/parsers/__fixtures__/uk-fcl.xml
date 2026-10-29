@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:uk="https://caselaw.nationalarchives.gov.uk/akn">
+  <judgment name="judgment">
+    <meta>
+      <identification source="#publisher">
+        <FRBRWork>
+          <FRBRthis value="https://caselaw.nationalarchives.gov.uk/id/uksc/2026/900001"/>
+          <FRBRuri value="https://caselaw.nationalarchives.gov.uk/id/uksc/2026/900001"/>
+          <FRBRdate date="2026-01-02" name="judgment"/>
+          <FRBRauthor href="#uksc"/>
+          <FRBRcountry value="GB-UKM"/>
+          <FRBRnumber value="900001"/>
+          <FRBRname value="Invented Amber v Invented Birch"/>
+        </FRBRWork>
+        <FRBRExpression><FRBRuri value="https://caselaw.nationalarchives.gov.uk/uksc/2026/900001/eng"/><FRBRlanguage language="eng"/></FRBRExpression>
+        <FRBRManifestation><FRBRdate date="2026-01-03T10:00:00Z" name="transform"/><FRBRdate date="2026-01-03T10:01:00Z" name="tna-enriched"/></FRBRManifestation>
+      </identification>
+      <references source="#publisher">
+        <TLCOrganization eId="uksc" href="https://www.supremecourt.uk/" showAs="Supreme Court"/>
+        <TLCPerson eId="party-a" href="/person-invented-amber" showAs="Invented Amber"/>
+        <TLCPerson eId="party-b" href="/person-invented-birch" showAs="Invented Birch"/>
+        <TLCPerson eId="judge-a" href="/judge-invented-cedar" showAs="Justice Invented Cedar"/>
+        <TLCRole eId="appellant" href="/role/appellant" showAs="Appellant"/>
+        <TLCRole eId="respondent" href="/role/respondent" showAs="Respondent"/>
+      </references>
+      <proprietary source="#publisher">
+        <uk:court>UKSC</uk:court><uk:year>2026</uk:year><uk:number>900001</uk:number>
+        <uk:cite>[2026] UKSC 900001</uk:cite><uk:parser>synthetic-parser-1</uk:parser>
+        <uk:hash>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</uk:hash>
+        <uk:tna-enrichment-engine>synthetic-enricher-1</uk:tna-enrichment-engine>
+      </proprietary>
+    </meta>
+    <header>
+      <p><neutralCitation>[2026] UKSC 900001</neutralCitation></p>
+      <p><party refersTo="#party-a" as="#appellant">Invented Amber</party> v <party refersTo="#party-b" as="#respondent">Invented Birch</party></p>
+      <p><judge refersTo="#judge-a">Justice Invented Cedar</judge></p>
+      <p><docDate date="2026-01-02">2 January 2026</docDate></p>
+      <block name="counsel">Invented Elm, instructed by Invented Fir Solicitors.</block>
+      <p>On appeal from <ref href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2025/900002" uk:type="case" uk:canonical="[2025] EWCA Civ 900002" uk:isNeutral="true" uk:origin="parser">[2025] EWCA Civ 900002</ref></p>
+    </header>
+    <judgmentBody>
+      <decision>
+        <level class="author"><heading>Justice Invented Cedar</heading>
+          <paragraph eId="para_1"><num>1.</num><content><p>This synthetic dispute concerns a blue boundary marker. The <b>invented</b> appeal raises one question.</p></content></paragraph>
+          <paragraph eId="para_2"><num>2.</num><content><p>Compare <ref href="https://caselaw.nationalarchives.gov.uk/uksc/2024/900003" uk:type="case" uk:canonical="[2024] UKSC 900003" uk:isNeutral="true" uk:origin="TNA" uk:year="2024">Invented Grove</ref> and <ref href="http://www.legislation.gov.uk/id/ukpga/2099/900001/section/2" uk:type="legislation" uk:canonical="Invented Markers Act 2099" uk:isNeutral="false" uk:origin="parser">section 2</ref>.</p></content></paragraph>
+          <paragraph eId="para_3"><num>3.</num><content><p>The synthetic appeal is allowed. <img src="image-synthetic.png" alt="Synthetic marker diagram"/></p></content></paragraph>
+        </level>
+      </decision>
+    </judgmentBody>
+  </judgment>
+</akomaNtoso>

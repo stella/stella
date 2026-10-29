@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript6";
+import * as ts from "tsrs/unstable/ast";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
@@ -20,6 +20,8 @@ import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { parseSource } from "../packages/scripts/src/syntax-tree";
+import { createProgram } from "../packages/scripts/src/typescript-program";
 import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
@@ -55,79 +57,85 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
-test("Generator output kinds remain literal discriminators after export widening", () => {
+test("Generator output kinds remain literal discriminators after export widening", async () => {
   const file = nodePath.resolve(import.meta.dirname, "generator-type-probe.ts");
-  const declaration = ts.createSourceFile(
-    file,
+  const declaration = parseSource(
+    "generated-files.ts",
     readFileSync(
       nodePath.resolve(import.meta.dirname, "generated-files.ts"),
       "utf-8",
     ),
-    ts.ScriptTarget.Latest,
-    true,
   );
-  const definitions = declaration.statements
+  const definitions = declaration.program.body
     .filter(
       (statement) =>
-        ts.isTypeAliasDeclaration(statement) &&
-        ["Generator", "GeneratorCheck"].includes(statement.name.text),
+        (statement.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(statement.id.name)) ||
+        (statement.type === "ExportNamedDeclaration" &&
+          statement.declaration?.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(
+            statement.declaration.id.name,
+          )),
     )
-    .map((statement) => statement.getText(declaration))
+    .map((statement) =>
+      declaration.sourceText.slice(statement.start, statement.end),
+    )
     .join("\n");
-  const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
-  const host = ts.createCompilerHost(options);
-  const sourceFile = host.getSourceFile;
-  host.getSourceFile = (
-    name,
-    languageVersion,
-    onError,
-    shouldCreateNewSourceFile,
-  ) =>
-    name === file
-      ? ts.createSourceFile(name, definitions, ts.ScriptTarget.Latest, true)
-      : sourceFile(name, languageVersion, onError, shouldCreateNewSourceFile);
-  const program = ts.createProgram([file], options, host);
-  const probe = program.getSourceFile(file);
-  if (probe === undefined) {
-    throw new Error("Missing generator type probe");
-  }
-  const generatorType = probe.statements.find(
-    (statement) =>
-      ts.isTypeAliasDeclaration(statement) &&
-      statement.name.text === "Generator",
-  );
-  if (
-    generatorType === undefined ||
-    !ts.isTypeAliasDeclaration(generatorType)
-  ) {
-    throw new Error("Missing Generator declaration");
-  }
-  const checker = program.getTypeChecker();
-  const generatorUnion = checker.getTypeAtLocation(generatorType);
-  if (!generatorUnion.isUnion()) {
-    throw new Error("Generator must be a discriminated union");
-  }
-  const kinds = new Set<string>();
-  for (const branch of generatorUnion.types) {
-    const discriminator = checker.getPropertyOfType(branch, "outputKind");
-    if (discriminator === undefined) {
-      throw new Error("Generator branch has no outputKind");
-    }
-    const kind = checker.getTypeOfSymbolAtLocation(
-      discriminator,
-      generatorType,
+  const opened = await createProgram({
+    rootNames: [file],
+    virtualFiles: new Map([[file, definitions]]),
+    compilerOptions: {
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      types: [],
+    },
+  });
+  try {
+    const probe =
+      (await opened.program.getSourceFile(file)) ??
+      panic("Missing generator type probe");
+    const generatorType = probe.statements.find(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.name.text === "Generator",
     );
-    // A union-valued property recreates TS1360 even if another field forms a union.
-    if (!kind.isStringLiteral()) {
-      throw new Error(
-        "Every Generator branch must retain a literal outputKind",
-      );
+    if (
+      generatorType === undefined ||
+      !ts.isTypeAliasDeclaration(generatorType)
+    ) {
+      panic("Missing Generator declaration");
     }
-    kinds.add(kind.value);
+    const { checker } = opened;
+    const generatorUnion = await checker.getTypeAtLocation(generatorType);
+    if (!generatorUnion.isUnionType()) {
+      panic("Generator must be a discriminated union");
+    }
+    const kinds = new Set<string>();
+    for (const branch of await generatorUnion.getTypes()) {
+      const discriminator = await checker.getPropertyOfType(
+        branch,
+        "outputKind",
+      );
+      if (discriminator === undefined) {
+        panic("Generator branch has no outputKind");
+      }
+      const kind = await checker.getTypeOfSymbolAtLocation(
+        discriminator,
+        generatorType,
+      );
+      // A union-valued property recreates TS1360 even if another field forms a union.
+      if (!kind.isStringLiteralType()) {
+        panic("Every Generator branch must retain a literal outputKind");
+      }
+      kinds.add(kind.value);
+    }
+    expect(kinds).toEqual(
+      new Set(GENERATORS.map(({ outputKind }) => outputKind)),
+    );
+  } finally {
+    await opened.close();
   }
-  expect(kinds).toEqual(
-    new Set(GENERATORS.map(({ outputKind }) => outputKind)),
-  );
 });
 
 test("generation owners have unique identifiers", () => {
@@ -1382,6 +1390,13 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "scripts/generate-cloud-setup.ts",
       "scripts/generated-artifacts.ts",
     ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      "packages/portable-path/src/index.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
     write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
     check: ["bun", "scripts/generate-cloud-setup.ts"],
     autofix: true,
@@ -1401,9 +1416,15 @@ test("every plan builds the derived outputs its generators read before running t
   const witness = (glob: string) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
   const problems: string[] = [];
+  const planByGlob = new Map(
+    GENERATORS.flatMap((entry) => [...entry.inputs, ...entry.outputs]).map(
+      (glob) =>
+        [glob, orderGenerators(generatorsForFiles([witness(glob)]))] as const,
+    ),
+  );
   for (const start of GENERATORS) {
     for (const glob of [...start.inputs, ...start.outputs]) {
-      const plan = orderGenerators(generatorsForFiles([witness(glob)]));
+      const plan = planByGlob.get(glob) ?? [];
       const position = new Map(plan.map(({ id }, index) => [id, index]));
       for (const planned of plan) {
         for (const prerequisite of derivedPrerequisites(planned)) {

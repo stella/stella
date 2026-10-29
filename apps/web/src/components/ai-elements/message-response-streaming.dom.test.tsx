@@ -30,7 +30,6 @@ const MAX_STREAM_CUTS = 8;
 const MAX_LIST_ITEMS = 3;
 const AT_LEAST_ONE = 1;
 const IN_PAGE_LINK_WEIGHT = 4;
-
 /** Text no generated word contains, so a restoration for it never matches. */
 const ABSENT_ORIGINAL = "Zephyrine Quandt";
 

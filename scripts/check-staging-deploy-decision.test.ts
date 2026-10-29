@@ -15,6 +15,10 @@ const STAGING_SETUP_URL = new URL(
   import.meta.url,
 );
 const RESOLVER_URL = new URL("resolve-staging-deploy-sha.sh", import.meta.url);
+const STATUS_WRITER = path.resolve(
+  import.meta.dirname,
+  "post-staging-verification.sh",
+);
 const TIP_SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
 
@@ -74,6 +78,7 @@ type DecisionCase = {
   status: "not_ready" | "ready";
   script?: string;
   statusWriteExitCode?: number;
+  statusOwnerRun?: number;
 };
 
 type Decision = {
@@ -83,6 +88,15 @@ type Decision = {
   summary: string;
   calls: string;
 };
+
+const statusWrites = (calls: string) =>
+  calls
+    .split("\n")
+    .filter(
+      (line) =>
+        line.includes("repos/stella/stella/statuses/") &&
+        line.includes("--method POST"),
+    );
 
 let workspace = "";
 let scriptPath = "";
@@ -99,6 +113,7 @@ const runDecision = async ({
   status,
   script = scriptPath,
   statusWriteExitCode = 0,
+  statusOwnerRun = 9,
 }: DecisionCase): Promise<Decision> => {
   const outputPath = path.join(workspace, `output-${Bun.randomUUIDv7()}.txt`);
   const summaryPath = path.join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
@@ -120,12 +135,14 @@ const runDecision = async ({
       GITHUB_EVENT_NAME: "workflow_dispatch",
       GH_TOKEN: "stub",
       GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
+      STAGING_STATUS_WRITER: STATUS_WRITER,
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
       STUB_GH_EXIT_CODE: String(statusWriteExitCode),
+      STUB_STATUS_OWNER_RUN: String(statusOwnerRun),
       GITHUB_OUTPUT: outputPath,
       DEPLOY_SHA: TIP_SHA,
       GITHUB_STEP_SUMMARY: summaryPath,
@@ -236,7 +253,7 @@ const resolve = (requested: string) => {
   };
 };
 
-const runRecord = async (deploySha: string) => {
+const runRecord = async (deploySha: string, statusOwnerRun = 9) => {
   const callsPath = path.join(workspace, `gh-calls-${Bun.randomUUIDv7()}`);
   await Bun.write(callsPath, "");
   const result = Bun.spawnSync(["bash", recordScriptPath], {
@@ -247,6 +264,7 @@ const runRecord = async (deploySha: string) => {
       DEPLOY_SHA: deploySha,
       GH_TOKEN: "stub",
       GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
+      STAGING_STATUS_WRITER: STATUS_WRITER,
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
@@ -257,6 +275,7 @@ const runRecord = async (deploySha: string) => {
       WAIVE_REASON: "",
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
+      STUB_STATUS_OWNER_RUN: String(statusOwnerRun),
       WEB_SMOKE: "success",
       DEPLOYED_JOURNEYS: "success",
       MOCK_JOURNEYS: "success",
@@ -309,8 +328,22 @@ beforeAll(async () => {
     ghStub,
     `#!/usr/bin/env bash
 set -euo pipefail
-printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
-exit "\${STUB_GH_EXIT_CODE:-0}"
+if [[ " $* " == *" --method POST "* ]]; then
+  printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
+  exit "\${STUB_GH_EXIT_CODE:-0}"
+fi
+printf '%s\\n' "$*" >> "$STUB_CALLS_PATH"
+case "$*" in
+  *actions/workflows/deploy-staging.yml/runs?*)
+    jq -cn --arg sha "$DEPLOY_SHA" '{workflow_runs: [{id: 9, event: "workflow_dispatch", head_sha: $sha,
+      head_branch: "main", path: ".github/workflows/deploy-staging.yml",
+      display_title: ("Deploy main to staging " + $sha), repository: {full_name: "stella/stella"}}]}' ;;
+  *commits/*/statuses?*)
+    jq -cn --arg run "\${STUB_STATUS_OWNER_RUN:-9}" '[[{context: "staging/verified", state: "pending",
+      creator: {login: "github-actions[bot]", type: "Bot"},
+      target_url: ("https://github.com/stella/stella/actions/runs/" + $run)}]]' ;;
+  *) echo "Unexpected fixture GET: $*" >&2; exit 1 ;;
+esac
 `,
   );
   await chmod(ghStub, 0o755);
@@ -383,9 +416,9 @@ describe("staging deploy decision", () => {
     const result = await runDecision({ status: "not_ready" });
 
     expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 1 });
-    expect(result.calls).toBe(
-      `api repos/stella/stella/statuses/${TIP_SHA} --method POST --input - {"state":"error","context":"staging/verified","description":"staging off","target_url":"https://github.com/stella/stella/actions/runs/9"}\n`,
-    );
+    expect(statusWrites(result.calls)).toEqual([
+      `api repos/stella/stella/statuses/${TIP_SHA} --method POST --input - {"state":"error","context":"staging/verified","description":"staging off","target_url":"https://github.com/stella/stella/actions/runs/9"}`,
+    ]);
     expect(result.summary).toContain("Staging is off");
     expect(result.summary).toContain(TIP_SHA);
   });
@@ -404,7 +437,20 @@ describe("staging deploy decision", () => {
     expect(result.exitCode).toBe(7);
     expect(result.deploy).toBe("deploy=false");
     expect(result.calls).toContain(`statuses/${TIP_SHA}`);
-    expect(result.calls.trim().split("\n")).toHaveLength(1);
+    expect(statusWrites(result.calls)).toHaveLength(1);
+  });
+
+  test("an off dispatch stays refused without overwriting a newer run's status", async () => {
+    const result = await runDecision({
+      status: "not_ready",
+      statusOwnerRun: 10,
+    });
+    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 1 });
+    expect(statusWrites(result.calls)).toEqual([]);
+    expect(result.calls).toContain(
+      "actions/workflows/deploy-staging.yml/runs?",
+    );
+    expect(result.calls).toContain(`commits/${TIP_SHA}/statuses?`);
   });
 
   test("hands an off staging to the wake job for a release candidate only", async () => {
@@ -448,9 +494,10 @@ describe("staging deploy decision", () => {
             deployWhenUnreachable,
             releaseCandidate,
           });
-          expect(result.calls === "", "only a refusal writes a status").toBe(
-            result.exitCode === 0,
-          );
+          expect(
+            statusWrites(result.calls).length === 0,
+            "only a refusal writes a status",
+          ).toBe(result.exitCode === 0);
           if (result.exitCode !== 0) {
             expect(result.deploy).toBe("deploy=false");
             expect(result.exitCode).toBe(1);
@@ -601,15 +648,18 @@ describe("staging deploy commit", () => {
     const result = await runRecord(baseSha);
 
     expect(result.exitCode).toBe(0);
-    const statusWrites = result.calls
-      .split("\n")
-      .filter((line) => line.includes("repos/stella/stella/statuses/"));
-    expect(statusWrites).toHaveLength(1);
-    expect(statusWrites[0]).toContain(
-      `repos/stella/stella/statuses/${baseSha} `,
-    );
-    expect(statusWrites[0]).toContain('"context":"staging/verified"');
-    expect(statusWrites[0]).toContain('"state":"success"');
+    const writes = statusWrites(result.calls);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toContain(`repos/stella/stella/statuses/${baseSha} `);
+    expect(writes[0]).toContain('"context":"staging/verified"');
+    expect(writes[0]).toContain('"state":"success"');
+  });
+
+  test("a completed older staging run leaves the newer verification owner unchanged", async () => {
+    const result = await runRecord(baseSha, 10);
+    expect(result.exitCode).toBe(0);
+    expect(statusWrites(result.calls)).toEqual([]);
+    expect(result.calls).toContain("deployments/1/statuses --method POST");
   });
 
   test("builds, promotes and verifies only the resolved commit", async () => {
@@ -630,19 +680,26 @@ describe("staging deploy commit", () => {
       `ref: ${resolved}`,
       `STELLA_COMMIT_SHA=${resolved}`,
       `release-sha: ${resolved}`,
-      `git-sha: ${resolved}`,
+      `git-sha: \${{ inputs.release_ref == '' && needs.resolve.outputs.sha || '' }}`,
       `EXPECTED_COMMIT: ${resolved}`,
       `DEPLOY_SHA: ${resolved}`,
     ]) {
       expect(workflow).toContain(consumer);
     }
-    for (const job of ["staging-health", "build-api", "build-web"]) {
+    for (const job of [
+      "staging-health",
+      "rc-manifest",
+      "build-api",
+      "build-web",
+    ]) {
       const start = workflow.indexOf(`\n  ${job}:\n`);
       expect(start).toBeGreaterThanOrEqual(0);
       expect(workflow.slice(start, workflow.indexOf("steps:", start))).toMatch(
         /needs: (resolve|\[resolve, )/u,
       );
     }
-    expect(workflow).toContain("needs: [resolve, build-api, build-web]");
+    expect(workflow).toContain(
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
+    );
   });
 });

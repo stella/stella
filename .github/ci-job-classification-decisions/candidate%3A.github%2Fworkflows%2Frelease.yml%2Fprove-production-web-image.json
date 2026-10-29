@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Boots the candidate's production web image and checks its assets and declared configuration as release evidence; no publication.",
+  "reviewedDigest": "11b4a6949fdbfe425562623f86f02b9c33b5190aafd6fa45862c4654545de88b"
+}

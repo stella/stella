@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -45,6 +45,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observedStatus } from "@/api/lib/observability/server-error-answer";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
@@ -349,14 +350,17 @@ type GenerateRefinedSearchQueryOptions = {
   managedAIResidency: ManagedAIResidency;
 };
 
-const validateSearchQueryWithPostgres = async ({
+type SearchQueryValidation =
+  { type: "valid" } | { type: "invalid" } | { type: "failed"; cause: unknown };
+
+export const validateSearchQueryWithPostgres = async ({
   query,
   scopedDb,
 }: {
   query: string;
   scopedDb: ScopedDb;
-}) =>
-  await Result.tryPromise({
+}): Promise<SearchQueryValidation> => {
+  const validation = await Result.tryPromise({
     try: async () => {
       await scopedDb((tx) =>
         tx.execute(sql`SELECT ${buildSearchTsQuery(query)}::text AS query`),
@@ -364,6 +368,14 @@ const validateSearchQueryWithPostgres = async ({
     },
     catch: (error: unknown) => error,
   });
+  if (validation.isOk()) {
+    return { type: "valid" };
+  }
+  if (isPgError(validation.error, PG_ERROR.SYNTAX_ERROR)) {
+    return { type: "invalid" };
+  }
+  return { type: "failed", cause: validation.error };
+};
 
 const generateRefinedSearchQuery = async ({
   analytics,
@@ -500,12 +512,24 @@ export const refineSearchQuery = async ({
       scopedDb,
     });
 
-    if (postgresValidation.isOk()) {
-      return { query: refinedQuery };
+    switch (postgresValidation.type) {
+      case "valid":
+        return { query: refinedQuery };
+      case "failed":
+        return observedStatus(
+          { sink: SEARCH_REFINE_FAILED, cause: postgresValidation.cause },
+          502,
+          { message: "Failed to improve search query" },
+        );
+      case "invalid":
+        lastValidationError =
+          "PostgreSQL rejected the generated tsquery. Use valid stella syntax with balanced operators and searchable terms.";
+        break;
+      default: {
+        postgresValidation satisfies never;
+        return panic("Unhandled search query validation outcome");
+      }
     }
-
-    lastValidationError =
-      "PostgreSQL rejected the generated tsquery. Use valid stella syntax with balanced operators and searchable terms.";
   }
 
   return observedStatus(

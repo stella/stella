@@ -1499,6 +1499,39 @@ export const renderTail = (rawLines: readonly string[]): string => {
       "----",
     ].join("\n");
   }
+  const grouped = new Map<string, Map<string, TestFailure[]>>();
+  for (const failure of failures) {
+    const scope = failure.scope === "" ? "(unscoped)" : failure.scope;
+    const file = failure.source ?? failure.file ?? "(unknown file)";
+    let files = grouped.get(scope);
+    if (files === undefined) {
+      files = new Map();
+      grouped.set(scope, files);
+    }
+    const fileFailures = files.get(file);
+    if (fileFailures === undefined) {
+      files.set(file, [failure]);
+    } else {
+      fileFailures.push(failure);
+    }
+  }
+  const names = [...grouped].flatMap(([scope, files]) => {
+    const count = [...files.values()].reduce(
+      (total, fileFailures) => total + fileFailures.length,
+      0,
+    );
+    return [
+      inert(
+        truncate(`${scope} (${count} ${count === 1 ? "failure" : "failures"})`),
+      ),
+      ...[...files].flatMap(([file, fileFailures]) => [
+        inert(`  ${truncate(file)}`),
+        ...fileFailures.map(({ name }) =>
+          inert(`    (fail) ${truncate(name)}`),
+        ),
+      ]),
+    ];
+  });
   const shown = failures.slice(0, MAX_TAIL_TESTS);
   const blocks = shown.flatMap((failure) => {
     const prefix = failure.scope === "" ? "" : `${failure.scope}: `;
@@ -1510,7 +1543,9 @@ export const renderTail = (rawLines: readonly string[]): string => {
     ];
   });
   return [
-    `---- failing tests (${shown.length} of ${failures.length}) ----`,
+    `---- failing test names (${failures.length}) ----`,
+    ...names,
+    `---- failure details (${shown.length} of ${failures.length}) ----`,
     ...blocks,
     "----",
   ].join("\n");

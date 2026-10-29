@@ -158,6 +158,8 @@ const requestFields = (onRequest: boolean): LoggerAttributes => {
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
+const observedStoreRequests = new WeakSet<object>();
+
 /**
  * `onRequest`: the failure belongs to the request in flight, so its record
  * carries the request id and the request keeps the observation for its
@@ -173,6 +175,16 @@ const observe = (
   const grading: FailureGrading = gradeFailure(evidence, sink, {
     requestAborted: request?.signal.aborted,
   });
+  const requestContext = getRequestContext();
+  if (
+    grading.reason === "limiter_store_unavailable" &&
+    requestContext !== undefined
+  ) {
+    if (observedStoreRequests.has(requestContext)) {
+      return;
+    }
+    observedStoreRequests.add(requestContext);
+  }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
   const attributes: LoggerAttributes = {
@@ -186,7 +198,7 @@ const observe = (
       : {}),
   };
 
-  if (onRequest) {
+  if (onRequest || grading.reason === "limiter_store_unavailable") {
     recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
@@ -256,7 +268,10 @@ export const observeFailure = (
  */
 export const observeAnswerFailure = (
   error: unknown,
-  { sink, ctx }: { readonly sink: FailureSink; readonly ctx?: FailureContext },
+  {
+    sink,
+    ctx,
+  }: { readonly sink: FailureSink; readonly ctx?: FailureContext | undefined },
 ): void => {
   const observed = Result.try(() => {
     observe(error, { sink, ctx }, true);

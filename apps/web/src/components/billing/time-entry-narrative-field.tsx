@@ -19,8 +19,9 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { SavedTimeNarratives } from "@/components/billing/saved-time-narratives";
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -55,7 +56,7 @@ export const TimeEntryNarrativeField = ({
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const [isPolishing, setIsPolishing] = useState(false);
   const getLatestValue = useLatestCallback(() => value);
@@ -156,6 +157,7 @@ export const TimeEntryNarrativeField = ({
         <Label htmlFor={`${id}-language`}>{tCommon("language")}</Label>
         <Combobox<LanguagePick>
           autoHighlight
+          filter={matchesComboboxItem}
           isItemEqualToValue={(a, b) => a.code === b.code}
           items={languageOptions}
           itemToStringLabel={(item) => item.label}

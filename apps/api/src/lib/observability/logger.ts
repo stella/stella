@@ -1,7 +1,4 @@
 // parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
-import "@/api/lib/observability/otel";
-import type { AttributeValue } from "@opentelemetry/api";
-import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 import { Result } from "better-result";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
@@ -14,6 +11,12 @@ import {
 
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
+import { otlpLogExporter } from "@/api/lib/observability/otel";
+import {
+  LOG_SEVERITY_NUMBER,
+  type LogAttributeValue,
+  type LogSeverityNumber,
+} from "@/api/lib/observability/otlp-log-exporter";
 import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 
 // Denylist of attribute-key substrings whose values may carry document
@@ -31,7 +34,7 @@ import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 // rejects such keys at the call site can pin the same one.
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN = SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN;
 
-type LoggerAttributeValue = AttributeValue;
+type LoggerAttributeValue = LogAttributeValue;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 type LoggerAttributeInput = Record<string, unknown>;
@@ -90,7 +93,9 @@ const isOwnedValueValid = (key: string, value: unknown): boolean => {
 
 const UNSERIALIZABLE_ATTRIBUTE = "[unserializable attribute]";
 
-const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
+const outputAttributeValue = (
+  value: unknown,
+): LogAttributeValue | undefined => {
   if (
     typeof value === "string" ||
     typeof value === "number" ||
@@ -184,7 +189,7 @@ export type LogRecord = {
 };
 
 // Test seam: when set, every sanitized record goes here instead of to the
-// OTel pipeline and the process streams, so a test reads what the real
+// OTLP exporter and the process streams, so a test reads what the real
 // logger would have emitted (after attribute sanitization) without replacing
 // the module.
 let recordSink: ((record: LogRecord) => void) | null = null;
@@ -207,12 +212,12 @@ const UNOWNED_KEY = "observability.unowned";
  * deployed log stream.
  */
 const annotateUnowned = (
-  severityNumber: SeverityNumber,
+  severityNumber: LogSeverityNumber,
   attributes: LoggerAttributes | undefined,
 ): LoggerAttributes | undefined => {
   if (
     attributes === undefined ||
-    severityNumber < SeverityNumber.WARN ||
+    severityNumber < LOG_SEVERITY_NUMBER.WARN ||
     Object.hasOwn(attributes, OWNED_FAILURE_KEY) ||
     !Object.keys(attributes).some((key) =>
       key.startsWith(ERROR_ATTRIBUTE_PREFIX),
@@ -235,7 +240,7 @@ const write = ({
 }: {
   attributes: LoggerAttributes | undefined;
   message: string;
-  severityNumber: SeverityNumber;
+  severityNumber: LogSeverityNumber;
   severityText: string;
   outputStream: OutputStream;
 }): void => {
@@ -247,22 +252,14 @@ const write = ({
     });
     return;
   }
-  const record = {
+  otlpLogExporter?.emit({
+    attributes: safeAttributes,
+    body: safeMessage,
     severityNumber,
     severityText,
-    body: safeMessage,
-  };
+  });
 
-  if (safeAttributes) {
-    logs.getLogger("stella.api").emit({
-      ...record,
-      attributes: safeAttributes,
-    });
-  } else {
-    logs.getLogger("stella.api").emit(record);
-  }
-
-  // Backstop for every structured record above DEBUG. The OTel pipeline
+  // Backstop for every structured record above DEBUG. The OTLP export
   // above exports only when a deployment opts in (see `otel.ts`), so this
   // stream is the sink operational tooling can always rely on.
   //
@@ -278,10 +275,10 @@ const write = ({
   // of severity, so severity was never what kept payloads out. DEBUG stays
   // unmirrored as the escape hatch for hot loops.
   //
-  // The release rides on every line as the OTel resource does on exported
+  // The release rides on every line as the OTLP resource does on exported
   // records, after the attributes so no caller key can replace it: a failure
   // is attributable to a release without a deploy timeline.
-  if (severityNumber >= SeverityNumber.INFO) {
+  if (severityNumber >= LOG_SEVERITY_NUMBER.INFO) {
     process[outputStream].write(
       `${JSON.stringify({
         severity: severityText,
@@ -302,7 +299,7 @@ const emit = ({
 }: {
   attributes: LoggerAttributeInput | undefined;
   message: string;
-  severityNumber: SeverityNumber;
+  severityNumber: LogSeverityNumber;
   severityText: string;
   outputStream?: OutputStream;
 }): void => {
@@ -326,9 +323,9 @@ const emit = ({
 };
 
 const REQUEST_SEVERITY = {
-  ERROR: SeverityNumber.ERROR,
-  INFO: SeverityNumber.INFO,
-  WARN: SeverityNumber.WARN,
+  ERROR: LOG_SEVERITY_NUMBER.ERROR,
+  INFO: LOG_SEVERITY_NUMBER.INFO,
+  WARN: LOG_SEVERITY_NUMBER.WARN,
 } as const;
 
 /**
@@ -396,28 +393,28 @@ export const logger = {
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.DEBUG,
+      severityNumber: LOG_SEVERITY_NUMBER.DEBUG,
       severityText: "DEBUG",
     }),
   info: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.INFO,
+      severityNumber: LOG_SEVERITY_NUMBER.INFO,
       severityText: "INFO",
     }),
   warn: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.WARN,
+      severityNumber: LOG_SEVERITY_NUMBER.WARN,
       severityText: "WARN",
     }),
   error: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.ERROR,
+      severityNumber: LOG_SEVERITY_NUMBER.ERROR,
       severityText: "ERROR",
     }),
   request: (options: RequestLogOptions) => emitRequest(options),

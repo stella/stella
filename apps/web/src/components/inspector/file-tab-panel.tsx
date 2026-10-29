@@ -33,7 +33,7 @@ import { FileTabFacetContent } from "@/components/inspector/file-tab-facet-conte
 import { FileTabFullView } from "@/components/inspector/file-tab-full-view";
 import {
   BackToPeekButton,
-  FileTabHeaderActions,
+  fileTabHeaderActions,
   getFileTabHeaderProps,
   MoveToMainButton,
 } from "@/components/inspector/file-tab-header";
@@ -63,6 +63,10 @@ import type { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
 
 type FileTabPanelProps = {
   activeId: string | null;
@@ -398,6 +402,13 @@ export const FileTabPanel = ({
     tab,
   });
 
+  const sharedHeaderActions = fileTabHeaderActions({
+    desktopEditTarget,
+    downloadRenditions: entity.downloadRenditions,
+    pdfSignTarget,
+    tab,
+  });
+
   const changeFacet = (next: Facet) => {
     setFileFacet(tab.id, next);
     pulseChatInputForReview(next, tab.entityId);
@@ -448,18 +459,18 @@ export const FileTabPanel = ({
         }
         header={
           <InspectorTabHeader
-            actions={
-              <FileTabHeaderActions
-                desktopEditTarget={desktopEditTarget}
-                downloadRenditions={entity.downloadRenditions}
-                pdfSignTarget={pdfSignTarget}
-                tab={tab}
-              >
-                <BackToPeekButton
-                  onMinimize={() => handleMinimizeFromFullView(tab)}
-                />
-              </FileTabHeaderActions>
-            }
+            actions={[
+              ...sharedHeaderActions,
+              {
+                id: "back-to-peek",
+                requires: [REQUIREMENT.sidePanel],
+                render: () => (
+                  <BackToPeekButton
+                    onMinimize={() => handleMinimizeFromFullView(tab)}
+                  />
+                ),
+              },
+            ]}
             {...tabHeader}
           />
         }
@@ -474,6 +485,21 @@ export const FileTabPanel = ({
   }
 
   const sidepeekFacet = tab.facet ?? "preview";
+  const sidepeekHeaderActions = [...sharedHeaderActions];
+  if (isPreviewFacet && editExit !== false) {
+    sidepeekHeaderActions.push({
+      id: "edit-exit",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => editExit,
+    });
+  }
+  if (canOpenFullView) {
+    sidepeekHeaderActions.push({
+      id: "move-to-main",
+      requires: [REQUIREMENT.sidePanel],
+      render: () => <MoveToMainButton onOpenFullView={handleOpenFullView} />,
+    });
+  }
   return (
     <FileTabSidepeek
       email={
@@ -503,22 +529,7 @@ export const FileTabPanel = ({
         />
       }
       header={
-        <InspectorTabHeader
-          actions={
-            <FileTabHeaderActions
-              desktopEditTarget={desktopEditTarget}
-              downloadRenditions={entity.downloadRenditions}
-              pdfSignTarget={pdfSignTarget}
-              tab={tab}
-            >
-              {isPreviewFacet && editExit}
-              {canOpenFullView && (
-                <MoveToMainButton onOpenFullView={handleOpenFullView} />
-              )}
-            </FileTabHeaderActions>
-          }
-          {...tabHeader}
-        />
+        <InspectorTabHeader actions={sidepeekHeaderActions} {...tabHeader} />
       }
       isActive={isActive}
       key={renderId}

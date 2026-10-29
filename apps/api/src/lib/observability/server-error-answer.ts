@@ -60,3 +60,14 @@ export const observedResponse = (
   observeServerError(init.status, answer);
   return new Response(body, init);
 };
+
+/** Rebuild an existing transport response while preserving its chosen status. */
+export const rebuildResponse = (
+  response: Response,
+  body: ConstructorParameters<typeof Response>[0],
+): Response =>
+  new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
