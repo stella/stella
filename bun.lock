@@ -3322,9 +3322,9 @@
 
     "@stll/fuzzy-search-win32-x64-msvc": ["@stll/fuzzy-search-win32-x64-msvc@1.4.0", "", { "os": "win32", "cpu": "x64" }, "sha512-FLsweQ/H/k9BKYVrcroNe7p2R3gk8b2jmEKZJ/FnxhDyfogYlmDHpS6eyzWwz1X/4uGkTHds+M50P4nBJYZYFA=="],
 
-    "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
-
     "@stll/html": ["@stll/html@workspace:packages/html"],
+
+    "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
 
     "@stll/invoicing": ["@stll/invoicing@workspace:packages/invoicing"],
 
