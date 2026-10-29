@@ -240,11 +240,13 @@ test("firm monitoring changes require the firm-settings grant over HTTP and a pe
           capability: "organization-settings.sanctions-monitoring.update",
           mode,
         });
-        // An organization-wide settings change needs a person's approval in
-        // stella, so no agent call over MCP changes it, whatever the role.
+        // Role authority precedes agent approval; neither refusal may mutate settings.
         if (transport === "mcp") {
+          expect(response.ok).toBe(false);
           expect(response.payload).toMatchObject({
-            error: { code: "person_approval_required" },
+            error: {
+              code: allowed ? "person_approval_required" : "permission_denied",
+            },
           });
           expect(await firmState(organizationId)).toEqual(before);
           continue;
