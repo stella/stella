@@ -1217,6 +1217,23 @@ jobs:
           bash apps/extension/scripts/release-zip.sh
           echo "packaged=true" >> "$GITHUB_OUTPUT"
 
+      - name: Write Chrome extension build predicate
+        if: steps.extension-zip.outputs.packaged == 'true'
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          jq -n --arg release_ref "$RELEASE_REF" --arg version "$VERSION" \
+            '{releaseRef: $release_ref, version: $version}' > extension-publication.json
+
+      - name: Attest the built Chrome extension ZIP
+        if: steps.extension-zip.outputs.packaged == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: apps/extension/.output/stella-extension-chrome-${{ needs.resolve.outputs.version }}.zip
+          predicate-type: https://stll.app/attestations/extension-publication/v1
+          predicate-path: extension-publication.json
+
       - name: Create draft GitHub release with the manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1331,6 +1348,14 @@ jobs:
             echo "web=$web"
             echo "web_target=$web_target"
           } >> "$GITHUB_OUTPUT"
+
+      # Release Desktop reads the tag from this artifact, as on the build path.
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-manifest-${{ needs.resolve.outputs.release_ref }}
+          path: release-manifest.json
+          retention-days: 90
 
       # The promotion accepts a web image only with a publication attestation
       # naming the release it promotes. The candidate's attestation names the
@@ -1478,6 +1503,8 @@ jobs:
             scripts/gh-retry.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/db-components.ts
+            apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -1492,8 +1519,11 @@ jobs:
       # leave `uses: ./...` unresolvable and fail before dispatching.
       - name: Preserve release verification tooling across source checkouts
         run: |
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
+          mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/scripts/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
 
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1535,7 +1565,7 @@ jobs:
           API_DEPLOYMENT_EXPECTED_ENVIRONMENT: production
           API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/scripts/check-api-deployment.ts"
 
       # Same commit gate as the staging web smoke: the web origin's
       # version marker must stably report the released commit. Read-only
@@ -1546,7 +1576,7 @@ jobs:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
           API_DEPLOYMENT_PROBE_PATH: version.json
           API_DEPLOYMENT_URL: https://my.stll.app
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/scripts/check-api-deployment.ts"
 
   publish-release:
     runs-on: ubuntu-24.04
@@ -1650,6 +1680,114 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  publish-chrome-extension:
+    # Submits the stable extension package attached to the published release
+    # to the Chrome Web Store, where Chrome updates installed copies after
+    # review. Outside release-complete: a store refusal is a red job here and
+    # never holds back the release itself.
+    name: Submit the Chrome extension to the Web Store
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [resolve, publish-release]
+    if: ${{ !cancelled() && needs.resolve.outputs.channel == 'final' && needs.publish-release.result == 'success' }}
+    concurrency:
+      group: chrome-web-store-submit
+      cancel-in-progress: false
+    # Only this environment (release tags and main) federates to the store
+    # publisher.
+    environment: chrome-web-store
+    permissions:
+      contents: read # download the release asset
+      id-token: write # keyless Google sign-in for the store publisher
+    steps:
+      - name: Checkout trusted tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - name: Download the release's extension package
+        id: package
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          asset="stella-extension-chrome-${VERSION}.zip"
+          assets=$(bash scripts/gh-retry.sh release view "$RELEASE_REF" --json assets --jq '.assets[].name')
+          if ! grep -Fx "$asset" <<< "$assets" > /dev/null; then
+            echo "::notice::Release $RELEASE_REF has no extension package; nothing to submit."
+            exit 0
+          fi
+          bash scripts/gh-retry.sh release download "$RELEASE_REF" --pattern "$asset" --dir "$RUNNER_TEMP/extension" --clobber
+          echo "zip=$RUNNER_TEMP/extension/$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Chrome extension build attestation
+        id: verify-extension
+        if: steps.package.outputs.zip != ''
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RC_REF: ${{ needs.resolve.outputs.rc_ref }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+        run: |
+          set -euo pipefail
+          identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RC_REF//./\\.}|refs/heads/main)\$"
+          verification=$(bash scripts/retry.sh gh attestation verify "$ZIP" \
+            --repo "$GITHUB_REPOSITORY" \
+            --cert-identity-regex "$identity_pattern" \
+            --predicate-type https://stll.app/attestations/extension-publication/v1 \
+            --deny-self-hosted-runners --format json)
+          jq -e --arg rc_ref "$RC_REF" --arg version "$VERSION" \
+            'any(.[].verificationResult.statement.predicate;
+              .releaseRef == $rc_ref and .version == $version)' \
+            <<< "$verification" > /dev/null
+
+      - name: Setup Bun
+        if: steps.package.outputs.zip != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Verify the package is the production release build
+        if: steps.package.outputs.zip != ''
+        timeout-minutes: 5
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+          WXT_STELLA_ORIGINS: ""
+          NPM_TOKEN: ""
+        run: |
+          set -euo pipefail
+          bash scripts/retry.sh bun ci --filter @stll/extension --ignore-scripts
+          unzip -p "$ZIP" manifest.json > "$RUNNER_TEMP/extension-manifest.json"
+          bun apps/extension/scripts/assert-manifest.ts production "$VERSION" "$RUNNER_TEMP/extension-manifest.json"
+
+      - name: Sign in to Google as the store publisher
+        if: steps.package.outputs.zip != ''
+        id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: stella-infra
+          workload_identity_provider: projects/48578651671/locations/global/workloadIdentityPools/github/providers/stella-repo
+          service_account: chrome-web-store-publisher@stella-infra.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Submit to the Chrome Web Store
+        if: steps.package.outputs.zip != ''
+        env:
+          CHROME_WEB_STORE_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+        run: bun apps/extension/scripts/publish-store.ts "$VERSION" "$ZIP"
+
   dispatch-release-health:
     # Start the post-release window for the release production now serves.
     name: Start the post-release health window
@@ -1742,6 +1880,12 @@ jobs:
           persist-credentials: false
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Reconcile production publication
         timeout-minutes: 5
         env:
@@ -1758,8 +1902,16 @@ jobs:
           health=false
           production=false
           if [[ "$(bash scripts/gh-retry.sh release view "$RELEASE_REF" --json isDraft --jq '.isDraft == false' || true)" == true ]]; then release=true; fi
-          api="$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
-          web="$(docker buildx imagetools inspect "${REGISTRY}/${WEB_IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+          latest_digest() {
+            local digest
+            if ! digest="$(docker buildx imagetools inspect "$1:latest" --format '{{.Manifest.Digest}}')"; then
+              echo "::warning::Cannot read $1:latest" >&2
+              return 0
+            fi
+            printf '%s' "$digest"
+          }
+          api="$(latest_digest "${REGISTRY}/${IMAGE_NAME}")"
+          web="$(latest_digest "${REGISTRY}/${WEB_IMAGE_NAME}")"
           if [[ -n "$API_DIGEST" && -n "$WEB_DIGEST" && "$api" == "$API_DIGEST" && "$web" == "$WEB_DIGEST" ]]; then latest=true; fi
           runs="$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/release-health.yml/runs?event=workflow_dispatch&per_page=100")"
           if jq -e --arg title "Release health $RELEASE_REF" 'any(.[].workflow_runs[]; .display_title == $title)' <<< "$runs" >/dev/null; then health=true; fi
@@ -1767,3 +1919,6 @@ jobs:
           jq -n --argjson release "$release" --argjson latest "$latest" --argjson health "$health" --argjson production "$production" \
             '{release: $release, ":latest": $latest, "health-run": $health, production: $production}' > receipts.json
           bash scripts/release-complete.sh receipts.json
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io

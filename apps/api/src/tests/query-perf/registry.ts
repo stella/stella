@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -18,8 +19,10 @@ import {
   CASE_LAW_SCENARIOS,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  seedSitemapReadBudget,
 } from "./corpus-seed";
 import { measureHostedErasureHistory } from "./hosted-erasure-run";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { seedQueryPerf } from "./seed";
 
 /** Tenant statements, measured as `stella` under row security per profile. */
@@ -31,11 +34,14 @@ export const queryPerfRegistry = (
       budgetId: "statement.documents.searchHits",
       query: buildDocumentSearchQueries(seed.searchInput).hitsQuery,
       expectedRows: Math.min(seed.searchMatchCount, seed.searchInput.limit + 1),
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.documents.searchHits"],
     },
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     query: SQLWrapper;
     expectedRows: number;
+    ownerDeadlineMs: number | undefined;
   }[];
 
 /** Public corpus statements, measured on the corpus profile as its owner. */
@@ -54,16 +60,20 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
           },
         ),
       expectedRows: LEGISLATION_CANDIDATE_COUNT,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.legislation.candidateRows"],
     },
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
     expectedRows: number;
+    ownerDeadlineMs: number | undefined;
   }[];
 
 type ScheduledJobMeasurement =
   | {
       type: "corpus";
+      prepare?: typeof seedSitemapReadBudget;
       task: string;
       scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
     }
@@ -88,6 +98,12 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
     type: "writing",
     task: ERASE_HOSTED_CUSTOMERS_TASK,
     measure: measureHostedErasureHistory,
+  },
+  "caseLaw.refreshSitemapShards.hourly": {
+    type: "corpus",
+    task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    prepare: seedSitemapReadBudget,
+    scenarios: [CASE_LAW_SCENARIOS.quiet],
   },
   "caseLaw.reportFreshness.fiveMinute": {
     type: "corpus",
@@ -139,7 +155,9 @@ export const scheduledJobMeasurementViolations = (
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
   "scheduled.usage.eraseHostedCustomers": "corpus",
+  "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
+  "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
-} as const satisfies Record<ReadBudgetId, "corpus" | "tenant">;
+} as const satisfies Record<ReadBudgetId, "corpus" | "tenant" | "coverage">;

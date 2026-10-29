@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -16,7 +17,8 @@ import {
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
 
-import type { QueryPerfTenantProfileId } from "./profiles";
+import { analyzePlan } from "./plan-analyzer";
+import type { QueryPerfProfileId, QueryPerfTenantProfileId } from "./profiles";
 import type { seedQueryPerf } from "./seed";
 import {
   applyPlannerSettings,
@@ -188,12 +190,26 @@ type MeasureQueryPerfOptions = {
   database: GatedTestDb;
   seed: Awaited<ReturnType<typeof seedQueryPerf>>;
   query: SQLWrapper;
+  owner: string;
+  ownerDeadlineMs: number | undefined;
+  profileId: QueryPerfProfileId;
 };
 
-const summarize = (
+const statementText = (query: SQLWrapper) =>
+  new PgDialect()
+    .sqlToQuery(query.getSQL())
+    .sql.replaceAll(/\s+/gu, " ")
+    .trim();
+
+export const summarize = (
   samples: readonly QueryPerfMetrics[],
-  lastPlan: ExplainPlanDocument | undefined,
+  plans: readonly ExplainPlanDocument[],
+  owner: string,
+  ownerDeadlineMs: number | undefined,
+  statement: string,
+  profileId: QueryPerfProfileId,
 ) => {
+  const lastPlan = plans.at(-1);
   if (lastPlan === undefined) {
     return panic("Query perf did not measure a plan");
   }
@@ -207,6 +223,9 @@ const summarize = (
       ),
     },
     plan: lastPlan,
+    planViolations: plans.flatMap((document) =>
+      analyzePlan({ document, owner, ownerDeadlineMs, statement, profileId }),
+    ),
     samples,
   };
 };
@@ -216,9 +235,12 @@ export const measureQueryPerf = async ({
   database,
   seed,
   query,
+  owner,
+  ownerDeadlineMs,
+  profileId,
 }: MeasureQueryPerfOptions) => {
   const samples: QueryPerfMetrics[] = [];
-  let lastPlan: ExplainPlanDocument | undefined;
+  const plans: ExplainPlanDocument[] = [];
   for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
     // db-await-in-loop: five sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
     const documents = await explainAsStella({
@@ -242,12 +264,19 @@ export const measureQueryPerf = async ({
     if (document === undefined || documents.length !== 1) {
       return panic("Query perf requires one plan document");
     }
-    lastPlan = document;
+    plans.push(document);
     if (sample !== 0) {
       samples.push(metricsFromPlan(document));
     }
   }
-  return summarize(samples, lastPlan);
+  return summarize(
+    samples,
+    plans,
+    owner,
+    ownerDeadlineMs,
+    statementText(query),
+    profileId,
+  );
 };
 
 const isExplainPlanDocument = (
@@ -282,24 +311,40 @@ export const explainOwnerStatement = async (
 export const measureOwnerStatement = async ({
   database,
   build,
+  owner,
+  ownerDeadlineMs,
+  profileId,
 }: {
   database: GatedTestDb;
   build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+  owner: string;
+  ownerDeadlineMs: number | undefined;
+  profileId: QueryPerfProfileId;
 }) => {
   const samples: QueryPerfMetrics[] = [];
-  let lastPlan: ExplainPlanDocument | undefined;
+  const plans: ExplainPlanDocument[] = [];
+  let lastStatement = "";
   for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
     // db-await-in-loop: sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
-    const document = await database.transaction(async (tx) => {
+    const { document, statement } = await database.transaction(async (tx) => {
       await applyPlannerSettings(tx);
-      const explained = await explainOwnerStatement(tx, build(tx));
+      const query = build(tx);
+      const explained = await explainOwnerStatement(tx, query);
       await assertPlannerSettings(tx, "owner");
-      return explained;
+      return { document: explained, statement: statementText(query) };
     });
-    lastPlan = document;
+    plans.push(document);
+    lastStatement = statement;
     if (sample !== 0) {
       samples.push(metricsFromPlan(document));
     }
   }
-  return summarize(samples, lastPlan);
+  return summarize(
+    samples,
+    plans,
+    owner,
+    ownerDeadlineMs,
+    lastStatement,
+    profileId,
+  );
 };

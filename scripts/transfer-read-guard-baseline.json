@@ -1058,13 +1058,6 @@
   },
   {
     "file": "apps/api/src/lib/chat/run-log.ts",
-    "function": "module/createRunLogReader",
-    "kind": "fixed-page-size",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/chat/run-log.ts",
     "function": "module/sweepClosedChatRunLogs",
     "kind": "constant-limit",
     "count": 3,
@@ -1855,20 +1848,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
-    "function": "module/postFolioCollabJson",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
-    "function": "module/postFolioCollabJson",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/components/inspector/external-reference-panel.tsx",
     "function": "module/useExternalPdfBuffer",
     "kind": "numeric-timeout",
@@ -1948,20 +1927,6 @@
   {
     "file": "apps/web/src/components/selfhost-update-banner.tsx",
     "function": "module/SelfhostUpdateBanner",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    "function": "module/requestManualOcr",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    "function": "module/requestManualOcr",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
@@ -2065,41 +2030,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/readDocumentProperties",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/readDocumentProperties",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/saveEmailAttachment",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/saveEmailAttachment",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/updateDocumentProperty",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/lib/files/storage-fetch.ts",
     "function": "module/fetchStorageArrayBuffer",
     "kind": "numeric-timeout",
@@ -2166,20 +2096,6 @@
     "file": "apps/web/src/lib/workspace-sse.ts",
     "function": "module/probeWorkspaceStreamAccess",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
-    "function": "module/requestTimeEntries",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
-    "function": "module/requestTimeEntries",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },

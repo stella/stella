@@ -26,6 +26,7 @@ const DECISION_SQL = sqlCaseExpression({
  * The baseline event takes its finding's id, as the decide handler's does,
  * so a finding changed while this runs keeps exactly one baseline. */
 export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
+  introducedBy: "20261028130100_document_review_finding_decision_history",
   name: "document-review-finding-decisions",
   readCompletion: async (connection) => {
     const pending = await connection.query(

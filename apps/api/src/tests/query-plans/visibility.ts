@@ -1,15 +1,18 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 const RETRY_INTERVAL_MS = 250;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** The server test database or a PGlite one: the helper only executes SQL. */
+type VisibilityDb = { execute: (query: SQL) => PromiseLike<unknown> };
+
 type VisibilityOptions = {
-  readonly db: GatedTestDb;
+  readonly db: VisibilityDb;
   /** Resolved through the session's search_path. */
   readonly table: string;
   readonly timeoutMs?: number;
@@ -18,7 +21,7 @@ type VisibilityOptions = {
 type PageCounts = { readonly pages: number; readonly allVisible: number };
 
 const readPageCounts = async (
-  db: GatedTestDb,
+  db: VisibilityDb,
   table: string,
 ): Promise<PageCounts> => {
   const row = executedRows(

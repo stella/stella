@@ -1,13 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -20,6 +12,12 @@ const FAKE_GH = `#!/usr/bin/env python3
 import json,os,pathlib,subprocess,sys
 root=pathlib.Path(os.environ['FAKE_ROOT'])
 args=sys.argv[1:]
+if args[:2]==['run','download']:
+ with (root/'calls').open('a') as calls:calls.write('artifact '+args[2]+' '+args[args.index('--repo')+1]+'\\n')
+ if os.environ.get('RECEIPT')!='available':sys.exit(1)
+ directory=pathlib.Path(args[args.index('--dir')+1])
+ (directory/'receipt.json').write_text('{"commit":"fixture"}')
+ sys.exit(0)
 sys.stdin.buffer.read()
 endpoint=next((arg for arg in args if arg.startswith('/')), '')
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
@@ -84,6 +82,7 @@ else:
 type PromotionScenarioOptions = {
   failurePhase: "lookup" | "poll" | "none";
   failureKind: "transport" | "unknown";
+  receipt?: "available" | "missing";
   targetEnvironment: "production" | "staging";
   priorRun?: "none" | "success" | "active" | "failed";
   priorRunPage?: 1 | 2;
@@ -93,6 +92,7 @@ type PromotionScenarioOptions = {
 const promotionScenario = async ({
   failurePhase,
   failureKind,
+  receipt,
   targetEnvironment,
   priorRun = "none",
   priorRunPage = 1,
@@ -106,24 +106,24 @@ const promotionScenario = async ({
     Bun.YAML.parse(await readFile(ACTION, "utf-8")),
   );
   const directory = await mkdtemp(
-    path.join(tmpdir(), "promote-dispatch-test-"),
+    path.resolve(import.meta.dir, "../.promote-dispatch-test-"),
   );
   try {
     const scripts = path.join(directory, "scripts");
     const actionPath = path.join(directory, ".github/actions/promote-dispatch");
     await Promise.all([mkdir(scripts), mkdir(actionPath, { recursive: true })]);
     await writeFile(path.join(scripts, "gh-retry.sh"), await readFile(HELPER));
-    for (const [name, source] of Object.entries({
-      gh: FAKE_GH,
-      openssl: FAKE_OPENSSL,
-      date: FAKE_DATE,
-      sleep: FAKE_SLEEP,
-      curl: `#!/bin/sh\nprintf '{"status":"ok","commit":"${deployedSha}"}\\n'\n`,
-    })) {
-      const executable = path.join(directory, name);
-      await writeFile(executable, source);
-      await chmod(executable, 0o700);
-    }
+    await Promise.all([
+      writeFile(path.join(directory, "gh"), FAKE_GH, { mode: 0o700 }),
+      writeFile(path.join(directory, "openssl"), FAKE_OPENSSL, { mode: 0o700 }),
+      writeFile(path.join(directory, "date"), FAKE_DATE, { mode: 0o700 }),
+      writeFile(path.join(directory, "sleep"), FAKE_SLEEP, { mode: 0o700 }),
+      writeFile(
+        path.join(directory, "curl"),
+        `#!/bin/sh\nprintf '{"status":"ok","commit":"${deployedSha}"}\\n'\n`,
+        { mode: 0o700 },
+      ),
+    ]);
     const process = Bun.spawn(["bash", "-c", action.runs.steps[0].run], {
       cwd: directory,
       env: {
@@ -147,6 +147,9 @@ const promotionScenario = async ({
         IMAGE_DIGEST: "",
         WEB_IMAGE_DIGEST: "",
         GIT_SHA: "",
+        STAGING_PROOF_STATE_PATH:
+          receipt === undefined ? "" : path.join(directory, "proof-state"),
+        RECEIPT: receipt ?? "",
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -174,7 +177,11 @@ const promotionScenario = async ({
         ? []
         : ["dispatch POST 1 ok"],
     );
-    return { exit, stdout, stderr, calls };
+    const receiptFile = Bun.file(path.join(directory, "proof-state.ecs.json"));
+    const recordedReceipt = (await receiptFile.exists())
+      ? await receiptFile.text()
+      : undefined;
+    return { exit, stdout, stderr, calls, recordedReceipt };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -240,6 +247,32 @@ test.each(["lookup", "poll"] as const)(
     expect(result.stdout).not.toContain("Promote run completed successfully:");
   },
 );
+
+test("proof consumes the ECS receipt from the exact dispatched run", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "staging",
+    receipt: "available",
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toContain("artifact 777 example/infra");
+  expect(result.recordedReceipt).toBe('{"commit":"fixture"}');
+});
+
+test("a missing ECS receipt remains absent for the proof readiness gate", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "staging",
+    receipt: "missing",
+  });
+  expect(result.exit).toBe(0);
+  expect(result.recordedReceipt).toBeUndefined();
+  expect(result.stdout).toContain(
+    "::warning::Deployment ECS readiness receipt is unavailable.",
+  );
+});
 
 for (const priorRun of ["success", "active", "failed"] as const) {
   test(`production retries ${priorRun} receipts only when they can still succeed`, async () => {
