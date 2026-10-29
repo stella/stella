@@ -95,6 +95,7 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -141,8 +142,8 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
-import { recordWriteContract } from "@/api/lib/write-contract";
-import type { WriteContract } from "@/api/lib/write-contract";
+import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
@@ -2545,6 +2546,12 @@ const logAndCaptureSafeError = ({
   statusCode,
   telemetry,
 }: LogAndCaptureSafeErrorProps) => {
+  if (
+    resolveHandlerError(error)?.code === ACTION_ADMISSION_CODES.storeUnavailable
+  ) {
+    observeLimiterAdmissionFailure(error, "admission");
+    return;
+  }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
   const severity =

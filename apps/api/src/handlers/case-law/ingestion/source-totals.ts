@@ -795,3 +795,21 @@ export const createSourceStoredTotalMaintenanceRuntime = (
     },
   };
 };
+
+/** Retire the snapshot and any claim that could publish a pre-removal count. */
+export const invalidateSourceStoredTotalTx = async (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  // audit: skip — source-count invalidation belongs to the canonical removal audit.
+  await tx
+    .update(caseLawSources)
+    .set({
+      storedTotal: null,
+      storedTotalAsOf: null,
+      storedTotalAttemptedAt: null,
+      storedTotalNextRefreshAt: sql`clock_timestamp()`,
+      storedTotalHeldSince: null,
+    })
+    .where(eq(caseLawSources.id, sourceId));
+};

@@ -1,14 +1,23 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
-const fetchBoundary = spyOn(globalThis, "fetch");
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { act, cleanup, fireEvent, renderHook, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -21,9 +30,14 @@ const en = (await import("@/i18n/langs/en.json")).default;
 
 const copy = en.workspaces.files.pdfSigning;
 const ID = "90123344-5566-7788-9900-aabbccddeeff";
-const target = { entityId: ID, propertyId: ID, workspaceId: ID };
+const target = { entityId: ID, fieldId: ID, propertyId: ID, workspaceId: ID };
+
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch");
+});
 
 afterEach(async () => {
+  mock.restore();
   await act(async () => {
     stellaToast.close();
   });

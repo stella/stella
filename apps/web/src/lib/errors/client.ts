@@ -1,5 +1,22 @@
 import { TaggedError } from "better-result";
 
+export const USER_SAFE_CLIENT_OPERATIONS = {
+  uploadVersion: "upload-version",
+} as const;
+
+type UserSafeClientOperation =
+  (typeof USER_SAFE_CLIENT_OPERATIONS)[keyof typeof USER_SAFE_CLIENT_OPERATIONS];
+
+const USER_SAFE_CLIENT_OPERATION_SET: ReadonlySet<UserSafeClientOperation> =
+  new Set<UserSafeClientOperation>(Object.values(USER_SAFE_CLIENT_OPERATIONS));
+
+export const isUserSafeClientOperation = (
+  action: string,
+): action is UserSafeClientOperation =>
+  [...USER_SAFE_CLIENT_OPERATION_SET].some(
+    (userSafeAction) => userSafeAction === action,
+  );
+
 export class ClientOperationError extends TaggedError("ClientOperationError")<{
   action: string;
   message: string;

@@ -18,8 +18,15 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
 import {
   filterNationalityOptions,
@@ -42,7 +49,7 @@ export const PersonDetailsFields = ({
 }: PersonDetailsFieldsProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const parsedNationalityCodes = nationalityCodes.filter(isCountryCode);
@@ -55,7 +62,6 @@ export const PersonDetailsFields = ({
   const visibleCodes = filterNationalityOptions({
     countries: allCountries,
     query,
-    locale,
   }).map(({ code }) => code);
 
   return (
@@ -63,26 +69,36 @@ export const PersonDetailsFields = ({
       <Field>
         <FieldLabel>{t("common.anonymizationLabels.dateOfBirth")}</FieldLabel>
         <div className="flex flex-wrap gap-2" dir="ltr">
-          <select
-            aria-label={t("contacts.datePrecision")}
-            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-            onChange={(event) =>
+          <Select
+            onValueChange={(precision) => {
+              if (precision === null) {
+                return;
+              }
               onBirthDateChange({
                 ...birthDate,
-                precision:
-                  event.target.value === "month" || event.target.value === "day"
-                    ? event.target.value
-                    : "year",
-                ...(event.target.value !== "day" && { day: "" }),
-                ...(event.target.value === "year" && { month: "" }),
-              })
-            }
+                precision,
+                ...(precision !== "day" && { day: "" }),
+                ...(precision === "year" && { month: "" }),
+              });
+            }}
             value={birthDate.precision}
           >
-            <option value="year">{t("contacts.precision.year")}</option>
-            <option value="month">{t("contacts.precision.month")}</option>
-            <option value="day">{t("contacts.precision.day")}</option>
-          </select>
+            <SelectTrigger
+              aria-label={t("contacts.datePrecision")}
+              className="w-32"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="year">
+                {t("contacts.precision.year")}
+              </SelectItem>
+              <SelectItem value="month">
+                {t("contacts.precision.month")}
+              </SelectItem>
+              <SelectItem value="day">{t("contacts.precision.day")}</SelectItem>
+            </SelectPopup>
+          </Select>
           {birthDate.precision === "day" && (
             <Input
               aria-label={t("contacts.fields.day")}

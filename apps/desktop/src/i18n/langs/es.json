@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Volver a guardar nuevos recortes de <bdi>{source}</bdi>",
     "pause": "Pausar captura",
     "plainText": "Texto sin formato",
+    "plainTextPreview": "Vista previa sin formato",
     "retention": "Conservar historial",
     "retentionWeek": "Una semana",
     "retentionMonth": "Un mes",
@@ -617,5 +618,46 @@
       "fullDiskAccess": "Acceso total al disco",
       "administrator": "Derechos de administrador"
     }
+  },
+  "agentSubscriptions": {
+    "title": "Suscripciones de IA",
+    "chatGpt": "ChatGPT",
+    "description": "Usa tu plan de ChatGPT para las solicitudes de IA en stella. El uso se descuenta de tu plan de ChatGPT, aparte de tu suscripción a stella.",
+    "continueWithChatGpt": "Continuar con ChatGPT",
+    "continueAs": "Continuar como {email}",
+    "useDifferentAccount": "Usar otra cuenta",
+    "signingIn": "Termina de iniciar sesión en tu navegador.",
+    "cancel": "Cancelar",
+    "pasteDescription": "Si el navegador muestra una página de error después de iniciar sesión, copia su dirección y pégala aquí.",
+    "pasteSubmit": "Terminar inicio de sesión",
+    "connected": "ChatGPT conectado",
+    "connectedAs": "ChatGPT conectado · {email}",
+    "manageUsage": "Gestionar uso",
+    "disconnect": "Desconectar",
+    "needsReconnect": "Tu conexión con ChatGPT ha caducado. Vuelve a iniciar sesión para seguir usando tu plan.",
+    "notice": {
+      "actionFailed": "No ha funcionado. Inténtalo de nuevo.",
+      "pasteRejected": "Esta dirección no corresponde al inicio de sesión actual. Copia la dirección completa de la pestaña del navegador que se abrió.",
+      "revocationUnconfirmed": "Desconectado en este ordenador, pero ChatGPT no lo ha confirmado. También puedes quitar stella en la configuración de ChatGPT."
+    },
+    "failure": {
+      "declined": "El inicio de sesión se rechazó en el navegador.",
+      "planUsageNotGranted": "stella no recibió permiso para usar tu plan de ChatGPT. Vuelve a iniciar sesión y permítelo.",
+      "differentAccount": "Has iniciado sesión con otra cuenta de ChatGPT. Tu conexión guardada no ha cambiado.",
+      "stateMismatch": "No se pudo verificar el inicio de sesión. Inténtalo de nuevo.",
+      "timedOut": "El inicio de sesión tardó demasiado. Inténtalo de nuevo.",
+      "browserUnavailable": "No se pudo abrir el navegador. Inténtalo de nuevo.",
+      "callbackUnavailable": "No se pudo preparar el inicio de sesión en este ordenador. Inténtalo de nuevo.",
+      "registrationIncomplete": "ChatGPT no terminó de conectar stella. Inténtalo de nuevo.",
+      "codeExpired": "El inicio de sesión caducó antes de terminar. Inténtalo de nuevo.",
+      "verification": "No se pudo verificar la respuesta de ChatGPT. Inténtalo de nuevo.",
+      "clientRejected": "ChatGPT ya no acepta esta conexión. Vuelve a conectarla con otra cuenta.",
+      "unreachable": "No se pudo acceder al inicio de sesión de ChatGPT. Comprueba tu conexión a internet e inténtalo de nuevo.",
+      "storage": "No se pudo leer ni guardar la conexión en este ordenador."
+    },
+    "callbackConnectedTitle": "ChatGPT está conectado",
+    "callbackConnectedBody": "Puedes cerrar esta pestaña y volver a stella.",
+    "callbackNotConnectedTitle": "ChatGPT no se ha conectado",
+    "callbackNotConnectedBody": "Vuelve a stella para ver qué ha pasado e inténtalo de nuevo."
   }
 }

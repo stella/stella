@@ -92,12 +92,23 @@ describe("dispatch", () => {
     const dispatched: Record<string, unknown>[] = [];
     const outputs: Record<string, string> = {};
     const warnings: string[] = [];
+    const info: string[] = [];
+    const summaries: string[] = [];
     await dispatch.runInNewContext({
       setTimeout: (resolve: () => void) => {
         resolve();
       },
       context: { repo: { owner: "stella", repo: "stella" } },
       core: {
+        info: (message: string) => {
+          info.push(message);
+        },
+        summary: {
+          addRaw: (message: string) => {
+            summaries.push(message);
+            return { write: async () => {} };
+          },
+        },
         notice: () => {},
         warning: (message: string) => {
           warnings.push(message);
@@ -191,14 +202,14 @@ describe("dispatch", () => {
       runId === "missing" ? [] : dispatched.map((_, index) => 1001 + index),
     );
     expect(warnings).toHaveLength(runId === "missing" ? dispatched.length : 0);
-    return dispatched;
+    return { dispatched, info, summaries };
   };
   const sha = (index: number) => index.toString(16).padStart(40, "0");
   const updatedAt = (day: number) =>
     `2026-10-${String(day).padStart(2, "0")}T00:00:00Z`;
 
   test("starts one run per pull request, on that pull request's own branch", async () => {
-    const dispatched = await run([
+    const { dispatched } = await run([
       pull({ updatedAt: updatedAt(2) }),
       pull({
         number: 2,
@@ -250,11 +261,54 @@ describe("dispatch", () => {
         updatedAt: updatedAt(20),
       }),
     );
-    const dispatched = await run([
+    const { dispatched } = await run([
       ...ineligible,
       pull({ headRefName: "feat/late", updatedAt: updatedAt(1) }),
     ]);
     expect(dispatched.map((request) => request["ref"])).toEqual(["feat/late"]);
+  });
+
+  const committed = (minutesAgo: number) => ({
+    nodes: [
+      {
+        commit: {
+          committedDate: new Date(
+            Date.now() - minutesAgo * 60_000,
+          ).toISOString(),
+        },
+      },
+    ],
+  });
+
+  test("defers a head committed 14 minutes ago and reports the typed skip", async () => {
+    const result = await run([
+      pull({ commits: committed(14), updatedAt: updatedAt(1) }),
+    ]);
+    expect(result.dispatched).toEqual([]);
+    expect(result.info).toContain("deferred #1: head-active (14 min < 15)");
+    expect(result.summaries).toEqual([
+      "deferred #1: head-active (14 min < 15)\nresolved: 0; deferred-active: 1; other-skipped: 0\n",
+    ]);
+  });
+
+  test("dispatches a head committed 16 minutes ago", async () => {
+    const { dispatched } = await run([
+      pull({ commits: committed(16), updatedAt: updatedAt(1) }),
+    ]);
+    expect(dispatched).toHaveLength(1);
+  });
+
+  test("dispatches a head whose committed date is missing", async () => {
+    const { dispatched } = await run([
+      pull({ commits: { nodes: [] }, updatedAt: updatedAt(1) }),
+    ]);
+    expect(dispatched).toHaveLength(1);
+  });
+
+  test("queries the head commit date", () => {
+    expect(read(DISPATCH)).toContain(
+      "commits(last: 1) { nodes { commit { committedDate } } }",
+    );
   });
 
   test("a branch that refuses the dispatch never takes a slot", async () => {
@@ -266,7 +320,7 @@ describe("dispatch", () => {
         updatedAt: updatedAt(20 + index),
       }),
     );
-    const dispatched = await run(
+    const { dispatched } = await run(
       [
         ...refused,
         pull({
@@ -306,7 +360,7 @@ describe("dispatch", () => {
     ];
     for (const source of ["listed", "missing"] as const) {
       expect(
-        (await run(pulls, [], [], undefined, source)).map(
+        (await run(pulls, [], [], undefined, source)).dispatched.map(
           (request) => request["ref"],
         ),
         source,
@@ -323,7 +377,7 @@ describe("dispatch", () => {
         updatedAt: updatedAt(20 + index),
       }),
     );
-    const dispatched = await run(
+    const { dispatched } = await run(
       [
         ...stale,
         pull({
@@ -574,6 +628,25 @@ describe("dispatch follows each resolve run to its publish", () => {
 
 describe("resolve", () => {
   const job = workflows.resolve.jobs["resolve"];
+
+  test("merged lockfiles refresh without lifecycle scripts before frozen install", () => {
+    const steps = job?.steps ?? [];
+    const refresh = steps.findIndex(
+      (step) => step.name === "Re-resolve merged lockfile with frozen pins",
+    );
+    const install = steps.findIndex(
+      (step) => step.name === "Install dependencies",
+    );
+    expect(refresh).toBeGreaterThan(-1);
+    expect(refresh).toBeLessThan(install);
+    expect(steps.at(refresh)?.["timeout-minutes"]).toBe(5);
+    expect(steps.at(refresh)?.run).toContain("refresh-lock --repo .");
+    expect(steps.at(install)?.run).toContain("bun ci --ignore-scripts");
+    const regenerate = steps.find(
+      (step) => step.name === "Regenerate conflicted outputs",
+    );
+    expect(regenerate?.run).toContain('if [[ -n "$GENERATOR_IDS" ]]');
+  });
 
   test("never runs in a default-branch context and saves no cache", () => {
     // Branch code runs here. On a branch ref its caches and artifacts are

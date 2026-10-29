@@ -1,12 +1,12 @@
-// Resolve merge conflicts that sit only in generated outputs.
+// Resolve generated, proven indentation-only, and independent bun.lock conflicts.
 //
 // When main moves under a same-repository pull request and the two sides
 // conflict only in files a registered, autofix-eligible generator writes, the
 // conflict carries no human decision: merge main, start each conflicted
 // output from main's side, and let the owning generators rewrite it from the
-// merged inputs. Any other conflicted path (source, lockfiles, baselines,
-// files with hand-written regions, delete/modify) leaves the pull request to
-// people.
+// merged inputs. Indentation-only source edits can yield to the semantic side;
+// independent bun.lock edits can combine existing pins. Competing source or pin
+// edits, other lockfiles, baselines and delete/modify conflicts stay with people.
 //
 // Three runs keep pull request code away from the push key and from caches
 // other runs restore (see the three generated-conflicts workflows):
@@ -19,7 +19,7 @@
 //    with main's copy of this file. It rebuilds the merge from git objects
 //    alone (no work tree, no repository attributes), accepts only the owning
 //    generators' outputs at paths whose parents are plain directories, and
-//    requires the identical tree. `push` then creates the merge commit and
+//    verifies source bytes and frozen lock pins, and requires the identical tree. `push` then creates the merge commit and
 //    moves the branch with a compare-and-swap on the resolved head.
 //
 // It imports nothing outside this directory and needs no dependencies.
@@ -36,8 +36,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { isAutofixProtectedPath } from "./autofix-protected-paths";
+import { parseBunLockText } from "./bun-lock-text";
 import {
   allowedOutputs,
   type Generator,
@@ -47,8 +49,9 @@ import {
   orderGenerators,
 } from "./generated-files";
 
-// Computed reads here are plans, manifests and git blobs copied into
-// temporary trees; none is repository Markdown.
+// Computed reads here are plans, manifests, git blobs copied into temporary
+// trees and the conflicted files and lockfiles of the branch being resolved;
+// none is repository Markdown.
 export const CI_MARKDOWN_READER_INPUTS: readonly string[] = [];
 
 class GeneratedConflictsError extends Error {
@@ -71,6 +74,221 @@ export type Classification =
 
 const LOCKFILE =
   /(?:^|\/)(?:bun\.lockb?|Cargo\.lock|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|uv\.lock|poetry\.lock|Gemfile\.lock)$/u;
+
+type IndentationOnlyOptions = { before: string; after: string };
+
+/** Only indentation changes: line boundaries and all literal bytes survive. */
+export const indentationOnly = ({
+  before,
+  after,
+}: IndentationOnlyOptions): boolean => {
+  // These constructs can contain meaningful whitespace. Unicode separators
+  // also match multiline anchors inside literals, so refuse them conservatively.
+  if (
+    [before, after].some((text) => /[`\\\u2028\u2029]|\/\*|[<>]/u.test(text))
+  ) {
+    return false;
+  }
+  return before.replace(/^[ \t]+/gmu, "") === after.replace(/^[ \t]+/gmu, "");
+};
+
+const object = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+type MergeLockfileOptions = { base: unknown; head: unknown; main: unknown };
+
+/** Merge independent JSON edits; arrays (resolved pins) are atomic. */
+export const mergeLockfile = ({
+  base,
+  head,
+  main,
+}: MergeLockfileOptions): unknown => {
+  if (isDeepStrictEqual(head, main) || isDeepStrictEqual(base, main)) {
+    return head;
+  }
+  if (isDeepStrictEqual(base, head)) {
+    return main;
+  }
+  if (!object(head) || !object(main) || (base !== undefined && !object(base))) {
+    return fail("bun.lock has competing edits to the same pin or metadata");
+  }
+  const merged = new Map<string, unknown>();
+  for (const key of new Set([
+    ...Object.keys(head),
+    ...Object.keys(main),
+    ...Object.keys(base ?? {}),
+  ])) {
+    const value = mergeLockfile({
+      base: object(base) ? base[key] : undefined,
+      head: head[key],
+      main: main[key],
+    });
+    if (value !== undefined) {
+      merged.set(key, value);
+    }
+  }
+  return Object.fromEntries(merged);
+};
+
+type AssertFrozenLockfileOptions = { before: unknown; after: unknown };
+
+/** Re-resolution may refresh workspace metadata, never registry pins or policy. */
+export const assertFrozenLockfile = ({
+  before,
+  after,
+}: AssertFrozenLockfileOptions) => {
+  if (
+    !object(before) ||
+    !object(after) ||
+    !object(before["packages"]) ||
+    !object(after["packages"])
+  ) {
+    fail("bun.lock must have a packages table");
+  }
+  const policies = (lock: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(lock).filter(([key]) => key !== "workspaces"),
+    );
+  if (!isDeepStrictEqual(policies(before), policies(after))) {
+    fail(
+      "Lockfile re-resolution changed frozen pins or policy; refusing version drift",
+    );
+  }
+};
+
+/** Final autofix boundary: require approved pins and current workspace metadata. */
+export const assertFinalAutofixLockfile = ({
+  repo,
+  frozen,
+}: {
+  repo: string;
+  frozen: string;
+}) => {
+  const before = parseBunLockText(readFileSync(frozen, "utf-8"));
+  const after = parseBunLockText(
+    readFileSync(path.join(repo, "bun.lock"), "utf-8"),
+  );
+  assertFrozenLockfile({
+    before,
+    after,
+  });
+  assertLockfileWorkspaces({
+    before,
+    after,
+    readManifest: (workspace) =>
+      JSON.parse(
+        readFileSync(path.join(repo, workspace, "package.json"), "utf-8"),
+      ),
+  });
+};
+
+type AssertLockfileWorkspacesOptions = {
+  before: unknown;
+  after: unknown;
+  readManifest: (workspace: string) => unknown;
+};
+
+/** Workspace metadata is a projection of merged manifests, never artifact authority. */
+export const assertLockfileWorkspaces = ({
+  before,
+  after,
+  readManifest,
+}: AssertLockfileWorkspacesOptions) => {
+  if (
+    !object(before) ||
+    !object(after) ||
+    !object(before["workspaces"]) ||
+    !object(after["workspaces"])
+  ) {
+    fail("bun.lock must have a workspaces table");
+  }
+  const workspaces = after["workspaces"];
+  if (
+    !isDeepStrictEqual(
+      Object.keys(before["workspaces"]).toSorted(),
+      Object.keys(workspaces).toSorted(),
+    )
+  ) {
+    fail("bun.lock changed the merged workspace set");
+  }
+  for (const [workspace, metadata] of Object.entries(workspaces)) {
+    if (workspace !== "" && !isPlainRelativePath(workspace)) {
+      fail("bun.lock has an invalid workspace path");
+    }
+    const manifest = readManifest(workspace);
+    if (!object(manifest)) {
+      fail(`${workspace}: malformed merged manifest`);
+    }
+    const fields = [
+      "name",
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      "optionalDependencies",
+      "bin",
+      ...(workspace === "" ? [] : ["version"]),
+    ];
+    const expected = Object.fromEntries(
+      fields
+        .filter((key) => manifest[key] !== undefined)
+        .map((key) => [key, manifest[key]]),
+    );
+    const peers = manifest["peerDependenciesMeta"];
+    if (object(peers)) {
+      const optional = Object.entries(peers)
+        .filter(([, value]) => object(value) && value["optional"] === true)
+        .map(([name]) => name);
+      if (optional.length > 0) {
+        expected["optionalPeers"] = optional.toSorted();
+      }
+    }
+    if (!isDeepStrictEqual(expected, metadata)) {
+      fail(
+        `${workspace || "."}: lockfile workspace metadata differs from merged manifest`,
+      );
+    }
+  }
+};
+
+export const refreshLockfile = (repo: string) => {
+  const lock = path.join(repo, "bun.lock");
+  const before = readFileSync(lock, "utf-8");
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      path.join(import.meta.dir, "retry.sh"),
+      "bun",
+      "--no-env-file",
+      "install",
+      "--lockfile-only",
+      "--ignore-scripts",
+    ],
+    {
+      cwd: repo,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  try {
+    if (result.exitCode !== 0) {
+      fail(`Lockfile re-resolution failed: ${result.stderr.toString()}`);
+    }
+    const after = parseBunLockText(readFileSync(lock, "utf-8"));
+    assertFrozenLockfile({ before: parseBunLockText(before), after });
+    assertLockfileWorkspaces({
+      before: parseBunLockText(before),
+      after,
+      readManifest: (workspace) =>
+        JSON.parse(
+          readFileSync(path.join(repo, workspace, "package.json"), "utf-8"),
+        ),
+    });
+  } catch (error) {
+    // A rejected refresh must never be picked up by a later autofix commit.
+    writeFileSync(lock, before);
+    throw error;
+  }
+};
 
 const SHA = /^[0-9a-f]{40}$/u;
 
@@ -133,6 +351,7 @@ export const classifyConflicts = (
   conflicts: readonly Conflict[],
   generators: readonly Generator[] = GENERATORS,
   deletions: ReadonlySet<string> = new Set(),
+  verified: ReadonlySet<string> = new Set(),
 ): Classification => {
   const sorted = conflicts.toSorted(
     // Byte order: paths are identifiers, not prose.
@@ -142,7 +361,10 @@ export const classifyConflicts = (
     return { eligible: false, conflicts: sorted, reasons: ["no conflicts"] };
   }
   const reasons = sorted.flatMap((conflict) => {
-    const reason = conflictReason(conflict, generators, deletions);
+    const reason =
+      verified.has(conflict.path) && conflict.kind !== "delete-modify"
+        ? null
+        : conflictReason(conflict, generators, deletions);
     return reason === null ? [] : [reason];
   });
   if (reasons.length > 0) {
@@ -191,8 +413,9 @@ export const isAllowedResolution = (
   isPlainRelativePath(file) &&
   !isAutofixProtectedPath(file) &&
   !file.startsWith(".github/") &&
-  !LOCKFILE.test(file) &&
-  (classification.conflicts.some((conflict) => conflict.path === file) ||
+  (!LOCKFILE.test(file) || file === "bun.lock") &&
+  (file === "bun.lock" ||
+    classification.conflicts.some((conflict) => conflict.path === file) ||
     classification.allowed.some((output) =>
       matchesGeneratedGlob(output, file),
     ));
@@ -465,17 +688,76 @@ export const plan = (
     conflicts,
     generators,
   });
+  const replacements = new Map<string, { mode: string; sha: string }>();
+  const verified = new Set<string>();
+  const readBlob = (entry: StageEntry) =>
+    git(gitDir, ["cat-file", "blob", entry.sha]).stdout;
+  for (const conflict of conflictsOf(entries)) {
+    const stages = entries.filter((entry) => entry.path === conflict.path);
+    const base = stages.find((entry) => entry.stage === "1");
+    const ours = stages.find((entry) => entry.stage === "2");
+    const theirs = stages.find((entry) => entry.stage === "3");
+    if (
+      !base ||
+      !ours ||
+      !theirs ||
+      stages.some((entry) => entry.mode !== "100644")
+    ) {
+      continue;
+    }
+    if (conflict.path === "bun.lock") {
+      // Conflicting pins are a human decision. Independent additions reuse
+      // precisely the tuples already committed in the two parents.
+      try {
+        const mergedLock = mergeLockfile({
+          base: parseBunLockText(readBlob(base)),
+          head: parseBunLockText(readBlob(ours)),
+          main: parseBunLockText(readBlob(theirs)),
+        });
+        const sha = git(gitDir, ["hash-object", "-w", "--stdin"], {
+          input: Buffer.from(`${JSON.stringify(mergedLock, null, 2)}\n`),
+        }).stdout.trim();
+        replacements.set(conflict.path, { mode: "100644", sha });
+        verified.add(conflict.path);
+      } catch (error) {
+        if (!(error instanceof GeneratedConflictsError)) {
+          throw error;
+        }
+      }
+      continue;
+    }
+    if (
+      isAutofixProtectedPath(conflict.path) ||
+      conflict.path.startsWith(".github/") ||
+      !/\.(?:ts|js|json)$/u.test(conflict.path)
+    ) {
+      continue;
+    }
+    const original = readBlob(base);
+    let chosen: StageEntry | undefined;
+    if (indentationOnly({ before: original, after: readBlob(ours) })) {
+      chosen = theirs;
+    } else if (indentationOnly({ before: original, after: readBlob(theirs) })) {
+      chosen = ours;
+    }
+    if (chosen) {
+      replacements.set(conflict.path, chosen);
+      verified.add(conflict.path);
+    }
+  }
   const classification = classifyConflicts(
     conflicts,
     generators,
     new Set(deletions),
+    verified,
   );
   if (!classification.eligible) {
     return { ...classification, head, main, baseline: null, deletions };
   }
   const theirs = entries.filter((entry) => entry.stage === "3");
   const baseline = editTree(gitDir, mergedTree, (index) => {
-    for (const entry of theirs) {
+    for (const mainEntry of theirs) {
+      const entry = { ...mainEntry, ...replacements.get(mainEntry.path) };
       git(
         gitDir,
         [
@@ -586,6 +868,7 @@ export const pathShapeProblem = (
 
 const readPlan = (
   file: string,
+  gitDir: string,
   generators: readonly Generator[] = GENERATORS,
 ): Plan => {
   const parsed: unknown = JSON.parse(readFileSync(file, "utf-8"));
@@ -631,14 +914,15 @@ const readPlan = (
     }
     return { path: conflictPath, kind };
   });
-  const deletions = storedDeletions.toSorted();
-  return {
-    ...classifyConflicts(conflicts, generators, new Set(deletions)),
-    head,
-    main,
-    baseline,
-    deletions,
-  };
+  const rebuilt = plan(gitDir, head, main, generators);
+  if (
+    !isDeepStrictEqual(rebuilt.conflicts, conflicts) ||
+    rebuilt.baseline !== baseline ||
+    !isDeepStrictEqual(rebuilt.deletions, storedDeletions.toSorted())
+  ) {
+    fail("Stored plan differs from the rebuilt merge");
+  }
+  return rebuilt;
 };
 
 /** Resolve run: package what the generators wrote on top of the baseline. */
@@ -653,11 +937,11 @@ export const collect = ({
   out: string;
   generators?: readonly Generator[];
 }) => {
-  const planned = readPlan(planFile, generators);
+  const gitDir = path.join(repo, ".git");
+  const planned = readPlan(planFile, gitDir, generators);
   if (!planned.eligible || planned.baseline === null) {
     fail("collect needs an eligible plan");
   }
-  const gitDir = path.join(repo, ".git");
   const run = (args: readonly string[]) => {
     const result = Bun.spawnSync(["git", "-C", repo, ...args], {
       stdout: "pipe",
@@ -748,6 +1032,67 @@ export type ApplyOptions = {
   generators?: readonly Generator[];
 };
 
+type VerifiedResolutionBytesOptions = {
+  gitDir: string;
+  baseline: string;
+  collected: string;
+  file: ManifestFile;
+  conflicted: ReadonlySet<string>;
+  generators: readonly Generator[];
+  deletions: ReadonlySet<string>;
+};
+
+const verifiedResolutionBytes = ({
+  gitDir,
+  baseline,
+  collected,
+  file,
+  conflicted,
+  generators,
+  deletions,
+}: VerifiedResolutionBytesOptions) => {
+  const source = path.join(collected, "files", file.path);
+  const stat = lstatSync(source);
+  if (!stat.isFile() || stat.size > MAX_FILE_BYTES) {
+    fail(`${file.path} is not a plain file within the size limit`);
+  }
+  const bytes = readFileSync(source);
+  if (file.path === "bun.lock") {
+    if (file.deleted || file.mode !== "100644") {
+      fail("bun.lock must remain a regular file");
+    }
+    const before = parseBunLockText(
+      git(gitDir, ["show", `${baseline}:bun.lock`]).stdout,
+    );
+    const after = parseBunLockText(bytes.toString());
+    assertFrozenLockfile({ before, after });
+    assertLockfileWorkspaces({
+      before,
+      after,
+      readManifest: (workspace) =>
+        JSON.parse(
+          git(gitDir, [
+            "show",
+            `${baseline}:${workspace ? `${workspace}/` : ""}package.json`,
+          ]).stdout,
+        ),
+    });
+  } else if (
+    conflicted.has(file.path) &&
+    conflictReason(
+      { path: file.path, kind: "both-modified" },
+      generators,
+      deletions,
+    ) !== null
+  ) {
+    const expected = git(gitDir, ["show", `${baseline}:${file.path}`]).stdout;
+    if (file.mode !== "100644" || bytes.toString() !== expected) {
+      fail(`${file.path}: format-only resolution changed source logic`);
+    }
+  }
+  return bytes;
+};
+
 /**
  * Trusted: rebuild the merge from git objects, apply the collected files as
  * data, and write the API requests for one merge commit. Nothing is written
@@ -795,7 +1140,8 @@ export const apply = ({
     treeModes(gitDir, headTree),
     treeModes(gitDir, planned.baseline),
   ];
-  const uncovered = new Set(planned.conflicts.map(({ path: file }) => file));
+  const conflicted = new Set(planned.conflicts.map(({ path: file }) => file));
+  const uncovered = new Set(conflicted);
   const seen = new Set<string>();
   for (const file of parsed.files) {
     if (seen.has(file.path)) {
@@ -816,22 +1162,39 @@ export const apply = ({
       `The collected resolution omits conflicted paths: ${[...uncovered].join(", ")}`,
     );
   }
-  const tree = editTree(gitDir, planned.baseline, (index) => {
+  const baseline = planned.baseline;
+  const tree = editTree(gitDir, baseline, (index) => {
     for (const file of parsed.files) {
       if (file.deleted) {
+        if (
+          file.path === "bun.lock" ||
+          (!planned.deletions.includes(file.path) &&
+            conflicted.has(file.path) &&
+            conflictReason(
+              { path: file.path, kind: "both-modified" },
+              generators,
+              new Set(planned.deletions),
+            ) !== null)
+        ) {
+          fail(`${file.path}: cannot delete a format or lockfile resolution`);
+        }
         removeFromIndex(gitDir, index, file.path);
         continue;
       }
-      const source = path.join(collected, "files", file.path);
-      const stat = lstatSync(source);
-      if (!stat.isFile() || stat.size > MAX_FILE_BYTES) {
-        fail(`${file.path} is not a plain file within the size limit`);
-      }
+      const bytes = verifiedResolutionBytes({
+        gitDir,
+        baseline,
+        collected,
+        file,
+        conflicted,
+        generators,
+        deletions: new Set(planned.deletions),
+      });
       const sha = git(
         gitDir,
         ["hash-object", "-w", "--no-filters", "--stdin"],
         {
-          input: readFileSync(source),
+          input: bytes,
         },
       ).stdout.trim();
       git(
@@ -950,9 +1313,9 @@ export type PushOptions = {
 
 /**
  * Trusted: create the blobs, tree and merge commit, then move the branch with
- * a compare-and-swap: `updateRefs` applies only while the branch still points
- * at the head the resolution was built on, so a push or force-push in the
- * meantime is never overwritten or resurrected.
+ * a compare-and-swap: `updateRefs` is the expected-head lease and applies only
+ * while the branch still points at the head the resolution was built on, so a
+ * push or force-push in the meantime is never overwritten or resurrected.
  */
 export const push = async ({
   requests,
@@ -1103,6 +1466,15 @@ if (import.meta.main) {
         ),
       );
       break;
+    case "refresh-lock":
+      refreshLockfile(path.resolve(required(args, "--repo")));
+      break;
+    case "assert-frozen-lock":
+      assertFinalAutofixLockfile({
+        repo: path.resolve(required(args, "--repo")),
+        frozen: path.resolve(required(args, "--frozen")),
+      });
+      break;
     case "collect":
       collect({
         repo: path.resolve(required(args, "--repo")),
@@ -1132,7 +1504,7 @@ if (import.meta.main) {
     }
     default:
       console.error(
-        "Usage: bun scripts/generated-conflicts.ts plan|collect|apply|push (see the header)",
+        "Usage: bun scripts/generated-conflicts.ts plan|refresh-lock|assert-frozen-lock|collect|apply|push (see the header)",
       );
       process.exitCode = 1;
   }

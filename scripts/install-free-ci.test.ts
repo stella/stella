@@ -1569,6 +1569,7 @@ describe("install-free invocation classification", () => {
       '"$RELEASE_TOOLING/scripts/retry.sh"',
       "./scripts/retry.sh",
       "tooling/retry.sh",
+      '"$NETWORK_RETRY_SCRIPT"',
     ]) {
       expect(
         classify(`bash ${helper} bun ci --ignore-scripts`).map(
