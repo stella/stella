@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DIALOG_MOBILE_LAYOUT,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -56,7 +57,7 @@ export const StyleSetEditorDialog = ({
     <Dialog onOpenChange={onOpenChange} open>
       <DialogPopup
         className="h-[calc(100dvh-2rem)] max-w-6xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
       >
         {target.type === "stella" ? (
           <StellaStyleEditorLoader

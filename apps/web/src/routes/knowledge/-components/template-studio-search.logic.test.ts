@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 import { isSafeFieldPath } from "@stll/template-conditions";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { sanitizeFieldPath } from "@/routes/knowledge/-components/template-studio-model";
 import type { StudioField } from "@/routes/knowledge/-components/template-studio-store";
@@ -57,25 +58,27 @@ const field = (path: string, label = ""): StudioField => ({
   valueSource: { type: "input" },
 });
 
-const oldMatchingSlashFields = (
+/**
+ * The search contract: a text matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (text: string, query: string) =>
+  foldSearchMatchText(text.toWellFormed()).includes(
+    foldSearchMatchText(query.trim().toWellFormed()),
+  );
+
+const referenceMatchingSlashFields = (
   query: string,
   fields: StudioField[],
 ): StudioField[] => {
-  const needle = query.trim().toLowerCase().toWellFormed();
   const matches = (candidate: StudioField): boolean => {
-    if (needle === "") {
-      return true;
-    }
     const label = candidate.label === "" ? candidate.path : candidate.label;
-    return (
-      candidate.path.toLowerCase().toWellFormed().includes(needle) ||
-      label.toLowerCase().toWellFormed().includes(needle)
-    );
+    return matchesFolded(candidate.path, query) || matchesFolded(label, query);
   };
   return fields.filter(matches).slice(0, OLD_SLASH_MENU_MAX_FIELDS);
 };
 
-const oldCreateFieldPathFromQuery = (trimmed: string): string => {
+const referenceCreateFieldPathFromQuery = (trimmed: string): string => {
   if (trimmed === "") {
     return "field";
   }
@@ -86,7 +89,10 @@ const oldCreateFieldPathFromQuery = (trimmed: string): string => {
   return isSafeFieldPath(sanitized) ? sanitized : "field";
 };
 
-const oldUniqueFieldPath = (base: string, fields: StudioField[]): string => {
+const referenceUniqueFieldPath = (
+  base: string,
+  fields: StudioField[],
+): string => {
   let path = base;
   for (let n = 2; fields.some((candidate) => candidate.path === path); n++) {
     path = `${base}_${n}`;
@@ -94,17 +100,16 @@ const oldUniqueFieldPath = (base: string, fields: StudioField[]): string => {
   return path;
 };
 
-const oldBuildSlashRootItems = (
+const referenceBuildSlashRootItems = (
   query: string,
   fields: StudioField[],
 ): SlashRootItem[] => {
   const trimmed = query.trim();
-  const needle = trimmed.toLowerCase().toWellFormed();
   const matches = (...keywords: string[]): boolean =>
-    keywords.some((keyword) => keyword.toWellFormed().includes(needle));
+    keywords.some((keyword) => matchesFolded(keyword, trimmed));
   if (trimmed === "") {
     const items: SlashRootItem[] = [
-      { kind: "create-field", path: oldUniqueFieldPath("field", fields) },
+      { kind: "create-field", path: referenceUniqueFieldPath("field", fields) },
       { kind: "create-condition" },
     ];
     if (fields.length > 0) {
@@ -113,15 +118,16 @@ const oldBuildSlashRootItems = (
     items.push({ kind: "open-clauses" });
     return items;
   }
-  const createPath = oldCreateFieldPathFromQuery(trimmed);
+  const createPath = referenceCreateFieldPathFromQuery(trimmed);
   const reuseExact = fields.some((candidate) => candidate.path === createPath);
-  const items: SlashRootItem[] = oldMatchingSlashFields(query, fields).map(
-    (candidate) => ({
-      kind: "field",
-      path: candidate.path,
-      label: candidate.label === "" ? candidate.path : candidate.label,
-    }),
-  );
+  const items: SlashRootItem[] = referenceMatchingSlashFields(
+    query,
+    fields,
+  ).map((candidate) => ({
+    kind: "field",
+    path: candidate.path,
+    label: candidate.label === "" ? candidate.path : candidate.label,
+  }));
   if (matches("clause")) {
     items.push({ kind: "open-clauses" });
   }
@@ -149,12 +155,15 @@ describe("template studio slash search", () => {
     ]);
   });
 
-  test("matches trimmed case-insensitive path and label substrings in source order, capped at 50", () => {
+  test("matches trimmed path and label substrings regardless of case and accents, in source order, capped at 50", () => {
     const fields = [field("first", "Clause target"), field("clause_path")];
     expect(matchingSlashFields(" CLAUSE ", fields)).toEqual(fields);
     expect(
       matchingSlashFields("cafe", [field("cafe"), field("x", "Café")]),
-    ).toEqual([field("cafe")]);
+    ).toEqual([field("cafe"), field("x", "Café")]);
+    expect(
+      matchingSlashFields("SMLUVNI", [field("strana", "Smluvní strana")]),
+    ).toEqual([field("strana", "Smluvní strana")]);
     const capped = Array.from({ length: 55 }, (_, index) =>
       field(`target_${index}`),
     );
@@ -183,7 +192,7 @@ describe("template studio slash search", () => {
     expect(matchingSlashFields("\ude00", [field("😀")])).toEqual([]);
   });
 
-  test("template studio menu outputs match the previous substring algorithms for generated Unicode inputs", () => {
+  test("template studio menu outputs match the reference algorithms for generated Unicode inputs", () => {
     const generatedFields = fc
       .array(
         fc.record({ path: searchTextArbitrary, label: searchTextArbitrary }),
@@ -191,13 +200,13 @@ describe("template studio slash search", () => {
       )
       .map((fields) => fields.map(({ path, label }) => field(path, label)));
     assertProperty(
-      "template studio menu outputs match the previous substring algorithms for generated Unicode inputs",
+      "template studio menu outputs match the reference algorithms for generated Unicode inputs",
       fc.property(generatedFields, searchTextArbitrary, (fields, query) => {
         expect(matchingSlashFields(query, fields)).toEqual(
-          oldMatchingSlashFields(query, fields),
+          referenceMatchingSlashFields(query, fields),
         );
         expect(buildSlashRootItems(query, fields)).toEqual(
-          oldBuildSlashRootItems(query, fields),
+          referenceBuildSlashRootItems(query, fields),
         );
       }),
     );
@@ -205,7 +214,7 @@ describe("template studio slash search", () => {
 });
 
 describe("template tag suggestions", () => {
-  test("trims and lowercases the query, excludes selected tags, preserves order, and caps at six", () => {
+  test("trims and folds the query, excludes selected tags, preserves order, and caps at six", () => {
     const suggestions = ["contracts", "Contract review", "corporate"];
     expect(
       filterTemplateTagSuggestions(suggestions, ["contracts"], "  CON "),
@@ -214,6 +223,7 @@ describe("template tag suggestions", () => {
       filterTemplateTagSuggestions(["a", "b", "c", "d", "e", "f", "g"], [], ""),
     ).toEqual(["a", "b", "c", "d", "e", "f"]);
     expect(filterTemplateTagSuggestions(["Café", "cafe"], [], "cafe")).toEqual([
+      "Café",
       "cafe",
     ]);
     expect(filterTemplateTagSuggestions(["A+B", "AB"], [], "+")).toEqual([
@@ -221,23 +231,16 @@ describe("template tag suggestions", () => {
     ]);
   });
 
-  test("tag suggestions match the previous predicate and cap for generated Unicode inputs", () => {
+  test("tag suggestions keep the folded matches and cap for generated Unicode inputs", () => {
     assertProperty(
-      "tag suggestions match the previous predicate and cap for generated Unicode inputs",
+      "tag suggestions keep the folded matches and cap for generated Unicode inputs",
       fc.property(
         fc.array(searchTextArbitrary, { maxLength: PROPERTY_MAX_TAGS }),
         fc.array(searchTextArbitrary, { maxLength: PROPERTY_MAX_TAGS }),
         searchTextArbitrary,
         (suggestions, tags, input) => {
           const expected = suggestions
-            .filter(
-              (tag) =>
-                !tags.includes(tag) &&
-                tag
-                  .toLowerCase()
-                  .toWellFormed()
-                  .includes(input.trim().toLowerCase().toWellFormed()),
-            )
+            .filter((tag) => !tags.includes(tag) && matchesFolded(tag, input))
             .slice(0, OLD_MAX_TAG_SUGGESTIONS);
           expect(
             filterTemplateTagSuggestions(suggestions, tags, input),

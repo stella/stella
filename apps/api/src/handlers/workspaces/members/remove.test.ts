@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -12,6 +12,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -27,7 +28,13 @@ import {
   removeWorkspaceMemberHandler,
 } from "./remove";
 
+// Every advisory acquisition in these fixtures succeeds under one identity.
+const ADVISORY_LOCK_ROW = { acquired: true, key1: 1, key2: 2 };
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
+
+beforeEach(() => {
+  revokeWorkspaceSseAccessMock.mockClear();
+});
 const removeWorkspaceMember = createRemoveWorkspaceMember({
   broadcastSessionEvent: () => undefined,
   broadcastWorkspaceResourceSetUpdated: () => undefined,
@@ -63,7 +70,7 @@ const createContext = ({
     managedAIResidency: "eu" as const,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/members/:userId",
+    route: "/v1/workspaces/:workspaceId/members/:userId" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },
@@ -82,13 +89,23 @@ describe("removeWorkspaceMember", () => {
     let deleteCalled = false;
 
     const { safeDb } = createScopedDbMock({
+      execute: async () => await Promise.resolve([ADVISORY_LOCK_ROW]),
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
-            limit: () => ({
-              for: async () =>
-                table === timeEntries ? [{ id: "timer_test" }] : [],
-            }),
+            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
+            limit: () =>
+              Object.assign(
+                Promise.resolve(
+                  table === workspaces
+                    ? [{ organizationId: "org_test123" }]
+                    : [],
+                ),
+                {
+                  for: async () =>
+                    table === timeEntries ? [{ id: "timer_test" }] : [],
+                },
+              ),
             for: async () => {
               if (table === workspaces) {
                 return [{ leadUserId: null }];
@@ -138,19 +155,27 @@ describe("removeWorkspaceMember", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
+      execute: async () => await Promise.resolve([ADVISORY_LOCK_ROW]),
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
-            ...createSelectQueryMock([]).from(),
+            where: createSelectQueryMock([]).from().where,
             innerJoin: () => ({
               where: () => ({ as: () => ({}) }),
             }),
           }),
           where: () => ({
             orderBy: async () => await createSelectQueryMock([]).from().where(),
-            limit: () => ({
-              for: async () => [],
-            }),
+            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
+            limit: () =>
+              Object.assign(
+                Promise.resolve(
+                  table === workspaces
+                    ? [{ organizationId: "org_test123" }]
+                    : [],
+                ),
+                { for: async () => [] },
+              ),
             for: async () => {
               if (table === workspaces) {
                 return [{ leadUserId: "user_lead" }];

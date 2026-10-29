@@ -382,12 +382,14 @@ describe("release workflows run the gate", () => {
   const read = (file: string) =>
     readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
-  test("the tag workflow refuses a stable tag before pushing it", () => {
+  test("the RC workflow checks CLI coupling before its candidate tag push", () => {
     const workflow = read(".github/workflows/release-tag.yml");
     const gate = workflow.indexOf(SCRIPT);
-    const push = workflow.indexOf("- name: Push tag");
+    const verdict = workflow.indexOf("- name: Report every release gate");
+    const push = workflow.indexOf("- name: Push candidate tag once");
     expect(gate).toBeGreaterThan(0);
-    expect(push).toBeGreaterThan(gate);
+    expect(verdict).toBeGreaterThan(gate);
+    expect(push).toBeGreaterThan(verdict);
   });
 
   test("a release pull request sees the same verdict before merging", () => {
@@ -528,6 +530,7 @@ test("release contract reads committed data without installed dependencies or de
         expect(archive.error).toBeUndefined();
         expect(archive.status, archive.stderr.toString()).toBe(0);
         const extracted = spawnSync("tar", ["-x", "-C", root], {
+          maxBuffer: 2 ** 30,
           input: archive.stdout,
           timeout: 10_000,
         });
@@ -582,7 +585,11 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
   try {
     copyNoInstallFiles(root);
     const git = (...args: string[]) => {
-      const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+      const result = spawnSync("git", args, {
+        maxBuffer: 2 ** 30,
+        cwd: root,
+        encoding: "utf-8",
+      });
       expect(result.status).toBe(0);
       return result.stdout.trim();
     };

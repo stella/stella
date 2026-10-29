@@ -5,12 +5,9 @@ import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
-import {
-  type AdmissionRedisClient,
-  type AdmissionRedisReady,
-  createAdmissionRedis,
-  resolveAdmissionRedisClient,
-  sendAdmissionRedisCommand,
+import type {
+  AdmissionRedisClient,
+  AdmissionRedisReady,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -19,8 +16,6 @@ import {
   actionAdmissionRefusal as configuredActionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
 import { admitSwitchedAction } from "@/api/lib/kill-switches/admission";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { withAdmittedOperation } from "@/api/lib/proofs/checked-transaction";
 import type { AdmittedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
@@ -29,9 +24,7 @@ import type {
   ConcurrencyOnlyActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
 import {
-  ACTION_PERIOD_ACQUIRE_SCRIPT,
   ACTION_SERVICE_DEADLINE_EXPIRED,
-  ACTION_SERVICE_DEADLINE_SCRIPT,
   actionPeriodArguments,
   type ActionPeriodBudget,
   type ActionPeriodBudgetError,
@@ -46,7 +39,6 @@ import {
   type DemoActionBudget,
   withDemoActionBudget,
 } from "@/api/lib/rate-limit/demo-action-budget";
-import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 import {
   type ActionCostRecorder,
@@ -65,18 +57,18 @@ import {
   resolveOrganizationActionBudget,
 } from "@/api/lib/usage/organization-action-budget";
 
-type RedisCommands = AdmissionRedisClient;
+import {
+  ACQUIRE_SCRIPT,
+  admissionRedis,
+  type AdmissionTiming,
+  concurrencyBusyRefusal,
+  defaultAdmissionTiming,
+  executeAdmissionCommand,
+  RESERVE_PERIOD_SCRIPT,
+  withAcquiredConcurrencyLease,
+} from "./concurrency-lease";
 
-const REDIS_COMMAND_TIMEOUT_MS = 500;
-const RENEW_FAILURE = failureSink({
-  event: "action_admission.renew_failed",
-  expected: [],
-});
-const RELEASE_FAILURE = failureSink({
-  event: "action_admission.release_failed",
-  expected: [],
-});
-const admissionRedis = createAdmissionRedis();
+type RedisCommands = AdmissionRedisClient;
 
 export const closeActionAdmissionRedis = () => admissionRedis.close();
 export const startActionAdmissionRedis = async () => {
@@ -96,61 +88,6 @@ type ActionAdmissionPolicy = {
   userConcurrency: number;
   leaseMs: number;
 };
-
-// Both keys share the organization hash slot. The operation admits to both
-// pools atomically, then expires even if the process dies before release.
-// Redis supplies time so clocks on separate API hosts cannot expire one
-// another's live leases.
-const ACQUIRE_SCRIPT = `
-local clock = redis.call("TIME")
-local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
-${ACTION_SERVICE_DEADLINE_SCRIPT}
-redis.call("ZREMRANGEBYSCORE", KEYS[1], "-inf", now)
-redis.call("ZREMRANGEBYSCORE", KEYS[2], "-inf", now)
-if redis.call("ZCARD", KEYS[1]) >= tonumber(ARGV[2]) or redis.call("ZCARD", KEYS[2]) >= tonumber(ARGV[3]) then
-  return 0
-end
-${ACTION_PERIOD_ACQUIRE_SCRIPT}
-redis.call("ZADD", KEYS[1], now + tonumber(ARGV[1]), ARGV[4])
-redis.call("ZADD", KEYS[2], now + tonumber(ARGV[1]), ARGV[4])
-redis.call("PEXPIRE", KEYS[1], ARGV[1])
-redis.call("PEXPIRE", KEYS[2], ARGV[1])
-return 1
-`;
-
-const RENEW_SCRIPT = `
-local clock = redis.call("TIME")
-local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
-local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[1])
-local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[1])
-if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then
-  return 0
-end
-redis.call("ZADD", KEYS[1], now + tonumber(ARGV[2]), ARGV[1])
-redis.call("ZADD", KEYS[2], now + tonumber(ARGV[2]), ARGV[1])
-redis.call("PEXPIRE", KEYS[1], ARGV[2])
-redis.call("PEXPIRE", KEYS[2], ARGV[2])
-return 1
-`;
-
-const RESERVE_PERIOD_SCRIPT = `
-local clock = redis.call("TIME")
-local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
-${ACTION_SERVICE_DEADLINE_SCRIPT}
-local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[4])
-local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[4])
-if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then
-  return -2
-end
-${ACTION_PERIOD_ACQUIRE_SCRIPT}
-return 1
-`;
-
-const RELEASE_SCRIPT = `
-redis.call("ZREM", KEYS[1], ARGV[1])
-redis.call("ZREM", KEYS[2], ARGV[1])
-return 1
-`;
 
 type AdmissionKeys = {
   organization: CoordinationKey;
@@ -199,7 +136,7 @@ const configuredPolicy = (
     return Result.err(
       new ActionAdmissionError({
         message: "Action admission configuration is incomplete",
-        reason: "unavailable",
+        reason: "configuration_incomplete",
       }),
     );
   }
@@ -262,11 +199,6 @@ type ActionAdmissionReservation =
       periodIdentity?: never;
     };
 
-type AdmissionTiming = {
-  now: () => number;
-  schedule: (callback: () => void, delayMs: number) => () => void;
-};
-
 type AdmissionScope = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -281,14 +213,6 @@ type AdmissionScope = {
 };
 
 const admissionScope = new AsyncLocalStorage<AdmissionScope>();
-
-const defaultTiming: AdmissionTiming = {
-  now: () => performance.now(),
-  schedule: (callback, delayMs) => {
-    const timer = setTimeout(callback, delayMs);
-    return () => clearTimeout(timer);
-  },
-};
 
 type AdmissionExecutorOptions = {
   keys: AdmissionKeys;
@@ -316,53 +240,34 @@ const createAdmissionExecutor = ({
           actionKind: periodIdentity.actionKind,
           logicalPhaseId: periodIdentity.logicalPhaseId,
         };
-  const execute = async (script: string, args: string[]) => {
+  const execute = async (
+    script: string,
+    args: string[],
+  ): Promise<Result<AdmissionReply, ActionAdmissionError>> => {
     const outcome = await Result.tryPromise({
       try: async () => {
-        const connected =
-          redis === undefined
-            ? await withCommandTimeout({
-                command: resolveAdmissionRedisClient(redisReady),
-                commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-                label: "action-admission-redis-connect",
-              })
-            : Result.ok(redis);
-        if (Result.isError(connected)) {
-          return Result.err(
-            new ActionAdmissionError({
-              message: "Action admission is unavailable",
-              reason: "unavailable",
-              cause: connected.error,
-            }),
-          );
-        }
-        const client = connected.value;
         const send = async (
           window: ActionPeriodBudget | null,
           commandArgs: string[],
-        ) => {
-          // Renewal and release touch concurrency keys alone.
-          const scriptKeys =
-            (script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT) &&
-            window !== null
-              ? [keys.organization, keys.user, window.key]
-              : [keys.organization, keys.user];
-          return await withCommandTimeout({
-            command: sendAdmissionRedisCommand(client, [
-              script,
-              String(scriptKeys.length),
-              ...scriptKeys,
+        ) =>
+          await executeAdmissionCommand({
+            script,
+            keys:
+              (script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT) &&
+              window !== null
+                ? [keys.organization, keys.user, window.key]
+                : [keys.organization, keys.user],
+            args: [
               ...commandArgs,
               ...((script === ACQUIRE_SCRIPT ||
                 script === RESERVE_PERIOD_SCRIPT) &&
               serviceDeadlineMs !== null
                 ? [String(serviceDeadlineMs)]
                 : []),
-            ]),
-            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-            label: "action-admission-redis-command",
+            ],
+            redis,
+            redisReady,
           });
-        };
         const commandResult = await send(budget, args);
         if (Result.isError(commandResult)) {
           return Result.err(
@@ -370,7 +275,7 @@ const createAdmissionExecutor = ({
               ? commandResult.error
               : new ActionAdmissionError({
                   message: "Action admission is unavailable",
-                  reason: "unavailable",
+                  reason: "store_unavailable",
                   cause: commandResult.error,
                 }),
           );
@@ -400,7 +305,7 @@ const createAdmissionExecutor = ({
           return Result.err(
             new ActionAdmissionError({
               message: "Action admission is unavailable",
-              reason: "unavailable",
+              reason: "configuration_incomplete",
               cause: refreshed.error,
             }),
           );
@@ -420,7 +325,7 @@ const createAdmissionExecutor = ({
               ? cause
               : new ActionAdmissionError({
                   message: "Action admission is unavailable",
-                  reason: "unavailable",
+                  reason: "store_unavailable",
                   cause,
                 }),
           );
@@ -430,7 +335,7 @@ const createAdmissionExecutor = ({
           ? error
           : new ActionAdmissionError({
               message: "Action admission is unavailable",
-              reason: "unavailable",
+              reason: "store_unavailable",
               cause: error,
             }),
     });
@@ -538,7 +443,7 @@ const admittedPeriodBudget = (period: AdmissionPeriod) => {
 const periodBudgetRefusal = (error: ActionPeriodBudgetError) =>
   new ActionAdmissionError({
     message: error.message,
-    reason: "unavailable",
+    reason: "configuration_incomplete",
     cause: error,
   });
 
@@ -565,7 +470,7 @@ const resolveAdmissionBudget = async ({
       return Result.err(
         new ActionAdmissionError({
           message: "Action service identity is missing",
-          reason: "unavailable",
+          reason: "configuration_incomplete",
         }),
       );
     }
@@ -584,7 +489,7 @@ const resolveAdmissionBudget = async ({
         return Result.err(
           new ActionAdmissionError({
             message: "Organization action scope is missing",
-            reason: "unavailable",
+            reason: "configuration_incomplete",
           }),
         );
       }
@@ -593,12 +498,20 @@ const resolveAdmissionBudget = async ({
         catch: (cause: unknown) =>
           new ActionAdmissionError({
             message: "Organization action access could not be read",
-            reason: "unavailable",
+            reason: "organization_state_unreadable",
             cause,
           }),
       });
       if (Result.isError(state)) {
         return state;
+      }
+      if (state.value.snapshot === undefined) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "Organization action state is missing",
+            reason: "organization_state_unreadable",
+          }),
+        );
       }
       nowMs = budgetNow();
       const access = resolveOrganizationAccess({
@@ -643,7 +556,7 @@ const resolveAdmissionBudget = async ({
           return Result.err(
             new ActionAdmissionError({
               message: "Organization action configuration is incomplete",
-              reason: "unavailable",
+              reason: "configuration_incomplete",
             }),
           );
         case "resolved":
@@ -720,7 +633,7 @@ const resolveQueuedBudget = async (
   return Result.err(
     new ActionAdmissionError({
       message: "Queued action admission requires a configured period budget",
-      reason: "unavailable",
+      reason: "configuration_incomplete",
     }),
   );
 };
@@ -741,17 +654,21 @@ const acquisitionRefusal = ({
   reply,
   window,
 }: AdmissionReply): ActionAdmissionError | null => {
+  if (reply === -2) {
+    return new ActionAdmissionError({
+      message: "Action lease was lost",
+      reason: "lease_lost",
+    });
+  }
   if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
     return new ActionAdmissionError({
       message: "Organization service actions are not enabled",
       reason: "not_enabled",
     });
   }
-  if (reply === 0) {
-    return new ActionAdmissionError({
-      message: "Concurrent action limit reached",
-      reason: "busy",
-    });
+  const busy = concurrencyBusyRefusal(reply);
+  if (busy !== null) {
+    return busy;
   }
   // Only a counted window refuses for its period; the refusal names the
   // window's own reset, whichever budget (generic or service) it belongs to.
@@ -765,7 +682,7 @@ const acquisitionRefusal = ({
   if (reply !== 1) {
     return new ActionAdmissionError({
       message: "Action admission returned an invalid response",
-      reason: "unavailable",
+      reason: "store_unavailable",
     });
   }
 
@@ -801,7 +718,7 @@ const reuseAdmissionScope = async <T>({
     return Result.err(
       new ActionAdmissionError({
         message: "Action service identity is incomplete",
-        reason: "unavailable",
+        reason: "configuration_incomplete",
       }),
     );
   }
@@ -817,7 +734,7 @@ const reuseAdmissionScope = async <T>({
       return Result.err(
         new ActionAdmissionError({
           message: budget.error.message,
-          reason: "unavailable",
+          reason: "configuration_incomplete",
           cause: budget.error,
         }),
       );
@@ -864,8 +781,8 @@ const createPeriodReservationScope = ({
     if (signal.aborted || executionScope.status !== "active") {
       return Result.err(
         new ActionAdmissionError({
-          message: "Action admission is unavailable",
-          reason: "unavailable",
+          message: "Action lease was lost",
+          reason: "lease_lost",
           cause: signal.reason,
         }),
       );
@@ -1069,23 +986,6 @@ const resolveExecutionBudget = async ({
   return Result.ok(admittedPeriodBudget(resolved.value));
 };
 
-const settledAdmissionOutcome = <T>(
-  outcome: Result<T, unknown>,
-  signal: AbortSignal,
-) => {
-  // A settled success may already have committed or charged. Losing the lease
-  // cannot replace it with an infrastructure error that invites duplicate work.
-  if (
-    Result.isError(outcome) &&
-    signal.aborted &&
-    (outcome.error === signal.reason ||
-      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
-  ) {
-    return Result.err(signal.reason);
-  }
-  return outcome;
-};
-
 const withEnabledActionAdmission = async <T>({
   organizationId,
   userId,
@@ -1101,7 +1001,7 @@ const withEnabledActionAdmission = async <T>({
   redis,
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
-  timing = defaultTiming,
+  timing = defaultAdmissionTiming,
 }: ActionAdmissionOptions<T> & {
   organizationBudgetOptions: ResolveAdmissionBudgetOptions;
 }): Promise<Result<T, unknown>> => {
@@ -1185,114 +1085,41 @@ const withEnabledActionAdmission = async <T>({
     return Result.err(refusal);
   }
 
-  let leaseDeadline = initialAttemptAt + limits.leaseMs;
-  const controller = new AbortController();
-  let leaseLost: ActionAdmissionError | null = null;
-  let stopped = false;
-  let cancelScheduled: () => void = () => undefined;
-  let renewal: Promise<void> | null = null;
-
-  const loseLease = () => {
-    if (stopped || leaseLost !== null) {
-      return;
-    }
-    leaseLost = new ActionAdmissionError({
-      message: "Action lease was lost",
-      reason: "unavailable",
-    });
-    cancelScheduled();
-    controller.abort(leaseLost);
-  };
-
-  const scheduleRenewal = (delayMs: number) => {
-    if (!stopped && leaseLost === null) {
-      cancelScheduled = timing.schedule(() => {
-        renewal = renew()
-          .catch((error: unknown) => {
-            observeFailure(error, { sink: RENEW_FAILURE });
-            loseLease();
-          })
-          .finally(() => {
-            renewal = null;
-          });
-      }, delayMs);
-    }
-  };
-
-  const renew = async () => {
-    const attemptAt = timing.now();
-    if (attemptAt >= leaseDeadline) {
-      loseLease();
-      return;
-    }
-    const result = await execute(RENEW_SCRIPT, [
-      leaseId,
-      String(limits.leaseMs),
-    ]);
-    if (Result.isOk(result)) {
-      if (result.value.reply !== 1) {
-        loseLease();
-        return;
-      }
-      leaseDeadline = attemptAt + limits.leaseMs;
-      scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
-      return;
-    }
-    observeFailure(result.error, { sink: RENEW_FAILURE });
-    const remaining = leaseDeadline - timing.now();
-    if (remaining <= 0) {
-      loseLease();
-      return;
-    }
-    scheduleRenewal(
-      Math.max(1, Math.min(Math.floor(limits.leaseMs / 4), remaining)),
-    );
-  };
-
-  if (timing.now() >= leaseDeadline) {
-    loseLease();
-  } else {
-    scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
-  }
-
-  let outcome: Result<T, unknown>;
-  const executionScope = createPeriodReservationScope({
-    keys,
-    budget: initialBudget,
-    serviceDeadlineMs,
-    organizationId,
-    userId,
-    periodIdentity,
-    redis,
-    redisReady,
-    signal: controller.signal,
-    queuedIdentity: execution === "queued-kickoff" ? periodIdentity : undefined,
-    limits,
+  return await withAcquiredConcurrencyLease({
+    availability: { type: "required" },
+    leaseMs: limits.leaseMs,
     leaseId,
-    organizationBudgetOptions,
-  });
-  try {
-    outcome = await Result.tryPromise({
-      try: async () =>
-        await admissionScope.run(
+    initialAttemptAt,
+    timing,
+    execute: async (script, args) =>
+      (await execute(script, args)).map(({ reply }) => reply),
+    run: async (signal) => {
+      const executionScope = createPeriodReservationScope({
+        keys,
+        budget: initialBudget,
+        serviceDeadlineMs,
+        organizationId,
+        userId,
+        periodIdentity,
+        redis,
+        redisReady,
+        signal,
+        queuedIdentity:
+          execution === "queued-kickoff" ? periodIdentity : undefined,
+        limits,
+        leaseId,
+        organizationBudgetOptions,
+      });
+      try {
+        return await admissionScope.run(
           executionScope,
-          async () => await run(controller.signal, executionScope.control),
-        ),
-      catch: (error: unknown) => error,
-    });
-  } finally {
-    executionScope.status = "settled";
-    stopped = true;
-    cancelScheduled();
-    await Promise.resolve(renewal);
-    const released = await execute(RELEASE_SCRIPT, [leaseId]);
-    if (Result.isError(released)) {
-      // The lease expires on its own. A release outage must not make a
-      // completed action look retryable and invite duplicate side effects.
-      observeFailure(released.error, { sink: RELEASE_FAILURE });
-    }
-  }
-  return settledAdmissionOutcome(outcome, controller.signal);
+          async () => await run(signal, executionScope.control),
+        );
+      } finally {
+        executionScope.status = "settled";
+      }
+    },
+  });
 };
 
 const ACTION_ADMITTED = "ActionAdmitted";

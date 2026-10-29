@@ -94,7 +94,6 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_READ_TOKEN: ${{ github.token }}
           DATED_WAIVER_FIX_REPO: ${{ github.repository_owner }}/${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
-          MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
 
       # The full expiry check: pull requests only fail on waivers they touch,
       # so the default branch is where every expired waiver fails, and the

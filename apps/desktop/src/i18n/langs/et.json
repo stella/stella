@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Salvesta rakenduse <bdi>{source}</bdi> uusi lõikeid taas",
     "pause": "Peata salvestamine",
     "plainText": "Lihttekst",
+    "plainTextPreview": "Lihtteksti eelvaade",
     "retention": "Ajaloo säilitamine",
     "retentionWeek": "Üks nädal",
     "retentionMonth": "Üks kuu",
@@ -617,5 +618,46 @@
       "fullDiskAccess": "Täielik kettale juurdepääs",
       "administrator": "Administraatori õigused"
     }
+  },
+  "agentSubscriptions": {
+    "title": "AI-tellimused",
+    "chatGpt": "ChatGPT",
+    "description": "Kasutage stella AI-päringuteks oma ChatGPT paketti. Kasutus arvestatakse teie ChatGPT paketist, stella tellimusest eraldi.",
+    "continueWithChatGpt": "Jätka ChatGPT-ga",
+    "continueAs": "Jätka kontoga {email}",
+    "useDifferentAccount": "Kasuta teist kontot",
+    "signingIn": "Lõpetage sisselogimine brauseris.",
+    "cancel": "Tühista",
+    "pasteDescription": "Kui brauser näitab pärast sisselogimist vealehte, kopeerige selle aadress ja kleepige see siia.",
+    "pasteSubmit": "Lõpeta sisselogimine",
+    "connected": "ChatGPT on ühendatud",
+    "connectedAs": "ChatGPT on ühendatud · {email}",
+    "manageUsage": "Halda kasutust",
+    "disconnect": "Katkesta ühendus",
+    "needsReconnect": "Teie ChatGPT ühendus on aegunud. Logige uuesti sisse, et oma paketti edasi kasutada.",
+    "notice": {
+      "actionFailed": "See ei õnnestunud. Proovige uuesti.",
+      "pasteRejected": "See aadress ei kuulu praeguse sisselogimise juurde. Kopeerige kogu aadress avanenud brauseri vahekaardilt.",
+      "revocationUnconfirmed": "Ühendus selles arvutis katkestati, kuid ChatGPT ei kinnitanud seda. Stella saate eemaldada ka ChatGPT seadetes."
+    },
+    "failure": {
+      "declined": "Sisselogimisest keelduti brauseris.",
+      "planUsageNotGranted": "Stella ei saanud luba teie ChatGPT paketti kasutada. Logige uuesti sisse ja andke luba.",
+      "differentAccount": "Logisite sisse teise ChatGPT kontoga. Salvestatud ühendus jäi muutmata.",
+      "stateMismatch": "Sisselogimist ei õnnestunud kontrollida. Proovige uuesti.",
+      "timedOut": "Sisselogimine võttis liiga kaua aega. Proovige uuesti.",
+      "browserUnavailable": "Brauserit ei õnnestunud avada. Proovige uuesti.",
+      "callbackUnavailable": "Sisselogimist ei õnnestunud selles arvutis ette valmistada. Proovige uuesti.",
+      "registrationIncomplete": "ChatGPT ei lõpetanud stella ühendamist. Proovige uuesti.",
+      "codeExpired": "Sisselogimine aegus enne lõppu. Proovige uuesti.",
+      "verification": "ChatGPT vastust ei õnnestunud kontrollida. Proovige uuesti.",
+      "clientRejected": "ChatGPT ei aktsepteeri seda ühendust enam. Ühendage see uuesti teise kontoga.",
+      "unreachable": "ChatGPT sisselogimine pole kättesaadav. Kontrollige internetiühendust ja proovige uuesti.",
+      "storage": "Ühendust ei õnnestunud selles arvutis lugeda ega salvestada."
+    },
+    "callbackConnectedTitle": "ChatGPT on ühendatud",
+    "callbackConnectedBody": "Võite selle vahekaardi sulgeda ja stellasse naasta.",
+    "callbackNotConnectedTitle": "ChatGPT-d ei ühendatud",
+    "callbackNotConnectedBody": "Naaske stellasse, et näha, mis juhtus, ja proovige uuesti."
   }
 }

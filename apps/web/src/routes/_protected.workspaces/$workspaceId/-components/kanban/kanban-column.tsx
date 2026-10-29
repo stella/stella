@@ -46,6 +46,8 @@ import {
 
 import { InlineEdit } from "@/components/inline-edit";
 import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   useKanbanColumnDrag,
   useKanbanEntityDropTarget,
@@ -76,7 +78,9 @@ type KanbanColumnProps = {
   optionColor?: PropertyOptionColor | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
-  onDrop: (entityId: string) => void;
+  onDrop: (cards: readonly KanbanDraggedCard[]) => void;
+  /** The board's card selection; omit on a board without one. */
+  selection?: KanbanSelection | undefined;
   onFileUpload?: ((files: File[]) => void) | undefined;
   onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onRenameColumn?: ((newName: string) => void) | undefined;
@@ -125,6 +129,7 @@ export const KanbanColumn = ({
   onReorderColumn,
   taskOnly,
   calculations,
+  selection,
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -378,6 +383,11 @@ export const KanbanColumn = ({
                   entity={entity}
                   onRename={onRenameEntity}
                   properties={properties}
+                  selection={
+                    selection
+                      ? { owner: selection, scope: entities }
+                      : undefined
+                  }
                   workspaceId={workspaceId}
                 />
               </div>

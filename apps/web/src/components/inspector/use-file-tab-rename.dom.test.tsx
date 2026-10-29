@@ -1,6 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import * as v from "valibot";
 import { createStore } from "zustand";
 import type { StoreApi } from "zustand";
@@ -20,6 +28,11 @@ import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -330,6 +343,7 @@ describe("confirmed file rename state", () => {
       ).toEqual(
         new Set([
           JSON.stringify(entitiesKeys.all("matter")),
+          JSON.stringify(entitiesKeys.detail("matter", "A")),
           JSON.stringify(entityViewKeys.all("org", "user")),
           JSON.stringify(inboxKeys.all("org", "user")),
           JSON.stringify(

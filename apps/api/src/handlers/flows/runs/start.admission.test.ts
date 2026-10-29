@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 
@@ -6,6 +6,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import startFlowRunHandler from "@/api/handlers/flows/runs/start";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteDefinition } from "@/api/http/route";
@@ -21,12 +22,17 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
+
 describe("manual flow start admission response", () => {
   test.each([
     "busy",
     "period_exhausted",
     "not_enabled",
-    "unavailable",
+    "store_unavailable",
     "configuration_unavailable",
   ] as const)(
     "%s reaches shared resolution and returns its HTTP refusal without inserting or auditing",
@@ -74,7 +80,10 @@ describe("manual flow start admission response", () => {
         modelId: BYOK_DEFAULT_MODELS.openai.chat.modelId,
       } as const;
       const refusal = new ActionAdmissionError({
-        reason: reason === "configuration_unavailable" ? "unavailable" : reason,
+        reason:
+          reason === "configuration_unavailable"
+            ? "configuration_incomplete"
+            : reason,
         message: "Private admission detail",
       });
       const contactUrl = "https://example.test/contact";
@@ -114,7 +123,8 @@ describe("manual flow start admission response", () => {
               asTestRaw({
                 set,
                 request,
-                route: "/flow-start",
+                route:
+                  "/v1/workspaces/:workspaceId/flows/runs" satisfies ApiRoutePath,
                 workspaceId,
                 user: { id: userId },
                 session: { activeOrganizationId: organizationId },

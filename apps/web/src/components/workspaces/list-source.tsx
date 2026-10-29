@@ -18,6 +18,7 @@ import type { LegalListSourceLocator } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type SourceLocatorLabelProps = {
   locator: LegalListSourceLocator;
@@ -66,6 +67,7 @@ export const useOpenSourceDocument = (workspaceId: string) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   return (entityId: string, pdfPage?: number) => {
     detached(
       (async () => {
@@ -75,7 +77,7 @@ export const useOpenSourceDocument = (workspaceId: string) => {
           navigate: async (fieldId) => {
             await navigate({
               to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: "all" },
+              params: viewParams,
               search: {
                 entity: entityId,
                 field: fieldId,

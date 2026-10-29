@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Evidence: decides from the completed proof run and existing tags whether finalization may run; no publication, tag creation, or deployment.",
+  "reviewedDigest": "f16866664357ca8c9fd1f85a886f67c83acd739612e55b0e7c41586ea98c79ec"
+}

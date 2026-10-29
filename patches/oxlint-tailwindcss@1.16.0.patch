@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c..193fe51 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..cbbd08ee46961ec231320d64df12d549c98678e9 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -60,7 +60,117 @@ index 6d9820c..193fe51 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -4099,7 +4119,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -3793,6 +3813,90 @@ function packageVersionFrom(fromDir, name) {
+ 		dir = parent;
+ 	}
+ }
++function cssExportTargets(value) {
++	if (typeof value === "string") return [value];
++	if (Array.isArray(value)) return value.flatMap(cssExportTargets);
++	if (value === null || typeof value !== "object") return [];
++	for (const [condition, target] of Object.entries(value)) if (condition === "style" || condition === "default") return cssExportTargets(target);
++	return [];
++}
++/**
++* The files an `exports` field maps `subpath` to under the conditions the
++* Tailwind CSS resolver uses (`style`, then `default`), including `*` patterns
++* ranked as Node ranks them: the longest prefix wins, then the longest key.
++*/
++function exportedCssTargets(exportsField, subpath) {
++	const conditional = exportsField === null || typeof exportsField !== "object" || Array.isArray(exportsField) || !Object.keys(exportsField).some((key) => key.startsWith("."));
++	if (conditional) return subpath === "." ? cssExportTargets(exportsField) : [];
++	if (Object.hasOwn(exportsField, subpath)) return cssExportTargets(exportsField[subpath]);
++	let best = null;
++	for (const key of Object.keys(exportsField)) {
++		const star = key.indexOf("*");
++		if (star === -1) continue;
++		const prefix = key.slice(0, star);
++		const suffix = key.slice(star + 1);
++		if (subpath.length < prefix.length + suffix.length || !subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
++		if (best === null || prefix.length > best.prefix.length || prefix.length === best.prefix.length && key.length > best.key.length) best = {
++			key,
++			prefix,
++			match: subpath.slice(prefix.length, subpath.length - suffix.length)
++		};
++	}
++	if (best === null) return [];
++	const match = best.match;
++	return cssExportTargets(exportsField[best.key]).map((target) => target.replaceAll("*", match));
++}
++/** Every stylesheet in a workspace package, outside its `node_modules`. */
++function workspaceCssFiles(dir) {
++	const out = [];
++	for (const entry of (0, node_fs.readdirSync)(dir, { withFileTypes: true })) {
++		if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
++		const entryPath = (0, node_path.join)(dir, entry.name);
++		if (entry.isDirectory()) out.push(...workspaceCssFiles(entryPath));
++		else if (entry.name.endsWith(".css")) out.push(entryPath);
++	}
++	return out.sort();
++}
++/**
++* The stylesheets a CSS import of a workspace package reaches, read for the
++* cache key as content rather than as the package version: the file its
++* `exports` (or `style`) resolves to, or every stylesheet in the package when
++* the import cannot be resolved here. `null` for a package outside the
++* repository, which keeps its `name@version`.
++*/
++function workspaceCssImport(fromDir, spec) {
++	const name = packageNameOf(spec);
++	if (name === null) return null;
++	let repositoryRoot = fromDir;
++	while (!(0, node_fs.existsSync)((0, node_path.join)(repositoryRoot, ".git"))) {
++		const parent = (0, node_path.dirname)(repositoryRoot);
++		if (parent === repositoryRoot) return null;
++		repositoryRoot = parent;
++	}
++	let dir = fromDir;
++	for (;;) {
++		const packagePath = (0, node_path.join)(dir, "node_modules", name);
++		try {
++			if (!(0, node_fs.lstatSync)(packagePath).isSymbolicLink()) return null;
++			const realPackagePath = (0, node_fs.realpathSync)(packagePath);
++			const repositoryRelative = (0, node_path.relative)(repositoryRoot, realPackagePath);
++			if (repositoryRelative.startsWith("..") || (0, node_path.isAbsolute)(repositoryRelative) || repositoryRelative.split(/[\\/]/).includes("node_modules")) return null;
++			const manifest = JSON.parse((0, node_fs.readFileSync)((0, node_path.join)(realPackagePath, "package.json"), "utf-8"));
++			const suffix = spec.slice(name.length);
++			const subpath = suffix === "" ? "." : `.${suffix}`;
++			const targets = manifest.exports === void 0 ? suffix === "" ? [manifest.style] : [suffix.slice(1), `${suffix.slice(1)}.css`] : exportedCssTargets(manifest.exports, subpath);
++			for (const target of targets) {
++				if (typeof target !== "string") continue;
++				const resolvedTarget = (0, node_path.resolve)(realPackagePath, target);
++				if ((0, node_fs.existsSync)(resolvedTarget) && (0, node_fs.statSync)(resolvedTarget).isFile()) return [resolvedTarget];
++			}
++			return workspaceCssFiles(realPackagePath);
++		} catch {}
++		const parent = (0, node_path.dirname)(dir);
++		if (parent === dir) return null;
++		dir = parent;
++	}
++}
+ /**
+ * Everything a design system is built from besides the Tailwind engine, as one
+ * string for the cache key — so the cache invalidates when any of it changes,
+@@ -3840,7 +3944,17 @@ function hashableContent(entryPath, entryContent) {
+ 		};
+ 		for (const spec of collect(IMPORT_RE)) {
+ 			if (!isPathSpecifier(spec)) {
+-				addPackage(spec);
++				const workspaceImports = workspaceCssImport(baseDir, spec);
++				if (workspaceImports === null) {
++					addPackage(spec);
++					continue;
++				}
++				for (const workspaceImport of workspaceImports) {
++					const importContent = readOnce(workspaceImport);
++					if (importContent === null) continue;
++					parts.push(importContent);
++					visit(workspaceImport, importContent, depth - 1);
++				}
+ 				continue;
+ 			}
+ 			const importPath = (0, node_path.resolve)(baseDir, spec);
+@@ -4099,7 +4213,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -69,7 +179,7 @@ index 6d9820c..193fe51 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4107,6 +4127,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4107,6 +4221,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -77,7 +187,7 @@ index 6d9820c..193fe51 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4612,6 +4633,7 @@ var DesignSystemWorker = class {
+@@ -4612,6 +4727,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -85,7 +195,7 @@ index 6d9820c..193fe51 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5549,6 +5571,73 @@ function answersFor(cache) {
+@@ -5549,6 +5665,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -159,7 +269,7 @@ index 6d9820c..193fe51 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5569,12 +5658,15 @@ function answersFor(cache) {
+@@ -5569,12 +5752,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -175,10 +285,37 @@ index 6d9820c..193fe51 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index a33017683295c52a1e681b23babeb821220d263f..52e9de6dc00f5cd26bda87b4aff5596f014a7c47 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -3993,5 +3993,10 @@ interface CreateOnceRule {
+ //#endregion
+ //#region src/index.d.ts
+ declare const plugin: Plugin;
++/** The cache paths of a stylesheet's design-system snapshot, named by the hash of the inputs that compile it. */
++declare function cacheArtifactPaths(cssPath: string): {
++  json: string;
++  lock: string;
++};
+ //#endregion
+-export { plugin as default };
+\ No newline at end of file
++export { cacheArtifactPaths, plugin as default };
+\ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c6242..d95d7ed 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..ed9241c664afbaceb5596ddf59cffdeaf8d23da9 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
+@@ -1,7 +1,7 @@
+ import { createRequire } from "node:module";
+ import { Worker, threadId } from "node:worker_threads";
+ import { createHash } from "node:crypto";
+-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
++import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+ import { tmpdir, userInfo } from "node:os";
+ //#region \0rolldown/runtime.js
 @@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
  		const memo = this.declMemo.get(key);
  		if (memo) return memo;
@@ -237,7 +374,117 @@ index 61c6242..d95d7ed 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -4102,7 +4122,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -3796,6 +3816,90 @@ function packageVersionFrom(fromDir, name) {
+ 		dir = parent;
+ 	}
+ }
++function cssExportTargets(value) {
++	if (typeof value === "string") return [value];
++	if (Array.isArray(value)) return value.flatMap(cssExportTargets);
++	if (value === null || typeof value !== "object") return [];
++	for (const [condition, target] of Object.entries(value)) if (condition === "style" || condition === "default") return cssExportTargets(target);
++	return [];
++}
++/**
++* The files an `exports` field maps `subpath` to under the conditions the
++* Tailwind CSS resolver uses (`style`, then `default`), including `*` patterns
++* ranked as Node ranks them: the longest prefix wins, then the longest key.
++*/
++function exportedCssTargets(exportsField, subpath) {
++	const conditional = exportsField === null || typeof exportsField !== "object" || Array.isArray(exportsField) || !Object.keys(exportsField).some((key) => key.startsWith("."));
++	if (conditional) return subpath === "." ? cssExportTargets(exportsField) : [];
++	if (Object.hasOwn(exportsField, subpath)) return cssExportTargets(exportsField[subpath]);
++	let best = null;
++	for (const key of Object.keys(exportsField)) {
++		const star = key.indexOf("*");
++		if (star === -1) continue;
++		const prefix = key.slice(0, star);
++		const suffix = key.slice(star + 1);
++		if (subpath.length < prefix.length + suffix.length || !subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
++		if (best === null || prefix.length > best.prefix.length || prefix.length === best.prefix.length && key.length > best.key.length) best = {
++			key,
++			prefix,
++			match: subpath.slice(prefix.length, subpath.length - suffix.length)
++		};
++	}
++	if (best === null) return [];
++	const match = best.match;
++	return cssExportTargets(exportsField[best.key]).map((target) => target.replaceAll("*", match));
++}
++/** Every stylesheet in a workspace package, outside its `node_modules`. */
++function workspaceCssFiles(dir) {
++	const out = [];
++	for (const entry of readdirSync(dir, { withFileTypes: true })) {
++		if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
++		const entryPath = join(dir, entry.name);
++		if (entry.isDirectory()) out.push(...workspaceCssFiles(entryPath));
++		else if (entry.name.endsWith(".css")) out.push(entryPath);
++	}
++	return out.sort();
++}
++/**
++* The stylesheets a CSS import of a workspace package reaches, read for the
++* cache key as content rather than as the package version: the file its
++* `exports` (or `style`) resolves to, or every stylesheet in the package when
++* the import cannot be resolved here. `null` for a package outside the
++* repository, which keeps its `name@version`.
++*/
++function workspaceCssImport(fromDir, spec) {
++	const name = packageNameOf(spec);
++	if (name === null) return null;
++	let repositoryRoot = fromDir;
++	while (!existsSync(join(repositoryRoot, ".git"))) {
++		const parent = dirname(repositoryRoot);
++		if (parent === repositoryRoot) return null;
++		repositoryRoot = parent;
++	}
++	let dir = fromDir;
++	for (;;) {
++		const packagePath = join(dir, "node_modules", name);
++		try {
++			if (!lstatSync(packagePath).isSymbolicLink()) return null;
++			const realPackagePath = realpathSync(packagePath);
++			const repositoryRelative = relative(repositoryRoot, realPackagePath);
++			if (repositoryRelative.startsWith("..") || isAbsolute(repositoryRelative) || repositoryRelative.split(/[\\/]/).includes("node_modules")) return null;
++			const manifest = JSON.parse(readFileSync(join(realPackagePath, "package.json"), "utf-8"));
++			const suffix = spec.slice(name.length);
++			const subpath = suffix === "" ? "." : `.${suffix}`;
++			const targets = manifest.exports === void 0 ? suffix === "" ? [manifest.style] : [suffix.slice(1), `${suffix.slice(1)}.css`] : exportedCssTargets(manifest.exports, subpath);
++			for (const target of targets) {
++				if (typeof target !== "string") continue;
++				const resolvedTarget = resolve(realPackagePath, target);
++				if (existsSync(resolvedTarget) && statSync(resolvedTarget).isFile()) return [resolvedTarget];
++			}
++			return workspaceCssFiles(realPackagePath);
++		} catch {}
++		const parent = dirname(dir);
++		if (parent === dir) return null;
++		dir = parent;
++	}
++}
+ /**
+ * Everything a design system is built from besides the Tailwind engine, as one
+ * string for the cache key — so the cache invalidates when any of it changes,
+@@ -3843,7 +3947,17 @@ function hashableContent(entryPath, entryContent) {
+ 		};
+ 		for (const spec of collect(IMPORT_RE)) {
+ 			if (!isPathSpecifier(spec)) {
+-				addPackage(spec);
++				const workspaceImports = workspaceCssImport(baseDir, spec);
++				if (workspaceImports === null) {
++					addPackage(spec);
++					continue;
++				}
++				for (const workspaceImport of workspaceImports) {
++					const importContent = readOnce(workspaceImport);
++					if (importContent === null) continue;
++					parts.push(importContent);
++					visit(workspaceImport, importContent, depth - 1);
++				}
+ 				continue;
+ 			}
+ 			const importPath = resolve(baseDir, spec);
+@@ -4102,7 +4216,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -246,7 +493,7 @@ index 61c6242..d95d7ed 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4110,6 +4130,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4110,6 +4224,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -254,7 +501,7 @@ index 61c6242..d95d7ed 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4615,6 +4636,7 @@ var DesignSystemWorker = class {
+@@ -4615,6 +4730,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -262,7 +509,7 @@ index 61c6242..d95d7ed 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5552,6 +5574,73 @@ function answersFor(cache) {
+@@ -5552,6 +5668,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -336,7 +583,7 @@ index 61c6242..d95d7ed 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5572,12 +5661,15 @@ function answersFor(cache) {
+@@ -5572,12 +5755,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -352,3 +599,9 @@ index 61c6242..d95d7ed 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
+@@ -10787,4 +10973,4 @@ const plugin = definePlugin({
+ 	}
+ });
+ //#endregion
+-export { plugin as default };
++export { cacheArtifactPaths, plugin as default };
