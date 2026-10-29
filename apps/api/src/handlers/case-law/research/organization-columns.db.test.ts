@@ -15,7 +15,7 @@ import {
   caseLawResearchColumns,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { readNamedResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
@@ -41,6 +41,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import {
   createTestIds,
   setupRlsTestData,
@@ -60,6 +61,9 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const lookupResearchAnswers = createLookupResearchAnswers({
+  readCopies: createTestWithdrawalCopyReader(() => testDb),
+});
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 

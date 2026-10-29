@@ -13,7 +13,7 @@ import {
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import { CASE_LAW_COVERAGE_FILING_DATE_INDEX } from "@/api/lib/case-law/coverage-index";
 import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -21,7 +21,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const COVERAGE_INDEX = CASE_LAW_COVERAGE_INDEX.name;
+const COVERAGE_INDEX = CASE_LAW_COVERAGE_FILING_DATE_INDEX.name;
 const SOURCES = 3;
 const SOURCE_DATE_SPAN = 5000;
 
@@ -95,7 +95,8 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             sql`DROP INDEX ${schema}.${sql.identifier(indexName)}`,
           );
         }
-        const { createSql, definitionBody } = CASE_LAW_COVERAGE_INDEX;
+        const { createSql, definitionBody } =
+          CASE_LAW_COVERAGE_FILING_DATE_INDEX;
         await db.execute(
           sql.raw(
             createSql

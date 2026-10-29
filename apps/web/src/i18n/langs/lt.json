@@ -132,6 +132,7 @@
     "checkSpamHint": "Jei jo nematote, patikrinkite šlamšto aplanką.",
     "chooseOrganization": "Pasirinkite organizaciją, kurioje norite dirbti",
     "codeSentAgain": "Išsiuntėme naują kodą.",
+    "continueWithApple": "Tęsti su Apple",
     "continueWithEmail": "Tęsti",
     "continueWithGoogle": "Tęsti su Google",
     "continueWithMicrosoft": "Tęsti su Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
+    "arrangement": {
+      "alertThreshold": "Įspėjimo slenkstis (%)",
+      "amountCap": "Atlygio riba",
+      "flatFee": "Fiksuotas atlygis",
+      "invalidCap": "Įveskite teigiamas ribas ir įspėjimo slenkstį nuo 0,01 % iki 100 %.",
+      "minuteCap": "Laiko riba (minutėmis)",
+      "title": "Susitarimas dėl atlygio"
+    },
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Susietos išlaidos",
       "linkedTimeEntries": "Susieti laiko įrašai",
-      "markPaid": "Pažymėti kaip apmokėtą",
       "noEntries": "Nėra įrašų, susietų su šia sąskaita",
       "noInvoices": "Sąskaitų dar nėra",
       "paidAt": "Apmokėta",
+      "payments": {
+        "amountTooHigh": "Suma viršija likusią mokėti sumą {amount}.",
+        "confirmVoid": "Mokėjimas liks užregistruotas kaip anuliuotas ir nebebus įskaitomas į šios sąskaitos apmokėjimą.",
+        "empty": "Mokėjimų dar neužregistruota",
+        "method": "Mokėjimo būdas",
+        "methods": {
+          "bank_transfer": "Banko pavedimas",
+          "card": "Kortelė",
+          "cash": "Grynieji",
+          "other": "Kitas būdas"
+        },
+        "outstandingAmount": "Liko sumokėti {amount}",
+        "paidOn": "Mokėjimo data",
+        "partiallyPaid": "Iš dalies apmokėta",
+        "record": "Užregistruoti mokėjimą",
+        "summary": "Sumokėta {paid}, liko sumokėti {outstanding}",
+        "title": "Mokėjimai",
+        "void": "Anuliuoti mokėjimą",
+        "voided": "Anuliuotas"
+      },
       "removeEntries": "Pašalinti įrašus",
       "send": "Siųsti",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "DI nesukonfigūruotas.",
     "availabilityUnknown": "Nepavyko patvirtinti prieinamumo.",
     "deeplMissing": "DeepL nesukonfigūruotas.",
+    "deeplPdfRequired": "PDF failams versti reikalinga „DeepL“.",
     "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
     "featureUnavailable": "Ši funkcija nepasiekiama.",
     "ocrUnavailable": "OCR nepasiekiamas.",
@@ -912,12 +941,16 @@
         "reasoning": "Mąstymas"
       },
       "errors": {
+        "analysisDisabled": "DI analizės kūrimas šiame serveryje išjungtas. Skaitykite sprendimo tekstą arba bandykite vėliau.",
         "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "decisionNotFound": "Šis teismo sprendimas nerastas. Atverkite jį iš naujo paieškoje.",
+        "documentUnparseable": "Teismo sprendimo tekstas dar neparengtas analizei. Skaitykite pirminį šaltinį.",
+        "languageUnsupported": "DI analizė dar nepalaiko šio teismo sprendimo kalbos. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
         "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
         "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
         "retryAfter": "Bandyti dar kartą galėsite po {time}.",
-        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
-        "unavailable": "Šiam sprendimui DI analizė neprieinama."
+        "sourceRestricted": "Šaltinis neleidžia atlikti DI analizės. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}"
       },
       "generate": "Parengti DI santraukas",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
@@ -1122,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
-      "headMatter": "Antraštinė dalis",
+      "headMatter": "Bylos informacija",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)",
       "versionBasisInferredCompact": "Sprendimo data · numanoma",
       "versionBasisInferredExplanation": "Redakcija nustatyta pagal sprendimo datą. Sprendime nenurodyta, kuri redakcija taikoma."
-    }
+    },
+    "withdrawnByPublisher": "Leidėjas atšaukė"
   },
   "catalogue": {
     "addCustom": "Pridėti pasirinktinį",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kitas} few {+# kiti} many {+# kito} other {+# kitų}}",
+      "dismiss": "Slėpti pranešimą apie ryšį",
+      "stoppedWorking": "Jūsų ryšys su <name>{server}</name> nustojo veikti.",
+      "waitingApproval": "Jūsų ryšys su <name>{server}</name> laukia patvirtinimo."
+    },
     "mention": {
       "category": {
         "entities": "Šioje byloje",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "Pagal šį IČO įmonė nerasta.",
       "aresTitle": "Čekijos registras (ARES)",
       "contactName": "Kontakto pavadinimas",
+      "displayNameOrganizationHint": "Pasirenkamas perrašymas; kitu atveju sukuriamas iš organizacijos pavadinimo.",
+      "displayNamePersonHint": "Pasirenkamas perrašymas; kitu atveju sukuriamas iš vardo ir pavardės.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Įveskite 8 skaitmenų IČO."
     },
@@ -2534,6 +2576,7 @@
       "rowLabel": "Klientas {index}",
       "skippedDuplicateContactId": "Praleista: pasikartojantis kontakto ID",
       "skippedDuplicateTaxId": "Praleista: pasikartojantis mokesčių mokėtojo kodas",
+      "skippedInFileDuplicate": "Praleista: kartoja ankstesnę failo eilutę",
       "skippedInvalidRow": "Praleista: eilutė neatitinka importo taisyklių",
       "skippedInvalidTaxId": "Praleista: neteisingas mokesčių mokėtojo kodas",
       "skippedLimitReached": "Praleista: pasiektas kontaktų limitas"
@@ -2575,6 +2618,7 @@
       "issue": {
         "address_line_required": "Jei nurodomas adresas, adreso 1 eilutė yra privaloma.",
         "display_name_required": "Nepavyko sukurti rodomo pavadinimo.",
+        "in_file_duplicate": "Ankstesnės šio failo eilutės dublikatas",
         "invalid_email": "El. pašto adresas netinkamas.",
         "invalid_phone": "Telefono numeris netinkamas.",
         "invalid_tags": "Žymos turi būti tekstinės reikšmės.",
@@ -2603,7 +2647,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilijos CPF/CNPJ (kontrolinė suma)",
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
-      "validateFailed": "Nepavyko patikrinti šių kontaktų."
+      "validateFailed": "Nepavyko patikrinti šių kontaktų.",
+      "warning": {
+        "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
+        "possible_in_file_duplicate": "Galimas {row} eilutės dublikatas; sutampa tik vardas."
+      }
     },
     "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
     "invalidNationalityCodes": "Įveskite galiojančius pilietybės kodus.",
@@ -2763,12 +2811,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
+      "configurationIncomplete": "Šis veiksmas nėra visiškai sukonfigūruotas. Kreipkitės į administratorių.",
       "contact": "Susisiekite su mumis",
       "featureDisabled": "Ši funkcija laikinai išjungta.",
+      "leaseLost": "Veiksmo rezervacijos galiojimas baigėsi. Bandykite dar kartą.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
-      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
+      "organizationStateUnreadable": "Nepavyko patikrinti organizacijos prieigos. Netrukus bandykite dar kartą.",
+      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas.",
+      "storeUnavailable": "Paslauga laikinai nepasiekiama. Netrukus bandykite dar kartą."
     },
     "actionFailed": "Nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "api": {
@@ -4839,7 +4890,9 @@
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
   },
   "readerAnswers": {
+    "answerLanguage": "Atsakymo kalba",
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "documentLanguage": "Dokumento kalba ({language})",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
     "followUp": "Užduoti papildomą klausimą",
@@ -5026,6 +5079,16 @@
       "preferredNamePlaceholder": "Jūsų vardas",
       "profileDescription": "Tvarkykite savo asmenines nuostatas",
       "sendOtpCode": "Siųsti patvirtinimo kodą",
+      "signInMethods": {
+        "confirmDescription": "Norėdami atsieti šį prisijungimo būdą, įveskite naują į el. paštą atsiųstą kodą.",
+        "confirmTitle": "Atsieti „{provider}“?",
+        "description": "Susiekite paskyras, kuriose naudojamas tas pats patvirtintas el. pašto adresas.",
+        "emailCode": "El. paštu siunčiamas kodas",
+        "emailCodeDescription": "Visada galite prisijungti naudodami į el. paštą atsiųstą kodą.",
+        "lastMethod": "Prieš atjungdami šią paskyrą, susiekite kitą.",
+        "title": "Prisijungimo būdai",
+        "unavailable": "Norint atsieti prisijungimo būdus, turi būti sukonfigūruotas el. laiškų siuntimas."
+      },
       "timezone": "Laiko juosta",
       "timezoneDescription": "Naudojama pranešimų ir el. laiškų laiko žymoms",
       "timezoneSaved": "Laiko juosta atnaujinta",
@@ -6191,20 +6254,18 @@
         "notOpeningConnect": "Neatsidaro? Prijunkite stella desktop",
         "notPickedUpDescription": "stella desktop gali būti nepaleista arba neprijungta prie šios paskyros. Prijunkite ją ir bandykite dar kartą.",
         "notPickedUpTitle": "stella desktop neatidarė PDF",
+        "placementAttachmentsOnly": "Šiame rodinyje rodomi PDF priedai, todėl spaudo čia padėti negalima. Pasirašykite be spaudo.",
         "placementBox": "Spaudo vieta",
-        "placementConfirm": "Atidaryti stella desktop",
-        "placementDescription": "Pasirinkite, kaip parašas bus rodomas PDF faile.",
+        "placementDrawTooLarge": "Per didelis spaudui. Atleiskite, kad būtų naudojamas didžiausias dydis.",
+        "placementDrawTooSmall": "Per mažas spaudui. Atleiskite, kad būtų naudojamas mažiausias dydis.",
         "placementHint": "Vilkite spaudą, kad jį perkeltumėte, arba jo kampą, kad pakeistumėte dydį. Kai spaudas pažymėtas, rodyklių klavišai jį perkelia, o Shift su rodyklės klavišu keičia jo dydį.",
-        "placementInvisible": "Nematomas parašas",
-        "placementInvisibleDescription": "Parašas įrašomas į failą be jokios žymos puslapiuose.",
-        "placementPageLabel": "Spaudo puslapis",
-        "placementPageOption": "{page, number} psl. iš {count, number}",
-        "placementPreview": "{page, number} psl. peržiūra",
-        "placementPreviewFailed": "Nepavyko įkelti puslapio peržiūros.",
+        "placementModeHint": "Vilkite puslapyje, kad nupieštumėte spaudą, arba spustelėkite, kad jį padėtumėte.",
+        "placementPlaceOnLastPage": "Padėti paskutiniame puslapyje",
+        "placementRedrawHint": "Vilkite spaudą, kad jį pakoreguotumėte, arba nupieškite naują bet kuriame puslapyje.",
+        "placementSignInvisible": "Pasirašyti be spaudo",
+        "placementSignVisible": "Pasirašyti su spaudu",
         "placementTitle": "Pasirašyti PDF",
         "placementTooSmall": "Šis puslapis per mažas spaudui. Pasirinkite kitą puslapį.",
-        "placementVisible": "Matomas spaudas",
-        "placementVisibleDescription": "Rėmelis puslapyje rodo, kas ir kada pasirašė.",
         "preparingDescription": "PDF ruošiamas stella desktop.",
         "readOnlyDescription": "Šis dokumentas yra tik skaitomas.",
         "signedDescription": "Parašas išsaugotas kaip {versionNumber, number} versija.",
