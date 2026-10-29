@@ -1,15 +1,15 @@
-// parser-output-unchanged: [cz-ns] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [cz-nss] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [cz-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [cz-regional] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [sk-courts] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [sk-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [at-findok] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [hu-bhgy] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [uk-fcl] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [pl-kis] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [pl-uokik] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [us-courtlistener] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
 // parser-output-unchanged: `<sup>` becomes a superscript only under the opt-in `superscripts` option; every walk without it unwraps it as before.
 // parser-output-unchanged: exports the existing script/style exclusion as a selector so pl-tk can clean its owned DOM clone once; other parsers keep using the unchanged tag predicate.

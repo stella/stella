@@ -1,29 +1,32 @@
-// parser-output-unchanged: [at-courts] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-vfgh] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-vwgh] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-bvwg] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-lvwg] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-asylgh] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-ubas] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-uvs] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-verg] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-umse] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [at-bks] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
-// parser-output-unchanged: [cz-ns] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [cz-nss] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [cz-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [cz-regional] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [sk-courts] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [sk-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [at-findok] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [hu-bhgy] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [uk-fcl] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [pl-kis] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [pl-uokik] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
-// parser-output-unchanged: [us-courtlistener] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [pl-nsa] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-lvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-asylgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-ubas] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-uvs] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-verg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-umse] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bks] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Citation tuples state their existing one-item minimum for schema publication; accepted values are identical.
 // parser-output-unchanged: Legislation citations are a new inline variant that no decision parser writes; existing citations validate as before.
 import * as v from "valibot";
+
+import { normalizeNumericIndices } from "@stll/text-normalize";
 
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -349,7 +352,7 @@ export const isInline = (val: unknown): val is Inline =>
 /** The rendered axis keeps offsets; search text marks numeric superscripts. */
 export const flattenInlineText = (
   inlines: readonly Inline[],
-  projection: "search" | "rendered" = "search",
+  projection: "search" | "rendered" | "validation" = "search",
 ): string => {
   const parts: string[] = [];
 
@@ -360,7 +363,7 @@ export const flattenInlineText = (
     }
 
     if (inline.type === "line-break") {
-      parts.push("\n");
+      parts.push(projection === "validation" ? " " : "\n");
       continue;
     }
 
@@ -379,7 +382,8 @@ export const flattenInlineText = (
     );
   }
 
-  return parts.join("");
+  const text = parts.join("");
+  return projection === "search" ? normalizeNumericIndices(text) : text;
 };
 
 /**

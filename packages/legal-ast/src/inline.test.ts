@@ -131,6 +131,29 @@ describe("text axis", () => {
     ).toBe("note");
   });
 
+  test("literal superscript digits share the search projection across inline boundaries", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "art. 505" },
+      { type: "bold", children: [{ type: "text", text: "⁹" }] },
+    ];
+    expect(flattenInlineText(inlines)).toBe("art. 505^9");
+    expect(plainTextOf(inlines)).toBe("art. 505⁹");
+  });
+
+  test("validation replaces only line-break nodes and preserves rendered digits", () => {
+    expect(
+      flattenInlineText(
+        [
+          { type: "text", text: "505\n" },
+          { type: "superscript", children: [{ type: "text", text: "9" }] },
+          { type: "line-break" },
+          { type: "text", text: "k.p.c." },
+        ],
+        "validation",
+      ),
+    ).toBe("505\n9 k.p.c.");
+  });
+
   test("a page anchor still contributes nothing", () => {
     expect(plainTextOf([SAMPLES["page-anchor"]])).toBe("");
   });

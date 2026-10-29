@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { flattenInlineText } from "@stll/legal-ast/inline";
+import { flattenInlineText, type Inline } from "@stll/legal-ast/inline";
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -26,6 +26,7 @@ import {
   CORPUS_QUERY_VARIANT_POLICY,
   type CorpusIndexQueryVariant,
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 import {
   LEGACY_STEMMERS,
@@ -1317,6 +1318,19 @@ test("corpus-query/numeric-superscript-index-roundtrip", () => {
         ]) {
           expect(tokenizeCorpusFreeText(printed)).toEqual(expected);
         }
+        for (const inlines of [
+          [{ type: "text", text: `${number}${superscript}` }],
+          [
+            { type: "text", text: number },
+            { type: "bold", children: [{ type: "text", text: superscript }] },
+          ],
+        ] satisfies Inline[][]) {
+          expect(corpusTokens(flattenInlineText(inlines))).toEqual([
+            number,
+            index,
+          ]);
+        }
+        expect(corpusTokens(projected)).toEqual([number, index]);
         expect(tokenizeCorpusFreeText(concatenated)).not.toEqual(expected);
       },
     ),
