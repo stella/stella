@@ -425,7 +425,15 @@ test("separate opinions choose their own marker style and keep continuation numb
     role: "dissent" as const,
   }));
   const blocks = [...majority, heading, ...dissent];
-  expect(labelsOf(extractCourtParagraphNumbers(blocks).blocks)).toEqual([
+  const result = extractCourtParagraphNumbers(blocks);
+  expect(result).toMatchObject({
+    type: "numbered",
+    scopes: [
+      { type: "fresh-start", blockIndex: 0 },
+      { type: "continuation", blockIndex: 11 },
+    ],
+  });
+  expect(labelsOf(result.blocks)).toEqual([
     ...Array.from({ length: 10 }, (_, index) => index + 1),
     undefined,
     11,
@@ -486,5 +494,112 @@ test("partly numbered paragraphs recover labels between numbered neighbours", ()
   expect(labelsOf(result.blocks)).toEqual([1, 2, 3]);
   expect(extractCourtParagraphNumbers(result.blocks).blocks).toEqual(
     result.blocks,
+  );
+});
+
+test("a dissent beginning at 2 does not continue the majority's paragraph 10", () => {
+  const majority = Array.from({ length: 10 }, (_, index) =>
+    printedParagraph(index, `${String(index + 1)}. `),
+  );
+  const heading: Block = {
+    type: "heading",
+    id: "opinion",
+    anchorId: "opinion",
+    level: 2,
+    plainText: "Odlišné stanovisko soudce",
+    inlines: [{ type: "text", text: "Odlišné stanovisko soudce" }],
+  };
+  const dissent = [2, 3, 4].map((number, index) => ({
+    ...printedParagraph(11 + index, `${String(number)}. `),
+    role: "dissent" as const,
+  }));
+  const result = extractCourtParagraphNumbers([
+    ...majority,
+    heading,
+    ...dissent,
+  ]);
+  expect(labelsOf(result.blocks)).toEqual([
+    ...Array.from({ length: 10 }, (_, index) => index + 1),
+    undefined,
+    2,
+    3,
+    4,
+  ]);
+  expect(result).toMatchObject({
+    type: "numbered",
+    scopes: [
+      { type: "fresh-start", blockIndex: 0 },
+      { type: "fresh-start", blockIndex: 11 },
+    ],
+  });
+});
+
+test("each separate opinion may start a fresh numbering after a longer majority", () => {
+  assertProperty(
+    "each separate opinion may start a fresh numbering after a longer majority",
+    fc.property(
+      fc.record({
+        majorityLength: fc.integer({ min: 10, max: 40 }),
+        first: fc.integer({ min: 2, max: 4 }),
+        opinionLength: fc.integer({ min: 3, max: 10 }),
+        majorityStyle: fc.constantFrom("bracket", "dot", "paren"),
+        opinionStyle: fc.constantFrom("bracket", "dot", "paren"),
+        preamble: fc.boolean(),
+      }),
+      ({
+        majorityLength,
+        first,
+        opinionLength,
+        majorityStyle,
+        opinionStyle,
+        preamble,
+      }) => {
+        const majority = Array.from({ length: majorityLength }, (_, index) =>
+          printedParagraph(index, MARKERS[majorityStyle](index + 1)),
+        );
+        const heading: Block = {
+          type: "heading",
+          id: "opinion",
+          anchorId: "opinion",
+          level: 2,
+          plainText: "Odlišné stanovisko soudce",
+          inlines: [{ type: "text", text: "Odlišné stanovisko soudce" }],
+        };
+        const opinionStart = majorityLength + 1 + (preamble ? 1 : 0);
+        const introduction = preamble
+          ? [
+              {
+                ...printedParagraph(majorityLength + 1, ""),
+                role: "dissent" as const,
+              },
+            ]
+          : [];
+        const dissent = Array.from({ length: opinionLength }, (_, index) => ({
+          ...printedParagraph(
+            opinionStart + index,
+            MARKERS[opinionStyle](first + index),
+          ),
+          role: "dissent" as const,
+        }));
+        const blocks = [...majority, heading, ...introduction, ...dissent];
+        const result = extractCourtParagraphNumbers(blocks);
+        expect(labelsOf(result.blocks)).toEqual([
+          ...Array.from({ length: majorityLength }, (_, index) => index + 1),
+          undefined,
+          ...(preamble ? [undefined] : []),
+          ...Array.from({ length: opinionLength }, (_, index) => first + index),
+        ]);
+        expect(result).toMatchObject({
+          type: "numbered",
+          scopes: [
+            { type: "fresh-start", blockIndex: 0 },
+            { type: "fresh-start", blockIndex: opinionStart },
+          ],
+        });
+        expect(extractCourtParagraphNumbers(result.blocks).blocks).toEqual(
+          result.blocks,
+        );
+      },
+    ),
   );
 });

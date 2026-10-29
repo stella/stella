@@ -127,6 +127,15 @@ export type CourtParagraphNumberingEvidence =
       readonly number: number;
     };
 
+type ScopeStart =
+  | { readonly type: "fresh-start"; readonly startingAt: 1 }
+  | { readonly type: "continuation"; readonly startingAt: number };
+
+export type CourtParagraphNumberingScope = {
+  readonly type: ScopeStart["type"];
+  readonly blockIndex: number;
+};
+
 export type CourtParagraphNumbering =
   | {
       readonly type: "numbered";
@@ -134,6 +143,7 @@ export type CourtParagraphNumbering =
       readonly numbered: number;
       readonly style: CourtParagraphMarkerStyle;
       readonly evidence: readonly CourtParagraphNumberingEvidence[];
+      readonly scopes: readonly CourtParagraphNumberingScope[];
     }
   | { readonly type: "unnumbered"; readonly blocks: Block[] };
 
@@ -433,6 +443,7 @@ type Reading = {
   readonly numbers: ReadonlyMap<number, NumberAssignment>;
   readonly style: CourtParagraphMarkerStyle;
   readonly evidence: readonly CourtParagraphNumberingEvidence[];
+  readonly scopes: readonly CourtParagraphNumberingScope[];
 };
 
 type BridgeScopeOptions = {
@@ -514,6 +525,7 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
   const body = bodyOf(blocks);
   const numbers = new Map<number, NumberAssignment>();
   const evidence: CourtParagraphNumberingEvidence[] = [];
+  const scopes: CourtParagraphNumberingScope[] = [];
   const starts = [...new Set([0, ...body.opinionStarts])].toSorted(
     (left, right) => left - right,
   );
@@ -523,17 +535,28 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
     const to = starts[index + 1] ?? body.paragraphs.length;
     // Keep existing numbers as anchors. Raw markers in this scope need the
     // local bridge below; replay must not reinterpret an entire nested list.
-    if (
-      body.paragraphs.slice(from, to).some((blockIndex) => {
+    const firstStructuredIndex = body.paragraphs
+      .slice(from, to)
+      .find((blockIndex) => {
         const block = blocks[blockIndex];
         return block?.type === "paragraph" && block.number !== undefined;
-      })
-    ) {
+      });
+    if (firstStructuredIndex !== undefined) {
+      const previousLast = previousScopeLast;
       for (const [position, blockIndex] of body.paragraphs
         .slice(from, to)
         .entries()) {
         const block = blocks[blockIndex];
         if (block?.type === "paragraph" && block.number !== undefined) {
+          if (blockIndex === firstStructuredIndex) {
+            scopes.push({
+              type:
+                previousLast > 0 && block.number === previousLast + 1
+                  ? "continuation"
+                  : "fresh-start",
+              blockIndex,
+            });
+          }
           previousScopeLast = block.number;
           numbers.set(blockIndex, {
             style,
@@ -549,18 +572,48 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
       }
       continue;
     }
-    const startingAt = previousScopeLast + 1;
-    const best = COURT_PARAGRAPH_MARKER_STYLES.map((candidateStyle) => ({
-      style: candidateStyle,
-      ...walk(
-        candidatesOf(blocks, body, candidateStyle, { from, to }),
-        startingAt,
-      ),
-    }))
+    const freshStart = {
+      type: "fresh-start",
+      startingAt: 1,
+    } as const satisfies ScopeStart;
+    const scopeStarts =
+      previousScopeLast === 0
+        ? [freshStart]
+        : [
+            freshStart,
+            {
+              type: "continuation",
+              startingAt: previousScopeLast + 1,
+            } as const satisfies ScopeStart,
+          ];
+    // Compare the evidence within this opinion. A fresh run may start at 2
+    // when paragraph 1 merged into its preamble; the preceding opinion must
+    // not make those markers look like steps backwards.
+    const best = COURT_PARAGRAPH_MARKER_STYLES.flatMap((candidateStyle) => {
+      const candidates = candidatesOf(blocks, body, candidateStyle, {
+        from,
+        to,
+      });
+      return scopeStarts.map((start) => {
+        const reading = walk(candidates, start.startingAt);
+        let startPriority = 1;
+        if (start.type === "continuation") {
+          startPriority =
+            reading.accepted.at(0)?.number === start.startingAt ? 0 : 2;
+        }
+        return {
+          style: candidateStyle,
+          start,
+          ...reading,
+          startPriority,
+        };
+      });
+    })
       .toSorted(
         (left, right) =>
           right.accepted.length - left.accepted.length ||
-          STYLE_PRIORITY[left.style] - STYLE_PRIORITY[right.style],
+          STYLE_PRIORITY[left.style] - STYLE_PRIORITY[right.style] ||
+          left.startPriority - right.startPriority,
       )
       .at(0);
     const first = best?.accepted.at(0);
@@ -585,6 +638,7 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
       continue;
     }
     style = best.style;
+    scopes.push({ type: best.start.type, blockIndex: first.blockIndex });
     previousScopeLast = best.accepted.at(-1)?.number ?? previousScopeLast;
     const seen = new Map<number, number>();
     for (const candidate of best.accepted) {
@@ -620,7 +674,7 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
     const to = starts[scopeIndex + 1] ?? body.paragraphs.length;
     bridgeScope({ blocks, body, numbers, evidence, from, to });
   }
-  return { numbers, style, evidence };
+  return { numbers, style, evidence, scopes };
 };
 
 const withNumber = (
@@ -661,5 +715,6 @@ export const extractCourtParagraphNumbers = (
     numbered: reading.numbers.size,
     style: reading.style,
     evidence: reading.evidence,
+    scopes: reading.scopes,
   };
 };
