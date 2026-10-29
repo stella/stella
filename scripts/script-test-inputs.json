@@ -205,6 +205,7 @@
     "scripts/code-quality-cache-inputs.test.ts": ["turbo.json"],
     "scripts/code-quality-task-budget.test.ts": ["**"],
     "scripts/codemod-icons.test.ts": ["packages/ui/**"],
+    "scripts/dated-waiver-renewal.test.ts": [".claude/mcp/doc-sources.ts"],
     "scripts/decision-reader-surfaces.test.ts": ["**"],
     "scripts/dependency-audit-acceptance.test.ts": [
       "scripts/dependency-audit-baseline.json"
@@ -417,6 +418,10 @@
       "scripts/require-hook-deps.sh"
     ],
     "scripts/require-json-import-attribute.test.ts": ["**"],
+    "scripts/retention-projection-imports.test.ts": [
+      "apps/api/src/**",
+      "packages/**"
+    ],
     "scripts/retry-step-deadline.test.ts": [".github/**"],
     "scripts/root-connection-shapes.test.ts": [
       "apps/**",
@@ -487,6 +492,11 @@
       "scripts/typecheck-command-probe.sh"
     ],
     "scripts/typescript-compiler-api-imports.test.ts": ["**"],
+    "scripts/ui-playground-selection.test.ts": [
+      "apps/web/**",
+      "packages/**",
+      "tsconfig.json"
+    ],
     "scripts/verify-release-candidate-tree.test.ts": [
       ".github/**",
       "scripts/**"
@@ -524,11 +534,13 @@
     "scripts/check-test-state-baseline.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/ci-job-classification/snapshots.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/ci-job-classification/writers.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/ci-postgres-shard-plan.test.ts": "Uses only in-memory fixtures and its static import closure; duration file reads belong to the command-line entry.",
     "scripts/contract-domain-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/fix-tests-on-base.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-process.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-rust.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flaky-test-history.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/generate-mobile-icons.test.ts": "Uses only in-memory SVG fixtures and its static import closure; file reads belong to the command-line entry.",
     "scripts/generate-mobile-ui-theme.test.ts": "Uses only in-memory fixtures and its static import closure.",
     "scripts/generated-conflicts.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/ledger-membership.test.ts": "Uses only temporary fixtures and its static import closure.",
