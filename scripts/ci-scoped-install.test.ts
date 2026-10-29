@@ -330,7 +330,14 @@ const scopedInstallCoverageProblems = (source: unknown) => {
               ),
               {},
             ),
-            runs: v.object({ steps: v.array(v.unknown()) }),
+            // A node action runs one entry point; only composite actions have steps.
+            runs: v.variant("using", [
+              v.object({
+                using: v.literal("composite"),
+                steps: v.array(v.unknown()),
+              }),
+              v.object({ using: v.picklist(["node20", "node24"]) }),
+            ]),
           }),
           Bun.YAML.parse(
             readFileSync(path.join(root, uses.slice(2), "action.yml"), "utf-8"),
@@ -350,7 +357,9 @@ const scopedInstallCoverageProblems = (source: unknown) => {
             name,
           );
         }
-        for (const child of flattenWorkflowSteps(action.runs.steps)) {
+        const actionSteps =
+          action.runs.using === "composite" ? action.runs.steps : [];
+        for (const child of flattenWorkflowSteps(actionSteps)) {
           const expanded = { ...child };
           for (const key of ["run", "working-directory"]) {
             const text = expanded[key];
