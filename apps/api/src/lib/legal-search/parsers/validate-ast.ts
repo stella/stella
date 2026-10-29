@@ -167,14 +167,16 @@ export const separateValidationSkipMarkers = (text: string): string => {
 const isMeaningfulWord = (clean: string): boolean =>
   clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
 
+const validationWord = (token: string): string =>
+  trimNonLetters(token.replace(/[[\]]/gu, "").toLowerCase());
+
 export const extractValidationWords = (text: string): Set<string> => {
   const words = new Set<string>();
   for (const w of separateValidationSkipMarkers(text).split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
-    const noBrackets = w.replace(/[[\]]/gu, "");
-    const clean = trimNonLetters(noBrackets.toLowerCase());
+    const clean = validationWord(w);
     if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w.toLowerCase())) {
       words.add(clean);
     }
@@ -187,23 +189,42 @@ const MAX_WORD_BOUNDARY_FRAGMENTS = 64;
 
 type WordTrie = { children: Map<string, WordTrie>; terminal: boolean };
 
-type RecoverWordFragmentsOptions = {
+type PublisherComparisonOptions = {
   source: string;
-  words: ReadonlySet<string>;
+  astText: string;
   options: { wordBoundaries?: "exact" | "publisher-fragments" } | undefined;
 };
 
-/** Only a complete word present in the AST can account for source fragments. */
-const recoveredWordFragments = ({
+/** An AST occurrence belongs to exact source words before it can vouch for fragments. */
+const publisherComparisonWords = ({
   source,
-  words,
+  astText,
   options,
-}: RecoverWordFragmentsOptions): Set<string> | undefined => {
+}: PublisherComparisonOptions): Set<string> | undefined => {
   if (options?.wordBoundaries !== "publisher-fragments") {
     return undefined;
   }
+  const counts = new Map<string, number>();
+  for (const token of separateValidationSkipMarkers(astText).split(/\s+/u)) {
+    const word = validationWord(token);
+    if (isMeaningfulWord(word)) {
+      counts.set(word, (counts.get(word) ?? 0) + 1);
+    }
+  }
+  const fragments = separateValidationSkipMarkers(source)
+    .split(/\s+/u)
+    .map((raw) => ({ raw, word: validationWord(raw) }));
+  for (const { word } of fragments) {
+    const count = counts.get(word);
+    if (count !== undefined && count > 0) {
+      counts.set(word, count - 1);
+    }
+  }
   const root: WordTrie = { children: new Map(), terminal: false };
-  for (const word of words) {
+  for (const [word, count] of counts) {
+    if (count === 0) {
+      continue;
+    }
     let node = root;
     for (const letter of word) {
       let child = node.children.get(letter);
@@ -215,22 +236,22 @@ const recoveredWordFragments = ({
     }
     node.terminal = true;
   }
-  const fragments = source
-    .split(/\s+/u)
-    .map((token) => trimNonLetters(token.replace(/[[\]]/gu, "")));
-  const recovered = new Set<string>();
-  for (let start = 0; start < fragments.length; start += 1) {
+  const comparison: string[] = [];
+  for (let start = 0; start < fragments.length;) {
     let node: WordTrie | undefined = root;
+    let joined = "";
+    let match: { end: number; word: string } | undefined;
     for (
       let end = start;
       end < Math.min(fragments.length, start + MAX_WORD_BOUNDARY_FRAGMENTS);
       end += 1
     ) {
       const fragment = fragments[end];
-      if (fragment === undefined || fragment.length === 0) {
+      if (fragment === undefined || fragment.word.length === 0) {
         break;
       }
-      for (const letter of fragment) {
+      joined += fragment.word;
+      for (const letter of fragment.word) {
         node = node?.children.get(letter);
         if (node === undefined) {
           break;
@@ -239,14 +260,35 @@ const recoveredWordFragments = ({
       if (node === undefined) {
         break;
       }
-      if (end > start && node.terminal) {
-        for (const covered of fragments.slice(start, end + 1)) {
-          recovered.add(covered);
-        }
+      if (
+        end > start &&
+        node.terminal &&
+        (counts.get(joined) ??
+          panic("A terminal word must have an occurrence count")) > 0
+      ) {
+        match = { end, word: joined };
+      }
+      // Punctuation can close the word, but cannot be erased between fragments.
+      if (!/^\p{L}+$/u.test(fragment.raw)) {
+        break;
       }
     }
+    if (match === undefined) {
+      const fragment =
+        fragments[start] ?? panic("A source position must have a token");
+      comparison.push(fragment.word);
+      start += 1;
+      continue;
+    }
+    comparison.push(match.word);
+    counts.set(
+      match.word,
+      (counts.get(match.word) ??
+        panic("A matched word must have an occurrence count")) - 1,
+    );
+    start = match.end + 1;
   }
-  return recovered;
+  return extractValidationWords(comparison.join(" "));
 };
 
 // NSS renders decorative figures with the alt text "obrázek" (Czech for
@@ -364,6 +406,24 @@ const rejoinLineBreakHyphenation = (text: string): string =>
   text
     .replace(/(\p{L})-\s+-(\p{L})/gu, "$1-$2")
     .replace(/(\p{L})-\s*(\p{Ll})/gu, "$1$2");
+
+type WordComparisonTextOptions = {
+  source: string;
+  suggested: string | undefined;
+};
+
+const wordComparisonSource = ({
+  source,
+  suggested,
+}: WordComparisonTextOptions): string => {
+  if (suggested === undefined) {
+    return source;
+  }
+  const normalized = normalizeValidationText(suggested);
+  return normalized.replace(/\s+/gu, "") === source.replace(/\s+/gu, "")
+    ? normalized
+    : source;
+};
 
 export const validateAst = (
   source: ValidationSource,
@@ -527,14 +587,9 @@ export const validateAst = (
   // the same rule extractWords applies. Peeling only ever clears a
   // phantom: a genuinely absent meaningful word keeps a remainder that is
   // meaningful and not in the AST, so real loss is still reported.
-  const recoveredFragments = recoveredWordFragments({
-    source: originalText,
-    words: astWords,
-    options,
-  });
   const missingFrom = (words: Set<string>): string[] =>
     [...words].filter((w) => {
-      if (astWords.has(w) || recoveredFragments?.has(w) === true) {
+      if (astWords.has(w)) {
         return false;
       }
       const peeled = peelDecorativeMarkers(w);
@@ -542,26 +597,25 @@ export const validateAst = (
     });
   // A comparison view that changes anything but whitespace is ignored, so the
   // check falls back to the source words and a real loss stays visible.
-  const wordComparisonText = options?.wordComparisonText;
+  const comparisonText = wordComparisonSource({
+    source: originalText,
+    suggested: options?.wordComparisonText,
+  });
+  const publisherWords = publisherComparisonWords({
+    source: comparisonText,
+    astText,
+    options,
+  });
   const comparisonWords =
-    wordComparisonText === undefined ||
-    normalizeValidationText(wordComparisonText).replace(/\s+/gu, "") !==
-      originalText.replace(/\s+/gu, "")
+    publisherWords ??
+    (comparisonText === originalText
       ? originalWords
-      : extractValidationWords(normalizeValidationText(wordComparisonText));
+      : extractValidationWords(comparisonText));
   const missingWords = missingFrom(comparisonWords);
-  const boundaryWhitespaceWords = [
-    ...new Set([
-      ...(comparisonWords === originalWords
-        ? []
-        : missingFrom(originalWords).filter(
-            (word) => !comparisonWords.has(word),
-          )),
-      ...[...originalWords].filter(
-        (word) => recoveredFragments?.has(word) === true && !astWords.has(word),
-      ),
-    ]),
-  ];
+  const boundaryWhitespaceWords =
+    comparisonWords === originalWords
+      ? []
+      : missingFrom(originalWords).filter((word) => !comparisonWords.has(word));
 
   if (retainedPct < minRetainedPct) {
     issues.push({

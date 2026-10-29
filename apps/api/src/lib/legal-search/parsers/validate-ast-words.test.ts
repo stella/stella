@@ -80,3 +80,54 @@ test("publisher fragments account only for complete words whose letters remain",
     true,
   );
 });
+
+test.each([
+  { source: "after noon afternoon", ast: "afternoon", missing: "after" },
+  { source: "case case l a w", ast: "caselaw", missing: "case" },
+  { source: "after, noon", ast: "afternoon", missing: "after" },
+])(
+  "fragment comparison preserves missing source words in $source",
+  ({ source, ast, missing }) => {
+    const retained =
+      " The judgment records the appeal and the reasons in its closing paragraph.".repeat(
+        20,
+      );
+    const text = ast + retained;
+    const result = validateAst(
+      { type: "paragraphs", paragraphs: [source + retained] },
+      [
+        {
+          type: "paragraph",
+          id: "p1",
+          anchorId: "p1",
+          inlines: [{ type: "text", text }],
+          plainText: text,
+        },
+      ],
+      { wordBoundaries: "publisher-fragments", maxMissingWords: 0 },
+    );
+    expect(result.stats.retainedPct).toBeGreaterThan(90);
+    expect(result.stats.missingWords).toContain(missing);
+    expect(result.issues.some((issue) => issue.code === "MISSING_WORDS")).toBe(
+      true,
+    );
+  },
+);
+
+test("fragment comparison also reads a character-preserving explicit word comparison", () => {
+  const text = "Alpha Beta";
+  const result = validateAst(
+    { type: "paragraphs", paragraphs: ["AlphaBeta"] },
+    [
+      {
+        type: "paragraph",
+        id: "p1",
+        anchorId: "p1",
+        inlines: [{ type: "text", text }],
+        plainText: text,
+      },
+    ],
+    { wordComparisonText: text, wordBoundaries: "publisher-fragments" },
+  );
+  expect(result.stats.missingWords).toEqual([]);
+});
