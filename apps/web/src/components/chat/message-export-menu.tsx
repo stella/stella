@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTitle } from "@stll/ui/popover";
 import {
@@ -221,7 +222,7 @@ export const MessageExportMenu = ({
           </p>
           {artifact !== undefined && (
             <div className="flex flex-col gap-2 text-xs">
-              <label className="flex items-center gap-2">
+              <Label className="flex">
                 <Checkbox
                   checked={includeMessage}
                   onCheckedChange={setIncludeMessage}
@@ -230,9 +231,11 @@ export const MessageExportMenu = ({
                   className="size-4 shrink-0"
                   mimeType={DOCX_MIME}
                 />
-                <span>{t("common.export.title")}</span>
-              </label>
-              <label className="flex items-center gap-2">
+                <span className="text-xs font-normal">
+                  {t("common.export.title")}
+                </span>
+              </Label>
+              <Label className="flex">
                 <Checkbox
                   checked={includeArtifact}
                   onCheckedChange={setIncludeArtifact}
@@ -242,13 +245,15 @@ export const MessageExportMenu = ({
                   fileName={artifactFileName}
                   mimeType={DOCX_MIME}
                 />
-                <span className="truncate">{artifactFileName}</span>
-              </label>
+                <span className="truncate text-xs font-normal">
+                  {artifactFileName}
+                </span>
+              </Label>
             </div>
           )}
           {includeMessage && hasCitations && (
-            <label className="flex flex-col gap-1.5 text-xs">
-              <span className="text-muted-foreground">
+            <Label className="flex flex-col items-stretch">
+              <span className="text-muted-foreground text-xs font-normal">
                 {t("common.export.citations")}
               </span>
               <Select
@@ -270,7 +275,7 @@ export const MessageExportMenu = ({
                   ))}
                 </SelectPopup>
               </Select>
-            </label>
+            </Label>
           )}
           <Button
             aria-live="polite"

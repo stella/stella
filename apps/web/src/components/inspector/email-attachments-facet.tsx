@@ -669,30 +669,35 @@ const AttachmentListItem = ({
   return (
     <li>
       <div className="hover:bg-muted/60 flex min-h-11 w-full items-center rounded-md border text-xs">
-        <button
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start disabled:cursor-default"
+        {/* A plain button does not dim when disabled: an attachment that
+            cannot be previewed keeps its row look (and its Save control),
+            the "unsupported" note says why it does nothing. */}
+        <Button
+          className="flex min-h-11 min-w-0 flex-1"
           disabled={!attachment.previewable}
           onClick={() => onSelect(attachment.id)}
-          type="button"
+          variant="plain"
         >
-          <DocumentIcon
-            className="text-muted-foreground size-4 shrink-0"
-            fileName={fileName}
-            mimeType={attachment.mimeType ?? "application/octet-stream"}
-          />
-          <BidiText
-            as="span"
-            className="min-w-0 flex-1 truncate"
-            id={fileNameId}
-          >
-            {fileName}
-          </BidiText>
-          {!attachment.previewable ? (
-            <span className="text-muted-foreground shrink-0">
-              {unsupportedLabel}
-            </span>
-          ) : null}
-        </button>
+          <span className="flex min-h-11 w-full min-w-0 items-center gap-2 px-2">
+            <DocumentIcon
+              className="text-muted-foreground size-4 shrink-0"
+              fileName={fileName}
+              mimeType={attachment.mimeType ?? "application/octet-stream"}
+            />
+            <BidiText
+              as="span"
+              className="min-w-0 flex-1 truncate"
+              id={fileNameId}
+            >
+              {fileName}
+            </BidiText>
+            {!attachment.previewable ? (
+              <span className="text-muted-foreground shrink-0">
+                {unsupportedLabel}
+              </span>
+            ) : null}
+          </span>
+        </Button>
         {canSave ? (
           <AttachmentSaveControls
             compact

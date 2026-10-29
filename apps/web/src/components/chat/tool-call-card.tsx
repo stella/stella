@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,6 +7,11 @@ import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -546,11 +552,11 @@ const ToolCallCardComponent = ({
           />
         }
       >
-        <button
+        {/* The row owns the hover tint; a plain button paints none of its
+            own, so the header does not tint twice. */}
+        <Button
           className={cn(
-            "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start",
-            !hasError &&
-              "text-muted-foreground group-hover/tool-step:text-foreground-muted",
+            "flex min-h-11 min-w-0 flex-1",
             !headerInteractive && "cursor-default",
           )}
           onClick={() => {
@@ -581,30 +587,18 @@ const ToolCallCardComponent = ({
               setExpanded((e) => !e);
             }
           }}
-          type="button"
+          variant="plain"
         >
-          <StatusMark label={statusLabel} status={status} />
-          <span
-            className={cn(
-              "min-w-0 truncate",
-              isLoading && CHAT_PENDING_TEXT_CLASS,
-            )}
-          >
-            <span>{label}</span>
-            {subtitle && (
-              <span
-                className={cn("ms-1.5", !isLoading && "text-foreground-ghost")}
-              >
-                {subtitle}
-              </span>
-            )}
-          </span>
-          {elapsed && (
-            <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
-              {elapsed}
-            </span>
-          )}
-        </button>
+          <ToolCallHeaderLabel
+            elapsed={elapsed}
+            hasError={hasError}
+            isLoading={isLoading}
+            label={label}
+            status={status}
+            statusLabel={statusLabel}
+            subtitle={subtitle}
+          />
+        </Button>
         {action !== undefined && (
           <Button
             className="me-1 shrink-0"
@@ -640,26 +634,12 @@ const ToolCallCardComponent = ({
           </Popover>
         )}
         {canExpand && (
-          <button
-            aria-label={t("chat.toolCall.toggleDetails")}
-            className={cn(
-              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none",
-              expanded && "opacity-100",
-            )}
-            onClick={() => {
+          <ToolCallExpandToggle
+            expanded={expanded}
+            onToggle={() => {
               setExpanded((e) => !e);
             }}
-            type="button"
-          >
-            <DirectionalIcon
-              className={cn(
-                "size-3.5 transition-transform duration-150",
-                expanded && "rotate-90",
-              )}
-              flip={!expanded}
-              icon={ChevronRightIcon}
-            />
-          </button>
+          />
         )}
       </Tooltip>
       {expanded &&
@@ -729,6 +709,90 @@ const ToolCallCardComponent = ({
 // message's part list: a card whose call did not change skips that render.
 export const ToolCallCard = memo(ToolCallCardComponent);
 
+/** The header's status, label and elapsed time. The colour is set here,
+ *  since the header button paints none of its own and the row owns the
+ *  hover tint. */
+const ToolCallHeaderLabel = ({
+  elapsed,
+  hasError,
+  isLoading,
+  label,
+  status,
+  statusLabel,
+  subtitle,
+}: {
+  elapsed: ReactNode;
+  hasError: boolean;
+  isLoading: boolean;
+  label: ReactNode;
+  status: StatusMarkStatus;
+  statusLabel: string | undefined;
+  subtitle: ReactNode;
+}) => (
+  <span
+    className={cn(
+      "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2",
+      hasError
+        ? "text-destructive"
+        : "text-muted-foreground group-hover/tool-step:text-foreground-muted",
+    )}
+  >
+    <StatusMark label={statusLabel} status={status} />
+    <span
+      className={cn("min-w-0 truncate", isLoading && CHAT_PENDING_TEXT_CLASS)}
+    >
+      <span>{label}</span>
+      {subtitle && (
+        <span className={cn("ms-1.5", !isLoading && "text-foreground-ghost")}>
+          {subtitle}
+        </span>
+      )}
+    </span>
+    {elapsed && (
+      <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
+        {elapsed}
+      </span>
+    )}
+  </span>
+);
+
+/** Shows on the row's hover or its own focus; the wrapper carries the fade so
+ *  the button keeps its own surface. */
+const ToolCallExpandToggle = ({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-within:opacity-100",
+        expanded && "opacity-100",
+      )}
+    >
+      <Button
+        aria-expanded={expanded}
+        aria-label={t("chat.toolCall.toggleDetails")}
+        onClick={onToggle}
+        size="icon-xl"
+        variant="muted"
+      >
+        <DirectionalIcon
+          className={cn(
+            "size-3.5 transition-transform duration-150",
+            expanded && "rotate-90",
+          )}
+          flip={!expanded}
+          icon={ChevronRightIcon}
+        />
+      </Button>
+    </span>
+  );
+};
+
 /** The short human failure line, with the raw tool error (written for the
  *  model, not for people) behind a collapsed disclosure for debugging. */
 export const ToolCallFailureDetails = ({
@@ -739,26 +803,32 @@ export const ToolCallFailureDetails = ({
   rawErrorDetails: string | undefined;
 }) => {
   const t = useTranslations();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
     <div className="max-w-xl py-1">
       <p className="text-destructive text-2xs leading-relaxed">
         {errorMessage}
       </p>
       {rawErrorDetails !== undefined && (
-        <details className="group">
-          <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
-            <span className="group-open:hidden">{t("common.showDetails")}</span>
-            <span className="hidden group-open:inline">
-              {t("common.hideDetails")}
-            </span>
-          </summary>
-          <ToolCallCodeBlock
-            code={rawErrorDetails}
-            label={t("chat.toolCall.output")}
-            language="text"
-            tone="result"
-          />
-        </details>
+        <div className="text-2xs">
+          <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+            <CollapsibleTrigger render={<Button variant="plain" />}>
+              <span className="text-muted-foreground hover:text-foreground">
+                {detailsOpen
+                  ? t("common.hideDetails")
+                  : t("common.showDetails")}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <ToolCallCodeBlock
+                code={rawErrorDetails}
+                label={t("chat.toolCall.output")}
+                language="text"
+                tone="result"
+              />
+            </CollapsiblePanel>
+          </Collapsible>
+        </div>
       )}
     </div>
   );

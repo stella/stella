@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { ContextMenu, type ContextMenuAction } from "@stll/ui/context-menu";
 import { cn } from "@stll/ui/utils";
 
@@ -77,8 +78,12 @@ export const CatalogueRow = ({
 
   return (
     <ContextMenu actions={contextActions}>
+      {/* The whole card is a pointer target, like a row in a list; the
+          title button is the keyboard and assistive-technology path. A card
+          that holds its own action buttons cannot itself be a button, since
+          interactive content may not nest. */}
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- a pointer convenience over the whole card; the title button below is the keyboard and assistive-technology path */}
       <div
-        aria-pressed={focused}
         className={cn(
           "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start",
           focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
@@ -88,17 +93,6 @@ export const CatalogueRow = ({
           !focused && !accentWhenUnfocused && "border-border hover:bg-muted/40",
         )}
         onClick={onFocus}
-        onKeyDown={(e) => {
-          if (e.target !== e.currentTarget) {
-            return;
-          }
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onFocus();
-          }
-        }}
-        role="button"
-        tabIndex={0}
       >
         <CatalogueEntryIcon
           className="text-muted-foreground mt-0.5 shrink-0"
@@ -109,9 +103,21 @@ export const CatalogueRow = ({
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
-            <span className="text-sm font-medium" dir="auto">
-              {displayName}
-            </span>
+            <Button
+              aria-pressed={focused}
+              // A long name wraps inside the row instead of pushing past it.
+              className="min-w-0 shrink"
+              onClick={(event) => {
+                // The card's own click handler would select it a second time.
+                event.stopPropagation();
+                onFocus();
+              }}
+              variant="plain"
+            >
+              <span className="text-sm font-medium" dir="auto">
+                {displayName}
+              </span>
+            </Button>
             {isFirstParty && <FirstPartyMark />}
             <div className="ms-auto flex items-center gap-2">{actions}</div>
           </div>

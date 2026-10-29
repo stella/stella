@@ -499,18 +499,17 @@ const GenericExternalReferencePanel = ({
               </div>
             )}
             {canPreview && (
-              <button
-                className={cn(
-                  "text-muted-foreground hover:text-foreground truncate text-start text-xs underline-offset-2 hover:underline",
-                  hasMetadata && "mt-1",
-                )}
+              <Button
+                className={cn("max-w-full min-w-0", hasMetadata && "mt-1")}
                 onClick={() => {
                   requestOpenExternal(safeHref);
                 }}
-                type="button"
+                variant="plain"
               >
-                {safeHref}
-              </button>
+                <span className="text-muted-foreground hover:text-foreground block truncate text-xs underline-offset-2 hover:underline">
+                  {safeHref}
+                </span>
+              </Button>
             )}
           </div>
           <InspectorFindBar find={find} />

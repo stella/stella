@@ -16,6 +16,12 @@ import {
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -915,24 +921,19 @@ const RegistryWriteSummaryRow = ({
   matter: SummaryMatter | undefined;
   value: string;
 }) => (
-  <div className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
-    <dt className="text-muted-foreground text-xs">
-      {matter ? stripIdSuffix(label) : label}
-    </dt>
-    <dd className="text-xs wrap-break-word">
-      {matter ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <MatterIcon
-            className="size-3.5 shrink-0"
-            matter={{ color: matter.color, id: matter.id }}
-          />
-          <span className="truncate">{matter.name}</span>
-        </span>
-      ) : (
-        value
-      )}
-    </dd>
-  </div>
+  <DetailsItem label={matter ? stripIdSuffix(label) : label}>
+    {matter ? (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ color: matter.color, id: matter.id }}
+        />
+        <span className="truncate">{matter.name}</span>
+      </span>
+    ) : (
+      value
+    )}
+  </DetailsItem>
 );
 
 /** "Matter id" -> "Matter": the id is no longer what the row shows. A single
@@ -979,7 +980,7 @@ const RegistryWriteSummary = ({
 
   return (
     <div className="border-border/50 border-t px-3 py-2">
-      <dl className="space-y-1.5">
+      <DetailsGrid variant="list">
         {rows.map((row) => (
           <RegistryWriteSummaryRow
             key={row.key}
@@ -988,7 +989,7 @@ const RegistryWriteSummary = ({
             value={row.value}
           />
         ))}
-      </dl>
+      </DetailsGrid>
     </div>
   );
 };
@@ -1053,24 +1054,26 @@ const ExternalMcpInputSummary = ({
           </p>
         </div>
       )}
-      <details className="group">
-        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
-          {t("common.showDetails")}
-        </summary>
-        <div className="bg-background/60 mt-2 rounded-md border p-2">
-          <dl className="space-y-1.5">
-            {rows.map((row) => (
-              <div
-                className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]"
-                key={row.key}
-              >
-                <dt className="text-muted-foreground text-xs">{row.label}</dt>
-                <dd className="text-xs wrap-break-word">{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </details>
+      <div className="text-xs">
+        <Collapsible>
+          <CollapsibleTrigger render={<Button variant="plain" />}>
+            <span className="text-muted-foreground hover:text-foreground">
+              {t("common.showDetails")}
+            </span>
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <div className="bg-background/60 mt-2 rounded-md border p-2">
+              <DetailsGrid variant="list">
+                {rows.map((row) => (
+                  <DetailsItem key={row.key} label={row.label}>
+                    {row.value}
+                  </DetailsItem>
+                ))}
+              </DetailsGrid>
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      </div>
     </div>
   );
 };
@@ -1173,16 +1176,15 @@ const BrowserControlInputSummary = ({
           </p>
         </div>
       )}
-      <dl className="bg-background/60 space-y-1.5 rounded-md border p-2">
-        {rows.map((row) => (
-          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.label}>
-            <dt className="text-muted-foreground text-xs">{row.label}</dt>
-            <dd className="text-xs wrap-break-word" dir="auto">
-              {row.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <div className="bg-background/60 rounded-md border p-2">
+        <DetailsGrid variant="list">
+          {rows.map((row) => (
+            <DetailsItem key={row.label} label={row.label}>
+              <span dir="auto">{row.value}</span>
+            </DetailsItem>
+          ))}
+        </DetailsGrid>
+      </div>
     </div>
   );
 };

@@ -27,6 +27,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { Form } from "@stll/ui/form";
 import {
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
@@ -777,55 +778,56 @@ export const AnonymizationFacet = ({
         </Button>
       )}
 
-      <form
-        action={submitTerm}
-        className="flex flex-col gap-2 rounded-md border p-3"
-      >
-        <Input
-          autoComplete="off"
-          disabled={createMutation.isPending}
-          onChange={(event) => setPendingValue(event.target.value)}
-          placeholder={t("inspector.anonymization.addPlaceholder")}
-          value={pendingValue}
-        />
-        <div className="flex items-center gap-2">
-          <Combobox<LabelOption>
-            autoHighlight
+      <Form action={submitTerm}>
+        <div className="flex flex-col gap-2 rounded-md border p-3">
+          <Input
+            autoComplete="off"
             disabled={createMutation.isPending}
-            filter={matchesComboboxItem}
-            items={[...LABEL_OPTIONS]}
-            itemToStringLabel={formatLabel}
-            onValueChange={(next) => {
-              if (next) {
-                setPendingLabel(next);
-              }
-            }}
-            value={pendingLabel}
-          >
-            <ComboboxInput
-              aria-label={t("inspector.anonymization.labelPickerAriaLabel")}
-              className="h-9 min-w-0 flex-1 text-xs"
-              placeholder={t("inspector.anonymization.labelPickerPlaceholder")}
-            />
-            <ComboboxPopup>
-              <ComboboxList>
-                {(option: LabelOption) => (
-                  <ComboboxItem key={option} value={option}>
-                    {formatLabel(option)}
-                  </ComboboxItem>
-                )}
-              </ComboboxList>
-              <ComboboxEmpty>
-                {t("inspector.anonymization.labelPickerEmpty")}
-              </ComboboxEmpty>
-            </ComboboxPopup>
-          </Combobox>
-          <AddTermSubmitButton
-            disabled={pendingValue.trim().length === 0}
-            label={t("common.add")}
+            onChange={(event) => setPendingValue(event.target.value)}
+            placeholder={t("inspector.anonymization.addPlaceholder")}
+            value={pendingValue}
           />
+          <div className="flex items-center gap-2">
+            <Combobox<LabelOption>
+              autoHighlight
+              disabled={createMutation.isPending}
+              filter={matchesComboboxItem}
+              items={[...LABEL_OPTIONS]}
+              itemToStringLabel={formatLabel}
+              onValueChange={(next) => {
+                if (next) {
+                  setPendingLabel(next);
+                }
+              }}
+              value={pendingLabel}
+            >
+              <ComboboxInput
+                aria-label={t("inspector.anonymization.labelPickerAriaLabel")}
+                className="h-9 min-w-0 flex-1 text-xs"
+                placeholder={t(
+                  "inspector.anonymization.labelPickerPlaceholder",
+                )}
+              />
+              <ComboboxPopup>
+                <ComboboxList>
+                  {(option: LabelOption) => (
+                    <ComboboxItem key={option} value={option}>
+                      {formatLabel(option)}
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+                <ComboboxEmpty>
+                  {t("inspector.anonymization.labelPickerEmpty")}
+                </ComboboxEmpty>
+              </ComboboxPopup>
+            </Combobox>
+            <AddTermSubmitButton
+              disabled={pendingValue.trim().length === 0}
+              label={t("common.add")}
+            />
+          </div>
         </div>
-      </form>
+      </Form>
 
       {(() => {
         if (noOpenDocument) {
@@ -889,10 +891,10 @@ export const AnonymizationFacet = ({
               data-anonymization-canonical={entry.canonical}
               key={entry.id}
             >
-              <button
-                className="flex min-w-0 flex-1 flex-col text-start"
+              <Button
+                className="flex min-w-0 flex-1 flex-col"
                 onClick={() => selectFromSidebar(entry.canonical, entry.label)}
-                type="button"
+                variant="plain"
               >
                 <span className="truncate text-sm font-medium">
                   {entry.canonical}
@@ -900,20 +902,24 @@ export const AnonymizationFacet = ({
                 <span className="text-muted-foreground text-xs">
                   {formatLabel(entry.label)}
                 </span>
-              </button>
+              </Button>
               <div className="flex items-center gap-1">
                 {hitCount !== undefined && hitCount > 0 && (
                   <Tooltip
                     content={t(
                       "inspector.anonymization.termMatchCountAriaLabel",
-                      { count: String(hitCount) },
+                      {
+                        count: String(hitCount),
+                      },
                     )}
                     render={
                       <span
                         className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
                         aria-label={t(
                           "inspector.anonymization.termMatchCountAriaLabel",
-                          { count: String(hitCount) },
+                          {
+                            count: String(hitCount),
+                          },
                         )}
                         role="group"
                       />
@@ -955,26 +961,28 @@ export const AnonymizationFacet = ({
             const activeCount = rows.filter((r) => !r.isExcluded).length;
             return (
               <div className="rounded-md border" key={label}>
-                <button
+                <Button
                   aria-expanded={isOpen}
-                  className="hover:bg-muted/50 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-start"
+                  className="w-full"
                   onClick={() => toggleGroup(label)}
-                  type="button"
+                  variant="plain"
                 >
-                  <span className="flex min-w-0 items-center gap-2">
-                    {isOpen ? (
-                      <ChevronDown className="text-muted-foreground size-4 shrink-0" />
-                    ) : (
-                      <ChevronRight className="text-muted-foreground size-4 shrink-0" />
-                    )}
-                    <span className="truncate text-sm font-medium">
-                      {formatLabel(label)}
+                  <span className="hover:bg-muted/50 flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-3 py-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {isOpen ? (
+                        <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+                      ) : (
+                        <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+                      )}
+                      <span className="truncate text-sm font-medium">
+                        {formatLabel(label)}
+                      </span>
+                    </span>
+                    <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
+                      {format.number(activeCount)}
                     </span>
                   </span>
-                  <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
-                    {format.number(activeCount)}
-                  </span>
-                </button>
+                </Button>
                 {isOpen && (
                   <ul className="flex flex-col gap-px border-t">
                     {rows.map((row) => (
@@ -987,27 +995,33 @@ export const AnonymizationFacet = ({
                         data-anonymization-canonical={row.canonical}
                         key={row.canonical}
                       >
-                        <button
-                          className="min-w-0 flex-1 truncate text-start text-xs"
+                        <Button
+                          className="min-w-0 flex-1"
                           onClick={() =>
                             selectFromSidebar(row.canonical, label)
                           }
-                          type="button"
+                          variant="plain"
                         >
-                          {row.canonical}
-                        </button>
+                          <span className="block truncate text-xs">
+                            {row.canonical}
+                          </span>
+                        </Button>
                         <div className="flex items-center gap-1">
                           {!row.isExcluded && row.count > 0 && (
                             <Tooltip
                               content={t(
                                 "inspector.anonymization.termMatchCountAriaLabel",
-                                { count: String(row.count) },
+                                {
+                                  count: String(row.count),
+                                },
                               )}
                               render={
                                 <span
                                   aria-label={t(
                                     "inspector.anonymization.termMatchCountAriaLabel",
-                                    { count: String(row.count) },
+                                    {
+                                      count: String(row.count),
+                                    },
                                   )}
                                   className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
                                   role="group"

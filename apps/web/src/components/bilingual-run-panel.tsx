@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { DialogClose, DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { AlertTriangleIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   bilingualErrorCodeKey,
@@ -196,9 +197,7 @@ const FlaggedRows = ({ rows }: { rows: BilingualRunRow[] }) => {
           <li className="flex gap-2 text-xs" key={row.rowId}>
             <AlertTriangleIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate" title={row.sourceText}>
-                {row.sourceText}
-              </span>
+              <TruncatedText>{row.sourceText}</TruncatedText>
               {row.warnings.map((warning) => (
                 <span className="text-muted-foreground" key={warning}>
                   {warning}

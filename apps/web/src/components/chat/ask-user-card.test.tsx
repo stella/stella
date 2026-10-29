@@ -167,7 +167,9 @@ describe("ask-user clarification card", () => {
     );
 
     expect(html).toContain('type="submit"');
-    expect(html).toContain('type="button">Czech law</button>');
-    expect(html).toContain('type="button">Spanish law</button>');
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*>Czech law<\/button>/u);
+    expect(html).toMatch(
+      /<button[^>]*type="button"[^>]*>Spanish law<\/button>/u,
+    );
   });
 });

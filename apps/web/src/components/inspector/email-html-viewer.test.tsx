@@ -269,7 +269,10 @@ describe("email viewer", () => {
     expect(html).toContain("Hide signature");
     expect(html).toContain("Kind regards");
     expect(html).not.toContain("href=");
-    expect(html).toContain('<button class="bg-muted/50');
+    // The attachment opens from a design-system button that holds its name.
+    expect(html).toMatch(
+      /<button[^>]*data-slot="button"[^>]*>(?:(?!<\/button>).)*contract\.pdf/su,
+    );
     expect(html).not.toContain("scrolling=");
     expect(html).toContain("overflow-y-auto overscroll-contain");
     expect(html).not.toContain("max-h-[45%]");

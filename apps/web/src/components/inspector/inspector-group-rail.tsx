@@ -5,6 +5,7 @@ import { useDirection } from "@base-ui/react/direction-provider";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, PenLineIcon, UngroupIcon } from "@stll/ui/icons";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
@@ -108,11 +109,11 @@ export const InspectorRailGroup = ({
             </div>
           }
           render={
-            <button
+            <Button
               aria-controls={contentId}
               aria-expanded={!collapsed}
               aria-label={label}
-              className="hover:bg-accent focus-visible:ring-ring relative flex min-h-11 w-full items-center justify-center rounded-md outline-hidden focus-visible:ring-2"
+              className="flex min-h-11 w-full justify-center"
               onClick={containedEventHandler(toggle)}
               onContextMenu={containedEventHandler(menu.openAt)}
               onKeyDown={menu.onKeyDown}
@@ -148,7 +149,9 @@ export const InspectorRailGroup = ({
                 requestMove(id, group.id);
               }}
               ref={returnFocus}
-              type="button"
+              // The ghost treatment is the rail cell's own hover fill; the
+              // glyph tile inside keeps the group colour.
+              variant="ghost"
             />
           }
           side={direction === "rtl" ? "right" : "left"}

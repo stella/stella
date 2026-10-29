@@ -10,7 +10,6 @@ import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 
@@ -69,39 +68,46 @@ export const ProposalMenu = ({
             <ul className="divide-y">
               {proposals.map((proposal) => (
                 <li key={proposal.id}>
-                  <button
-                    className={cn(
-                      "hover:bg-accent/50 flex w-full flex-col gap-0.5 px-3 py-2 text-start",
-                      proposal.id === openProposalId && "bg-accent/50",
-                    )}
+                  <Button
+                    aria-current={
+                      proposal.id === openProposalId ? "true" : undefined
+                    }
+                    className="h-auto flex-col items-start whitespace-normal"
                     onClick={() => {
                       onOpenProposal(proposal.id);
                     }}
-                    type="button"
+                    selected={proposal.id === openProposalId}
+                    size="row"
+                    variant="ghost"
                   >
-                    <span className="flex items-center gap-1.5">
-                      <ProposalStatusBadge status={proposal.status} />
-                      <span className="text-muted-foreground text-2xs truncate">
-                        {t("skillHistory.proposalMeta", {
-                          author: authorName(proposal.authorId),
-                          date: format.dateTime(new Date(proposal.createdAt), {
-                            day: "numeric",
-                            month: "short",
-                          }),
-                        })}
+                    <span className="flex w-full flex-col gap-0.5 font-normal">
+                      <span className="flex items-center gap-1.5">
+                        <ProposalStatusBadge status={proposal.status} />
+                        <span className="text-muted-foreground text-2xs truncate">
+                          {t("skillHistory.proposalMeta", {
+                            author: authorName(proposal.authorId),
+                            date: format.dateTime(
+                              new Date(proposal.createdAt),
+                              {
+                                day: "numeric",
+                                month: "short",
+                              },
+                            ),
+                          })}
+                        </span>
+                      </span>
+                      <span className="text-foreground text-xs wrap-anywhere">
+                        {proposal.summary === ""
+                          ? t("skillHistory.proposalNoSummary")
+                          : proposal.summary}
+                      </span>
+                      <span className="text-muted-foreground text-2xs">
+                        {proposal.baseIsCurrent
+                          ? t("skillHistory.basedOnCurrent")
+                          : t("skillHistory.outOfDate")}
                       </span>
                     </span>
-                    <span className="text-foreground text-xs wrap-anywhere">
-                      {proposal.summary === ""
-                        ? t("skillHistory.proposalNoSummary")
-                        : proposal.summary}
-                    </span>
-                    <span className="text-muted-foreground text-2xs">
-                      {proposal.baseIsCurrent
-                        ? t("skillHistory.basedOnCurrent")
-                        : t("skillHistory.outOfDate")}
-                    </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -366,6 +366,7 @@ export const ChatThreadCard = ({
           "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
         )}
+        // oxlint-disable-next-line no-native-ui/no-native-dialog -- a non-modal thread card docked in place in the composer column; Dialog is a portalled modal overlay with a backdrop and focus trap, which would lift the card off the composer it sits on
         role="dialog"
       >
         {/* The header is its own opaque row with a hairline under it, so the
@@ -1046,46 +1047,48 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
-      <button
-        type="button"
-        className="text-muted-foreground text-2xs flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start"
-        onClick={() => onFocus(suggestion.id)}
+      <Button
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
+        className="flex w-full"
+        onClick={() => onFocus(suggestion.id)}
+        variant="plain"
       >
-        {display ? (
-          <SuggestionDisplayBadges display={display} />
-        ) : (
-          <>
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                SEVERITY_DOT_CLASS[suggestion.severity],
-              )}
-              aria-hidden="true"
-            />
-            <span className="text-foreground font-medium">
-              {suggestion.topic}
+        <span className="text-muted-foreground text-2xs flex min-w-0 flex-1 items-center gap-1.5">
+          {display ? (
+            <SuggestionDisplayBadges display={display} />
+          ) : (
+            <>
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  SEVERITY_DOT_CLASS[suggestion.severity],
+                )}
+                aria-hidden="true"
+              />
+              <span className="text-foreground font-medium">
+                {suggestion.topic}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
+            </>
+          )}
+          {suggestion.status === "stale" && (
+            <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("common.stale")}
             </span>
-            <span aria-hidden="true">·</span>
-            <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
-          </>
-        )}
-        {suggestion.status === "stale" && (
-          <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("common.stale")}
-          </span>
-        )}
-        {suggestion.status === "accepted" && (
-          <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.accepted")}
-          </span>
-        )}
-        {suggestion.status === "rejected" && (
-          <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.rejected")}
-          </span>
-        )}
-      </button>
+          )}
+          {suggestion.status === "accepted" && (
+            <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.accepted")}
+            </span>
+          )}
+          {suggestion.status === "rejected" && (
+            <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.rejected")}
+            </span>
+          )}
+        </span>
+      </Button>
 
       {display ? (
         <>

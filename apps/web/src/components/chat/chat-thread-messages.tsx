@@ -18,6 +18,11 @@ import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowUpIcon,
@@ -718,11 +723,13 @@ const StickyUserTurn = ({
               pointer-events-none so plain text falls through to this jump
               target, and only its interactive children re-enable clicks. */}
           {isStuck && (
-            <button
+            // An invisible hit area: a plain button paints nothing, so no
+            // fill shows over the pinned header.
+            <Button
               aria-label={t("chat.jumpToMessage")}
-              className="absolute inset-0 z-0 cursor-pointer"
+              className="absolute inset-0 z-0"
               onClick={handleScrollBack}
-              type="button"
+              variant="plain"
             />
           )}
           <Message
@@ -2193,57 +2200,61 @@ const AssistantProcessGroup = ({
           unitDisplay: "narrow",
         });
   return (
-    <details
+    <div
       data-slot="chat-step-list"
       className={cn(
         "max-w-[min(44rem,100%)] rounded-md",
         isOpen && "border-border/70 bg-muted/20 border",
         appearedLive && "motion-safe:animate-text-fade",
       )}
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
     >
-      <summary
-        className={cn(
-          "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
-          "rounded-md px-2.5 py-1.5 text-xs",
-          !isOpen &&
-            "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
-          "text-muted-foreground",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <DirectionalIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-transform",
-            isOpen && "rotate-90",
-          )}
-          flip={!isOpen}
-          icon={ChevronRightIcon}
-        />
-        <span className="text-xs font-medium">
-          <SwapText
-            className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
-            text={label}
-          />
-        </span>
-        {elapsed !== null && (
-          <>
-            <span aria-hidden="true" className="text-foreground-placeholder">
-              ·
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span
+            className={cn(
+              "inline-flex min-h-8 items-center gap-1.5",
+              "rounded-md px-2.5 py-1.5 text-xs",
+              !isOpen &&
+                "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
+              "text-muted-foreground",
+            )}
+          >
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform",
+                isOpen && "rotate-90",
+              )}
+              flip={!isOpen}
+              icon={ChevronRightIcon}
+            />
+            <span className="text-xs font-medium">
+              <SwapText
+                className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
+                text={label}
+              />
             </span>
-            {/* The timer ticks plainly: a fade every second is motion for
+            {elapsed !== null && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="text-foreground-placeholder"
+                >
+                  ·
+                </span>
+                {/* The timer ticks plainly: a fade every second is motion for
                 its own sake. */}
-            <span className="text-foreground-ghost tabular-nums">
-              {elapsed}
-            </span>
-          </>
-        )}
-      </summary>
-      <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
-    </details>
+                <span className="text-foreground-ghost tabular-nums">
+                  {elapsed}
+                </span>
+              </>
+            )}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 
@@ -2312,33 +2323,29 @@ const AssistantThinkingPart = ({
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <details
-      className="group/reasoning my-0.5 max-w-xl text-sm"
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
-    >
-      <summary
-        className={cn(
-          "flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg ps-2",
-          "text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <AssistantThinkingHeader
-          isExpanded={isOpen}
-          isStreaming={isStreaming}
-          reasoningTokenCount={reasoningTokenCount}
-        />
-      </summary>
-      <AssistantThinkingBody
-        components={components}
-        isStreaming={isStreaming}
-        restorationPairs={restorationPairs}
-        text={text}
-      />
-    </details>
+    <div className="group/reasoning my-0.5 max-w-xl text-sm">
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger
+          render={<Button className="flex w-full" variant="plain" />}
+        >
+          <span className="text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted flex min-h-11 w-full items-center gap-2 rounded-lg ps-2">
+            <AssistantThinkingHeader
+              isExpanded={isOpen}
+              isStreaming={isStreaming}
+              reasoningTokenCount={reasoningTokenCount}
+            />
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <AssistantThinkingBody
+            components={components}
+            isStreaming={isStreaming}
+            restorationPairs={restorationPairs}
+            text={text}
+          />
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 

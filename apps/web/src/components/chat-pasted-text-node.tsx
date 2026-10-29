@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import type {
@@ -171,17 +172,26 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
                 <XIcon className="size-3" />
               </Button>
             </div>
-            <textarea
-              aria-label={t("common.edit")}
-              className="bg-muted/40 focus-visible:ring-ring text-2xs max-h-60 min-h-32 resize-none overflow-auto rounded-md border p-2 font-mono whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
-              dir={contentDir(draftText)}
-              onBlur={commitDraft}
-              onChange={(event) => {
-                setDraftText(event.target.value);
-              }}
-              spellCheck={false}
-              value={draftText}
-            />
+            {/* The box is drawn here and the control is `unstyled`: raw
+                pasted text reads in small monospace (the control supplies
+                the inset), and the textarea sizes to its content, so this
+                bounded box keeps a long paste scrolling inside the popover
+                instead of growing it. Textarea's own frame has no height
+                bound for its inner element and no way to drop the resize
+                handle. */}
+            <div className="bg-muted/40 focus-within:ring-ring text-2xs max-h-60 min-h-32 overflow-y-auto rounded-md border font-mono whitespace-pre-wrap focus-within:ring-2 [&_textarea]:resize-none">
+              <Textarea
+                aria-label={t("common.edit")}
+                dir={contentDir(draftText)}
+                onBlur={commitDraft}
+                onChange={(event) => {
+                  setDraftText(event.target.value);
+                }}
+                spellCheck={false}
+                unstyled
+                value={draftText}
+              />
+            </div>
           </div>
         </PopoverPopup>
       </Popover>

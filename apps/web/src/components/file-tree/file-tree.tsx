@@ -191,6 +191,7 @@ export const FileTree = ({
                   }
                 }
               }}
+              // oxlint-disable-next-line no-native-ui/no-native-button -- the row's name slot can mount an inline rename input (renderName), and an input cannot nest inside a <button> or the design-system Button, so the row stays a focusable div that answers Enter and Space
               role="button"
               tabIndex={0}
             >
