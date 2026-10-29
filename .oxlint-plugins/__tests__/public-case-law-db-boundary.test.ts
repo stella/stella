@@ -34,6 +34,22 @@ const lint = async (
     ...(ruleOptions === undefined ? {} : { ruleOptions }),
   });
 
+test("the public-law plugin and its transitive policy imports load in Node", () => {
+  const pluginUrl = new URL(
+    "../public-case-law-db-boundary.ts",
+    import.meta.url,
+  ).href;
+  const probe = Bun.spawnSync([
+    "node",
+    "--input-type=module",
+    "--eval",
+    `const plugin = await import(${JSON.stringify(pluginUrl)});
+     console.log(plugin.isCaseLawPublicReadModule("apps/api/src/lib/case-law-public-read-db.ts", new Set()));`,
+  ]);
+  expect(probe.exitCode, new TextDecoder().decode(probe.stderr)).toBe(0);
+  expect(new TextDecoder().decode(probe.stdout).trim()).toBe("true");
+});
+
 describe.serial("public-law relation scan", () => {
   test("public case-law reads cannot name the base decision table", async () => {
     const source = [
