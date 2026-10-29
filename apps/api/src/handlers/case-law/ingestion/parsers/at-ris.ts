@@ -167,37 +167,41 @@ const wrappableText = (item: RisItem | undefined): string | undefined =>
  * Join the printed lines of a transcript into paragraphs: consecutive
  * `absatz` lines of one content type, with no `abstand` between them, belong
  * to one paragraph when the first fills a line and stops mid-sentence and the
- * second does not open a point, list item or field.
+ * second does not open a point, list item or field. Each boundary is judged
+ * on the printed line before it, never on the paragraph joined so far: a
+ * short line ends its paragraph even after long lines were joined into it.
  */
 export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
   const joined: RisItem[] = [];
-  let current: RisParagraphItem | undefined;
+  let current: { item: RisParagraphItem; lastLine: string } | undefined;
   for (const item of items) {
-    const above = wrappableText(current);
     const below = wrappableText(item);
     if (
       current !== undefined &&
       item.type === "paragraph" &&
-      above !== undefined &&
       below !== undefined &&
-      item.contentType === current.contentType &&
-      continuesLine(above, below)
+      item.contentType === current.item.contentType &&
+      continuesLine(current.lastLine, below)
     ) {
-      current.inlines.push({ type: "text", text: " " }, ...item.inlines);
+      current.item.inlines.push({ type: "text", text: " " }, ...item.inlines);
+      current.lastLine = below;
       continue;
     }
     if (current !== undefined) {
-      joined.push(current);
+      joined.push(current.item);
       current = undefined;
     }
     if (item.type === "paragraph" && below !== undefined) {
-      current = { ...item, inlines: [...item.inlines] };
+      current = {
+        item: { ...item, inlines: [...item.inlines] },
+        lastLine: below,
+      };
       continue;
     }
     joined.push(item);
   }
   if (current !== undefined) {
-    joined.push(current);
+    joined.push(current.item);
   }
   return joined;
 };

@@ -111,4 +111,25 @@ describe("RIS wrapped lines", () => {
       config(300),
     );
   });
+
+  // A long line joined to a short one must not carry the short one's
+  // boundary: the 15-character line ends its paragraph.
+  test("a short line ends the paragraph a long line opened", () => {
+    const lines = [60, 15, 60].map((length, index) =>
+      toItem(
+        {
+          type: "line",
+          contentType: "text",
+          length,
+          ending: "",
+          opensPoint: false,
+        },
+        index,
+      ),
+    );
+    expect(joinWrappedLines(lines).map(textOfItem)).toEqual([
+      `${textOfItem(lines[0] ?? { type: "break" })} ${textOfItem(lines[1] ?? { type: "break" })}`,
+      textOfItem(lines[2] ?? { type: "break" }),
+    ]);
+  });
 });
