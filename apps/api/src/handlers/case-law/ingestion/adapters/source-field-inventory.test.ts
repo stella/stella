@@ -73,8 +73,7 @@ import {
   metadataTextAddressDispositionsForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
-
-import { nssRecoveryFixture } from "./__fixtures__/cz-nss-recovery";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 
 const originalFetch = globalThis.fetch;
 

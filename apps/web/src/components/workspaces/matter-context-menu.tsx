@@ -239,7 +239,6 @@ export const useMatterActions = (
     const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     await deleteWorkspace.mutateAsync(
@@ -414,7 +413,10 @@ export const useMatterContextMenu = (
       }}
       open={menuOpen}
     >
-      <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+      <MenuTrigger
+        nativeButton={false}
+        render={<span aria-hidden="true" className="sr-only" tabIndex={-1} />}
+      />
       <MenuPopup anchor={menuAnchor ?? undefined} className="z-50">
         <MatterMenuHeader
           clientName={target.client?.displayName ?? null}

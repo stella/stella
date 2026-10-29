@@ -5,6 +5,7 @@ import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-an
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import type { DeployEnvironment } from "@/api/lib/observability/release-failure-contract";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -99,8 +100,12 @@ const startReceiver = (
   };
 };
 
-const analyticsFor = (host: string, options: PostHogClientOptions = {}) =>
-  createPostHogServerAnalytics("phc_test", host, {
+const analyticsFor = (
+  host: string,
+  options: PostHogClientOptions = {},
+  deployEnvironment?: DeployEnvironment,
+) =>
+  createPostHogServerAnalytics("phc_test", host, deployEnvironment, {
     // Timer and size flushes stay out of the way unless a test asks for them.
     flushAt: 1000,
     flushIntervalMs: 60_000,
@@ -192,6 +197,26 @@ describe("PostHog server analytics", () => {
       },
     ]);
   });
+
+  for (const deployEnvironment of [
+    undefined,
+    "production",
+    "staging",
+    "development",
+  ] as const) {
+    test(`stamps the deployment environment ${String(deployEnvironment)} without inventing an absent one`, async () => {
+      const receiver = startReceiver();
+      const analytics = analyticsFor(receiver.host, {}, deployEnvironment);
+      analytics.capture(feedbackEvent("user_123"));
+      await analytics.flush();
+
+      const [message] = receiver.requests[0]?.body.batch ?? [];
+      expect(message?.properties["deploy_environment"]).toBe(deployEnvironment);
+      expect(
+        Object.hasOwn(message?.properties ?? {}, "deploy_environment"),
+      ).toBe(deployEnvironment !== undefined);
+    });
+  }
 
   test("upserts the organization group under the shared group type", async () => {
     const receiver = startReceiver();

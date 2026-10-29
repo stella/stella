@@ -160,6 +160,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "account_audit_logs",
   "chat_thread_names",
   "chat_message_revisions",
+  "document_review_finding_decisions",
 ]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.

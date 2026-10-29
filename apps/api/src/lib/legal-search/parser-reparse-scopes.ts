@@ -149,19 +149,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 14,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; none has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
     version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "letter-spaced words and section markers are recomputed from stored markup, including uneven chunks witnessed by intact words in the decision; paragraph text has no feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 16,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
@@ -181,11 +181,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {

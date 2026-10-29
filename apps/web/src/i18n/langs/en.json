@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
+    "modelRefused": "The model refused to answer",
+    "nothingFound": "Nothing found",
     "refusedBudget": "Not run: answer budget unavailable",
     "rerunAllPage": "Rerun all (this page)",
     "rerunColumnPage": "Rerun column (this page)",
@@ -130,6 +132,7 @@
     "checkSpamHint": "If you don't see it, check your spam folder.",
     "chooseOrganization": "Choose which organization to work in",
     "codeSentAgain": "We sent a new code.",
+    "continueWithApple": "Continue with Apple",
     "continueWithEmail": "Continue",
     "continueWithGoogle": "Continue with Google",
     "continueWithMicrosoft": "Continue with Microsoft",
@@ -544,6 +547,14 @@
     },
     "approve": "Approve",
     "approveSelected": "Approve selected",
+    "arrangement": {
+      "alertThreshold": "Alert threshold (%)",
+      "amountCap": "Amount cap",
+      "flatFee": "Flat fee",
+      "invalidCap": "Enter positive caps and an alert threshold between 0.01% and 100%.",
+      "minuteCap": "Time cap (minutes)",
+      "title": "Billing arrangement"
+    },
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
@@ -708,10 +719,29 @@
       },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
-      "markPaid": "Mark paid",
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
+      "payments": {
+        "amountTooHigh": "The amount is more than the outstanding {amount}.",
+        "confirmVoid": "The payment stays on record as voided and no longer counts towards this invoice.",
+        "empty": "No payments recorded yet",
+        "method": "Payment method",
+        "methods": {
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "cash": "Cash",
+          "other": "Other method"
+        },
+        "outstandingAmount": "Outstanding {amount}",
+        "paidOn": "Payment date",
+        "partiallyPaid": "Partially paid",
+        "record": "Record payment",
+        "summary": "Paid {paid}, outstanding {outstanding}",
+        "title": "Payments",
+        "void": "Void payment",
+        "voided": "Voided"
+      },
       "removeEntries": "Remove entries",
       "send": "Send",
       "statuses": {
@@ -893,6 +923,7 @@
     "aiMissing": "AI is not configured.",
     "availabilityUnknown": "Availability could not be confirmed.",
     "deeplMissing": "DeepL is not configured.",
+    "deeplPdfRequired": "Translating PDFs requires DeepL.",
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
@@ -1549,6 +1580,12 @@
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
     "maxAttachmentsReached": "Maximum {count} files per message",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# more} other {+# more}}",
+      "dismiss": "Dismiss connection notice",
+      "stoppedWorking": "Your connection to <name>{server}</name> stopped working.",
+      "waitingApproval": "Your connection to <name>{server}</name> is waiting for approval."
+    },
     "mention": {
       "category": {
         "entities": "In this matter",
@@ -2212,6 +2249,7 @@
     "moveDown": "Move down",
     "moveUp": "Move up",
     "name": "Name",
+    "networkError": "Network error. Please check your internet connection and try again.",
     "newMatter": "New matter",
     "newRow": "New row",
     "next": "Next",
@@ -2454,6 +2492,8 @@
       "aresNotFound": "No company found for this IČO.",
       "aresTitle": "Czech registry (ARES)",
       "contactName": "Contact name",
+      "displayNameOrganizationHint": "Optional override; otherwise generated from the organization name.",
+      "displayNamePersonHint": "Optional override; otherwise generated from the first and last name.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Enter an 8-digit IČO."
     },
@@ -2531,6 +2571,7 @@
       "rowLabel": "Client {index}",
       "skippedDuplicateContactId": "Skipped: duplicate contact ID",
       "skippedDuplicateTaxId": "Skipped: duplicate tax ID",
+      "skippedInFileDuplicate": "Skipped: repeats an earlier row in the file",
       "skippedInvalidRow": "Skipped: the row failed the import rules",
       "skippedInvalidTaxId": "Skipped: invalid tax ID",
       "skippedLimitReached": "Skipped: contacts limit reached"
@@ -2572,6 +2613,7 @@
       "issue": {
         "address_line_required": "Address line 1 is required when an address is present.",
         "display_name_required": "A display name could not be created.",
+        "in_file_duplicate": "Duplicate of an earlier row in this file",
         "invalid_email": "The e-mail address is invalid.",
         "invalid_phone": "The phone number is invalid.",
         "invalid_tags": "Tags must be text values.",
@@ -2600,7 +2642,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
-      "validateFailed": "Couldn't check these contacts."
+      "validateFailed": "Couldn't check these contacts.",
+      "warning": {
+        "ignored_populated_column": "Column “{column}” contains data but is ignored.",
+        "possible_in_file_duplicate": "Possible duplicate of row {row}; matching name only."
+      }
     },
     "invalidDateOfBirth": "Enter a valid date of birth.",
     "invalidNationalityCodes": "Enter valid nationality codes.",
@@ -2760,12 +2806,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
+      "configurationIncomplete": "This action is not fully configured. Contact your administrator.",
       "contact": "Contact us",
       "featureDisabled": "This feature is temporarily turned off.",
+      "leaseLost": "The action reservation expired. Please try again.",
       "notEnabled": "This action is not enabled for your organization.",
-      "periodExhausted": "This action is paused for your organization."
+      "organizationStateUnreadable": "Organization access could not be checked. Please try again shortly.",
+      "periodExhausted": "This action is paused for your organization.",
+      "storeUnavailable": "The service is temporarily unavailable. Please try again shortly."
     },
     "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {
@@ -3297,7 +3346,6 @@
       "simple": "Simple Markup"
     },
     "moreFormatting": "More formatting",
-    "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",
     "numberedList": "Numbered List",
     "parseError": "The document could not be parsed. It may be corrupted or in an unsupported format.",
@@ -4630,7 +4678,6 @@
       "selectAtLeastOneRole": "Select at least one role for this key.",
       "selectModelForEachRole": "Add a provider and select a model for each category.",
       "selectedProvider": "{provider}",
-      "title": "AI configuration",
       "usingDefaults": "Using defaults"
     },
     "invitations": {
@@ -5025,6 +5072,16 @@
       "preferredNamePlaceholder": "Your name",
       "profileDescription": "Manage your personal preferences",
       "sendOtpCode": "Send verification code",
+      "signInMethods": {
+        "confirmDescription": "Enter a fresh code sent to your email to disconnect this sign-in method.",
+        "confirmTitle": "Disconnect {provider}?",
+        "description": "Connect accounts that use the same verified email address.",
+        "emailCode": "Email code",
+        "emailCodeDescription": "You can always sign in with a code sent to your email.",
+        "lastMethod": "Connect another account before disconnecting this one.",
+        "title": "Sign-in methods",
+        "unavailable": "Email delivery must be configured to disconnect sign-in methods."
+      },
       "timezone": "Timezone",
       "timezoneDescription": "Used for timestamps in notifications and emails",
       "timezoneSaved": "Timezone updated",
@@ -5990,6 +6047,9 @@
       "title": "Translation ready"
     }
   },
+  "transportErrors": {
+    "timeout": "The request took too long. Try again."
+  },
   "validation": {
     "invalidEmail": "Enter a valid email address.",
     "organizationNameRequired": "Organization name is required",
@@ -6187,20 +6247,18 @@
         "notOpeningConnect": "Not opening? Connect stella desktop",
         "notPickedUpDescription": "stella desktop may not be running or connected to this account. Connect it, then retry.",
         "notPickedUpTitle": "stella desktop did not open the PDF",
+        "placementAttachmentsOnly": "This view shows the PDF's attachments, so the stamp can't go here. Sign without a stamp instead.",
         "placementBox": "Stamp position",
-        "placementConfirm": "Open stella desktop",
-        "placementDescription": "Choose how the signature appears in the PDF.",
+        "placementDrawTooLarge": "Too large for a stamp. Let go to use the largest size.",
+        "placementDrawTooSmall": "Too small for a stamp. Let go to use the smallest size.",
         "placementHint": "Drag the stamp to move it, or drag its corner to resize it. With the stamp selected, arrow keys move it and Shift with an arrow key resizes it.",
-        "placementInvisible": "Invisible signature",
-        "placementInvisibleDescription": "The signature is stored in the file without a mark on any page.",
-        "placementPageLabel": "Stamp page",
-        "placementPageOption": "Page {page, number} of {count, number}",
-        "placementPreview": "Preview of page {page, number}",
-        "placementPreviewFailed": "The page preview could not be loaded.",
+        "placementModeHint": "Drag on a page to draw the stamp, or click to place it.",
+        "placementPlaceOnLastPage": "Place on last page",
+        "placementRedrawHint": "Drag the stamp to adjust it, or draw a new one on any page.",
+        "placementSignInvisible": "Sign without stamp",
+        "placementSignVisible": "Sign with stamp",
         "placementTitle": "Sign PDF",
         "placementTooSmall": "This page is too small for a stamp. Choose another page.",
-        "placementVisible": "Visible stamp",
-        "placementVisibleDescription": "A box on the page shows who signed and when.",
         "preparingDescription": "Preparing the PDF for stella desktop.",
         "readOnlyDescription": "This document is read-only.",
         "signedDescription": "The signature was saved as version {versionNumber, number}.",

@@ -79,8 +79,8 @@ import {
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 
-import { nssRecoveryFixture } from "./__fixtures__/cz-nss-recovery";
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
 

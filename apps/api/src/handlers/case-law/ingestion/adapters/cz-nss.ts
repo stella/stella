@@ -2071,6 +2071,9 @@ const rebuildStoredDocument = async ({
       return parsed.documentAst.blocks.length === 0 ? null : parsed;
     }
     case "html": {
+      if (isNssDocumentPlaceholder(document.html)) {
+        return null;
+      }
       const parsed = parseNssDecisionHtml({
         caseNumber,
         ecli,

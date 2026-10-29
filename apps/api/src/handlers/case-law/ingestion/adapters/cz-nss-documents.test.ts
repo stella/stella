@@ -3,11 +3,12 @@ import { gunzipSync } from "node:zlib";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  nssRecoveryFixture,
-  nssRecoveryReference,
-} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-nss-recovery";
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   decodeNssDocument,
@@ -16,6 +17,10 @@ import {
   nssRegistryUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import {
+  nssRecoveryFixture,
+  nssRecoveryReference,
+} from "@/api/tests/helpers/cz-nss-recovery";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -51,6 +56,45 @@ describe("NSS document recovery", () => {
     expect(isNssDocumentPlaceholder("<p>Věc se vrací pátému senátu.</p>")).toBe(
       false,
     );
+  });
+
+  test("replay rejects placeholder documents in legacy and envelope payloads", async () => {
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("NSS replay required");
+    }
+    for (const html of [
+      "N/A",
+      "<html><body>\n N/A \n</body></html>",
+      "<html><body></body></html>",
+    ]) {
+      for (const payload of [
+        { raw: html, contentType: "text/html" },
+        {
+          raw: encodeSourceRawEnvelope({ document: html }),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        },
+      ]) {
+        const replay = await reparse({
+          raw: new TextEncoder().encode(payload.raw),
+          contentType: payload.contentType,
+          caseNumber: nssRecoveryReference,
+          sourceDocumentId: "641220",
+          language: "cs",
+          court: "Nejvyšší správní soud",
+          ecli: null,
+          decisionDate: null,
+          decisionType: null,
+          sourceUrl: null,
+          documentUrl: null,
+          metadata: {},
+        });
+        expect(replay).toMatchObject({
+          type: "rejected",
+          rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        });
+      }
+    }
   });
 
   test("searches referrals by docket and selects the exact document rather than its referral", async () => {
