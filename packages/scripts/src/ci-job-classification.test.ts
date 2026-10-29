@@ -2007,7 +2007,7 @@ for (const review of ["missing", "stale"] as const) {
               review === "missing"
                 ? "<describe the reviewed classification>"
                 : decision.qualifier,
-            approvedDigest: reviewedDigest,
+            reviewedDigest,
           },
           null,
           2,

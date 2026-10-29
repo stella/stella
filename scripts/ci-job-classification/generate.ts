@@ -346,7 +346,7 @@ const reviewJobs = ({
 }: ReviewJobsOptions) => {
   const entries: Record<
     string,
-    { kind: string; qualifier: string; approvedDigest: string }
+    { kind: string; qualifier: string; reviewedDigest: string }
   > = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
@@ -410,7 +410,8 @@ const reviewJobs = ({
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
             decision?.qualifier ?? "<describe the reviewed classification>",
-          approvedDigest: digest,
+          // The approval file format the decision reader validates.
+          reviewedDigest: digest,
         };
         if (privileged) {
           privilegedJobs.push(key);
@@ -444,7 +445,7 @@ const reviewJobs = ({
       )
         .map(
           ([key, value]) =>
-            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.approvedDigest)}\n${JSON.stringify(value, null, 2)}`,
+            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
       privilegedJobs,
