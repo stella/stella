@@ -85,7 +85,7 @@ export const loadInvoiceDocument = async (
   };
 };
 
-export type LoadedInvoiceDocument = NonNullable<
+type LoadedInvoiceDocument = NonNullable<
   Awaited<ReturnType<typeof loadInvoiceDocument>>
 >;
 

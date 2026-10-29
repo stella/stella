@@ -4,8 +4,11 @@ import * as v from "valibot";
 
 import { INVOICE_STATUS, invoiceSends } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { executedRows } from "@/api/lib/db/executed-rows";

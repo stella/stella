@@ -38,7 +38,7 @@ import { revokeInvoiceLinksAfterTransition } from "@/api/lib/billing/invoice-sen
 import type { InvoiceTransitionEffectContext } from "@/api/lib/billing/invoice-send-revocation";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
-import { lockedInvoiceTransitionSource } from "@/api/lib/db/aggregate-lock";
+import { lockedInvoiceTransitionSource } from "@/api/lib/db/aggregate-lock/invoice-transition-source";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 

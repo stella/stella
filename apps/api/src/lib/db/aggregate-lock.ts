@@ -62,15 +62,6 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-/** Capture ordered invoice rows and their prior state inside the transition's update statement. */
-export const lockedInvoiceTransitionSource = (predicate: SQL) => sql`
-  SELECT ${invoices.id} AS source_id, ${invoices.status} AS previous_status
-  FROM ${invoices}
-  WHERE ${predicate}
-  ORDER BY ${invoices.id}
-  FOR UPDATE
-`;
-
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
   account: { rank: -20, kind: "row" },
