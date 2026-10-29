@@ -978,7 +978,7 @@ describe("persisted block identities that repeat", () => {
     const unique = withUniqueBlockIdentities(blocks);
     expect(unique).toEqual([...blocks]);
     for (const [index, block] of unique.entries()) {
-      expect(block).toBe(blocks[index]);
+      expect(blocks.at(index)).toBe(block);
     }
   });
 
