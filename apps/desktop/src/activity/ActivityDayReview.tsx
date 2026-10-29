@@ -619,17 +619,25 @@ const DayReviewMetrics = ({ header, segments }: DayReviewMetricsProps) => {
       {header}
       <div className="ms-auto flex flex-wrap gap-6 tabular-nums">
         {[
-          { label: t("activeLabel"), ms: activeMs },
-          { label: t("matchedToMatters"), ms: matchedMs },
-          { label: t("draftedLabel"), ms: draftedMs },
-        ].map(({ label, ms }) => (
-          <div key={label}>
-            <b className="block text-base font-semibold">
-              {t("hours", { hours: hours(ms / 3_600_000) })}
-            </b>
-            <span className="text-muted-foreground text-xs">{label}</span>
-          </div>
-        ))}
+          { label: t("matchedToMatters"), ms: matchedMs, shown: true },
+          // Active equals matched on a fully assigned day; show it only when
+          // some time still needs a matter.
+          {
+            label: t("activeLabel"),
+            ms: activeMs,
+            shown: activeMs > matchedMs,
+          },
+          { label: t("draftedLabel"), ms: draftedMs, shown: draftedMs > 0 },
+        ]
+          .filter(({ shown }) => shown)
+          .map(({ label, ms }) => (
+            <div key={label}>
+              <b className="block text-base font-semibold">
+                {t("hours", { hours: hours(ms / 3_600_000) })}
+              </b>
+              <span className="text-muted-foreground text-xs">{label}</span>
+            </div>
+          ))}
       </div>
     </div>
   );
@@ -790,60 +798,66 @@ const ReviewBar = ({
     submission.type === "discarding" ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
-    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-t px-6 py-3">
-      <span className="text-muted-foreground text-xs tabular-nums">
-        {t("selectedSummary", {
-          selected: selected.length,
-          total: eligibleCount,
-          hours,
-        })}
-      </span>
-      <span className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
-        <LockKeyholeIcon aria-hidden="true" className="size-3" />
-        {t("batchPrivacy")}
-      </span>
-      <CopyButton
-        copiedLabel={t("copied")}
-        disabled={selected.length === 0}
-        iconClassName="size-4"
-        label={t("copySummary")}
-        onCopy={onCopy}
-        size="sm"
-        variant="outline"
-      />
-      {drafts?.undoable ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!draftEditable}
-          onClick={drafts.onUndoAll}
-        >
-          {t("aiUndoAll")}
-        </Button>
-      ) : null}
-      {drafts ? (
-        <Button
+    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-col gap-2 border-t px-6 py-3">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <span className="tabular-nums">
+          {t("selectedSummary", {
+            selected: selected.length,
+            total: eligibleCount,
+            hours,
+          })}{" "}
+          · {t("roundedSixMinutes")}
+        </span>
+        <span className="ms-auto flex items-center gap-1">
+          <LockKeyholeIcon aria-hidden="true" className="size-3" />
+          {t("batchPrivacy")}
+        </span>
+      </div>
+      {/* The actions get their own row so creating drafts never wraps away. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <CopyButton
+          copiedLabel={t("copied")}
+          disabled={selected.length === 0}
+          iconClassName="size-4"
+          label={t("copySummary")}
+          onCopy={onCopy}
           size="sm"
           variant="outline"
-          title={
-            drafts.status === "tooMany"
-              ? t("aiDraftLimit", {
-                  limit: DESKTOP_BILLING_DRAFT_LIMITS.entries,
-                })
-              : undefined
-          }
-          disabled={!draftEditable || drafts.status !== "draft"}
-          onClick={drafts.onDraft}
-        >
-          <AiActionIcon aria-hidden="true" />
-          {t(DRAFT_BUTTON_LABELS[drafts.status])}
+        />
+        {drafts?.undoable ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!draftEditable}
+            onClick={drafts.onUndoAll}
+          >
+            {t("aiUndoAll")}
+          </Button>
+        ) : null}
+        {drafts ? (
+          <Button
+            size="sm"
+            variant="outline"
+            title={
+              drafts.status === "tooMany"
+                ? t("aiDraftLimit", {
+                    limit: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+                  })
+                : undefined
+            }
+            disabled={!draftEditable || drafts.status !== "draft"}
+            onClick={drafts.onDraft}
+          >
+            <AiActionIcon aria-hidden="true" />
+            {t(DRAFT_BUTTON_LABELS[drafts.status])}
+          </Button>
+        ) : null}
+        <Button size="sm" disabled={disabled} onClick={onSubmit}>
+          {submission.type === "retry"
+            ? t("pendingRetry")
+            : t("createDrafts", { count: itemCount })}
         </Button>
-      ) : null}
-      <Button size="sm" disabled={disabled} onClick={onSubmit}>
-        {submission.type === "retry"
-          ? t("pendingRetry")
-          : t("createDrafts", { count: itemCount })}
-      </Button>
+      </div>
     </footer>
   );
 };
@@ -976,9 +990,6 @@ const ReviewEntries = ({
         <h2 className="text-sm font-semibold">
           {snapshot.date === snapshot.today ? t("reviewToday") : t("reviewDay")}
         </h2>
-        <p className="text-muted-foreground text-xs">
-          {t("reviewDescription")}
-        </p>
       </div>
       <div className="divide-y overflow-clip rounded-xl border">
         {groups.map((group) => {
@@ -1091,15 +1102,15 @@ const ReviewEntries = ({
                       {t("newAssignment")}
                     </ReviewStatusBadge>
                   ) : null}
-                  {
+                  {group.confidence === "likely" ? (
                     <ReviewStatusBadge
                       tone={CONFIDENCE_TONES[group.confidence]}
                     >
                       {t(CONFIDENCE_LABELS[group.confidence])}
                     </ReviewStatusBadge>
-                  }
+                  ) : null}
                 </div>
-                <Evidence group={group} snapshot={snapshot} />
+                <Evidence group={group} snapshot={snapshot} compact />
                 {absorbed.has(group.id) ? (
                   <p className="text-muted-foreground mt-2 px-2 text-xs">
                     {t("aiMergedIntoAnother")}
@@ -1142,9 +1153,6 @@ const ReviewEntries = ({
               <div className="col-start-2 flex items-center justify-between gap-2 min-[40rem]:col-start-3 min-[40rem]:flex-col min-[40rem]:items-end">
                 <div className="text-base font-semibold tabular-nums">
                   {t("hours", { hours: hours(group.roundedTenths / 10) })}
-                  <span className="text-muted-foreground text-2xs block font-normal">
-                    {t("roundedSixMinutes")}
-                  </span>
                 </div>
               </div>
             </div>
@@ -1158,11 +1166,22 @@ const ReviewEntries = ({
 const Evidence = ({
   group,
   snapshot,
+  compact = false,
 }: {
   group: DayReviewGroup;
   snapshot: ActivityDaySnapshot;
+  /** Icons only; the narrative below already names the work. */
+  compact?: boolean;
 }) => (
-  <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+  <div
+    className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs"
+    title={
+      compact
+        ? group.evidence.join(" · ") ||
+          group.apps.map(({ name }) => name).join(" · ")
+        : undefined
+    }
+  >
     {group.apps.map(({ identifier }) => (
       <ActivitySourceIcon
         key={identifier}
@@ -1170,7 +1189,7 @@ const Evidence = ({
         sourceAppVisuals={snapshot.sourceAppVisuals}
       />
     ))}
-    <bdi className="min-w-0 wrap-break-word">
+    <bdi className={compact ? "sr-only" : "min-w-0 wrap-break-word"}>
       {group.evidence.join(" · ") ||
         group.apps.map(({ name }) => name).join(" · ")}
     </bdi>

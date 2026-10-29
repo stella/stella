@@ -544,9 +544,10 @@ test("only explicit batch creation sends the edited billing fields and prevents 
   page,
 }) => {
   await installNativeBoundary({ page });
+  // A confident match needs no badge; only a likely one asks for a look.
   await expect(
     page.getByText(enMessages.activity.strongMatch, { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   const narrative = page.getByRole("textbox", {
     name: enMessages.activity.entryNarrative,
   });

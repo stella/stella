@@ -113,6 +113,10 @@ export const ActivityTimeline = ({
     });
   const selected =
     selection && selection.endMs > selection.startMs ? selection : null;
+  const hasUnassigned = segments.some(
+    ({ type, matter }) => type === "active" && !matter,
+  );
+  const hasAway = segments.some(({ type }) => type === "idle");
   const legend = [
     ...new Map(
       segments.flatMap(({ matter }) =>
@@ -244,22 +248,22 @@ export const ActivityTimeline = ({
           </div>
         ) : null}
       </div>
-      <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         {legend.map((matter) => (
           <span className="flex items-center gap-1.5" key={matter.id}>
             <MatterIcon matter={matter} className="size-3" />
             <bdi>{matter.name}</bdi>
           </span>
         ))}
-        <span className="flex items-center gap-1.5">
-          <i data-activity-away="" className="size-3 rounded-sm" />
-          {t("awayNotCounted")}
-        </span>
-      </div>
-      {mode === "review" ? (
-        <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
-          <p>{t("timelineHint")}</p>
+        {hasAway ? (
+          <span className="flex items-center gap-1.5">
+            <i data-activity-away="" className="size-3 rounded-sm" />
+            {t("awayNotCounted")}
+          </span>
+        ) : null}
+        {mode === "review" ? (
           <Button
+            className="ms-auto"
             disabled={disabled}
             variant="ghost"
             size="sm"
@@ -269,7 +273,11 @@ export const ActivityTimeline = ({
           >
             {t("selectRange")}
           </Button>
-        </div>
+        ) : null}
+      </div>
+      {/* The drag hint only helps while some time still has no matter. */}
+      {mode === "review" && hasUnassigned ? (
+        <p className="text-muted-foreground text-xs">{t("timelineHint")}</p>
       ) : null}
       {selection ? (
         <div className="bg-muted flex flex-wrap items-end gap-3 rounded-lg p-3">
