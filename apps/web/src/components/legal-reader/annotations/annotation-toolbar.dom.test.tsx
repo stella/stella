@@ -208,6 +208,14 @@ test("the bar acts on the document's text, not on words selected in the reader's
     throw new TypeError("Selection fixture is missing");
   }
   root.getBoundingClientRect = () => new DOMRect(0, 0, 900, 768);
+  for (
+    let node: HTMLElement | null = root;
+    node !== null;
+    node = node.parentElement
+  ) {
+    node.style.overflowX = "visible";
+    node.style.overflowY = "visible";
+  }
   Object.defineProperty(Range.prototype, "getClientRects", {
     configurable: true,
     value: () => {
