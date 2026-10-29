@@ -12,6 +12,7 @@ import {
   INVOICE_STATUS,
   invoiceLines,
   invoices,
+  requestIdempotencyReceipts,
   sellerProfiles,
   timeEntries,
   workspaceMembers,
@@ -26,6 +27,7 @@ import {
 } from "@/api/db/scoped";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
 import createInvoice from "@/api/handlers/invoices/create";
 import { loadInvoiceExport } from "@/api/handlers/invoices/export-records";
 import readInvoiceById from "@/api/handlers/invoices/get";
@@ -54,6 +56,7 @@ import {
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
 import { LIMITS } from "@/api/lib/limits";
 import {
   hasMemberPermission,
@@ -391,6 +394,106 @@ if (!databaseUrl || !runPostgres) {
         ),
         route: "/v1/client-invoices/:clientId/prefill",
       });
+
+    test("client invoice replay follows current matter membership", async () => {
+      const scenario = await seedScenario();
+      const userId = scenario.actors.full;
+      const organizationId = scenario.orgId;
+      const body = {
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+        matters: [scenario.firstMatterId, scenario.secondMatterId].map(
+          (workspaceId) => ({
+            workspaceId,
+            timeEntryIds: [createSafeId<"timeEntry">()],
+            expenseIds: [],
+          }),
+        ),
+      };
+      const params = { clientId: scenario.clientId };
+      const route = "/v1/client-invoices/:clientId";
+      const key = createSafeId<"requestIdempotencyReceipt">();
+      const response = { id: scenario.invoiceId };
+      await scoped(
+        scenario,
+        userId,
+      )(
+        async (tx) =>
+          await tx.insert(requestIdempotencyReceipts).values({
+            id: createSafeId<"requestIdempotencyReceipt">(),
+            organizationId,
+            userId,
+            idempotencyKey: key,
+            route,
+            requestFingerprint: fingerprintRequest({
+              method: "PUT",
+              route,
+              body,
+              params,
+              query: {},
+            }),
+            state: "completed",
+            claimedAt: new Date(),
+            completedAt: new Date(),
+            responseCode: 200,
+            responseBody: response,
+          }),
+      );
+
+      const invoke = async () =>
+        await createClientInvoice.handler(
+          createTestHandlerContext<
+            Parameters<typeof createClientInvoice.handler>[0]
+          >({
+            audit: NO_AUDIT,
+            scopedDb: scoped(scenario, userId),
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId,
+              userId,
+              serverValidatedWorkspaceIds: [],
+            }),
+            session: { activeOrganizationId: organizationId },
+            user: { id: userId },
+            memberRole: sessionMemberRole("member"),
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              organizationId,
+              userId,
+            }),
+            params,
+            body,
+            query: {},
+            route,
+            request: new Request(
+              `https://example.test/v1/client-invoices/${params.clientId}`,
+              { method: "PUT", headers: { "Idempotency-Key": key } },
+            ),
+          }),
+        );
+      const available = await invoke();
+      expect(available).toBeInstanceOf(Response);
+      if (!(available instanceof Response)) {
+        panic("Expected stored invoice response");
+      }
+      expect(available.headers.get("Idempotency-Replayed")).toBe("true");
+      expect(await available.json()).toEqual(response);
+      await db
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.userId, userId),
+            eq(workspaceMembers.workspaceId, scenario.secondMatterId),
+          ),
+        );
+      const unavailable = await invoke();
+      expect(unavailable).toBeInstanceOf(HttpStatusResponse);
+      if (!(unavailable instanceof HttpStatusResponse)) {
+        panic("Expected current matter access refusal");
+      }
+      expect(unavailable.code).toBe(404);
+      expect(unavailable.response).toMatchObject({
+        message: "Some client matters were not found or are inaccessible",
+      });
+    });
 
     test.each(["exempt", "not_vat_payer"] as const)(
       "finalization checks a Polish %s basis in every client-invoice matter",

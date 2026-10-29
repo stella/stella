@@ -6,6 +6,7 @@ import type { VatRatePresetCountry } from "@stll/api-contract";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -33,10 +34,18 @@ export type VatRateCommand =
   | { type: "update"; id: string; values: VatRateInput }
   | { type: "archive"; id: string }
   | { type: "applyPreset"; country: VatRatePresetCountry };
-export const sendVatRateCommand = async (command: VatRateCommand) => {
+export const sendVatRateCommand = async (
+  command: VatRateCommand,
+  intentRequest: IdempotentRequest,
+) => {
   if (command.type === "create") {
-    return invokeCapability("vat-rates.create", async (request) =>
-      unwrapApiResponse(await api["vat-rates"].post(command.values, request)),
+    return invokeCapability("vat-rates.create", async (capability) =>
+      unwrapApiResponse(
+        await api["vat-rates"].post(command.values, {
+          ...capability,
+          fetch: { headers: intentRequest.headers },
+        }),
+      ),
     );
   }
   if (command.type === "applyPreset") {
@@ -44,7 +53,7 @@ export const sendVatRateCommand = async (command: VatRateCommand) => {
       unwrapApiResponse(
         await api["vat-rates"]["apply-preset"].post(
           { country: command.country },
-          request,
+          { ...request, fetch: { headers: intentRequest.headers } },
         ),
       ),
     );

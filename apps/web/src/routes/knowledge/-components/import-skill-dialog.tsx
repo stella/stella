@@ -34,6 +34,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 
 import {
   listSkippedImportFiles,
@@ -119,6 +120,7 @@ const ImportSkillDialogBody = ({
   onImported,
   onOpenChange,
 }: ImportSkillDialogProps & { onBusyChange: (busy: boolean) => void }) => {
+  const submit = useIdempotentSubmit();
   const format = useFormatter();
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
@@ -158,14 +160,18 @@ const ImportSkillDialogBody = ({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
     mutationFn: async (source: SkillDiscovery) => {
-      const response = await api.skills["import-urls"].post({
-        items: source.skills
-          .filter((skill) => selected.has(skill.sourceUrl))
-          .map((skill) => ({
-            integrity: skill.integrity,
-            sourceUrl: skill.sourceUrl,
-          })),
-        scope,
+      const response = await submit.run({
+        operation: "skill-import-urls",
+        send: async (body) => api.skills["import-urls"].post(body),
+        body: {
+          items: source.skills
+            .filter((skill) => selected.has(skill.sourceUrl))
+            .map((skill) => ({
+              integrity: skill.integrity,
+              sourceUrl: skill.sourceUrl,
+            })),
+          scope,
+        },
       });
       return unwrapApiResponse(response);
     },

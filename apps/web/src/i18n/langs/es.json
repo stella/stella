@@ -2870,6 +2870,8 @@
       "forbidden": "No tienes permiso para hacer esto.",
       "hostedCheckoutOpen": "Ya hay un pago abierto para esta organización. Complételo o inicie uno nuevo cuando caduque.",
       "hostedSubscriptionLive": "Esta organización ya tiene una suscripción. Cámbiela en «Gestionar uso alojado».",
+      "idempotencyInProgress": "Esta solicitud aún se está procesando. Espere un momento y vuelva a intentarlo.",
+      "idempotencyKeyReused": "Los datos han cambiado desde el intento anterior. Restablezca el formulario y vuelva a intentarlo.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
