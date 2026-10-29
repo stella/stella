@@ -138,7 +138,7 @@ test("calendar consent stores only the requested grant and consumes its state on
     });
   const first = await callback.handler(requestContext());
   if (!(first instanceof Response)) {
-    return panic("Expected OAuth callback redirect");
+    panic("Expected OAuth callback redirect");
   }
   expect(
     new URL(first.headers.get("Location") ?? "").searchParams.get("status"),
@@ -150,7 +150,7 @@ test("calendar consent stores only the requested grant and consumes its state on
     },
   });
   if (!connection) {
-    return panic("Expected stored delegated connection");
+    panic("Expected stored delegated connection");
   }
   expect(scopeSet(connection.scope)).toEqual(["calendars.read", "user.read"]);
   expect(grantedCapabilities(connection.scope)).toEqual(["calendar.read"]);
@@ -185,7 +185,7 @@ test("calendar consent stores only the requested grant and consumes its state on
 
   const replay = await callback.handler(requestContext());
   if (!(replay instanceof Response)) {
-    return panic("Expected OAuth replay redirect");
+    panic("Expected OAuth replay redirect");
   }
   expect(
     new URL(replay.headers.get("Location") ?? "").searchParams.get("reason"),
@@ -219,7 +219,7 @@ test("calendar consent stores only the requested grant and consumes its state on
   });
   const rejected = await missingGrant.handler(requestContext(rejectedState));
   if (!(rejected instanceof Response)) {
-    return panic("Expected missing-grant callback redirect");
+    panic("Expected missing-grant callback redirect");
   }
   expect(
     new URL(rejected.headers.get("Location") ?? "").searchParams.get("reason"),
@@ -284,7 +284,7 @@ test("a legacy pending file consent cannot become a calendar grant", async () =>
     }),
   );
   if (!(response instanceof Response)) {
-    return panic("Expected legacy consent redirect");
+    panic("Expected legacy consent redirect");
   }
   expect(
     new URL(response.headers.get("Location") ?? "").searchParams.get("status"),
@@ -397,7 +397,7 @@ test("fresh consent restores a reconnect-required connection", async () => {
     }),
   );
   if (!(response instanceof Response)) {
-    return panic("Expected reconnect callback redirect");
+    panic("Expected reconnect callback redirect");
   }
   expect(
     new URL(response.headers.get("Location") ?? "").searchParams.get("status"),
@@ -437,7 +437,7 @@ test("a committed newer consent invalidates an unexpired calendar token snapshot
     where: { id: { eq: seeded.id } },
   });
   if (!snapshot) {
-    return panic("Expected unexpired connection snapshot");
+    panic("Expected unexpired connection snapshot");
   }
   const state = `file-only-consent-${createSafeId<"sharepointConnection">()}`;
   await testDb.insert(sharepointOAuthState).values({
@@ -479,7 +479,7 @@ test("a committed newer consent invalidates an unexpired calendar token snapshot
     }),
   );
   if (!(response instanceof Response)) {
-    return panic("Expected newer consent redirect");
+    panic("Expected newer consent redirect");
   }
   expect(
     new URL(response.headers.get("Location") ?? "").searchParams.get("status"),
@@ -488,7 +488,7 @@ test("a committed newer consent invalidates an unexpired calendar token snapshot
     where: { id: { eq: snapshot.id } },
   });
   if (!newer) {
-    return panic("Expected newer file-only consent");
+    panic("Expected newer file-only consent");
   }
   expect(grantedCapabilities(newer.scope)).toEqual(["files.read"]);
   expect(newer.accessTokenEncrypted).not.toEqual(snapshot.accessTokenEncrypted);
@@ -534,7 +534,7 @@ test("a delayed refresh cannot replace newer consent or its ciphertext", async (
           tenantId: "tenant",
         }),
       refreshAccessToken: async ({ scope }) => {
-        expect(scopeSet(scope ?? null)).toContain("calendars.read");
+        expect(scopeSet(scope)).toContain("calendars.read");
         await testDb
           .update(sharepointConnections)
           .set({ accessTokenEncrypted: newerCiphertext, scope: newerScope })
@@ -666,7 +666,7 @@ test("successful refresh retains the original refresh secret and rejects extra p
           tenantId: "tenant",
         }),
       refreshAccessToken: async ({ scope }) => {
-        expect(scopeSet(scope ?? null)).not.toContain("files.read.all");
+        expect(scopeSet(scope)).not.toContain("files.read.all");
         return Result.ok({
           access_token: "fresh-calendar-access",
           scope: "User.Read Calendars.Read Files.Read.All",
@@ -677,14 +677,14 @@ test("successful refresh retains the original refresh secret and rejects extra p
   );
   expect(Result.isOk(result)).toBe(true);
   if (Result.isError(result)) {
-    return panic("Expected usable refreshed token");
+    panic("Expected usable refreshed token");
   }
   expect(String(result.value)).toBe("fresh-calendar-access");
   const stored = await testDb.query.sharepointConnections.findFirst({
     where: { id: { eq: connection.id } },
   });
   if (!stored) {
-    return panic("Expected refreshed connection");
+    panic("Expected refreshed connection");
   }
   expect(grantedCapabilities(stored.scope)).toEqual(["calendar.read"]);
   expect(scopeSet(stored.scope)).not.toContain("files.read.all");

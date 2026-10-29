@@ -250,7 +250,7 @@ test("free/busy retains explicit per-attendee errors with complete coverage", as
   expect(Result.isOk(result)).toBe(true);
   if (Result.isOk(result)) {
     if (result.value.type !== "attendees") {
-      return panic("Expected attendee availability response");
+      panic("Expected attendee availability response");
     }
     expect(result.value.schedules.at(0)?.error).toMatchObject({
       responseCode: "ErrorMailRecipientNotFound",

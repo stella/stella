@@ -21,7 +21,7 @@ import {
 import { outboundPermitContract } from "@/api/lib/safe-outbound-fetch.type-test";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
-const fetchMetadataAt = ({
+const fetchMetadataAt = async ({
   port,
   totalTimeoutMs = HAPPY_PATH_TIMEOUT_MS,
   signal,
@@ -30,7 +30,7 @@ const fetchMetadataAt = ({
   totalTimeoutMs?: number;
   signal?: AbortSignal;
 }) =>
-  fetchWithResolvedAddress({
+  await fetchWithResolvedAddress({
     permit: grantThirdPartyOutboundPermit(),
     addresses: [{ address: "127.0.0.1", family: 4 }],
     transfer: { type: "bounded-metadata", totalTimeoutMs },
@@ -71,7 +71,9 @@ describe("bounded metadata transfers", () => {
 
   test("the fixed 64 KiB cap rejects even one extra byte", async () => {
     await withHttpServer(
-      (_request, response) => response.end("x".repeat(64 * 1024 + 1)),
+      (_request, response) => {
+        response.end("x".repeat(64 * 1024 + 1));
+      },
       async (port) => {
         const result = await fetchMetadataAt({ port });
         expect(result.isErr()).toBe(true);
@@ -96,7 +98,9 @@ describe("bounded metadata transfers", () => {
           Location: "https://elsewhere.example/target",
         });
         response.write("redirect body");
-        const drip = setInterval(() => response.write("."), 10);
+        const drip = setInterval(() => {
+          response.write(".");
+        }, 10);
         response.on("close", () => {
           clearInterval(drip);
           closed.resolve(true);
