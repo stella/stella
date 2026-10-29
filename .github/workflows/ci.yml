@@ -2208,6 +2208,15 @@ jobs:
           bun scripts/check-published-exports.ts packages/fetch
           bun scripts/check-published-exports.ts packages/scan-engine
 
+      - name: Rebuild every npm package to verify identical tarball bytes
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        timeout-minutes: 20
+        run: bash scripts/check-publish-reproducibility.sh
+
+      - name: npm release jobs match the package dependency graph
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/generate-npm-release-jobs.ts --check
+
       - name: Load merge base measurement
         timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
