@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { Block } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -278,9 +279,38 @@ describe("withAttestedLetterSpacing", () => {
           expect(first?.plainText.replaceAll(/\s/gu, "")).toBe(
             text.replaceAll(/\s/gu, ""),
           );
+          for (const block of once) {
+            if (block.type === "paragraph") {
+              expect(block.plainText).toBe(plainTextOf(block.inlines).trim());
+            }
+          }
           expect(withAttestedLetterSpacing(once)).toEqual(once);
         },
       ),
     );
+  });
+
+  // A spaced word split across formatting nodes cannot be read inside one
+  // node; the block's text must then still say what its inlines say.
+  test("derives the block's text from its repaired inlines", () => {
+    const [mixed] = withAttestedLetterSpacing([
+      {
+        id: "b2",
+        anchorId: "p-2",
+        type: "paragraph",
+        inlines: [
+          { type: "text", text: "m ů že a m " },
+          { type: "bold", children: [{ type: "text", text: "ů že" }] },
+        ],
+        plainText: "m ů že a m ů že",
+      },
+      witness,
+    ]);
+    expect(mixed?.type).toBe("paragraph");
+    if (mixed?.type !== "paragraph") {
+      return;
+    }
+    expect(mixed.plainText).toBe(plainTextOf(mixed.inlines).trim());
+    expect(mixed.plainText).toBe("může a m ů že");
   });
 });

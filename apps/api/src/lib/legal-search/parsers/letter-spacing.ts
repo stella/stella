@@ -406,14 +406,11 @@ export const withAttestedLetterSpacing = (
     const inlines = mapInlineText(block.inlines, (text) =>
       collapseLetterSpacing(text, { attestedWords }),
     );
-    // The block's text is its inlines' trimmed; only a changed reading
-    // replaces either.
+    // The block's text is derived from its repaired inlines, never repaired
+    // apart from them: a word split across formatting nodes stays as printed
+    // in both. Only a changed reading replaces either.
     return plainTextOf(inlines) === plainTextOf(block.inlines)
       ? block
-      : {
-          ...block,
-          inlines,
-          plainText: collapseLetterSpacing(block.plainText, { attestedWords }),
-        };
+      : { ...block, inlines, plainText: plainTextOf(inlines).trim() };
   });
 };
