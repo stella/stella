@@ -23,6 +23,7 @@ import { plUodoRetention } from "@/api/handlers/case-law/ingestion/retention/sou
 import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import { skCourtsRetention } from "@/api/handlers/case-law/ingestion/retention/sources/sk-courts";
 import { skUsRetention } from "@/api/handlers/case-law/ingestion/retention/sources/sk-us";
+import { ukFclRetention } from "@/api/handlers/case-law/ingestion/retention/sources/uk-fcl";
 import { usCourtlistenerRetention } from "@/api/handlers/case-law/ingestion/retention/sources/us-courtlistener";
 import {
   ADAPTER_KEYS,
@@ -68,6 +69,7 @@ const RETENTION_POLICIES = {
   [ADAPTER_KEYS.PL_KIS]: plKisRetention,
   [ADAPTER_KEYS.PL_UODO]: plUodoRetention,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikRetention,
+  [ADAPTER_KEYS.UK_FCL]: ukFclRetention,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: usCourtlistenerRetention,
 } as const satisfies Record<AdapterKey | ImportSourceKey, RetentionPolicy>;
 
