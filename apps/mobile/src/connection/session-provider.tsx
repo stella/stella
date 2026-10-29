@@ -14,6 +14,10 @@ import {
 } from "@/connection/platform";
 import { restoredSource, sourceFor } from "@/connection/restored-session";
 import type { AccessTokenSource } from "@/connection/session";
+import {
+  type BeforeSessionEnd,
+  createSessionEndBoundary,
+} from "@/connection/session-end";
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
@@ -40,6 +44,11 @@ type SessionContextValue = {
    * A source left over from an earlier sign-in ends nothing.
    */
   readonly end: (source: AccessTokenSource) => void;
+  /**
+   * Runs `handler` before any sign-out or server-ended session forgets the
+   * session, at most a couple of seconds per handler; returns its removal.
+   */
+  readonly registerBeforeSessionEnd: (handler: BeforeSessionEnd) => () => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -70,6 +79,10 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ? { status: "signed-out", ended: false }
       : { status: "signed-in", source: restored },
   );
+  const [boundary] = useState(createSessionEndBoundary);
+  // Several requests can find the same session refused at once; its
+  // handlers run for the first only.
+  const [ending] = useState(() => new WeakSet<AccessTokenSource>());
 
   const value: SessionContextValue = {
     state,
@@ -120,6 +133,8 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
     },
     signOut: async () => {
       if (state.status === "signed-in") {
+        ending.add(state.source);
+        await boundary.run("signed-out", state.source.session());
         // Stop the notifications first, while the token still opens the API.
         await stopPushNotifications(state.source);
         const session = state.source.session();
@@ -143,12 +158,25 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       setState({ status: "signed-out", ended: false });
     },
     end: (source) => {
-      setState((current) =>
-        current.status === "signed-in" && current.source === source
-          ? { status: "signed-out", ended: true }
-          : current,
-      );
+      if (
+        state.status !== "signed-in" ||
+        state.source !== source ||
+        ending.has(source)
+      ) {
+        return;
+      }
+      ending.add(source);
+      const signOutAfterHandlers = async () => {
+        await boundary.run("ended", source.session());
+        setState((current) =>
+          current.status === "signed-in" && current.source === source
+            ? { status: "signed-out", ended: true }
+            : current,
+        );
+      };
+      void signOutAfterHandlers();
     },
+    registerBeforeSessionEnd: boundary.register,
   };
 
   return <SessionContext value={value}>{children}</SessionContext>;
