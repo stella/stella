@@ -52,7 +52,10 @@ describe.skipIf(!enabled)("playbook source access on PostgreSQL", () => {
         createdAt: new Date(),
       });
       try {
-        await recordNewOrganizationAccessState(db, { organizationId });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
+        });
         await db.insert(member).values({
           id: mintAuthProviderIdValue(),
           organizationId,
