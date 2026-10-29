@@ -30,6 +30,7 @@ import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -730,6 +731,14 @@ type ChunkContent = ReturnType<typeof normalizeInlineLine>;
  * behind the emblem.
  */
 const stripPageFurniture = (chunk: PChunk): ChunkContent | null => {
+  const text = inlinesToPlainText(chunk.inlines).trimStart();
+  const prefix = PAGE_FURNITURE_RE.exec(text)?.at(0) ?? "";
+  const image = text.startsWith("[OBRÁZEK]");
+  const hasBody = text.slice(prefix.length).trim().length > 0;
+  // Without a layout boundary, an apparent header prefix may be ordinary prose.
+  if (hasBody && prefix.trim().length > 0 && !image && !prefix.includes("\n")) {
+    return normalizeInlineLine(chunk.inlines);
+  }
   const normalized = normalizeInlineLine(
     stripFurniturePrefix(chunk.inlines, PAGE_FURNITURE_RE),
   );
@@ -967,7 +976,15 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let cutParagraph: CutParagraph | null = null;
   let afterPageFurniture = false;
 
-  for (const chunk of chunks) {
+  const quotedStarts = closedQuotationParagraphStarts(
+    chunks.map(({ plainText }) => plainText),
+    new Set(
+      chunks.flatMap(({ plainText }, index) =>
+        ODUVODNENI_RE.test(plainText) ? [index] : [],
+      ),
+    ),
+  );
+  for (const [chunkIndex, chunk] of chunks.entries()) {
     const { centered, bold, letterSpacing: _letterSpacing } = chunk;
 
     const content = stripPageFurniture(chunk);
@@ -1165,7 +1182,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // A separate opinion follows the decision's closing; its paragraphs are
     // the dissenting judge's, numbered from 1 again.
-    if (sawClosing && isSeparateOpinionHeading(plainText)) {
+    if (
+      sawClosing &&
+      !quotedStarts.has(chunkIndex) &&
+      isSeparateOpinionHeading(plainText)
+    ) {
       phase = DOCUMENT_PHASE.SEPARATE_OPINION;
       blockIndex += 1;
       blocks.push({
@@ -1181,7 +1202,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // Closing: "V Brně dne ..."
-    if (!courtNumbered && CLOSING_RE.test(plainText)) {
+    if (
+      !courtNumbered &&
+      !quotedStarts.has(chunkIndex) &&
+      CLOSING_RE.test(plainText)
+    ) {
       sawClosing = true;
       blockIndex += 1;
       blocks.push({

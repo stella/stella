@@ -114,3 +114,23 @@ test("soft hyphens leave the text", () => {
     "rozhodnutí finanční",
   );
 });
+
+test("a quoted lowercase continuation remains a cut sentence, while a lettered item stays separate", () => {
+  const cut =
+    "Žalovaný uvádí, že obsah jeho žádosti správní orgán vyložil chybně a označil žadatele za";
+  expect(continuesAcrossPageBreak(cut, "„žalobce bez právního zájmu“. ")).toBe(
+    true,
+  );
+  expect(continuesAcrossPageBreak(cut, "a. žalobce doložil plnou moc")).toBe(
+    false,
+  );
+});
+
+test("a docket prefix before the page break still needs its number", () => {
+  expect(
+    continuesAcrossPageBreak(
+      "Správní orgán ve svém vyjádření odkázal na rozsudek uvedený pod č. j.",
+      "1 As 23/2012-45 a navrhl zamítnutí žaloby.",
+    ),
+  ).toBe(true);
+});

@@ -1287,3 +1287,38 @@ for (const tag of ["script", "style"]) {
     );
   });
 }
+
+test("a closing inside a closed quotation cannot arm a separate opinion", () => {
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body>
+    <p>Odůvodnění:</p>
+    <p>[1] Soud cituje rozhodnutí: „Citace začíná.</p>
+    <p>V Brně dne 1. ledna 2025</p>
+    <p>Odlišné stanovisko soudce Jana Nováka</p>
+    <p>Citace končí.“</p>
+    <p>[2] Soud pokračuje v odůvodnění.</p>
+  </body></html>`),
+  );
+  expect(
+    documentAst.blocks.filter(
+      (block) =>
+        "role" in block &&
+        (block.role === "dissent" || block.role === "closing"),
+    ),
+  ).toEqual([]);
+  expect(
+    documentAst.blocks.some(
+      (block) =>
+        block.plainText === "Odlišné stanovisko soudce Jana Nováka" &&
+        block.type === "paragraph",
+    ),
+  ).toBe(true);
+});
+
+test("a header-shaped prefix remains prose without a layout boundary", () => {
+  const text = "Pokračování 2 1 As 23/2012-45 soud uvedl v citovaném podání.";
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body><p>Odůvodnění:</p><p>${text}</p></body></html>`),
+  );
+  expect(documentAst.blocks.map((block) => block.plainText)).toContain(text);
+});

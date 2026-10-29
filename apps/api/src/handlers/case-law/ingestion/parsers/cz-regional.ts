@@ -110,9 +110,15 @@ export const parseRegionalDecision = (
     if (content.length > 0 || !fallbackText.trim()) {
       return content;
     }
-    return [
-      { inlines: textInline(fallbackText), plainText: fallbackText.trim() },
-    ];
+    return withoutPageFurniture(
+      fallbackText
+        .split(/\r?\n/u)
+        .map((plainText) => ({
+          inlines: textInline(plainText),
+          plainText: plainText.trim(),
+        }))
+        .filter(({ plainText }) => plainText.length > 0),
+    );
   };
   const header = sectionContent(input.header, "");
   const verdict = sectionContent(input.verdict, input.verdictText);
@@ -377,9 +383,11 @@ const OPENS_BEFORE_QUOTE_RE = /^[\s([{/]$/u;
  * can sit in different spans ("též„ " before an anonymised name), and each
  * character stays in the span it came from.
  */
-const spanTexts = (spans: readonly TextSpan[]): string[] => {
-  const chars = spans.flatMap(({ text }, span) =>
-    Array.from(withoutSoftHyphens(text), (char) => ({ char, span })),
+type SpanTextRun = { text: string; span: TextSpan };
+
+const spanTexts = (spans: readonly TextSpan[]): SpanTextRun[] => {
+  const chars = spans.flatMap((span) =>
+    Array.from(withoutSoftHyphens(span.text), (char) => ({ char, span })),
   );
   for (let index = 0; index < chars.length; index++) {
     const quote = chars[index];
@@ -397,15 +405,20 @@ const spanTexts = (spans: readonly TextSpan[]): string[] => {
       chars.splice(index + 1, 1);
       continue;
     }
-    quote.char = space.char;
-    space.char = OPENING_QUOTE;
+    chars[index] = space;
+    chars[index + 1] = quote;
     index += 1;
   }
-  const texts = spans.map(() => "");
+  const runs: SpanTextRun[] = [];
   for (const { char, span } of chars) {
-    texts[span] += char;
+    const previous = runs.at(-1);
+    if (previous?.span === span) {
+      previous.text += char;
+    } else {
+      runs.push({ text: char, span });
+    }
   }
-  return texts;
+  return runs;
 };
 
 /** Convert a finaldoc paragraph to Inline nodes. */
@@ -418,8 +431,7 @@ const toInlines = (
   let plain = "";
   const texts = spanTexts(para.texts);
 
-  for (const [index, span] of para.texts.entries()) {
-    const text = texts[index] ?? "";
+  for (const { text, span } of texts) {
     if (!text) {
       continue;
     }

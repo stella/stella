@@ -62,6 +62,7 @@ export const isPageNumberLine = (text: string): boolean =>
  * Where a sentence has ended: closing punctuation, then any closing quotes
  * or brackets.
  */
+const DOCKET_PREFIX_END_RE = /č\.\s*j\.\s*$/u;
 const SENTENCE_END_RE = /[.!?:;][“”"'»«)\]]*\s*$/u;
 /**
  * What a cut sentence goes on with: a lowercase word, a section sign or a
@@ -69,8 +70,9 @@ const SENTENCE_END_RE = /[.!?:;][“”"'»«)\]]*\s*$/u;
  * opens an item of a list, whatever case its text starts in ("2. žalobce
  * doložil …").
  */
-const CONTINUATION_START_RE = /^\s*(?:\p{Ll}|§|\d)/u;
-const LIST_ITEM_RE = /^\s*(?:\d{1,4}[.)]|\p{L}\)|[-–•])\s/u;
+const CONTINUATION_START_RE = /^\s*„?(?:\p{Ll}|§|\d)/u;
+const STATUTE_NUMBER_START_RE = /^\s*č\.\s*\d/u;
+const LIST_ITEM_RE = /^\s*(?:\d{1,4}[.)]|\p{L}[.)]|[-–•])\s/u;
 /**
  * Shortest text a page can have cut. Short lines without closing
  * punctuation are names, labels and titles ("Josef Baxa" over "předseda
@@ -88,9 +90,9 @@ export const continuesAcrossPageBreak = (
   next: string,
 ): boolean =>
   previous.trim().length >= MIN_CUT_PARAGRAPH_CHARS &&
-  !SENTENCE_END_RE.test(previous) &&
+  (!SENTENCE_END_RE.test(previous) || DOCKET_PREFIX_END_RE.test(previous)) &&
   CONTINUATION_START_RE.test(next) &&
-  !LIST_ITEM_RE.test(next) &&
+  (!LIST_ITEM_RE.test(next) || STATUTE_NUMBER_START_RE.test(next)) &&
   !opensWithCourtParagraphMarker(next);
 
 /**

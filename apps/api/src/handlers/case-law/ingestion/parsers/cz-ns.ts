@@ -966,7 +966,7 @@ const classifyBlocks = (
     });
   }
 
-  for (const chunk of chunks) {
+  for (const [chunkIndex, chunk] of chunks.entries()) {
     blockIndex += 1;
     const id = makeBlockId();
     const anchorId = makeAnchorId(blockIndex);
@@ -989,13 +989,22 @@ const classifyBlocks = (
     const { inlines, centered } = chunk;
     const plainText = inlinesToPlainText(inlines).trim();
 
+    const nextChunk = chunks[chunkIndex + 1];
+    const followedByHeader =
+      nextChunk?.kind === "inlines" &&
+      isRunningHeaderLine(inlinesToPlainText(nextChunk.inlines));
+
     // The print page keeps every page's running header and page number
     // where the page broke. Without them, the merge pass below joins the
     // sentence they cut.
     if (
       !plainText ||
       isRunningHeaderLine(plainText) ||
-      isPageNumberLine(plainText)
+      (isPageNumberLine(plainText) &&
+        (/^[\r\n]*[ \t\u00a0]{8,}\d{1,3}\s*$/u.test(
+          inlinesToPlainText(inlines),
+        ) ||
+          (centered && followedByHeader)))
     ) {
       continue;
     }

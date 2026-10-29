@@ -443,6 +443,39 @@ describe("the hard invariants of a numbering", () => {
     },
   );
 
+  test.each(["dot", "paren", "bracket"] as const)(
+    "a quote closing in a later paragraph cannot hide the next court %s marker",
+    (style) => {
+      const marker = {
+        dot: (number: number) => `${String(number)}.`,
+        paren: (number: number) => `${String(number)})`,
+        bracket: (number: number) => `[${String(number)}]`,
+      }[style];
+      for (const [open, close] of [
+        ["«", "»"],
+        ["»", "«"],
+        ["„", "“"],
+      ] as const) {
+        const numbering = extractCourtParagraphNumbers(
+          [
+            `${marker(1)} Soud uvážil.`,
+            `${marker(2)} Soud uvedl ${open}první citaci.`,
+            `Citace pokračuje a končí.${close}`,
+            `${marker(3)} Soud uvedl ${open}další citaci.`,
+            `Druhá citace končí.${close}`,
+            `${marker(4)} Soud uzavřel.`,
+          ].map((text, index) => paragraph(index, text)),
+        );
+        expect(
+          numbering.blocks.map((block) =>
+            block.type === "paragraph" ? (block.number ?? null) : null,
+          ),
+          `${open} … ${close}`,
+        ).toEqual([1, 2, null, 3, null, 4]);
+      }
+    },
+  );
+
   test.each([
     // Closed by a straight quote, which closes no Czech quotation.
     ['[4] Soud cituje: „Takto rozhodl."', "[5] Soud uvážil."],

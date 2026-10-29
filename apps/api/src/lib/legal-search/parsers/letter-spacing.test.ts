@@ -141,3 +141,10 @@ describe("letter-spaced emphasis", () => {
     });
   });
 });
+
+test("ordinary one-letter words beside spaced emphasis remain separate", () => {
+  expect(collapseLetterSpacing("rozhodl   i o   z a m í t á")).toBe(
+    "rozhodl   i o zamítá",
+  );
+  expect(collapseLetterSpacing("s e   mu   v r a c í")).toBe("se mu vrací");
+});

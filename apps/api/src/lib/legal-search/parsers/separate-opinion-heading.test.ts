@@ -27,3 +27,10 @@ describe("separate-opinion headings", () => {
     expect(separateOpinionHeadingTail(NSS_HEADING, 300)).toMatch(/^ soudce/u);
   });
 });
+
+test.each([
+  "Odlišné stanovisko k této otázce uplatnili dva soudci",
+  "Odlišné stanovisko uplatnili dva soudci",
+])("prose does not acquire heading structure: %s", (line) => {
+  expect(separateOpinionHeadingTail(line, 300)).toBeUndefined();
+});

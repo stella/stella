@@ -25,7 +25,7 @@ const BARE_OPINION_HEADING_RE = /^STANOVISKO(?<tail>)$/u;
  * opinion, not its heading.
  */
 const SEPARATE_OPINION_HEADING_TAIL_RE =
-  /^(?:\s*[.:]?$|\s+(?:(?:k|ke|ve|podle)\s|soud|předsed|místopředsed|JUDr|prof|doc|Mgr|pléna|člen|men[šs]in|podan|uplatn|vyjádřen))/iu;
+  /^(?:\s*[.:]?$|\s+(?:(?:k|ke)\s+(?:nálezu|usnesení|rozsudku|rozhodnutí|výroku|věci|sp\.|č\.|§|čl\.)|ve\s+věci|podle\s+§|soud|předsed|místopředsed|JUDr|prof|doc|Mgr|pléna|člen|men[šs]in))/iu;
 
 /**
  * What follows the title of a separate opinion's heading on its line, or

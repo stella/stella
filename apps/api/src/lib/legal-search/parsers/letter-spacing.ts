@@ -148,7 +148,7 @@ const inSpacedPhrase = (
 ): boolean => {
   if (
     run.end === tokens.length ||
-    !isWideGap(tokens[run.start]?.gap) ||
+    (run.start > 0 && !isWideGap(tokens[run.start]?.gap)) ||
     !isWideGap(tokens[run.end]?.gap)
   ) {
     return false;
@@ -188,6 +188,21 @@ const spacedRunsOf = (
   runs: readonly Run[],
   options: LetterSpacingOptions,
 ): Run[] => {
+  const hasOrdinaryWords = tokens.some(
+    ({ text }) =>
+      !LETTER_RE.test(text) &&
+      !MARKED_LETTER_RE.test(text) &&
+      !TRAILING_MARK_RE.test(text),
+  );
+  const ordinaryRuns = new Set(
+    hasOrdinaryWords
+      ? runs.filter((run) =>
+          tokens
+            .slice(run.start, run.start + run.letters)
+            .every(({ text }) => ONE_LETTER_WORDS.has(text)),
+        )
+      : [],
+  );
   const strongTokens = new Set(
     runs
       .filter((run) => run.letters >= STRONG_RUN_LETTERS)
@@ -197,15 +212,16 @@ const spacedRunsOf = (
   );
   const spaced = runs.map(
     (run) =>
-      run.letters >= STRONG_RUN_LETTERS ||
-      inSpacedPhrase(run, tokens, strongTokens) ||
-      (options.setApart === true && isSetApartRun(tokens, run)),
+      !ordinaryRuns.has(run) &&
+      (run.letters >= STRONG_RUN_LETTERS ||
+        inSpacedPhrase(run, tokens, strongTokens) ||
+        (options.setApart === true && isSetApartRun(tokens, run))),
   );
   let changed = true;
   while (changed) {
     changed = false;
     for (const [index, run] of runs.entries()) {
-      if (spaced[index] === true) {
+      if (spaced[index] === true || ordinaryRuns.has(run)) {
         continue;
       }
       const before = runs[index - 1];

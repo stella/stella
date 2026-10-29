@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The court's own paragraph numbers, read off the start of its paragraphs.
  *
@@ -18,8 +19,7 @@
  * outcome rather than storing a guess.
  */
 
-import { panic } from "better-result";
-
+import { closedQuotationParagraphStarts } from "./closed-quotation-paragraphs";
 import type { Block, ParagraphBlock } from "./document-ast.js";
 import { normalizeInlineLine, stripInlineLinePrefix } from "./inline-line.js";
 
@@ -195,82 +195,6 @@ type Body = {
 };
 
 /**
- * The quotation pairs of Czech and Slovak text: „…“ (often printed „…”) and
- * »…« or «…». Each pair closes only with its own mark; a straight quote closes
- * neither, and the English “…” never opens one here.
- */
-const QUOTE_PAIRS = [
-  { opening: "„", closing: new Set(["“", "”"]) },
-  { opening: "»", closing: new Set(["«"]) },
-  { opening: "«", closing: new Set(["»"]) },
-] as const;
-
-/** Quotations of each pair a paragraph leaves open, from those it opens at. */
-const openQuotesAfter = (open: readonly number[], text: string): number[] => {
-  const states = QUOTE_PAIRS.map(({ opening, closing }, pair) => ({
-    opening,
-    closing,
-    count: open[pair] ?? 0,
-  }));
-  for (const character of text) {
-    const closing = states.find(
-      (state) => state.count > 0 && state.closing.has(character),
-    );
-    if (closing !== undefined) {
-      closing.count -= 1;
-      continue;
-    }
-    // The closing guillemet cannot also open the opposite quotation direction.
-    const opening = states.find((state) => state.opening === character);
-    if (opening !== undefined) {
-      opening.count += 1;
-    }
-  }
-  return states.map(({ count }) => count);
-};
-
-/**
- * Most paragraphs a quotation may run on past the one that opens it. A
- * longer one, or one never closed by its own mark, is not evidence enough
- * to set a marker apart from the court's numbering.
- */
-const MAX_QUOTED_PARAGRAPHS = 8;
-
-/**
- * Body positions that open inside a quotation an earlier paragraph began
- * and a later one, at most {@link MAX_QUOTED_PARAGRAPHS} on, closes with
- * the matching mark. A quotation never crosses a heading or the start of a
- * separate opinion.
- */
-const quotedStartsOf = (
-  texts: readonly string[],
-  sectionStarts: ReadonlySet<number>,
-): Set<number> => {
-  const quoted = new Set<number>();
-  for (let start = 0; start < texts.length; start++) {
-    let open = openQuotesAfter([], texts[start] ?? "");
-    for (
-      let end = start + 1;
-      open.some((count) => count > 0) &&
-      end < texts.length &&
-      end - start <= MAX_QUOTED_PARAGRAPHS &&
-      !sectionStarts.has(end);
-      end++
-    ) {
-      open = openQuotesAfter(open, texts[end] ?? "");
-      if (open.every((count) => count === 0)) {
-        for (let inside = start + 1; inside <= end; inside++) {
-          quoted.add(inside);
-        }
-        start = end - 1;
-        break;
-      }
-    }
-  }
-  return quoted;
-};
-
-/**
  * The body paragraphs, and where each separate opinion printed after the
  * decision begins: an opinion either counts from 1 again or carries on the
  * decision's numbering, and both read as one numbering.
@@ -313,7 +237,7 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     headingSinceBody = false;
     paragraphs.push(index);
   }
-  const quotedStarts = quotedStartsOf(
+  const quotedStarts = closedQuotationParagraphStarts(
     paragraphs.map((blockIndex) => blocks[blockIndex]?.plainText ?? ""),
     new Set([...sectionStarts, ...opinionStarts]),
   );
