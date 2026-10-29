@@ -87,6 +87,10 @@ export const aggregateFences = () => {
       aggregate: "caseLawRepublication",
       id: "global",
     },
+    caseLawSitemapMonth: {
+      aggregate: "caseLawSitemapMonth",
+      id: { country: "CZE", year: "2020", month: "03" },
+    },
     legislationAmendmentWork: {
       aggregate: "legislationAmendmentWork",
       id: {

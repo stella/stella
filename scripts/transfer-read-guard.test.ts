@@ -108,7 +108,7 @@ test("the owned bounded metadata contract replaces a legacy numeric body deadlin
   ).toEqual(["numeric-timeout", "total-timeout-body"]);
 });
 
-test("explicit idle policy and bounded owner fixtures pass", () => {
+test("explicit transfer policies and bounded owner fixtures pass", () => {
   expect(
     findTransferReads(
       file,
@@ -117,6 +117,10 @@ test("explicit idle policy and bounded owner fixtures pass", () => {
       const response = await fetchWithTimeout(url, { timeout: { type: "idle", ms: 30_000 } });
       return new Response(response.body);
     };
+    export const request = () => fetchWithTimeout(url, {
+      timeout: { type: "total", ms: 30_000 },
+      timeoutMs: 30_000,
+    });
     export const exportRows = async () => {
       const result = await readBounded(query, LIMITS.exportRowLimit);
       return result.type === "complete" ? makeCsv(result.rows) : rejectOverflow();

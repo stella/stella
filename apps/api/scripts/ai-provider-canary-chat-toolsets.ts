@@ -8,7 +8,10 @@ import {
   BUSINESS_REGISTRY_SLUGS,
   CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
-import type { ChatEditApplyMode } from "@stll/api-contract";
+import type {
+  BusinessRegistrySlug,
+  ChatEditApplyMode,
+} from "@stll/api-contract";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
@@ -27,6 +30,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -99,7 +103,9 @@ const activeSkillContext: ActiveChatSkillContext = {
   version: null,
 };
 
-const canaryRegistryDispatch = { ...BUSINESS_REGISTRY_DISPATCH };
+const canaryRegistryDispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
+  ...BUSINESS_REGISTRY_DISPATCH,
+};
 for (const slug of BUSINESS_REGISTRY_SLUGS) {
   canaryRegistryDispatch[slug] = {
     ...BUSINESS_REGISTRY_DISPATCH[slug],

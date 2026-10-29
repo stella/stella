@@ -3,6 +3,7 @@ import type { ApiClientOptions } from "@stll/api-client";
 import type { ConnectConnectorDecision } from "@stll/api-contract/chat-connector";
 import { INTERNAL_UI_TRANSPORT_ROUTES } from "@stll/api-contract/internal-ui-transport";
 import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
 import { getTranslator } from "@/i18n/translator";
@@ -23,6 +24,26 @@ import {
 import type { SafeId } from "@/lib/safe-id";
 
 export type WebApiRoutes = WebRoutes["v1"];
+
+const WEB_API_REQUEST_TIMEOUT_MS = 30_000;
+
+type WebApiFetcherOwner = typeof fetchWithTimeout;
+type ApiClientFetcher = NonNullable<ApiClientOptions["fetcher"]>;
+
+export const createWebApiFetcher =
+  (fetcher: WebApiFetcherOwner) =>
+  async (
+    url: Parameters<WebApiFetcherOwner>[0],
+    { timeoutMs, signal, ...init }: Parameters<ApiClientFetcher>[1],
+  ) =>
+    await fetcher(url, {
+      ...init,
+      signal: signal ?? undefined,
+      timeout: {
+        type: "total",
+        ms: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
+      },
+    });
 
 // Types the API owns and the browser reads by name, re-exported through the
 // generated API types.
@@ -51,6 +72,7 @@ export type {
 } from "@/generated/api-routes.gen";
 
 export const webApiClientOptions = {
+  fetcher: createWebApiFetcher(fetchWithTimeout),
   async onRequest() {
     await waitForSimulatedApiDelay();
   },
