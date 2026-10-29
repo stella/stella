@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 import { load as loadSlim } from "cheerio/slim";
 import type { CheerioAPI, CheerioOptions } from "cheerio/slim";
 import { isDocument } from "domhandler";

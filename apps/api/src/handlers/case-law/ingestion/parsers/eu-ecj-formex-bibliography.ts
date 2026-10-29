@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Read the bibliographic block of the Publications Office's Formex encoding
  * of a CJEU decision.

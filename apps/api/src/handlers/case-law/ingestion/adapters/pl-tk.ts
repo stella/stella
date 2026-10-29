@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.

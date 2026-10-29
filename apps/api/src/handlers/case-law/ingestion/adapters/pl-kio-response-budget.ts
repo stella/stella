@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: registers telemetry fingerprint dimensions without changing error payloads or parser results.
 import { panic, Result, TaggedError } from "better-result";
 import { isText } from "domhandler";

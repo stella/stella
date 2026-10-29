@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
 import type * as cheerio from "cheerio/slim";

@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Read the Cellar branch notice the Publications Office serves for one CJEU
  * work, negotiated into one expression's language.

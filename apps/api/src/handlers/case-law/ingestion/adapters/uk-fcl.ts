@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
 import * as v from "valibot";

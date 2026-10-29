@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
 // parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.

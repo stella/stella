@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.

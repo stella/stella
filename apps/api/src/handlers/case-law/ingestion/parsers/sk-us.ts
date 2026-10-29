@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *

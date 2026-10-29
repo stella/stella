@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,

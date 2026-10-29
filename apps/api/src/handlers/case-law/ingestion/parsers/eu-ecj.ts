@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
 /**
  * Court of Justice of the European Union (CJEU) XHTML parser.

@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
  *

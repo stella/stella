@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
 import { Result } from "better-result";
 import type * as cheerio from "cheerio/slim";

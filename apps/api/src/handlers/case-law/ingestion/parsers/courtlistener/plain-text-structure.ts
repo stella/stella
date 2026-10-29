@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 import { isTag, isText } from "domhandler";
 
 import { load } from "@stll/html";

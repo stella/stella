@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *

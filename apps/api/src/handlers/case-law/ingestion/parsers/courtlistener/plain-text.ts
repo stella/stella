@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Unmarked opinion text: the `plain_text` column, and the preformatted

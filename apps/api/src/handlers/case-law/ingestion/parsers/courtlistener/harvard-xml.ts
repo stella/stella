@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Harvard case XML as CourtListener serves it in `xml_harvard`, and inside
  * `html_with_citations` where that column holds the same XML: one

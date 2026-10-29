@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.

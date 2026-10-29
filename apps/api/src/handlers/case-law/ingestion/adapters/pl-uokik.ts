@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
