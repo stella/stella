@@ -31,11 +31,12 @@ test("the truncated resource id exposes its full labelled value", () => {
 
   const accessibleId = view.getByText("Resource ID: resource_1234567890");
   expect(accessibleId.classList.contains("sr-only")).toBe(true);
-  expect(view.getByText("resource").getAttribute("aria-hidden")).toBe("true");
-  // Sighted users can still read and copy the full id from the short one.
-  expect(view.getByText("resource").getAttribute("title")).toBe(
-    "resource_1234567890",
-  );
+  // Sighted users see the id truncated by CSS, so selecting and copying it
+  // yields the complete value; the tooltip shows it too.
+  const visibleId = view.getByText("resource_1234567890");
+  expect(visibleId.getAttribute("aria-hidden")).toBe("true");
+  expect(visibleId.getAttribute("title")).toBe("resource_1234567890");
+  expect(visibleId.textContent).toBe("resource_1234567890");
   expect(view.getByText(/^retired_record_kind/u)).not.toBeNull();
   expect(
     view.getByText(messages.settings.organization.auditLogsUnknownResource),

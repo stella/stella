@@ -497,7 +497,6 @@ export function AuditResourceLabel({
 }) {
   const t = useTranslations();
   const label = useAuditResourceLabel(action, resource);
-  const shortId = resource.id.slice(0, 8);
   const content =
     resource.available && resource.kind === "workspace" ? (
       <MatterRefLink
@@ -520,8 +519,13 @@ export function AuditResourceLabel({
             id: resource.id,
           })}
         </span>
-        <bdi aria-hidden="true" title={resource.id}>
-          {shortId}
+        {/* CSS truncation keeps the full id selectable for copying. */}
+        <bdi
+          aria-hidden="true"
+          className="inline-block max-w-[120px] truncate align-bottom"
+          title={resource.id}
+        >
+          {resource.id}
         </bdi>
       </div>
     </div>
