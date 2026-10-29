@@ -2355,6 +2355,7 @@
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
     "unsavedChanges": "تغييرات غير محفوظة",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",

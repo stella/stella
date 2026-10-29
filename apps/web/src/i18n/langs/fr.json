@@ -2355,6 +2355,7 @@
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
     "unsavedChanges": "Modifications non enregistrées",
+    "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",

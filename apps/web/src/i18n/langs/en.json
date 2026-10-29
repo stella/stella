@@ -2355,6 +2355,7 @@
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
     "unsavedChanges": "Unsaved changes",
+    "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
     "unverified": "Unverified",

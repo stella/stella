@@ -2355,6 +2355,7 @@
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
     "unsavedChanges": "Nesaglabātas izmaiņas",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",

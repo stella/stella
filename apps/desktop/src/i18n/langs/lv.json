@@ -149,6 +149,7 @@
     "handoffUnavailable": "Neizdevās atvērt dokumentu. Sāciet no jauna no Stella.",
     "handoffRetry": "Mēģināt vēlreiz",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu",
     "handoffConnectToSign": "Pievienojiet stella desktop, lai parakstītu šo dokumentu",
     "handoffConnectToOpen": "Pievienojiet stella desktop, lai atvērtu šo dokumentu",
     "handoffConnectDetail": "Pievienojiet savu stella kontu. Dokuments tiks atvērts automātiski pēc pievienošanas.",

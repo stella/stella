@@ -2355,6 +2355,7 @@
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
     "unsavedChanges": "Nem mentett módosítások",
+    "unsavedChangesClose": "Nem mentett módosítások. Az elvetéshez zárja be újra",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unverified": "Nem ellenőrzött",

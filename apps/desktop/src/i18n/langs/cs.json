@@ -149,6 +149,7 @@
     "handoffUnavailable": "Dokument se nepodařilo otevřít. Začněte znovu ze Stelly.",
     "handoffRetry": "Zkusit znovu",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
+    "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte",
     "handoffConnectToSign": "Pro podepsání tohoto dokumentu připojte stella desktop",
     "handoffConnectToOpen": "Pro otevření tohoto dokumentu připojte stella desktop",
     "handoffConnectDetail": "Připojte svůj účet stella. Dokument se po připojení otevře automaticky.",

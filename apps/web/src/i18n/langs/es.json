@@ -2355,6 +2355,7 @@
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
     "unsavedChanges": "Cambios sin guardar",
+    "unsavedChangesClose": "Cambios sin guardar. Cierra de nuevo para descartarlos",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",

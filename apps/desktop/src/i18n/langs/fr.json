@@ -149,6 +149,7 @@
     "handoffUnavailable": "Impossible d’ouvrir le document. Recommencez depuis Stella.",
     "handoffRetry": "Réessayer",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
+    "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "handoffConnectToSign": "Connectez stella desktop pour signer ce document",
     "handoffConnectToOpen": "Connectez stella desktop pour ouvrir ce document",
     "handoffConnectDetail": "Connectez votre compte stella. Le document s'ouvrira automatiquement une fois la connexion établie.",

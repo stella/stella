@@ -2355,6 +2355,7 @@
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
     "unsavedChanges": "Ungespeicherte Änderungen",
+    "unsavedChangesClose": "Ungespeicherte Änderungen. Erneut schließen, um sie zu verwerfen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",

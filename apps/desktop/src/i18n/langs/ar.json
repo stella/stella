@@ -149,6 +149,7 @@
     "handoffUnavailable": "تعذّر فتح المستند. ابدأ من جديد من Stella.",
     "handoffRetry": "إعادة المحاولة",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
     "handoffConnectToSign": "اربط stella desktop لتوقيع هذا المستند",
     "handoffConnectToOpen": "اربط stella desktop لفتح هذا المستند",
     "handoffConnectDetail": "اربط حسابك في stella. سيُفتح المستند تلقائيًا بعد الربط.",

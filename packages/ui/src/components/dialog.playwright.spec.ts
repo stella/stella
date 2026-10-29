@@ -150,3 +150,65 @@ test("discard confirmation supplies X even when ordinary chrome omits it", async
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByLabel("Stored draft")).toHaveText("Stored question");
 });
+
+for (const locale of ["en", "ar"] as const) {
+  test(`a click outside holds unsaved changes once, then discards them in ${locale}`, async ({
+    page,
+  }) => {
+    await page.goto("/src/components/fixtures/dialog.fixture.html", {
+      waitUntil: "domcontentloaded",
+    });
+    if (locale === "ar") {
+      await page.getByRole("button", { name: "Switch language" }).click();
+    }
+    await page
+      .getByRole("button", { name: "Open editor", exact: true })
+      .click();
+    const editor = page.getByRole("dialog");
+    const input = page.getByLabel("Question", { exact: true });
+    await input.fill("Changed question");
+    await page.mouse.click(4, 4);
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole("status")).toHaveText(
+      locale === "en"
+        ? "Unsaved changes. Close again to discard"
+        : "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
+    );
+    await expect(input).toHaveValue("Changed question");
+    await page.mouse.click(4, 4);
+    await expect(editor).not.toBeVisible();
+    await expect(page.getByLabel("Stored draft")).toHaveText("Stored question");
+  });
+}
+
+test("a click outside closes a clean dialog at once", async ({ page }) => {
+  await page.goto("/src/components/fixtures/dialog.fixture.html", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.getByRole("button", { name: "Open editor", exact: true }).click();
+  await page.mouse.click(4, 4);
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+});
+
+for (const name of ["Close", "Cancel"]) {
+  test(`the ${name} button asks once before discarding unsaved changes`, async ({
+    page,
+  }) => {
+    await page.goto("/src/components/fixtures/dialog.fixture.html", {
+      waitUntil: "domcontentloaded",
+    });
+    await page
+      .getByRole("button", { name: "Open editor", exact: true })
+      .click();
+    const editor = page.getByRole("dialog");
+    await page.getByLabel("Question", { exact: true }).fill("Changed question");
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole("status")).toHaveText(
+      "Unsaved changes. Close again to discard",
+    );
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(editor).not.toBeVisible();
+    await expect(page.getByLabel("Stored draft")).toHaveText("Stored question");
+  });
+}

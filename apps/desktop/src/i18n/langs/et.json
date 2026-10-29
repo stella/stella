@@ -149,6 +149,7 @@
     "handoffUnavailable": "Dokumenti ei saanud avada. Alustage uuesti Stella kaudu.",
     "handoffRetry": "Proovi uuesti",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
+    "unsavedChangesClose": "Salvestamata muudatused. Loobumiseks sulge uuesti",
     "handoffConnectToSign": "Ühendage stella desktop, et seda dokumenti allkirjastada",
     "handoffConnectToOpen": "Ühendage stella desktop, et seda dokumenti avada",
     "handoffConnectDetail": "Ühendage oma stella konto. Dokument avaneb pärast ühendamist automaatselt.",
