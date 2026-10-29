@@ -1,6 +1,7 @@
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 // parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.
+// parser-output-unchanged: the common courts' thesis placeholders are read only by the pl-courts and pl-ncourt text fields, whose versions are bumped; other adapters read their own patterns.
 import { panic } from "better-result";
 
 import {
@@ -121,6 +122,14 @@ type AdapterManifestMap = {
 
 const NO_DECLARED_ECLI_COURT_CODES = {} as const;
 const NO_PLACEHOLDER_PATTERNS = [] as const;
+/**
+ * What a common court's record prints in its thesis field when the judgment
+ * has no thesis: "nietezowane" (not given a thesis) or "brak" (none).
+ */
+const PL_COMMON_COURT_THESIS_PLACEHOLDERS = [
+  { type: "exact", text: "nietezowane" },
+  { type: "exact", text: "brak" },
+] as const;
 const OPEN_RANGE = { type: "open" } as const;
 const ADAPTER_JURISDICTIONS = {
   AUT: {
@@ -292,7 +301,8 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    // SAOS copies the courts' thesis into its summary, markers and all.
+    placeholderPatterns: PL_COMMON_COURT_THESIS_PLACEHOLDERS,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1986-05-28",
@@ -388,7 +398,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    placeholderPatterns: PL_COMMON_COURT_THESIS_PLACEHOLDERS,
     dateRange: {
       type: "decision-date",
       // The oldest judgment date the listing answers with, sorted by date.
