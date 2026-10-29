@@ -65,6 +65,11 @@ export type AnalysisInputResolution =
   /** No analysis prompt is written for the decision's language. */
   | { kind: "unsupported-language"; language: string };
 
+type AnalysisInputResult = Result<
+  AnalysisInputResolution,
+  AnalysisInputVersionChangedError
+>;
+
 export const resolveAnalysisInput = defineWindowedRead(
   "analysis-input",
   async ({
@@ -73,7 +78,7 @@ export const resolveAnalysisInput = defineWindowedRead(
   }: {
     decisionId: SafeId<"caseLawDecision">;
     scopedDb: ScopedDb;
-  }): Promise<AnalysisInputResolution> => {
+  }): Promise<AnalysisInputResult> => {
     for (
       let attempt = 1;
       attempt <= ANALYSIS_INPUT_VERSION_ATTEMPTS;
@@ -89,15 +94,15 @@ export const resolveAnalysisInput = defineWindowedRead(
             );
 
       if (!decision) {
-        return { kind: "decision-not-found" };
+        return Result.ok({ kind: "decision-not-found" });
       }
       // Decided from the row alone, before the tree is read from storage.
       const systemPrompt = getSystemPrompt(decision.language);
       if (Result.isError(systemPrompt)) {
-        return {
+        return Result.ok({
           kind: "unsupported-language",
           language: systemPrompt.error.language,
-        };
+        });
       }
 
       // The text the reader sees: in development that may be the tree's own
@@ -167,10 +172,10 @@ export const resolveAnalysisInput = defineWindowedRead(
         continue;
       }
       if (ast === null) {
-        return { kind: "unparseable-document" };
+        return Result.ok({ kind: "unparseable-document" });
       }
 
-      return {
+      return Result.ok({
         kind: "resolved",
         decision,
         anchorIds: ast.blocks.map((block) => block.anchorId),
@@ -179,12 +184,14 @@ export const resolveAnalysisInput = defineWindowedRead(
           decision,
           systemPrompt: systemPrompt.value,
         }),
-      };
+      });
     }
-    throw new AnalysisInputVersionChangedError({
-      message: `Decision changed during analysis input resolution after ${String(ANALYSIS_INPUT_VERSION_ATTEMPTS)} attempts`,
-      decisionId,
-      attempts: ANALYSIS_INPUT_VERSION_ATTEMPTS,
-    });
+    return Result.err(
+      new AnalysisInputVersionChangedError({
+        message: `Decision changed during analysis input resolution after ${String(ANALYSIS_INPUT_VERSION_ATTEMPTS)} attempts`,
+        decisionId,
+        attempts: ANALYSIS_INPUT_VERSION_ATTEMPTS,
+      }),
+    );
   },
 );

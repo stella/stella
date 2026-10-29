@@ -194,10 +194,12 @@ const productionReads = {
   },
   "analysis-input": async (fixture: WindowFixture) => {
     expect(envBase.PUBLIC_LAW_DATABASE_URL).toBeUndefined();
-    const read = await resolveAnalysisInput({
-      decisionId: fixture.decisionId,
-      scopedDb: fixture.scopedDb,
-    });
+    const read = (
+      await resolveAnalysisInput({
+        decisionId: fixture.decisionId,
+        scopedDb: fixture.scopedDb,
+      })
+    ).unwrap();
     if (read.kind !== "resolved") {
       panic("Window fixture must reach the production analysis input");
     }
@@ -218,7 +220,7 @@ const expectRedacted = async (profile: string, fixture: WindowFixture) => {
             decisionId: fixture.decisionId,
             scopedDb: fixture.scopedDb,
           })
-        ).kind,
+        ).unwrap().kind,
       ).toBe("decision-not-found");
       return;
     case "citation-passages":
