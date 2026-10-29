@@ -345,7 +345,7 @@ export const initPushDeliveryWorker = ({ db }: BullMqWorkerContext) => {
     if (!exhausted && error instanceof PushDeliveryRetryError) {
       logger.info("push_delivery.retrying", {
         notificationId,
-        attemptsMade: String(job?.attemptsMade ?? 0),
+        attemptsMade: String(job.attemptsMade),
       });
       return;
     }
