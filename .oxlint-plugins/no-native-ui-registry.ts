@@ -371,8 +371,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   }),
   "truncated-text": owned(
     nativeRuleId("tooltip"),
-    "TruncatedText replaces a title= hint on cut text; title= is the " +
-      "tooltip rule's",
+    "a title on truncated text is reported by the tooltip rule",
   ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),

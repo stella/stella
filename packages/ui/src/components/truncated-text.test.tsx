@@ -23,6 +23,19 @@ describe("TruncatedText", () => {
     expect(markup).toContain("Smlouva o dílo č. 2026/118");
     expect(markup).not.toContain('data-slot="tooltip-popup"');
     expect(markup).not.toContain('data-slot="popover-popup"');
+    expect(markup).not.toContain("title=");
+    expect(markup.match(/Smlouva o dílo/gu)).toHaveLength(1);
+  });
+
+  test("keeps the caller's placement and attributes", () => {
+    const markup = renderToStaticMarkup(
+      <TruncatedText className="max-w-48" dir="auto">
+        Rozsudek
+      </TruncatedText>,
+    );
+
+    expect(markup).toContain("max-w-48");
+    expect(markup).toContain('dir="auto"');
   });
 
   test("clamps to several lines", () => {

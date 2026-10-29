@@ -26,17 +26,17 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 const TruncatedText = ({
   children,
   className,
-  hint,
   lines = 1,
   render,
   side = "top",
+  tooltip,
   ...props
 }: TruncatedTextProps) => {
   const ref = React.useRef<HTMLElement>(null);
   const [surface, setSurface] = React.useState<TruncatedTextSurface | null>(
     null,
   );
-  const content = hint ?? children;
+  const content = tooltip ?? children;
 
   const handleTooltipOpenChange = (open: boolean) => {
     if (!open) {
@@ -117,13 +117,13 @@ type TruncatedTextSurface = "tooltip" | "popover";
 type TruncatedTextLines = 1 | 2 | 3;
 
 type TruncatedTextProps = useRender.ComponentProps<"span"> & {
+  lines?: TruncatedTextLines;
+  side?: React.ComponentProps<typeof TooltipPopup>["side"];
   /**
    * What the tooltip shows; the text itself by default. Pass it when the
    * children are not plain text (a highlighted search match, a link).
    */
-  hint?: React.ReactNode;
-  lines?: TruncatedTextLines;
-  side?: React.ComponentProps<typeof TooltipPopup>["side"];
+  tooltip?: React.ReactNode;
 };
 
 /**
