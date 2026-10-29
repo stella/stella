@@ -285,8 +285,8 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["password"],
   }),
   "segmented-icon-toggle": noNative(
-    "a row of pressed-state Buttons; native radio groups have no @stll/ui " +
-      "counterpart yet, so radios stay allowed",
+    "an icon ToggleGroup; native radio groups have no @stll/ui counterpart " +
+      "yet, so radios stay allowed",
   ),
   select: native("Select from @stll/ui/select", {
     elements: ["select", "option", "optgroup"],
@@ -348,6 +348,15 @@ export const NO_NATIVE_UI_REGISTRY = {
   toast: owned(
     "stella-toast/stella-toast",
     "toasts go through stellaToast; the browser's alert() is no-alert's",
+  ),
+  toggle: owned(
+    nativeRuleId("button"),
+    "a pressed-state Button; a native button with aria-pressed is the " +
+      "button rule's",
+  ),
+  "toggle-group": owned(
+    nativeRuleId("button"),
+    "a row of Toggles; their native buttons are the button rule's",
   ),
   "toolbar-icon-action": owned(
     nativeRuleId("button"),

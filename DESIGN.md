@@ -264,6 +264,9 @@ When a screen needs a look the components lack, add it once here and in
 | Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                        |
 | Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)          |
 | Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options              |
+| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                     |
+| A button that stays pressed                                        | `Toggle`                                                                 |
+| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`               |
 | Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                       |
 | Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                          |
 | Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                               |
