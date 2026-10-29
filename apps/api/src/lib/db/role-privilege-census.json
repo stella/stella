@@ -277,6 +277,8 @@
       "table:public.case_law_research_columns:UPDATE",
       "table:public.case_law_search_document_preview_passages:SELECT",
       "table:public.case_law_search_documents:SELECT",
+      "table:public.case_law_sitemap_changes:INSERT",
+      "table:public.case_law_sitemap_changes:RLS_FORCED:true",
       "table:public.case_law_sources:SELECT",
       "table:public.case_law_statute_citation_count_state:SELECT",
       "table:public.case_law_statute_citation_counts:SELECT",

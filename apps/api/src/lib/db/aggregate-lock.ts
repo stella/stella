@@ -1573,7 +1573,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "caseLawSitemapMonth":
       return {
-        first: sql`${0x0f_10_cc_b0}::integer`,
+        first: sql`${0x0f_10_cc_b5}::integer`,
         second: sql`hashtext(${JSON.stringify([options.id.country, options.id.year, options.id.month])})`,
         order: [
           options.aggregate,

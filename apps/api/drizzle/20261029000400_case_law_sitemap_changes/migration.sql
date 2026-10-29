@@ -24,18 +24,20 @@ ALTER TABLE "case_law_sitemap_changes" FORCE ROW LEVEL SECURITY;--> statement-br
 -- Row security is forced, so the owner-run refresh and the owner's trigger
 -- functions are bound by policy too. The owner role is named per deployment,
 -- so the policy cannot name it; table privileges decide who reaches the rows.
--- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all and stella none (revoked below); no other role is granted
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all and stella only INSERT (granted below) for removal invalidation; no other role is granted
 CREATE POLICY "case_law_sitemap_change_owner_access" ON "case_law_sitemap_changes"
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_changes" FROM stella;--> statement-breakpoint
+GRANT INSERT ON TABLE "case_law_sitemap_changes" TO stella;--> statement-breakpoint
 
 -- A decision's shard is its country and month, the bucket of its id, its
 -- source (the redistribution gate), its updated_at (the shard's last
 -- modification) and its publication. A write that changes any of these, for
 -- a decision published before or after it, logs the month the decision left
--- and the month it entered. The function runs as its owner: the writers of
--- case_law_decisions hold no privilege on the log.
--- stella-migration-safety: reviewed security-definer - trigger-only function with a fixed search path and PUBLIC execute revoked below; it only appends the months of the decision row that fired it
+-- and the month it entered, plus the published language group's months. The function runs as its owner: the writers of
+-- case_law_decisions need no log privileges for trigger execution; the
+-- application role separately holds INSERT for removal invalidation.
+-- stella-migration-safety: reviewed security-definer - trigger-only function with a fixed search path and PUBLIC execute revoked below; it only appends the months of the decision and its same-country language group
 CREATE FUNCTION "log_case_law_sitemap_decision_change"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -53,6 +55,17 @@ BEGIN
       COALESCE(to_char(OLD.decision_date, 'MM'), '00')
     )
     ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
+    IF OLD.language_group_key IS NOT NULL THEN
+      INSERT INTO public.case_law_sitemap_changes (country, year, month)
+      SELECT DISTINCT sibling.country,
+        COALESCE(to_char(sibling.decision_date, 'YYYY'), 'undated'),
+        COALESCE(to_char(sibling.decision_date, 'MM'), '00')
+      FROM public.case_law_decisions sibling
+      WHERE sibling.country = OLD.country
+        AND sibling.language_group_key = OLD.language_group_key
+        AND public.case_law_statute_citation_is_published(sibling.metadata, sibling.redacted_at)
+      ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
+    END IF;
   END IF;
   IF TG_OP <> 'DELETE'
     AND public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
@@ -64,6 +77,17 @@ BEGIN
       COALESCE(to_char(NEW.decision_date, 'MM'), '00')
     )
     ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
+    IF NEW.language_group_key IS NOT NULL THEN
+      INSERT INTO public.case_law_sitemap_changes (country, year, month)
+      SELECT DISTINCT sibling.country,
+        COALESCE(to_char(sibling.decision_date, 'YYYY'), 'undated'),
+        COALESCE(to_char(sibling.decision_date, 'MM'), '00')
+      FROM public.case_law_decisions sibling
+      WHERE sibling.country = NEW.country
+        AND sibling.language_group_key = NEW.language_group_key
+        AND public.case_law_statute_citation_is_published(sibling.metadata, sibling.redacted_at)
+      ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
+    END IF;
   END IF;
   RETURN NULL;
 END
@@ -102,7 +126,7 @@ WHEN (public.case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_a
 EXECUTE FUNCTION "log_case_law_sitemap_decision_change"();--> statement-breakpoint
 
 CREATE TRIGGER "case_law_decisions_sitemap_update"
-AFTER UPDATE OF "id", "country", "decision_date", "source_id", "updated_at", "metadata", "redacted_at" ON "case_law_decisions"
+AFTER UPDATE OF "id", "country", "decision_date", "source_id", "language_group_key", "updated_at", "metadata", "redacted_at" ON "case_law_decisions"
 FOR EACH ROW
 WHEN (
   (
@@ -114,6 +138,7 @@ WHEN (
     OR OLD.country IS DISTINCT FROM NEW.country
     OR OLD.decision_date IS DISTINCT FROM NEW.decision_date
     OR OLD.source_id IS DISTINCT FROM NEW.source_id
+    OR OLD.language_group_key IS DISTINCT FROM NEW.language_group_key
     OR OLD.updated_at IS DISTINCT FROM NEW.updated_at
     OR public.case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
       IS DISTINCT FROM public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)

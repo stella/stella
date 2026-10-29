@@ -25,10 +25,14 @@ import {
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { refreshCaseLawSitemapShards } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { SITEMAP_ALL_BUCKET } from "@/api/lib/case-law/sitemap-shard-sql";
+import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import { refreshCaseLawSitemapShardsTask } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -194,9 +198,10 @@ if (!databaseUrl || !runPostgresTests) {
     /**
      * Under the deployed roles: the ingestion role's decision write logs its
      * month through the owner-run trigger, while neither the ingestion role
-     * nor the application role can read or write the log itself.
+     * can read or mutate logged work; the application role may only append
+     * removal invalidation work.
      */
-    test("writers log months only through the owner-run trigger", async () => {
+    test("ingestion logs through its trigger and application invalidation only appends", async () => {
       await insertDecisions("1905-03-15", 1);
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);
@@ -234,15 +239,25 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ).toMatch(/permission denied/u);
           // db-await-in-loop: each role is probed in its own transaction
+          const inserted = await refused(
+            role,
+            async (tx) =>
+              await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
+          );
+          if (role === "stella") {
+            expect(inserted).toBe("allowed");
+          } else {
+            expect(inserted).toMatch(/permission denied/u);
+          }
+          // db-await-in-loop: neither writer may consume the owner's pending work
           expect(
             await refused(
               role,
-              async (tx) =>
-                await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
+              async (tx) => await tx`DELETE FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
         }
-        expect(await loggedMonths("1905")).toEqual(["1905/01"]);
+        expect(await loggedMonths("1905")).toEqual(["1905/01", "1905/02"]);
       });
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);
@@ -304,7 +319,34 @@ if (!databaseUrl || !runPostgresTests) {
         const dialect = new PgDialect();
         const pause = async () => {
           await insertDecisions("1904-01-17", 1);
-          await refreshCaseLawSitemapShards(runB);
+          expect(await refreshCaseLawSitemapShards(runB)).toMatchObject({
+            type: "pending",
+            retry: "delayed",
+          });
+          const continuations: Date[] = [];
+          const before = Date.now();
+          await refreshCaseLawSitemapShardsTask(
+            asTestRaw({
+              db: runB,
+              dueAt: DueSlot.of({
+                nextRunAt: new Date("2000-01-01"),
+                lockedAt: new Date("2000-01-01"),
+              }),
+              logger,
+              runId: createSafeId<"schedulerJobRun">(),
+              scheduleContinuation: (at: Date) => {
+                continuations.push(at);
+              },
+              signal: new AbortController().signal,
+            }),
+          );
+          expect(continuations).toHaveLength(1);
+          expect(continuations.at(0)?.getTime()).toBeGreaterThanOrEqual(
+            before + 60_000,
+          );
+          expect(continuations.at(0)?.getTime()).toBeLessThanOrEqual(
+            Date.now() + 60_000,
+          );
           // B found the month held and left it, with its newer row, alone.
           expect(await listedMonths("1904")).toEqual(["1904/01:1"]);
           expect(await loggedMonths("1904")).toEqual(["1904/01", "1904/01"]);
@@ -338,7 +380,10 @@ if (!databaseUrl || !runPostgresTests) {
         // SAFETY: forwards every transaction to the gated handle.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
         const runADb = runA as unknown as RefreshDb;
-        await refreshCaseLawSitemapShards(runADb);
+        expect(await refreshCaseLawSitemapShards(runADb)).toMatchObject({
+          type: "pending",
+          retry: "delayed",
+        });
         expect(state.paused).toBe(true);
       });
 

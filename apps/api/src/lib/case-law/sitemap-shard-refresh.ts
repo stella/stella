@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, eq, inArray, max, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -35,7 +35,6 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -55,7 +54,7 @@ export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
  */
 export const SITEMAP_WHOLE_COUNTRY = "*";
 
-/** Logged months read per page; the run reads the next page once they are done. */
+/** Log rows read per page before deduplicating months. */
 const PENDING_MONTHS_PAGE_SIZE = 500;
 
 /** Both budgets in milliseconds. */
@@ -509,6 +508,14 @@ const expandEveryCountry = async ({
   });
 };
 
+/** Read the oldest bounded row range before deduplicating months. Exported for its plan guard. */
+export const sitemapPendingMonthsSql = (): SQL => sql`
+  SELECT country, year, month
+  FROM ${caseLawSitemapChanges}
+  ORDER BY id
+  LIMIT ${PENDING_MONTHS_PAGE_SIZE}
+`;
+
 /** The next page of logged months, oldest log row first. */
 const readPendingMonths = async ({
   db,
@@ -517,24 +524,18 @@ const readPendingMonths = async ({
   await withAggregateTransaction(db, async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
     await setTransactionBudget(tx, budget);
-    const firstId = sql<number>`min(${caseLawSitemapChanges.id})`;
-    const page = await readCursorPage(
-      tx
-        .select({
-          country: caseLawSitemapChanges.country,
-          year: caseLawSitemapChanges.year,
-          month: caseLawSitemapChanges.month,
-        })
-        .from(caseLawSitemapChanges)
-        .groupBy(
-          caseLawSitemapChanges.country,
-          caseLawSitemapChanges.year,
-          caseLawSitemapChanges.month,
-        )
-        .orderBy(asc(firstId)),
-      { limit: PENDING_MONTHS_PAGE_SIZE, cursorForItem: monthKey },
+    const rows = executedRows(await tx.execute(sitemapPendingMonthsSql())).map(
+      (row) =>
+        v.parse(
+          v.object({
+            country: v.string(),
+            year: v.string(),
+            month: v.string(),
+          }),
+          row,
+        ),
     );
-    return page.items;
+    return [...new Map(rows.map((item) => [monthKey(item), item])).values()];
   });
 
 /** The public index's size, read back for the capacity alarm. */
@@ -570,7 +571,7 @@ const readPublicShardExtent = async (
 const SITEMAP_REFRESH_RUN_BUDGET_MS = 15 * 60 * 1000;
 
 type SitemapRefreshOutcome =
-  | { type: "pending"; months: number }
+  | { type: "pending"; months: number; retry: "immediate" | "delayed" }
   | {
       type: "refreshed";
       months: number;
@@ -631,12 +632,18 @@ export const refreshCaseLawSitemapShards = async (
   const queue: SitemapMonth[] = [];
 
   /** One step of the run: list more logged months, or work the next one. */
-  const advance = async (): Promise<"progress" | "pending" | "done"> => {
+  const advance = async (): Promise<
+    "progress" | "pending" | "deferred" | "done"
+  > => {
     const target = queue.shift();
     if (target === undefined) {
-      const pending = (await readPendingMonths(run)).filter(
-        (logged) => !progress.worked.has(monthKey(logged)),
+      const logged = await readPendingMonths(run);
+      const pending = logged.filter(
+        (item) => !progress.worked.has(monthKey(item)),
       );
+      if (pending.length === 0 && logged.length > 0) {
+        return "deferred";
+      }
       queue.push(...pending);
       return pending.length === 0 ? "done" : "progress";
     }
@@ -663,8 +670,12 @@ export const refreshCaseLawSitemapShards = async (
   for (;;) {
     // db-await-in-loop: logged months are worked oldest first, one short transaction at a time, so the run can stop between any two
     const step = await advance();
-    if (step === "pending") {
-      return { type: "pending", months: progress.months };
+    if (step === "pending" || step === "deferred") {
+      return {
+        type: "pending",
+        months: progress.months,
+        retry: step === "deferred" ? "delayed" : "immediate",
+      };
     }
     if (step === "done") {
       break;

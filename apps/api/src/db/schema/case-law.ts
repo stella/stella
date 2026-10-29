@@ -2639,7 +2639,7 @@ export const caseLawSitemapShards = p.pgTable(
 
 /**
  * The sitemap months a write touched, appended by triggers (migration
- * `20261029000200_case_law_sitemap_changes`): the month a decision left and
+ * `20261029000400_case_law_sitemap_changes`): the month a decision left and
  * the month it entered. A month of `*` asks for a whole country, and a
  * country of `*` for every country (a source's redistribution changed). The
  * refresh recounts each logged month and deletes exactly the rows its count's
