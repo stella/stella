@@ -7,19 +7,35 @@ import {
 import { runReleaseRehearsal } from "./release-rehearsal";
 
 describe("release rehearsal", () => {
-  test("runs every preCutGates entry", async () => {
-    const commands: string[][] = [];
+  const contextEffects = {
+    latestFinalVersion: () => "1.2.3",
+    resolveHeadSha: () => "0123456789abcdef0123456789abcdef01234567",
+    write: () => undefined,
+  };
+
+  test("hands every pre-cut gate to the cut runner with the cut context", async () => {
+    const calls: { gate: PreCutGate; context: unknown }[] = [];
     const results = await runReleaseRehearsal({
-      run: async (command) => {
-        commands.push([...command]);
-        return 0;
+      ...contextEffects,
+      rootDir: "/release-root",
+      runGate: async (gate, context) => {
+        calls.push({ gate, context });
+        return { passed: true };
       },
     });
 
     expect(results.map(({ name }) => name)).toEqual(
       preCutGates().map(({ name }) => name),
     );
-    expect(commands).toHaveLength(preCutGates().length);
+    expect(calls.map(({ gate }) => gate)).toEqual([...preCutGates()]);
+    expect(calls.map(({ context }) => context)).toEqual(
+      preCutGates().map(() => ({
+        baseSha: "0123456789abcdef0123456789abcdef01234567",
+        previousFinalTag: "v1.2.3",
+        rootDir: "/release-root",
+        write: contextEffects.write,
+      })),
+    );
   });
 
   test("refuses a gate reporting a write side in dry-run mode", async () => {
@@ -33,10 +49,11 @@ describe("release rehearsal", () => {
     } as const satisfies PreCutGate;
     let ran = false;
     const [result] = await runReleaseRehearsal({
+      ...contextEffects,
       gates: [gate],
-      run: async () => {
+      runGate: async () => {
         ran = true;
-        return 0;
+        return { passed: true };
       },
     });
 
@@ -50,8 +67,9 @@ describe("release rehearsal", () => {
 
   test("token-free scope omits only deploy-env-contract", async () => {
     const results = await runReleaseRehearsal({
+      ...contextEffects,
       scope: "token-free",
-      run: async () => 0,
+      runGate: async () => ({ passed: true }),
     });
     expect(results.map(({ name }) => name)).toEqual(
       preCutGates()

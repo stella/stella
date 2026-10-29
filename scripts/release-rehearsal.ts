@@ -1,8 +1,12 @@
 #!/usr/bin/env bun
 
-import { panic } from "better-result";
 import path from "node:path";
 
+import {
+  assertPreCutGates,
+  type CutGateRunner,
+  productionCutGateEffects,
+} from "./prepare-maintenance-release";
 import {
   type PreCutGate,
   preCutGates,
@@ -10,7 +14,7 @@ import {
 
 export type RehearsalResult = {
   readonly name: string;
-  readonly status: "passed" | "failed";
+  readonly status: "passed" | "failed" | "skipped";
   readonly detail?: string;
 };
 
@@ -18,72 +22,65 @@ type RehearsalOptions = {
   readonly gates?: readonly PreCutGate[];
   readonly scope?: "all" | "token-free";
   readonly rootDir?: string;
-  readonly run?: (command: readonly string[]) => Promise<number>;
-};
-
-const commandFor = (gate: PreCutGate): readonly string[] => {
-  switch (gate.check.kind) {
-    case "command":
-      return gate.check.command;
-    case "npm-publish-lag":
-      return [
-        "bun",
-        "scripts/check-npm-publish-lag.ts",
-        "--previous-release-of",
-        "HEAD",
-      ];
-    case "main-statuses":
-      return [
-        "bash",
-        "scripts/check-release-main-health.sh",
-        process.env["GITHUB_REPOSITORY"] ?? "stella/stella",
-        process.env["GITHUB_SHA"] ?? "HEAD",
-        process.env["GITHUB_SHA"] ?? "HEAD",
-      ];
-    default:
-      gate.check satisfies never;
-      return panic("Unknown release gate check");
-  }
-};
-
-const spawn = async (command: readonly string[], rootDir: string) => {
-  const child = Bun.spawn([...command], {
-    cwd: rootDir,
-    env: process.env,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  return await child.exited;
+  readonly runGate?: CutGateRunner;
+  readonly resolveHeadSha?: () => string;
+  readonly latestFinalVersion?: () => string;
+  readonly write?: (text: string) => void;
 };
 
 export const runReleaseRehearsal = async ({
   gates = preCutGates(),
   scope = "all",
   rootDir = path.resolve(import.meta.dirname, ".."),
-  run = async (command) => await spawn(command, rootDir),
+  ...injected
 }: RehearsalOptions = {}): Promise<readonly RehearsalResult[]> => {
+  const production = productionCutGateEffects(rootDir);
+  const runGate = injected.runGate ?? production.runGate;
+  const resolveHeadSha = injected.resolveHeadSha ?? production.resolveHeadSha;
+  const latestFinalVersion =
+    injected.latestFinalVersion ?? production.latestFinalVersion;
+  const write = injected.write ?? production.write;
   const selected = gates.filter(
     ({ name }) => scope === "all" || name !== "deploy-env-contract",
   );
   const results: RehearsalResult[] = [];
-  for (const gate of selected) {
-    if (gate.writeSide !== undefined) {
-      results.push({
-        name: gate.name,
-        status: "failed",
-        detail: `dry-run refused write side: ${gate.writeSide}`,
-      });
-      continue;
+  const rehearsalRunner: CutGateRunner = async (gate, context) => {
+    const writeRefusal =
+      gate.writeSide === undefined
+        ? null
+        : `dry-run refused write side: ${gate.writeSide}`;
+    const outcome =
+      writeRefusal === null
+        ? await runGate(gate, context)
+        : { passed: false as const, detail: writeRefusal };
+    const skipped = !outcome.passed && gate.overriddenByAllowUnprovenMain;
+    let status: RehearsalResult["status"] = "passed";
+    if (!outcome.passed) {
+      status = skipped ? "skipped" : "failed";
     }
-    process.stdout.write(`release-rehearsal: ${gate.name}: check only\n`);
-    const exitCode = await run(commandFor(gate));
     results.push({
       name: gate.name,
-      status: exitCode === 0 ? "passed" : "failed",
-      ...(exitCode === 0 ? {} : { detail: `exit ${String(exitCode)}` }),
+      status,
+      ...(outcome.passed ? {} : { detail: outcome.detail }),
     });
-  }
+    return outcome;
+  };
+  await assertPreCutGates({
+    allowUnprovenMain: true,
+    context: {
+      baseSha: resolveHeadSha(),
+      previousFinalTag: `v${latestFinalVersion()}`,
+      rootDir,
+      write,
+    },
+    gates: selected,
+    runGate: rehearsalRunner,
+  }).catch((error: unknown) => {
+    // A failed gate is already in the results; anything else must not pass.
+    if (!results.some(({ status }) => status === "failed")) {
+      throw error;
+    }
+  });
   return results;
 };
 
@@ -91,9 +88,15 @@ if (import.meta.main) {
   const scope = process.argv.includes("--token-free") ? "token-free" : "all";
   const results = await runReleaseRehearsal({ scope });
   const failed = results.filter(({ status }) => status === "failed");
+  const skipped = results.filter(({ status }) => status === "skipped");
   process.stdout.write(
     `release-rehearsal: ran ${results.map(({ name }) => name).join(", ")}\n`,
   );
+  if (skipped.length > 0) {
+    process.stdout.write(
+      `release-rehearsal: --allow-unproven-main skipped ${skipped.map(({ name }) => name).join(", ")}\n`,
+    );
+  }
   if (failed.length > 0) {
     for (const { detail, name } of failed) {
       process.stderr.write(`::error::${name}: ${detail ?? "failed"}\n`);

@@ -1387,13 +1387,14 @@ const postCutNote = (): string =>
 export const assertPreCutGates = async ({
   allowUnprovenMain,
   context,
+  gates = preCutGates(MAINTENANCE_CUT_GATES),
   runGate,
 }: {
   allowUnprovenMain: boolean;
   context: CutGateContext;
+  gates?: readonly PreCutGate[];
   runGate: CutGateRunner;
 }): Promise<void> => {
-  const gates = preCutGates(MAINTENANCE_CUT_GATES);
   const failures: string[] = [];
   for (const gate of gates) {
     // One at a time: each gate prints its own output.
@@ -1528,11 +1529,8 @@ export const cutMaintenanceRelease = async (
   );
 };
 
-const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+export const productionCutGateEffects = (rootDir: string) => ({
   rootDir,
-  assertCleanWorktree: () => {
-    assertCleanWorktree(rootDir);
-  },
   resolveHeadSha: () => resolveHeadSha(rootDir),
   latestFinalVersion: () => {
     run(["git", "fetch", "origin", "main", "--tags"]);
@@ -1555,6 +1553,17 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       throw new MaintenanceReleaseError("No final release tag exists");
     }
     return latest.slice(1);
+  },
+  runGate: runCutGate,
+  write: (text: string) => {
+    process.stdout.write(text);
+  },
+});
+
+const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+  ...productionCutGateEffects(rootDir),
+  assertCleanWorktree: () => {
+    assertCleanWorktree(rootDir);
   },
   assertNoOpenRelease: () => {
     const listing = spawnOutput([
@@ -1615,7 +1624,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       `Release v${version}.`,
     ]);
   },
-  runGate: runCutGate,
   queueHistoryWarning: (baseSha) =>
     releaseQueueHistoryWarning(() => ({ baseSha })),
   readPreviousRelease,
@@ -1624,9 +1632,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   checkPreparedRelease: (version) => {
     run(["bash", "scripts/check-release-changelog.sh", "--version", version]);
     run(["bun", "run", "marketing:provenance", "--strict"]);
-  },
-  write: (text) => {
-    process.stdout.write(text);
   },
 });
 
