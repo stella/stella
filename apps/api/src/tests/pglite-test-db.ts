@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
-import { getTableName, isTable, sql } from "drizzle-orm";
+import { getColumns, getTableName, isTable, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -12,6 +12,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CENSUS_COLUMN_GRANTS_BY_RELATION,
   DOCTRINE_COLUMN_GRANTS_BY_RELATION,
@@ -326,12 +327,22 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
       .map(({ relation, column }) => `${relation}.${column}`),
   ]);
 
+const decisionColumnNames = new Set(
+  Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
+);
+const decisionRelationNames = new Set<string>([
+  getTableName(schema.caseLawDecisions),
+  ...CASE_LAW_DECISION_VIEWS,
+]);
+
 const grantedPublicLawColumns = (
   relation: string,
   columns: Readonly<Record<string, unknown>>,
 ) =>
   Object.keys(columns).filter(
     (column) =>
+      (!decisionRelationNames.has(relation) ||
+        decisionColumnNames.has(column)) &&
       !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
         `${relation}.${column}`,
       ),
