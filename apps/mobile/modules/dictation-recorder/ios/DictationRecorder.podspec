@@ -8,11 +8,9 @@ Pod::Spec.new do |s|
   s.platforms = { :ios => '16.4' }
   s.source = { git: '' }
   s.static_framework = true
-  s.license = { :type => 'Apache-2.0 AND BSD-3-Clause', :file => 'rnnoise/COPYING' }
-  s.resource_bundles = { 'DictationRecorderNotices' => ['rnnoise/COPYING', 'rnnoise/PROVENANCE'] }
+  s.license = { :type => 'Apache-2.0' }
   s.dependency 'ExpoModulesCore'
+  s.dependency 'StellaRNNoise', '1.0.0'
   s.frameworks = 'AVFoundation', 'CryptoKit', 'UIKit'
-  s.source_files = '**/*.{swift,c,h}'
-  s.public_header_files = 'rnnoise/rnnoise.h'
-  s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) RNNOISE_BUILD=1' }
+  s.source_files = '*.swift'
 end

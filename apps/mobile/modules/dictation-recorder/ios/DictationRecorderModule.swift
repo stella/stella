@@ -1,6 +1,7 @@
 import AVFoundation
 import CryptoKit
 import ExpoModulesCore
+import StellaRNNoise
 import UIKit
 
 private struct Meter: Codable {

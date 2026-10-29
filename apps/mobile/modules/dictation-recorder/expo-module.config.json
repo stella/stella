@@ -1,4 +1,11 @@
 {
   "platforms": ["apple"],
-  "apple": { "modules": ["DictationRecorderModule"] }
+  "apple": {
+    "modules": ["DictationRecorderModule"],
+    "podspecPath": [
+      "ios/DictationRecorder.podspec",
+      "ios/rnnoise/StellaRNNoise.podspec"
+    ],
+    "swiftModuleName": ["DictationRecorder"]
+  }
 }

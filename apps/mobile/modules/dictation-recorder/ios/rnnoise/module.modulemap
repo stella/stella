@@ -1,0 +1,4 @@
+module StellaRNNoise {
+  header "rnnoise.h"
+  export *
+}
