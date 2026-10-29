@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
-import { getTableName, isTable, sql } from "drizzle-orm";
+import { getColumns, getTableName, isTable, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -12,6 +12,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CENSUS_COLUMN_GRANTS_BY_RELATION,
   DOCTRINE_COLUMN_GRANTS_BY_RELATION,
@@ -326,12 +327,22 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
       .map(({ relation, column }) => `${relation}.${column}`),
   ]);
 
+const decisionColumnNames = new Set(
+  Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
+);
+const decisionRelationNames = new Set<string>([
+  getTableName(schema.caseLawDecisions),
+  ...CASE_LAW_DECISION_VIEWS,
+]);
+
 const grantedPublicLawColumns = (
   relation: string,
   columns: Readonly<Record<string, unknown>>,
 ) =>
   Object.keys(columns).filter(
     (column) =>
+      (!decisionRelationNames.has(relation) ||
+        decisionColumnNames.has(column)) &&
       !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
         `${relation}.${column}`,
       ),
@@ -360,7 +371,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
-  caseLawDecisionViewGrantStatement("stella_ingestion"),
+  caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella

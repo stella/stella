@@ -15,6 +15,7 @@ import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grant
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
@@ -184,7 +185,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  * `permitted` first, revoke in a later release, so both releases serve while
  * the two steps are apart.
  */
-const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
+const CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS = {
   id: "required",
   source_id: "required",
   case_number: "required",
@@ -202,7 +203,6 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   language_group_key: "required",
   decision_date: "required",
   decision_type: "required",
-  extraction_warnings: "required",
   fulltext: "required",
   sections: "required",
   document_ast: "required",
@@ -222,10 +222,21 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   updated_at: "required",
 } as const;
 
-/** Columns added after the previous release, which never reads them. */
-const CASE_LAW_DECISION_VIEW_ONLY_COLUMNS: ReadonlySet<string> = new Set<
-  keyof typeof CASE_LAW_DECISION_VIEW_COLUMN_GRANTS
->(["extraction_warnings"]);
+// Permitted ahead of its migration: runtime attestation accepts the grant,
+// but generators must not grant a column the migrated views do not contain.
+const CASE_LAW_DECISION_PENDING_VIEW_COLUMN_GRANTS = {
+  text_state: "permitted",
+} as const;
+
+const CASE_LAW_DECISION_LATER_VIEW_COLUMN_GRANTS = {
+  extraction_warnings: "required",
+} as const;
+
+const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
+  ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+  ...CASE_LAW_DECISION_PENDING_VIEW_COLUMN_GRANTS,
+  ...CASE_LAW_DECISION_LATER_VIEW_COLUMN_GRANTS,
+} as const;
 
 /**
  * Expand phase: the previous release reads the base table, so the role keeps
@@ -235,9 +246,10 @@ const CASE_LAW_DECISION_VIEW_ONLY_COLUMNS: ReadonlySet<string> = new Set<
  * ships with the removal of this map.
  */
 const CASE_LAW_DECISION_BASE_COLUMN_GRANTS = Object.fromEntries(
-  Object.keys(CASE_LAW_DECISION_VIEW_COLUMN_GRANTS)
-    .filter((column) => !CASE_LAW_DECISION_VIEW_ONLY_COLUMNS.has(column))
-    .map((column) => [column, "permitted"] as const),
+  Object.keys({
+    ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+    ...CASE_LAW_DECISION_PENDING_VIEW_COLUMN_GRANTS,
+  }).map((column) => [column, "permitted"] as const),
 );
 
 export const CASE_LAW_DECISION_VIEWS = [
@@ -246,18 +258,36 @@ export const CASE_LAW_DECISION_VIEWS = [
 ] as const;
 
 /** Subject resolution and publication reads require the paired decision views. */
-export const CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE = {
+const CASE_LAW_DECISION_INITIAL_VIEW_SELECT_GRANTS_BY_ROLE = {
   stella_public_law_reader: {
     kind: "columns",
-    columns: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+    columns: CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
   },
   stella_caselaw_reader: { kind: "table" },
   stella: { kind: "table" },
   stella_ingestion: { kind: "table" },
 } as const;
 
+export const CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE = {
+  initial: CASE_LAW_DECISION_INITIAL_VIEW_SELECT_GRANTS_BY_ROLE,
+  later: {
+    ...CASE_LAW_DECISION_INITIAL_VIEW_SELECT_GRANTS_BY_ROLE,
+    stella_public_law_reader: {
+      kind: "columns",
+      columns: {
+        ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+        ...CASE_LAW_DECISION_LATER_VIEW_COLUMN_GRANTS,
+      },
+    },
+  },
+} as const;
+
+type DecisionViewGrantStage =
+  keyof typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE;
+type DecisionViewGrantRole =
+  keyof (typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE)[DecisionViewGrantStage];
 type DecisionViewGrant =
-  (typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE)[keyof typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE];
+  (typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE)[DecisionViewGrantStage][DecisionViewGrantRole];
 const decisionViewSelection = (grant: DecisionViewGrant): string => {
   switch (grant.kind) {
     case "columns":
@@ -276,19 +306,27 @@ const renderDecisionViewGrant = (role: string, grant: DecisionViewGrant) =>
   `GRANT ${decisionViewSelection(grant)} ON TABLE ${CASE_LAW_DECISION_VIEWS.map((relation) => `"${relation}"`).join(", ")} TO "${role}"`;
 
 export const caseLawDecisionViewGrantStatement = (
-  role: keyof typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
+  stage: DecisionViewGrantStage,
+  role: DecisionViewGrantRole,
 ) =>
   renderDecisionViewGrant(
     role,
-    CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE[role],
+    CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE[stage][role],
   );
 
-export const caseLawDecisionViewGrantStatements = () =>
-  Object.entries(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE).map(
+export const caseLawDecisionViewGrantStatements = (
+  stage: DecisionViewGrantStage,
+) =>
+  Object.entries(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE[stage]).map(
     ([role, grant]) => renderDecisionViewGrant(role, grant),
   );
 
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  case_law_withdrawal_status: {
+    decision_id: "required",
+    status: "required",
+    withdrawn_at: "required",
+  },
   ...CENSUS_COLUMN_GRANTS_BY_RELATION,
   ...REVIEW_COLUMN_GRANTS_BY_RELATION,
   ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,

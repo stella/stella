@@ -23,7 +23,7 @@ const migrationSql = readFileSync(
 const generationMigrationSql = readFileSync(
   nodePath.resolve(
     import.meta.dir,
-    "../../drizzle/20261029183100_case_law_extraction_warnings_generation/migration.sql",
+    "../../drizzle/20261029211728_case_law_extraction_warnings_generation/migration.sql",
   ),
   "utf-8",
 ).replaceAll("--> statement-breakpoint", "");

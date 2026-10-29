@@ -8,6 +8,10 @@ import {
 } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
+import {
+  nativeEntries,
+  nativeRuleId,
+} from "./.oxlint-plugins/no-native-ui-registry.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
@@ -33,7 +37,10 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
-import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
+import {
+  DESIGN_SYSTEM_CONSUMER_FILES,
+  PRODUCT_FRONTEND_FILES,
+} from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -174,6 +181,12 @@ const derivedAttributeRuleOptions = {
   })),
 };
 
+// One rule per @stll/ui component that replaces native markup, generated
+// from .oxlint-plugins/no-native-ui-registry.ts.
+const NO_NATIVE_UI_RULE_IDS = nativeEntries().map(({ module }) =>
+  nativeRuleId(module),
+);
+
 const fixtureRuleOverrides = [
   {
     files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
@@ -224,6 +237,12 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-test-support-import.fixture.ts", [
     "no-test-support-import/no-test-support-import",
+  ]),
+  fixtureRuleOverride("retention-source-independence.fixture.ts", [
+    "retention-source-independence/retention-source-independence",
+  ]),
+  fixtureRuleOverride("retention-oracle-owner.fixture.ts", [
+    "retention-oracle-owner/retention-oracle-owner",
   ]),
   fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
     "no-failure-as-empty/no-failure-as-empty",
@@ -435,6 +454,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
@@ -1793,6 +1813,7 @@ const config = defineConfig({
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
+    "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -1831,6 +1852,8 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
+    "./.oxlint-plugins/retention-source-independence.ts",
+    "./.oxlint-plugins/retention-oracle-owner.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
@@ -1888,7 +1911,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
-    "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-failure-as-empty.ts",
@@ -2183,6 +2205,20 @@ const config = defineConfig({
         "apps/api/src/tests/**",
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/retention/sources/**/*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "retention-source-independence/retention-source-independence": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**"],
+      rules: { "retention-oracle-owner/retention-oracle-owner": "error" },
     },
     {
       files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
@@ -4505,24 +4541,6 @@ const config = defineConfig({
     },
     {
       files: [
-        "apps/api/src/handlers/case-law/ingestion/{parsers,adapters}/**/*.ts",
-        "apps/api/src/lib/legal-search/parsers/**/*.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.import.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.call.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.legacy.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.stale.ts",
-      ],
-      excludeFiles: [
-        "**/*.test.ts",
-        "apps/api/src/lib/legal-search/parsers/validate-ast.ts",
-      ],
-      rules: {
-        "no-parser-validator-calls/no-parser-validator-calls": "error",
-      },
-    },
-    {
-      files: [
         ".oxlint-plugins/__fixtures__/no-literal-decision-court.fixture.ts",
       ],
       rules: {
@@ -6722,6 +6740,22 @@ const config = defineConfig({
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
       },
+    },
+    {
+      // Surfaces that render through @stll/ui never hand-roll the native
+      // markup one of its components wraps (a role="switch" button, a raw
+      // <select>, a title tooltip); each rule names the import to use. The
+      // design system renders that markup itself and is not in this scope;
+      // tests render bare harness markup.
+      files: [...DESIGN_SYSTEM_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: Object.fromEntries(
+        NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
+      ),
     },
     {
       // `shadcn/no-restyle` judges a className by reading its classes. An

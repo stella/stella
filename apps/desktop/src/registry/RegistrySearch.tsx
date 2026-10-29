@@ -69,6 +69,25 @@ type Connection =
   | { status: "reconnectRequired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
+
+const registrySearchHint = (
+  t: ReturnType<typeof useTranslations<"clipboard">>,
+  connection: Connection | null,
+  registryId: string,
+) => {
+  if (connection?.status !== "connected") {
+    return t("registrySearchHint");
+  }
+  const capabilities = connection.registries.find(
+    ({ id }) => id === registryId,
+  )?.searchCapabilities;
+  if (capabilities?.nameSearch !== "unsupported") {
+    return t("registrySearchHint");
+  }
+  return t("registryIdentifierSearchHint", {
+    identifiers: capabilities.identifierKinds.join(", "),
+  });
+};
 export type DesktopConnectionStatus = Connection["status"] | "loading";
 type ResultCard = Omit<
   DesktopRegistrySearchResponse["results"][number],
@@ -544,7 +563,7 @@ export const RegistrySearch = ({
     input.addEventListener("keydown", handleSearchKey);
     return () => input.removeEventListener("keydown", handleSearchKey);
   });
-  let emptyText = t("registrySearchHint");
+  let emptyText = registrySearchHint(t, connection, registryId);
   if (connection === null) {
     emptyText = t("registryLoading");
   } else if (connection.status === "expired") {

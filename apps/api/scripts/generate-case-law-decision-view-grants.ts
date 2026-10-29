@@ -27,7 +27,7 @@ const endOffset = source.indexOf(end);
 if (startOffset === -1 || endOffset < startOffset) {
   panic("Decision view grant migration lacks its generated section");
 }
-const generated = `${start}\n${caseLawDecisionViewGrantStatements().join(";--> statement-breakpoint\n\n")};\n${end}`;
+const generated = `${start}\n${caseLawDecisionViewGrantStatements("later").join(";--> statement-breakpoint\n\n")};\n${end}`;
 const output =
   source.slice(0, startOffset) +
   generated +

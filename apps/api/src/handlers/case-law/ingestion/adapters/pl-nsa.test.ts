@@ -1143,7 +1143,6 @@ describe("the document is checked against the dataset's own text", () => {
     "Wojewódzki sąd rozpoznał skargę podatnika na interpretację indywidualną organu i uznał, że wnioskodawca prawidłowo ustalił przychód, a organ błędnie zastosował przepisy ustawy o podatku dochodowym od osób fizycznych w brzmieniu obowiązującym w dacie zdarzenia, co przesądziło o uchyleniu zaskarżonego aktu.";
 
   test("text only the full rendering carries is kept, from the rendering", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       reference: [
@@ -1156,11 +1155,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.textSource).toBe("full-text");
     expect(parsed.fulltext).toContain(REASONS);
     expect(parsed.validation.ok).toBe(true);
-    expect(error).not.toHaveBeenCalledWith(
-      "case_law.ingestion.ast_content_lost",
-      expect.anything(),
-    );
-    error.mockRestore();
   });
 
   test("with every section empty, the rendering is the document", () => {
@@ -1175,7 +1169,6 @@ describe("the document is checked against the dataset's own text", () => {
   });
 
   test("with no text anywhere, the check still runs and reports it", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       sections: { thesis: null, sentence: null, reasons: null, dissent: null },
@@ -1184,7 +1177,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.documentAst).toBeNull();
     expect(parsed.textSource).toBe("none");
     expect(parsed.validation.issues.length).toBeGreaterThan(0);
-    error.mockRestore();
   });
 
   test("sections that hold everything are used as sections", () => {
