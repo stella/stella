@@ -258,6 +258,70 @@ test("escaped occurrences consume their per-file baseline budget", () => {
   ).toEqual([expect.objectContaining({ file: FILE, line: 4 })]);
 });
 
+test("a listed reasoned kit-allow is reviewed without consuming the budget", () => {
+  const source =
+    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  const escapedHits = scanRustTestDeterminism({
+    source,
+    integrationTest: false,
+  });
+  const boundary = {
+    file: FILE,
+    line: source,
+    reason: "exercise deadline",
+  };
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, escapedHits]]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: JSON.stringify([boundary]),
+    }),
+  ).toEqual([]);
+});
+
+test("an unlisted reasoned kit-allow still fails the determinism guard", () => {
+  const source =
+    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([
+        [FILE, scanRustTestDeterminism({ source, integrationTest: false })],
+      ]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: "[]",
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      message: expect.stringContaining(
+        "Escaped occurrences still need a baseline slot",
+      ),
+    }),
+  ]);
+});
+
+test("a reasonless kit-allow cannot become a reviewed boundary", () => {
+  const source = "#[test] fn example() { Instant::now(); } // kit-allow:";
+  const reasonlessHits = scanRustTestDeterminism({
+    source,
+    integrationTest: false,
+  });
+  expect(reasonlessHits).toEqual([{ line: 1, kind: "clock", escaped: false }]);
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, reasonlessHits]]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: "[]",
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      message: expect.stringContaining("Rust test clock"),
+    }),
+  ]);
+});
+
 test.each([
   ["escaped before plain", [true, false], 4],
   ["plain before escaped", [false, true], 2],
@@ -529,6 +593,7 @@ test.each([
   "crates/new-engine/src/lib.rs",
   "crates/new-engine/Cargo.toml",
   "scripts/rust-test-determinism-baseline.json",
+  "scripts/rust-test-determinism-reviewed-boundaries.json",
   "scripts/rust-test-determinism-scan.ts",
   "scripts/check-rust-test-determinism.ts",
 ])("selects the baseline runner when %s changes or is deleted", (file) => {
@@ -554,6 +619,7 @@ test.each([
   "Cargo.toml",
   "crates/new-engine/Cargo.toml",
   "scripts/rust-test-determinism-baseline.json",
+  "scripts/rust-test-determinism-reviewed-boundaries.json",
 ])("baseline runner cache inputs cover changed or deleted %s", (file) => {
   expect(
     PLUGIN_FIXTURE_INPUTS.some((input) =>
@@ -572,6 +638,7 @@ test("baseline runner selection inputs include scanner and baseline owners", () 
   expect(PLUGIN_FIXTURE_INPUTS).toEqual(
     expect.arrayContaining([
       "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
+      "$TURBO_ROOT$/scripts/rust-test-determinism-reviewed-boundaries.json",
       "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
       "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
     ]),
