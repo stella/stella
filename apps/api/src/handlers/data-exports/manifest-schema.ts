@@ -6,6 +6,8 @@
 
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
+
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
 export const DATA_EXPORT_FORMAT = "stella-data-export";
@@ -27,6 +29,7 @@ const idSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(255));
 const timestampSchema = v.pipe(
   v.string(),
   v.isoTimestamp(),
+  API_STORABLE_INSTANT_CHECK,
   v.description("ISO 8601 timestamp in UTC."),
 );
 const sha256Schema = v.pipe(

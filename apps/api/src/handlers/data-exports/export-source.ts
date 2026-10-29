@@ -41,6 +41,7 @@ import {
   workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
+import { int8ToSafeNumber } from "@/api/db/sql-client";
 import type {
   ExportFileRef,
   ExportSource,
@@ -833,7 +834,7 @@ const measureRecords = async (
       ),
     ).at(0),
   );
-  const organizationBytes = Number(organizationRow.bytes);
+  const organizationBytes = int8ToSafeNumber(organizationRow.bytes);
   // What `loadMatter` reads, grouped by matter: one query per page of
   // matters over all of its tables.
   const matterTables: readonly (readonly [PgTable, PgColumn])[] = [
@@ -866,7 +867,7 @@ const measureRecords = async (
     },
   );
   const matterBytes = new Map(
-    rows.map((row) => [row.workspace_id, Number(row.bytes)] as const),
+    rows.map((row) => [row.workspace_id, int8ToSafeNumber(row.bytes)] as const),
   );
   return { organizationBytes, matterBytes };
 };

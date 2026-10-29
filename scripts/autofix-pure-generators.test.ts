@@ -228,6 +228,7 @@ test("export schema inputs select the canonical producer without database initia
     "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
     "apps/api/src/handlers/data-exports/manifest-schema.ts",
     "apps/api/src/lib/data-export/version-scope.ts",
+    "packages/api-contract/src/api-date.ts",
     "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     "packages/api-contract/src/json-schema-regex.ts",
     "packages/legal-ast/src/analysis.ts",

@@ -133,6 +133,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             const sweeping = Promise.resolve(
               task(
                 asTestRaw<SchedulerTaskContext>({
+                  runId: createSafeId<"schedulerJobRun">(),
                   db: sweep.db,
                   dueAt: DueSlot.of({ nextRunAt: now }),
                   job,
@@ -265,6 +266,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             }
             return await task(
               asTestRaw<SchedulerTaskContext>({
+                runId: createSafeId<"schedulerJobRun">(),
                 db: client.db,
                 dueAt: DueSlot.of({ nextRunAt: now }),
                 job,

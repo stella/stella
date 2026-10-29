@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const MAINTAIN_DATA_EXPORTS_TASK = "dataExports.maintain" as const;
 
@@ -64,6 +65,11 @@ export type DataExportMaintenanceDependencies = {
   /** `DATA_EXPORT_HANDOFF_PAGE_SIZE` in production. */
   handoffPageSize: number;
 };
+
+const DEFAULT_MAINTENANCE_DEPENDENCIES = {
+  enqueue: enqueueDataExport,
+  handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+} satisfies DataExportMaintenanceDependencies;
 
 type MaintenanceSummary = {
   expired: number;
@@ -493,8 +499,10 @@ const requeueQueued = async (
  * next attempt.
  */
 export const createMaintainDataExportsTask =
-  (deps: DataExportMaintenanceDependencies): SchedulerTask =>
-  async ({ db, dueAt, job, logger, signal, scheduleContinuation }) => {
+  (
+    deps: DataExportMaintenanceDependencies = DEFAULT_MAINTENANCE_DEPENDENCIES,
+  ): SchedulerTask =>
+  async ({ db, dueAt, job, logger, signal, scheduleContinuation, runId }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
@@ -516,26 +524,35 @@ export const createMaintainDataExportsTask =
     const leaseToken =
       job.lockedBy ??
       panic("Data-export maintenance requires a scheduler lease");
-    // audit: skip - scheduler cursor bookkeeping is recorded by scheduler runs
-    await db
-      .update(schedulerJobs)
-      .set({
-        payload: {
-          queuedCursor:
-            nextQueuedCursor === null
-              ? null
-              : {
-                  createdAt: nextQueuedCursor.createdAt.value,
-                  id: nextQueuedCursor.id,
-                },
-        },
-      })
-      .where(
-        and(
-          eq(schedulerJobs.id, job.id),
-          eq(schedulerJobs.lockedBy, leaseToken),
-        ),
-      );
+    await withAggregateTransaction(db, async (tx: Transaction) => {
+      const checkpointed = await tx
+        .update(schedulerJobs)
+        .set({
+          payload: {
+            queuedCursor:
+              nextQueuedCursor === null
+                ? null
+                : {
+                    createdAt: nextQueuedCursor.createdAt.value,
+                    id: nextQueuedCursor.id,
+                  },
+          },
+        })
+        .where(
+          and(
+            eq(schedulerJobs.id, job.id),
+            eq(schedulerJobs.lockedBy, leaseToken),
+          ),
+        )
+        .returning({ id: schedulerJobs.id });
+      if (checkpointed.length === 0) {
+        return;
+      }
+      await recordSystemAudit(tx, "system:data-export-maintenance", {
+        subject: runId,
+        counts: { checkpointedJobs: checkpointed.length },
+      });
+    });
     // Transitions remove handled rows from the next scan; queue workers
     // remove handed-off rows when they claim them. The sentinel requests
     // another bounded pass without treating a full batch as complete.
@@ -563,7 +580,4 @@ export const createMaintainDataExportsTask =
     return Result.ok(undefined);
   };
 
-export const maintainDataExports = createMaintainDataExportsTask({
-  enqueue: enqueueDataExport,
-  handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
-});
+export const maintainDataExports = createMaintainDataExportsTask();

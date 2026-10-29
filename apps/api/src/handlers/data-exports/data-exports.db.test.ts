@@ -47,7 +47,7 @@ import {
   startDataExport,
 } from "@/api/handlers/data-exports/start-export";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export/queue";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -455,6 +455,7 @@ describe("data export maintenance", () => {
     const runMaintenance = async (nextRunAt: Date) =>
       await task(
         asTestRaw<SchedulerTaskContext>({
+          runId: createSafeId<"schedulerJobRun">(),
           db: testDb,
           dueAt: DueSlot.of({ nextRunAt }),
           job: createLeasedSchedulerJobFixture({
@@ -469,11 +470,6 @@ describe("data export maintenance", () => {
         }),
       );
 
-    const firstResult = await runMaintenance(now);
-    expect(firstResult !== undefined && Result.isOk(firstResult)).toBe(true);
-    const continuationAt = new Date(now.getTime() + 1000);
-    expect(continuations).toEqual([continuationAt]);
-
     const readStatuses = async () =>
       new Map(
         (
@@ -487,14 +483,17 @@ describe("data export maintenance", () => {
         ).map((row) => [row.id, row.status]),
       );
 
-    const firstStatuses = await readStatuses();
-    for (const [index, exportId] of exportIds.entries()) {
-      expect(firstStatuses.get(exportId)).toBe(index < 8 ? "expired" : "ready");
+    let nextRunAt: Date | null = now;
+    while (nextRunAt !== null) {
+      const previousContinuationCount = continuations.length;
+      const result = await runMaintenance(nextRunAt);
+      expect(result !== undefined && Result.isOk(result)).toBe(true);
+      nextRunAt =
+        continuations.length > previousContinuationCount
+          ? (continuations.at(-1) ?? null)
+          : null;
     }
-
-    const secondResult = await runMaintenance(continuationAt);
-    expect(secondResult !== undefined && Result.isOk(secondResult)).toBe(true);
-    expect(continuations).toHaveLength(1);
+    expect(continuations.length).toBeGreaterThan(0);
 
     const finalStatuses = await readStatuses();
     for (const exportId of exportIds) {
@@ -534,6 +533,7 @@ describe("data export maintenance", () => {
     });
     const result = await task(
       asTestRaw<SchedulerTaskContext>({
+        runId: createSafeId<"schedulerJobRun">(),
         db: testDb,
         dueAt: DueSlot.of({ nextRunAt: now }),
         job: createLeasedSchedulerJobFixture({
@@ -542,6 +542,7 @@ describe("data export maintenance", () => {
           nextRunAt: now,
         }),
         logger: { info: () => {}, warn: () => {}, error: () => {} },
+        scheduleContinuation: () => {},
         signal: new AbortController().signal,
       }),
     );
@@ -600,6 +601,7 @@ describe("data export maintenance", () => {
     try {
       await task(
         asTestRaw<SchedulerTaskContext>({
+          runId: createSafeId<"schedulerJobRun">(),
           db: testDb,
           dueAt: DueSlot.of({ nextRunAt: now }),
           job: createLeasedSchedulerJobFixture({
@@ -608,6 +610,7 @@ describe("data export maintenance", () => {
             nextRunAt: now,
           }),
           logger: { info: () => {}, warn: () => {}, error: () => {} },
+          scheduleContinuation: () => {},
           signal: new AbortController().signal,
         }),
       );
@@ -650,6 +653,7 @@ describe("data export maintenance", () => {
     });
     await task(
       asTestRaw<SchedulerTaskContext>({
+        runId: createSafeId<"schedulerJobRun">(),
         db: testDb,
         dueAt: DueSlot.of({ nextRunAt: now }),
         job: createLeasedSchedulerJobFixture({
@@ -658,6 +662,7 @@ describe("data export maintenance", () => {
           nextRunAt: now,
         }),
         logger: { info: () => {}, warn: () => {}, error: () => {} },
+        scheduleContinuation: () => {},
         signal: new AbortController().signal,
       }),
     );

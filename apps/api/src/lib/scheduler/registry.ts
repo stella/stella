@@ -327,10 +327,9 @@ const schedulerTasks = (
   options: SchedulerTaskRegistryOptions = {},
 ) => ({
   ...SCHEDULER_TASKS,
-  [MAINTAIN_DATA_EXPORTS_TASK]:
-    options.dataExportMaintenance === undefined
-      ? maintainDataExports
-      : createMaintainDataExportsTask(options.dataExportMaintenance),
+  [MAINTAIN_DATA_EXPORTS_TASK]: createMaintainDataExportsTask(
+    options.dataExportMaintenance,
+  ),
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
 });

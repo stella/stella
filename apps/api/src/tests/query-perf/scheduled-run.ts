@@ -7,6 +7,7 @@ import {
 } from "drizzle-orm";
 
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
+import { createSafeId } from "@/api/lib/branded-types";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
@@ -118,6 +119,7 @@ export const captureScheduledJobRun = async ({
     try: async () =>
       await task(
         asTestRaw<SchedulerTaskContext>({
+          runId: createSafeId<"schedulerJobRun">(),
           db: database,
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           job: createLeasedSchedulerJobFixture({

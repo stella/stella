@@ -6,7 +6,11 @@ import { drizzle } from "drizzle-orm/pglite";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { databaseRelations } from "@/api/db/database-relations";
-import { auditLogs, organizationDataExports } from "@/api/db/schema";
+import {
+  auditLogs,
+  organizationDataExports,
+  systemAuditRuns,
+} from "@/api/db/schema";
 import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
 import {
   DATA_EXPORT_HANDOFF_PAGE_SIZE,
@@ -85,6 +89,7 @@ test.each(["quiet", "transitions", "queued"] as const)(
       },
       resetAfterCapture: async () => {
         resets += 1;
+        expect(await db.$count(systemAuditRuns)).toBe(1);
         const changed = await exportRows();
         const audits = await db.$count(auditLogs);
         if (cohort === "transitions") {
@@ -100,6 +105,7 @@ test.each(["quiet", "transitions", "queued"] as const)(
     expect(resets).toBe(1);
     expect(await exportRows()).toEqual(original);
     expect(await db.$count(auditLogs)).toBe(0);
+    expect(await db.$count(systemAuditRuns)).toBe(0);
     expect(statements.some(({ text }) => /^\s*explain\b/iu.test(text))).toBe(
       false,
     );
