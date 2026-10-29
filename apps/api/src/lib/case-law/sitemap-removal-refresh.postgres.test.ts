@@ -2,10 +2,12 @@ import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import nodePath from "node:path";
 import * as v from "valibot";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
+import { runMigrations } from "@/api/db/migration-runner";
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
@@ -14,7 +16,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import {
   invalidateCaseLawSitemapShardsTx,
   refreshCaseLawSitemapShards,
@@ -26,10 +27,7 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  copyIngestionTablePrivileges,
-  openGatedTestDatabase,
-} from "@/api/tests/gated-test-database";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -39,79 +37,41 @@ const REFRESH_TIMEOUT_MS = 10_000;
 describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
   const databaseUrl =
     process.env["DATABASE_URL"] ?? panic("PostgreSQL URL required");
-  const schema = `sitemap_removal_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+  const databaseName = `sitemap_removal_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+  const fixtureUrl = new URL(databaseUrl);
+  fixtureUrl.pathname = `/${databaseName}`;
+  const { db, sql: client } = openGatedTestDatabase(fixtureUrl.href);
+  const competitor = openGatedTestDatabase(fixtureUrl.href);
   const admin = openGatedTestDatabase(databaseUrl);
-  const { db } = openGatedTestDatabase(databaseUrl, {
-    searchPath: `${schema}, public`,
-  });
-  const competitor = openGatedTestDatabase(databaseUrl, {
-    searchPath: `${schema}, public`,
-  });
   const country = "XSR";
   const sourceId = createSafeId<"caseLawSource">();
   const decisionId = createSafeId<"caseLawDecision">();
   admin.cleanUp(async () => {
+    // Dropping the database requires both fixture pools to be closed,
+    // regardless of the test runner's ordering of the gated cleanup hooks.
+    await client.close();
+    await competitor.sql.close();
     await admin.db.execute(
-      sql`DROP SCHEMA IF EXISTS ${sql.identifier(schema)} CASCADE`,
+      sql`DROP DATABASE IF EXISTS ${sql.identifier(databaseName)}`,
     );
   });
+  // timeout: a fresh database must apply the complete committed migration bundle before either concurrency test starts.
   beforeAll(async () => {
-    await admin.db.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
-    const tables = [
-      "case_law_sources",
-      "case_law_decisions",
-      "case_law_sitemap_country_generations",
-      "case_law_browse_facet_counts",
-      "case_law_coverage_summaries",
-      "case_law_sitemap_shard_counts",
-      "case_law_sitemap_shards",
-      "case_law_source_arrivals",
-    ];
-    await db.transaction(async (tx) => {
-      for (const table of tables) {
-        // db-await-in-loop: copy this fixture's finite set of migrated relations before installing their canonical triggers.
-        await tx.execute(
-          sql`CREATE TABLE ${sql.identifier(table)} (LIKE public.${sql.identifier(table)} INCLUDING ALL)`,
-        );
-      }
-      const migration = await Bun.file(
-        new URL(
-          "../../../drizzle/20261029140900_case_law_sitemap_changes/migration.sql",
-          import.meta.url,
-        ),
-      ).text();
-      // Redirect the canonical triggers' table references; publication predicates
-      // remain the migrated functions. No fixture trigger logic is duplicated.
-      for (const statement of migration
-        .replaceAll(
-          "public.case_law_sitemap_changes",
-          () => `${schema}.case_law_sitemap_changes`,
-        )
-        .replaceAll(
-          "public.case_law_decisions",
-          () => `${schema}.case_law_decisions`,
-        )
-        .replaceAll(
-          "pg_catalog, public, pg_temp",
-          () => `pg_catalog, ${schema}, public, pg_temp`,
-        )
-        .split("--> statement-breakpoint")) {
-        if (statement.trim().length === 0) {
-          continue;
-        }
-        // db-await-in-loop: install the committed migration in the isolated schema in statement order.
-        await tx.execute(sql.raw(statement));
-      }
-      await tx.execute(sql`CREATE VIEW case_law_published_decisions AS
-        SELECT * FROM case_law_decisions WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}`);
-    });
-    await copyIngestionTablePrivileges({
-      sourceDb: admin.db,
-      targetDb: db,
-      targetSchema: schema,
-      tableNames: tables,
-    });
-  });
+    await admin.db.execute(
+      sql`CREATE DATABASE ${sql.identifier(databaseName)} TEMPLATE template0`,
+    );
+    const connection = await client.reserve();
+    try {
+      await runMigrations({
+        connection,
+        migrationsFolder: nodePath.resolve(import.meta.dir, "../../../drizzle"),
+        databaseUrl: fixtureUrl.href,
+        ebs: { type: "disabled" },
+      });
+    } finally {
+      await connection.release();
+    }
+  }, 120_000);
 
   test("generation inserts and updates keep a whole-country row beside a monthly change in the same transaction", async () => {
     const generationCountry = "XSG";
@@ -215,7 +175,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       const refreshDb =
         asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db);
       // Broad invalidations can defer work to the next incremental run, even
-      // though this schema's change log belongs exclusively to this suite.
+      // though this database's change log belongs exclusively to this suite.
       const refreshUntilCountryDrained = async (database = refreshDb) =>
         await waitForExternalState({
           description: `${country} sitemap change log is drained`,
@@ -359,7 +319,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
             EXISTS (SELECT 1 FROM case_law_sitemap_country_generations WHERE country = ${country} AND generation > 0) AS finished,
             EXISTS (SELECT 1 FROM pg_locks
               WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database())
-                AND relation = ${`${schema}.case_law_browse_facet_counts`}::regclass
+                AND relation = 'public.case_law_browse_facet_counts'::regclass
                 AND NOT granted) AS waiting`),
               ).at(0),
             );
