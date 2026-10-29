@@ -57,8 +57,11 @@ const sensitiveChanges = ({
     const previousDecision = baseDecisions[key];
     if (
       current !== undefined &&
+      previous !== undefined &&
+      current.digest === previous.digest &&
       headDecision?.approvedDigests.includes(current.digest) &&
       previousDecision !== undefined &&
+      previousDecision.approvedDigests.includes(previous.digest) &&
       previousDecision.kind === headDecision.kind &&
       previousDecision.qualifier === headDecision.qualifier
     ) {

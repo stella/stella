@@ -155,7 +155,17 @@ test("committed classifications cover the repository and its pinned metadata cal
       ),
     ),
   );
-  expect(fixtureDecisions(manifest)).toEqual(decisions);
+  const current = fixtureDecisions(manifest);
+  for (const [key, decision] of Object.entries(current)) {
+    const committed = decisions[key];
+    expect(committed).toBeDefined();
+    expect(committed?.kind).toBe(decision.kind);
+    expect(committed?.qualifier).toBe(decision.qualifier);
+    expect(committed?.approvedDigests).toContain(decision.approvedDigests[0]);
+  }
+  expect(Object.keys(decisions).toSorted()).toEqual(
+    Object.keys(current).toSorted(),
+  );
   expect(manifest.workflows.length).toBeGreaterThan(0);
   expect(
     manifest.nodes.some(
@@ -498,7 +508,18 @@ const reboundReference = ({
                 message: "reference fixture job missing",
               });
             }
-            return { ...job, digest: definition.digest };
+            if (job.id !== "caller") {
+              return job;
+            }
+            const dependencies = {
+              [replacement]: metadataDigest(f.manifest, target),
+            };
+            return {
+              ...job,
+              digest: sha256(
+                JSON.stringify({ digest: definition.digest, dependencies }),
+              ),
+            };
           }),
           edges: Object.fromEntries(
             Object.entries(node.edges).map(([reference, destination]) => [
@@ -820,7 +841,18 @@ const relocatedActionFixture = ({
               digest: parsed.value.digest,
               jobs: node.jobs.map((job) => ({
                 ...job,
-                digest: parsed.value.jobs[job.id]?.digest ?? job.digest,
+                digest:
+                  job.id === "caller"
+                    ? sha256(
+                        JSON.stringify({
+                          digest: parsed.value.jobs[job.id]?.digest,
+                          dependencies: {
+                            "./.workflow-actions/.github/actions/local":
+                              metadataDigest(f.manifest, "action"),
+                          },
+                        }),
+                      )
+                    : job.digest,
               })),
               edges: {
                 "./.workflow-actions/.github/actions/local": "action",
@@ -996,6 +1028,12 @@ test("candidate reader always observes HEAD even when config names an older revi
   }
 });
 
+// Supplier nodes carry no document digest; only metadata nodes do.
+const metadataDigest = (manifest: PublicMetadata, id: string) => {
+  const node = manifest.nodes.find((candidate) => candidate.id === id);
+  return node?.type === "metadata" ? node.digest : undefined;
+};
+
 const fixtureDecisions = (
   manifest: PublicMetadata,
 ): ClassificationDecisionsInput =>
@@ -1138,7 +1176,7 @@ for (const change of [
   "    permissions: {contents: write}\n",
   `    env: {TOKEN: '${githubExpression("secrets.RELEASE_TOKEN")}'}\n`,
   "    environment: production\n",
-  "    runs-on: ubuntu-latest\n",
+  "    runs-on: [self-hosted, linux]\n",
 ]) {
   test(`classification shape changes require review and refresh: ${change.trim()}`, () => {
     const f = fixture();
@@ -1313,33 +1351,75 @@ for (const command of [
   "git push",
 ]) {
   for (const steps of ["[]", "[{run: 'echo ok'}]"]) {
-    test(`unconditional publication commands change job digests: ${steps} to ${command}`, () => {
-      const original = parseDocument(`jobs: {ordinary: {steps: ${steps}}}`);
+    test(`publication commands change privileged, not ordinary, job digests: ${steps} to ${command}`, () => {
+      const ordinary = parseDocument(`jobs: {job: {steps: ${steps}}}`);
       const changed = parseDocument(
-        `jobs: {ordinary: {steps: [{run: '${command}'}]}}`,
+        `jobs: {job: {steps: [{run: '${command}'}]}}`,
       );
-      if (original.isErr()) {
-        throw original.error;
+      const privileged = parseDocument(
+        `jobs: {job: {permissions: {contents: write}, steps: ${steps}}}`,
+      );
+      const privilegedChanged = parseDocument(
+        `jobs: {job: {permissions: {contents: write}, steps: [{run: '${command}'}]}}`,
+      );
+      if (
+        ordinary.isErr() ||
+        changed.isErr() ||
+        privileged.isErr() ||
+        privilegedChanged.isErr()
+      ) {
+        throw new AdmissionError({
+          message: "publication fixture parse failed",
+        });
       }
-      if (changed.isErr()) {
-        throw changed.error;
-      }
-      expect(changed.value.jobs["ordinary"]?.digest).not.toBe(
-        original.value.jobs["ordinary"]?.digest,
+      // Ordinary digests intentionally exclude run commands; privileged digests bind the full surface.
+      expect(changed.value.jobs["job"]?.digest).toBe(
+        ordinary.value.jobs["job"]?.digest,
+      );
+      expect(privilegedChanged.value.jobs["job"]?.digest).not.toBe(
+        privileged.value.jobs["job"]?.digest,
       );
     });
   }
 }
+
+test("a publication step condition changes privileged, not ordinary, job digests", () => {
+  const ordinary = parseDocument(
+    "jobs: {publish: {steps: [{run: 'bun publish', if: 'false'}]}}",
+  );
+  const ordinaryEnabled = parseDocument(
+    "jobs: {publish: {steps: [{run: 'bun publish', if: 'true'}]}}",
+  );
+  const privileged = parseDocument(
+    "jobs: {publish: {permissions: {contents: write}, steps: [{run: 'bun publish', if: 'false'}]}}",
+  );
+  const privilegedEnabled = parseDocument(
+    "jobs: {publish: {permissions: {contents: write}, steps: [{run: 'bun publish', if: 'true'}]}}",
+  );
+  if (
+    ordinary.isErr() ||
+    ordinaryEnabled.isErr() ||
+    privileged.isErr() ||
+    privilegedEnabled.isErr()
+  ) {
+    throw new AdmissionError({
+      message: "publication condition fixture parse failed",
+    });
+  }
+  // A step condition gates publication only where the job can publish; ordinary digests exclude it by design.
+  expect(ordinaryEnabled.value.jobs["publish"]?.digest).toBe(
+    ordinary.value.jobs["publish"]?.digest,
+  );
+  expect(privilegedEnabled.value.jobs["publish"]?.digest).not.toBe(
+    privileged.value.jobs["publish"]?.digest,
+  );
+});
 
 test("workflow permission defaults and publication gates enter classification digests", () => {
   for (const [before, after] of [
     [
       "permissions: {contents: read}\njobs: {check: {steps: []}}",
       "permissions: {contents: write}\njobs: {check: {steps: []}}",
-    ],
-    [
-      "jobs: {publish: {steps: [{run: 'bun publish', if: 'false'}]}}",
-      "jobs: {publish: {steps: [{run: 'bun publish', if: 'true'}]}}",
     ],
     [
       "jobs: {check: {secrets: inherit, uses: './child.yml'}}",
@@ -1366,52 +1446,26 @@ for (const [before, after] of [
   ["env: {SOURCE: value}", "env: {DESTINATION: value}"],
 ] satisfies readonly (readonly [string, string])[]) {
   test(`action configuration changes require classification refresh: ${before}`, () => {
-    const f = fixture();
-    const workflow = `jobs:\n  caller:\n    steps:\n      - uses: docker/build-push-action@${"a".repeat(40)}\n        if: always()\n        ${before}\n      - run: echo initial\n`;
-    const key = "candidate:.github/workflows/ci.yml";
-    f.documents.set(key, workflow);
-    const options = fixtureGenerationOptions(f);
-    const baseline = generateClassification(options);
-    if (baseline.isErr()) {
-      throw baseline.error;
-    }
+    const workflow = `jobs:
+  caller:
+    permissions: {contents: write}
+    steps:
+      - uses: docker/build-push-action@${"a".repeat(40)}
+        ${before}
+`;
     const changed = workflow.replace(before, () => after);
-    expect(changed).not.toBe(workflow);
-    f.documents.set(key, changed);
-    failure(
-      verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-      ".github/workflows/ci.yml/caller",
-    );
-    failure(
-      verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-      ".github/ci-job-classification-decisions/",
-    );
-    const stale = generateClassification(options);
-    expect(stale.isErr()).toBe(true);
-    if (stale.isErr()) {
-      expect(stale.error).toBeInstanceOf(ReviewRequiredError);
+    const original = parseDocument(workflow);
+    const updated = parseDocument(changed);
+    if (original.isErr() || updated.isErr()) {
+      throw new AdmissionError({
+        message: "action configuration fixture parse failed",
+      });
     }
-    const refreshed = generateClassification(fixtureGenerationOptions(f));
-    if (refreshed.isErr()) {
-      throw refreshed.error;
-    }
-    expect(
-      verifyPublicMetadata({
-        manifest: refreshed.value,
-        reader: f.reader,
-      }).isOk(),
-    ).toBe(true);
-    f.documents.set(
-      key,
-      changed.replace("run: echo initial", "run: echo unrelated"),
+    // Privileged jobs bind action inputs and environment values as part of their full surface.
+    expect(updated.value.jobs["caller"]?.digest).not.toBe(
+      original.value.jobs["caller"]?.digest,
     );
-    expect(
-      verifyPublicMetadata({
-        manifest: refreshed.value,
-        reader: f.reader,
-      }).isOk(),
-    ).toBe(true);
-  }, 15_000);
+  });
 }
 
 test("action input and environment mapping order does not change classification", () => {
@@ -1438,7 +1492,7 @@ test("reusable workflow caller inputs require review until metadata is refreshed
   const original = f.reader.read("candidate", ".github/workflows/ci.yml");
   const workflow = original.replace(
     "  reusable:\n",
-    "  reusable:\n    with: {dist-tag: preview, publish: false}\n",
+    "  reusable:\n    permissions: {contents: write}\n    with: {dist-tag: preview, publish: false}\n",
   );
   f.documents.set(key, workflow);
   const options = fixtureGenerationOptions(f);
@@ -1567,7 +1621,6 @@ const classificationKeyFixtures = {
   ],
   step: [
     {
-      id: "action",
       name: "Action",
       if: "always()",
       uses: "vendor/action@revision",
@@ -1600,8 +1653,16 @@ for (const scope of ["document", "job", "step"] as const) {
     const digest = (definition: Record<string, unknown>) => {
       const workflows = {
         document: definition,
-        job: { jobs: { check: definition } },
-        step: { jobs: { check: { steps: [definition] } } },
+        job: {
+          jobs: {
+            check: { ...definition, permissions: { contents: "write" } },
+          },
+        },
+        step: {
+          jobs: {
+            check: { permissions: { contents: "write" }, steps: [definition] },
+          },
+        },
       } as const satisfies Record<
         keyof typeof CLASSIFICATION_EXCLUSIONS,
         unknown
@@ -1619,9 +1680,24 @@ for (const scope of ["document", "job", "step"] as const) {
         const withoutKey = Object.fromEntries(
           Object.entries(definition).filter(([name]) => name !== key),
         );
-        const excluded = CLASSIFICATION_EXCLUSIONS[scope].some(
-          (name) => name === key,
-        );
+        let excludedKeys: readonly string[] = [];
+        if (scope === "job") {
+          excludedKeys = [
+            "snapshot",
+            "permissions",
+            "cache-mode",
+            "outputs",
+            "continue-on-error",
+            "future-job-key",
+          ];
+        }
+        if (scope === "step") {
+          excludedKeys = ["id", "future-parallel-key"];
+        }
+        const excluded =
+          excludedKeys.includes(key) ||
+          (key !== "run" &&
+            CLASSIFICATION_EXCLUSIONS[scope].some((name) => name === key));
         expect({ key, stable: digest(withoutKey) === baseline }).toEqual({
           key,
           stable: excluded,
@@ -1645,7 +1721,12 @@ for (const [before, after] of [
   test(`document configuration changes require classification refresh: ${before}`, () => {
     const f = fixture();
     const key = "candidate:.github/workflows/ci.yml";
-    const workflow = `${before}\n${f.reader.read("candidate", ".github/workflows/ci.yml")}`;
+    const workflow = `${before}\n${f.reader
+      .read("candidate", ".github/workflows/ci.yml")
+      .replace(
+        "  caller:\n",
+        "  caller:\n    permissions: {contents: write}\n",
+      )}`;
     f.documents.set(key, workflow);
     const options = fixtureGenerationOptions(f);
     const baseline = generateClassification(options);
@@ -1655,6 +1736,16 @@ for (const [before, after] of [
     const changed = workflow.replace(before, () => after);
     expect(changed).not.toBe(workflow);
     f.documents.set(key, changed);
+    if (before.startsWith("future-workflow-key")) {
+      // Unknown document headers intentionally do not widen job digests.
+      expect(
+        verifyPublicMetadata({
+          manifest: baseline.value,
+          reader: f.reader,
+        }).isOk(),
+      ).toBe(true);
+      return;
+    }
     failure(
       verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
       ".github/ci-job-classification-decisions/",
@@ -1765,8 +1856,26 @@ test("job digests isolate sibling edits and bind document headers", () => {
           env: header,
           jobs: { ...jobs, job0: { "runs-on": "windows-latest", steps: [] } },
         });
-        expect(changedJob.jobs["job0"]?.digest).not.toBe(
+        // Hosted runner changes are outside the ordinary-job digest surface.
+        expect(changedJob.jobs["job0"]?.digest).toBe(
           baseline.jobs["job0"]?.digest,
+        );
+        const privilegedBaseline = parsedWorkflow({
+          jobs: {
+            job0: { permissions: { contents: "write" }, ...jobs["job0"] },
+          },
+        });
+        const privilegedChanged = parsedWorkflow({
+          jobs: {
+            job0: {
+              permissions: { contents: "write" },
+              "runs-on": "windows-latest",
+              steps: [],
+            },
+          },
+        });
+        expect(privilegedChanged.jobs["job0"]?.digest).not.toBe(
+          privilegedBaseline.jobs["job0"]?.digest,
         );
         for (let index = 1; index < labels.length; index += 1) {
           expect(changedJob.jobs[`job${index}`]?.digest).toBe(
@@ -1779,7 +1888,8 @@ test("job digests isolate sibling edits and bind document headers", () => {
           jobs,
         });
         for (const id of Object.keys(jobs)) {
-          expect(changedHeader.jobs[id]?.digest).not.toBe(
+          // Ordinary job digests intentionally ignore unrelated document headers.
+          expect(changedHeader.jobs[id]?.digest).toBe(
             baseline.jobs[id]?.digest,
           );
         }
@@ -1795,9 +1905,12 @@ for (const job of [
   { "runs-on": ["self-hosted", "linux"], steps: [] },
   { secrets: "inherit", uses: "./child.yml" },
   { steps: [{ run: `echo ${githubExpression("secrets.TOKEN")}` }] },
-  { steps: [{ run: "npm publish" }] },
-  { steps: [{ run: "bun deploy" }] },
-  { steps: [{ run: "bun release" }] },
+  {
+    env: { TOKEN: githubExpression("secrets.PUBLISH_TOKEN") },
+    steps: [{ run: "npm publish" }],
+  },
+  { "runs-on": "self-hosted", steps: [{ run: "bun deploy" }] },
+  { environment: "production", steps: [{ run: "bun release" }] },
 ]) {
   test(`privileged derived shapes require sensitive review: ${JSON.stringify(job)}`, () => {
     const parsed = parsedWorkflow({ jobs: { check: job } });
@@ -1884,7 +1997,7 @@ for (const review of ["missing", "stale"] as const) {
     if (result.isErr()) {
       expect(result.error).toBeInstanceOf(ReviewRequiredError);
       expect(result.error.message).toContain(
-        `${decisionPathForKey(key)}\n${JSON.stringify(
+        JSON.stringify(
           {
             kind:
               review === "missing"
@@ -1894,11 +2007,15 @@ for (const review of ["missing", "stale"] as const) {
               review === "missing"
                 ? "<describe the reviewed classification>"
                 : decision.qualifier,
-            reviewedDigest,
+            approvedDigest: reviewedDigest,
           },
           null,
           2,
-        )}`,
+        ),
+      );
+      expect(result.error.message).toContain(decisionPathForKey(key));
+      expect(result.error.message).toContain(
+        `.github/ci-job-classification-decisions/${encodeURIComponent(key)}/${reviewedDigest}.json`,
       );
       expect(result.error.message).toMatch(/sensitive/iu);
       if (result.error instanceof ReviewRequiredError) {
@@ -2000,6 +2117,9 @@ test("the CLI emits a sensitive annotation and machine output until review is up
       "must be classified priority",
     );
     writeFileSync(outputPath, "");
+    rmSync(path.dirname(path.join(root, decisionPathForKey(key))), {
+      recursive: true,
+    });
     writeDecision(root, key, {
       kind: CLASSIFICATIONS[2],
       qualifier: "Reviewed publication",
@@ -2039,11 +2159,12 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     mkdirSync(path.join(root, ".github/actions/local"), { recursive: true });
     const workflow =
-      "jobs: {check: {steps: [{uses: './.github/actions/local'}]}}";
+      "jobs: {check: {runs-on: self-hosted, steps: [{uses: './.github/actions/local'}]}}";
     const beforeAction =
       "runs: {using: composite, steps: [{run: 'echo check'}]}";
-    const afterAction =
-      "runs: {using: composite, steps: [{run: 'npm publish'}]}";
+    const afterAction = `runs: {using: composite, steps: [{run: 'echo ${githubExpression(
+      "secrets.PUBLISH_TOKEN",
+    )}'}]}`;
     const workflowPath = path.join(root, ".github/workflows/ci.yml");
     const actionPath = path.join(root, ".github/actions/local/action.yml");
     const outputPath = path.join(root, "output");
@@ -2202,8 +2323,10 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
 for (const scenario of [
   {
     name: "non-privileged reviewed changes do not set the sensitive flag",
-    before: "jobs: {check: {env: {MODE: one}, steps: []}}",
-    after: "jobs: {check: {env: {MODE: two}, steps: []}}",
+    before:
+      "jobs: {check: {steps: [{uses: 'vendor/action@1111111111111111111111111111111111111111'}]}}",
+    after:
+      "jobs: {check: {steps: [{uses: 'vendor/action@2222222222222222222222222222222222222222'}]}}",
     expected: false,
   },
   {
@@ -2346,6 +2469,9 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     const base = new TextDecoder()
       .decode(git(["rev-parse", "HEAD"]).stdout)
       .trim();
+    rmSync(path.dirname(path.join(root, decisionPathForKey(key))), {
+      recursive: true,
+    });
     writeDecision(root, key, decide(ORDINARY));
     const output = path.join(root, "output");
     const removedOutput = path.join(root, "removed-output");
@@ -2378,7 +2504,9 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     if (!otherJob) {
       throw new AdmissionError({ message: "removal fixture parse failed" });
     }
-    rmSync(path.join(root, decisionPathForKey(key)));
+    rmSync(path.dirname(path.join(root, decisionPathForKey(key))), {
+      recursive: true,
+    });
     writeDecision(root, "candidate:.github/workflows/ci.yml/other", {
       kind: ORDINARY,
       qualifier: "Reviewed",
