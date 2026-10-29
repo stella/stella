@@ -39,6 +39,10 @@ export type PlaygroundInventory = {
 };
 
 const EMITTED_SCANNER = new Bun.Transpiler({ loader: "js" });
+const SOURCE_IMPORTS = new Map<
+  string,
+  { imports: readonly string[]; complete: boolean }
+>();
 
 const normalize = (file: string) =>
   file.replaceAll("\\", "/").replace(/^\.\//u, "");
@@ -463,35 +467,44 @@ export const staticImportClosure = (
     }
     const loader = file.endsWith("x") ? "tsx" : "ts";
     const source = readFileSync(absolute, "utf-8");
-    let imports: readonly string[];
-    try {
-      const transpiler = new Bun.Transpiler({ loader, logLevel: "error" });
-      // `scanImports` on JSX throws on warnings the transform only logs (a
-      // `key` after a spread), so the imports come from the emitted code.
-      const emitted = transpiler.transformSync(source);
-      imports = EMITTED_SCANNER.scanImports(emitted).map(
-        ({ path: imported }) => imported,
-      );
-      // A computed `import(...)` names no module the scan can follow. The
-      // emitted code has no comments or type-only imports, so any call beyond
-      // the literal ones leaves the closure unknown.
-      const dynamicCalls = emitted.match(/\bimport\s*\(/gu)?.length ?? 0;
-      const literalCalls =
-        emitted.match(/\bimport\s*\(\s*(["'])[^"'`]+\1\s*[,)]/gu)?.length ?? 0;
-      if (dynamicCalls > literalCalls) {
-        complete = false;
+    const scanKey = `${loader}\0${source}`;
+    let scanned = SOURCE_IMPORTS.get(scanKey);
+    if (scanned === undefined) {
+      let imports: readonly string[];
+      let importComplete = true;
+      try {
+        const transpiler = new Bun.Transpiler({ loader, logLevel: "error" });
+        // `scanImports` on JSX throws on warnings the transform only logs (a
+        // `key` after a spread), so the imports come from the emitted code.
+        const emitted = transpiler.transformSync(source);
+        imports = EMITTED_SCANNER.scanImports(emitted).map(
+          ({ path: imported }) => imported,
+        );
+        // A computed `import(...)` names no module the scan can follow. The
+        // emitted code has no comments or type-only imports, so any call beyond
+        // the literal ones leaves the closure unknown.
+        const dynamicCalls = emitted.match(/\bimport\s*\(/gu)?.length ?? 0;
+        const literalCalls =
+          emitted.match(/\bimport\s*\(\s*(["'])[^"'`]+\1\s*[,)]/gu)?.length ??
+          0;
+        if (dynamicCalls > literalCalls) {
+          importComplete = false;
+        }
+      } catch {
+        // A file the transpiler cannot parse is followed as far as the plain
+        // scan reaches, but its closure is not known to be complete.
+        importComplete = false;
+        imports = [
+          ...source.matchAll(/(?:from\s*|import\s*\()(["'])([^"']+)\1/gu),
+        ]
+          .map((match) => match[2])
+          .filter((imported): imported is string => imported !== undefined);
       }
-    } catch {
-      // A file the transpiler cannot parse is followed as far as the plain
-      // scan reaches, but its closure is not known to be complete.
-      complete = false;
-      imports = [
-        ...source.matchAll(/(?:from\s*|import\s*\()(["'])([^"']+)\1/gu),
-      ]
-        .map((match) => match[2])
-        .filter((imported): imported is string => imported !== undefined);
+      scanned = { imports, complete: importComplete };
+      SOURCE_IMPORTS.set(scanKey, scanned);
     }
-    for (const imported of imports) {
+    complete &&= scanned.complete;
+    for (const imported of scanned.imports) {
       const resolved = resolveImport(imported, file, root, boundary);
       pending.push(...resolved.files);
       if (!resolved.complete && resolved.internal) {

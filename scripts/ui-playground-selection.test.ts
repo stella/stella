@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import {
   cpSync,
   mkdirSync,
@@ -271,6 +271,54 @@ test("a removed compiler base remains a shared build input", () => {
       "apps/web/e2e/ui-playground/other.geometry.spec.ts",
     ]);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("shared module text is parsed once and changed text is traced again", () => {
+  const { root, write } = createSelectionFixture();
+  const transform = spyOn(Bun.Transpiler.prototype, "transformSync");
+  try {
+    const directory = "apps/web/src/routes/dev";
+    const shared =
+      'import "./before"; export const parsingMarker = "shared-parse-fixture";';
+    write(
+      `${directory}/first.ts`,
+      'import "./shared"; export const entry = "first-parse-fixture";',
+    );
+    write(
+      `${directory}/second.ts`,
+      'import "./shared"; export const entry = "second-parse-fixture";',
+    );
+    write(`${directory}/shared.ts`, shared);
+    write(
+      `${directory}/before.ts`,
+      'export const value = "before-parse-fixture";',
+    );
+    write(
+      `${directory}/after.ts`,
+      'export const value = "after-parse-fixture";',
+    );
+    expect(staticImportClosure(`${directory}/first.ts`, root).complete).toBe(
+      true,
+    );
+    expect(
+      staticImportClosure(`${directory}/second.ts`, root).files.has(
+        `${directory}/before.ts`,
+      ),
+    ).toBe(true);
+    expect(
+      transform.mock.calls.filter(([source]) => source === shared),
+    ).toHaveLength(1);
+    write(
+      `${directory}/shared.ts`,
+      'import "./after"; export const parsingMarker = "shared-parse-fixture";',
+    );
+    const changed = staticImportClosure(`${directory}/first.ts`, root);
+    expect(changed.files.has(`${directory}/after.ts`)).toBe(true);
+    expect(changed.files.has(`${directory}/before.ts`)).toBe(false);
+  } finally {
+    transform.mockRestore();
     rmSync(root, { recursive: true, force: true });
   }
 });
