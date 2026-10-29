@@ -291,7 +291,9 @@ const normalizeScopedStateAliases = async <
     return;
   }
   const columns = getColumns(spec.table);
-  const state = columns[spec.stateColumn];
+  const state =
+    columns[spec.stateColumn] ??
+    panic("Declared transition state column is missing");
   const keys = [spec.key, ...spec.scope];
   const result = await tx.execute(sql`
     UPDATE ${spec.table}

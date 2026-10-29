@@ -97,7 +97,7 @@ describe("online step operator pauses", () => {
     expect(ONLINE_WORK_STATE_TRANSITIONS.edges.done).toEqual([]);
     for (const targets of Object.values(ONLINE_WORK_STATE_TRANSITIONS.edges)) {
       for (const target of targets) {
-        expect(ONLINE_WORK_STATES).toContain(target);
+        expect(ONLINE_WORK_STATES.some((state) => state === target)).toBe(true);
       }
     }
   });
