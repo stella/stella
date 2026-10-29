@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { documentReviewRuns, playbookDefinitions } from "@/api/db/schema";
@@ -12,13 +14,19 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 const RECENT_PLAYBOOKS_DEFAULT_LIMIT = 4;
 const RECENT_PLAYBOOKS_MAX_LIMIT = 10;
 
-export const recentPlaybooksQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: RECENT_PLAYBOOKS_MAX_LIMIT,
-      description: "Max recently used playbooks to return",
-    }),
+export const recentPlaybooksQuerySchema = v.object({
+  limit: v.optional(
+    v.pipe(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(RECENT_PLAYBOOKS_MAX_LIMIT),
+        ),
+      ),
+      v.description("Max recently used playbooks to return"),
+    ),
   ),
 });
 

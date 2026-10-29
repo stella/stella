@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   MODEL_OVERRIDE_GROUP_TASK,
@@ -30,7 +30,6 @@ import {
 } from "@/api/lib/ai-config-response";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -47,57 +46,56 @@ import { resolveAIConfigDefaults } from "./ai-config-defaults";
 
 const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 
-const providerBody = t.Object({
-  provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
-  apiKey: t.Optional(t.String({ minLength: 1 })),
-  anthropicWorkspaceId: t.Optional(
-    t.String({
-      maxLength: 256,
-      pattern: OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN,
-    }),
+const providerBody = v.object({
+  provider: v.picklist(BYOK_PROVIDER_VALUES),
+  apiKey: v.optional(v.pipe(v.string(), v.minLength(1))),
+  anthropicWorkspaceId: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(256),
+      v.regex(new RegExp(OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN, "u")),
+    ),
   ),
-  region: t.Optional(
-    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
-  ),
+  region: v.optional(v.picklist(["global", "eu", "ch"])),
 });
 
-const modelSelectionBody = t.Object({
-  provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
-  modelId: t.String({ minLength: 1, maxLength: 256 }),
+const modelSelectionBody = v.object({
+  provider: v.picklist(BYOK_PROVIDER_VALUES),
+  modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
 // Absent keeps the stored decision model, null clears it, an object sets it.
 const decisionBodyByProvider = {
-  typesafe: t.Object({
-    provider: t.Literal("typesafe"),
-    apiKey: t.Optional(t.String({ minLength: 1 })),
-    modelId: t.String({ minLength: 1, maxLength: 256 }),
+  typesafe: v.object({
+    provider: v.literal("typesafe"),
+    apiKey: v.optional(v.pipe(v.string(), v.minLength(1))),
+    modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   }),
-  openai: t.Object({
-    provider: t.Literal("openai"),
-    apiKey: t.Optional(t.Nullable(t.String({ minLength: 1 }))),
-    region: t.Optional(t.Union([t.Literal("eu"), t.Literal("global")])),
-    modelId: t.String({ minLength: 1, maxLength: 256 }),
+  openai: v.object({
+    provider: v.literal("openai"),
+    apiKey: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
+    region: v.optional(v.picklist(["eu", "global"])),
+    modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   }),
 } satisfies Record<DecisionModelProvider, unknown>;
-const decisionBody = t.Union([
+const decisionBody = v.union([
   decisionBodyByProvider.typesafe,
   decisionBodyByProvider.openai,
 ]);
 
-const updateAIConfigBody = t.Object({
-  providers: t.Array(providerBody, { minItems: 1 }),
-  overrideModels: t.Optional(
-    t.Nullable(
-      t.Object({
-        fast: t.Optional(modelSelectionBody),
-        chat: t.Optional(modelSelectionBody),
-        reasoning: t.Optional(modelSelectionBody),
-        pdf: t.Optional(modelSelectionBody),
+const updateAIConfigBody = v.object({
+  providers: v.pipe(v.array(providerBody), v.minLength(1)),
+  overrideModels: v.optional(
+    v.nullable(
+      v.object({
+        fast: v.optional(modelSelectionBody),
+        chat: v.optional(modelSelectionBody),
+        reasoning: v.optional(modelSelectionBody),
+        pdf: v.optional(modelSelectionBody),
       }),
     ),
   ),
-  decision: t.Optional(t.Nullable(decisionBody)),
+  decision: v.optional(v.nullable(decisionBody)),
 });
 
 export const updateAIConfigConfig = {
@@ -149,18 +147,17 @@ const updateAIConfig = createSafeRootHandler(
 
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
-    if (ciphertext && iv) {
-      const decryptResult = await Result.tryPromise({
-        try: async () =>
-          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-        catch: (error: unknown) => error,
-      });
+    if (ciphertext || iv) {
+      const decryptResult = await decryptAIConfig(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
 
       if (decryptResult.isErr()) {
-        captureError(decryptResult.error);
         // The stored config is the merge base for a partial update, so an
         // unreadable one cannot be treated as "no providers configured".
-        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
       existingConfig = decryptResult.value;
     }

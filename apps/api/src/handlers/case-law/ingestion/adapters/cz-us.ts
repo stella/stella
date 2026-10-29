@@ -48,6 +48,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { czUsOpeningBench } from "@/api/handlers/case-law/ingestion/adapters/cz-us-bench";
 import {
   fetchNalus,
   NALUS_REQUEST_INTERVAL_MS,
@@ -97,9 +98,12 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type {
+  CzechDeclinedDecisionJudge,
   DecisionJudgeInput,
+  PrintedDecisionJudge,
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { reflowPrintedText } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -481,17 +485,18 @@ const fieldAboveAbstractMinimum = (field: TextField): TextField => {
 /**
  * Project one publisher cell to text without erasing its block breaks. NALUS
  * separates abstract paragraphs and headings with paired `<br>` elements;
- * Cheerio's `.text()` drops both and welds the blocks together.
+ * Cheerio's `.text()` drops both and welds the blocks together. The legal
+ * sentence of a typewriter-era decision has a `<br>` at every printed line,
+ * and those lines are joined back into its paragraphs.
  */
 const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
   const cells: string[] = [];
   $(selector).each((_, element) => {
     const cell = $(element).clone();
     cell.find("br").replaceWith("\n");
-    const text = visibleHtmlText(cell)
-      .replaceAll(/\r\n?/gu, "\n")
-      .split("\n")
-      .map((line) => line.trim())
+    const text = reflowPrintedText(
+      visibleHtmlText(cell).replaceAll(/\r\n?/gu, "\n").split("\n"),
+    )
       .join("\n")
       .replaceAll(/\n{3,}/gu, "\n\n")
       .trim();
@@ -666,8 +671,13 @@ const DETAIL_FIELD_BY_LABEL = new Map<string, NalusDetailFieldKey>(
  */
 const RECORD_CARD_SELECTOR = "table.recordCardTable";
 
-/** Repeats inside one value cell, as the court separates them. */
-const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>/giu;
+/**
+ * Repeats inside one value cell, as the court separates them: line breaks
+ * between judges or petitioners, list items between the acts a decision
+ * touches. Taking a list's text whole would run one act's last provision
+ * into the next act's number (`§ 35 odst.2` + `20/1966 Sb.`).
+ */
+const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>|<\/li\s*>/giu;
 
 const detailText = (text: string): string =>
   text.replaceAll(" ", " ").replace(/\s+/gu, " ").trim();
@@ -777,8 +787,13 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
  * what the roster is matched on: honorifics differ between the court's own
  * pages and change over a career.
  */
-const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
-  [
+const detailJudges = (
+  fields: NalusDetailFields | null,
+): PrintedDecisionJudge[] => {
+  if (fields === null) {
+    return [];
+  }
+  return [
     ...fields.rapporteur.map((name) => ({
       role: DECISION_JUDGE_ROLE.RAPPORTEUR,
       nameAsPrinted: stripAcademicTitles(name),
@@ -788,6 +803,41 @@ const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
       nameAsPrinted: stripAcademicTitles(name),
     })),
   ].filter(({ nameAsPrinted }) => nameAsPrinted.length > 0);
+};
+
+type DecisionJudgesOptions = {
+  recordCard: ParsedRecordCard;
+  bench: readonly CzechDeclinedDecisionJudge[];
+};
+
+/**
+ * Everyone the decision names: the bench its opening sentence states, then
+ * the record card's rapporteur and dissenters. The card and the sentence both
+ * name the rapporteur and the roster resolves the two to one row; the bench
+ * comes first so that row carries the roster's spelling, the one the rest of
+ * the bench is shown in, rather than the card's surname-first one.
+ *
+ * Absent when the card could not be read, so the judges already stored stay
+ * as they are; a card the court says it does not hold leaves the sentence as
+ * the only statement, and a sentence naming nobody then states nothing.
+ */
+const decisionJudges = ({
+  recordCard,
+  bench,
+}: DecisionJudgesOptions): DecisionJudgeInput[] | undefined => {
+  switch (recordCard.state) {
+    case CZ_US_RECORD_CARD_STATE.READ:
+      return [...bench, ...detailJudges(recordCard.fields)];
+    case CZ_US_RECORD_CARD_STATE.ABSENT:
+      return bench.length === 0 ? undefined : [...bench];
+    case CZ_US_RECORD_CARD_STATE.UNAVAILABLE:
+      return undefined;
+    default: {
+      recordCard satisfies never;
+      return panic(`Unhandled record card state: ${String(recordCard)}`);
+    }
+  }
+};
 
 /** Record-card fields the row carries under their own metadata keys. */
 const DETAIL_METADATA_KEYS = [
@@ -1035,10 +1085,13 @@ const parseDecisionPage = ({
     extractLabel(html, "lblPopularName") ?? detail?.popularName.at(0);
   const bodyText = extractDocContentText(html);
   const fulltext = extractFulltext(bodyText);
-  const judges = detail === null ? undefined : detailJudges(detail);
+  const judges = decisionJudges({
+    recordCard,
+    bench: czUsOpeningBench(bodyText ?? ""),
+  });
   // The stored facts row reads one name; the roles live on `judges`, and
   // both spell it the way the roster is matched on.
-  const judge = judges?.find(
+  const judge = detailJudges(detail).find(
     ({ role }) => role === DECISION_JUDGE_ROLE.RAPPORTEUR,
   )?.nameAsPrinted;
 

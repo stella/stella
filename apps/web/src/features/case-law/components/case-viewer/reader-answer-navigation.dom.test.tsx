@@ -37,10 +37,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-12",
-    quote: "Selected words",
-    startOffset: 0,
-    endOffset: 14,
+    spans: [
+      {
+        paragraphId: "p-12",
+        quote: "Selected words",
+        startOffset: 0,
+        endOffset: 14,
+      },
+    ],
   },
   messages: [
     {
@@ -83,7 +87,7 @@ const ReopenHarness = () => {
           });
         }}
       >
-        {anchors.at(0)?.render(answer.anchor.quote)}
+        {anchors.at(0)?.render(answer.anchor.spans[0].quote)}
       </div>
       <ReaderAnswerCard
         answer={answer}
@@ -91,7 +95,8 @@ const ReopenHarness = () => {
         active
         openRevision={revision}
         busy={false}
-        citationLabel={() => "¶48"}
+        citationTarget={() => ({ type: "unresolved" })}
+        language="en"
         onOpen={() => undefined}
         onFollowUp={() => undefined}
         onRegenerate={() => undefined}
@@ -165,7 +170,7 @@ test("a foreign citation navigates with both validated decision and paragraph", 
 test("paragraph markers reopen answers when another mark overlaps, and detach cleanly", () => {
   const view = render(
     <article>
-      <p data-anchor="p-12">{answer.anchor.quote}</p>
+      <p data-anchor="p-12">{answer.anchor.spans[0].quote}</p>
     </article>,
   );
   const open = mock(() => undefined);

@@ -204,15 +204,10 @@ const readOutstandingCorpusProjectionIntentTx = async (
   return observation["hasOutstandingIntent"];
 };
 
-/**
- * PostgreSQL precondition for a fresh zero-drift engine census. The state
- * queue answers in one round trip; the intent and publish probes run only once
- * it is quiet, so a generation with work left still costs one round trip.
- */
-export const readCorpusIndexProjectionConvergenceTx = async (
+const readCorpusProjectionStateQueueTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
-): Promise<CorpusIndexProjectionConvergenceStatus> => {
+) => {
   const result: unknown = await tx.execute(
     corpusProjectionStateQueueProbe(target),
   );
@@ -225,16 +220,65 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   ) {
     return panic("Corpus projection convergence probe returned malformed row");
   }
-  if (!observation["hasState"]) {
+  return {
+    hasState: observation["hasState"],
+    hasBlockedState: observation["hasBlockedState"],
+    hasPendingState: observation["hasPendingState"],
+  };
+};
+
+/**
+ * What the state queue alone says about a generation: three single-row index
+ * probes, whatever the generation's size, so a recurring report can read it.
+ * `queue_quiet` is not readiness for a census: the revision checks that decide
+ * that grow with the generation, and only the serving flip and the operator
+ * script run them (`readCorpusIndexProjectionConvergenceTx`).
+ */
+export type CorpusIndexProjectionQueueStatus =
+  | typeof CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.empty
+  | typeof CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending
+  | typeof CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked
+  | "queue_quiet";
+
+export const readCorpusIndexProjectionQueueStatusTx = async (
+  tx: Transaction,
+  target: CorpusIndexProjectionConvergenceTarget,
+): Promise<CorpusIndexProjectionQueueStatus> => {
+  const queue = await readCorpusProjectionStateQueueTx(tx, target);
+  if (!queue.hasState) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.empty;
   }
-  if (observation["hasPendingState"]) {
+  if (queue.hasPendingState) {
+    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
+  }
+  return queue.hasBlockedState
+    ? CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked
+    : "queue_quiet";
+};
+
+/**
+ * PostgreSQL precondition for a fresh zero-drift engine census. The state
+ * queue answers in one round trip; the intent and publish probes run only once
+ * it is quiet, so a generation with work left still costs one round trip.
+ * Once it is quiet the revision checks read the generation's applied
+ * revisions, so this runs where a census is decided (the serving flip and the
+ * operator script), never on a schedule.
+ */
+export const readCorpusIndexProjectionConvergenceTx = async (
+  tx: Transaction,
+  target: CorpusIndexProjectionConvergenceTarget,
+): Promise<CorpusIndexProjectionConvergenceStatus> => {
+  const queue = await readCorpusProjectionStateQueueTx(tx, target);
+  if (!queue.hasState) {
+    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.empty;
+  }
+  if (queue.hasPendingState) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
   }
   if (await readOutstandingCorpusProjectionIntentTx(tx, target)) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
   }
-  if (observation["hasBlockedState"]) {
+  if (queue.hasBlockedState) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked;
   }
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(

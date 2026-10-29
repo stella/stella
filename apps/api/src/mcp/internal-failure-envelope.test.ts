@@ -1,23 +1,41 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { BoeAPIError, BoeRequestError } from "@stll/boe";
+
+import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  flushFailureObservations,
+  resetFailureObservationsForTesting,
+} from "@/api/lib/observability/failure-shadow";
+import {
   credentialPermissionsForContext,
   readAuthorizedMemberRole,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  createTimeEntryHandlerMock.mockReset();
+});
 
 const createTimeEntryHandlerMock = mock();
 
@@ -51,18 +69,20 @@ const createRecordAuditEventMock = () =>
 // Owner role with one active, accessible workspace, so authorization and
 // workspace-access pre-checks pass and each handler advances to its first DB
 // call (the only thing that fails here).
-const createFailingDbContext = (failure?: HandlerError): McpRequestContext => {
-  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
+const createFailingDbContext = (
+  failure?: HandlerError,
+): AuthorizedMcpRequestContext => {
+  const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(() => {
     throw new Error(`database unavailable: ${DB_INTERNAL_LEAK_TOKEN}`);
   });
   const safeDb =
     failure === undefined
       ? toSafeDbMock(scopedDb)
-      : asTestRaw<McpRequestContext["safeDb"]>(
+      : asTestRaw<AuthorizedMcpRequestContext["safeDb"]>(
           async () => await Promise.resolve(Result.err(failure)),
         );
 
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
@@ -76,7 +96,7 @@ const createFailingDbContext = (failure?: HandlerError): McpRequestContext => {
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const asCallToolResult = (result: McpToolResponse) => {
@@ -160,13 +180,18 @@ const REPRESENTATIVE_DB_FAILURES: {
 ];
 
 let analytics: RecordingAnalytics;
+let logs: RecordingLogger;
 
 beforeEach(() => {
+  resetFailureObservationsForTesting();
   analytics = installRecordingAnalytics();
+  logs = installRecordingLogger();
 });
 
 afterEach(() => {
+  resetFailureObservationsForTesting();
   analytics.restore();
+  logs.restore();
 });
 
 // Read the recorder through module-scope helpers: the table-driven tests below
@@ -243,6 +268,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
   test("internalFailureResult never echoes the internal error text", () => {
     const result = internalFailureResult(
       new Error(`unhandled: ${DB_INTERNAL_LEAK_TOKEN}`),
+      "mcp.result.failure",
     );
 
     const serialized = serializeToolResult(result);
@@ -269,7 +295,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
 // record as telemetry.
 describe("internalFailureResult preserves expected handler errors", () => {
   const EXPECTED_BUSINESS_CASES: {
-    status: HandlerErrorStatusCode;
+    status: Exclude<HandlerErrorStatusCode, 500 | 502 | 503>;
     code: McpErrorCode;
   }[] = [
     { status: 400, code: "validation_error" },
@@ -294,6 +320,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
             hint: "Correct the request and call the tool again.",
             retryable,
           }),
+          "mcp.result.failure",
         );
         expect(JSON.parse(envelopeText(result))).toEqual({
           error: {
@@ -318,6 +345,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
       const message = `curated business message for ${status}`;
       const result = internalFailureResult(
         new HandlerError({ status, message }),
+        "mcp.result.failure",
       );
 
       expectBusinessEnvelope(result, { code, message });
@@ -332,6 +360,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         status: 500,
         message: `internal boom ${DB_INTERNAL_LEAK_TOKEN}`,
       }),
+      "mcp.result.failure",
     );
 
     expectInternalErrorEnvelope(result);
@@ -348,6 +377,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         message: "ARES is temporarily unavailable",
         cause: new Error(DB_INTERNAL_LEAK_TOKEN),
       }),
+      "mcp.result.failure",
     );
 
     expect(JSON.parse(envelopeText(result))).toEqual({
@@ -359,9 +389,64 @@ describe("internalFailureResult preserves expected handler errors", () => {
       },
     });
     expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
-    expect(capturedExceptionProperties()).toMatchObject([
-      { "error.code": "upstream_unavailable", source: "mcp" },
+    expect(capturedExceptions()).toEqual([]);
+    flushFailureObservations();
+    expect(
+      logs.records.filter(({ message }) => message === "failure.observed"),
+    ).toMatchObject([
+      {
+        severityText: "INFO",
+        message: "failure.observed",
+        attributes: {
+          "failure.sink": "exception.captured",
+          "failure.grade": "transient",
+          "failure.reason": "upstream_unavailable",
+          "failure.legacy_channel": "capture",
+          occurrences: 1,
+        },
+      },
     ]);
+    expect(JSON.stringify(logs.records)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+  });
+  test("BOE outages reach the transient grading owner and caller failures stay actionable", () => {
+    for (const cause of [
+      new BoeAPIError({ message: DB_INTERNAL_LEAK_TOKEN, httpStatus: 502 }),
+      new BoeRequestError("https://example.test", DB_INTERNAL_LEAK_TOKEN),
+    ]) {
+      const result = internalFailureResult(
+        mapBoeError(cause),
+        "mcp.result.failure",
+      );
+      expect(JSON.parse(envelopeText(result)).error).toMatchObject({
+        code: "upstream_unavailable",
+        retryable: true,
+      });
+      expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+    }
+    const rejected = internalFailureResult(
+      mapBoeError(
+        new BoeAPIError({ message: "Invalid filter", httpStatus: 422 }),
+      ),
+      "mcp.result.failure",
+    );
+    expect(JSON.parse(envelopeText(rejected)).error).toMatchObject({
+      code: "validation_error",
+      message: expect.stringContaining("Check the identifier and filters"),
+    });
+    expect(capturedExceptions()).toEqual([]);
+    flushFailureObservations();
+    expect(
+      logs.records.filter(({ message }) => message === "failure.observed"),
+    ).toMatchObject([
+      {
+        attributes: {
+          "failure.grade": "transient",
+          "failure.reason": "upstream_unavailable",
+          occurrences: 2,
+        },
+      },
+    ]);
+    expect(logs.at("ERROR")).toEqual([]);
   });
 });
 

@@ -2,8 +2,11 @@ import { Result } from "better-result";
 
 import { mergeLegacyLawHistory } from "@/lib/account/law-history-legacy-merge";
 import {
+  CLAIMED_GUEST_ANNOTATIONS_STORAGE_KEY,
   DOCX_OUTLINE_DEPTH_STORAGE_KEY,
+  GUEST_ANNOTATIONS_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
+  LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
   READER_PROVISION_MODE_STORAGE_KEY,
 } from "@/lib/account/storage-keys";
 
@@ -200,6 +203,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella:mcp-reconnect-dismissed:",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
@@ -307,6 +311,34 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     restoration: "data",
     owner: "carried",
     retention: "cleared",
+  },
+  // A visitor's private legal-reader marks, until the first account signed in
+  // this tab claims them; unclaimed, they go when that account leaves.
+  {
+    area: "session",
+    prefix: GUEST_ANNOTATIONS_STORAGE_KEY,
+    restoration: "data",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // The previous guest-store shape follows the same ownership boundary until
+  // the reader migrates it to the current shape.
+  {
+    area: "session",
+    prefix: LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
+    restoration: "data",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // Guest marks an account claimed and has not uploaded yet: they wait under
+  // its key through a sign-out for its next sign-in in this tab, and no other
+  // account reads them.
+  {
+    area: "session",
+    prefix: CLAIMED_GUEST_ANNOTATIONS_STORAGE_KEY,
+    restoration: "data",
+    owner: "scoped",
+    retention: "kept-for-owner",
   },
   // A desktop app's linking challenge, held across the sign-in redirect
   // until the desktop settings page consumes it once.

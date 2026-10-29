@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { SafeDbError } from "@/api/db/safe-db";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   narrowModelOfferedSkills,
   offerSkillsToModel,
@@ -30,12 +31,13 @@ import {
   collisionSafeToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
-  hasGrantedScope,
   loadOfferedStaticMcpToolDefinitions,
+  usableStaticMcpToolNames,
 } from "@/api/mcp/gateway/static-tool-visibility";
 
 const AVAILABLE: SkillToolAvailability = {
@@ -53,18 +55,19 @@ export type ResolvedSkillTool = AvailableChatSkill & {
 };
 
 /**
- * The skill catalog is the one chat serves (enabled team skills plus the
- * caller's private ones, private first on a slug collision), so every agent
- * surface offers the same skills under the same precedence. Exposed names are
- * assigned over the whole catalog, so hiding an unavailable skill never
- * renames another one.
+ * The skill catalog starts from the one chat serves so installed rows keep
+ * chat's private-over-team precedence and continue to shadow a built-in with
+ * the same slug. Built-ins are removed before naming because MCP serves their
+ * guidance as resources rather than tools. Exposed names are assigned over
+ * the whole installed catalog, so hiding an unavailable skill never renames
+ * another one.
  */
 const loadSkillTools = async ({
   context,
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> => {
@@ -73,6 +76,8 @@ const loadSkillTools = async ({
   // `tools/list` fails loudly rather than silently dropping skill tools.
   const skills = throwOnLoadFault(
     await listAvailableChatSkillMetadata({
+      // An MCP session has no conversation matter: unbound skills only.
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: context.organizationId,
       safeDb: context.safeDb,
       userId: context.userId,
@@ -85,21 +90,14 @@ const loadSkillTools = async ({
     );
   }
 
-  // `tools/list` keeps a compound tool discoverable on its primary scope
-  // alone; a skill can use it only with every scope it needs.
-  const offeredToolNames = new Set(
-    (
-      await loadOfferedStaticMcpToolDefinitions({
-        context,
-        mode,
-        scopes,
-        audience: "model",
-      })
-    ).flatMap(({ additionalScopes = [], name }) =>
-      additionalScopes.every((scope) => hasGrantedScope(scopes, scope))
-        ? [name]
-        : [],
-    ),
+  const offeredToolNames = usableStaticMcpToolNames(
+    await loadOfferedStaticMcpToolDefinitions({
+      context,
+      mode,
+      scopes,
+      audience: "model",
+    }),
+    scopes,
   );
   return exposed.map((skill) =>
     Object.assign(skill, {
@@ -124,7 +122,7 @@ export const loadVisibleSkillTools = async ({
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
 }): Promise<ModelOfferedSkills<ResolvedSkillTool>> =>
@@ -146,7 +144,7 @@ export const loadSkillPrompts = async ({
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> =>
@@ -172,7 +170,7 @@ export const resolveSkillTool = async ({
   mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
 }): Promise<ResolvedSkillTool | null> =>
@@ -213,11 +211,12 @@ export const readSkillTool = async ({
   resourcePath,
   skill,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   resourcePath: string | undefined;
   skill: ResolvedSkillTool;
 }): Promise<SkillToolRead | null> => {
   const scope = {
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     skillName: skill.name,
@@ -288,7 +287,12 @@ const isResolvedSkill = ({
 
 const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-skills" });
+    captureError(
+      result.error,
+      handlerErrorContext("gateway.throwOnLoadFault.result_error", {
+        source: "mcp-gateway-skills",
+      }),
+    );
     // A load fault means the skills may still exist: dispatch answers a
     // retryable error rather than `unknown_tool`.
     throw new McpGatewayLoadError({
@@ -300,8 +304,8 @@ const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
 };
 
 /**
- * Pure naming step over an already precedence-resolved catalog, exported so
- * tests and the orientation eval derive collision-safe exposed names through
+ * Filters and names an already precedence-resolved catalog, exported so tests
+ * and the orientation eval derive collision-safe installed-skill names through
  * the served code path rather than a hand-written mirror of it.
  */
 export const exposeSkillTools = (
@@ -309,12 +313,14 @@ export const exposeSkillTools = (
 ): (AvailableChatSkill & { exposedName: string })[] => {
   const seenToolNames = new Set<string>();
 
-  return skills.map((skill) => ({
-    ...skill,
-    exposedName: collisionSafeToolName({
-      baseName: namespaceSkillToolName(skill.name),
-      rawName: skill.name,
-      seen: seenToolNames,
-    }),
-  }));
+  return skills
+    .filter(({ source }) => source === CHAT_SKILL_SOURCE.installed)
+    .map((skill) => ({
+      ...skill,
+      exposedName: collisionSafeToolName({
+        baseName: namespaceSkillToolName(skill.name),
+        rawName: skill.name,
+        seen: seenToolNames,
+      }),
+    }));
 };

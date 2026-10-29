@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -10,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  checkLogText,
   exitCodeDetail,
   FAILED_CHECK_RECORD,
   failedCheckRecord,
@@ -19,8 +21,12 @@ import {
   type ApiStep,
   BARE_EXIT_CAUSE,
   buildDigest,
+  cancelledJobs,
+  checkOutputLines,
   classify,
   dedupe,
+  DIGEST_ARTIFACT,
+  digestFile,
   escapeMarkdown,
   failedTests,
   failureLines,
@@ -29,14 +35,18 @@ import {
   frameLocation,
   inert,
   isFailedJob,
+  MAX_ANNOTATION_LINES,
   MAX_ANNOTATIONS,
   MAX_LINE_WIDTH,
   MAX_LINES_PER_STEP,
   MAX_SCAN_WIDTH,
+  parseDigestFile,
   parseJobs,
   playwrightEntry,
   POOLED_FAILURE_PREFIX,
   renderTail,
+  RESULT_GATE,
+  runIdOf,
   segmentForStep,
   splitSteps,
   stripAnsi,
@@ -119,13 +129,16 @@ test("bun test failures keep their error and repository location", () => {
   });
   expect(failures[0]?.detail).toContain("Received: 2");
   expect(failures[0]?.detail.join("\n")).not.toContain("(pass)");
+  // The headline names the assertion; the values it compared follow.
+  const location = { file: "apps/api/src/math.test.ts", line: 12 };
   expect(failureLines(BUN_FAILURE)).toEqual([
     {
       message:
         "@stll/api: (fail) math > adds (apps/api/src/math.test.ts:12) -- error: expect(received).toBe(expected)",
-      file: "apps/api/src/math.test.ts",
-      line: 12,
+      ...location,
     },
+    { message: "Expected: 3", ...location },
+    { message: "Received: 2", ...location },
   ]);
 });
 
@@ -141,13 +154,52 @@ test("failed Bun tests keep the package scope and file header they ran under", (
 
 test("a test run's tail lists only the failures, after everything else", () => {
   const tail = renderTail(BUN_FAILURE);
-  expect(tail.split("\n").at(0)).toBe("---- failing tests (1 of 1) ----");
+  expect(tail.split("\n").at(0)).toBe("---- failing test names (1) ----");
+  expect(tail).toContain("@stll/api (1 failure)\n  src/math.test.ts");
   expect(tail).toContain(
     "@stll/api: (fail) math > adds (apps/api/src/math.test.ts:12)",
   );
   expect(tail).toContain("    Expected: 3");
   expect(tail).not.toContain("(pass)");
   expect(renderTail(["(pass) a [1ms]", " 1 pass"])).toBe("");
+});
+
+test("a test run's tail lists every failure name and package count", () => {
+  const lines = Array.from({ length: 45 }, (_, index) => {
+    const scope = index < 32 ? "@stll/api" : "@stll/web";
+    const file = index < 32 ? "src/api.test.ts" : "src/web.test.ts";
+    return [
+      `${scope}:test: ${file}:`,
+      `${scope}:test: (fail) case ${index + 1} [1ms]`,
+    ];
+  }).flat();
+  const tail = renderTail(lines);
+
+  expect(tail).toContain("@stll/api (32 failures)");
+  expect(tail).toContain("@stll/web (13 failures)");
+  for (let index = 1; index <= 45; index += 1) {
+    expect(tail).toContain(`    (fail) case ${index}`);
+  }
+  expect(tail).toContain("---- failure details (30 of 45) ----");
+  expect(tail.match(/^ {4}\(fail\) case \d+$/gmu)).toHaveLength(45);
+  expect(tail.match(/^@stll\/(?:api|web): \(fail\)/gmu)).toHaveLength(30);
+});
+
+test("a failure after a very long diff remains in the complete name list", () => {
+  const longDiff = Array.from(
+    { length: 500 },
+    (_, index) => `@stll/api:test: ${index} | ${"x".repeat(300)}`,
+  );
+  const tail = renderTail([
+    "@stll/api:test: src/early.test.ts:",
+    ...longDiff,
+    "@stll/api:test: (fail) early failure [1ms]",
+    "@stll/web:test: src/later.test.ts:",
+    "@stll/web:test: error: later assertion",
+    "@stll/web:test: (fail) later failure [1ms]",
+  ]);
+
+  expect(tail).toContain("  src/later.test.ts\n    (fail) later failure");
 });
 
 test("typecheck diagnostics in tsc and tsgo formats carry file and line", () => {
@@ -211,6 +263,7 @@ test("Playwright failures are read from the list reporter's summary", () => {
       message:
         "(fail) [chromium] login › rejects a wrong password (e2e/login.spec.ts:14) -- Error: expect(locator).toBeVisible() failed",
     },
+    { message: "Locator: getByText('Wrong password')" },
   ]);
 });
 
@@ -257,7 +310,7 @@ test("at most the first lines are kept, deduplicated", () => {
     ]),
   ).toEqual([{ message: "a", file: "scripts/a.ts", line: 1 }]);
   const many = Array.from(
-    { length: 12 },
+    { length: MAX_LINES_PER_STEP + 7 },
     (_, index) => `src/a.ts(${index + 1},1): error TS2322: Bad.`,
   );
   expect(failureLines(many)).toHaveLength(MAX_LINES_PER_STEP);
@@ -1146,7 +1199,7 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   // Node warns on stderr when NO_COLOR is set beside FORCE_COLOR.
   expect(workflow.env?.["NO_COLOR"]).toBeUndefined();
 
-  const steps = workflow.jobs["ci-result"]?.steps ?? [];
+  const steps = workflow.jobs[RESULT_GATE]?.steps ?? [];
   const tooling = steps.find(({ with: options }) =>
     String(options?.["path"] ?? "").includes(".workflow-tooling"),
   );
@@ -1171,7 +1224,10 @@ test("CI logs are plain text and failures are digested by the result gate", () =
     names.indexOf("Evaluate CI outcome"),
   );
   const upload = steps.find(({ name }) => name === "Upload failure digest");
-  expect(upload?.with?.["name"]).toBe("ci-failures");
+  // `show` downloads this artifact and names this job as the result gate.
+  expect(upload?.with?.["name"]).toBe(DIGEST_ARTIFACT);
+  expect(upload?.with?.["path"]).toEndWith(`/${DIGEST_ARTIFACT}.json`);
+  expect(Object.keys(workflow.jobs)).toContain(RESULT_GATE);
 
   const testSteps = (workflow.jobs["ci-tests"]?.steps ?? []).filter(
     ({ run }) => run?.includes("bun run test --") === true,
@@ -1386,5 +1442,447 @@ test("annotation details survive informational output beyond the closing window"
       ).toEqual(messages.slice(0, MAX_LINES_PER_STEP));
       expect(lines.length).toBeLessThanOrEqual(MAX_LINES_PER_STEP);
     }
+  }
+});
+
+// The runner rendering a step's output into the job log. It reads a workflow
+// command after leading whitespace, so indenting one never makes it inert.
+const renderRunner = (output: string): string[] =>
+  output.split("\n").map((line) => {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith("::group::")) {
+      return `##[group]${trimmed.slice("::group::".length)}`;
+    }
+    if (trimmed.startsWith("::endgroup::")) {
+      return "##[endgroup]";
+    }
+    if (trimmed.startsWith("::error")) {
+      return `##[error]${trimmed.slice(trimmed.indexOf("::", 2) + 2)}`;
+    }
+    return line;
+  });
+
+type PooledCheck = {
+  readonly name: string;
+  readonly output: string;
+  readonly cause: string;
+};
+
+/** A pooled step's log as ci-check-pool.ts prints failed checks. */
+const pooledStep = (checks: readonly PooledCheck[]): string =>
+  runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-rest", [
+    ...checks.flatMap(({ name, output, cause }) => [
+      `##[group]${name}: FAILED in 8.5 s`,
+      ...renderRunner(checkLogText(output, "failure")),
+      "##[endgroup]",
+      `##[error]${cause}`,
+      failedCheckRecord(name, cause),
+    ]),
+    `${checks.length} check(s) failed: ${checks.map(({ name }) => name).join("; ")}`,
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+
+const poolJob = {
+  id: 21,
+  name: "ci-checks-rest (2)",
+  conclusion: "failure",
+  html_url: "https://github.com/o/r/actions/runs/1/job/21",
+  steps: [
+    {
+      name: "Run repository checks",
+      number: 4,
+      conclusion: "failure",
+      started_at: "2026-10-12T10:00:04Z",
+      completed_at: "2026-10-12T10:00:05Z",
+    },
+  ],
+};
+
+// Shapes from a real failing run. A backlog check runs its own tests (Bun
+// groups each test file) and prints its findings after them.
+const BACKLOG_CHECK_OUTPUT = [
+  "bun test v1.4.4 (38afee6c8)",
+  "",
+  "::group::scripts/design-lint-baseline.test.ts:",
+  "(pass) each rule is budgeted on its own [0.05ms]",
+  "(pass) a fall below the baseline fails the check like a rise does [0.09ms]",
+  "",
+  "::endgroup::",
+  "",
+  " 2 pass",
+  " 0 fail",
+  " 12 expect() calls",
+  "Ran 2 tests across 1 file. [540.00ms]",
+  "",
+  "Lint findings fell in 2 backlog entries:",
+  "  require-bounded-request-schema apps/api/src/handlers/search/ai.ts (1, baseline 2)",
+  "  require-bounded-request-schema apps/api/src/handlers/tasks/calendar/list.ts (2, baseline 4)",
+  "",
+  "Run `bun scripts/design-lint-baseline.ts --write` and commit the baseline.",
+].join("\n");
+
+// A check whose `bun run` exit names no cause, after informational logging.
+const AGGREGATE_CHECK_OUTPUT = [
+  "$ bun scripts/check-aggregate-mutations.ts",
+  '{"severity":"INFO","message":"database.shared_pool_timeout_configured","pool":"root","idleTimeoutMs":0}',
+  "Undeclared aggregate mutation: PATCH /mcp",
+  "Undeclared aggregate mutation: PUT /mcp",
+  "Aggregate mutation coverage: 37 verified declarations, 449 undeclared mutation routes, 438 legacy entries",
+  'error: script "check:aggregate-mutations" exited with code 1',
+].join("\n");
+
+// Lint findings printed as error commands and again by the affected runner,
+// behind Node's process warnings.
+const LINT_CHECK_OUTPUT = [
+  "(node:5557) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/runner/work/stella/stella/scripts/check-oxlint-design-system.ts is not specified and it doesn't parse as CommonJS.",
+  "Reparsing as ES module because module syntax was detected. This incurs a performance overhead.",
+  'To eliminate this warning, add "type": "module" to /home/runner/work/stella/stella/package.json.',
+  "(Use `node --trace-warnings ...` to show where the warning was created)",
+  "::error::.oxlint-plugins/no-offset-pagination.ts:35:3: Use 'String#endsWith' method instead.",
+  "",
+  "Found 0 warnings and 1 error.",
+  'error: "oxlint" exited with code 1',
+  "code-check: failed (exit 1): bash scripts/lint-oxlint-fixtures.sh",
+  "    typescript(prefer-string-starts-ends-with): .oxlint-plugins/no-offset-pagination.ts:35:3: Use 'String#endsWith' method instead.",
+  'error: script "code-check:affected" exited with code 1',
+].join("\n");
+
+const messagesOf = (failure: FailureRecord | undefined): string[] =>
+  failure?.lines.map(({ message }) => message) ?? [];
+
+test("a pooled check's own test groups never hide the findings printed after them", () => {
+  const rendered = renderRunner(checkLogText(BACKLOG_CHECK_OUTPUT, "failure"));
+  // Bun's file header stays a plain line, so no group nests in the check's.
+  expect(rendered).toContain("scripts/design-lint-baseline.test.ts:");
+  expect(rendered.filter((line) => line.startsWith("##["))).toEqual([]);
+  const [backlog] = buildDigest({
+    jobs: [poolJob],
+    logFor: () =>
+      pooledStep([
+        {
+          name: "Design-system lint backlog",
+          output: BACKLOG_CHECK_OUTPUT,
+          cause: exitCodeDetail(1),
+        },
+      ]),
+  });
+  expect(backlog?.step).toBe("Design-system lint backlog");
+  expect(messagesOf(backlog)).toEqual([
+    "Lint findings fell in 2 backlog entries:",
+    "require-bounded-request-schema apps/api/src/handlers/search/ai.ts (1, baseline 2)",
+    "require-bounded-request-schema apps/api/src/handlers/tasks/calendar/list.ts (2, baseline 4)",
+    "Run `bun scripts/design-lint-baseline.ts --write` and commit the baseline.",
+  ]);
+});
+
+test("a pooled check whose cause restates a runner exit is read from its output", () => {
+  const records = buildDigest({
+    jobs: [poolJob],
+    logFor: () =>
+      pooledStep([
+        {
+          name: "Aggregate ownership",
+          output: AGGREGATE_CHECK_OUTPUT,
+          cause: 'error: script "check:aggregate-mutations" exited with code 1',
+        },
+        {
+          name: "Code quality (rest)",
+          output: LINT_CHECK_OUTPUT,
+          cause: 'error: "oxlint" exited with code 1',
+        },
+      ]),
+  });
+  expect(records.map(({ step }) => step)).toEqual([
+    "Aggregate ownership",
+    "Code quality (rest)",
+  ]);
+  expect(messagesOf(records[0])).toEqual([
+    "$ bun scripts/check-aggregate-mutations.ts",
+    "Undeclared aggregate mutation: PATCH /mcp",
+    "Undeclared aggregate mutation: PUT /mcp",
+    "Aggregate mutation coverage: 37 verified declarations, 449 undeclared mutation routes, 438 legacy entries",
+  ]);
+  expect(messagesOf(records[1])).toEqual([
+    ".oxlint-plugins/no-offset-pagination.ts:35:3: Use 'String#endsWith' method instead.",
+    "Found 0 warnings and 1 error.",
+    "code-check: failed (exit 1): bash scripts/lint-oxlint-fixtures.sh",
+    "typescript(prefer-string-starts-ends-with): .oxlint-plugins/no-offset-pagination.ts:35:3: Use 'String#endsWith' method instead.",
+  ]);
+  expect(records[1]?.lines[0]).toMatchObject({
+    file: ".oxlint-plugins/no-offset-pagination.ts",
+    line: 35,
+  });
+  expect(records[1]?.kind).toBe("lint");
+});
+
+test("a check's closing lines keep the last distinct lines, never passing tests", () => {
+  const output = [
+    "(pass) a [1ms]",
+    ...Array.from(
+      { length: MAX_LINES_PER_STEP + 5 },
+      (_, index) => `finding ${index}`,
+    ),
+    "finding 0",
+    "(pass) b [1ms]",
+  ];
+  const { specific, lines } = checkOutputLines(output);
+  expect(specific).toBe(false);
+  expect(lines.map(({ message }) => message)).toEqual(
+    Array.from(
+      { length: MAX_LINES_PER_STEP },
+      (_, index) => `finding ${index + 5}`,
+    ),
+  );
+});
+
+test("a failing test lists the errors and values below its headline, not its source", () => {
+  const lines = failureLines([
+    "@stll/api:test: src/lib/compiled-http-validation.artifact.test.ts:",
+    "@stll/api:test: 82 |     expect(build.exitCode, new TextDecoder().decode(build.stderr)).toBe(0);",
+    "@stll/api:test:                                                                         ^",
+    `@stll/api:test: error: 7 | import { serveForTest } from "${WORK}/apps/api/src/http/test-server.ts";`,
+    "@stll/api:test:                                  ^",
+    `@stll/api:test: error: Could not resolve: "${WORK}/apps/api/src/http/test-server.ts"`,
+    "@stll/api:test:     at /tmp/stella-http-artifact-i9nFBC/probe.ts:7:30",
+    "@stll/api:test: ",
+    "@stll/api:test: Expected: 0",
+    "@stll/api:test: Received: 1",
+    "@stll/api:test: ",
+    `@stll/api:test:       at <anonymous> (${WORK}/apps/api/src/lib/compiled-http-validation.artifact.test.ts:82:68)`,
+    "@stll/api:test: (fail) the compiled HTTP core validates synchronous and asynchronous Standard Schema bodies [8.47ms]",
+  ]).map(({ message }) => message);
+  expect(lines.at(0)).toContain("(fail)");
+  expect(lines.slice(1)).toEqual([
+    `error: Could not resolve: "${WORK}/apps/api/src/http/test-server.ts"`,
+    "Expected: 0",
+    "Received: 1",
+  ]);
+  expect(lines.join("\n")).not.toContain("82 |");
+});
+
+test("an annotation shows the first lines of a longer record", () => {
+  const lines = Array.from(
+    { length: MAX_ANNOTATION_LINES + 3 },
+    (_, index) => ({ message: `line ${index}` }),
+  );
+  const [command] = annotations([{ ...record(0), lines }]);
+  expect(command?.split("::").at(-1)?.split("%0A")).toEqual(
+    lines.slice(0, MAX_ANNOTATION_LINES).map(({ message }) => message),
+  );
+});
+
+const apiJob = (
+  id: number,
+  name: string,
+  conclusion: string | null,
+  steps: readonly ApiStep[],
+) => ({
+  id,
+  name,
+  conclusion,
+  html_url: `https://example.test/job/${id}`,
+  steps,
+});
+
+const POLICY_FAILURE = apiJob(1, "ci-checks-policy", "failure", [
+  { name: "Run policy checks", number: 4, conclusion: "failure" },
+]);
+const CANCELLED_SHARD = apiJob(2, "ci-tests (api-3)", "cancelled", [
+  { name: "Test API or rest", number: 12, conclusion: "cancelled" },
+]);
+const MASKED_FAILURE = apiJob(3, "ci-tests (api-1)", "cancelled", [
+  { name: "Test API or rest", number: 12, conclusion: "failure" },
+]);
+const RUNNING_GATE = apiJob(4, RESULT_GATE, null, [
+  { name: "Evaluate CI outcome", number: 3, conclusion: "failure" },
+]);
+
+test("cancelled jobs are listed apart and the gate never restates other failures", () => {
+  const jobs = parseJobs([
+    { jobs: [POLICY_FAILURE, CANCELLED_SHARD, MASKED_FAILURE, RUNNING_GATE] },
+  ]);
+  const records = buildDigest({ jobs, logFor: () => undefined });
+  // A cancelled job with a failed step is a failure, not a cancellation.
+  expect(records.map(({ job }) => job)).toEqual([
+    "ci-checks-policy",
+    "ci-tests (api-1)",
+  ]);
+  // Read back after the run, the gate has finished; its name still marks it.
+  const finished = parseJobs([
+    { jobs: [POLICY_FAILURE, { ...RUNNING_GATE, conclusion: "failure" }] },
+  ]);
+  expect(
+    buildDigest({
+      jobs: finished,
+      logFor: () => undefined,
+      gate: RESULT_GATE,
+    }).map(({ job }) => job),
+  ).toEqual(["ci-checks-policy"]);
+
+  const cancelled = cancelledJobs(jobs);
+  expect(cancelled).toEqual([
+    {
+      job: "ci-tests (api-3)",
+      url: "https://example.test/job/2",
+      reason: "after-failure",
+    },
+  ]);
+  expect(cancelledJobs(parseJobs([{ jobs: [CANCELLED_SHARD] }]))).toEqual([
+    {
+      job: "ci-tests (api-3)",
+      url: "https://example.test/job/2",
+      reason: "no-failure",
+    },
+  ]);
+  const summary = summaryMarkdown(records, cancelled);
+  expect(summary).toContain(
+    "**Cancelled, not failed** (1): ci-tests (api-3). stopped after another job failed",
+  );
+  expect(summary).not.toContain("**ci-tests (api-3) /");
+});
+
+test("a digest artifact reads back as written; run ids come from ids or URLs", () => {
+  const failures: FailureRecord[] = [
+    {
+      ...record(0),
+      lines: [{ message: "a", file: "apps/a.ts", line: 3 }, { message: "b" }],
+    },
+  ];
+  const cancelled = cancelledJobs(
+    parseJobs([{ jobs: [POLICY_FAILURE, CANCELLED_SHARD] }]),
+  );
+  // The artifact is the JSON text the digest command writes.
+  const text = JSON.stringify(
+    digestFile(failures, { GITHUB_RUN_ID: "5" }, cancelled),
+  );
+  const written: unknown = JSON.parse(text);
+  expect(parseDigestFile(written)).toEqual({ failures, cancelled });
+  // A digest from before cancelled jobs were recorded lists none.
+  expect(parseDigestFile({ version: 1, failures: [] })).toEqual({
+    failures: [],
+    cancelled: [],
+  });
+  expect(parseDigestFile({ version: 0, failures: [] })).toBeUndefined();
+
+  expect(runIdOf("40137279936")).toBe("40137279936");
+  for (const url of [
+    "https://github.com/o/r/actions/runs/40137279936",
+    "https://github.com/o/r/actions/runs/40137279936/job/121003611661",
+    "https://github.com/o/r/actions/runs/40137279936/attempts/2",
+  ]) {
+    expect(runIdOf(url)).toBe("40137279936");
+  }
+  expect(runIdOf("https://github.com/o/r/pull/6710")).toBeUndefined();
+  expect(runIdOf("latest")).toBeUndefined();
+});
+
+// Stands in for gh: `run download` serves $FAKE_ARTIFACT when set; `api`
+// serves the run's jobs and the logs under $FAKE_LOGS.
+const FAKE_GH = [
+  "#!/usr/bin/env bash",
+  'printf "%s\\n" "$*" >> "$FAKE_CALLS"',
+  'if [[ "$1" == run && "$2" == download ]]; then',
+  '  [[ -n "$FAKE_ARTIFACT" ]] || exit 1',
+  '  while (($#)); do if [[ "$1" == --dir ]]; then dir=$2; fi; shift; done',
+  '  cp "$FAKE_ARTIFACT" "$dir/ci-failures.json"',
+  "  exit 0",
+  "fi",
+  "for endpoint; do :; done",
+  'case "$endpoint" in',
+  '  repos/o/r/actions/runs/7/jobs*) cat "$FAKE_JOBS" ;;',
+  '  repos/o/r/actions/jobs/*/logs) id=$(basename "$(dirname "$endpoint")"); cat "$FAKE_LOGS/$id.log" 2>/dev/null || exit 1 ;;',
+  "  *) exit 1 ;;",
+  "esac",
+].join("\n");
+
+test("show prints a run's digest from its artifact, else from its job logs", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-digest-show-"));
+  try {
+    const bin = path.join(directory, "bin");
+    const logs = path.join(directory, "logs");
+    mkdirSync(bin);
+    mkdirSync(logs);
+    writeFileSync(path.join(bin, "gh"), FAKE_GH, { mode: 0o755 });
+    const policy = apiJob(11, "ci-checks-policy", "failure", [
+      {
+        name: "Ratchet guard",
+        number: 3,
+        conclusion: "failure",
+        started_at: "2026-10-12T10:00:04Z",
+        completed_at: "2026-10-12T10:00:08Z",
+      },
+    ]);
+    writeFileSync(
+      path.join(directory, "jobs.json"),
+      JSON.stringify([
+        {
+          jobs: [
+            policy,
+            CANCELLED_SHARD,
+            { ...RUNNING_GATE, conclusion: "failure" },
+          ],
+        },
+      ]),
+    );
+    writeFileSync(path.join(logs, "11.log"), JOB_LOG);
+    const show = (artifact?: string) =>
+      Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(ROOT, "scripts/ci-failure-digest.ts"),
+          "show",
+          "https://github.com/o/r/actions/runs/7/job/11",
+          "--repo",
+          "o/r",
+        ],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+          env: {
+            PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+            FAKE_CALLS: path.join(directory, "calls"),
+            FAKE_JOBS: path.join(directory, "jobs.json"),
+            FAKE_LOGS: logs,
+            ...(artifact === undefined ? {} : { FAKE_ARTIFACT: artifact }),
+          },
+        },
+      );
+
+    const fromLogs = show();
+    expect(fromLogs.exitCode).toBe(0);
+    expect(fromLogs.stderr.toString()).toBe(
+      `Run 7 has no ${DIGEST_ARTIFACT} artifact; digested from its job logs.\n`,
+    );
+    const markdown = fromLogs.stdout.toString();
+    expect(markdown).toContain(
+      "**ci-checks-policy / Ratchet guard** `ratchet`",
+    );
+    expect(markdown).toContain("as-casts: 10 -> 11 (+1)");
+    expect(markdown).toContain(
+      "**Cancelled, not failed** (1): ci-tests (api-3).",
+    );
+    expect(markdown).not.toContain(`${RESULT_GATE} /`);
+    // Only failed jobs' logs are fetched, and the gate's is never needed.
+    const calls = readFileSync(path.join(directory, "calls"), "utf-8");
+    expect(calls).toContain("repos/o/r/actions/jobs/11/logs");
+    expect(calls).not.toContain("repos/o/r/actions/jobs/2/logs");
+
+    const artifact = path.join(directory, "artifact.json");
+    const failures = [record(0)];
+    writeFileSync(artifact, JSON.stringify(digestFile(failures, {})));
+    const fromArtifact = show(artifact);
+    expect(fromArtifact.exitCode).toBe(0);
+    expect(fromArtifact.stderr.toString()).toBe("");
+    expect(fromArtifact.stdout.toString()).toBe(summaryMarkdown(failures));
+
+    rmSync(path.join(logs, "11.log"));
+    const unavailable = show();
+    expect(unavailable.exitCode).toBe(0);
+    expect(unavailable.stdout.toString()).toContain(
+      'Log of job "ci-checks-policy" was unavailable to the digest.',
+    );
+    expect(unavailable.stderr.toString()).toContain("GitHub command failed:");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });

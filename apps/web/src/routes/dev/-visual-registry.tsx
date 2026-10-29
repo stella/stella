@@ -4,6 +4,8 @@ import type { ComponentType, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { routeSearchSchema } from "@/route-search-params";
+
 import { visualRegistry } from "./-visual-metadata";
 import type { VisualName } from "./-visual-metadata";
 
@@ -80,6 +82,13 @@ const visualLoaders = {
       const { ChatLongPastePlayground } =
         await import("./-components/chat-long-paste-playground");
       return { default: ChatLongPastePlayground };
+    },
+  },
+  "chat-composer-reference": {
+    load: async () => {
+      const { ChatComposerReferencePlayground } =
+        await import("./-components/chat-composer-reference-playground");
+      return { default: ChatComposerReferencePlayground };
     },
   },
   "chat-continuation-error": {
@@ -219,7 +228,7 @@ const visualLoaders = {
 const isVisualName = (input: unknown): input is VisualName =>
   typeof input === "string" && Object.hasOwn(visualRegistry, input);
 
-export const visualSearchSchema = v.object({
+export const visualSearchSchema = routeSearchSchema({
   visual: v.optional(v.custom<VisualName>(isVisualName)),
 });
 

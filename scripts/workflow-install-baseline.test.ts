@@ -27,6 +27,8 @@ const PUSH_TO_MAIN = {
 const INSTALL_WITH_SCRIPTS =
   /\bbun (?:install|ci)\b(?![^\n]*--ignore-scripts)/u;
 
+// timeout: each test builds a git remote and runs a synchronous git
+// checkout for every installing workflow job; no wait is involved.
 setDefaultTimeout(30_000);
 
 let roots: string[] = [];
@@ -41,7 +43,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+  execFileSync("git", args, {
+    maxBuffer: 2 ** 30,
+    cwd,
+    encoding: "utf-8",
+  }).trim();
 
 /** Jobs whose steps install with lifecycle scripts, with their checkout inputs. */
 const installingJobs = () =>
@@ -149,16 +155,16 @@ const checkOut = (remote: string, sha: string, fetchDepth: number) => {
   return workspace;
 };
 
-test("every job that installs with lifecycle scripts checks out the hygiene baseline", () => {
+test("every job that installs with lifecycle scripts checks out the hygiene baseline", async () => {
   const jobs = installingJobs();
-  expect(jobs.map(({ job }) => job)).toContain(
+  expect(jobs.map(({ job }) => job)).not.toContain(
     "release-pr.yml#refresh-release-version",
   );
   const { remote, staged } = releaseRemote();
   for (const { job, fetchDepth } of jobs) {
     expect({
       job,
-      issues: validateWorkspaceAppBoundaries(
+      issues: await validateWorkspaceAppBoundaries(
         checkOut(remote, staged, fetchDepth),
         PUSH_TO_MAIN,
       ),
@@ -166,10 +172,13 @@ test("every job that installs with lifecycle scripts checks out the hygiene base
   }
 });
 
-test("a single-commit checkout of the release has no baseline to read", () => {
+test("a single-commit checkout of the release has no baseline to read", async () => {
   const { remote, staged } = releaseRemote();
   expect(
-    validateWorkspaceAppBoundaries(checkOut(remote, staged, 1), PUSH_TO_MAIN),
+    await validateWorkspaceAppBoundaries(
+      checkOut(remote, staged, 1),
+      PUSH_TO_MAIN,
+    ),
   ).toEqual([
     {
       message: "app-boundary ledger baseline branch is unavailable",

@@ -12,7 +12,7 @@
  */
 
 import { Result } from "better-result";
-import { createHmac, hkdf } from "node:crypto";
+import { hkdf } from "node:crypto";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -190,7 +190,7 @@ export const contentLookupKey = async (
     masterKey,
     `${LOOKUP_KEY_SCOPE}${organizationId}`,
   );
-  return createHmac("sha256", scopeKey).update(value).digest("hex");
+  return new Bun.CryptoHasher("sha256", scopeKey).update(value).digest("hex");
 };
 
 /** Keyed identifiers never fall back to a guessable plaintext digest. */

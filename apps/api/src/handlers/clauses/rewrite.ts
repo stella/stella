@@ -14,10 +14,11 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -32,11 +33,11 @@ import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const REWRITE_TIMEOUT_MS = 45_000;
 
-const rewriteClauseBodySchema = t.Object({
+const rewriteClauseBodySchema = v.object({
   body: clauseBodySchema,
-  instruction: t.String({ minLength: 1, maxLength: 2000 }),
-  usageNotes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  title: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
+  instruction: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
+  usageNotes: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
+  title: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
 });
 
 // strictObject + required (not optional): OpenAI strict structured output
@@ -116,6 +117,7 @@ const config = {
 const rewriteClause = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     session,
     body,
@@ -124,6 +126,10 @@ const rewriteClause = createSafeRootHandler(
     orgAIConfig,
     managedAIResidency,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
 
     // Editable paragraphs = non-directive with non-empty text; directives and
@@ -192,6 +198,7 @@ const rewriteClause = createSafeRootHandler(
           aiAnalytics.captureError(cause);
           return new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "AI rewrite failed",
             cause,
           });

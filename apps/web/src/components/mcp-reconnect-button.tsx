@@ -9,10 +9,9 @@ import { Button } from "@stll/ui/button";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { api } from "@/lib/api";
+import { mcpConnectorConnection } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
@@ -84,8 +83,7 @@ export const McpReconnectButton = ({
     return subscribeToMcpOAuthOutcome(onOutcome);
   }, [authType, onOutcome]);
   const reconnect = useMutation({
-    mutationFn: async () =>
-      unwrapEden(await api.mcp.connectors({ slug }).connect.post({})),
+    mutationFn: async () => await mcpConnectorConnection.start(slug),
     onSuccess: (data) => {
       switch (data.type) {
         case "oauth2":

@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
+import type { listSkillMetadata } from "@stll/skills";
 
 import { rlsDb } from "@/api/db/root";
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -59,6 +60,7 @@ import {
   resolveCredentialMemberAuthorization,
 } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
@@ -75,7 +77,10 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
-import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
+import type {
+  readCaseLawProvisionScope,
+  readProvisionWorkLinked,
+} from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -92,11 +97,11 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { getSearchReader } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {
@@ -125,7 +130,7 @@ import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
-import type { McpSession } from "@/api/mcp/auth";
+import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
@@ -152,10 +157,16 @@ export type McpOperationDatabaseScope = {
   scopedDb: ScopedDb;
 };
 
+export type McpRequestDataAccess = Pick<
+  McpOperationDatabaseScope,
+  "safeDb" | "scopedDb"
+>;
+
 export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    admitPublicRead?: typeof withMcpPublicReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */
@@ -173,6 +184,8 @@ export type McpRequestContext = {
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
     isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
     contextFidelityWaivers?: ReadonlyMap<string, string>;
+    /** Replaces the shipped skill catalog, for a skill shape no shipped skill has yet. */
+    listShippedSkillMetadata?: typeof listSkillMetadata;
     materializePlaybookRun?: typeof materializePlaybookRun;
     startWorkflow?: typeof startWorkflow;
     loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;
@@ -185,6 +198,10 @@ export type McpRequestContext = {
     readCaseLawProvisionScope?: (
       scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
+    /** Whether any recorded link names the provision's act. */
+    readProvisionWorkLinked?: (
+      scope: Parameters<typeof readProvisionWorkLinked>[1],
+    ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
@@ -246,8 +263,8 @@ export type McpRequestContext = {
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Write
    * tools gate on this to keep archived matters read-only, mirroring the HTTP
-   * `validateWorkspaceAccess` macro which 404s a workspace whose status is not
-   * "active".
+   * core's `authorizeWorkspace`, which 404s a workspace whose status the route
+   * does not admit ("active" unless it admits archived matters).
    */
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**
@@ -262,6 +279,8 @@ export type McpRequestContext = {
   clientIp?: string | null;
   credentialType?: "oauth" | "api-key" | "anonymous";
   clientId?: string | null;
+  /** Credential classification copied from the authenticated MCP session. */
+  sessionCredentialType?: McpCredentialType | undefined;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -337,10 +356,14 @@ export type McpRequestContext = {
    * declared with `withThirdPartyOutbound`.
    */
   thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
-  safeDb: SafeDb;
-  scopedDb: ScopedDb;
   userId: SafeId<"user">;
   userEmail: string;
+};
+
+/** Resources built with the caller context but kept outside its authority. */
+export type McpRequestResources = McpRequestContext & {
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
 };
 
 /**
@@ -348,9 +371,9 @@ export type McpRequestContext = {
  * contexts carry the request needed to rebuild the recorder; chat contexts
  * already receive a recorder whose approval was resolved by the chat gate.
  */
-export const bindApprovedMcpAuditContext = (
-  context: McpRequestContext,
-): McpRequestContext => {
+export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
+  context: TContext,
+): TContext => {
   if (context.request === undefined) {
     return context;
   }
@@ -570,7 +593,7 @@ export const resolveMcpSessionContext = async (
     checkAccountOperation?: typeof checkDemoAccountOperation;
     checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
-): Promise<McpRequestContext> => {
+): Promise<McpRequestResources> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
     userId: session.userId,
@@ -717,6 +740,9 @@ export const resolveMcpSessionContext = async (
     ),
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
+    ...(session.credential === undefined
+      ? {}
+      : { sessionCredentialType: session.credential.type }),
     createOperationDatabaseScope,
     featureAccessSnapshot,
     ...credentialPermissionContext(session),

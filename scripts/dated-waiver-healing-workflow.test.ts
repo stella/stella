@@ -87,14 +87,19 @@ test("package and probe execution precede conditional write credential minting",
   for (const step of steps.slice(0, steps.indexOf(token))) {
     expect(JSON.stringify(step)).not.toContain("app-token.outputs.token");
   }
-  expect(token.with).toMatchObject({
+  expect(
+    Object.fromEntries(
+      Object.entries(token.with ?? {}).filter(([key]) =>
+        key.startsWith("permission-"),
+      ),
+    ),
+  ).toEqual({
     "permission-contents": "write",
-    "permission-pull-requests": "write",
     "permission-issues": "write",
+    "permission-pull-requests": "write",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
   expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
-  expect(publish.env?.["MERGE_HOLD"]).toBe(`\${{ vars.STELLA_MERGE_HOLD }}`);
 });
 
 test("probe evidence stays local and public output does not expose failed probes", () => {
@@ -183,6 +188,20 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
             }),
           ),
         }),
+        "pr-heavy-gate": v.object({
+          if: v.string(),
+          needs: v.string(),
+          steps: v.array(
+            v.looseObject({
+              name: v.string(),
+              if: v.optional(v.string()),
+              run: v.optional(v.string()),
+              "continue-on-error": v.optional(v.boolean()),
+              with: v.optional(v.record(v.string(), v.unknown())),
+              env: v.optional(v.record(v.string(), v.string())),
+            }),
+          ),
+        }),
         "ci-result": v.object({
           needs: v.array(v.string()),
           steps: v.array(
@@ -201,11 +220,14 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
       ),
     ),
   );
-  // The guard is a part of the quick checks. The job waits for the plan but
-  // its condition never reads the plan, so a failed plan still runs it.
+  // Both event-specific quick-check carriers wait for the plan without
+  // reading its result, so a failed plan still runs the active carrier.
   const expiry = ci.jobs["ci-quick-checks"];
+  const pullRequestExpiry = ci.jobs["pr-heavy-gate"];
   expect(expiry.needs).toBe("ci-plan");
+  expect(pullRequestExpiry.needs).toBe("ci-plan");
   expect(expiry.if).not.toContain("needs.");
+  expect(pullRequestExpiry.if).not.toContain("needs.");
   const result = ci.jobs["ci-result"];
   expect(result.needs).toContain("ci-quick-checks");
   const outcome = result.steps.find(
@@ -216,9 +238,10 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   }
   expect(JSON.parse(outcome.env?.["JOB_SCOPES"] ?? "{}")).toMatchObject({
     "ci-quick-checks": null,
+    "pr-heavy-gate": null,
   });
   expect(JSON.parse(outcome.env?.["FAST_REQUIRED"] ?? "[]")).toContain(
-    "ci-quick-checks",
+    "pr-heavy-gate",
   );
   const guardSteps = expiry.steps.filter(({ name }) =>
     name.startsWith("dated-waiver-expiry: "),
@@ -239,14 +262,16 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
       },
       status: { always: true, cancelled: false },
     };
-    expect(evaluate(expiry.if, context), event).toBe(true);
+    const carrier = event === "pull_request" ? pullRequestExpiry : expiry;
+    context.values["inputs.pr_depth_only"] = event !== "pull_request";
+    expect(evaluate(carrier.if, context), event).toBe(true);
     for (const step of guardSteps) {
       expect(evaluate(step.if ?? "true", context), step.name).toBe(true);
     }
     // A heavy-only dispatch adds heavy suites to a tree whose merge group
     // already ran this thin job, so it is the one run that skips it.
     expect(
-      evaluate(expiry.if, {
+      evaluate(carrier.if, {
         ...context,
         values: { ...context.values, "inputs.heavy_only": true },
       }),
@@ -254,7 +279,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     ).toBe(false);
     // An enqueued head skips it: its merge group runs it on the queued tree.
     expect(
-      evaluate(expiry.if, {
+      evaluate(carrier.if, {
         ...context,
         values: { ...context.values, "github.event.action": "enqueued" },
       }),

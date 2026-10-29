@@ -296,22 +296,6 @@
     "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/matter-tools.ts::birthMonthSchema::maxValue:12::1",
-    "reason": "Existing birthMonthSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::birthMonthSchema::minValue:1::1",
-    "reason": "Existing birthMonthSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::birthYearSchema::maxValue:9999::1",
-    "reason": "Existing birthYearSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::birthYearSchema::minValue:1000::1",
-    "reason": "Existing birthYearSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:100::1",
     "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -362,14 +346,6 @@
   {
     "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:2::2",
     "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::dateOfBirthInputSchema::maxValue:31::1",
-    "reason": "Existing dateOfBirthInputSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::dateOfBirthInputSchema::minValue:1::1",
-    "reason": "Existing dateOfBirthInputSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/matter-tools.ts::listContactsArgsSchema::maxLength:512::1",
@@ -960,10 +936,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/view-registry-builtins.ts::BUILT_IN_KINDS::domain:[\"pdf\",\"task\",\"chat\",\"matter\",\"external\",\"skill-resource\"]::1",
-    "reason": "Existing BUILT_IN_KINDS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.test.ts::<module>::max:3::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1078,10 +1050,6 @@
   {
     "id": "apps/web/src/components/workspaces/properties/composer-primitives.tsx::CREATABLE_CONTENT_TYPES::domain:[\"text\",\"int\",\"date\",\"single-select\",\"multi-select\"]::1",
     "reason": "Existing CREATABLE_CONTENT_TYPES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/components/workspaces/table/find-highlight.logic.test.ts::<module>::minLength:1::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
     "id": "apps/web/src/components/workspaces/table/workspace-table/skeleton-rows.logic.ts::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\",\"i\",\"j\",\"k\",\"l\"]::1",
@@ -1830,18 +1798,6 @@
   {
     "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:6::1",
     "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::Route::minValue:1::1",
-    "reason": "Existing Route UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::Route::minValue:1::2",
-    "reason": "Existing Route UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx::searchSchema::minValue:1::1",
-    "reason": "Existing searchSchema UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.logic.test.ts::triggerTypes::domain:[\"direct\",\"user_dispatch\",\"agent_delegation\",\"schedule\",\"webhook\",\"credential\",\"system\"]::1",

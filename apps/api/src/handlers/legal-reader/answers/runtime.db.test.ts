@@ -17,8 +17,10 @@ import {
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
   READER_ANSWER_MAX_MESSAGES,
+  type ReaderAnswerSpans,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -33,6 +35,7 @@ import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answ
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -50,10 +53,14 @@ const userId = mintAuthProviderId<"user">();
 const decisionId = createSafeId<"caseLawDecision">();
 const relatedId = createSafeId<"caseLawDecision">();
 const anchor = {
-  paragraphId: "p-1",
-  quote: "The holding",
-  startOffset: 0,
-  endOffset: 11,
+  spans: [
+    {
+      paragraphId: "p-1",
+      quote: "The holding",
+      startOffset: 0,
+      endOffset: 11,
+    },
+  ],
 };
 let database: TestDatabase;
 
@@ -222,6 +229,7 @@ describe("reader answer turn lifecycle", () => {
             : Result.err(
                 new HandlerError({
                   status: 502,
+                  code: "internal_error",
                   message: "Provider unavailable",
                 }),
               ),
@@ -274,7 +282,7 @@ describe("reader answer turn lifecycle", () => {
           body: {
             kind: "explain",
             decisionId,
-            anchor: invalidAnchor,
+            anchor: { spans: [invalidAnchor] },
             locale: "cs-CZ",
           },
         },
@@ -294,6 +302,194 @@ describe("reader answer turn lifecycle", () => {
           message: "Selection does not match the decision paragraph",
         });
       }
+    }
+  });
+
+  test("a selection over several paragraphs, past any length cap, persists and reloads every span", async () => {
+    const long = "Reasoning ".repeat(500);
+    const paragraphs = [
+      { paragraphId: "p-1", text: "The facts. The holding" },
+      { paragraphId: "p-2", text: long },
+      { paragraphId: "p-3", text: "follows here." },
+    ];
+    const spans = [
+      {
+        paragraphId: "p-1",
+        quote: "The holding",
+        startOffset: 11,
+        endOffset: 22,
+      },
+      {
+        paragraphId: "p-2",
+        quote: long,
+        startOffset: 0,
+        endOffset: long.length,
+      },
+      { paragraphId: "p-3", quote: "follows", startOffset: 0, endOffset: 7 },
+    ] satisfies ReaderAnswerSpans;
+    const result = await prepareReaderAnswer({
+      ...scope(),
+      command: {
+        type: "create",
+        body: {
+          kind: "explain",
+          decisionId,
+          anchor: { spans },
+          locale: "cs-CZ",
+        },
+      },
+      readDecision: async () =>
+        Result.ok({
+          decisionId,
+          court: "Test court",
+          decisionDate: "2026-01-01",
+          paragraphs,
+        }),
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.anchor).toEqual(spans);
+    expect((await reloadThread(result.value))?.anchor).toEqual({ spans });
+  });
+
+  test("refuses spans that repeat a paragraph, run against reading order or are empty", async () => {
+    const paragraphs = [
+      { paragraphId: "p-1", text: "The holding" },
+      { paragraphId: "p-2", text: "follows here." },
+    ];
+    const first = {
+      paragraphId: "p-1",
+      quote: "The holding",
+      startOffset: 0,
+      endOffset: 11,
+    };
+    const second = {
+      paragraphId: "p-2",
+      quote: "follows",
+      startOffset: 0,
+      endOffset: 7,
+    };
+    for (const spans of [[second, first], [first, first], []]) {
+      const result = await prepareReaderAnswer({
+        ...scope(),
+        command: {
+          type: "create",
+          body: {
+            kind: "explain",
+            decisionId,
+            anchor: { spans },
+            locale: "cs-CZ",
+          },
+        },
+        readDecision: async () =>
+          Result.ok({
+            decisionId,
+            court: "Test court",
+            decisionDate: "2026-01-01",
+            paragraphs,
+          }),
+      });
+      expect(Result.isError(result) && result.error).toMatchObject({
+        status: 400,
+        code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
+      });
+    }
+  });
+
+  test("explains a selection in every block kind the reader anchors, from create through the stream", async () => {
+    const blocks: Block[] = [
+      {
+        type: "heading",
+        id: "heading",
+        anchorId: "h-1",
+        level: 2,
+        inlines: [{ type: "text", text: "Odůvodnění" }],
+        plainText: "Odůvodnění",
+      },
+      {
+        type: "paragraph",
+        id: "footnote",
+        anchorId: "fn-1",
+        note: { type: "footnote", label: "1" },
+        inlines: [{ type: "text", text: "Poznámka soudu." }],
+        plainText: "Poznámka soudu.",
+      },
+      {
+        type: "table",
+        id: "table",
+        anchorId: "t-1",
+        rows: [
+          [
+            {
+              inlines: [{ type: "text", text: "Spisová značka" }],
+              plainText: "Spisová značka",
+            },
+          ],
+        ],
+        plainText: "Spisová značka",
+      },
+    ];
+    // The decision as the reader source returns it, read through the real
+    // corpus mapping rather than a hand-written paragraph list.
+    const readDecision = async () =>
+      await readReaderAnswerDecision(decisionId, {
+        readDecision: async () =>
+          asTestRaw({
+            status: "read",
+            ast: { blocks, metadata: {} },
+            decision: {
+              id: decisionId,
+              caseNumberType: "case-number",
+              court: "Test court",
+              decisionDate: "2026-01-01",
+            },
+          }),
+      });
+    for (const { anchorId, text } of [
+      { anchorId: "h-1", text: "Odůvodnění" },
+      { anchorId: "fn-1", text: "Poznámka soudu." },
+      { anchorId: "table:table:0:0", text: "Spisová značka" },
+    ]) {
+      const quote = text.slice(1);
+      const prepared = await prepareReaderAnswer({
+        ...scope(),
+        command: {
+          type: "create",
+          body: {
+            kind: "explain",
+            decisionId,
+            anchor: {
+              spans: [
+                {
+                  paragraphId: anchorId,
+                  quote,
+                  startOffset: 1,
+                  endOffset: text.length,
+                },
+              ],
+            },
+            locale: "cs-CZ",
+          },
+        },
+        readDecision,
+      });
+      if (Result.isError(prepared)) {
+        throw prepared.error;
+      }
+      const { text: streamed } = await complete(prepared.value, {
+        runModel: async ({ onDelta }) => {
+          onDelta("The explanation");
+          return Result.ok({
+            content: `The explanation [[${decisionId}#${anchorId}]].`,
+            model: "fixture-model",
+            usage: null,
+          });
+        },
+      });
+      expect(terminalEvents(streamed)).toEqual([
+        expect.objectContaining({ type: "complete", invalidCitationCount: 0 }),
+      ]);
     }
   });
 
@@ -470,9 +666,18 @@ describe("reader answer turn lifecycle", () => {
     { reason: "busy", code: ACTION_ADMISSION_CODES.concurrencyBusy },
     { reason: "not_enabled", code: ACTION_ADMISSION_CODES.notEnabled },
     {
-      reason: "unavailable",
-      code: ACTION_ADMISSION_CODES.admissionUnavailable,
+      reason: "store_unavailable",
+      code: ACTION_ADMISSION_CODES.storeUnavailable,
     },
+    {
+      reason: "configuration_incomplete",
+      code: ACTION_ADMISSION_CODES.configurationIncomplete,
+    },
+    {
+      reason: "organization_state_unreadable",
+      code: ACTION_ADMISSION_CODES.organizationStateUnreadable,
+    },
+    { reason: "lease_lost", code: ACTION_ADMISSION_CODES.leaseLost },
   ] as const)(
     "admission $reason persists its precise recovery code on stream and reload",
     async ({ reason, code }) => {
@@ -519,12 +724,38 @@ describe("reader answer turn lifecycle", () => {
     },
   );
 
+  test("an unclassified admission failure persists an internal error without claiming a store outage", async () => {
+    const prepared = await create();
+    const { text } = await complete(prepared, {
+      admitModelAction: async () => {
+        throw new HandlerError({
+          status: 500,
+          code: "internal_error",
+          message: "Admission failed",
+        });
+      },
+    });
+    expect(terminalEvents(text).at(0)?.errorCode).toBe("internal");
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+    expect(await reload(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+  });
+
   test("model failures settle streaming messages as failed", async () => {
     const prepared = await create();
     const { text } = await complete(prepared, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     expect(text).toContain('"type":"failed"');
@@ -635,7 +866,11 @@ describe("reader answer turn lifecycle", () => {
           `Related [[${relatedId}#p-7]]. Invented [[${relatedId}#p-99]].`,
         );
         return Result.err(
-          new HandlerError({ status: 502, message: "Provider interrupted" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider interrupted",
+          }),
         );
       },
     });
@@ -682,7 +917,11 @@ describe("reader answer turn lifecycle", () => {
     await complete(first, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     const regenerated = await prepare({
@@ -764,6 +1003,7 @@ describe("reader answer turn lifecycle", () => {
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Expired fixture generation",
             }),
           );

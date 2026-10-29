@@ -28,6 +28,7 @@ import {
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requiresDurableNativeExtraction } from "@/api/lib/search/process-extraction";
 import { isAISupportedFile } from "@/api/lib/workflow/ai-file-support";
 import {
@@ -89,7 +90,7 @@ const encryptedHandling = async ({
   }
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType, scanned: scanned.value }),
-    { mimeType },
+    handlerErrorContext("test.detectEncryption", { mimeType }),
   );
   if (encryption === null) {
     return { accepted: false as const, status: 422 };

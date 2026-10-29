@@ -58,7 +58,7 @@ import {
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   type CatalogueMcp,
@@ -296,7 +296,7 @@ const ApproveAuthorizationButton = ({
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const approve = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.mcp
           .connectors({ slug: connectorSlug })
           ["approve-authorization"].post({
@@ -317,7 +317,13 @@ const ApproveAuthorizationButton = ({
       setOpen(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ApproveAuthorizationButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ApproveAuthorizationButton:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

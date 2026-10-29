@@ -56,6 +56,7 @@ import {
   subscribeUser,
 } from "@/api/lib/sse";
 import { createSseBroadcastPublisher } from "@/api/lib/sse-broadcast";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -275,6 +276,10 @@ const seedAudience = async (size: number): Promise<Audience> => {
     name: "Fan-out",
     slug: `fan-out-${organizationId.slice(-12)}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
   await testDb.insert(user).values(
     userIds.map((id) => ({

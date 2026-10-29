@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -11,29 +11,39 @@ import {
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
-import {
-  recalculateInvoiceTotals,
-  requireDraftInvoiceForEntryChanges,
-} from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import {
+  recalculateInvoiceTotals,
+  requireDraftInvoiceForEntryChanges,
+} from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const removeEntriesBodySchema = t.Object({
-  timeEntryIds: t.Optional(
-    t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 500 }),
+const removeEntriesBodySchema = v.object({
+  timeEntryIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("timeEntry")),
+      v.minLength(1),
+      v.maxLength(500),
+    ),
   ),
-  expenseIds: t.Optional(
-    t.Array(tSafeId("expense"), { minItems: 1, maxItems: 500 }),
+  expenseIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("expense")),
+      v.minLength(1),
+      v.maxLength(500),
+    ),
   ),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const buildDetachEvents = (params: {
   invoiceId: SafeId<"invoice">;
@@ -98,8 +108,9 @@ const removeEntries = createSafeHandler(
       "recomputing the invoice totals. " +
       "Reversible: the same entries can be attached again with " +
       "invoices.entries.add, and the entries themselves are kept. Only " +
-      "draft invoices may " +
-      "be changed, and ids that are not on this invoice are skipped without " +
+      "never-issued drafts may be changed; issued invoices require a credit " +
+      "note even after reverting to draft. Ids that are not on this invoice " +
+      "are skipped without " +
       "an error.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -173,21 +184,25 @@ const removeEntries = createSafeHandler(
 
     const txResult = yield* Result.await(
       resultTx(safeDb, async (tx) => {
-        const runningError = await guardRunningTimeEntries({
+        const running = await guardRunningTimeEntries({
           tx,
+          organizationId: session.activeOrganizationId,
           workspaceId,
           actorUserId: user.id,
-          selection: body.timeEntryIds
-            ? { type: "entries", ids: body.timeEntryIds }
-            : { type: "none" },
+          selection: {
+            type: "invoice",
+            runningCheck: "additional",
+            invoiceId: params.invoiceId,
+            additionalIds: body.timeEntryIds,
+          },
         });
-        if (runningError) {
-          return Result.err(runningError);
+        if (running.isErr()) {
+          return Result.err(running.error);
         }
-        const invoiceResult = await requireDraftInvoiceForEntryChanges(
-          tx,
-          entryChangeScope,
-        );
+        const invoiceResult = await requireDraftInvoiceForEntryChanges(tx, {
+          ...entryChangeScope,
+          matterLocks: running.value,
+        });
         if (invoiceResult.isErr()) {
           return Result.err(invoiceResult.error);
         }

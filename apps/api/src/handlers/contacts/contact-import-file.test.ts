@@ -1,5 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
@@ -11,18 +12,23 @@ import {
   type ContactImportLabeledField,
   type ContactImportTargetField,
 } from "@stll/api-contract";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   contactCustomFieldSchema,
   contactMetadataSchema,
 } from "@/api/db/schema-validators";
 import {
+  assertContactImportHeaderAliases,
+  contactImportSkipReason,
+  decideInFileDuplicate,
   importedTaxIdentifiers,
   inspectContactImportDocument,
   parseContactImportDocument,
   previewContactImport,
   suggestedTargetForHeader,
   validateContactImportCandidate,
+  validateContactImportCandidates,
 } from "@/api/handlers/contacts/contact-import-file";
 import type { ContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
 
@@ -34,6 +40,27 @@ const parseDocument = (text: string) => {
   }
   return result.value;
 };
+
+const person = (displayName: string): ContactImportCandidate => ({
+  type: "person",
+  displayName,
+});
+
+const email = (address: string) => ({
+  type: "work" as const,
+  address,
+  isPrimary: true,
+});
+
+const organization = (
+  displayName: string,
+  registrationNumber: string,
+): ContactImportCandidate => ({
+  type: "organization",
+  displayName,
+  organizationName: displayName,
+  registrationNumber,
+});
 
 type PreviewMapping = Omit<
   Parameters<typeof previewContactImport>[0]["mapping"],
@@ -50,6 +77,19 @@ const preview = (text: string, mapping: PreviewMapping) => {
     throw result.error;
   }
   return result.value;
+};
+
+// The bound is read off the stored schema, not copied, so a test cannot pass
+// against a limit the schema no longer enforces.
+const maxLengthOf = (schema: {
+  readonly pipe: readonly { readonly type: string }[];
+}) => {
+  const action = schema.pipe.find(({ type }) => type === "max_length");
+  return action !== undefined &&
+    "requirement" in action &&
+    typeof action.requirement === "number"
+    ? action.requirement
+    : 0;
 };
 
 // A checksum-valid CPF (person) and CNPJ (organization); the third fails the
@@ -74,6 +114,55 @@ const LABELED_BLOCKS = [
 ].join("\n");
 
 describe("contact import document", () => {
+  test.each([
+    {
+      name: "Czech",
+      csv: "Jméno,Příjmení,E-mail,Telefon,Organizace\nJan,Novák,jan@example.com,+420123456789,Example Legal",
+      targets: [
+        "first_name",
+        "last_name",
+        "primary_email",
+        "primary_phone",
+        "organization_name",
+      ],
+    },
+    {
+      name: "Slovak",
+      csv: "Meno,Priezvisko,E-mail,Telefón,Organizácia\nJán,Novák,jan@example.com,+421123456789,Example Legal",
+      targets: [
+        "first_name",
+        "last_name",
+        "primary_email",
+        "primary_phone",
+        "organization_name",
+      ],
+    },
+    {
+      name: "English Google/Outlook",
+      csv: "Given Name,Family Name,E-mail Address,Phone Number,Company\nJane,Doe,jane@example.com,+12025550123,Example Legal",
+      targets: [
+        "first_name",
+        "last_name",
+        "primary_email",
+        "primary_phone",
+        "organization_name",
+      ],
+    },
+  ])("maps $name export headers", ({ csv, targets }) => {
+    const inspection = inspectContactImportDocument(parseDocument(csv));
+    expect(inspection.columns.map(({ targetField }) => targetField)).toEqual([
+      ...targets,
+    ]);
+  });
+
+  test("rejects an alias vocabulary whose normalized labels collide", () => {
+    expect(() =>
+      assertContactImportHeaderAliases([
+        { first_name: ["Shared label"], display_name: ["Shared-label"] },
+      ]),
+    ).toThrow("Contact import header aliases must map to one field");
+  });
+
   test("parses quoted headers after a UTF-8 BOM", () => {
     const document = parseDocument(
       '\uFEFF"Name","Email"\n"Jane Doe","jane@example.com"',
@@ -93,7 +182,7 @@ describe("contact import document", () => {
       rowCount: 1,
       taxIdScheme: "none",
       columns: [
-        { sourceIndex: 0, targetField: "display_name" },
+        { sourceIndex: 0, targetField: "first_name" },
         { sourceIndex: 1, targetField: "primary_email" },
         { sourceIndex: 2, targetField: "ignore" },
       ],
@@ -157,6 +246,284 @@ describe("contact import document", () => {
         },
       ],
     });
+  });
+
+  test("skips blank rows, preserves file line numbers, and warns for ignored data", () => {
+    const document = parseDocument("Name,Extra\nJane,kept out\n   ,   \nJohn,");
+    expect(inspectContactImportDocument(document).skippedBlankRowCount).toBe(1);
+    const result = previewContactImport({
+      document,
+      mapping: {
+        version: CONTACT_IMPORT_SCHEMA_VERSION,
+        defaultType: "person",
+        generateDisplayName: false,
+        taxIdScheme: "none",
+        columns: [
+          { sourceIndex: 0, targetField: "display_name" },
+          { sourceIndex: 1, targetField: "ignore" },
+        ],
+      },
+    });
+    expect(
+      Result.isOk(result) &&
+        result.value.rows.map(({ rowNumber }) => rowNumber),
+    ).toEqual([2, 4]);
+    expect(Result.isOk(result) && result.value.rows.at(0)?.warnings).toEqual([
+      { code: "ignored_populated_column", column: "Extra", rowNumber: 2 },
+    ]);
+  });
+
+  test("marks repeated email and strong person identity as duplicates of the earlier source row", () => {
+    const result = preview(
+      "First name,Last name,Email,Date of birth,Phone\nJane,Doe,JANE@example.com,1990-01-02,+1 202 555 0100\nJanet,Doe,jane@example.com,,\nJohn,Smith,,1980-03-04,+1 202 555 0111\nJohn,Smith,,1980-03-04,+1 202 555 0111",
+      {
+        defaultType: "person",
+        generateDisplayName: true,
+        taxIdScheme: "none",
+        columns: CONTACT_IMPORT_FIELDS.flatMap((targetField) => {
+          const sourceIndex = [
+            "first_name",
+            "last_name",
+            "primary_email",
+            "date_of_birth",
+            "primary_phone",
+          ].indexOf(targetField);
+          return sourceIndex === -1 ? [] : [{ sourceIndex, targetField }];
+        }),
+      },
+    );
+    expect(result.rows.at(1)?.issues).toContainEqual({
+      code: "in_file_duplicate",
+      field: null,
+      rowNumber: 3,
+      duplicateOfRowNumber: 2,
+    });
+    expect(result.rows.at(3)?.issues).toContainEqual({
+      code: "in_file_duplicate",
+      field: null,
+      rowNumber: 5,
+      duplicateOfRowNumber: 4,
+    });
+  });
+
+  test("warns about name-only matches without blocking either row", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [person("John Smith"), person("John Smith")],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.map(({ issues }) => issues)).toEqual([[], []]);
+    expect(rows.at(1)?.warnings).toContainEqual({
+      code: "possible_in_file_duplicate",
+      duplicateOfRowNumber: 2,
+      rowNumber: 3,
+    });
+  });
+
+  test("a partial structured name does not merge different people", () => {
+    const householdPhone = {
+      isPrimary: true,
+      number: "+1 202 555 0150",
+      type: "home" as const,
+    };
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("John Smith"),
+          firstName: "John",
+          phones: [householdPhone],
+        },
+        { ...person("John Doe"), firstName: "John", phones: [householdPhone] },
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.map(({ issues }) => issues)).toEqual([[], []]);
+  });
+
+  test("a shared secondary email or phone still identifies a duplicate", () => {
+    const mobile = (number: string, isPrimary: boolean) => ({
+      isPrimary,
+      number,
+      type: "mobile" as const,
+    });
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("Jane Doe"),
+          emails: [email("jane@example.com"), email("shared@example.com")],
+        },
+        {
+          ...person("Janet Roe"),
+          emails: [email("janet@example.com"), email("shared@example.com")],
+        },
+        {
+          ...person("John Smith"),
+          phones: [
+            mobile("+1 202 555 0101", true),
+            mobile("+1 202 555 0199", false),
+          ],
+        },
+        {
+          ...person("John Smith"),
+          phones: [
+            mobile("+1 202 555 0102", true),
+            mobile("+1 202 555 0199", false),
+          ],
+        },
+      ],
+      rowNumbers: [2, 3, 4, 5],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues.at(0)?.duplicateOfRowNumber).toBe(2);
+    expect(rows.at(3)?.issues.at(0)?.duplicateOfRowNumber).toBe(4);
+  });
+
+  test("only surviving rows block later duplicate candidates", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("Jane Doe"),
+          emails: [email("shared@example.com")],
+          phones: [
+            {
+              isPrimary: true,
+              number: "+1 202 555 0101",
+              type: "mobile",
+            },
+          ],
+        },
+        {
+          ...person("John Smith"),
+          emails: [email("shared@example.com")],
+          phones: [
+            {
+              isPrimary: true,
+              number: "+1 202 555 0102",
+              type: "mobile",
+            },
+          ],
+        },
+        {
+          ...person("John Smith"),
+          phones: [
+            {
+              isPrimary: true,
+              number: "+1 202 555 0102",
+              type: "mobile",
+            },
+          ],
+        },
+      ],
+      rowNumbers: [2, 3, 4],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues).toContainEqual({
+      code: "in_file_duplicate",
+      duplicateOfRowNumber: 2,
+      field: null,
+      rowNumber: 3,
+    });
+    expect(rows.at(2)?.issues).toEqual([]);
+  });
+
+  test("keeps same-name people with different birth dates distinct", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("John Smith"),
+          dateOfBirth: { precision: "day", year: 1980, month: 1, day: 2 },
+        },
+        {
+          ...person("John Smith"),
+          dateOfBirth: { precision: "day", year: 1981, month: 1, day: 2 },
+        },
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues).toEqual([]);
+    expect(rows.at(1)?.warnings).toEqual([]);
+  });
+
+  test("blocks repeated email even when names differ", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        { ...person("Jane Doe"), emails: [email("same@example.com")] },
+        { ...person("Janet Roe"), emails: [email("SAME@example.com")] },
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues.at(0)?.duplicateOfRowNumber).toBe(2);
+  });
+
+  test("grades organization registration numbers as strong evidence", () => {
+    const different = validateContactImportCandidates({
+      candidates: [
+        organization("Northwind", "REG-1"),
+        organization("Northwind", "REG-2"),
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+    const same = validateContactImportCandidates({
+      candidates: [
+        organization("Northwind", "REG-1"),
+        organization("Northwind", "reg 1"),
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(different.at(1)?.issues).toEqual([]);
+    expect(different.at(1)?.warnings).toEqual([]);
+    expect(same.at(1)?.issues.at(0)?.duplicateOfRowNumber).toBe(2);
+  });
+
+  test("duplicate evidence is symmetric and name alone never blocks", () => {
+    const candidate = fc.record({
+      displayName: fc.constantFrom("John Smith", "Jane Doe", "Northwind"),
+      email: fc.option(fc.constantFrom("a@example.com", "b@example.com"), {
+        nil: undefined,
+      }),
+      registrationNumber: fc.option(fc.constantFrom("REG-1", "REG-2"), {
+        nil: undefined,
+      }),
+    });
+    assertProperty(
+      "duplicate evidence is symmetric and name alone never blocks",
+      fc.property(candidate, candidate, (left, right) => {
+        const toRow = (value: typeof left, rowNumber: number) => ({
+          contact: {
+            ...person(value.displayName),
+            ...(value.email ? { emails: [email(value.email)] } : {}),
+            registrationNumber: value.registrationNumber,
+          },
+          issues: [],
+          rowNumber,
+          warnings: [],
+        });
+        const forward = decideInFileDuplicate(toRow(left, 1), toRow(right, 2));
+        const reverse = decideInFileDuplicate(toRow(right, 2), toRow(left, 1));
+        expect({
+          kind: forward.kind,
+          by: "by" in forward ? forward.by : undefined,
+        }).toEqual({
+          kind: reverse.kind,
+          by: "by" in reverse ? reverse.by : undefined,
+        });
+        if (forward.kind === "possibleDuplicate") {
+          expect(forward.by).toBe("nameOnly");
+        }
+      }),
+    );
   });
 
   test("rejects mapping one destination more than once", () => {
@@ -307,6 +674,21 @@ describe("labeled contact import blocks", () => {
     }
   });
 
+  test("headers recognised before the locale vocabularies keep their destinations", () => {
+    expect(
+      ["Nome", "Endereço", "Endereco", "Typ", "Druh"].map((header) => [
+        header,
+        suggestedTargetForHeader(header),
+      ]),
+    ).toEqual([
+      ["Nome", "display_name"],
+      ["Endereço", "address_line_1"],
+      ["Endereco", "address_line_1"],
+      ["Typ", "type"],
+      ["Druh", "type"],
+    ]);
+  });
+
   test("every field name suggests its own field", () => {
     for (const field of CONTACT_IMPORT_FIELDS) {
       expect([field, suggestedTargetForHeader(field)]).toEqual([field, field]);
@@ -342,7 +724,7 @@ describe("custom field columns", () => {
   });
 
   test("flags a custom field value the contact schema could not store", () => {
-    const valueLimit = contactCustomFieldSchema.properties.value.maxLength ?? 0;
+    const valueLimit = maxLengthOf(contactCustomFieldSchema.entries.value);
     expect(valueLimit).toBeGreaterThan(0);
     const result = preview(`Nome: Long\nRG: ${"9".repeat(valueLimit + 1)}`, {
       defaultType: "person",
@@ -375,7 +757,7 @@ describe("custom field columns", () => {
   });
 
   test("rejects a mapping whose custom field label exceeds the schema bound", () => {
-    const labelLimit = contactCustomFieldSchema.properties.label.maxLength ?? 0;
+    const labelLimit = maxLengthOf(contactCustomFieldSchema.entries.label);
     expect(labelLimit).toBeGreaterThan(0);
     const header = "L".repeat(labelLimit + 1);
     const result = previewContactImport({
@@ -522,9 +904,10 @@ describe("candidate validation", () => {
   });
 
   test("reports custom fields the contact schema could not store", () => {
-    const labelLimit = contactCustomFieldSchema.properties.label.maxLength ?? 0;
-    const countLimit =
-      contactMetadataSchema.properties.customFields.maxItems ?? 0;
+    const labelLimit = maxLengthOf(contactCustomFieldSchema.entries.label);
+    const countLimit = maxLengthOf(
+      contactMetadataSchema.entries.customFields.wrapped,
+    );
     expect(labelLimit).toBeGreaterThan(0);
     expect(countLimit).toBeGreaterThan(0);
 
@@ -623,7 +1006,7 @@ describe("candidate validation", () => {
   });
 
   test("reports a custom field value the contact schema could not store", () => {
-    const valueLimit = contactCustomFieldSchema.properties.value.maxLength ?? 0;
+    const valueLimit = maxLengthOf(contactCustomFieldSchema.entries.value);
     const { issues } = validateContactImportCandidate({
       candidate: candidate({
         metadata: {
@@ -689,5 +1072,32 @@ describe("imported tax identifiers", () => {
       taxId: null,
       vatId: null,
     });
+  });
+});
+
+describe("contact import skip reasons", () => {
+  test("a repeated row keeps a duplicate reason, by tax id when that matched", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        { ...person("Jane Doe"), emails: [email("jane@example.com")] },
+        { ...person("Jane D."), emails: [email("jane@example.com")] },
+        { ...person("Acme Holding"), taxId: "12345678" },
+        { ...person("Acme"), taxId: "12345678" },
+        {
+          ...person("Jane Doe"),
+          emails: [email("jane@example.com"), email("not an email")],
+        },
+      ],
+      rowNumbers: [2, 3, 4, 5, 6],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(0)?.issues).toEqual([]);
+    expect(rows.at(2)?.issues).toEqual([]);
+    expect(
+      [1, 3, 4].map((index) =>
+        contactImportSkipReason(rows.at(index)?.issues ?? panic("row")),
+      ),
+    ).toEqual(["in_file_duplicate", "duplicate_tax_id", "invalid_row"]);
   });
 });

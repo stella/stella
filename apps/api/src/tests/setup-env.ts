@@ -1,4 +1,3 @@
-import "../register-schema-formats";
 import { envApiServerSchema } from "../env-schema";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
@@ -39,6 +38,7 @@ configureTestDatabaseEnvironment();
 // route guards) exercise local development capabilities, which require an
 // explicit runtime opt-in. `bun test` already sets NODE_ENV=test. A test of
 // strict behaviour switches the mode through `setRuntimeModeForTesting`.
+process.env["DEPLOY_ENVIRONMENT"] ??= "development";
 process.env.NODE_ENV ??= "development";
 process.env["STELLA_LOCAL_DEV"] ??= "1";
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
@@ -64,6 +64,10 @@ delete process.env["GOOGLE_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_CLIENT_ID"];
 delete process.env["MICROSOFT_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_TENANT_ID"];
+delete process.env["APPLE_AUTH_CLIENT_ID"];
+delete process.env["APPLE_AUTH_TEAM_ID"];
+delete process.env["APPLE_AUTH_KEY_ID"];
+delete process.env["APPLE_AUTH_PRIVATE_KEY"];
 // Same leak, different blast radius: a developer .env that turns corpus
 // object storage on sends ingestion tests down the real S3 write path, where
 // they fail against a bucket the test runner has never created. Tests assert

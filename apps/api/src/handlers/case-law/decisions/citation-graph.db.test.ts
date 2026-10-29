@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import {
   caseLawCitationDoctrineReviews,
@@ -47,7 +47,6 @@ import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
-  grantPgliteDecisionCitationStatsReader,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
@@ -102,7 +101,7 @@ const summaryOf = async (
     throw new Error("expected a citation summary, got a status response");
   }
   const projected = projectResponseText(result, citationSummaryResponseSchema);
-  expect(Value.Check(citationSummaryResponseSchema, projected)).toBe(true);
+  expect(v.is(citationSummaryResponseSchema, projected)).toBe(true);
   return projected;
 };
 
@@ -132,7 +131,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    await grantPgliteDecisionCitationStatsReader(db);
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>

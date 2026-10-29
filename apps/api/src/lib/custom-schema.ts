@@ -1,105 +1,89 @@
-import type { TProperties, TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
-import type { Static } from "elysia";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import type { INVOICE_LANGUAGES, InvoiceLanguage } from "@stll/api-contract";
-import {
-  CURRENCY_CODE_LENGTH,
-  CURRENCY_CODE_PATTERN,
-} from "@stll/api-contract/currency-code";
+import { INVOICE_LANGUAGES } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { safeIdSchema } from "@stll/api-contract/safe-id";
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
-/**
- * Elysia schema for UUID string validation.
- *
- * Validates UUID format (8-4-4-4-12 hex digits).
- * Previously named `tNanoid` when the project used nanoid;
- * renamed to `tUuid` after migrating to `Bun.randomUUIDv7()`.
- */
-export const tUuid = t.String({
-  minLength: 36,
-  maxLength: 36,
-  pattern: UUID_PATTERN,
-});
+/** UUID string (8-4-4-4-12 hex digits), as `Bun.randomUUIDv7()` issues them. */
+export const uuidSchema = v.pipe(
+  v.string(),
+  v.length(36),
+  v.regex(new RegExp(UUID_PATTERN, "u")),
+);
 
 /**
- * A copy of a shared schema carrying per-property prose. The branded schemas
- * below (`tUserId`, `tDefaultVarchar`, …) are single module-level instances
- * reused by many handlers, so a description belongs to the USE SITE, not to the
- * shared value; mutating the shared one would leak the prose everywhere. Object
- * spread copies TypeBox's own enumerable symbol metadata (the `Kind` marker),
- * so the copy validates exactly as the original does.
+ * A shared schema with per-use prose. The branded schemas below are module
+ * level values reused by many handlers, so a description belongs to the use
+ * site; the pipe wraps the shared value instead of mutating it.
  *
- * The resulting `description` is carried by the capability-catalog exporter
- * into the committed catalog's `inputSchema`, where it becomes the generated
- * CLI flag's `--help` text and the property prose an MCP client sees.
+ * The description is carried by the capability-catalog exporter into the
+ * committed catalog's `inputSchema`, where it becomes the generated CLI flag's
+ * `--help` text and the property prose an MCP client sees.
  */
-export const withDescription = <T extends TSchema>(
-  schema: T,
+export const withDescription = <TSchema extends v.GenericSchema>(
+  schema: TSchema,
   description: string,
-): T => ({ ...schema, description });
+) => v.pipe(schema, v.description(description));
 
-export const tSafeId = <T extends SafeIdType>(
+/** Metadata keys `resourcesAreVisible` and the capability exporter read. */
+const RESOURCE_KIND_METADATA_KEY = "x-stella-resource-kind";
+const RESOURCE_USAGE_METADATA_KEY = "x-stella-resource-usage";
+
+/**
+ * The id of a stored resource. The metadata names its kind, so the safe
+ * handler factories prove every referenced id is visible to the caller before
+ * the handler runs; a `creation` id names a resource the request creates.
+ */
+export const resourceIdSchema = <T extends SafeIdType>(
   resourceKind: T,
   {
     usage = "reference",
-    ...options
+    description,
   }: {
     description?: string;
     usage?: "reference" | "creation";
   } = {},
 ) =>
-  Type.Unsafe<SafeId<T>>({
-    ...tUuid,
-    ...options,
-    "x-stella-resource-kind": resourceKind,
-    "x-stella-resource-usage": usage,
-  });
-
-export const tUserId = t.String({
-  minLength: 1,
-  maxLength: 128,
-});
-
-export const tDefaultVarchar = t.String({
-  minLength: 1,
-  maxLength: DEFAULT_VARCHAR_MAX_LENGTH,
-});
-
-/** A JSON object with caller-defined keys and values. `t.Record` does not
- * reject scalar JSON values in Elysia's runtime validator, so intersect it
- * with an object schema at every boundary that requires a map. */
-export const tJsonObject = t.Intersect([
-  t.Object({}, { additionalProperties: true }),
-  t.Record(t.String(), t.Unknown()),
-]);
+  v.pipe(
+    uuidSchema,
+    safeIdSchema,
+    v.transform((id): SafeId<T> => id),
+    // One metadata step with a fixed shape: a spread of optional steps would
+    // leave `v.pipe` without a typed overload, and the id's input type with it.
+    v.metadata({
+      [RESOURCE_KIND_METADATA_KEY]: resourceKind,
+      [RESOURCE_USAGE_METADATA_KEY]: usage,
+      ...(description === undefined ? {} : { description }),
+    }),
+  );
 
 /**
- * ISO 4217 alphabetic code, upper case, for a column that stores money.
- *
- * Three LETTERS, not three characters: a stored "A1C" satisfies a length check
- * and then makes `Intl.NumberFormat` throw the moment something formats it. An
- * unknown-but-well-formed code ("ZZZ") is accepted, because `Intl` accepts it.
- *
- * Case is part of the contract here, unlike the workspace field-currency schema
- * in `db/schema-validators.ts`, which still admits either case. `Intl` resolves
- * "jpy" and "JPY" alike, so a mixed-case column would look fine and still be
- * two currencies to anything that groups or joins on the code — including the
- * migration that rescaled these amounts to true minor units, and `MoneyTotals`,
- * which buckets by the raw string.
+ * A file a multipart body carries, at most `maxBytes` long. Agents and the
+ * generated CLI see it as a binary string (`format: "binary"`), which is what
+ * a capability's file-input transport is checked against.
  */
-export const tCurrencyCode = t.String({
-  minLength: CURRENCY_CODE_LENGTH,
-  maxLength: CURRENCY_CODE_LENGTH,
-  pattern: CURRENCY_CODE_PATTERN,
-});
+export const fileSchema = ({ maxBytes }: { maxBytes: number }) =>
+  v.pipe(
+    v.file(),
+    v.maxSize(maxBytes, `The file is larger than ${String(maxBytes)} bytes`),
+  );
 
-export const tPaginationLimit = (maximum: number) =>
-  t.Integer({ minimum: 1, maximum });
+export { userIdSchema } from "@stll/api-contract/safe-id";
+
+export const defaultVarcharSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DEFAULT_VARCHAR_MAX_LENGTH),
+);
+
+/** A JSON object with caller-defined keys and values; scalars are rejected. */
+export const jsonObjectSchema = v.record(v.string(), v.unknown());
+
+export const paginationLimitSchema = (maximum: number) =>
+  v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(maximum));
 
 /**
  * A monetary amount in the currency's minor units.
@@ -110,8 +94,13 @@ export const tPaginationLimit = (maximum: number) =>
  * `Number.MAX_SAFE_INTEGER` the amount stored is no longer the amount sent --
  * silently, which is the whole reason money carries a brand here.
  */
-export const tMinorUnitAmount = (minimum: number) =>
-  t.Integer({ minimum, maximum: Number.MAX_SAFE_INTEGER });
+export const minorUnitAmountSchema = (minimum: number) =>
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(minimum),
+    v.maxValue(Number.MAX_SAFE_INTEGER),
+  );
 
 export const PAGINATION_CURSOR_MAX_CHARS = 512;
 
@@ -127,59 +116,43 @@ type PaginationCursorOptions = {
   readonly description?: string;
 };
 
-export const tPaginationCursor = ({
+export const paginationCursorSchema = ({
   maxChars = PAGINATION_CURSOR_MAX_CHARS,
   description = PAGINATION_CURSOR_DESCRIPTION,
 }: PaginationCursorOptions = {}) =>
-  t.String({ maxLength: maxChars, description });
+  v.pipe(v.string(), v.maxLength(maxChars), v.description(description));
+
+export const workspaceParams = <TEntries extends v.ObjectEntries>(
+  extra: TEntries,
+) => v.object({ workspaceId: resourceIdSchema("workspace"), ...extra });
+
+/** The `:workspaceId` segment every matter route is mounted under. */
+export const workspaceSegmentSchema = v.looseObject({
+  workspaceId: resourceIdSchema("workspace"),
+});
+
+const UNIQUE_ITEMS_CHECKS = new WeakSet<object>();
+
+/** Whether a pipe action came from `uniqueItems`, which renders as `uniqueItems: true`. */
+export const isUniqueItemsCheck = (action: object): boolean =>
+  UNIQUE_ITEMS_CHECKS.has(action);
 
 /**
- * The params shape a route mounted under a `:workspaceId` prefix must declare.
- *
- * Elysia validates the route-level params schema before the auth macros run and
- * does not merge it with the workspace macro's own `workspaceId` property, so a
- * schema that omits `workspaceId` rejects every request with a bare 422 --
- * before authentication, for a perfectly valid caller.
- * `WorkspaceHandlerConfig["params"]` requires this shape, which leaves a bare
- * `t.Object({ ... })` unassignable there.
- *
- * The constraint reads `properties` instead of naming `TObject<...>`: `TObject`
- * carries a `required` tuple that a wider property set cannot satisfy, so the
- * nominal form would reject every schema that adds a param of its own.
+ * Every item of the array distinct, as JSON Schema's `uniqueItems`. Items are
+ * compared by identity; an array of objects names the primitive `key` two
+ * equal items share. Items distinct by key are distinct as values, so the
+ * rendered `uniqueItems: true` never admits what the check refuses.
  */
-export type WorkspaceParamsSchema = TSchema & {
-  properties: { workspaceId: TSchema };
+export const uniqueItems = <TItem>(
+  key: (item: TItem) => unknown = (item) => item,
+) => {
+  const check = v.check(
+    (items: TItem[]) => new Set(items.map(key)).size === items.length,
+    "Items must be unique",
+  );
+  UNIQUE_ITEMS_CHECKS.add(check);
+  return check;
 };
 
-export const workspaceParams = <T extends TProperties>(extra: T) =>
-  t.Object({ workspaceId: tSafeId("workspace"), ...extra });
-
-/**
- * A literal union, not `t.UnionEnum`: UnionEnum stamps its first member as the
- * schema default, so an omitted language would become Arabic before the
- * client, organization and seller defaults are consulted.
- */
-export const tInvoiceLanguage = t.Union([
-  t.Literal("ar"),
-  t.Literal("cs"),
-  t.Literal("de"),
-  t.Literal("en"),
-  t.Literal("es"),
-  t.Literal("et"),
-  t.Literal("fr"),
-  t.Literal("hu"),
-  t.Literal("lt"),
-  t.Literal("lv"),
-  t.Literal("pl"),
-  t.Literal("pt-BR"),
-  t.Literal("sk"),
-]);
-
-// Binds the literals to the contract list in both directions.
-true satisfies InvoiceLanguage extends Static<typeof tInvoiceLanguage>
-  ? true
-  : never;
-true satisfies Static<typeof tInvoiceLanguage> extends InvoiceLanguage
-  ? true
-  : never;
-true satisfies (typeof INVOICE_LANGUAGES)["length"] extends 13 ? true : never;
+/** A language invoices are issued in; an omitted one falls to the defaults. */
+export const invoiceLanguageSchema = v.picklist(INVOICE_LANGUAGES);

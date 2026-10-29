@@ -6,6 +6,10 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type {
+  McpRequestContext,
+  McpRequestDataAccess,
+} from "@/api/mcp/context";
 import {
   type McpEffectiveAuthority,
   mcpMemberAuthority,
@@ -70,6 +74,23 @@ export type McpWriteToolPermissions =
     }
   | { type: "delegated"; reason: string };
 
+/** An intentional read that needs no member grant beyond its existing scope. */
+export type McpOpenRead = { type: "open-read"; reason: string };
+
+/**
+ * Declares why a read is intentionally open to every caller admitted by its
+ * scope. This owner alone interprets the marker; rejecting an empty reason
+ * keeps the registry census useful in review.
+ */
+export const openMcpRead = (reason: string): McpOpenRead => {
+  if (reason.trim().length === 0) {
+    return panic("An open MCP read requires a non-empty reason");
+  }
+  return { type: "open-read", reason };
+};
+
+export type McpReadToolPermissions = McpWriteToolPermissions | McpOpenRead;
+
 /** A `presence` selector: `property` set selects `present`, else `absent`. */
 export const selectOperationByPresence = (
   property: string,
@@ -127,7 +148,7 @@ const selectWriteToolOperation = (
  * `sandbox` admits it.
  */
 export type McpToolAuthorityDeclaration =
-  | { access: "read" }
+  | { access: "read"; permissions: McpReadToolPermissions }
   | {
       access: "write";
       permissions: McpWriteToolPermissions;
@@ -136,7 +157,7 @@ export type McpToolAuthorityDeclaration =
 
 /**
  * Whether a member may be offered this tool and reach its dispatch. Reads
- * carry no tool-level grant (their scope and per-row checks govern them). A
+ * without a tool-level grant rely on their scope and per-row checks. A
  * tool whose input selects its operation is offered when any operation is
  * held; `isMemberAuthorizedForMcpToolInput` decides the call.
  *
@@ -149,11 +170,10 @@ export const isMemberAuthorizedForMcpTool = (
   authority: AuthorizedMemberRole,
   definition: McpToolAuthorityDeclaration,
 ): boolean => {
-  if (definition.access === "read") {
-    return true;
-  }
   const { permissions } = definition;
   switch (permissions.type) {
+    case "open-read":
+      return true;
     case "all":
       return hasMemberPermission(authority, permissions.permissions);
     case "input":
@@ -182,7 +202,7 @@ export const isMemberAuthorizedForMcpToolInput = (
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
 ): boolean => {
-  if (definition.access === "read" || definition.permissions.type !== "input") {
+  if (definition.permissions.type !== "input") {
     return isMemberAuthorizedForMcpTool(authority, definition);
   }
   const operation = selectWriteToolOperation(
@@ -202,7 +222,7 @@ export const hasMcpToolAuthority = (
   isMemberAuthorizedForMcpTool(mcpMemberAuthority(authority), definition);
 
 /** `isMemberAuthorizedForMcpToolInput` for an MCP request. */
-export const hasMcpToolInputAuthority = (
+const hasMcpToolInputAuthority = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
@@ -256,7 +276,7 @@ const mcpToolAuthorityDenial = (
  * `mcpToolAuthorityDenial` for the operation the normalized input selects:
  * whether the member role or a narrower credential refuses its exact grant.
  */
-export const mcpToolInputAuthorityDenial = (
+const mcpToolInputAuthorityDenial = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
@@ -279,12 +299,39 @@ type McpToolAuthorityRefusal = {
   hint?: string;
 };
 
+const authorizedMcpRequestContextBrand: unique symbol = Symbol(
+  "AuthorizedMcpRequestContext",
+);
+
+export type AuthorizedMcpRequestContext = McpRequestContext &
+  McpRequestDataAccess & {
+    readonly [authorizedMcpRequestContextBrand]: true;
+  };
+
+/** Constructs an authorized context for tests without weakening the production brand. */
+export const authorizedMcpContextForTest = <
+  TContext extends McpRequestContext & McpRequestDataAccess,
+>(
+  context: TContext,
+): AuthorizedMcpRequestContext & TContext => ({
+  ...context,
+  [authorizedMcpRequestContextBrand]: true,
+  testDependencies: {
+    admitPublicRead: async ({ run }) =>
+      Result.ok({
+        status: "leased",
+        value: await run(new AbortController().signal),
+      }),
+    ...context.testDependencies,
+  },
+});
+
 /**
  * The refusal for `subject` (a tool, or the operation its input selects). A
  * credential narrower than the role needs a different credential, not a role
  * change, so the two are told apart.
  */
-export const mcpToolAuthorityDenialRefusal = (
+const mcpToolAuthorityDenialRefusal = (
   subject: string,
   denial: McpToolAuthorityDenial,
 ): McpToolAuthorityRefusal => {
@@ -338,4 +385,53 @@ export const mcpToolAuthorityRefusal = ({
     };
   }
   return null;
+};
+
+type AuthorizeMcpToolContextOptions = {
+  context: McpRequestContext;
+  dataAccess: McpRequestDataAccess;
+  definition: McpToolAuthorityDeclaration;
+  input: Readonly<Record<string, unknown>>;
+  toolName: string;
+};
+
+export type AuthorizeMcpToolContextResult =
+  | { authorized: true; context: AuthorizedMcpRequestContext }
+  | { authorized: false; refusal: McpToolAuthorityRefusal };
+
+/** The sole boundary that grants tool handlers access to request-scoped data. */
+export const authorizeMcpToolContext = ({
+  context,
+  dataAccess,
+  definition,
+  input,
+  toolName,
+}: AuthorizeMcpToolContextOptions): AuthorizeMcpToolContextResult => {
+  const denial = mcpToolInputAuthorityDenial(context, definition, input);
+  if (denial !== null) {
+    return {
+      authorized: false,
+      refusal: mcpToolAuthorityDenialRefusal(
+        `this ${toolName} operation`,
+        denial,
+      ),
+    };
+  }
+  if (!isAccountAuthorizedForMcpTool(context.userEmail, definition)) {
+    return {
+      authorized: false,
+      refusal: {
+        code: "permission_denied",
+        message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+      },
+    };
+  }
+  return {
+    authorized: true,
+    context: {
+      ...context,
+      ...dataAccess,
+      [authorizedMcpRequestContextBrand]: true,
+    },
+  };
 };

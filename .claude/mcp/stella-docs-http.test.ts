@@ -7,8 +7,12 @@ import { connect, createServer } from "node:net";
 
 const children = new Set<ReturnType<typeof Bun.spawn>>();
 const UNBOUNDED_UPLOAD_ITERATIONS = 200;
-const DECLARED_UPLOAD_BYTES = 100 * 1024 * 1024;
-const SENT_UPLOAD_BYTES = 10 * 1024 * 1024;
+// The repeated-upload server runs with a smaller body limit, so each round
+// keeps the same shape (past the 8x drain bound, never complete) without
+// pushing gigabytes through loopback inside one test timeout.
+const REPEATED_UPLOAD_LIMIT_BYTES = 64 * 1024;
+const DECLARED_UPLOAD_BYTES = 100 * REPEATED_UPLOAD_LIMIT_BYTES;
+const SENT_UPLOAD_BYTES = 10 * REPEATED_UPLOAD_LIMIT_BYTES;
 
 const getFreePort = async () =>
   await new Promise<number>((resolve, reject) => {
@@ -24,16 +28,44 @@ const getFreePort = async () =>
     });
   });
 
-const waitForHealth = async (baseUrl: string) => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const response = await fetch(`${baseUrl}/healthz`).catch(() => undefined);
-    if (response?.ok) {
-      expect(await response.text()).toBe("ok");
-      return;
+// The server writes this line from its `listen` callback, once the socket is
+// bound, so it is the ready signal. Stderr is drained to its end, so the child
+// never blocks on a full pipe; an exit before the line fails with its output.
+const waitForListening = async (
+  stderr: ReadableStream<Uint8Array>,
+  baseUrl: string,
+) => {
+  const announcement = `HTTP server listening on ${baseUrl}/mcp`;
+  const listening = Promise.withResolvers<undefined>();
+  const drain = async () => {
+    const decoder = new TextDecoder();
+    let output = "";
+    let announced = false;
+    for await (const chunk of stderr) {
+      if (!announced) {
+        output += decoder.decode(chunk, { stream: true });
+        announced = output.includes(announcement);
+        if (announced) {
+          listening.resolve(undefined);
+        }
+      }
     }
-    await Bun.sleep(25);
-  }
-  throw new Error("HTTP MCP server did not become healthy");
+    if (!announced) {
+      listening.reject(
+        new Error(`HTTP MCP server exited before listening:\n${output}`),
+      );
+    }
+  };
+  drain().catch((error: unknown) => {
+    listening.reject(error);
+  });
+  await listening.promise;
+};
+
+const expectHealthy = async (baseUrl: string) => {
+  const response = await fetch(`${baseUrl}/healthz`);
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe("ok");
 };
 
 const getSessionCount = async (baseUrl: string) => {
@@ -52,18 +84,19 @@ const getSessionCount = async (baseUrl: string) => {
   return body.sessions;
 };
 
-const startHttpServer = async () => {
+const startHttpServer = async (env: Record<string, string> = {}) => {
   const port = await getFreePort();
   const child = Bun.spawn([process.execPath, "run", "stella-docs-http.ts"], {
     cwd: import.meta.dir,
-    env: { ...process.env, STELLA_DOCS_PORT: String(port) },
+    env: { ...process.env, ...env, STELLA_DOCS_PORT: String(port) },
     stdin: "ignore",
     stdout: "ignore",
-    stderr: "ignore",
+    stderr: "pipe",
   });
   children.add(child);
   const baseUrl = `http://127.0.0.1:${port}`;
-  await waitForHealth(baseUrl);
+  await waitForListening(child.stderr, baseUrl);
+  await expectHealthy(baseUrl);
   return { baseUrl, child };
 };
 
@@ -102,8 +135,8 @@ const readEarlyUploadResponse = async (port: string) =>
       socket.write(
         `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${DECLARED_UPLOAD_BYTES}\r\n\r\n`,
       );
-      // Ten MiB of a declared hundred: past the drain bound, while the upload
-      // remains incomplete. Receiving a response proves the server stopped reading.
+      // Ten body limits of a declared hundred: past the drain bound, while the
+      // upload remains incomplete. Receiving a response proves the server stopped reading.
       socket.write(Buffer.alloc(SENT_UPLOAD_BYTES, 120));
     });
     const settleFromResponse = () => {
@@ -284,41 +317,39 @@ describe("shared documentation MCP HTTP server", () => {
         resolve();
       });
     });
-    const statusLine = await new Promise<string>((resolve, reject) => {
-      let received = "";
-      socket.on("data", (data) => {
-        received += data.toString();
-        if (received.includes("\r\n")) {
-          resolve(received.split("\r\n")[0] ?? "");
-        }
+    try {
+      const statusLine = await new Promise<string>((resolve, reject) => {
+        let received = "";
+        socket.on("data", (data) => {
+          received += data.toString();
+          if (received.includes("\r\n")) {
+            resolve(received.split("\r\n")[0] ?? "");
+          }
+        });
+        // Before the status line any socket error is a failure; after it, the
+        // server's close of the unfinished upload is expected.
+        socket.on("error", (error) => {
+          if (!received.includes("\r\n")) {
+            reject(error);
+          }
+        });
       });
-      // Before the status line any socket error is a failure; after it, the
-      // server's close of the unfinished upload is expected.
-      socket.on("error", (error) => {
-        if (!received.includes("\r\n")) {
-          reject(error);
-        }
-      });
-    });
-    expect(statusLine).toContain(" 413 ");
-    // The server does not keep reading the unfinished upload indefinitely: it
-    // drops the connection after its linger window, well within this bound. A
-    // server that kept the upload open fails here instead of hanging the test.
-    const closedInTime = await Promise.race([
-      socketClosed.then(() => true),
-      new Promise<boolean>((resolve) => {
-        setTimeout(() => {
-          resolve(false);
-        }, 4000).unref();
-      }),
-    ]);
-    clearInterval(keepUploading);
-    socket.destroy();
-    expect(closedInTime).toBe(true);
+      expect(statusLine).toContain(" 413 ");
+      // The server does not keep reading the unfinished upload indefinitely: it
+      // drops the connection after its linger window, while the client is still
+      // uploading. The test awaits that close itself; a server that kept the
+      // upload open never closes it and fails on the test's default timeout.
+      await socketClosed;
+    } finally {
+      clearInterval(keepUploading);
+      socket.destroy();
+    }
   });
 
   test("answers every repeated unbounded upload with a 413 status line first", async () => {
-    const { baseUrl } = await startHttpServer();
+    const { baseUrl } = await startHttpServer({
+      STELLA_DOCS_MAX_REQUEST_BYTES: String(REPEATED_UPLOAD_LIMIT_BYTES),
+    });
     const { port } = new URL(baseUrl);
     expect(SENT_UPLOAD_BYTES).toBeLessThan(DECLARED_UPLOAD_BYTES);
     for (
@@ -401,4 +432,30 @@ describe("shared documentation MCP HTTP server", () => {
     expect(stdout).toBe("");
     expect(stderr).toContain("must be 127.0.0.1");
   });
+
+  test.each(["0", "-1", "1.5", "lots"])(
+    "refuses a body limit of %p",
+    async (limit) => {
+      const child = Bun.spawn(
+        [process.execPath, "run", "stella-docs-http.ts"],
+        {
+          cwd: import.meta.dir,
+          env: { ...process.env, STELLA_DOCS_MAX_REQUEST_BYTES: limit },
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect(exitCode).not.toBe(0);
+      expect(stdout).toBe("");
+      expect(stderr).toContain(
+        `Invalid STELLA_DOCS_MAX_REQUEST_BYTES: ${limit}.`,
+      );
+    },
+  );
 });

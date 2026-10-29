@@ -1,0 +1,1024 @@
+{
+  "ci-checks-policy": {
+    "Format": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Test unsignalled skip detection": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Ratchet guard": {
+      "minutes": 22,
+      "samples": 19,
+      "p95Seconds": 263,
+      "p99Seconds": 263
+    },
+    "Ratchet scanner invariants": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "Test subject reachability census": {
+      "minutes": 18,
+      "samples": 19,
+      "p95Seconds": 205,
+      "p99Seconds": 205
+    },
+    "Deployment feature guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 27,
+      "p99Seconds": 27
+    },
+    "Processed-field backlog guard": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "GitHub API command ownership": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 53,
+      "p99Seconds": 53
+    },
+    "Tracked file sizes": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "CI network step retries and timeouts": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Sparse checkout script dependencies": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "SHA-256 migration ledger": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 51,
+      "p99Seconds": 51
+    },
+    "Custom lint rule coverage": {
+      "minutes": 13,
+      "samples": 19,
+      "p95Seconds": 147,
+      "p99Seconds": 147
+    },
+    "Custom lint test timeout policy": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 24,
+      "p99Seconds": 24
+    },
+    "Dated waiver lifecycle guards": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "Documentation source policy rule": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Instruction references": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Knip production dependency checks": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 19,
+      "p99Seconds": 19
+    },
+    "Knip workspace dependency checks": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 29,
+      "p99Seconds": 29
+    },
+    "Knip dead-export check (packages/cli)": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 21,
+      "p99Seconds": 21
+    },
+    "Knip dead-export budget (all workspaces)": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 24,
+      "p99Seconds": 24
+    },
+    "Dependabot group guard (installed packages)": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    }
+  },
+  "ci-checks-rest": {
+    "Content delivery declarations": {
+      "minutes": 9,
+      "samples": 18,
+      "p95Seconds": 103,
+      "p99Seconds": 103
+    },
+    "Test capability shard merge and package parity": {
+      "minutes": 12,
+      "samples": 18,
+      "p95Seconds": 142,
+      "p99Seconds": 142
+    },
+    "Generated files manifest guard": {
+      "minutes": 49,
+      "samples": 19,
+      "p95Seconds": 586,
+      "p99Seconds": 586
+    },
+    "Test oxlint plugins": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test release image CI gate": {
+      "minutes": 29,
+      "samples": 19,
+      "p95Seconds": 342,
+      "p99Seconds": 342
+    },
+    "Test api scripts": {
+      "minutes": 14,
+      "samples": 18,
+      "p95Seconds": 163,
+      "p99Seconds": 163
+    },
+    "API test timeout guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 15,
+      "p99Seconds": 15
+    },
+    "Test CLI runtime package parity": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 35,
+      "p99Seconds": 35
+    },
+    "Test remaining repository scripts": {
+      "minutes": 35,
+      "samples": 19,
+      "p95Seconds": 418,
+      "p99Seconds": 418
+    },
+    "Playwright config scope": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 39,
+      "p99Seconds": 39
+    },
+    "Workspace hygiene": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 49,
+      "p99Seconds": 49
+    },
+    "Lockfile workspace-version guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Resolution range guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Quarantine-exclude guards": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Policy evidence": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Marketing content check": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Docker host mount guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Railway template shape": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Check i18n sync": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 25,
+      "p99Seconds": 25
+    },
+    "Release changelog guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Release queue history guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Release CLI coupling guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "CLI contract changeset guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "SQL performance suppression summary": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Release marketing provenance warning": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Rust format": {
+      "minutes": 5,
+      "samples": 4,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "React Compiler bailout guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 23,
+      "p99Seconds": 23
+    },
+    "Design-system lint backlog": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 10,
+      "p99Seconds": 10
+    },
+    "Full error toast text census": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 8,
+      "p99Seconds": 8
+    },
+    "Query data state baseline": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "SQL performance baseline": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 29,
+      "p99Seconds": 29
+    },
+    "Failure-as-empty baseline": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Oxlint override union guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 7,
+      "p99Seconds": 7
+    },
+    "Oxlint rule decisions": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Oxlint effective config": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Result boundary enrolment": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Generated source artifact contract": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "Windows dry-run receipt contract": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test input coverage": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 9,
+      "p99Seconds": 9
+    },
+    "Chat mutation targets": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Desktop Rust inputs": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Test shard partition": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Landing deploy scope": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Workflow cache policy": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Store cache save supervisor": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 10,
+      "p99Seconds": 10
+    },
+    "Workflow lint": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 7,
+      "p99Seconds": 7
+    },
+    "Workflow YAML": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Module ownership": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 8,
+      "p99Seconds": 8
+    },
+    "Outbound transport ownership": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 30,
+      "p99Seconds": 30
+    },
+    "Document identity ownership": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 9,
+      "p99Seconds": 9
+    },
+    "Module ownership invariants": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 9,
+      "p99Seconds": 9
+    },
+    "Generated artifact formatting invariants": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Schema introspection invariants": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 12,
+      "p99Seconds": 12
+    },
+    "Queue authority": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Design token docs": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Icon module imports": {
+      "minutes": 30,
+      "samples": 0
+    },
+    "Suppression waiver ledger": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Crawl posture guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Chat fixture guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Transfer timeout and fixed read guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 14,
+      "p99Seconds": 14
+    },
+    "Offline check transport policy": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Model catalog generation guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Model task default evidence guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Model catalog snapshot drift check": {
+      "minutes": 5,
+      "samples": 5,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Capability description ledger": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "MCP coverage guard": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 14,
+      "p99Seconds": 14
+    },
+    "MCP surface baseline self-test": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Offline catalogue pinned-content policy": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Catalogue pinned-content check": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Property-test convention guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 33,
+      "p99Seconds": 33
+    },
+    "Test marketing recording verification guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test desktop bridge CI guards": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Check workflow shell policy": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test release-channel script": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test web container platform boundary": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test @stll resolution pin": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test web runtime staging": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 8,
+      "p99Seconds": 8
+    },
+    "Check Docker source closure": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 24,
+      "p99Seconds": 24
+    },
+    "Test published export artifact guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test publish manifest transformation": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test journey checks": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 15,
+      "p99Seconds": 15
+    },
+    "Test release policy scripts": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 32,
+      "p99Seconds": 32
+    },
+    "Test documentation and landing CI scope": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 26,
+      "p99Seconds": 26
+    },
+    "Test main heavy workflow contracts": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 8,
+      "p99Seconds": 8
+    },
+    "Test cancellation evidence": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test thin merge queue contracts": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 17,
+      "p99Seconds": 17
+    },
+    "Test service-suite dependency scope": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Test nightly rehearsal and retry guards": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 7,
+      "p99Seconds": 7
+    },
+    "Reject automatic test retries": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "Keep tests off history walks": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Test dependency malware scanners": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test maintenance release preparation": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test release queue history guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test promoted release resolution": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test API and CLI contract invariants": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test detect-desktop-release-changes script": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test route smoke change detector": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test changed e2e shard selection": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test geometry shard plan": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 37,
+      "p99Seconds": 37
+    },
+    "Test e2e shard budget": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Validate CI service image mirror inventory": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Test CI service image workflow contracts": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test CI workflow invariants": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 28,
+      "p99Seconds": 28
+    },
+    "Test reusable workflow permission contracts": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test main network recording selection": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Test API duration workflow": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test autofix protected paths": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 4,
+      "p99Seconds": 4
+    },
+    "Test type-aware autofix": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 11,
+      "p99Seconds": 11
+    },
+    "Test local workflow verification": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 6,
+      "p99Seconds": 6
+    },
+    "Typecheck cache contract": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 5,
+      "p99Seconds": 5
+    },
+    "Task result cache contract": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 8,
+      "p99Seconds": 8
+    },
+    "Test CI check partition": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Test install-free CI commands": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Test pre-push secret scan ranges": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Test merge-base network comparison": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 7,
+      "p99Seconds": 7
+    },
+    "Test CLI release coupling gate": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test CLI contract changeset guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Test package scaffolder": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test affected code-check planner": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 30,
+      "p99Seconds": 30
+    },
+    "Test changeset guard": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test environment tooling": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Test retry script": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test CI failure digest": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Test base image pull script": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Verify runner tool availability": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Test preview scope tool availability": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Verify CI job event policies": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test public document fetch": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test migration identity logic": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Check migration identity against the base branch": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test dead-columns reference matching": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test projection-totality classification": {
+      "minutes": 5,
+      "samples": 18,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test aggregate inventories": {
+      "minutes": 5,
+      "samples": 17,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Test write contract inventories": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Office fixture metadata": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 2,
+      "p99Seconds": 2
+    },
+    "Bridge-version guard": {
+      "minutes": 5,
+      "samples": 11,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Test depth repository scripts": {
+      "minutes": 30,
+      "samples": 0
+    }
+  },
+  "code-quality-web-rest": {
+    "Code quality (web)": {
+      "minutes": 21,
+      "samples": 19,
+      "p95Seconds": 241,
+      "p99Seconds": 241
+    },
+    "Result consumption (web)": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 43,
+      "p99Seconds": 43
+    },
+    "Code quality (rest)": {
+      "minutes": 33,
+      "samples": 19,
+      "p95Seconds": 389,
+      "p99Seconds": 389
+    },
+    "Query cache types": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 48,
+      "p99Seconds": 48
+    },
+    "Dead columns": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 35,
+      "p99Seconds": 35
+    },
+    "Projection totality": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 1,
+      "p99Seconds": 1
+    },
+    "Aggregate ownership": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 45,
+      "p99Seconds": 45
+    },
+    "Split-button census": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 3,
+      "p99Seconds": 3
+    },
+    "Database awaits in loops": {
+      "minutes": 12,
+      "samples": 19,
+      "p95Seconds": 134,
+      "p99Seconds": 134
+    },
+    "API timeout mutation guard": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 31,
+      "p99Seconds": 31
+    },
+    "Result consumption (rest)": {
+      "minutes": 5,
+      "samples": 19,
+      "p95Seconds": 8,
+      "p99Seconds": 8
+    }
+  }
+}

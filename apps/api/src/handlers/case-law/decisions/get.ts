@@ -1,6 +1,6 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -18,6 +18,10 @@ import {
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
+  isCaseFileCursor,
+  listCaseFileDocuments,
+} from "@/api/handlers/case-law/decisions/case-file";
+import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
@@ -25,6 +29,7 @@ import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-sub
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
+import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -47,7 +52,7 @@ import {
   corpusCarriesDocument,
   publicRowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
@@ -62,6 +67,7 @@ import {
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -97,11 +103,26 @@ export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
   },
 );
 
-export const readDecisionQuerySchema = t.Object({
-  citationsCursor: t.Optional(tPaginationCursor()),
+export const readDecisionQuerySchema = v.object({
+  caseFileCursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(isCaseFileCursor, "Invalid cursor"),
+    ),
+  ),
+  citationsCursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(
+        (cursor) => decodeDecisionCitationCursor(cursor) !== null,
+        "Invalid cursor",
+      ),
+    ),
+  ),
 });
 
 type ReadDecisionOptions = {
+  caseFileCursor?: string | null | undefined;
   citationsCursor?: string | null | undefined;
   /**
    * The court registry the chip beside the court's name is drawn from. The
@@ -313,6 +334,7 @@ export const decisionRecordQuery = (
   tx
     .select({
       id: publishedCaseLawDecisions.id,
+      sourceId: publishedCaseLawDecisions.sourceId,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       caseNumberType: publishedCaseLawDecisions.caseNumberType,
       slug: publishedCaseLawDecisions.slug,
@@ -369,6 +391,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
+    caseFileCursor,
     readCourtWeights,
     subject,
   }: ReadDecisionOptions) => {
@@ -401,6 +424,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       judges,
       citationsFromPage,
       citationsToPage,
+      caseFile,
     ] = await Promise.all([
       // Bounded and degraded to no badge: a slow registry read must cost the
       // decision its chip, not the reader its decision.
@@ -427,8 +451,12 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             decisionId,
             countries: subject.countries,
           }),
+      listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
     ]);
 
+    if (caseFile === false) {
+      return status(400, { message: "Invalid cursor" });
+    }
     if (!("items" in citationsFromPage)) {
       return citationsFromPage;
     }
@@ -584,6 +612,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationsTo: citationsToPage.items,
       citationsNextCursor,
       languageAlternates,
+      caseFile,
       fulltext,
     };
   },
@@ -637,10 +666,13 @@ const containPayloadUnavailable = async <TPayload>(
     );
   }
 
-  captureError(raised, {
-    decisionId,
-    step: "readDecision.corpusPayloadUnavailable",
-  });
+  captureError(
+    raised,
+    handlerErrorContext("decisions.containPayloadUnavailable.raised", {
+      decisionId,
+      step: "readDecision.corpusPayloadUnavailable",
+    }),
+  );
   return { payload: null, unavailable: true };
 };
 

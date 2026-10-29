@@ -8,7 +8,8 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import type { ChatPrompt } from "./types";
 
@@ -38,8 +39,8 @@ export const useSuggestedSkills = (): SuggestedSkill[] => {
     enabled: activeOrganizationId !== undefined && userId !== undefined,
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = skillPagesQuery;
-  const skillPagesView = useQueryView(skillPagesQuery);
-  useQueryViewError(skillPagesView);
+  const skillPagesView = queryView(skillPagesQuery);
+  useQueryViewError(skillPagesView, "useSuggestedSkills:query");
   const skillPages =
     skillPagesView.type === "items" ? skillPagesView.items : undefined;
   const canLoadSkillPages =
