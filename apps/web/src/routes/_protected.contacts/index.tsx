@@ -613,7 +613,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
           content={t("common.actions")}
           render={
             <MenuTrigger
-              className="opacity-0! transition-opacity group-hover:opacity-100!"
+              className="opacity-0! transition-opacity group-hover:opacity-100! pointer-coarse:opacity-100!"
               render={<Button size="icon-xs" variant="ghost" />}
             />
           }
@@ -1290,12 +1290,19 @@ const CreateContactDialog = ({
               <form.Field name="displayName">
                 {(field) => (
                   <Field name={field.name}>
-                    <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
+                    <FieldLabel>{t("common.displayName")}</FieldLabel>
                     <Input
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
                       value={field.state.value}
                     />
+                    <p className="text-muted-foreground text-xs">
+                      {t(
+                        contactType === "person"
+                          ? "contacts.create.displayNamePersonHint"
+                          : "contacts.create.displayNameOrganizationHint",
+                      )}
+                    </p>
                     <FieldError />
                   </Field>
                 )}

@@ -132,6 +132,7 @@
     "checkSpamHint": "Si vous ne le voyez pas, vérifiez votre dossier spam.",
     "chooseOrganization": "Choisissez l'organisation dans laquelle vous souhaitez travailler",
     "codeSentAgain": "Nous avons envoyé un nouveau code.",
+    "continueWithApple": "Continuer avec Apple",
     "continueWithEmail": "Continuer",
     "continueWithGoogle": "Continuer avec Google",
     "continueWithMicrosoft": "Continuer avec Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
+    "arrangement": {
+      "alertThreshold": "Seuil d’alerte (%)",
+      "amountCap": "Plafond des honoraires",
+      "flatFee": "Forfait",
+      "invalidCap": "Saisissez des plafonds positifs et un seuil d’alerte compris entre 0,01 % et 100 %.",
+      "minuteCap": "Plafond de temps (minutes)",
+      "title": "Convention d’honoraires"
+    },
     "batchActions": "Actions groupées",
     "billable": "Facturable",
     "billedAmount": "Montant facturé",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Dépenses liées",
       "linkedTimeEntries": "Entrées de temps liées",
-      "markPaid": "Marquer comme payée",
       "noEntries": "Aucune entrée liée à cette facture",
       "noInvoices": "Aucune facture",
       "paidAt": "Payée le",
+      "payments": {
+        "amountTooHigh": "Le montant dépasse le reste dû de {amount}.",
+        "confirmVoid": "Le paiement reste enregistré comme annulé et n'est plus imputé sur cette facture.",
+        "empty": "Aucun paiement enregistré pour l'instant",
+        "method": "Mode de paiement",
+        "methods": {
+          "bank_transfer": "Virement bancaire",
+          "card": "Carte",
+          "cash": "Espèces",
+          "other": "Autre mode"
+        },
+        "outstandingAmount": "Reste dû {amount}",
+        "paidOn": "Date du paiement",
+        "partiallyPaid": "Payée partiellement",
+        "record": "Enregistrer un paiement",
+        "summary": "Payé {paid}, reste dû {outstanding}",
+        "title": "Paiements",
+        "void": "Annuler le paiement",
+        "voided": "Annulé"
+      },
       "removeEntries": "Retirer les entrées",
       "send": "Envoyer",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "L’IA n’est pas configurée.",
     "availabilityUnknown": "La disponibilité n’a pas pu être confirmée.",
     "deeplMissing": "DeepL n’est pas configuré.",
+    "deeplPdfRequired": "La traduction des fichiers PDF nécessite DeepL.",
     "desktopUnavailable": "Connectez ou mettez à jour stella desktop.",
     "featureUnavailable": "Cette fonctionnalité n’est pas disponible.",
     "ocrUnavailable": "L’OCR n’est pas disponible.",
@@ -912,12 +941,16 @@
         "reasoning": "Raisonnement"
       },
       "errors": {
+        "analysisDisabled": "La génération d’analyses par IA est désactivée sur ce serveur. Consultez le texte de la décision ou réessayez plus tard.",
         "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
+        "decisionNotFound": "Cette décision est introuvable. Rouvrez-la depuis la recherche.",
+        "documentUnparseable": "Le texte de la décision n’est pas prêt pour l’analyse. Consultez la source originale.",
+        "languageUnsupported": "L’analyse par IA ne prend pas encore en charge la langue de cette décision. Consultez le texte de la décision ou la source originale.",
         "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
         "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
         "retryAfter": "Vous pourrez réessayer à partir du {time}.",
-        "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
-        "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
+        "sourceRestricted": "La source n’autorise pas l’analyse par IA. Consultez le texte de la décision ou la source originale.",
+        "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}"
       },
       "generate": "Générer les sommaires par IA",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",
@@ -1122,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
-      "headMatter": "En-tête",
+      "headMatter": "Informations sur l’affaire",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Version à la date de la décision (déduite)",
       "versionBasisInferredCompact": "Date de la décision · déduite",
       "versionBasisInferredExplanation": "La version est déduite de la date de la décision. La décision ne précise pas quelle rédaction s’applique."
-    }
+    },
+    "withdrawnByPublisher": "Retiré par l’éditeur"
   },
   "catalogue": {
     "addCustom": "Ajouter personnalisé",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
     "loadingEarlierMessages": "Chargement des messages précédents…",
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# de plus} many {+# de plus} other {+# de plus}}",
+      "dismiss": "Masquer l’avis de connexion",
+      "stoppedWorking": "Votre connexion à <name>{server}</name> ne fonctionne plus.",
+      "waitingApproval": "Votre connexion à <name>{server}</name> est en attente d’approbation."
+    },
     "mention": {
       "category": {
         "entities": "Dans ce dossier",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "Aucune entreprise trouvée pour cet IČO.",
       "aresTitle": "Registre tchèque (ARES)",
       "contactName": "Nom du contact",
+      "displayNameOrganizationHint": "Remplacement facultatif ; sinon généré à partir du nom de l’organisation.",
+      "displayNamePersonHint": "Remplacement facultatif ; sinon généré à partir du prénom et du nom.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Saisissez un IČO à 8 chiffres."
     },
@@ -2769,12 +2811,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
       "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
+      "configurationIncomplete": "Cette action n’est pas entièrement configurée. Contactez votre administrateur.",
       "contact": "Contactez-nous",
       "featureDisabled": "Cette fonctionnalité est temporairement désactivée.",
+      "leaseLost": "La réservation de l’action a expiré. Veuillez réessayer.",
       "notEnabled": "Cette action n’est pas activée pour votre organisation.",
-      "periodExhausted": "Cette action est suspendue pour votre organisation."
+      "organizationStateUnreadable": "L’accès de l’organisation n’a pas pu être vérifié. Veuillez réessayer dans un instant.",
+      "periodExhausted": "Cette action est suspendue pour votre organisation.",
+      "storeUnavailable": "Le service est temporairement indisponible. Veuillez réessayer dans un instant."
     },
     "actionFailed": "Cela n’a pas fonctionné. Réessayez, ou rechargez la page si le problème persiste.",
     "api": {
@@ -4845,7 +4890,9 @@
     "viewOnGithub": "Voir sur GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Langue de réponse",
     "budgetError": "Le budget consacré aux réponses est épuisé.",
+    "documentLanguage": "Langue du document ({language})",
     "expand": "Développer la réponse",
     "explain": "Expliquer",
     "followUp": "Poser une question complémentaire",
@@ -5032,6 +5079,16 @@
       "preferredNamePlaceholder": "Votre nom",
       "profileDescription": "Gérez vos préférences personnelles",
       "sendOtpCode": "Envoyer le code de vérification",
+      "signInMethods": {
+        "confirmDescription": "Saisissez un nouveau code envoyé à votre adresse e-mail pour dissocier cette méthode de connexion.",
+        "confirmTitle": "Dissocier {provider} ?",
+        "description": "Associez les comptes qui utilisent la même adresse e-mail vérifiée.",
+        "emailCode": "Code par e-mail",
+        "emailCodeDescription": "Vous pouvez toujours vous connecter avec un code envoyé à votre adresse e-mail.",
+        "lastMethod": "Associez un autre compte avant de dissocier celui-ci.",
+        "title": "Méthodes de connexion",
+        "unavailable": "L’envoi d’e-mails doit être configuré pour dissocier des méthodes de connexion."
+      },
       "timezone": "Fuseau horaire",
       "timezoneDescription": "Utilisé pour les horodatages dans les notifications et les e-mails",
       "timezoneSaved": "Fuseau horaire mis à jour",

@@ -325,6 +325,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
   const userId = toSafeId<"user">("user_prompts_refused");
   const threadId = toSafeId<"chatThread">("thread_prompts_refused");
   let entitlementReads = 0;
+  let sourceReads = 0;
   let threadReads = 0;
   let messageReads = 0;
   const persist = mock(() =>
@@ -361,6 +362,10 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
     select: (fields: Record<string, unknown>) => {
       if ("usedAnonymization" in fields) {
         return createSelectQueryMock([{ usedAnonymization: false }]);
+      }
+      if ("subjectDecisionId" in fields) {
+        sourceReads += 1;
+        return createSelectQueryMock([]);
       }
       entitlementReads += 1;
       return createSelectQueryMock([]);
@@ -406,6 +411,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
       },
     });
     expect(entitlementReads).toBe(1);
+    expect(sourceReads).toBe(1);
     expect(threadReads).toBe(1);
     expect(messageReads).toBe(2);
     expect(generator).not.toHaveBeenCalled();

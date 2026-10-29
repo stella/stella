@@ -1125,7 +1125,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   // The resolver's dispatch is now keyed by every supported registry; spread
   // the real table and override only the krs handler these tests exercise.
   const stubDispatch = (
-    override: Partial<RegistryHandler>,
+    override: Partial<RegistryHandler<"krs">>,
   ): typeof BUSINESS_REGISTRY_DISPATCH => ({
     ...BUSINESS_REGISTRY_DISPATCH,
     krs: { ...BUSINESS_REGISTRY_DISPATCH.krs, ...override },
