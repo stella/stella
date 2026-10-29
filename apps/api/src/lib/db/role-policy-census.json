@@ -4571,6 +4571,36 @@
   },
   {
     "schema": "public",
+    "table": "document_review_finding_decisions",
+    "policy": "document_review_finding_decisions_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('document_review_finding_decisions'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('document_review_finding_decisions'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "document_review_finding_decisions",
+    "policy": "document_review_finding_decisions_workspace_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND (EXISTS ( SELECT 1\n   FROM document_review_findings decided_finding\n  WHERE ((decided_finding.id = document_review_finding_decisions.finding_id) AND (decided_finding.workspace_id = document_review_finding_decisions.workspace_id)))))"
+  },
+  {
+    "schema": "public",
+    "table": "document_review_finding_decisions",
+    "policy": "document_review_finding_decisions_workspace_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "document_review_findings",
     "policy": "document_review_findings_workspace_delete",
     "command": "DELETE",
