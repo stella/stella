@@ -67,7 +67,15 @@ const currentSharepointFields = v.object({
   connection: v.nullable(v.object({ capabilities: capabilityListSchema })),
 });
 
-export const classifySharepointConnectionResponse = <T>(data: T) => {
+type SharepointConnectionClassification<T> = Result<
+  | { readonly type: "upgrade_required" }
+  | { readonly type: "ready"; readonly value: T },
+  ClientOperationError
+>;
+
+export const classifySharepointConnectionResponse = <T>(
+  data: T,
+): SharepointConnectionClassification<T> => {
   if (isLegacySharepointConnectionResponse(data)) {
     return Result.ok({ type: "upgrade_required" } as const);
   }

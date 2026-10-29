@@ -156,11 +156,11 @@ export const SharepointGroup = () => {
             connection.connection.capabilities.includes(capability);
           const reconnect =
             allowed && connection.connection?.status === "reconnect_required";
-          let status = t("settings.connections.notConnected");
+          let status = t("common.notConnected");
           if (reconnect) {
             status = t("knowledge.mcp.needsReauth");
           } else if (connected && allowed) {
-            status = t("settings.connections.connected");
+            status = t("common.connected");
           }
           return (
             <ListItem key={capability}>
