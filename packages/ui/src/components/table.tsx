@@ -2,6 +2,7 @@ import type * as React from "react";
 
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
+import { Button } from "./button";
 
 /**
  * How far cells pad their content from the column edges.
@@ -134,7 +135,8 @@ const TableRow = ({
 
 /**
  * Where a column sets its content. `end` lines up figures and amounts;
- * `start` is the default reading edge.
+ * `start` is the default reading edge. A `numeric` head or cell sets to the
+ * end unless it names an alignment, so a figures column needs one prop.
  */
 type TableAlign = "start" | "center" | "end";
 
@@ -144,23 +146,31 @@ const TABLE_ALIGN_CLASS = {
   start: "text-start",
 } as const satisfies Record<TableAlign, string>;
 
+const resolveTableAlign = (
+  align: TableAlign | undefined,
+  numeric: boolean,
+): TableAlign | undefined => align ?? (numeric ? "end" : undefined);
+
 // The obsolete `align` attribute of th/td gives way to the alignment prop.
 type TableHeadProps = Omit<React.ComponentProps<"th">, "align"> & {
   align?: TableAlign | undefined;
-  /** Heads a column of figures: tabular numerals, like its cells. */
+  /**
+   * Heads a column of figures: tabular numerals, like its cells, set to the
+   * end unless `align` says otherwise.
+   */
   numeric?: boolean | undefined;
 };
 
 const TableHead = ({
   className,
-  align = "start",
+  align,
   numeric = false,
   ...props
 }: TableHeadProps) => (
   <th
     className={cn(
       "text-muted-foreground h-10 px-2.5 align-middle leading-none font-medium whitespace-nowrap in-data-[inset=card]:px-4 has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
-      TABLE_ALIGN_CLASS[align],
+      TABLE_ALIGN_CLASS[resolveTableAlign(align, numeric) ?? "start"],
       numeric && "tabular-nums",
       className,
     )}
@@ -172,7 +182,10 @@ const TableHead = ({
 type TableCellProps = Omit<React.ComponentProps<"td">, "align"> & {
   align?: TableAlign | undefined;
   tone?: TableTone | undefined;
-  /** Figures set in tabular numerals, so digits line up down the column. */
+  /**
+   * Figures set in tabular numerals and to the end of the cell (unless
+   * `align` says otherwise), so digits line up down the column.
+   */
   numeric?: boolean | undefined;
   /**
    * Cuts text that overflows the cell with an ellipsis; the caller bounds the
@@ -195,23 +208,26 @@ const TableCell = ({
   truncate = false,
   flush = false,
   ...props
-}: TableCellProps) => (
-  <td
-    className={cn(
-      "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
-      flush
-        ? "p-0"
-        : "p-2.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
-      align !== undefined && TABLE_ALIGN_CLASS[align],
-      tone === "muted" && "text-muted-foreground",
-      numeric && "tabular-nums",
-      truncate && "truncate",
-      className,
-    )}
-    data-slot="table-cell"
-    {...props}
-  />
-);
+}: TableCellProps) => {
+  const resolvedAlign = resolveTableAlign(align, numeric);
+  return (
+    <td
+      className={cn(
+        "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
+        flush
+          ? "p-0"
+          : "p-2.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
+        resolvedAlign !== undefined && TABLE_ALIGN_CLASS[resolvedAlign],
+        tone === "muted" && "text-muted-foreground",
+        numeric && "tabular-nums",
+        truncate && "truncate",
+        className,
+      )}
+      data-slot="table-cell"
+      {...props}
+    />
+  );
+};
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -222,14 +238,24 @@ type SortableHeadProps = Omit<TableHeadProps, "onClick"> & {
   trailing?: React.ReactNode;
 };
 
+/**
+ * A column head the reader sorts by. The label is a quiet `Button`, so it
+ * has the design system's hover band, focus ring and touch target; its
+ * padding is pulled back so the label still lines up with the cells below.
+ * In an end-aligned (numeric) column the arrow sits before the label, keeping
+ * the label flush with the figures.
+ */
 const SortableHead = ({
   children,
   sortDirection = null,
   onSort,
   trailing,
   className,
+  align,
+  numeric = false,
   ...props
 }: SortableHeadProps) => {
+  const endAligned = resolveTableAlign(align, numeric) === "end";
   let ariaSort: "ascending" | "descending" | "none" = "none";
   if (sortDirection === "asc") {
     ariaSort = "ascending";
@@ -244,8 +270,10 @@ const SortableHead = ({
   }
   return (
     <TableHead
+      align={align}
       aria-sort={ariaSort}
       className={className}
+      numeric={numeric}
       {...props}
       // After the spread on purpose: the props type omits `onClick` because the
       // sort button below owns activation, but omitting it only rejects a
@@ -255,16 +283,20 @@ const SortableHead = ({
       onClick={undefined}
     >
       <span className="inline-flex items-center gap-1">
-        <button
-          className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 font-medium select-none"
+        <Button
+          className={cn(
+            "min-w-0 gap-1",
+            endAligned ? "-me-3 flex-row-reverse" : "-ms-3",
+          )}
           onClick={onSort}
           type="button"
+          variant="muted"
         >
           <span className="truncate">{children}</span>
           <span aria-hidden className="inline-flex w-3 shrink-0 justify-center">
             {sortIcon}
           </span>
-        </button>
+        </Button>
         {trailing}
       </span>
     </TableHead>
