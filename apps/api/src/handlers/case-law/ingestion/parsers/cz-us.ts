@@ -660,6 +660,15 @@ const PLENARY_BENCH_RE = /^pléna Ústavního soudu(?=\s)/u;
 /** The label a plenary nález prints above its ruling. */
 const RULING_LABEL_RE = /^V\s*ý\s*r\s*o\s*k\s*:?$/iu;
 
+/**
+ * The caption an SbNU-format nález prints in place of "takto:": the ruling
+ * follows it directly.
+ */
+const NALEZ_CAPTION_RE = /^Nález Ústavního soudu(?=\s).*\sve věci(?=\s)/u;
+
+/** The instruction block that follows the signatures; the ruling is over. */
+const INSTRUCTION_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í(?=\s*:|\s|$)/iu;
+
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
   /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*(?::\s*)?$/iu;
@@ -878,6 +887,7 @@ const classifyUsBodyLine = ({
     plainText.length <= CLOSING_MAX_CHARS &&
     CLOSING_RE.test(plainText)
   ) {
+    state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -892,6 +902,7 @@ const classifyUsBodyLine = ({
 
   // Signature: judge title line
   if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -931,6 +942,10 @@ const classifyUsBodyLine = ({
       });
       return;
     }
+  }
+
+  if (INSTRUCTION_RE.test(plainText)) {
+    state.inRuling = false;
   }
 
   if (closesRuling(state, plainText)) {
@@ -1044,7 +1059,8 @@ const closesRuling = (
 
 /**
  * The sentence naming the bench and the parties opens the ruling: it ends
- * in "takto:", or it is the plenary's, which prints the ruling after it.
+ * in "takto:", or it is the plenary's or the SbNU caption, which print the
+ * ruling after it.
  */
 const opensRuling = (
   state: UsClassificationState,
@@ -1052,7 +1068,9 @@ const opensRuling = (
 ): boolean =>
   !state.inOduvodneni &&
   !state.inDissent &&
-  (CZ_TAKTO_TAIL_RE.test(plainText) || PLENARY_BENCH_RE.test(plainText));
+  (CZ_TAKTO_TAIL_RE.test(plainText) ||
+    PLENARY_BENCH_RE.test(plainText) ||
+    NALEZ_CAPTION_RE.test(plainText));
 
 const paragraphRole = (
   state: UsClassificationState,
