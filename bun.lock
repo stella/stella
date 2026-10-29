@@ -785,7 +785,6 @@
         "@stll/stdnum": "^2.3.2",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
-        "fast-xml-parser": "^5.11.2",
         "saxes": "catalog:",
         "temporal-polyfill": "catalog:",
       },
@@ -1499,7 +1498,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.54.0",
+      "version": "0.54.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
