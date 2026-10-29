@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { INVOICE_SEND_UPDATE_COLUMNS } from "@/api/db/schema";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
@@ -220,6 +223,18 @@ describePostgres("database role privilege census", () => {
           .toSorted()
           .map((column) => ({ column })),
       );
+      expect(
+        await database.unsafe(`SELECT
+        has_function_privilege('stella', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS runtime,
+        has_function_privilege('stella_public_law_reader', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS reader`),
+      ).toEqual([{ runtime: true, reader: false }]);
+      const denied = await rejectionOf(
+        database.begin(async (tx) => {
+          await tx.unsafe("SET LOCAL ROLE stella_public_law_reader");
+          await tx.unsafe("SELECT public.stella_chat_run_text_boundaries()");
+        }),
+      );
+      expect(getPgErrorCode(denied)).toBe("42501");
     });
   }, 120_000);
 

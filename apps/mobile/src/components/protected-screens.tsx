@@ -13,7 +13,9 @@ import {
 } from "@/components/header-search";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
+import { PushRegistration } from "@/components/push-registration";
 import { SelectionProvider, useSelection } from "@/components/selection";
+import { TimerActivitySync } from "@/components/timer-activity-sync";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
 import { KeyCommands } from "@/native/key-commands";
@@ -33,6 +35,8 @@ export const ProtectedScreens = () => {
         <MattersViewProvider>
           <ChangesProvider>
             <SelectionProvider>
+              <TimerActivitySync />
+              <PushRegistration />
               <Screens />
             </SelectionProvider>
           </ChangesProvider>

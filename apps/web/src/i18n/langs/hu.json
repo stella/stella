@@ -1321,7 +1321,8 @@
       "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)",
       "versionBasisInferredCompact": "Határozat dátuma · következtetett",
       "versionBasisInferredExplanation": "A változatot a határozat dátumából következtettük ki. A határozat nem jelöli meg az alkalmazandó szövegváltozatot."
-    }
+    },
+    "withdrawnByPublisher": "A közzétevő visszavonta"
   },
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",

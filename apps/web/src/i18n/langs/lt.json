@@ -1321,7 +1321,8 @@
       "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)",
       "versionBasisInferredCompact": "Sprendimo data · numanoma",
       "versionBasisInferredExplanation": "Redakcija nustatyta pagal sprendimo datą. Sprendime nenurodyta, kuri redakcija taikoma."
-    }
+    },
+    "withdrawnByPublisher": "Leidėjas atšaukė"
   },
   "catalogue": {
     "addCustom": "Pridėti pasirinktinį",

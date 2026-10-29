@@ -104,16 +104,29 @@ export const checkDeployEnvContract = async (
         );
       }
     }
-    for (const { name, tasks: requiredTasks, kind } of DEPLOY_ENV_CONTRACT) {
+    for (const {
+      name,
+      tasks: requiredTasks,
+      kind,
+      alternatives = [],
+    } of DEPLOY_ENV_CONTRACT) {
       for (const task of requiredTasks) {
         const names = tasks[DEPLOY_TASK_ADDRESSES[task]];
-        const present =
+        const has = (candidate: string) =>
           names !== undefined &&
           (kind === "either"
-            ? names.environment.includes(name) || names.secrets.includes(name)
-            : names[kind].includes(name));
+            ? names.environment.includes(candidate) ||
+              names.secrets.includes(candidate)
+            : names[kind].includes(candidate));
+        const present = has(name) || alternatives.some((set) => set.every(has));
         if (!present) {
-          problems.push(`${environment} ${task} ${name} expected ${kind}`);
+          problems.push(
+            alternatives.length === 0
+              ? `${environment} ${task} ${name} expected ${kind}`
+              : `${environment} ${task} ${name} expected ${kind}, or all of ${alternatives
+                  .map((set) => set.join(","))
+                  .join(" or ")}`,
+          );
         }
       }
     }

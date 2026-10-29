@@ -731,6 +731,7 @@ jobs:
             scripts/staging-owner.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
@@ -744,6 +745,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"staging-proof-readiness*.ts "$RUNNER_TEMP/scripts/"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health,staging-ecs-readiness}.ts "$RUNNER_TEMP/scripts/"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
           echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/scripts" >> "$GITHUB_ENV"
           echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/scripts/state.json" >> "$GITHUB_ENV"
