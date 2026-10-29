@@ -497,14 +497,14 @@ export const DraggableRow = ({
           visibleCells={visibleCells}
         />
         <RowEndFillerCell
-          actions={visibleCells.length === 1 ? rowActions : undefined}
+          actions={rowActions}
           addPropertyColumn={addPropertyColumn}
           renderColumns={renderColumns}
           selected={selected}
         />
         <AddPropertyCell
           cell={addPropertyCell}
-          columnIndex={renderColumns.length + 1}
+          renderColumns={renderColumns}
           selected={selected}
         />
       </WorkspaceGridRow>
@@ -628,7 +628,7 @@ const FolderTableRow = ({
       />
       <AddPropertyCell
         cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
+        renderColumns={renderColumns}
         selected={selected}
       />
     </WorkspaceGridRow>
@@ -661,8 +661,11 @@ const DataRowCells = ({
   rowActions,
   selected,
   visibleCells,
-}: DataRowCellsProps) =>
-  visibleCells.map((cell, cellIndex) => {
+}: DataRowCellsProps) => {
+  const firstValueCell = visibleCells.find(
+    ({ column }) => column.id !== selectColId,
+  );
+  return visibleCells.map((cell, cellIndex) => {
     const isSelectCell = cell.column.id === selectColId;
     const isAddPropertyCell = cell.column.id === addPropertyColId;
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
@@ -705,7 +708,7 @@ const DataRowCells = ({
           selectCellContent
         ) : (
           <EntityCellContent
-            actions={cellIndex === 1 ? rowActions : undefined}
+            actions={cell === firstValueCell ? rowActions : undefined}
             layout={getCellContentLayout({ contentMode, isExpandedCell })}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -714,6 +717,7 @@ const DataRowCells = ({
       </WorkspaceGridCell>
     );
   });
+};
 
 /**
  * How a value cell lays out its content: on one line, centred in the first
@@ -744,15 +748,6 @@ const EntityCellContent = ({
   children: React.ReactNode;
   layout: CellContentLayout;
 }) => {
-  const content =
-    actions === undefined ? (
-      children
-    ) : (
-      <>
-        <span className="min-w-0 flex-1">{children}</span>
-        {actions}
-      </>
-    );
   switch (layout) {
     case "line":
       return (
@@ -762,7 +757,8 @@ const EntityCellContent = ({
             ROW_FIRST_LINE[FIRST_LINE].content,
           )}
         >
-          {content}
+          {children}
+          {actions}
         </span>
       );
     case "wrap":
@@ -778,14 +774,16 @@ const EntityCellContent = ({
         >
           <FirstLineStrut firstLine={FIRST_LINE} />
           <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-            {content}
+            {children}
+            {actions}
           </span>
         </span>
       );
     case "expanded":
       return (
         <span className="border-border/80 bg-background absolute inset-x-0 top-0 z-40 flex max-h-96 min-h-24 w-full min-w-0 items-start gap-1.5 overflow-y-auto border p-2 pb-8 shadow-lg">
-          {content}
+          {children}
+          {actions}
         </span>
       );
     default:

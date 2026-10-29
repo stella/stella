@@ -14,8 +14,6 @@
 //
 // Accepted:
 //   a matching touch reveal or an explicit touch hide under `pointer-coarse:`.
-//   a hide that only applies under a variant (`md:opacity-0`,
-//   `data-[closed]:opacity-0`): the base state is visible.
 //   a reveal that is not a hover (`focus-visible:opacity-100`,
 //   `data-[state=open]:opacity-100`) with no hover reveal beside it.
 //   a hover reveal next to one through a state a tap can set
@@ -62,13 +60,17 @@ const variantsOf = (token: string): string[] => {
   return variants === "" ? [] : variants.split(":");
 };
 
+const dependsOnHover = (token: string): boolean =>
+  variantsOf(token).some(isHoverVariant) ||
+  /:hover\b/u.test(classVariants(token));
+
 // The opening element whose attribute holds this string, through any `cn()`
 // call or expression container between them.
-const owningElement = (node: unknown): Record<string, unknown> | null => {
+const owningAttribute = (node: unknown): Record<string, unknown> | null => {
   let current: unknown = isAstNode(node) ? node.parent : null;
   while (isAstNode(current)) {
     if (current.type === "JSXAttribute") {
-      return isAstNode(current.parent) ? current.parent : null;
+      return current;
     }
     if (
       current.type === "JSXElement" ||
@@ -107,8 +109,9 @@ const isHiddenFromAssistiveTech = (attribute: unknown): boolean => {
 };
 
 const isDecoration = (node: unknown): boolean => {
-  const element = owningElement(node);
-  if (element === null) {
+  const attribute = owningAttribute(node);
+  const element = attribute?.parent;
+  if (!isAstNode(element)) {
     return false;
   }
   if (jsxName(element.name)?.endsWith("Icon") === true) {
@@ -120,6 +123,71 @@ const isDecoration = (node: unknown): boolean => {
   );
 };
 
+// Only unconditional parts may prove a reveal: a conditional touch class
+// cannot make its sibling base hide safe when the condition is false.
+const staticClassParts = (node: unknown, parts: string[]): void => {
+  if (!isAstNode(node)) {
+    return;
+  }
+  if (node.type === "Literal" && typeof node.value === "string") {
+    parts.push(node.value);
+    return;
+  }
+  if (node.type === "JSXExpressionContainer") {
+    staticClassParts(node.expression, parts);
+    return;
+  }
+  if (node.type === "CallExpression" && Array.isArray(node.arguments)) {
+    for (const argument of node.arguments) {
+      staticClassParts(argument, parts);
+    }
+    return;
+  }
+  if (node.type === "TemplateLiteral" && Array.isArray(node.quasis)) {
+    for (const quasi of node.quasis) {
+      const value: unknown = isAstNode(quasi) ? quasi.value : undefined;
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        "raw" in value &&
+        typeof value.raw === "string"
+      ) {
+        parts.push(value.raw);
+      }
+    }
+  }
+};
+
+const isClassNamePart = (node: unknown): boolean => {
+  let current: unknown = isAstNode(node) ? node.parent : null;
+  while (isAstNode(current)) {
+    if (
+      current.type === "LogicalExpression" ||
+      current.type === "ConditionalExpression" ||
+      current.type === "Property" ||
+      current.type === "ArrayExpression" ||
+      current.type === "SpreadElement"
+    ) {
+      return false;
+    }
+    if (current.type === "JSXAttribute") {
+      return jsxName(current.name) === "className";
+    }
+    if (
+      current.type === "JSXElement" ||
+      current.type === "VariableDeclarator" ||
+      current.type === "Program"
+    ) {
+      return false;
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
+const isHide = (token: string): boolean =>
+  HIDDEN.has(classBaseName(token)) && !dependsOnHover(token);
+
 const hidesUntilHover = (value: string): boolean => {
   const tokens = classTokens(value);
   const bases = new Set(tokens.map(classBaseName));
@@ -127,15 +195,12 @@ const hidesUntilHover = (value: string): boolean => {
   if (bases.has("pointer-events-none") && !bases.has("pointer-events-auto")) {
     return false;
   }
-  const hidesAtRest = tokens.some(
-    (token) => classVariants(token) === "" && HIDDEN.has(classBaseName(token)),
-  );
+  const hidesAtRest = tokens.some(isHide);
   if (!hidesAtRest) {
     return false;
   }
   const revealsOnHover = tokens.some(
-    (token) =>
-      SHOWN.has(classBaseName(token)) && variantsOf(token).some(isHoverVariant),
+    (token) => SHOWN.has(classBaseName(token)) && dependsOnHover(token),
   );
   if (!revealsOnHover) {
     return false;
@@ -144,7 +209,7 @@ const hidesUntilHover = (value: string): boolean => {
     (token) =>
       SHOWN.has(classBaseName(token)) &&
       variantsOf(token).some(isTappableStateVariant) &&
-      !variantsOf(token).some(isHoverVariant),
+      !dependsOnHover(token),
   );
   const touchDecisions = tokens.filter((token) => {
     const variants = variantsOf(token);
@@ -164,7 +229,7 @@ const hidesUntilHover = (value: string): boolean => {
   ]);
   return tokens.some((token) => {
     const base = classBaseName(token);
-    if (classVariants(token) !== "" || !HIDDEN.has(base)) {
+    if (!isHide(token)) {
       return false;
     }
     const shown = base.startsWith("opacity-") ? "opacity-100" : "visible";
@@ -191,17 +256,37 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         return {
+          JSXAttribute(node) {
+            if (
+              jsxName(node.name) !== "className" ||
+              isDecoration(node.value)
+            ) {
+              return;
+            }
+            const parts: string[] = [];
+            staticClassParts(node.value, parts);
+            if (hidesUntilHover(parts.join(" "))) {
+              context.report({ node, messageId: "hoverOnlyReveal" });
+            }
+          },
           Literal(node) {
             if (
               typeof node.value === "string" &&
+              !isClassNamePart(node) &&
               hidesUntilHover(node.value) &&
               !isDecoration(node)
             ) {
               context.report({ node, messageId: "hoverOnlyReveal" });
             }
           },
-          TemplateElement(node) {
-            if (hidesUntilHover(node.value.raw) && !isDecoration(node)) {
+          TemplateLiteral(node) {
+            const parts: string[] = [];
+            staticClassParts(node, parts);
+            if (
+              !isClassNamePart(node) &&
+              hidesUntilHover(parts.join(" ")) &&
+              !isDecoration(node)
+            ) {
               context.report({ node, messageId: "hoverOnlyReveal" });
             }
           },

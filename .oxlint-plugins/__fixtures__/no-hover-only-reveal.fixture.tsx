@@ -40,9 +40,9 @@ export const _ok1 = () => (
 export const _ok2 = () => (
   <button className="opacity-0 hover:opacity-100 any-pointer-coarse:opacity-100" type="button" />
 );
-// --- Accepted: hidden only under a variant, visible at rest ---
+// --- Accepted: breakpoint hide with a touch reveal ---
 export const _ok3 = () => (
-  <button className="md:opacity-0 md:group-hover:opacity-100" type="button" />
+  <button className="md:opacity-0 md:group-hover:opacity-100 pointer-coarse:opacity-100" type="button" />
 );
 // --- Accepted: revealed by state, not hover ---
 export const _ok4 = () => <div className="opacity-0 data-[state=open]:opacity-100" />;

@@ -175,7 +175,7 @@ export const CellMetadataFlags = ({
               aria-label={t("workspaces.table.lock.lock")}
               className={cn(
                 CELL_CORNER_CLASS.start,
-                "bg-background/55 text-foreground-ghost focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 pointer-coarse:hidden",
+                "bg-background/55 text-foreground-ghost focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 pointer-coarse:opacity-100",
               )}
               data-row-expansion-ignore
               onClick={(event) => {
@@ -209,7 +209,7 @@ export const CellMetadataFlags = ({
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
               className={cn(
                 CELL_CORNER_CLASS.end,
-                "bg-background/55 text-foreground-ghost focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 pointer-coarse:hidden",
+                "bg-background/55 text-foreground-ghost focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 pointer-coarse:opacity-100",
               )}
               onClick={(event) => {
                 event.stopPropagation();
