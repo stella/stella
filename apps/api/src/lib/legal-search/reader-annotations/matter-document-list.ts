@@ -59,6 +59,8 @@ const DOCUMENT_ANNOTATION_PROJECTION = {
   startOffset: legalReaderAnnotations.startOffset,
   endOffset: legalReaderAnnotations.endOffset,
   quote: legalReaderAnnotations.quote,
+  quotePrefix: legalReaderAnnotations.quotePrefix,
+  quoteSuffix: legalReaderAnnotations.quoteSuffix,
   pageTextSha256: legalReaderAnnotations.pageTextSha256,
   body: legalReaderAnnotations.body,
   createdAt: legalReaderAnnotations.createdAt,

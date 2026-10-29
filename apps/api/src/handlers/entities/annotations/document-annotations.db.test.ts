@@ -440,6 +440,32 @@ const withTenant = async (
 };
 
 describe.skipIf(!enabled)("marks on a matter document's PDF", () => {
+  test("lists quote context together with the document version and page digest", async () =>
+    await withTenant(async ({ db, tenant }) => {
+      const id = createdId(await create(db, tenant));
+      const quotePrefix = "The seller shall ";
+      const quoteSuffix = " within thirty days.";
+      await db
+        .update(legalReaderAnnotations)
+        .set({ quotePrefix, quoteSuffix })
+        .where(eq(legalReaderAnnotations.id, id));
+
+      expect(listed(await list(db, tenant))).toMatchObject([
+        {
+          id,
+          fieldId: tenant.first.fieldId,
+          versionNumber: 1,
+          pageNumber: 2,
+          pageTextSha256: pdfPageTextSha256(
+            tenant.first.pageTexts.get(2) ?? panic("No page 2"),
+          ),
+          quote: QUOTE,
+          quotePrefix,
+          quoteSuffix,
+        },
+      ]);
+    }));
+
   test("an author creates, lists, edits, shares and deletes a comment, each audited without its words", async () =>
     await withTenant(async ({ db, tenant }) => {
       const id = createdId(await create(db, tenant));
