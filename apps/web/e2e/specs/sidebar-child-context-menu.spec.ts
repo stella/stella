@@ -116,10 +116,11 @@ test("context menus return focus to sidebar rows and matter cards", async ({
     if ((await disclosure.getAttribute("aria-expanded")) === "false") {
       await disclosure.click();
     }
-    const sidebarOpener = sidebar.getByRole("button", {
-      exact: true,
-      name: childName,
-    });
+    const sidebarOpener = sidebar
+      .locator('[data-slot="sidebar-menu-sub-item"]')
+      .filter({ has: page.getByText(childName, { exact: true }) })
+      .getByRole("button");
+    await expect(sidebarOpener).toBeVisible();
     await sidebarOpener.click({ button: "right" });
     await expect(page.getByRole("menu")).toBeVisible();
     await page.keyboard.press("Escape");

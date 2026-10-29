@@ -191,7 +191,7 @@ for (const email of [null, "a@example.test"]) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/contacts", { waitUntil: "domcontentloaded" });
       await page
-        .getByRole("textbox", { name: "Search contacts" })
+        .getByRole("searchbox", { name: "Search contacts" })
         .fill(displayName);
       const row = page.getByRole("row").filter({
         has: page.getByRole("link", { exact: true, name: displayName }),
