@@ -35,6 +35,20 @@ const d = "opacity-0 hover:opacity-100 data-[state=open]:opacity-100";`),
   ).toEqual([1, 2, 3]);
 });
 
+test("requires state reveals to cover the full hide scope", async () => {
+  expect(
+    await lint(`const a = "opacity-0 hover:opacity-100 md:data-[state=open]:opacity-100";
+const b = "opacity-0 hover:opacity-100 data-[state=open]:opacity-100";
+const c = "md:opacity-0 md:hover:opacity-100 lg:data-[state=open]:opacity-100";
+const d = "md:opacity-0 md:hover:opacity-100 md:data-[state=open]:opacity-100";
+const e = "opacity-0 hover:opacity-100 focus-visible:data-[state=open]:opacity-100";
+const f = "md:dark:opacity-0 md:dark:hover:opacity-100 md:data-[state=open]:opacity-100";
+const g = "md:opacity-0 md:hover:opacity-100 md:dark:data-[state=open]:opacity-100";
+const h = "opacity-0 hover:opacity-100 has-[:checked]:opacity-100";
+const i = "opacity-0 md:opacity-0 hover:opacity-100 md:data-[state=open]:opacity-100";`),
+  ).toEqual([1, 3, 5, 7, 9]);
+});
+
 test("requires a touch visibility decision that works without hover", async () => {
   expect(
     await lint(`const a = "opacity-0 group-hover:opacity-100 pointer-coarse:cursor-pointer";

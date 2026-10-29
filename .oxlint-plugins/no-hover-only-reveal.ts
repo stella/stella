@@ -57,7 +57,24 @@ const isCoarsePointerVariant = (variant: string): boolean =>
 
 const variantsOf = (token: string): string[] => {
   const variants = classVariants(token);
-  return variants === "" ? [] : variants.split(":");
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < variants.length; index++) {
+    const character = variants[index];
+    if (character === "[") {
+      depth++;
+    } else if (character === "]") {
+      depth--;
+    } else if (character === ":" && depth === 0) {
+      parts.push(variants.slice(start, index));
+      start = index + 1;
+    }
+  }
+  if (variants !== "") {
+    parts.push(variants.slice(start));
+  }
+  return parts;
 };
 
 const dependsOnHover = (token: string): boolean =>
@@ -223,15 +240,23 @@ const hidesUntilHover = (value: string): boolean => {
   ) {
     return false;
   }
-  const revealBases = new Set([
-    ...touchBases,
-    ...tappableStateReveals.map(classBaseName),
-  ]);
   return tokens.some((token) => {
     const base = classBaseName(token);
     if (!isHide(token)) {
       return false;
     }
+    const hideScope = new Set(variantsOf(token));
+    const revealBases = new Set([
+      ...touchBases,
+      ...tappableStateReveals
+        .filter((reveal) =>
+          variantsOf(reveal).every(
+            (variant) =>
+              isTappableStateVariant(variant) || hideScope.has(variant),
+          ),
+        )
+        .map(classBaseName),
+    ]);
     const shown = base.startsWith("opacity-") ? "opacity-100" : "visible";
     return (
       !revealBases.has(`${shown}!`) &&
