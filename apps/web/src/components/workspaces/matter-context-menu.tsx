@@ -35,6 +35,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { ownsContextMenuTarget } from "@stll/ui/use-contained-handler";
 
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -433,6 +434,9 @@ export const useMatterContextMenu = (
     menuOpen,
     rename: renameState,
     onContextMenu: (e) => {
+      if (!ownsContextMenuTarget(e)) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       const x = e.clientX;
