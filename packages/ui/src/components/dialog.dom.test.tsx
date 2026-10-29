@@ -1,38 +1,56 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import type * as TestingLibrary from "@testing-library/react";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 
-GlobalRegistrator.register();
-const { cleanup, render } = await import("@testing-library/react");
-const { Dialog, DialogPopup, DialogTitle } = await import("./dialog");
+import { Dialog, DialogPopup, type DialogSize, DialogTitle } from "./dialog";
+
+// Registered for this file only, and the testing library loaded after it,
+// so the shared test process keeps one happy-dom at a time.
+let library: typeof TestingLibrary;
+
+beforeAll(async () => {
+  GlobalRegistrator.register();
+  library = await import("@testing-library/react");
+});
 
 afterEach(() => {
-  cleanup();
+  library.cleanup();
 });
 
 afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const popupFor = (size?: "sm" | "default" | "lg" | "xl") => {
-  render(
+/** The open popup, once the portal has mounted it. */
+const popupFor = async (size?: DialogSize): Promise<HTMLElement> => {
+  library.render(
     <Dialog defaultOpen>
       <DialogPopup size={size}>
         <DialogTitle>Review</DialogTitle>
       </DialogPopup>
     </Dialog>,
   );
-  const popup = document.querySelector<HTMLElement>(
-    '[data-slot="dialog-popup"]',
-  );
-  if (popup === null) {
-    throw new Error("Expected an open dialog popup");
-  }
-  return popup;
+  return library.waitFor(() => {
+    const popup = document.querySelector<HTMLElement>(
+      '[data-slot="dialog-popup"]',
+    );
+    if (popup === null) {
+      throw new Error("The dialog popup has not mounted yet");
+    }
+    return popup;
+  });
 };
 
 describe("DialogPopup size", () => {
-  test("is a short-form width by default", () => {
-    const popup = popupFor();
+  test("is a short-form width by default", async () => {
+    const popup = await popupFor();
     expect(popup.dataset["size"]).toBe("default");
     expect(popup.classList.contains("max-w-lg")).toBe(true);
   });
@@ -42,8 +60,8 @@ describe("DialogPopup size", () => {
     ["lg", "max-w-2xl"],
     ["xl", "max-w-4xl"],
   ] as const) {
-    test(`${size} sets the popup to ${width}`, () => {
-      const popup = popupFor(size);
+    test(`${size} sets the popup to ${width}`, async () => {
+      const popup = await popupFor(size);
       expect(popup.dataset["size"]).toBe(size);
       expect(popup.classList.contains(width)).toBe(true);
       expect(popup.classList.contains("max-w-lg")).toBe(false);
