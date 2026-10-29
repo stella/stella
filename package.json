@@ -149,6 +149,7 @@
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
     "@stll/collation": "workspace:*",
+    "@stll/html": "workspace:*",
     "@stll/oxlint-config": "1.7.0",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",

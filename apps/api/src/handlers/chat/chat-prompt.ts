@@ -1,11 +1,10 @@
-import { panic, Result, UnhandledException } from "better-result";
 /**
  * System prompt builders for chat endpoints.
  *
  * Extracted from the chat actor so both the actor and the
  * REST chat endpoint can share the same prompt logic.
  */
-import * as cheerio from "cheerio";
+import { panic, Result, UnhandledException } from "better-result";
 import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -42,6 +41,7 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
+import { load } from "@stll/html";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -1244,8 +1244,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts
     .map((part) => (part.type === "text" ? part.content : ""))
     .join("");
-  const plainText = cheerio
-    .load(raw, undefined, false)
+  const plainText = load(raw, undefined, false)
     .text()
     .replaceAll(/\s+/gu, " ")
     .trim();

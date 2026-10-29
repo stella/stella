@@ -1,6 +1,7 @@
-import * as cheerio from "cheerio";
-import type { Cheerio, CheerioAPI } from "cheerio";
+import type { Cheerio, CheerioAPI } from "cheerio/slim";
 import type { AnyNode } from "domhandler";
+
+import { load } from "@stll/html";
 
 import {
   isExcludedHtmlTag,
@@ -8,7 +9,7 @@ import {
   visibleHtmlText,
 } from "../../apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines";
 
-const $ = cheerio.load("<table><tr><td>Visible</td></tr></table>");
+const $ = load("<table><tr><td>Visible</td></tr></table>");
 const table = $("table");
 declare const tag: string;
 

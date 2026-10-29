@@ -13,9 +13,10 @@
  * in tests, the result can be asserted.
  */
 
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, isTag } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
@@ -322,7 +323,7 @@ export const validateAst = (
       }
     }
   } else {
-    const $ = options?.document ?? cheerio.load(source);
+    const $ = options?.document ?? load(source);
     $("div[style*='-aw-headerfooter-type']").remove();
     // <br> is a word boundary in the rendered document, but cheerio's
     // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →

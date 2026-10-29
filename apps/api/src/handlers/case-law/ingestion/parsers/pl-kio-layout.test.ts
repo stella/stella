@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
+
+import { load } from "@stll/html";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
@@ -43,8 +45,8 @@ describe("reading the converter's layout", () => {
   test("it moves spacing and drops page numbers, and never touches another character", async () => {
     for (const id of CAPTURED) {
       const html = await gzFixtureText(`pl-kio-content-${id}.html.gz`);
-      const before = withoutSpacing(visibleText(cheerio.load(html)));
-      const $ = cheerio.load(html);
+      const before = withoutSpacing(visibleText(load(html)));
+      const $ = load(html);
       const { pageNumbers } = readPlKioLayout($);
       const after = withoutSpacing(visibleText($));
 
@@ -64,14 +66,14 @@ describe("reading the converter's layout", () => {
   test("a number a citation word claims is no page number", () => {
     // The page breaks between an article and its number; a paged document
     // keeps it because nothing else in the sequence vouches for it.
-    const article = cheerio.load(
+    const article = load(
       "<html><body><p>Zgodnie z art.<br>353</p><hr><p>Kodeksu cywilnego.</p></body></html>",
     );
     expect(readPlKioLayout(article).pageNumbers).toEqual([]);
     expect(visibleText(article)).toContain("353");
 
     // An annex number ending a document the converter did not page.
-    const annex = cheerio.load(
+    const annex = load(
       "<html><body><p>Załącznik nr</p><p>12</p></body></html>",
     );
     expect(readPlKioLayout(annex).pageNumbers).toEqual([]);
@@ -96,7 +98,7 @@ describe("reading the converter's layout", () => {
     },
   ])("$name keeps its stated index position", ({ style, expected }) => {
     const alignment = style === "" ? "" : `;${style}`;
-    const $ = cheerio.load(
+    const $ = load(
       `<body style="font-size:12pt"><p>CO<span style="font-size:8pt${alignment}">2</span></p></body>`,
     );
 
@@ -111,7 +113,7 @@ describe("reading the converter's layout", () => {
   ])(
     "an inherited $shift baseline shift sets the index position",
     ({ shift, expected }) => {
-      const $ = cheerio.load(
+      const $ = load(
         `<body style="font-size:12pt"><p style="baseline-shift:${shift}">` +
           'CO<span style="font-size:8pt">2</span></p></body>',
       );
@@ -123,13 +125,13 @@ describe("reading the converter's layout", () => {
   );
 
   test("an unstyled final number inherits the body typeface", () => {
-    const bodyText = cheerio.load(
+    const bodyText = load(
       '<body style="font-size:12pt"><p>Document text.</p><p>42</p></body>',
     );
     expect(readPlKioLayout(bodyText).pageNumbers).toEqual([]);
     expect(visibleText(bodyText)).toContain("42");
 
-    const footer = cheerio.load(
+    const footer = load(
       '<body style="font-size:12pt"><p>Document text.</p><p style="font-size:8pt">42</p></body>',
     );
     expect(readPlKioLayout(footer).pageNumbers).toEqual(["42"]);
@@ -137,7 +139,7 @@ describe("reading the converter's layout", () => {
   });
 
   test("an unstyled final number inherits the body's font shorthand, size and family alike", () => {
-    const shorthand = cheerio.load(
+    const shorthand = load(
       '<body style="font: 12pt Arial"><p>Koniec.</p><p>12</p></body>',
     );
     expect(readPlKioLayout(shorthand).pageNumbers).toEqual([]);
@@ -147,7 +149,7 @@ describe("reading the converter's layout", () => {
   test.each([" / ", " /", "/ ", "/"])(
     "font shorthand parses line-height spacing %j and quoted families",
     (separator) => {
-      const sameFamily = cheerio.load(
+      const sameFamily = load(
         `<html><body style="font: italic 12pt${separator}1.2 'Arial Narrow', sans-serif">` +
           `<p>Document text.</p>` +
           `<p style="font: 400 12pt 'Arial Narrow', sans-serif">42</p>` +
@@ -156,7 +158,7 @@ describe("reading the converter's layout", () => {
       expect(readPlKioLayout(sameFamily).pageNumbers).toEqual([]);
       expect(visibleText(sameFamily)).toContain("42");
 
-      const differentFamily = cheerio.load(
+      const differentFamily = load(
         `<html><body style="font: italic 12pt${separator}1.2 'Arial Narrow', sans-serif">` +
           `<p>Document text.</p>` +
           `<p style="font: 400 12pt 'Times New Roman', serif">42</p>` +
@@ -165,7 +167,7 @@ describe("reading the converter's layout", () => {
       expect(readPlKioLayout(differentFamily).pageNumbers).toEqual(["42"]);
       expect(visibleText(differentFamily)).not.toContain("42");
 
-      const explicitFamilyWins = cheerio.load(
+      const explicitFamilyWins = load(
         `<html><body style="font: italic 12pt${separator}1.2 'Times New Roman', serif; ` +
           `font-family: 'Arial Narrow', sans-serif">` +
           `<p>Document text.</p>` +
@@ -179,7 +181,7 @@ describe("reading the converter's layout", () => {
 
   test("fractional bold font weights retain their printed width", () => {
     const textWithWeight = (weight: string): string => {
-      const $ = cheerio.load(
+      const $ = load(
         `<body style="font-size:10pt"><p style="padding-left:20pt">` +
           `<span style="font-weight:${weight}">${"W".repeat(20)}</span>` +
           `<br>Aaaa nnnnnn</p><p>${"A".repeat(37)}<br>end</p></body>`,
@@ -193,7 +195,7 @@ describe("reading the converter's layout", () => {
   });
 
   test("paragraph breaks preserve their enclosing inline formatting", () => {
-    const $ = cheerio.load(
+    const $ = load(
       "<p><span>Introductory text<br>1. First point<br>2. Second point</span></p>",
     );
 
@@ -217,7 +219,7 @@ describe("reading the converter's layout", () => {
   });
 
   test("a paragraph runs on across a page only when page furniture alone lies between", () => {
-    const $ = cheerio.load(
+    const $ = load(
       [
         "<html><body>",
         // The second line is the page's widest, so it reads as full and its
@@ -248,7 +250,7 @@ describe("reading the converter's layout", () => {
       documentUrl: undefined,
       content: html,
       loadHtml: (source) => {
-        const $ = cheerio.load(source);
+        const $ = load(source);
         readPlKioLayout($);
         return $;
       },

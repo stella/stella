@@ -24,6 +24,9 @@ const OWNERS = [
   "apps/api/src/lib/legal-search/parsers/visible-html-text.ts",
 ];
 const CHEERIO_TYPES = new Set(["Cheerio", "CheerioAPI"]);
+// Parsers load documents through @stll/html and take types from cheerio/slim.
+const HTML_LOAD_SOURCE = "@stll/html";
+const HTML_IMPORT_SOURCES = new Set([HTML_LOAD_SOURCE, "cheerio/slim"]);
 const SELECTION_METHODS = new Set([
   "add",
   "addBack",
@@ -155,7 +158,7 @@ class ParserHtmlProvenance {
     for (const statement of node.body) {
       if (
         statement.type !== "ImportDeclaration" ||
-        staticStringValue(statement.source) !== "cheerio"
+        !HTML_IMPORT_SOURCES.has(staticStringValue(statement.source) ?? "")
       ) {
         continue;
       }
@@ -216,7 +219,9 @@ class ParserHtmlProvenance {
       this.context,
       node,
     );
-    return imported?.source === "cheerio" && imported.imported === "load";
+    return (
+      imported?.source === HTML_LOAD_SOURCE && imported.imported === "load"
+    );
   }
 
   constantString(node: unknown, seen = new Set<unknown>()): string | null {

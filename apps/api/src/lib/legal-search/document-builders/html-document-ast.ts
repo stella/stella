@@ -11,9 +11,10 @@
  */
 
 import { panic, Result } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 import {
   hasInlineChildren,
   plainTextOf,
@@ -789,7 +790,7 @@ export const buildHtmlDocumentAst = ({
   metadata,
   source,
 }: BuildHtmlDocumentAstOptions): Result<DocumentAst, DocumentBuildError> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const rootElement = $(contentRoot).get(0);
   if (rootElement === undefined || !isTag(rootElement)) {
     return Result.err(

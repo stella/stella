@@ -11,11 +11,11 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
+import { load } from "@stll/html";
 import { plainTextOf, projectPlainText } from "@stll/legal-ast/document-ast";
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import type {
@@ -56,7 +56,7 @@ type CapturedDocument = {
  * Citation anchors are transparent here; their spans are recorded instead.
  */
 const readCapturedDocument = (html: string): CapturedDocument => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const blocks: Block[] = [];
   const scopes: CitationOpinionScope[] = [];
   const oracle: OracleSpan[] = [];
@@ -202,7 +202,7 @@ const readCapturedDocument = (html: string): CapturedDocument => {
 
 /** The capture with every citation anchor unwrapped, its text kept. */
 const withoutCitationMarkup = (html: string): string => {
-  const $ = cheerio.load(html, null, false);
+  const $ = load(html, null, false);
   $("a.citation").each((_, anchor) => {
     $(anchor).replaceWith($(anchor).contents());
   });

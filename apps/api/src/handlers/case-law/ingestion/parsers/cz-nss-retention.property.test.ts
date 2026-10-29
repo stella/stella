@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import {
   propertyConfig,
   propertySeed,
@@ -36,7 +36,7 @@ test(
   () => {
     fc.assert(
       fc.property(markerPlan, wrappers, (plan, ancestors) => {
-        const fixture = cheerio.load(nssUnitDecisionHtml);
+        const fixture = load(nssUnitDecisionHtml);
         for (const tag of ancestors) {
           fixture("body").wrapInner(`<${tag}></${tag}>`);
         }

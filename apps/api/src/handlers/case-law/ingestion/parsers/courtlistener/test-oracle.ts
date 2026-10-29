@@ -5,12 +5,12 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
 import { decodeHTML } from "entities";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import * as slimdom from "slimdom";
 
+import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import {
@@ -150,7 +150,7 @@ export const sourceWords = (
         ),
       );
     case "pre": {
-      const $ = cheerio.load(source);
+      const $ = load(source);
       $("script, style").remove();
       return words($.root().text());
     }

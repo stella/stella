@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { load } from "cheerio";
 import { isTag } from "domhandler";
+
+import { load } from "@stll/html";
 
 import {
   EMAIL_PREVIEW_DOM_OPTIONS,

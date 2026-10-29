@@ -9,9 +9,9 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 import type {
   Block,
   Inline,
@@ -59,7 +59,7 @@ const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
  * markup dropped, whitespace collapsed.
  */
 const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const labels = new Map(
     $("xGloss")
       .toArray()

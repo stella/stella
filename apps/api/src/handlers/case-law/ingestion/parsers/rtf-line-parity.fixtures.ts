@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
-import * as cheerio from "cheerio";
 
 import type { BlockContent, Document } from "@stll/docx-core/model";
+import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -95,7 +95,7 @@ export const assertRtfLineParity = (
 };
 
 export const assertHtmlRtfLineParity = (html: string): void => {
-  const rtf = cheerio.load(html)("input#docContentHidden").attr("value");
+  const rtf = load(html)("input#docContentHidden").attr("value");
   if (rtf === undefined || rtf.trim().length === 0) {
     return;
   }

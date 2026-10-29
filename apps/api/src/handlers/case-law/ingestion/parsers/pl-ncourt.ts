@@ -19,9 +19,9 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -380,7 +380,7 @@ const renderBlocks = (element: Element, state: RenderState): string =>
  * `<error>` answer, an HTML page, an empty body.
  */
 export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $.root().children().first().get(0);
   if (root === undefined || !isTag(root) || root.name !== "xPart") {
     return null;

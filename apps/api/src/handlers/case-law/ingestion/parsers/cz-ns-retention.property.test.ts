@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -46,7 +46,7 @@ test(
           for (const tag of ancestors) {
             body = `<${tag}>${body}</${tag}>`;
           }
-          const fixture = cheerio.load(
+          const fixture = load(
             `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>metadataqzexcluded</td></tr></table><p class="fixture-title" align="center">ROZSUDEK</p>${body}<script>scriptqzexcluded</script><style>styleqzexcluded</style></body></html>`,
           );
           const injected = injectMarkupMarkers({

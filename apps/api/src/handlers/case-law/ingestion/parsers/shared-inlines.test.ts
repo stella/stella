@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { readFileSync } from "node:fs";
 
+import { load } from "@stll/html";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
@@ -13,7 +13,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const walk = (html: string, options?: WalkInlinesOptions): Inline[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return walkInlines($, $("body"), options);
 };
 
@@ -145,7 +145,7 @@ describe("walkInlines", () => {
       ),
       "utf-8",
     );
-    const $ = cheerio.load(html);
+    const $ = load(html);
     const inlines = walkInlines($, $("h").first(), {
       pageAnchor: (element) =>
         element.attribs["number"] === "6"

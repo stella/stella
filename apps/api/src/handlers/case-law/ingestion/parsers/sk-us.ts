@@ -24,10 +24,11 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -1286,7 +1287,7 @@ export const parseSkUsDocumentXhtml = ({
   decisionType,
   documentUrl,
 }: ParseSkUsDocumentOptions): ParseSkUsDocumentResult => {
-  const $ = cheerio.load(xhtml);
+  const $ = load(xhtml);
   markHiddenRuns($);
   const lines = removePageFurniture(readMarkupLines($));
   const words = typographyWords(lines);

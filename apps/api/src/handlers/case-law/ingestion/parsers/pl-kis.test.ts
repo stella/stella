@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
@@ -135,7 +135,7 @@ describe("ordered lists", () => {
     const html = await htmlOf(
       new URL("pl-kis-detail-05-objas.json.gz", ADAPTER_FIXTURES),
     );
-    const $ = cheerio.load(html);
+    const $ = load(html);
     const items = $("ol[style*='list-style-type: none'] > li")
       .toArray()
       .map((item) => $(item).text().replace(/\s+/gu, " ").trim())
@@ -178,7 +178,7 @@ describe("ordered lists", () => {
     "%s: an item of a plain ordered list opens with its count",
     async (_name, detail) => {
       const html = await htmlOf(detail);
-      const $ = cheerio.load(html);
+      const $ = load(html);
       const items = $(
         "ol:not([type]):not([start]):not([reversed]):not([style*='list-style'])",
       )

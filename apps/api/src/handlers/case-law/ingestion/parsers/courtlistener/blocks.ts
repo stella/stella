@@ -10,7 +10,7 @@
  */
 
 import { panic } from "better-result";
-import type * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import {
   type AnyNode,
   type Element,

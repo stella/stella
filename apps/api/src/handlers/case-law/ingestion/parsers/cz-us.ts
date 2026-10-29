@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import type { AnyNode } from "domhandler";
 
 import type {
@@ -7,6 +7,7 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
 } from "@stll/docx-core/model";
+import { load } from "@stll/html";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -129,7 +130,7 @@ type ParseUsDecisionOutput = {
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { load } from "cheerio";
 
 import { VISUAL_DATA_SCRIPT_ID } from "@stll/api-contract/generated-visual";
 import {
@@ -7,6 +6,7 @@ import {
   VISUAL_RENDER_ID_SCRIPT_ID,
 } from "@stll/api-contract/visual-sandbox";
 import { VISUAL_THEME_SCRIPT_ID } from "@stll/api-contract/visual-theme";
+import { load } from "@stll/html";
 
 import { VISUAL_INNER_POLICY, visualOuterPolicy } from "./document";
 import { sanitizeVisualHtml } from "./sanitize";

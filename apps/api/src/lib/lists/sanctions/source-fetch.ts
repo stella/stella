@@ -1,8 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
-import { load } from "cheerio";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
+import { load } from "@stll/html";
 import {
   parseCzList,
   parseEuList,

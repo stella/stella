@@ -33,7 +33,7 @@
  * keeps a thin local alias over one core.
  */
 
-import type * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner

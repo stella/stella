@@ -1,6 +1,6 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
-import type * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import type { AnyNode } from "domhandler";
 import { Buffer } from "node:buffer";
 

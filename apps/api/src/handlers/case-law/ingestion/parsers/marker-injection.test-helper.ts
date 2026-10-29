@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
-import * as cheerio from "cheerio";
 import { isCDATA, isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 export const markerPlan = fc.record({
@@ -93,7 +93,7 @@ export const injectMarkupMarkers = ({
   plan,
   xml = false,
 }: InjectMarkupOptions) => {
-  const $ = cheerio.load(source, xml ? { xml: true } : {});
+  const $ = load(source, xml ? { xml: true } : {});
   const roots = $(selector).toArray();
   const visited = new Set<AnyNode>();
   const slots: MarkerSlot[] = [];

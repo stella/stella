@@ -14,8 +14,10 @@
  * to check the parser against, not available enough to parse from.
  */
 
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import type { AnyNode } from "domhandler";
+
+import { load } from "@stll/html";
 
 type FormexHeading = {
   /** Formex nesting depth, clamped to the AST's 1–3 heading levels. */
@@ -66,7 +68,7 @@ const headingText = (
 };
 
 export const parseFormex = (xml: string): FormexDocument => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
 
   // Formex models quotation marks as empty elements carrying the
   // codepoint; the rendering emits the character. Materialize them so

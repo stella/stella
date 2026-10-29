@@ -16,8 +16,8 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import {
@@ -1518,7 +1518,7 @@ for (const candidate of [
   ["javascript", "alert(1)"].join(":"),
 ]) {
   test(`all tribunal metadata URL paths use parser-decoded addresses: ${candidate}`, async () => {
-    const $ = cheerio.load(await caseFixture("pl-tk-case-k-2-26.html.gz"));
+    const $ = load(await caseFixture("pl-tk-case-k-2-26.html.gz"));
     const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
     expect(documents.length).toBe(1);
     documents.empty().append("<ul><li><a>source document</a></li></ul>");

@@ -143,6 +143,7 @@
     "@stll/fetch": "workspace:*",
     "@stll/folio-agents": "catalog:",
     "@stll/folio-core": "catalog:",
+    "@stll/html": "workspace:*",
     "@stll/infosoud": "workspace:*",
     "@stll/invoicing": "workspace:*",
     "@stll/legal-ast": "workspace:*",

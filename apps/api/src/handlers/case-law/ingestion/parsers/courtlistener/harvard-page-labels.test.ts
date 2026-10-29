@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
 
@@ -46,7 +46,7 @@ describe("removed page labels preserve source word boundaries", () => {
         if (parsed.status !== "parsed") {
           return;
         }
-        expect(cheerio.load(parsed.text.validationHtml)("p").text()).toBe(
+        expect(load(parsed.text.validationHtml)("p").text()).toBe(
           left + separator + right,
         );
         const allBlocks = parsed.text.units.flatMap(({ blocks }) => [
@@ -99,9 +99,7 @@ describe("removed page labels preserve source word boundaries", () => {
           if (parsed.status !== "parsed") {
             return;
           }
-          const sourceText = cheerio
-            .load(parsed.text.validationHtml)("p")
-            .text();
+          const sourceText = load(parsed.text.validationHtml)("p").text();
           const astText = parsed.text.units
             .flatMap(({ blocks }) =>
               blocks.map((block) => {

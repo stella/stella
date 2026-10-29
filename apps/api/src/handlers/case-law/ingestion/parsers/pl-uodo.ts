@@ -14,9 +14,10 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -529,7 +530,7 @@ const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] => {
 
 /** What the validator measures a parse against, read from the XML alone. */
 export const plUodoSourceTexts = (xml: string): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $("xPart").get(0);
   return root === undefined ? [] : sourceTextsOf($, root);
 };
@@ -537,7 +538,7 @@ export const plUodoSourceTexts = (xml: string): string[] => {
 export const parsePlUodoDecisionXml = (
   input: ParsePlUodoDecisionInput,
 ): Result<ParsePlUodoDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const root = $("xPart").get(0);
   if (root === undefined) {
     return Result.err(

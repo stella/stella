@@ -25,11 +25,12 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
@@ -89,7 +90,7 @@ type ParseNssDecisionOutput = {
 export const parseNssDecisionHtml = (
   input: ParseNssDecisionInput,
 ): ParseNssDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const chunks = extractChunks($);
   const blocks = courtParagraphNumbers(classifyChunks(chunks), {
     parser: "cz-nss",

@@ -25,8 +25,10 @@
  * different courts.
  */
 
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import type { Element } from "domhandler";
+
+import { load } from "@stll/html";
 
 /** The three scopes a branch notice states facts at. */
 const ECJ_NOTICE_SCOPE = {
@@ -350,7 +352,7 @@ const noticeManifestations = (
 
 /** Parse one branch notice into the facts a row keeps from it. */
 export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const work = $("NOTICE > WORK");
   const expression = $("NOTICE > EXPRESSION");
   const dossier = work.find("WORK_PART_OF_DOSSIER > EMBEDDED_NOTICE > DOSSIER");
@@ -446,7 +448,7 @@ export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
  * file are accounted for without descending into the cited works' notices.
  */
 export const listEcjNoticeFields = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const stated = new Set<string>();
 
   const addChildren = (parent: Selection, prefix: string): void => {

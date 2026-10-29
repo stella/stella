@@ -9,9 +9,10 @@
  *      ruling items, tables)
  */
 
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
+import { load } from "@stll/html";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
@@ -80,7 +81,7 @@ type ParseNsDecisionOutput = {
 export const parseNsDecisionHtml = (
   input: ParseNsDecisionInput,
 ): ParseNsDecisionOutput => {
-  const $ = cheerio.load(input.printHtml);
+  const $ = load(input.printHtml);
 
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
@@ -267,7 +268,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
     ($(td).html() ?? "").split(/<br\s*\/?>/iu).flatMap((s) => {
-      const trimmed = visibleHtmlText(cheerio.load(s).root()).trim();
+      const trimmed = visibleHtmlText(load(s).root()).trim();
       return trimmed ? [trimmed] : [];
     });
 

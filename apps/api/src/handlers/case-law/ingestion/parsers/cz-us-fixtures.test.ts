@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { readdir } from "node:fs/promises";
 import * as v from "valibot";
 
+import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
 
@@ -263,7 +263,7 @@ describe("committed CZ ÚS fixtures", () => {
   test("produce identical diagnostics from paragraphs and validation HTML", async () => {
     for (const name of await fixtureNames()) {
       const html = await gunzipText(new URL(name, FIXTURES));
-      const $ = cheerio.load(html);
+      const $ = load(html);
       const rtf = $("input#docContentHidden").attr("value") ?? "";
       expect(rtf.trim()).not.toBe("");
 

@@ -1,8 +1,9 @@
 /** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import type {
@@ -123,7 +124,7 @@ const paragraphRole = (
  * the parser below is where an unreadable document is an error.
  */
 export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const content = $("nutzdaten").first();
   const contentTypes = new Set<string>();
   content.find("absatz[ct]").each((_, element) => {
@@ -141,7 +142,7 @@ export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const content = $("nutzdaten").first();
   if (content.length === 0) {
     return Result.err(

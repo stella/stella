@@ -2,11 +2,11 @@
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
-import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
 
 import { declareFingerprintFields } from "@stll/errors";
+import { load } from "@stll/html";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -108,7 +108,7 @@ const matchesContentType = (
 };
 
 const isHtmlInterstitial = (text: string): boolean => {
-  const $ = cheerio.load(text);
+  const $ = load(text);
   if ($("form input[type=password]").length > 0) {
     return true;
   }

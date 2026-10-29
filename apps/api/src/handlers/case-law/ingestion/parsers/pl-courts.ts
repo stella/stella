@@ -19,7 +19,7 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import {
   type AnyNode,
   Element,
@@ -30,6 +30,7 @@ import {
 } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -1214,7 +1215,7 @@ const enforcePlainTextExpansionBudget = (
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
-  const loadHtml = input.loadHtml ?? cheerio.load;
+  const loadHtml = input.loadHtml ?? load;
   const state = createState(input.superscripts === true, input.markup);
   const title = normalizeDecisionTitle(input.decisionType);
 

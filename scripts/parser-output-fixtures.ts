@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { Glob } from "bun";
-import * as cheerio from "cheerio";
 import path from "node:path";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+import { load } from "@stll/html";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 
@@ -463,7 +463,7 @@ const collectEuropeanDocuments = async ({
         adapter: "eu-ecj",
         fixture: `eu-ecj/${filename}`,
         output: {
-          boundary: ecjDocumentRoot(cheerio.load(html)).boundary,
+          boundary: ecjDocumentRoot(load(html)).boundary,
           warnings: warnings.splice(0).map(stableDiagnostic),
         },
       });

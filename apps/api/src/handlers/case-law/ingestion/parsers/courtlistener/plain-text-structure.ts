@@ -1,5 +1,6 @@
-import * as cheerio from "cheerio";
 import { isTag, isText } from "domhandler";
+
+import { load } from "@stll/html";
 
 const STRUCTURAL_TAGS = new Set([
   "div",
@@ -24,7 +25,7 @@ const STRUCTURAL_TAGS = new Set([
 
 /** Prose outside structural roots keeps the plain column's literal markup. */
 export const plainTextStructureOf = (text: string): "plain" | "html" => {
-  const $ = cheerio.load(text, {}, false);
+  const $ = load(text, {}, false);
   let hasStructuralRoot = false;
   for (const node of $.root().contents().toArray()) {
     if (isText(node)) {

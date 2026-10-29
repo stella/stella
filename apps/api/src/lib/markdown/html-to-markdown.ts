@@ -1,6 +1,7 @@
-import * as cheerio from "cheerio";
 import { isTag, isText } from "domhandler";
 import type { AnyNode, Element } from "domhandler";
+
+import { load } from "@stll/html";
 
 // Includes `|` so table-cell pipes are escaped in the same pass as backslashes
 // (renders as a literal `|` in GFM/CommonMark), rather than a separate pipe
@@ -353,7 +354,7 @@ export const htmlToMarkdown = (html: string): string => {
   if (!html.trim()) {
     return "";
   }
-  const $ = cheerio.load(html, undefined, false);
+  const $ = load(html, undefined, false);
   const body = renderChildren($.root().contents().toArray());
   return body ? `${body}\n` : "";
 };

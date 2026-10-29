@@ -13,9 +13,9 @@
  * paragraph is scoped alone.
  */
 
-import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 
@@ -220,7 +220,7 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   if (input.text.trim() === "") {
     return { status: "unusable", reason: TEXT_CANDIDATE_UNUSABLE.BLANK };
   }
-  const $ = cheerio.load(input.text, null, false);
+  const $ = load(input.text, null, false);
   const foreign = $.root()
     .children()
     .toArray()
@@ -247,7 +247,7 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   }
   // The retention check reads the source through cheerio's own text, not
   // through the walk above.
-  const visible = cheerio.load(input.text, null, false);
+  const visible = load(input.text, null, false);
   return parseLayoutText(
     input,
     $.root().contents().toArray().map(textOf).join(""),

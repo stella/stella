@@ -10,9 +10,10 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
 import { type Element, isTag } from "domhandler";
 import * as slimdom from "slimdom";
+
+import { load } from "@stll/html";
 
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -194,7 +195,7 @@ export const parseHarvardXml = ({
   }
   // Cheerio's parser does not recurse, so the tree is measured before the
   // well-formedness check or any walk can recurse through it.
-  const $ = cheerio.load(body, { xml: true });
+  const $ = load(body, { xml: true });
   const [root] = $.root().toArray();
   if (root === undefined) {
     return { status: "over-limit", limit: "DOM_NODES" };

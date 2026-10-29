@@ -1,11 +1,11 @@
 // parser-output-unchanged: registers telemetry fingerprint dimensions without changing error payloads or parser results.
 import { panic, Result, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
 import { isText } from "domhandler";
 import { Buffer } from "node:buffer";
 import { adapter } from "parse5-htmlparser2-tree-adapter";
 
 import { declareFingerprintFields } from "@stll/errors";
+import { load } from "@stll/html";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
 
@@ -132,7 +132,7 @@ export const loadPlKioHtml = (
   } satisfies typeof adapter;
   return Result.try({
     try: () => {
-      const document = cheerio.load(html, { treeAdapter });
+      const document = load(html, { treeAdapter });
       parsingPublisherMarkup = false;
       return document;
     },

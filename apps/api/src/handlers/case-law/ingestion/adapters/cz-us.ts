@@ -1,10 +1,11 @@
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
+import { load } from "@stll/html";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -515,7 +516,7 @@ const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
 const extractAbstract = (
   html: string,
 ): Required<Pick<DecisionTextFields, "abstract" | "legalSentence">> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return {
     abstract: fieldAboveAbstractMinimum(
       sourceTextField(
@@ -726,7 +727,7 @@ const emptyDetailFields = (): Record<NalusDetailFieldKey, string[]> => ({
  * indistinguishable from a decision the court states nothing about.
  */
 export const parseNalusDetail = (html: string): NalusDetailFields | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const rows = ownTableRows($(RECORD_CARD_SELECTOR));
   if (rows.length === 0) {
     return null;
@@ -747,7 +748,7 @@ export const parseNalusDetail = (html: string): NalusDetailFields | null => {
       ...(cells.eq(1).html() ?? "")
         .split(DETAIL_VALUE_SEPARATOR)
         .map((part) =>
-          detailText(visibleHtmlText(cheerio.load(part, null, false).root())),
+          detailText(visibleHtmlText(load(part, null, false).root())),
         )
         .filter((part) => part.length > 0),
     );
@@ -768,7 +769,7 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
   if (recordCard === undefined) {
     return [];
   }
-  const $ = cheerio.load(recordCard);
+  const $ = load(recordCard);
   const labels: string[] = [];
   ownTableRows($(RECORD_CARD_SELECTOR)).each((_, row) => {
     const cells = $(row).children("td");
@@ -1566,7 +1567,7 @@ const rollingPageDigest = (digest: string, page: SearchPage): string =>
   );
 
 const hiddenField = (html: string, name: string): string | undefined =>
-  cheerio.load(html)(`#${name}`).attr("value");
+  load(html)(`#${name}`).attr("value");
 
 /**
  * Stable publisher-visible fields for an anomalous row that exposes neither
@@ -1689,7 +1690,7 @@ const parseResultPage = ({
     });
   }
 
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const listed: ListedDecision[] = [];
   ownTableRows($("table"))
     .filter(".resultData0, .resultData1")
@@ -2018,7 +2019,7 @@ const fetchSearchPage = async ({
   });
   if (submit.status !== 302 || !redirectsToResults(submit)) {
     if (submit.ok) {
-      const $ = cheerio.load(await submit.text());
+      const $ = load(await submit.text());
       const noResults = visibleHtmlText($("#ctl00_MainContent_lbError")).trim();
       const resultsDisabled =
         $("#ctl00_bResults").attr("disabled") === "disabled";
@@ -2310,7 +2311,7 @@ const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
   const detail = payloads.detail?.replace(
     /<input\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
     (input) => {
-      const $ = cheerio.load(input);
+      const $ = load(input);
       const field = $("input");
       return field.attr("type")?.toLowerCase() === "hidden" &&
         /^__(?:VIEWSTATE(?:GENERATOR|FIELDCOUNT|\d+)?|EVENTVALIDATION)$/iu.test(

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
@@ -120,7 +120,7 @@ tento mimořádný opravný prostředek nepřipouští.</p>
 
 describe("extractNsMetadata", () => {
   test("extracts all metadata fields", () => {
-    const $ = cheerio.load(metaTableHtml);
+    const $ = load(metaTableHtml);
     const { canonical, source } = extractNsMetadata($);
 
     expect(canonical.court).toBe("Nejvyšší soud");
@@ -143,7 +143,7 @@ describe("extractNsMetadata", () => {
         <tr><td>Datum rozhodnutí:</td><td>01/05/2025</td></tr>
       </tbody></table>
     `;
-    const $ = cheerio.load(html);
+    const $ = load(html);
     const { canonical } = extractNsMetadata($);
 
     expect(canonical.decisionDate).toBe("2025-01-05");
@@ -151,7 +151,7 @@ describe("extractNsMetadata", () => {
 
   test("handles missing metadata gracefully", () => {
     const html = `<table id="box-table-a"><tbody></tbody></table>`;
-    const $ = cheerio.load(html);
+    const $ = load(html);
     const { canonical } = extractNsMetadata($);
 
     expect(canonical.court).toBeNull();
@@ -164,7 +164,7 @@ describe("extractNsMetadata", () => {
 
 describe("extractRawChunks", () => {
   test("extracts content after metadata table", () => {
-    const $ = cheerio.load(minimalPrintHtml);
+    const $ = load(minimalPrintHtml);
     const chunks = extractRawChunks($);
 
     expect(chunks.length).toBeGreaterThan(0);
@@ -175,7 +175,7 @@ describe("extractRawChunks", () => {
   });
 
   test("identifies centered content", () => {
-    const $ = cheerio.load(minimalPrintHtml);
+    const $ = load(minimalPrintHtml);
     const chunks = extractRawChunks($);
 
     const centeredChunks = chunks.filter(
@@ -448,7 +448,7 @@ describe("parseNsDecisionHtml", () => {
         const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
         <table><tr><${headerTag}>datum podání</${headerTag}><${headerTag}>spisová značka</${headerTag}></tr>
         <tr><td>${date}</td><td>${docket}</td></tr></table></td></tr></table>`;
-        const { source } = extractNsMetadata(cheerio.load(html));
+        const { source } = extractNsMetadata(load(html));
         const row = source.ustavniStiznost?.at(0);
         expect(row?.["datum podání"]).toEqual({
           type: "date",
@@ -481,7 +481,7 @@ describe("parseNsDecisionHtml", () => {
         const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
         <table><tr><td>datum podání</td></tr><tr><td>${date}</td></tr></table>
         </td></tr><tr><td>Datum rozhodnutí:</td><td>05/27/2022</td></tr></table>`;
-        const { source } = extractNsMetadata(cheerio.load(html));
+        const { source } = extractNsMetadata(load(html));
         expect(source.ustavniStiznost?.at(0)?.["datum podání"]).toEqual({
           type: "unresolved-date",
           sourceValue: date.replace("<br>", "\n"),
@@ -640,7 +640,7 @@ describe("source table text retention", () => {
       "&lt;BR /&gt;",
     ]) {
       const { canonical, source } = extractNsMetadata(
-        cheerio.load(`<table id="box-table-a">
+        load(`<table id="box-table-a">
           <tr><th>Unknown${separator}label</th>
             <td>${separator}<b>foo${separator}bar</b>${separator}baz</td>
             <td>extra${separator}value</td></tr>
@@ -721,7 +721,7 @@ describe("source table text retention", () => {
 
   test("keeps every metadata cell and caption without inferring labels", () => {
     const { source } = extractNsMetadata(
-      cheerio.load(`<table id="box-table-a">
+      load(`<table id="box-table-a">
       <caption>Metadata caption</caption>
       <tr><th>Soud:</th><td>Named court</td><td>Extra value</td></tr>
       <tr><td>Unknown label</td><td>Unknown value</td></tr>
@@ -789,15 +789,15 @@ for (const tag of ["script", "style"]) {
       .replace("Nejvyšší soud", () => `Nejvyšší soud${hidden}`)
       .replace("Dovolání<br/>", () => `Dovolání${hidden}<br/>`);
     expect(injected).not.toBe(clean);
-    expect(extractNsMetadata(cheerio.load(injected))).toEqual(
-      extractNsMetadata(cheerio.load(clean)),
+    expect(extractNsMetadata(load(injected))).toEqual(
+      extractNsMetadata(load(clean)),
     );
   });
 }
 
 test("retains metadata footer rows through the shared row owner", () => {
   const { source } = extractNsMetadata(
-    cheerio.load(`<table id="box-table-a">
+    load(`<table id="box-table-a">
     <tbody><tr><td>Soud:</td><td>Nejvyšší soud</td></tr></tbody>
     <tfoot><tr><td>Dodatečná informace:</td><td>Source footer</td></tr></tfoot>
   </table>`),

@@ -1,8 +1,8 @@
-import { load } from "cheerio";
 import { isTag } from "domhandler";
 import * as v from "valibot";
 
 import { visualLinkSchema } from "@stll/api-contract/visual-sandbox";
+import { load } from "@stll/html";
 
 import type { SanitizedVisualHtml } from "./sanitize";
 

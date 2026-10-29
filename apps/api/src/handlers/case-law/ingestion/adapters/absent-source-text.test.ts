@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { isTag, isText } from "domhandler";
 import { readdirSync } from "node:fs";
 
 import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
+import { load } from "@stll/html";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -150,7 +150,7 @@ const capturesOf = async (adapter: string): Promise<string[]> => {
 
 /** Each element's own text and each attribute value in a piece of markup. */
 const markupValues = (markup: string): string[] => {
-  const $ = cheerio.load(markup);
+  const $ = load(markup);
   const values: string[] = [];
   $("*").each((_, element) => {
     if (!isTag(element)) {

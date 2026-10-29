@@ -14,9 +14,10 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -321,7 +322,7 @@ const RULING_TAB_ID = /^sprawaForm:tabView:dok_(?<id>\d+)$/u;
 
 /** Parse and index one case page. The returned value belongs to that assembly. */
 export const parsePlTkPage = (html: string): ParsedPlTkPage => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const scope = $('[id="sprawaForm:tabView"]');
   const containers = [
     ...byId($, METRYKA_ID).toArray().filter(isTag),

@@ -1,4 +1,3 @@
-import { panic, Result, TaggedError } from "better-result";
 /**
  * Import the Czech Constitutional Court's published roster of its justices
  * into `case_law_judges`, then re-link the decision rows whose printed name
@@ -15,12 +14,14 @@ import { panic, Result, TaggedError } from "better-result";
  * implementations pull their connections in on first use: importing this
  * module opens nothing.
  */
-import * as cheerio from "cheerio";
+import { panic, Result, TaggedError } from "better-result";
+import type * as cheerio from "cheerio/slim";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { load } from "@stll/html";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -266,7 +267,7 @@ export const parseRosterListing = ({
   html,
   listingUrl,
 }: RosterListingOptions): RosterListingEntry[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const entries: RosterListingEntry[] = [];
   $(".judges-list a.list_polozka").each((_, element) => {
     const anchor = $(element);
@@ -307,7 +308,7 @@ export const parseJusticePage = ({
   html,
   sourceUrl,
 }: JusticePageOptions): Result<ParsedJusticePage, CzUsRosterParseError> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const printed = normalizeSpace($("h1.judges_name").first().text());
   if (printed.length === 0) {
     return Result.err(

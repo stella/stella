@@ -36,7 +36,7 @@
  * apart from printed lines before the marks go.
  */
 
-import type { CheerioAPI } from "cheerio";
+import type { CheerioAPI } from "cheerio/slim";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
 import {

@@ -1,9 +1,9 @@
 import { panic, Result, TaggedError } from "better-result";
-import { load } from "cheerio";
 import { isTag } from "domhandler";
 import * as slimdom from "slimdom";
 
 import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+import { load } from "@stll/html";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { CompoundFile } from "@/api/lib/files/compound-file";

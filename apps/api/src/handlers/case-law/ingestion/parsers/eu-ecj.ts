@@ -42,10 +42,11 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -118,7 +119,7 @@ export type ParseEcjDecisionOutput = {
 export const parseEcjDecisionHtml = (
   input: ParseEcjDecisionInput,
 ): ParseEcjDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const { boundary, root: $document } = ecjDocumentRoot($);
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
@@ -434,7 +435,7 @@ export const ecjConverterVersion = (html: string): string | undefined =>
  * the caller must be able to tell apart from a bounded document.
  */
 export const ecjDocumentHtml = (html: string): EcjDocumentSource => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const document = ecjDocumentRoot($);
   return {
     boundary: document.boundary,
@@ -604,7 +605,7 @@ export const ecjStatesKeywordChain = (html: string): boolean =>
   new RegExp(`class="(?:${CLASS_PREFIX})?${CLASS.index}"`, "u").test(html);
 
 export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const raw = visibleHtmlText($(sel(CLASS.index)).first()).trim();
   return (
     raw.length > 0 &&

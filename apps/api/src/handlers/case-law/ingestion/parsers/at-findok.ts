@@ -1,8 +1,9 @@
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio/slim";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -110,7 +111,7 @@ const headingLevel = (element: Element): 1 | 2 | 3 => {
  * to account for is `ngesamt`, not the container it repeats inside.
  */
 export const listFindokDocumentFields = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const names = new Set<string>();
   for (const group of ["Grundk", "Segk"]) {
     $(group)
@@ -157,7 +158,7 @@ const envelopeFields = ($: cheerio.CheerioAPI): FindokEnvelopeFields => ({
 export const parseFindokHeadnoteXml = (
   xml: string,
 ): ParseFindokHeadnotesOutput => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const sentences = $("Segk > txtascii")
     .toArray()
     .map((element) => normalizedText($(element).text()))
@@ -173,7 +174,7 @@ export const parseFindokHeadnoteXml = (
 export const parseFindokDecisionXml = (
   input: ParseFindokDecisionInput,
 ): Result<ParseFindokDecisionOutput, ParseXmlError> => {
-  const envelope = cheerio.load(input.xml, { xml: true });
+  const envelope = load(input.xml, { xml: true });
   const xhtmlSegments = envelope("Segk > txt")
     .toArray()
     .map((element) => envelope(element).text())
@@ -244,7 +245,7 @@ export const parseFindokDecisionXml = (
   };
 
   for (const xhtml of xhtmlSegments) {
-    const document = cheerio.load(xhtml);
+    const document = load(xhtml);
     const body = document("body").first();
     const validationText = normalizedText(visibleHtmlText(body));
     if (body.length === 0 || validationText === "") {

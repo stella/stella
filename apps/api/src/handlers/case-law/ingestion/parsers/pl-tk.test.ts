@@ -6,9 +6,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import {
   type Block,
   hasInlineChildren,
@@ -477,7 +477,7 @@ for (const href of [
   ["javascript", "alert(1)"].join(":"),
 ]) {
   test(`portal document links retain known-base resolution or whole-entry omission: ${href}`, async () => {
-    const $ = cheerio.load(await casePage("pl-tk-case-k-2-26.html.gz"));
+    const $ = load(await casePage("pl-tk-case-k-2-26.html.gz"));
     const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
     documents.empty().append("<ul><li><a>Document</a></li></ul>");
     documents.find("a").attr("href", href);
@@ -681,11 +681,7 @@ describe("the portal's typesetting, read as a browser lays it out", () => {
       <div id="tekst_1"><p>word${gap}<span class="wyrok_indeks_gorny">1</span></p></div>
     </div>`);
       const ruling = readPlTkRuling(page, "1");
-      expect(
-        cheerio
-          .load(ruling?.textHtml ?? "")("p")
-          .text(),
-      ).toBe(`word${kept}1`);
+      expect(load(ruling?.textHtml ?? "")("p").text()).toBe(`word${kept}1`);
     },
   );
 

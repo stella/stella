@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
+
+import { load } from "@stll/html";
 
 import {
   decodeSourceRawEnvelope,
@@ -472,7 +473,7 @@ for (const adapter of replayAdapters) {
     ).toBe("parsed");
     const misses: string[] = [];
     for (const [slotIndex, slot] of slots.entries()) {
-      const $ = cheerio.load(slot.text, { xml: driver.driver === "xml" });
+      const $ = load(slot.text, { xml: driver.driver === "xml" });
       const roots =
         driver.textRoot === undefined
           ? $("*")
@@ -502,7 +503,7 @@ for (const adapter of replayAdapters) {
         const bare = tokens.at(2) ?? panic("Bare marker missing");
         let mutated = `${first} ${slot.text} ${last} ${bare}`;
         if (driver.driver !== "json-text") {
-          const dom = cheerio.load(slot.text, { xml: driver.driver === "xml" });
+          const dom = load(slot.text, { xml: driver.driver === "xml" });
           const candidates =
             driver.textRoot === undefined
               ? dom("*")

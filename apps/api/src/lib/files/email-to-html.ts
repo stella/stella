@@ -12,7 +12,7 @@
  * the document: email HTML is untrusted input.
  */
 import { panic, Result, TaggedError } from "better-result";
-import { type Cheerio, type CheerioOptions, load } from "cheerio";
+import type { Cheerio, CheerioOptions } from "cheerio/slim";
 import { type Element, isTag, isText } from "domhandler";
 import { serializeOuter } from "parse5";
 import { adapter as htmlparser2Adapter } from "parse5-htmlparser2-tree-adapter";
@@ -34,6 +34,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { load } from "@stll/html";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
