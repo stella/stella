@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -260,7 +260,7 @@ const decisionForSource = async (sourceId: SafeId<"caseLawSource">) => {
       .where(eq(caseLawDecisions.sourceId, sourceId))
   ).at(0);
   if (decision === undefined) {
-    return expect.unreachable("the enriched decision must exist");
+    panic("the enriched decision must exist");
   }
   return decision;
 };
@@ -285,7 +285,7 @@ test("archives a partial observation's fetched document while retaining the enri
   const payload = puts().find(({ key }) => key.includes("/payloads/"));
   expect(payload).toBeDefined();
   if (payload === undefined) {
-    return expect.unreachable("the partial envelope must be stored");
+    panic("the partial envelope must be stored");
   }
   expect(payload.key).not.toBe(before.sourceRawS3Key);
   const envelope = new TextDecoder().decode(
@@ -297,9 +297,7 @@ test("archives a partial observation's fetched document while retaining the enri
   const ref = decodeSourceRawEnvelopeObjects(envelope)["document-file"];
   expect(ref).toBeDefined();
   if (ref === undefined) {
-    return expect.unreachable(
-      "the partial envelope must name its fetched document",
-    );
+    panic("the partial envelope must name its fetched document");
   }
   expect(ref.location).toContain(`/documents/${before.id}/`);
   expect(fake.objects.get(`${payload.bucket}/${ref.location}`)?.bytes).toEqual(
@@ -355,9 +353,7 @@ test("stored-input partial replay never archives raw objects", async () => {
   await observe({ sourceId, listing: "{}", order: 1n });
   const before = await decisionForSource(sourceId);
   if (before.sourceRawS3Key === null) {
-    return expect.unreachable(
-      "the enriched decision must retain its raw pointer",
-    );
+    panic("the enriched decision must retain its raw pointer");
   }
   fake.requests.length = 0;
   const outcome = await processStoredDecision({

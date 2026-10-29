@@ -131,12 +131,6 @@ const declarations: Record<string, Declaration> = {
       reason:
         "metadata or document payload update; no citation identity assignment",
     },
-  "src/lib/legal-search/sk-document-backfill.ts:writeFetchBookkeeping:orm-set-caseLawDecisions:1":
-    {
-      disposition: "copy",
-      reason:
-        "metadata or document payload update; no citation identity assignment",
-    },
   "src/lib/legal-search/sk-document-backfill.ts:markDocumentUnavailableOwned:orm-set-caseLawDecisions:1":
     {
       disposition: "copy",

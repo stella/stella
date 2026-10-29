@@ -476,6 +476,39 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(outcome.type).toBe("parsed");
   });
 
+  test("capturing a legacy wrapper preserves its metadata replay fixed point", async () => {
+    const original = await storedDecision(TRANSFERRED_FILE_ID);
+    expect(original.sourceRawContentType).toBe("application/json");
+    expect(decodeSourceRawEnvelope(original.sourceRaw)).toBeNull();
+    const expected = reparse(original, TRANSFERRED_FILE_DOCKET);
+    expect(expected.type).toBe("parsed");
+    const captured = await deferredSkDocumentRawFixture(original.sourceRaw);
+    expect(decodeSourceRawEnvelope(captured.raw)?.["legacy"]).toBe(
+      original.sourceRaw,
+    );
+    expect(Object.keys(decodeSourceRawEnvelopeObjects(captured.raw))).toEqual([
+      "document-pdf",
+    ]);
+    const publisherRead = spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(async () =>
+        panic("Stored metadata replay must not fetch the publisher"),
+      ),
+    );
+    try {
+      expect(
+        reparse(
+          {
+            sourceRaw: captured.raw,
+            sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          },
+          TRANSFERRED_FILE_DOCKET,
+        ),
+      ).toEqual(expected);
+    } finally {
+      publisherRead.mockRestore();
+    }
+  });
+
   test("the three fields the adapter used to discard land in metadata", async () => {
     const outcome = reparse(
       await storedDecision(TRANSFERRED_FILE_ID),

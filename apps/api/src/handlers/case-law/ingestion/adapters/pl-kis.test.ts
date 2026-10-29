@@ -509,10 +509,10 @@ describe("every ingested category, as the service served it", () => {
     );
     expect(first.decision.rawHash).toBe(again.decision.rawHash);
     expect(first.decision.rawHash).not.toBe(second.decision.rawHash);
+    const firstRaw =
+      first.decision.sourceRaw ?? panic("first source envelope missing");
     expect(first.decision.rawHash).toBe(
-      legacySha256Hex(
-        `${first.decision.sourceRaw}\n${legacySha256Hex(firstPdf)}`,
-      ),
+      legacySha256Hex(`${firstRaw}\n${legacySha256Hex(firstPdf)}`),
     );
   });
 

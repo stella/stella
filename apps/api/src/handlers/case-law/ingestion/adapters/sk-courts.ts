@@ -1,3 +1,4 @@
+// parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
@@ -1929,7 +1930,9 @@ const skCourtsStoredRawParts = (
 ): SourceRawParts | null => {
   const envelope = decodeSourceRawEnvelope(raw);
   if (envelope !== null) {
-    return envelope;
+    return envelope["listing"] === undefined && envelope["legacy"] !== undefined
+      ? skCourtsStoredRawParts(envelope["legacy"], "application/json")
+      : envelope;
   }
   if (contentType !== null && contentType !== "application/json") {
     return null;
