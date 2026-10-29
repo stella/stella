@@ -154,6 +154,29 @@ describe("text axis", () => {
     ).toBe("505\n9 k.p.c.");
   });
 
+  test("numeric indices retain context across containers without changing units or footnotes", () => {
+    expect(
+      flattenInlineText([
+        { type: "text", text: "505" },
+        {
+          type: "bold",
+          children: [
+            { type: "superscript", children: [{ type: "text", text: "9" }] },
+          ],
+        },
+      ]),
+    ).toBe("505^9");
+    for (const base of ["m", "Body", "Body.", "("]) {
+      expect(
+        flattenInlineText([
+          { type: "text", text: base },
+          { type: "superscript", children: [{ type: "text", text: "2" }] },
+        ]),
+      ).toBe(`${base}2`);
+    }
+    expect(flattenInlineText([{ type: "text", text: "20 m²" }])).toBe("20 m²");
+  });
+
   test("a page anchor still contributes nothing", () => {
     expect(plainTextOf([SAMPLES["page-anchor"]])).toBe("");
   });

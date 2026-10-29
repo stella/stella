@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
 // parser-output-unchanged: [pl-nsa] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
@@ -355,33 +356,45 @@ export const flattenInlineText = (
   projection: "search" | "rendered" | "validation" = "search",
 ): string => {
   const parts: string[] = [];
-
-  for (const inline of inlines) {
-    if (inline.type === "text") {
-      parts.push(inline.text);
-      continue;
+  let precedingCharacter = "";
+  const appendText = (text: string): void => {
+    parts.push(text);
+    if (projection !== "search") {
+      return;
     }
-
-    if (inline.type === "line-break") {
-      parts.push(projection === "validation" ? " " : "\n");
-      continue;
+    const lastCharacter = text.replace(/[ \t\r\f]+$/u, "").at(-1);
+    if (lastCharacter !== undefined) {
+      precedingCharacter = lastCharacter;
     }
-
-    if (inline.type === "page-anchor") {
-      // Typography, not content: zero characters on the text axis.
-      continue;
+  };
+  const walk = (nodes: readonly Inline[]): void => {
+    for (const inline of nodes) {
+      if (inline.type === "text") {
+        appendText(inline.text);
+        continue;
+      }
+      if (inline.type === "line-break") {
+        appendText(projection === "validation" ? " " : "\n");
+        continue;
+      }
+      if (inline.type === "page-anchor") {
+        continue;
+      }
+      if (inline.type === "superscript" && projection === "search") {
+        const text = flattenInlineText(inline.children, "rendered");
+        // Numeric indices stay distinct from concatenated numbers across
+        // emphasis wrappers. A unit exponent after a letter is not an index.
+        appendText(
+          /\d/u.test(precedingCharacter)
+            ? text.replace(/^(\s*)(\d+)(\s*)$/u, "$1^$2$3")
+            : text,
+        );
+        continue;
+      }
+      walk(inline.children);
     }
-
-    const text = flattenInlineText(inline.children, projection);
-    // A numeric index names a different provision from the concatenated
-    // number. Caret notation survives compatibility normalization in search.
-    parts.push(
-      inline.type === "superscript" && projection === "search"
-        ? text.replace(/^(\s*)(\d+)(\s*)$/u, "$1^$2$3")
-        : text,
-    );
-  }
-
+  };
+  walk(inlines);
   const text = parts.join("");
   return projection === "search" ? normalizeNumericIndices(text) : text;
 };

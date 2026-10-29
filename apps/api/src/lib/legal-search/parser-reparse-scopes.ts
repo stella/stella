@@ -349,11 +349,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 6,
+    version: 5,
     scope: {
       type: "all",
       reason:
-        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
 } as const satisfies ParserVersionScopes<

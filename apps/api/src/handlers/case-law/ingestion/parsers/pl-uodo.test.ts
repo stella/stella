@@ -55,8 +55,8 @@ const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
 
 /**
  * Every `<xText>` of the source as the portal prints it: a gloss reference as
- * the label of the gloss it names or, naming none, as its reference, other
- * markup dropped, whitespace collapsed.
+ * the label of the gloss it names or, naming none, as a caret-delimited
+ * numeric index. Other markup is dropped and whitespace collapsed.
  */
 const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
   const $ = cheerio.load(xml, { xml: true });
@@ -74,7 +74,10 @@ const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
     }
     if (node.tagName === "xGlossRef") {
       const ref = node.attribs["xRef"] ?? "";
-      return withFootnoteMarks ? (labels.get(ref) ?? ref) : "";
+      if (!withFootnoteMarks) {
+        return "";
+      }
+      return labels.get(ref) ?? (/^\d+$/u.test(ref) ? `^${ref}` : ref);
     }
     return node.children.map(textOf).join("");
   };

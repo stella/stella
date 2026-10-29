@@ -673,6 +673,46 @@ test("v6 writes a stem beside each field a reader's words reach", () => {
   ).toBe(true);
 });
 
+test("literal provision indices share surface and stem boundaries without rewriting source text", () => {
+  const text = "art. 23¹ p.p.s.a.";
+  const ast = {
+    version: 1,
+    blocks: [
+      {
+        id: "p-1",
+        anchorId: "p-1",
+        type: "paragraph",
+        plainText: text,
+        inlines: [{ type: "text", text }],
+      },
+    ],
+  } satisfies DocumentAst;
+  const original = structuredClone(ast);
+  expect(corpusTokens(text)).toContain("23¹");
+
+  for (const payload of [
+    { text, ast },
+    { text, ast: null },
+  ]) {
+    const documents = buildCaseLawProjectionDocuments({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+      input: { ...CASE_LAW_INPUT, jurisdiction: "POL", language: "pl" },
+      payload,
+      revision: REVISION,
+    });
+
+    expect(documents).toHaveLength(1);
+    expect(documents.at(0)?.text).toBe("art. 23^1 p.p.s.a.");
+    const stems = corpusTokens(documents.at(0)?.text_stem ?? "");
+    expect(stems.filter((token) => /^\d+$/u.test(token))).toEqual(["23", "1"]);
+    expect(stems).toHaveLength(
+      corpusTokens(documents.at(0)?.text ?? "").length,
+    );
+    expect(payload.text).toBe(text);
+  }
+  expect(ast).toEqual(original);
+});
+
 test("a language with no stemmer writes no stem field at all", () => {
   const documents = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,

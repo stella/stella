@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
 // parser-output-unchanged: [cz-nss] canonical line text is unchanged because this reader constructs no numeric superscript inlines.
 // parser-output-unchanged: [pl-kis] canonical line text is unchanged because this reader constructs no numeric superscript inlines.
 // parser-output-unchanged: [pl-uokik] canonical line text is unchanged because this reader constructs no numeric superscript inlines.

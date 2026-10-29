@@ -92,15 +92,14 @@ const treeAndPrefix = inlines.chain((tree) =>
 
 describe("inlinesToPlainText (properties)", () => {
   /**
-   * Flattening is a homomorphism over concatenation: no node's text
-   * depends on what sits beside it. This is what lets a parser splice
-   * inline lists without re-deriving plain text.
+   * Rendered offsets distribute over concatenation. Search projection
+   * additionally reads a superscript's numeric base across list boundaries.
    */
-  test("distributes over concatenation", () => {
+  test("rendered text distributes over concatenation", () => {
     fc.assert(
       fc.property(inlines, inlines, (left, right) => {
-        expect(inlinesToPlainText([...left, ...right])).toBe(
-          inlinesToPlainText(left) + inlinesToPlainText(right),
+        expect(plainTextOf([...left, ...right])).toBe(
+          plainTextOf(left) + plainTextOf(right),
         );
       }),
       config(300),

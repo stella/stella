@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
 // parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.

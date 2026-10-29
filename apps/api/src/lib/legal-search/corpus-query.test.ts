@@ -1286,22 +1286,43 @@ test("corpus-query/numeric-superscript-index-roundtrip", () => {
       fc.nat({ max: Number.MAX_SAFE_INTEGER }).map(String),
       fc.array(INDEX_DIGIT, { minLength: 1, maxLength: 16 }),
       fc.constantFrom("", " ", "\t", "\n"),
-      (number, digits, trailingWhitespace) => {
+      fc.constantFrom("none", "bold", "italic", "underline", "link"),
+      (number, digits, trailingWhitespace, wrapper) => {
         const index = digits.map(({ plain }) => plain).join("");
         const superscript = digits.map((digit) => digit.superscript).join("");
+        const mark = {
+          type: "superscript",
+          children: [
+            {
+              type: "bold",
+              children: [
+                { type: "text", text: `${index}${trailingWhitespace}` },
+              ],
+            },
+          ],
+        } satisfies Inline;
+        const wrapped = (() => {
+          switch (wrapper) {
+            case "none":
+              return mark;
+            case "link":
+              return {
+                type: "link",
+                href: "#index",
+                children: [mark],
+              } satisfies Inline;
+            case "bold":
+            case "italic":
+            case "underline":
+              return { type: wrapper, children: [mark] } satisfies Inline;
+            default:
+              wrapper satisfies never;
+              return panic("Unknown index wrapper");
+          }
+        })();
         const projected = flattenInlineText([
           { type: "text", text: number },
-          {
-            type: "superscript",
-            children: [
-              {
-                type: "bold",
-                children: [
-                  { type: "text", text: `${index}${trailingWhitespace}` },
-                ],
-              },
-            ],
-          },
+          wrapped,
         ]);
         const concatenated = flattenInlineText([
           { type: "text", text: `${number}${index}` },

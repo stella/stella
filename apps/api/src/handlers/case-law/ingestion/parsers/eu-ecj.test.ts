@@ -953,7 +953,7 @@ test("Cellar's raised spans retain their index boundary", async () => {
   const blocks = await parseStem("62018CC0311.fi");
   expect(
     blocks.some((block) =>
-      block.plainText.includes("Tietojen tuojan velvollisuudet (^1)"),
+      block.plainText.includes("Tietojen tuojan velvollisuudet (1)"),
     ),
   ).toBe(true);
 });
