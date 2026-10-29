@@ -28,7 +28,7 @@ import type {
   PdfRef,
   TextMarkupAnnotationOptions,
 } from "@libpdf/core";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type {
   ReaderAnnotationColor,
@@ -46,8 +46,23 @@ import type {
 } from "@stll/api-contract/pdf-mark-placement";
 
 import { pdfPageTextSha256 } from "@/api/lib/files/pdf-page-text";
-import { appendAnnotationRevision } from "@/api/lib/files/pdf-signatures";
+import {
+  appendAnnotationRevision,
+  PdfRevisionAppendError,
+} from "@/api/lib/files/pdf-signatures";
 import { readDocMdpPermission } from "@/api/lib/files/pdf-signing/doc-mdp";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+class MarkedPdfWriteError extends TaggedError("MarkedPdfWriteError")<{
+  message: string;
+  cause: unknown;
+}> {}
+
+const MARKED_PDF_FAILURE = failureSink({
+  event: "files.marked_pdf.failed",
+  expected: [],
+});
 
 /** One row of a mark, as the caller may see it. */
 export type PdfMark = MarkAnchor & {
@@ -301,58 +316,90 @@ export const writeMarksIntoPdf = async ({
   source,
   viewedFieldId,
 }: WriteMarksOptions): Promise<MarkedPdf> => {
-  const annotationFor = MARK_ANNOTATION_BY_MODE[mode];
-  const written = marks.flatMap((mark) => {
-    const annotation = annotationFor(mark);
-    return annotation === null ? [] : [{ mark, annotation }];
+  const marked = await Result.tryPromise({
+    try: async (): Promise<Result<MarkedPdf, PdfRevisionAppendError>> => {
+      const annotationFor = MARK_ANNOTATION_BY_MODE[mode];
+      const written = marks.flatMap((mark) => {
+        const annotation = annotationFor(mark);
+        return annotation === null ? [] : [{ mark, annotation }];
+      });
+      if (written.length === 0) {
+        return Result.ok({
+          status: "unchanged",
+          reason: MARKED_PDF_UNCHANGED.noMarks,
+        });
+      }
+      const pdf = await PDF.load(source);
+      if (pdf.isEncrypted || pdf.canSaveIncrementally() !== null) {
+        return Result.ok({
+          status: "unchanged",
+          reason: MARKED_PDF_UNCHANGED.cannotAppend,
+        });
+      }
+      if (signaturesForbidAnnotations(pdf, source)) {
+        return Result.ok({
+          status: "unchanged",
+          reason: MARKED_PDF_UNCHANGED.certified,
+        });
+      }
+
+      const pages = readMarkPages(
+        pdf,
+        new Set(written.map(({ mark }) => mark.pageNumber)),
+      );
+      let annotationCount = 0;
+      for (const { mark, annotation } of written) {
+        const read = pages.get(mark.pageNumber);
+        const placement = placeMark({
+          anchor: mark,
+          page: read?.text,
+          pagesRead: true,
+          viewedFieldId,
+        });
+        if (read === undefined || placement.type !== "placed") {
+          continue;
+        }
+        const { color, contents, subtype, title } = annotation;
+        addMarkup(read.page, subtype, {
+          rects: placement.boxes,
+          color: pdfMarkColor(color),
+          ...(contents.length > 0 && { contents }),
+          ...(title.length > 0 && { title }),
+        });
+        annotationCount += 1;
+      }
+      if (annotationCount === 0) {
+        return Result.ok({
+          status: "unchanged",
+          reason: MARKED_PDF_UNCHANGED.noMarks,
+        });
+      }
+
+      const appended = await appendAnnotationRevision(pdf);
+      return appended.map((bytes) => ({
+        status: "marked",
+        bytes,
+        annotationCount,
+      }));
+    },
+    catch: (cause) =>
+      new MarkedPdfWriteError({
+        message: "Could not prepare marked PDF",
+        cause,
+      }),
   });
-  if (written.length === 0) {
-    return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.noMarks };
+  const result = marked.andThen((value) => value);
+  if (result.isOk()) {
+    return result.value;
   }
-  const loaded = await Result.tryPromise(async () => await PDF.load(source));
-  if (Result.isError(loaded)) {
-    return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.unreadable };
-  }
-  const pdf = loaded.value;
-  if (pdf.isEncrypted || pdf.canSaveIncrementally() !== null) {
-    return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.cannotAppend };
-  }
-  if (signaturesForbidAnnotations(pdf, source)) {
-    return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.certified };
-  }
-
-  const pages = readMarkPages(
-    pdf,
-    new Set(written.map(({ mark }) => mark.pageNumber)),
-  );
-  let annotationCount = 0;
-  for (const { mark, annotation } of written) {
-    const read = pages.get(mark.pageNumber);
-    const placement = placeMark({
-      anchor: mark,
-      page: read?.text,
-      pagesRead: true,
-      viewedFieldId,
-    });
-    if (read === undefined || placement.type !== "placed") {
-      continue;
-    }
-    const { color, contents, subtype, title } = annotation;
-    addMarkup(read.page, subtype, {
-      rects: placement.boxes,
-      color: pdfMarkColor(color),
-      ...(contents.length > 0 && { contents }),
-      ...(title.length > 0 && { title }),
-    });
-    annotationCount += 1;
-  }
-  if (annotationCount === 0) {
-    return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.noMarks };
-  }
-
-  const appended = await appendAnnotationRevision(pdf);
-  if (Result.isError(appended)) {
-    return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.cannotAppend };
-  }
-  return { status: "marked", bytes: appended.value, annotationCount };
+  observeFailure(result.error, {
+    sink: MARKED_PDF_FAILURE,
+    ctx: { mode },
+  });
+  return {
+    status: "unchanged",
+    reason: PdfRevisionAppendError.is(result.error)
+      ? MARKED_PDF_UNCHANGED.cannotAppend
+      : MARKED_PDF_UNCHANGED.unreadable,
+  };
 };

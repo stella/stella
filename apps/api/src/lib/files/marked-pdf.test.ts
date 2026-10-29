@@ -5,7 +5,7 @@ import {
   PdfNumber,
   rectsToQuadPoints,
 } from "@libpdf/core";
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { READER_ANNOTATION_STYLES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationStyle } from "@stll/api-contract/legal-reader-annotations";
@@ -26,6 +26,10 @@ import type {
   PdfMark,
 } from "@/api/lib/files/marked-pdf";
 import { pdfPageTextSha256 } from "@/api/lib/files/pdf-page-text";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import {
   createEncryptedPdf,
   createSignedPdf,
@@ -143,6 +147,55 @@ const pageOneAnnotations = async (bytes: Uint8Array) =>
   (await PDF.load(bytes)).getPages().at(0)?.getAnnotations() ?? [];
 
 describe("a downloaded PDF with the reader's marks", () => {
+  test.each(["extraction", "incremental save"] as const)(
+    "keeps stored bytes and records a failed %s",
+    async (stage) => {
+      const source = await createTextPdf();
+      const stored = source.slice();
+      const mark = await markOn(source, "seller");
+      const pdf = await PDF.load(source);
+      const pages = pdf.getPages();
+      const page = pages.at(0);
+      if (page === undefined) {
+        throw new Error("the fixture has no first page");
+      }
+      spyOn(pdf, "getPages").mockReturnValue(pages);
+      const failure = new Error("PDF marking fixture failure");
+      const fault =
+        stage === "extraction"
+          ? spyOn(page, "extractText").mockImplementation(() => {
+              throw failure;
+            })
+          : spyOn(pdf, "save").mockRejectedValue(failure);
+      spyOn(PDF, "load").mockResolvedValue(pdf);
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      try {
+        const marked = await writeMarksIntoPdf({
+          source,
+          marks: [mark],
+          mode: "highlights",
+          viewedFieldId: FIELD,
+        });
+        expect(fault).toHaveBeenCalledTimes(1);
+        expect(marked.status).toBe("unchanged");
+        const downloaded = marked.status === "marked" ? marked.bytes : source;
+        expect(downloaded).toEqual(stored);
+        expect(source).toEqual(stored);
+        expect(analytics.exceptions()).toHaveLength(1);
+        expect(
+          logs.records.some(
+            ({ message }) => message === "files.marked_pdf.failed",
+          ),
+        ).toBe(true);
+      } finally {
+        mock.restore();
+        logs.restore();
+        analytics.restore();
+      }
+    },
+  );
+
   test("carries a highlight as a /Highlight annotation over its words", async () => {
     const source = await createTextPdf();
     const mark = await markOn(source, "deliver the goods");
