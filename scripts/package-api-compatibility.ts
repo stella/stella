@@ -187,7 +187,10 @@ export const normalizeCompatibilityDeclarations = (
               );
             }
             if (ts.isTypeLiteralNode(visited)) {
-              return ts.factory.updateTypeLiteralNode(visited, members);
+              return ts.factory.updateTypeLiteralNode(
+                visited,
+                ts.factory.createNodeArray(members),
+              );
             }
             return ts.factory.updateInterfaceDeclaration(
               visited,

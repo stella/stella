@@ -191,6 +191,26 @@
           "space": "value"
         },
         {
+          "name": "Badge",
+          "kind": "function",
+          "space": "value"
+        },
+        {
+          "name": "BadgeProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BadgeSize",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BadgeTone",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "BidiDirection",
           "kind": "type",
           "space": "type"
@@ -1406,6 +1426,11 @@
           "space": "type"
         },
         {
+          "name": "LEGAL_TEXT_CLASS_NAME",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "Label",
           "kind": "function",
           "space": "value"
@@ -2281,6 +2306,11 @@
           "space": "value"
         },
         {
+          "name": "TOOLTIP_OPEN_DELAY_MS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "TRACKED_DELETION_STYLE",
           "kind": "variable",
           "space": "value"
@@ -2296,6 +2326,11 @@
           "space": "value"
         },
         {
+          "name": "TableAlign",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableBody",
           "kind": "variable",
           "space": "value"
@@ -2309,6 +2344,11 @@
           "name": "TableCell",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "TableCellProps",
+          "kind": "type",
+          "space": "type"
         },
         {
           "name": "TableColumnCapabilities",
@@ -2331,9 +2371,29 @@
           "space": "value"
         },
         {
+          "name": "TableHeadProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableHeader",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "TableHeaderProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableInset",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableProps",
+          "kind": "type",
+          "space": "type"
         },
         {
           "name": "TableRow",
@@ -2342,6 +2402,16 @@
         },
         {
           "name": "TableSchema",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableScroll",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableTone",
           "kind": "type",
           "space": "type"
         },
@@ -2431,6 +2501,21 @@
           "space": "value"
         },
         {
+          "name": "TruncatedText",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TruncatedTextLines",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TruncatedTextProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TypedCharacterEvent",
           "kind": "type",
           "space": "type"
@@ -2492,6 +2577,11 @@
         },
         {
           "name": "assertConsecutiveCalendarDates",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "badgeVariants",
           "kind": "variable",
           "space": "value"
         },
@@ -2626,6 +2716,11 @@
           "space": "value"
         },
         {
+          "name": "isTextOverflowing",
+          "kind": "function",
+          "space": "value"
+        },
+        {
           "name": "layoutResourceCalendarEntries",
           "kind": "variable",
           "space": "value"
@@ -2703,6 +2798,11 @@
         {
           "name": "resolveOptionColor",
           "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveToastUpdateTimeout",
+          "kind": "function",
           "space": "value"
         },
         {
@@ -3038,6 +3138,37 @@
         },
         {
           "name": "AvatarImage",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./badge": {
+      "type": "module",
+      "file": "./src/components/badge.d.ts",
+      "exports": [
+        {
+          "name": "Badge",
+          "kind": "function",
+          "space": "value"
+        },
+        {
+          "name": "BadgeProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BadgeSize",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BadgeTone",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "badgeVariants",
           "kind": "variable",
           "space": "value"
         }
@@ -5251,6 +5382,11 @@
           "space": "value"
         },
         {
+          "name": "TableAlign",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableBody",
           "kind": "variable",
           "space": "value"
@@ -5266,6 +5402,11 @@
           "space": "value"
         },
         {
+          "name": "TableCellProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableFooter",
           "kind": "variable",
           "space": "value"
@@ -5276,14 +5417,44 @@
           "space": "value"
         },
         {
+          "name": "TableHeadProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableHeader",
           "kind": "variable",
           "space": "value"
         },
         {
+          "name": "TableHeaderProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableInset",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableRow",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "TableScroll",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableTone",
+          "kind": "type",
+          "space": "type"
         }
       ]
     },
@@ -5364,6 +5535,11 @@
           "space": "value"
         },
         {
+          "name": "resolveToastUpdateTimeout",
+          "kind": "function",
+          "space": "value"
+        },
+        {
           "name": "stellaToast",
           "kind": "variable",
           "space": "value"
@@ -5384,6 +5560,11 @@
       "type": "module",
       "file": "./src/components/tooltip.d.ts",
       "exports": [
+        {
+          "name": "TOOLTIP_OPEN_DELAY_MS",
+          "kind": "variable",
+          "space": "value"
+        },
         {
           "name": "Tooltip",
           "kind": "variable",
@@ -5548,6 +5729,82 @@
         },
         {
           "name": "ComposerStatusRow",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./composer-tokens": {
+      "type": "module",
+      "file": "./src/components/composer-tokens.d.ts",
+      "exports": [
+        {
+          "name": "COMPOSER_BOX_ANONYMIZED_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_BOX_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_BOX_FOCUS_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_COMPACT_ROW_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_COMPACT_TEXT_CELL_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_CONTROL_BUTTON_SIZE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_LARGE_ACTION_ROW_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_LARGE_EDITOR_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_LARGE_TEXT_WELL_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_LEADING_GROUP_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_PICKER_TRIGGER_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_PLACEHOLDER_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_SEND_BUTTON_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPOSER_TEXT_CLASS",
           "kind": "variable",
           "space": "value"
         }
@@ -5949,6 +6206,16 @@
           "name": "DocumentIdentity",
           "kind": "type",
           "space": "type"
+        },
+        {
+          "name": "IdentityLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "caseNumberIdentityLabels",
+          "kind": "variable",
+          "space": "value"
         },
         {
           "name": "statuteIdentityLabels",
@@ -9100,6 +9367,11 @@
       "file": "./src/components/prose.d.ts",
       "exports": [
         {
+          "name": "LEGAL_TEXT_CLASS_NAME",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "Prose",
           "kind": "variable",
           "space": "value"
@@ -9305,6 +9577,27 @@
         },
         {
           "name": "ScrollBar",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./scroll-edge-fade": {
+      "type": "module",
+      "file": "./src/lib/scroll-edge-fade.d.ts",
+      "exports": [
+        {
+          "name": "SCROLL_EDGE_FADE_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "fadeScrollEdges",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "writeScrollEdgeFade",
           "kind": "variable",
           "space": "value"
         }
@@ -9786,6 +10079,11 @@
           "space": "value"
         },
         {
+          "name": "TableAlign",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableBody",
           "kind": "variable",
           "space": "value"
@@ -9801,6 +10099,11 @@
           "space": "value"
         },
         {
+          "name": "TableCellProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableFooter",
           "kind": "variable",
           "space": "value"
@@ -9811,14 +10114,44 @@
           "space": "value"
         },
         {
+          "name": "TableHeadProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableHeader",
           "kind": "variable",
           "space": "value"
         },
         {
+          "name": "TableHeaderProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableInset",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "TableRow",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "TableScroll",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableTone",
+          "kind": "type",
+          "space": "type"
         }
       ]
     },
@@ -9996,6 +10329,11 @@
           "space": "value"
         },
         {
+          "name": "resolveToastUpdateTimeout",
+          "kind": "function",
+          "space": "value"
+        },
+        {
           "name": "stellaToast",
           "kind": "variable",
           "space": "value"
@@ -10028,6 +10366,11 @@
       "file": "./src/components/tooltip.d.ts",
       "exports": [
         {
+          "name": "TOOLTIP_OPEN_DELAY_MS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "Tooltip",
           "kind": "variable",
           "space": "value"
@@ -10055,6 +10398,32 @@
         {
           "name": "TooltipTrigger",
           "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./truncated-text": {
+      "type": "module",
+      "file": "./src/components/truncated-text.d.ts",
+      "exports": [
+        {
+          "name": "TruncatedText",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TruncatedTextLines",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TruncatedTextProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isTextOverflowing",
+          "kind": "function",
           "space": "value"
         }
       ]
@@ -10261,15 +10630,17 @@
     "./src/components/animated-count.d.ts": "declare const AnimatedCount: ({ className, value, }: {\n    className?: string;\n    value: string;\n}) => import(\"react\").JSX.Element;\nexport { AnimatedCount };\n",
     "./src/components/application-rail.d.ts": "import type * as React from \"react\";\nexport declare const APPLICATION_RAIL_WIDTH: \"w-12\";\nexport declare const APPLICATION_RAIL_BUTTON_SIZE: \"size-11\";\nexport declare const APPLICATION_RAIL_ICON_SIZE: \"size-4\";\nexport declare const ApplicationRail: ({ className, ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\nexport declare const ApplicationRailHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailMenu: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailButton: ({ className, ...props }: React.ComponentProps<\"button\">) => React.JSX.Element;\nexport declare const ApplicationRailSeparator: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\n",
     "./src/components/avatar.d.ts": "import { Avatar as AvatarPrimitive } from \"@base-ui/react/avatar\";\ndeclare const Avatar: ({ className, ...props }: AvatarPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const AvatarImage: ({ className, ...props }: AvatarPrimitive.Image.Props) => import(\"react\").JSX.Element;\ndeclare const AvatarFallback: ({ className, ...props }: AvatarPrimitive.Fallback.Props) => import(\"react\").JSX.Element;\nexport { Avatar, AvatarImage, AvatarFallback };\n",
+    "./src/components/badge.d.ts": "import { useRender } from \"@base-ui/react/use-render\";\nimport type { StatusTone } from \"./list\";\ndeclare function Badge({ className, tone, size, dot, children, render, ...props }: BadgeProps): import(\"react\").ReactElement<unknown, string | import(\"react\").JSXElementConstructor<any>>;\ntype BadgeTone = StatusTone | \"info\";\ntype BadgeSize = \"xs\" | \"sm\";\ntype BadgeProps = useRender.ComponentProps<\"span\"> & {\n    tone?: BadgeTone;\n    size?: BadgeSize;\n    dot?: boolean;\n};\ndeclare const badgeVariants: (props?: ({\n    size?: \"xs\" | \"sm\" | null | undefined;\n    tone?: \"neutral\" | \"warning\" | \"destructive\" | \"success\" | \"info\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\nexport { Badge, badgeVariants };\nexport type { BadgeProps, BadgeSize, BadgeTone };\n",
     "./src/components/bidi-text.d.ts": "import type * as React from \"react\";\nexport declare const BidiText: (props: BidiTextProps) => React.JSX.Element;\nexport declare const UserText: (props: BidiTextProps) => React.JSX.Element;\ntype BidiDirection = \"auto\" | \"ltr\" | \"rtl\";\ntype BdiElementProps = Omit<React.ComponentPropsWithoutRef<\"bdi\">, \"dir\"> & {\n    as?: \"bdi\";\n    direction?: BidiDirection;\n};\ntype SpanTextProps = Omit<React.ComponentPropsWithoutRef<\"span\">, \"dir\"> & {\n    as: \"span\";\n    direction?: BidiDirection;\n};\ntype DivTextProps = Omit<React.ComponentPropsWithoutRef<\"div\">, \"dir\"> & {\n    as: \"div\";\n    direction?: BidiDirection;\n};\ntype ParagraphTextProps = Omit<React.ComponentPropsWithoutRef<\"p\">, \"dir\"> & {\n    as: \"p\";\n    direction?: BidiDirection;\n};\ntype BidiTextProps = BdiElementProps | SpanTextProps | DivTextProps | ParagraphTextProps;\nexport type { BidiDirection, BidiTextProps };\n",
     "./src/components/brand-icons.d.ts": "import type * as React from \"react\";\ntype BrandIconProps = React.ComponentProps<\"svg\">;\nexport declare const DiscordLogoIcon: (props: BrandIconProps) => React.JSX.Element;\nexport declare const GitHubLogoIcon: (props: BrandIconProps) => React.JSX.Element;\nexport declare const XLogoIcon: (props: BrandIconProps) => React.JSX.Element;\nexport {};\n",
     "./src/components/breadcrumb.d.ts": "import type * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\ndeclare const Breadcrumb: ({ ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\ndeclare const BreadcrumbList: ({ className, ...props }: React.ComponentProps<\"ol\">) => React.JSX.Element;\ndeclare const BreadcrumbItem: ({ className, ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ndeclare function BreadcrumbLink({ className, render, ...props }: useRender.ComponentProps<\"a\">): React.ReactElement<unknown, string | React.JSXElementConstructor<any>>;\ndeclare const BreadcrumbPage: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const BreadcrumbSeparator: ({ children, className, ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ndeclare const BreadcrumbEllipsis: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\nexport { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator, BreadcrumbEllipsis, };\n",
-    "./src/components/button.d.ts": "import type { ReactNode } from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport { type VariantProps } from \"class-variance-authority\";\ndeclare const buttonAccessibleDisabledClass = \"cursor-not-allowed opacity-64\";\ndeclare const buttonVariants: (props?: ({\n    size?: \"row\" | \"default\" | \"xs\" | \"sm\" | \"icon\" | \"chip\" | \"icon-lg\" | \"icon-sm\" | \"icon-xl\" | \"icon-xs\" | \"lg\" | \"xl\" | null | undefined;\n    variant?: \"link\" | \"destructive\" | \"default\" | \"destructive-outline\" | \"destructive-ghost\" | \"ghost\" | \"muted\" | \"outline\" | \"secondary\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const BUTTON_CONTENT: {\n    readonly icon: \"icon\";\n    readonly text: \"text\";\n};\ndeclare const BUTTON_SIZE_CONTENT: {\n    readonly chip: \"text\";\n    readonly default: \"text\";\n    readonly icon: \"icon\";\n    readonly \"icon-lg\": \"icon\";\n    readonly \"icon-sm\": \"icon\";\n    readonly \"icon-xl\": \"icon\";\n    readonly \"icon-xs\": \"icon\";\n    readonly lg: \"text\";\n    readonly row: \"text\";\n    readonly sm: \"text\";\n    readonly xl: \"text\";\n    readonly xs: \"text\";\n};\ntype ButtonProps = {\n    variant?: VariantProps<typeof buttonVariants>[\"variant\"];\n    size?: VariantProps<typeof buttonVariants>[\"size\"];\n    loading?: boolean;\n    icon?: ReactNode;\n    tooltip?: ReactNode;\n} & useRender.ComponentProps<\"button\">;\ndeclare function Button({ className, variant, size, render, loading, icon, children, disabled, tooltip, ...props }: ButtonProps): import(\"react\").JSX.Element;\nexport { Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT, buttonAccessibleDisabledClass, buttonVariants, };\n",
+    "./src/components/button.d.ts": "import type { ReactNode } from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport { type VariantProps } from \"class-variance-authority\";\ndeclare const buttonAccessibleDisabledClass = \"cursor-not-allowed opacity-64\";\ndeclare const buttonVariants: (props?: ({\n    size?: \"row\" | \"default\" | \"xs\" | \"sm\" | \"icon\" | \"chip\" | \"icon-lg\" | \"icon-sm\" | \"icon-xl\" | \"icon-xs\" | \"lg\" | \"xl\" | null | undefined;\n    variant?: \"link\" | \"destructive\" | \"default\" | \"destructive-outline\" | \"destructive-ghost\" | \"ghost\" | \"muted\" | \"outline\" | \"secondary\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const BUTTON_CONTENT: {\n    readonly icon: \"icon\";\n    readonly text: \"text\";\n};\ndeclare const BUTTON_SIZE_CONTENT: {\n    readonly chip: \"text\";\n    readonly default: \"text\";\n    readonly icon: \"icon\";\n    readonly \"icon-lg\": \"icon\";\n    readonly \"icon-sm\": \"icon\";\n    readonly \"icon-xl\": \"icon\";\n    readonly \"icon-xs\": \"icon\";\n    readonly lg: \"text\";\n    readonly row: \"text\";\n    readonly sm: \"text\";\n    readonly xl: \"text\";\n    readonly xs: \"text\";\n};\ntype ButtonProps = {\n    variant?: VariantProps<typeof buttonVariants>[\"variant\"];\n    size?: VariantProps<typeof buttonVariants>[\"size\"];\n    loading?: boolean;\n    icon?: ReactNode;\n    tooltip?: ReactNode;\n    \"data-accessible-disabled\"?: \"\";\n} & useRender.ComponentProps<\"button\">;\ndeclare function Button({ className, variant, size, render, loading, icon, children, disabled, tooltip, \"data-accessible-disabled\": accessibleDisabled, ...props }: ButtonProps): import(\"react\").JSX.Element;\nexport { Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT, buttonAccessibleDisabledClass, buttonVariants, };\n",
     "./src/components/checkbox.d.ts": "import { Checkbox as CheckboxPrimitive } from \"@base-ui/react/checkbox\";\ndeclare const Checkbox: ({ className, ...props }: CheckboxPrimitive.Root.Props) => import(\"react\").JSX.Element;\nexport { Checkbox };\n",
     "./src/components/color-picker.d.ts": "import type * as React from \"react\";\ntype ColorPreset = {\n    label: string;\n    value: string;\n    color?: string;\n};\ntype ColorPickerProps = {\n    value?: string | undefined;\n    onSelect?: (value: string) => void;\n    onClear?: () => void;\n    presets?: ColorPreset[];\n    columns?: number;\n    defaultExpanded?: boolean;\n    moreLabel: string;\n    children: React.ReactNode;\n    side?: \"top\" | \"bottom\" | \"left\" | \"right\";\n    align?: \"start\" | \"center\" | \"end\";\n    className?: string;\n};\ntype ColorPickerContentBaseProps = {\n    value?: string | undefined;\n    onSelect?: ((value: string) => void) | undefined;\n    presets: ColorPreset[];\n    moreLabel: string;\n};\ntype ColorPickerContentProps = ColorPickerContentBaseProps & ({\n    columns: number;\n    defaultExpanded: boolean;\n    onClear?: (() => void) | undefined;\n    presentation?: \"popover\";\n} | {\n    columns?: never;\n    defaultExpanded?: never;\n    onClear?: never;\n    presentation: \"inline\";\n});\ndeclare const DEFAULT_PRESETS: ColorPreset[];\ndeclare const ColorPickerContent: ({ value, onSelect, onClear, presets, columns, defaultExpanded, moreLabel, presentation, }: ColorPickerContentProps) => React.JSX.Element;\ndeclare const ColorPicker: ({ value, onSelect, onClear, presets, columns, defaultExpanded, moreLabel, children, side, align, className, }: ColorPickerProps) => React.JSX.Element;\nexport { ColorPicker, ColorPickerContent, DEFAULT_PRESETS, type ColorPickerContentProps, type ColorPickerProps, type ColorPreset, };\n",
     "./src/components/combobox.d.ts": "import * as React from \"react\";\nimport { Combobox as ComboboxPrimitive } from \"@base-ui/react/combobox\";\nimport type { ControlSize } from \"../lib/control-size\";\ndeclare const Combobox: <Value, Multiple extends boolean | undefined = false>(props: ComboboxPrimitive.Root.Props<Value, Multiple>) => React.JSX.Element;\ndeclare const ComboboxChipsInput: ({ className, size, ...props }: Omit<ComboboxPrimitive.Input.Props, \"size\"> & {\n    size?: ControlSize | number;\n    ref?: React.Ref<HTMLInputElement>;\n}) => React.JSX.Element;\ndeclare const ComboboxInput: ({ className, showTrigger, showClear, startAddon, size, ...props }: Omit<ComboboxPrimitive.Input.Props, \"size\"> & {\n    showTrigger?: boolean;\n    showClear?: boolean;\n    startAddon?: React.ReactNode;\n    size?: ControlSize | number;\n    ref?: React.Ref<HTMLInputElement>;\n}) => React.JSX.Element;\ndeclare const ComboboxTrigger: ({ className, ...props }: ComboboxPrimitive.Trigger.Props) => React.JSX.Element;\ndeclare const ComboboxPopup: ({ className, children, side, sideOffset, alignOffset, align, ...props }: ComboboxPrimitive.Popup.Props & {\n    align?: ComboboxPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: ComboboxPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: ComboboxPrimitive.Positioner.Props[\"alignOffset\"];\n    side?: ComboboxPrimitive.Positioner.Props[\"side\"];\n}) => React.JSX.Element;\ndeclare const ComboboxItem: ({ className, children, ...props }: ComboboxPrimitive.Item.Props) => React.JSX.Element;\ndeclare const ComboboxSeparator: ({ className, ...props }: ComboboxPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const ComboboxGroup: ({ className, ...props }: ComboboxPrimitive.Group.Props) => React.JSX.Element;\ndeclare const ComboboxGroupLabel: ({ className, ...props }: ComboboxPrimitive.GroupLabel.Props) => React.JSX.Element;\ndeclare const ComboboxEmpty: ({ className, ...props }: ComboboxPrimitive.Empty.Props) => React.JSX.Element;\ndeclare const ComboboxRow: ({ className, ...props }: ComboboxPrimitive.Row.Props) => React.JSX.Element;\ndeclare const ComboboxValue: ({ ...props }: ComboboxPrimitive.Value.Props) => React.JSX.Element;\ndeclare const ComboboxList: ({ className, ...props }: ComboboxPrimitive.List.Props) => React.JSX.Element;\ndeclare const ComboboxClear: ({ className, ...props }: ComboboxPrimitive.Clear.Props) => React.JSX.Element;\ndeclare const ComboboxStatus: ({ className, ...props }: ComboboxPrimitive.Status.Props) => React.JSX.Element;\ndeclare const ComboboxCollection: (props: ComboboxPrimitive.Collection.Props) => React.JSX.Element;\ndeclare const ComboboxChips: ({ className, children, startAddon, ...props }: ComboboxPrimitive.Chips.Props & {\n    startAddon?: React.ReactNode;\n}) => React.JSX.Element;\ndeclare const ComboboxChip: ({ children, ...props }: ComboboxPrimitive.Chip.Props) => React.JSX.Element;\nexport { Combobox, ComboboxChipsInput, ComboboxInput, ComboboxTrigger, ComboboxPopup, ComboboxItem, ComboboxSeparator, ComboboxGroup, ComboboxGroupLabel, ComboboxEmpty, ComboboxValue, ComboboxList, ComboboxClear, ComboboxStatus, ComboboxRow, ComboboxCollection, ComboboxChips, ComboboxChip, };\n",
     "./src/components/command.d.ts": "import type * as React from \"react\";\nimport { Autocomplete as AutocompletePrimitive } from \"@base-ui/react/autocomplete\";\nimport { Dialog as DialogPrimitive } from \"@base-ui/react/dialog\";\nimport { type VariantProps } from \"class-variance-authority\";\nimport type { ControlSize } from \"../lib/control-size\";\nimport { DialogPopup } from \"./dialog\";\ntype CommandProps<ItemValue> = Omit<AutocompletePrimitive.Root.Props<ItemValue>, \"items\"> & {\n    items?: readonly ItemValue[] | undefined;\n};\ndeclare const Command: <ItemValue>({ autoHighlight, keepHighlight, open, ...props }: CommandProps<ItemValue>) => React.JSX.Element;\ndeclare const CommandDialog: <Payload>(props: DialogPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const CommandDialogTrigger: (props: DialogPrimitive.Trigger.Props) => React.JSX.Element;\ndeclare const CommandDialogPopup: ({ className, showCloseButton, ...props }: React.ComponentProps<typeof DialogPopup>) => React.JSX.Element;\ntype CommandInputProps = Omit<AutocompletePrimitive.Input.Props, \"size\"> & {\n    size?: ControlSize | number;\n    wrapperClassName?: string;\n    ref?: React.Ref<HTMLInputElement>;\n};\ndeclare const CommandInput: ({ className, size, wrapperClassName, dir, onChange, ...props }: CommandInputProps) => React.JSX.Element;\ndeclare const CommandPanel: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const CommandEmpty: ({ className, ...props }: AutocompletePrimitive.Empty.Props) => React.JSX.Element;\ndeclare const CommandList: ({ className, ...props }: AutocompletePrimitive.List.Props & {\n    ref?: React.Ref<HTMLDivElement>;\n}) => React.JSX.Element;\ndeclare const CommandGroup: ({ className, ...props }: AutocompletePrimitive.Group.Props) => React.JSX.Element;\ndeclare const CommandGroupLabel: ({ className, ...props }: AutocompletePrimitive.GroupLabel.Props) => React.JSX.Element;\ndeclare const CommandCollection: (props: AutocompletePrimitive.Collection.Props) => React.JSX.Element;\ndeclare const commandItemVariants: (props?: ({\n    size?: \"row\" | \"default\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const CommandItem: ({ className, size, ...props }: AutocompletePrimitive.Item.Props & {\n    ref?: React.Ref<HTMLDivElement>;\n    size?: VariantProps<typeof commandItemVariants>[\"size\"];\n}) => React.JSX.Element;\ndeclare const CommandSeparator: ({ className, ...props }: AutocompletePrimitive.Separator.Props) => React.JSX.Element;\ndeclare const CommandShortcut: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const CommandFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport { Command, CommandCollection, CommandDialog, CommandDialogPopup, CommandDialogTrigger, CommandEmpty, CommandFooter, CommandGroup, CommandGroupLabel, CommandInput, CommandItem, CommandList, CommandPanel, CommandSeparator, CommandShortcut, };\n",
-    "./src/components/composer.d.ts": "import type { ReactNode } from \"react\";\nexport declare const COMPOSER_CONTROL_BUTTON_SIZE: \"icon-sm\";\nexport declare const COMPOSER_BOX_CLASS = \"bg-background rounded-2xl border\";\nexport declare const COMPOSER_BOX_FOCUS_CLASS = \"focus-within:border-ring\";\nexport declare const COMPOSER_BOX_ANONYMIZED_CLASS = \"ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1\";\nexport declare const COMPOSER_COMPACT_ROW_CLASS = \"min-h-11 items-end gap-1 px-1.5 py-px\";\nexport declare const COMPOSER_COMPACT_TEXT_CELL_CLASS = \"relative min-w-0 py-[11px]\";\nexport declare const COMPOSER_TEXT_CLASS = \"text-sm leading-5\";\nexport declare const COMPOSER_LARGE_TEXT_WELL_CLASS = \"ps-3 pe-3 pt-2 pb-1\";\nexport declare const COMPOSER_LARGE_EDITOR_CLASS = \"min-h-15\";\nexport declare const COMPOSER_PLACEHOLDER_CLASS = \"text-foreground-placeholder pointer-events-none absolute truncate text-sm\";\nexport declare const COMPOSER_LARGE_ACTION_ROW_CLASS = \"flex items-center justify-end gap-0.5 px-1.5 pb-1.5\";\nexport declare const COMPOSER_LEADING_GROUP_CLASS = \"flex min-w-0 items-center gap-0.5\";\nexport declare const COMPOSER_SEND_BUTTON_CLASS = \"bg-foreground text-background hover:bg-foreground/90 size-7 shrink-0 rounded-full\";\nexport declare const COMPOSER_PICKER_TRIGGER_CLASS = \"text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs\";\ntype ComposerStatusRowProps = {\n    start?: ReactNode | undefined;\n    end?: ReactNode | undefined;\n    center?: ReactNode | undefined;\n    className?: string | undefined;\n};\nexport declare const ComposerStatusRow: ({ start, end, center, className, }: ComposerStatusRowProps) => import(\"react\").JSX.Element | null;\nexport type ComposerPickerOption<Value extends string> = {\n    label: string;\n    value: Value;\n};\ntype ComposerPickerProps<Value extends string> = {\n    ariaLabel: string;\n    icon: ReactNode;\n    onChange: (value: Value) => void;\n    options: readonly ComposerPickerOption<Value>[];\n    value: Value;\n};\nexport declare const ComposerPicker: <Value extends string>({ ariaLabel, icon, onChange, options, value, }: ComposerPickerProps<Value>) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/composer-tokens.d.ts": "export declare const COMPOSER_CONTROL_BUTTON_SIZE: \"icon-sm\";\nexport declare const COMPOSER_BOX_CLASS = \"bg-background rounded-2xl border\";\nexport declare const COMPOSER_BOX_FOCUS_CLASS = \"focus-within:border-ring\";\nexport declare const COMPOSER_BOX_ANONYMIZED_CLASS = \"ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1\";\nexport declare const COMPOSER_COMPACT_ROW_CLASS = \"min-h-11 items-end gap-1 px-1.5 py-px\";\nexport declare const COMPOSER_COMPACT_TEXT_CELL_CLASS = \"relative min-w-0 py-[11px]\";\nexport declare const COMPOSER_TEXT_CLASS = \"text-sm leading-5\";\nexport declare const COMPOSER_LARGE_TEXT_WELL_CLASS = \"ps-3 pe-3 pt-2 pb-1\";\nexport declare const COMPOSER_LARGE_EDITOR_CLASS = \"min-h-15\";\nexport declare const COMPOSER_PLACEHOLDER_CLASS = \"text-foreground-placeholder pointer-events-none absolute truncate text-sm\";\nexport declare const COMPOSER_LARGE_ACTION_ROW_CLASS = \"flex items-center justify-end gap-0.5 px-1.5 pb-1.5\";\nexport declare const COMPOSER_LEADING_GROUP_CLASS = \"flex min-w-0 items-center gap-0.5\";\nexport declare const COMPOSER_SEND_BUTTON_CLASS = \"bg-foreground text-background hover:bg-foreground/90 size-7 shrink-0 rounded-full\";\nexport declare const COMPOSER_PICKER_TRIGGER_CLASS = \"text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs\";\n",
+    "./src/components/composer.d.ts": "import type { ReactNode } from \"react\";\nexport { COMPOSER_CONTROL_BUTTON_SIZE, COMPOSER_BOX_CLASS, COMPOSER_BOX_FOCUS_CLASS, COMPOSER_BOX_ANONYMIZED_CLASS, COMPOSER_COMPACT_ROW_CLASS, COMPOSER_COMPACT_TEXT_CELL_CLASS, COMPOSER_TEXT_CLASS, COMPOSER_LARGE_TEXT_WELL_CLASS, COMPOSER_LARGE_EDITOR_CLASS, COMPOSER_PLACEHOLDER_CLASS, COMPOSER_LARGE_ACTION_ROW_CLASS, COMPOSER_LEADING_GROUP_CLASS, COMPOSER_SEND_BUTTON_CLASS, COMPOSER_PICKER_TRIGGER_CLASS, } from \"./composer-tokens\";\ntype ComposerStatusRowProps = {\n    start?: ReactNode | undefined;\n    end?: ReactNode | undefined;\n    center?: ReactNode | undefined;\n    className?: string | undefined;\n};\nexport declare const ComposerStatusRow: ({ start, end, center, className, }: ComposerStatusRowProps) => import(\"react\").JSX.Element | null;\nexport type ComposerPickerOption<Value extends string> = {\n    label: string;\n    value: Value;\n};\ntype ComposerPickerProps<Value extends string> = {\n    ariaLabel: string;\n    icon: ReactNode;\n    onChange: (value: Value) => void;\n    options: readonly ComposerPickerOption<Value>[];\n    value: Value;\n};\nexport declare const ComposerPicker: <Value extends string>({ ariaLabel, icon, onChange, options, value, }: ComposerPickerProps<Value>) => import(\"react\").JSX.Element;\n",
     "./src/components/context-menu.d.ts": "import type { ReactNode } from \"react\";\nexport type ContextMenuAction = {\n    label: string;\n    icon?: ReactNode;\n    onClick?: () => void;\n    variant?: \"default\" | \"destructive\";\n    disabled?: boolean;\n    checked?: boolean;\n    submenu?: readonly ContextMenuAction[];\n    separatorBefore?: boolean;\n    closeOnClick?: boolean;\n};\nexport type ContextMenuProps = {\n    actions: readonly ContextMenuAction[];\n    children: ReactNode;\n};\nexport declare const ContextMenu: ({ actions, children, }: ContextMenuProps) => ReactNode;\n",
     "./src/components/copy-button.d.ts": "import type { ComponentProps } from \"react\";\nimport { CopyToClipboardIcon } from \"../icons\";\nimport { Button } from \"./button\";\nexport declare const COPIED_RESET_MS = 1500;\ntype CopyButtonProps = Omit<ComponentProps<typeof Button>, \"children\" | \"onClick\"> & {\n    onCopy: () => Promise<boolean>;\n    label: string;\n    copiedLabel: string;\n    iconOnly?: boolean;\n    iconClassName?: string;\n    labelClassName?: string;\n};\nexport declare const useCopyConfirmation: (onCopy: () => Promise<boolean>) => {\n    copied: boolean;\n    copy: () => Promise<void>;\n};\nexport declare const CopyButton: ({ onCopy, label, copiedLabel, iconOnly, iconClassName, labelClassName, className, ...buttonProps }: CopyButtonProps) => import(\"react\").JSX.Element;\nexport declare const useCopiedFeedback: () => {\n    copied: boolean;\n    confirm: () => void;\n    reset: () => void;\n};\ntype CopyFeedbackProps = {\n    icon?: typeof CopyToClipboardIcon | undefined;\n    labelClassName?: string | undefined;\n    copied: boolean;\n    copiedLabel: string;\n    iconOnly?: boolean | undefined;\n    iconClassName?: string | undefined;\n    label: string;\n};\nexport declare const CopyFeedback: ({ icon: Icon, labelClassName, copied, copiedLabel, iconOnly, iconClassName, label, }: CopyFeedbackProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/court-badge.d.ts": "export type CourtBadgeWeight = \"solid\" | \"tinted\" | \"outline\" | \"dashed\";\nexport type CourtBadgeSize = \"default\" | \"inline\";\ntype CourtBadgeProps = {\n    abbreviation: string;\n    weight: CourtBadgeWeight;\n    size?: CourtBadgeSize | undefined;\n    className?: string;\n};\nexport declare const CourtBadge: ({ abbreviation, className, size, weight, }: CourtBadgeProps) => import(\"react\").JSX.Element;\nexport {};\n",
@@ -10282,7 +10653,7 @@
     "./src/components/dialog-form-state.d.ts": "export type DialogFormSource = {\n    dirty: boolean;\n    onDiscard?: (() => void) | undefined;\n};\nexport type DialogFormRegistry = {\n    sources: Map<string, DialogFormSource>;\n    clearConfirmation: () => void;\n};\nexport declare const DialogFormContext: import(\"react\").Context<DialogFormRegistry | null>;\nexport declare const DialogFormState: ({ dirty, onDiscard, }: {\n    dirty: boolean;\n    onDiscard?: (() => void) | undefined;\n}) => null;\n",
     "./src/components/dialog.d.ts": "import type * as React from \"react\";\nimport { Dialog as DialogPrimitive } from \"@base-ui/react/dialog\";\nimport { type OverlayLayer } from \"../lib/overlay-layer\";\ndeclare const DialogCreateHandle: typeof DialogPrimitive.createHandle;\ntype DialogLabels = {\n    close: string;\n    unsavedChanges: string;\n};\ndeclare const DialogProvider: ({ labels, children, }: React.PropsWithChildren<{\n    labels: DialogLabels;\n}>) => React.JSX.Element;\ndeclare const Dialog: <Payload>({ dirty, onOpenChange, onOpenChangeComplete, ...props }: DialogPrimitive.Root.Props<Payload> & {\n    dirty?: boolean;\n}) => React.JSX.Element;\ndeclare const DialogPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").AlertDialogPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function DialogTrigger({ tooltip, ...props }: DialogPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare function DialogClose({ tooltip, ...props }: DialogPrimitive.Close.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const DialogBackdrop: ({ className, layer, ...props }: DialogPrimitive.Backdrop.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const DialogViewport: ({ className, layer, ...props }: DialogPrimitive.Viewport.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const DIALOG_MOBILE_LAYOUT: {\n    readonly bottomSheet: \"bottom-sheet\";\n    readonly centered: \"centered\";\n    readonly fullscreen: \"fullscreen\";\n};\ntype DialogMobileLayout = (typeof DIALOG_MOBILE_LAYOUT)[keyof typeof DIALOG_MOBILE_LAYOUT];\ndeclare const DialogPopup: ({ backdropClassName, className, children, showCloseButton, mobileLayout, layer, viewportClassName, ...props }: DialogPrimitive.Popup.Props & {\n    backdropClassName?: string;\n    showCloseButton?: boolean;\n    mobileLayout?: DialogMobileLayout;\n    layer?: OverlayLayer;\n    viewportClassName?: string;\n}) => React.JSX.Element;\ndeclare const DialogHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const DialogFooter: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & {\n    variant?: \"default\" | \"bare\";\n}) => React.JSX.Element;\ndeclare const DialogTitle: ({ className, ...props }: DialogPrimitive.Title.Props) => React.JSX.Element;\ndeclare const DialogDescription: ({ className, ...props }: DialogPrimitive.Description.Props) => React.JSX.Element;\ndeclare const DialogPanel: ({ className, scrollFade, ...props }: React.ComponentProps<\"div\"> & {\n    scrollFade?: boolean;\n}) => React.JSX.Element;\nexport type { DialogMobileLayout };\nexport { DIALOG_MOBILE_LAYOUT, DialogCreateHandle, DialogProvider, Dialog, DialogTrigger, DialogPortal, DialogClose, DialogBackdrop, DialogBackdrop as DialogOverlay, DialogPopup, DialogPopup as DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogPanel, DialogViewport, };\nexport { DialogFormState } from \"./dialog-form-state\";\n",
     "./src/components/directional-icon.d.ts": "import type { LucideIcon } from \"../icons\";\ntype DirectionalIconProps = {\n    icon: LucideIcon;\n    className?: string;\n    flip?: boolean;\n};\nexport declare const DirectionalIcon: ({ icon: Icon, className, flip, }: DirectionalIconProps) => import(\"react\").JSX.Element;\nexport {};\n",
-    "./src/components/document-identity-badge.logic.d.ts": "export declare const COURT_TIER_WEIGHT: {\n    readonly constitutional: \"solid\";\n    readonly supreme: \"tinted\";\n    readonly regional: \"outline\";\n    readonly other: \"dashed\";\n};\nexport type DocumentIdentity = {\n    kind: \"statute\";\n    number: string | null;\n    year: string | null;\n} | {\n    kind: \"decision\";\n    courtAbbreviation: string | null | undefined;\n    courtTier?: keyof typeof COURT_TIER_WEIGHT | undefined;\n} | {\n    kind: \"unknown\";\n};\nexport declare const statuteIdentityLabels: ({ number, year, }: Extract<DocumentIdentity, {\n    kind: \"statute\";\n}>) => {\n    short: string;\n    long: string;\n} | null;\n",
+    "./src/components/document-identity-badge.logic.d.ts": "export declare const COURT_TIER_WEIGHT: {\n    readonly constitutional: \"solid\";\n    readonly supreme: \"tinted\";\n    readonly regional: \"outline\";\n    readonly other: \"dashed\";\n};\nexport type DocumentIdentity = {\n    kind: \"statute\";\n    number: string | null;\n    year: string | null;\n} | {\n    kind: \"decision\";\n    courtAbbreviation: string | null | undefined;\n    courtTier?: keyof typeof COURT_TIER_WEIGHT | undefined;\n} | {\n    kind: \"caseNumber\";\n    caseNumber: string | null | undefined;\n} | {\n    kind: \"unknown\";\n};\nexport type IdentityLabels = {\n    short: string;\n    long: string;\n};\nexport declare const statuteIdentityLabels: ({ number, year, }: Extract<DocumentIdentity, {\n    kind: \"statute\";\n}>) => IdentityLabels | null;\nexport declare const caseNumberIdentityLabels: ({ caseNumber, }: Extract<DocumentIdentity, {\n    kind: \"caseNumber\";\n}>) => IdentityLabels | null;\n",
     "./src/components/document-identity-badge.d.ts": "import type { CourtBadgeSize } from \"./court-badge\";\nimport type { DocumentIdentity } from \"./document-identity-badge.logic\";\nexport declare const DocumentIdentityBadge: ({ identity, size, title, }: DocumentIdentityBadgeProps) => import(\"react\").JSX.Element;\ntype DocumentIdentityBadgeProps = {\n    identity: DocumentIdentity;\n    size?: CourtBadgeSize | undefined;\n    title?: string | undefined;\n};\nexport {};\n",
     "./src/components/field.d.ts": "import { Field as FieldPrimitive } from \"@base-ui/react/field\";\ndeclare const Field: ({ className, ...props }: FieldPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const FieldLabel: ({ className, ...props }: FieldPrimitive.Label.Props) => import(\"react\").JSX.Element;\ndeclare const FieldItem: ({ className, ...props }: FieldPrimitive.Item.Props) => import(\"react\").JSX.Element;\ndeclare const FieldDescription: ({ className, ...props }: FieldPrimitive.Description.Props) => import(\"react\").JSX.Element;\ndeclare const FieldError: ({ className, ...props }: FieldPrimitive.Error.Props) => import(\"react\").JSX.Element;\ndeclare const FieldControl: import(\"react\").ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").FieldControlProps, \"ref\"> & import(\"react\").RefAttributes<HTMLElement>>;\ndeclare const FieldValidity: import(\"react\").FC<import(\"@base-ui/react\").FieldValidityProps>;\nexport { Field, FieldLabel, FieldDescription, FieldError, FieldControl, FieldItem, FieldValidity, };\n",
     "./src/components/file-input.d.ts": "type FileInputProps = {\n    accept?: string | undefined;\n    \"aria-labelledby\"?: string | undefined;\n    className?: string | undefined;\n    disabled?: boolean | undefined;\n    file: File | null;\n    onFileChange: (file: File) => void;\n    chooseLabel: string;\n    emptyLabel: string;\n};\ndeclare const FileInput: ({ accept, \"aria-labelledby\": labelledBy, className, disabled, file, onFileChange, chooseLabel, emptyLabel, }: FileInputProps) => import(\"react\").JSX.Element;\nexport { FileInput, type FileInputProps };\n",
@@ -10307,8 +10678,8 @@
     "./src/components/pagination.d.ts": "import type * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport type { Button } from \"./button\";\ndeclare const Pagination: ({ className, ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\ndeclare const PaginationContent: ({ className, ...props }: React.ComponentProps<\"ul\">) => React.JSX.Element;\ndeclare const PaginationItem: ({ ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ntype PaginationLinkProps = {\n    isActive?: boolean;\n    size?: React.ComponentProps<typeof Button>[\"size\"];\n} & useRender.ComponentProps<\"a\">;\ndeclare function PaginationLink({ className, isActive, size, render, ...props }: PaginationLinkProps): React.ReactElement<unknown, string | React.JSXElementConstructor<any>>;\ndeclare const PaginationPrevious: ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => React.JSX.Element;\ndeclare const PaginationNext: ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => React.JSX.Element;\ndeclare const PaginationEllipsis: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\nexport { Pagination, PaginationContent, PaginationLink, PaginationItem, PaginationPrevious, PaginationNext, PaginationEllipsis, };\n",
     "./src/components/popover.d.ts": "import type * as React from \"react\";\nimport type { ComponentProps } from \"react\";\nimport { Popover as PopoverPrimitive } from \"@base-ui/react/popover\";\nimport { type OverlayLayer } from \"../lib/overlay-layer\";\ndeclare const PopoverCreateHandle: typeof PopoverPrimitive.createHandle;\ndeclare const Popover: typeof PopoverPrimitive.Root;\ndeclare function PopoverTrigger({ tooltip, ...props }: PopoverPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const POPOVER_PADDING: {\n    readonly none: \"py-0 [--viewport-inline-padding:0px]\";\n    readonly xs: \"py-1 [--viewport-inline-padding:--spacing(1)]\";\n    readonly sm: \"py-2 [--viewport-inline-padding:--spacing(2)]\";\n    readonly md: \"py-3 [--viewport-inline-padding:--spacing(3)]\";\n    readonly default: \"py-4 [--viewport-inline-padding:--spacing(4)]\";\n};\ntype PopoverPadding = keyof typeof POPOVER_PADDING;\ndeclare const PopoverPopup: ({ children, className, side, align, sideOffset, alignOffset, tooltipStyle, padding, anchor, layer, ...props }: PopoverPrimitive.Popup.Props & {\n    padding?: PopoverPadding;\n    side?: PopoverPrimitive.Positioner.Props[\"side\"];\n    align?: PopoverPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: PopoverPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: PopoverPrimitive.Positioner.Props[\"alignOffset\"];\n    anchor?: PopoverPrimitive.Positioner.Props[\"anchor\"];\n    layer?: OverlayLayer;\n    tooltipStyle?: boolean;\n}) => React.JSX.Element;\ndeclare const PopoverPanel: ({ children, contentClassName, ...props }: ComponentProps<typeof PopoverPopup> & {\n    contentClassName?: string;\n}) => React.JSX.Element;\ndeclare const PopoverClose: ({ ...props }: PopoverPrimitive.Close.Props) => React.JSX.Element;\ndeclare const PopoverTitle: ({ className, ...props }: PopoverPrimitive.Title.Props) => React.JSX.Element;\ndeclare const PopoverDescription: ({ className, ...props }: PopoverPrimitive.Description.Props) => React.JSX.Element;\nexport { PopoverCreateHandle, Popover, PopoverTrigger, PopoverPopup, PopoverPopup as PopoverContent, PopoverPanel, PopoverTitle, PopoverDescription, PopoverClose, };\n",
     "./src/components/preview-card.d.ts": "import type React from \"react\";\nimport { PreviewCard as PreviewCardPrimitive } from \"@base-ui/react/preview-card\";\nexport declare const PreviewCard: typeof PreviewCardPrimitive.Root;\nexport declare const PreviewCardTrigger: ({ ...props }: PreviewCardPrimitive.Trigger.Props) => React.ReactElement;\nexport declare const PreviewCardPopup: ({ className, children, align, sideOffset, anchor, ...props }: PreviewCardPrimitive.Popup.Props & {\n    align?: PreviewCardPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: PreviewCardPrimitive.Positioner.Props[\"sideOffset\"];\n    anchor?: PreviewCardPrimitive.Positioner.Props[\"anchor\"];\n}) => React.ReactElement;\nexport { PreviewCardPrimitive, PreviewCard as HoverCard, PreviewCardTrigger as HoverCardTrigger, PreviewCardPopup as HoverCardContent, };\n",
-    "./src/components/preview-pane.d.ts": "import type * as React from \"react\";\ntype MenuPreviewLayoutProps = React.PropsWithChildren<{\n    preview: React.ReactNode;\n    className?: string;\n    previewWidth?: \"fixed\" | \"remaining\";\n}>;\ndeclare const MenuPreviewLayout: ({ children, preview, className, previewWidth, }: MenuPreviewLayoutProps) => React.JSX.Element;\ntype PreviewPaneProps = React.ComponentProps<\"div\"> & {\n    size?: \"default\" | \"thumbnail\";\n};\ndeclare const PreviewPane: ({ children, className, size, ...props }: PreviewPaneProps) => React.JSX.Element;\nexport { MenuPreviewLayout, PreviewPane };\n",
-    "./src/components/prose.d.ts": "import type * as React from \"react\";\nimport type { VariantProps } from \"class-variance-authority\";\ndeclare const proseVariants: (props?: ({\n    size?: \"default\" | \"sm\" | \"lede\" | null | undefined;\n    tone?: \"default\" | \"muted\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\nexport declare const Prose: ({ className, size, tone, ...props }: React.ComponentProps<\"p\"> & VariantProps<typeof proseVariants>) => React.JSX.Element;\nexport {};\n",
+    "./src/components/preview-pane.d.ts": "import type * as React from \"react\";\ntype MenuPreviewLayoutProps = React.PropsWithChildren<{\n    preview: React.ReactNode;\n    className?: string;\n    previewWidth?: \"fixed\" | \"remaining\";\n}>;\ndeclare const MenuPreviewLayout: ({ children, preview, className, previewWidth, }: MenuPreviewLayoutProps) => React.JSX.Element;\ntype PreviewPaneOverflow = \"clip\" | \"scroll\";\ntype PreviewPaneProps = React.ComponentProps<\"div\"> & {\n    overflow?: PreviewPaneOverflow;\n    size?: \"default\" | \"thumbnail\";\n};\ndeclare const PreviewPane: ({ children, className, overflow, size, ...props }: PreviewPaneProps) => React.JSX.Element;\nexport { MenuPreviewLayout, PreviewPane };\n",
+    "./src/components/prose.d.ts": "import type * as React from \"react\";\nimport type { VariantProps } from \"class-variance-authority\";\nexport declare const LEGAL_TEXT_CLASS_NAME = \"hyphens-manual wrap-anywhere\";\ndeclare const proseVariants: (props?: ({\n    size?: \"default\" | \"sm\" | \"lede\" | null | undefined;\n    tone?: \"default\" | \"muted\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\nexport declare const Prose: ({ className, size, tone, ...props }: React.ComponentProps<\"p\"> & VariantProps<typeof proseVariants>) => React.JSX.Element;\nexport {};\n",
     "./src/components/scroll-area.d.ts": "import type { Ref } from \"react\";\nimport { ScrollArea as ScrollAreaPrimitive } from \"@base-ui/react/scroll-area\";\ntype ScrollAreaAxis = \"both\" | \"vertical\";\ndeclare const ScrollArea: ({ axis, className, children, scrollFade, scrollbarClassName, scrollbarGutter, viewportRef, ...props }: ScrollAreaPrimitive.Root.Props & {\n    axis?: ScrollAreaAxis;\n    scrollFade?: boolean;\n    scrollbarClassName?: string;\n    scrollbarGutter?: boolean;\n    viewportRef?: Ref<HTMLDivElement>;\n}) => import(\"react\").JSX.Element;\ndeclare const ScrollBar: ({ className, orientation, ...props }: ScrollAreaPrimitive.Scrollbar.Props) => import(\"react\").JSX.Element;\nexport { ScrollArea, ScrollBar };\n",
     "./src/components/scroll-to-top.d.ts": "import { type RefObject } from \"react\";\nexport type ScrollToTopProps = {\n    scrollContainerRef: RefObject<HTMLElement | null>;\n    threshold?: number;\n    label?: string;\n    className?: string;\n};\nexport declare const ScrollToTop: ({ scrollContainerRef, threshold, label, className, }: ScrollToTopProps) => import(\"react\").JSX.Element;\n",
     "./src/components/search-field.d.ts": "import type * as React from \"react\";\nimport { InputGroupInput } from \"./input-group\";\ntype SearchFieldProps = Omit<React.ComponentProps<typeof InputGroupInput>, \"onChange\" | \"type\" | \"value\"> & {\n    value: string;\n    onValueChange: (value: string) => void;\n    clearLabel: string;\n    groupClassName?: string;\n};\ndeclare const SearchField: ({ value, onValueChange, clearLabel, groupClassName, className, onKeyDown, ...props }: SearchFieldProps) => React.JSX.Element;\nexport { SearchField };\nexport type { SearchFieldProps };\n",
@@ -10318,7 +10689,7 @@
     "./src/components/separator.d.ts": "import type { PropsWithChildren } from \"react\";\nimport { Separator as SeparatorPrimitive } from \"@base-ui/react/separator\";\ndeclare const Separator: ({ className, orientation, ...props }: SeparatorPrimitive.Props) => import(\"react\").JSX.Element;\ntype TextSeparatorProps = PropsWithChildren<{\n    className?: string;\n    labelClassName?: string;\n}>;\ndeclare const TextSeparator: ({ children, className, labelClassName, }: TextSeparatorProps) => import(\"react\").JSX.Element;\nexport { Separator, TextSeparator };\n",
     "./src/components/sheet.d.ts": "import type * as React from \"react\";\nimport { Dialog as SheetPrimitive } from \"@base-ui/react/dialog\";\ndeclare const Sheet: <Payload>(props: SheetPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const SheetPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").AlertDialogPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ntype SheetSide = \"inline-start\" | \"inline-end\" | \"block-start\" | \"block-end\";\ndeclare function SheetTrigger({ tooltip, ...props }: SheetPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare function SheetClose({ tooltip, ...props }: SheetPrimitive.Close.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const SheetBackdrop: ({ className, ...props }: SheetPrimitive.Backdrop.Props) => React.JSX.Element;\ndeclare const SheetPopup: ({ className, children, showCloseButton, side, variant, ...props }: SheetPrimitive.Popup.Props & {\n    showCloseButton?: boolean;\n    side?: SheetSide;\n    variant?: \"default\" | \"inset\";\n}) => React.JSX.Element;\ndeclare const SheetHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const SheetFooter: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & {\n    variant?: \"default\" | \"bare\";\n}) => React.JSX.Element;\ndeclare const SheetTitle: ({ className, ...props }: SheetPrimitive.Title.Props) => React.JSX.Element;\ndeclare const SheetDescription: ({ className, ...props }: SheetPrimitive.Description.Props) => React.JSX.Element;\ndeclare const SheetPanel: ({ className, scrollFade, ...props }: React.ComponentProps<\"div\"> & {\n    scrollFade?: boolean;\n}) => React.JSX.Element;\nexport { Sheet, SheetTrigger, SheetPortal, SheetClose, SheetBackdrop, SheetBackdrop as SheetOverlay, SheetPopup, SheetPopup as SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription, SheetPanel, };\nexport type { SheetSide };\n",
     "./src/components/sidebar.logic.d.ts": "export type SidebarState = \"expanded\" | \"collapsed\";\nexport type SidebarLayout = \"rail\" | \"full\";\nexport declare const resolveSidebarLayout: ({ state, isMobile, }: {\n    state: SidebarState;\n    isMobile: boolean;\n}) => SidebarLayout;\nexport declare const resolveSidebarOpen: ({ requestedOpen, forceCollapsed, }: {\n    requestedOpen: boolean;\n    forceCollapsed: boolean;\n}) => boolean;\nexport declare const deriveSidebarState: (open: boolean) => SidebarState;\nexport declare const nextRequestedOpen: (requestedOpen: boolean) => boolean;\nexport declare const nextOpenMobile: (openMobile: boolean) => boolean;\n",
-    "./src/components/sidebar.d.ts": "import type { VariantProps } from \"class-variance-authority\";\nimport { Button } from \"./button\";\nimport { Input } from \"./input\";\nimport { Separator } from \"./separator\";\nimport type { SidebarLayout } from \"./sidebar.logic\";\nimport { TooltipPopup } from \"./tooltip\";\nexport declare const SIDEBAR_WIDTH_PX = 256;\nexport declare const SIDEBAR_WIDTH_ICON_PX = 48;\ntype SidebarContextProps = {\n    state: \"expanded\" | \"collapsed\";\n    open: boolean;\n    setOpen: (open: boolean) => void;\n    openMobile: boolean;\n    setOpenMobile: (open: boolean) => void;\n    isMobile: boolean;\n    toggleSidebar: () => void;\n};\ndeclare function useSidebar(): SidebarContextProps;\ndeclare function useSidebarLayout(): SidebarLayout;\ndeclare function useSidebarInlineSize(): 0 | 256 | 48;\ndeclare const SidebarProvider: ({ defaultOpen, forceCollapsed, open: openProp, onOpenChange: setOpenProp, className, style, children, ...props }: React.ComponentProps<\"div\"> & {\n    defaultOpen?: boolean;\n    forceCollapsed?: boolean;\n    open?: boolean;\n    onOpenChange?: (open: boolean) => void;\n}) => import(\"react\").JSX.Element;\ndeclare const Sidebar: ({ side, variant, collapsible, mobileTitle, mobileDescription, className, children, ...props }: React.ComponentProps<\"div\"> & {\n    side?: \"left\" | \"right\";\n    variant?: \"sidebar\" | \"floating\" | \"inset\";\n    collapsible?: \"offcanvas\" | \"icon\" | \"none\";\n    mobileTitle?: string;\n    mobileDescription?: string;\n}) => import(\"react\").JSX.Element;\ntype PanelTriggerSide = \"left\" | \"right\";\ndeclare const PanelTrigger: ({ side, label, \"aria-label\": ariaLabel, ...props }: Omit<React.ComponentProps<typeof Button>, \"children\"> & {\n    side: PanelTriggerSide;\n    label: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarTrigger: ({ onClick, label, ...props }: Omit<React.ComponentProps<typeof PanelTrigger>, \"label\" | \"side\"> & {\n    label?: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarRail: ({ className, label, \"aria-label\": ariaLabel, ...props }: React.ComponentProps<\"button\"> & {\n    label?: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarInset: ({ className, ...props }: React.ComponentProps<\"main\">) => import(\"react\").JSX.Element;\ndeclare const SidebarInput: ({ className, ...props }: React.ComponentProps<typeof Input>) => import(\"react\").JSX.Element;\ndeclare const SidebarHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarSeparator: ({ className, ...props }: React.ComponentProps<typeof Separator>) => import(\"react\").JSX.Element;\ndeclare const SidebarContent: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarGroup: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupLabel: ({ className, asChild, ...props }: React.ComponentProps<\"div\"> & {\n    asChild?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupAction: ({ className, asChild, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupContent: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenu: ({ className, ...props }: React.ComponentProps<\"ul\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuItem: ({ className, ...props }: React.ComponentProps<\"li\">) => import(\"react\").JSX.Element;\ndeclare const sidebarMenuButtonVariants: (props?: ({\n    variant?: \"default\" | \"outline\" | null | undefined;\n    size?: \"default\" | \"sm\" | \"lg\" | \"rail\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const sidebarIdentityTriggerClassName: (layout: SidebarLayout) => string;\ndeclare const SidebarMenuButton: ({ asChild, isActive, variant, size, tooltip, className, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n    isActive?: boolean;\n    tooltip?: string | React.ComponentProps<typeof TooltipPopup>;\n} & VariantProps<typeof sidebarMenuButtonVariants>) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuAction: ({ className, asChild, showOnHover, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n    showOnHover?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuBadge: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSkeleton: ({ className, showIcon, ...props }: React.ComponentProps<\"div\"> & {\n    showIcon?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSub: ({ className, ...props }: React.ComponentProps<\"ul\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSubItem: ({ className, ...props }: React.ComponentProps<\"li\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSubButton: ({ asChild, size, isActive, className, ...props }: React.ComponentProps<\"a\"> & {\n    asChild?: boolean;\n    size?: \"sm\" | \"md\";\n    isActive?: boolean;\n}) => import(\"react\").JSX.Element;\nexport { PanelTrigger, Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupAction, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarInset, SidebarMenu, SidebarMenuAction, SidebarMenuBadge, SidebarMenuButton, sidebarIdentityTriggerClassName, SidebarMenuItem, SidebarMenuSkeleton, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarProvider, SidebarRail, SidebarSeparator, SidebarTrigger, useSidebar, useSidebarInlineSize, useSidebarLayout, };\n",
+    "./src/components/sidebar.d.ts": "import type { VariantProps } from \"class-variance-authority\";\nimport { Button } from \"./button\";\nimport { Input } from \"./input\";\nimport { Separator } from \"./separator\";\nimport type { SidebarLayout } from \"./sidebar.logic\";\nimport { TooltipPopup } from \"./tooltip\";\nexport declare const SIDEBAR_WIDTH_PX = 256;\nexport declare const SIDEBAR_WIDTH_ICON_PX = 48;\ntype SidebarContextProps = {\n    state: \"expanded\" | \"collapsed\";\n    open: boolean;\n    setOpen: (open: boolean) => void;\n    openMobile: boolean;\n    setOpenMobile: (open: boolean) => void;\n    isMobile: boolean;\n    toggleSidebar: () => void;\n};\ndeclare function useSidebar(): SidebarContextProps;\ndeclare function useSidebarLayout(): SidebarLayout;\ndeclare function useSidebarInlineSize(): 0 | 256 | 48;\ndeclare const SidebarProvider: ({ defaultOpen, forceCollapsed, open: openProp, onOpenChange: setOpenProp, className, style, children, ...props }: React.ComponentProps<\"div\"> & {\n    defaultOpen?: boolean;\n    forceCollapsed?: boolean;\n    open?: boolean;\n    onOpenChange?: (open: boolean) => void;\n}) => import(\"react\").JSX.Element;\ndeclare const Sidebar: ({ side, variant, collapsible, mobileTitle, mobileDescription, className, style, children, ...props }: React.ComponentProps<\"div\"> & {\n    side?: \"left\" | \"right\";\n    variant?: \"sidebar\" | \"floating\" | \"inset\";\n    collapsible?: \"offcanvas\" | \"icon\" | \"none\";\n    mobileTitle?: string;\n    mobileDescription?: string;\n}) => import(\"react\").JSX.Element;\ntype PanelTriggerSide = \"left\" | \"right\";\ndeclare const PanelTrigger: ({ side, label, \"aria-label\": ariaLabel, ...props }: Omit<React.ComponentProps<typeof Button>, \"children\"> & {\n    side: PanelTriggerSide;\n    label: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarTrigger: ({ onClick, label, ...props }: Omit<React.ComponentProps<typeof PanelTrigger>, \"label\" | \"side\"> & {\n    label?: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarRail: ({ className, label, \"aria-label\": ariaLabel, ...props }: React.ComponentProps<\"button\"> & {\n    label?: string;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarInset: ({ className, ...props }: React.ComponentProps<\"main\">) => import(\"react\").JSX.Element;\ndeclare const SidebarInput: ({ className, ...props }: React.ComponentProps<typeof Input>) => import(\"react\").JSX.Element;\ndeclare const SidebarHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarSeparator: ({ className, ...props }: React.ComponentProps<typeof Separator>) => import(\"react\").JSX.Element;\ndeclare const SidebarContent: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarGroup: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupLabel: ({ className, asChild, ...props }: React.ComponentProps<\"div\"> & {\n    asChild?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupAction: ({ className, asChild, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarGroupContent: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenu: ({ className, ...props }: React.ComponentProps<\"ul\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuItem: ({ className, ...props }: React.ComponentProps<\"li\">) => import(\"react\").JSX.Element;\ndeclare const sidebarMenuButtonVariants: (props?: ({\n    variant?: \"default\" | \"outline\" | null | undefined;\n    size?: \"default\" | \"sm\" | \"lg\" | \"rail\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const sidebarIdentityTriggerClassName: (layout: SidebarLayout) => string;\ndeclare const SidebarMenuButton: ({ asChild, isActive, variant, size, tooltip, className, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n    isActive?: boolean;\n    tooltip?: string | React.ComponentProps<typeof TooltipPopup>;\n} & VariantProps<typeof sidebarMenuButtonVariants>) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuAction: ({ className, asChild, showOnHover, ...props }: React.ComponentProps<\"button\"> & {\n    asChild?: boolean;\n    showOnHover?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuBadge: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSkeleton: ({ className, showIcon, ...props }: React.ComponentProps<\"div\"> & {\n    showIcon?: boolean;\n}) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSub: ({ className, ...props }: React.ComponentProps<\"ul\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSubItem: ({ className, ...props }: React.ComponentProps<\"li\">) => import(\"react\").JSX.Element;\ndeclare const SidebarMenuSubButton: ({ asChild, size, isActive, className, ...props }: React.ComponentProps<\"a\"> & {\n    asChild?: boolean;\n    size?: \"sm\" | \"md\";\n    isActive?: boolean;\n}) => import(\"react\").JSX.Element;\nexport { PanelTrigger, Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupAction, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarInset, SidebarMenu, SidebarMenuAction, SidebarMenuBadge, SidebarMenuButton, sidebarIdentityTriggerClassName, SidebarMenuItem, SidebarMenuSkeleton, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarProvider, SidebarRail, SidebarSeparator, SidebarTrigger, useSidebar, useSidebarInlineSize, useSidebarLayout, };\n",
     "./src/components/skeleton.d.ts": "declare const Skeleton: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\nexport { Skeleton };\n",
     "./src/components/split-button.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nimport { Button, BUTTON_CONTENT } from \"./button\";\nimport { Menu } from \"./menu\";\nimport { Popover } from \"./popover\";\ntype SplitButtonSharedProps = {\n    menuLabel: string;\n    primaryDescriptionId?: string;\n    menuDescriptionId?: string;\n    onPrimaryClick: NonNullable<ComponentProps<typeof Button>[\"onClick\"]>;\n    menu: ReactNode;\n    primaryDisabled?: boolean;\n    menuDisabled?: boolean;\n    size?: \"sm\" | \"md\";\n    className?: string;\n};\ntype SplitButtonPrimary = {\n    children: ReactNode;\n    primaryContent: (typeof BUTTON_CONTENT)[keyof typeof BUTTON_CONTENT];\n    primaryLabel: string;\n} | {\n    children: string;\n    primaryContent?: never;\n    primaryLabel?: never;\n};\ntype SplitButtonProps = SplitButtonSharedProps & SplitButtonPrimary & ({\n    surface?: \"menu\";\n    open?: ComponentProps<typeof Menu>[\"open\"];\n    onOpenChange?: ComponentProps<typeof Menu>[\"onOpenChange\"];\n} | {\n    surface: \"popover\";\n    open?: ComponentProps<typeof Popover>[\"open\"];\n    onOpenChange?: ComponentProps<typeof Popover>[\"onOpenChange\"];\n});\nexport declare const SplitButton: (props: SplitButtonProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/status-mark.d.ts": "type StatusMarkStatus = \"pending\" | \"running\" | \"done\" | \"failed\";\ntype StatusMarkProps = {\n    status: StatusMarkStatus;\n    label?: string | undefined;\n    className?: string;\n};\ndeclare const StatusMark: ({ className, label, status }: StatusMarkProps) => import(\"react\").JSX.Element;\nexport { StatusMark };\nexport type { StatusMarkStatus };\n",
@@ -10328,12 +10699,13 @@
     "./src/components/swap-text.d.ts": "declare const SwapText: ({ className, text, }: {\n    className?: string;\n    text: string;\n}) => import(\"react\").JSX.Element;\nexport { SwapText };\n",
     "./src/components/switch.d.ts": "import { Switch as SwitchPrimitive } from \"@base-ui/react/switch\";\ndeclare const Switch: ({ className, ...props }: SwitchPrimitive.Root.Props) => import(\"react\").JSX.Element;\nexport { Switch };\n",
     "./src/components/table-chart.d.ts": "export type TableChartKind = \"bar\" | \"line\" | \"pie\" | \"scatter\";\nexport type TableChartPoint = {\n    label: string;\n    x: number;\n    y: number;\n    series?: string;\n};\nexport type TableChartProps = {\n    kind: TableChartKind;\n    points: readonly TableChartPoint[];\n    title: string;\n    summary: string;\n    xLabel?: string | undefined;\n    yLabel?: string | undefined;\n    xMode?: \"numeric\" | \"category\";\n    formatNumber: (value: number) => string;\n};\nexport declare const TableChart: ({ kind, points, title, summary, xLabel, yLabel, xMode, formatNumber, }: TableChartProps) => import(\"react\").JSX.Element;\n",
-    "./src/components/table.d.ts": "import type * as React from \"react\";\ndeclare const Table: ({ className, ...props }: React.ComponentProps<\"table\">) => React.JSX.Element;\ndeclare const TableHeader: ({ className, ...props }: React.ComponentProps<\"thead\">) => React.JSX.Element;\ndeclare const TableBody: ({ className, ...props }: React.ComponentProps<\"tbody\">) => React.JSX.Element;\ndeclare const TableFooter: ({ className, ...props }: React.ComponentProps<\"tfoot\">) => React.JSX.Element;\ndeclare const TableRow: ({ className, ...props }: React.ComponentProps<\"tr\">) => React.JSX.Element;\ndeclare const TableHead: ({ className, ...props }: React.ComponentProps<\"th\">) => React.JSX.Element;\ndeclare const TableCell: ({ className, ...props }: React.ComponentProps<\"td\">) => React.JSX.Element;\ntype SortDirection = \"asc\" | \"desc\" | null;\ntype SortableHeadProps = Omit<React.ComponentProps<\"th\">, \"onClick\"> & {\n    sortDirection?: SortDirection;\n    onSort: () => void;\n    trailing?: React.ReactNode;\n};\ndeclare const SortableHead: ({ children, sortDirection, onSort, trailing, className, ...props }: SortableHeadProps) => React.JSX.Element;\ndeclare const TableCaption: ({ className, ...props }: React.ComponentProps<\"caption\">) => React.JSX.Element;\nexport { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, SortableHead, };\nexport type { SortDirection };\n",
+    "./src/components/table.d.ts": "import type * as React from \"react\";\ntype TableInset = \"default\" | \"card\";\ntype TableScroll = \"self\" | \"parent\";\ntype TableProps = React.ComponentProps<\"table\"> & {\n    inset?: TableInset;\n    scroll?: TableScroll;\n};\ndeclare const Table: ({ className, inset, scroll, ...props }: TableProps) => React.JSX.Element;\ntype TableHeaderProps = React.ComponentProps<\"thead\"> & {\n    surface?: \"plain\" | \"muted\";\n    sticky?: boolean;\n};\ndeclare const TableHeader: ({ className, surface, sticky, ...props }: TableHeaderProps) => React.JSX.Element;\ndeclare const TableBody: ({ className, ...props }: React.ComponentProps<\"tbody\">) => React.JSX.Element;\ndeclare const TableFooter: ({ className, ...props }: React.ComponentProps<\"tfoot\">) => React.JSX.Element;\ntype TableTone = \"default\" | \"muted\";\ndeclare const TableRow: ({ className, tone, ...props }: React.ComponentProps<\"tr\"> & {\n    tone?: TableTone | undefined;\n}) => React.JSX.Element;\ntype TableAlign = \"start\" | \"center\" | \"end\";\ntype TableHeadProps = Omit<React.ComponentProps<\"th\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    numeric?: boolean | undefined;\n};\ndeclare const TableHead: ({ className, align, numeric, ...props }: TableHeadProps) => React.JSX.Element;\ntype TableCellProps = Omit<React.ComponentProps<\"td\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    tone?: TableTone | undefined;\n    numeric?: boolean | undefined;\n    truncate?: boolean;\n    flush?: boolean;\n};\ndeclare const TableCell: ({ className, align, tone, numeric, truncate, flush, ...props }: TableCellProps) => React.JSX.Element;\ntype SortDirection = \"asc\" | \"desc\" | null;\ntype SortableHeadProps = Omit<TableHeadProps, \"onClick\"> & {\n    sortDirection?: SortDirection;\n    onSort: () => void;\n    trailing?: React.ReactNode;\n};\ndeclare const SortableHead: ({ children, sortDirection, onSort, trailing, className, align, numeric, ...props }: SortableHeadProps) => React.JSX.Element;\ndeclare const TableCaption: ({ className, ...props }: React.ComponentProps<\"caption\">) => React.JSX.Element;\nexport { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, SortableHead, };\nexport type { SortDirection, TableAlign, TableHeadProps, TableCellProps, TableHeaderProps, TableInset, TableProps, TableScroll, TableTone, };\n",
     "./src/components/tabs.d.ts": "import { Tabs as TabsPrimitive } from \"@base-ui/react/tabs\";\ntype TabsVariant = \"default\" | \"underline\";\ndeclare const Tabs: ({ className, ...props }: TabsPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const TabsList: ({ variant, className, children, ref, ...props }: TabsPrimitive.List.Props & {\n    variant?: TabsVariant;\n}) => import(\"react\").JSX.Element;\ndeclare const TabsTab: ({ className, ...props }: TabsPrimitive.Tab.Props) => import(\"react\").JSX.Element;\ndeclare const TabsPanel: ({ className, ...props }: TabsPrimitive.Panel.Props) => import(\"react\").JSX.Element;\nexport { Tabs, TabsList, TabsTab, TabsTab as TabsTrigger, TabsPanel, TabsPanel as TabsContent, };\n",
     "./src/components/textarea.d.ts": "import type * as React from \"react\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype TextareaProps = React.ComponentProps<\"textarea\"> & {\n    size?: ControlSize | number;\n    unstyled?: boolean;\n};\ndeclare const Textarea: ({ className, size, unstyled, dir, onChange, ...props }: TextareaProps) => React.JSX.Element;\nexport { Textarea, type TextareaProps };\n",
-    "./src/components/toast.d.ts": "import * as React from \"react\";\nimport { Toast } from \"@base-ui/react/toast\";\nimport type { ToastManagerAddOptions } from \"@base-ui/react/toast\";\ntype ToastData = {\n    tooltipStyle?: boolean;\n    timeoutPolicy?: {\n        type: \"automatic\";\n    } | {\n        type: \"explicit\";\n        timeout: number;\n    };\n};\ndeclare const TOAST_RIGHT_OFFSET_VAR = \"--stella-toast-right-offset\";\ndeclare const TOAST_ICONS: {\n    readonly error: React.JSX.Element;\n    readonly info: React.JSX.Element;\n    readonly loading: null;\n    readonly neutral: null;\n    readonly success: React.JSX.Element;\n    readonly warning: React.JSX.Element;\n};\ntype ToastType = keyof typeof TOAST_ICONS;\ntype ToastAction = {\n    label: React.ReactNode;\n    onClick?: React.MouseEventHandler<HTMLButtonElement>;\n};\ntype ToastActionProps = ToastManagerAddOptions<ToastData>[\"actionProps\"];\ntype ToastOptions = Omit<ToastManagerAddOptions<ToastData>, \"actionProps\" | \"title\" | \"type\"> & {\n    action?: ToastAction | undefined;\n    actionProps?: ToastActionProps;\n};\ntype ToastUpdateOptions = Partial<ToastOptions> & {\n    title?: React.ReactNode | undefined;\n    type?: ToastType | undefined;\n};\ntype ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;\ntype ToastPromiseOptions<Value> = {\n    error: ToastPromiseMessage | ((error: unknown) => ToastPromiseMessage);\n    loading: ToastPromiseMessage;\n    success: ToastPromiseMessage | ((value: Value) => ToastPromiseMessage);\n};\ntype ToastApi = {\n    (title: React.ReactNode, options?: ToastOptions): string;\n    add: (options: ToastAddOptions) => string;\n    close: (id?: string) => void;\n    dismiss: (id?: string) => void;\n    error: (title: React.ReactNode, options?: ToastOptions) => string;\n    info: (title: React.ReactNode, options?: ToastOptions) => string;\n    loading: (title: React.ReactNode, options?: ToastOptions) => string;\n    promise: <Value>(promiseValue: Promise<Value>, options: ToastPromiseOptions<Value>) => Promise<Value>;\n    success: (title: React.ReactNode, options?: ToastOptions) => string;\n    update: (id: string, options: ToastUpdateOptions) => void;\n    warning: (title: React.ReactNode, options?: ToastOptions) => string;\n};\ntype ToastAddOptions = ToastUpdateOptions & {\n    title: React.ReactNode;\n};\ntype ToastPosition = \"top-left\" | \"top-center\" | \"top-right\" | \"bottom-left\" | \"bottom-center\" | \"bottom-right\";\ntype ToastProviderProps = {\n    position?: ToastPosition;\n} & Toast.Provider.Props;\ndeclare const stellaToast: ToastApi;\ndeclare const ToastProvider: ({ children, position, ...props }: ToastProviderProps) => React.JSX.Element;\ndeclare const AnchoredToastProvider: ({ children, ...props }: Toast.Provider.Props) => React.JSX.Element;\ndeclare function toastDedupeId({ action, actionProps, description, title, type, }: Pick<ToastAddOptions, \"action\" | \"actionProps\" | \"description\" | \"title\" | \"type\">): string | undefined;\ndeclare function toastCountdownMs({ timeout, type, }: {\n    timeout?: number | undefined;\n    type?: string | undefined;\n}): number | undefined;\nexport { ToastProvider, type ToastPosition, TOAST_RIGHT_OFFSET_VAR, stellaToast, AnchoredToastProvider, toastCountdownMs, toastDedupeId, };\n",
+    "./src/components/toast.d.ts": "import * as React from \"react\";\nimport { Toast } from \"@base-ui/react/toast\";\nimport type { ToastManagerAddOptions, ToastObject } from \"@base-ui/react/toast\";\ntype ToastData = {\n    tooltipStyle?: boolean;\n    timeoutPolicy?: {\n        type: \"automatic\";\n    } | {\n        type: \"explicit\";\n        timeout: number;\n    };\n};\ndeclare const TOAST_RIGHT_OFFSET_VAR = \"--stella-toast-right-offset\";\ndeclare const TOAST_ICONS: {\n    readonly error: React.JSX.Element;\n    readonly info: React.JSX.Element;\n    readonly loading: null;\n    readonly neutral: null;\n    readonly success: React.JSX.Element;\n    readonly warning: React.JSX.Element;\n};\ntype ToastType = keyof typeof TOAST_ICONS;\ntype ToastAction = {\n    label: React.ReactNode;\n    onClick?: React.MouseEventHandler<HTMLButtonElement>;\n};\ntype ToastActionProps = ToastManagerAddOptions<ToastData>[\"actionProps\"];\ntype ToastOptions = Omit<ToastManagerAddOptions<ToastData>, \"actionProps\" | \"title\" | \"type\"> & {\n    action?: ToastAction | undefined;\n    actionProps?: ToastActionProps;\n};\ntype ToastUpdateFields = Partial<Omit<ToastOptions, \"timeout\">> & {\n    title?: React.ReactNode | undefined;\n};\ntype ToastUpdateOptions = (ToastUpdateFields & {\n    type: ToastType;\n    timeout?: number | undefined;\n}) | (ToastUpdateFields & {\n    type?: undefined;\n    timeout?: number | undefined;\n});\ntype ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;\ntype ToastPromiseOptions<Value> = {\n    error: ToastPromiseMessage | ((error: unknown) => ToastPromiseMessage);\n    loading: ToastPromiseMessage;\n    success: ToastPromiseMessage | ((value: Value) => ToastPromiseMessage);\n};\ntype ToastApi = {\n    (title: React.ReactNode, options?: ToastOptions): string;\n    add: (options: ToastAddOptions) => string;\n    close: (id?: string) => void;\n    dismiss: (id?: string) => void;\n    error: (title: React.ReactNode, options?: ToastOptions) => string;\n    info: (title: React.ReactNode, options?: ToastOptions) => string;\n    loading: (title: React.ReactNode, options?: ToastOptions) => string;\n    promise: <Value>(promiseValue: Promise<Value>, options: ToastPromiseOptions<Value>) => Promise<Value>;\n    success: (title: React.ReactNode, options?: ToastOptions) => string;\n    update: (id: string, options: ToastUpdateOptions) => void;\n    warning: (title: React.ReactNode, options?: ToastOptions) => string;\n};\ntype ToastAddOptions = ToastUpdateOptions & {\n    title: React.ReactNode;\n};\ntype ToastPosition = \"top-left\" | \"top-center\" | \"top-right\" | \"bottom-left\" | \"bottom-center\" | \"bottom-right\";\ntype ToastProviderProps = {\n    position?: ToastPosition;\n} & Toast.Provider.Props;\ndeclare const stellaToast: ToastApi;\ndeclare const ToastProvider: ({ children, position, ...props }: ToastProviderProps) => React.JSX.Element;\ndeclare const AnchoredToastProvider: ({ children, ...props }: Toast.Provider.Props) => React.JSX.Element;\ndeclare function toastDedupeId({ action, actionProps, description, title, type, }: {\n    action?: ToastAction | undefined;\n    actionProps?: ToastActionProps | undefined;\n    description?: React.ReactNode | undefined;\n    title: React.ReactNode;\n    type?: ToastType | undefined;\n}): string | undefined;\ndeclare function toastCountdownMs({ timeout, type, }: {\n    timeout?: number | undefined;\n    type?: string | undefined;\n}): number | undefined;\ndeclare function resolveToastUpdateTimeout(options: ToastUpdateOptions, previous: Pick<ToastObject<ToastData>, \"actionProps\" | \"data\" | \"description\" | \"title\" | \"type\">): {\n    timeout?: number;\n};\nexport { ToastProvider, type ToastPosition, TOAST_RIGHT_OFFSET_VAR, stellaToast, AnchoredToastProvider, toastCountdownMs, toastDedupeId, resolveToastUpdateTimeout, };\n",
     "./src/components/toolbar-icon-action.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nimport { Button } from \"./button\";\ntype ToolbarIconActionProps = Omit<ComponentProps<typeof Button>, \"aria-label\" | \"children\" | \"size\" | \"title\" | \"tooltip\" | \"variant\"> & {\n    label: string;\n    icon: ReactNode;\n    density: \"header\" | \"toolbar\";\n};\nexport declare const ToolbarIconAction: ({ density, icon, label, ...props }: ToolbarIconActionProps) => import(\"react\").JSX.Element;\nexport {};\n",
-    "./src/components/tooltip.d.ts": "import { Tooltip as TooltipPrimitive } from \"@base-ui/react/tooltip\";\ndeclare const TooltipCreateHandle: typeof TooltipPrimitive.createHandle;\ndeclare const TooltipProvider: import(\"react\").FC<import(\"@base-ui/react\").TooltipProviderProps>;\ndeclare const Tooltip: <Payload>(props: TooltipPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const TooltipTrigger: (props: TooltipPrimitive.Trigger.Props) => import(\"react\").JSX.Element;\ndeclare const TooltipPopup: ({ className, align, sideOffset, side, children, ...props }: TooltipPrimitive.Popup.Props & {\n    align?: TooltipPrimitive.Positioner.Props[\"align\"];\n    side?: TooltipPrimitive.Positioner.Props[\"side\"];\n    sideOffset?: TooltipPrimitive.Positioner.Props[\"sideOffset\"];\n}) => import(\"react\").JSX.Element;\nexport { TooltipCreateHandle, TooltipProvider, Tooltip, TooltipTrigger, TooltipPopup, TooltipPopup as TooltipContent, };\n",
+    "./src/components/tooltip.d.ts": "import { Tooltip as TooltipPrimitive } from \"@base-ui/react/tooltip\";\ndeclare const TooltipCreateHandle: typeof TooltipPrimitive.createHandle;\ndeclare const TOOLTIP_OPEN_DELAY_MS = 300;\ndeclare const TooltipProvider: ({ delay, ...props }: TooltipPrimitive.Provider.Props) => import(\"react\").JSX.Element;\ndeclare const Tooltip: <Payload>(props: TooltipPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const TooltipTrigger: (props: TooltipPrimitive.Trigger.Props) => import(\"react\").JSX.Element;\ndeclare const TooltipPopup: ({ className, align, sideOffset, side, children, ...props }: TooltipPrimitive.Popup.Props & {\n    align?: TooltipPrimitive.Positioner.Props[\"align\"];\n    side?: TooltipPrimitive.Positioner.Props[\"side\"];\n    sideOffset?: TooltipPrimitive.Positioner.Props[\"sideOffset\"];\n}) => import(\"react\").JSX.Element;\nexport { TOOLTIP_OPEN_DELAY_MS, TooltipCreateHandle, TooltipProvider, Tooltip, TooltipTrigger, TooltipPopup, TooltipPopup as TooltipContent, };\n",
+    "./src/components/truncated-text.d.ts": "import * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport { TooltipPopup } from \"./tooltip\";\ndeclare const TruncatedText: ({ children, className, lines, render, side, tooltip, ...props }: TruncatedTextProps) => React.JSX.Element;\ntype TruncatedTextLines = 1 | 2 | 3;\ntype TruncatedTextProps = useRender.ComponentProps<\"span\"> & {\n    lines?: TruncatedTextLines;\n    side?: React.ComponentProps<typeof TooltipPopup>[\"side\"];\n    tooltip?: React.ReactNode;\n};\ndeclare function isTextOverflowing(element: Pick<HTMLElement, \"clientHeight\" | \"clientWidth\" | \"scrollHeight\" | \"scrollWidth\"> | null): boolean;\nexport { TruncatedText, isTextOverflowing };\nexport type { TruncatedTextLines, TruncatedTextProps };\n",
     "./src/components/view-toolbar.d.ts": "import type { ComponentProps } from \"react\";\nimport { Button } from \"./button\";\nexport declare const ViewToolbarChrome: ({ className, ...props }: ComponentProps<\"div\">) => import(\"react\").JSX.Element;\ntype ViewFilterButtonProps = Omit<ComponentProps<typeof Button>, \"children\" | \"size\" | \"variant\" | \"aria-label\" | \"title\"> & {\n    label: string;\n};\nexport declare const ViewFilterButton: ({ label, ...props }: ViewFilterButtonProps) => import(\"react\").JSX.Element;\nexport declare const ViewFilterChip: ({ className, ...props }: Omit<ComponentProps<typeof Button>, \"size\" | \"variant\">) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/workspace-shell.d.ts": "import type { ReactElement, ReactNode } from \"react\";\ntype WorkspaceCompactNavigation = {\n    content: ReactElement;\n    label: string;\n    open: boolean;\n    onOpenChange: (open: boolean) => void;\n    trigger: ReactElement | null;\n};\ntype WorkspaceNavigation = {\n    content: ReactElement;\n    mode: \"responsive\";\n} | {\n    compact: WorkspaceCompactNavigation;\n    desktop: ReactElement;\n    mode: \"shell-managed\";\n};\ntype WorkspaceTopBarContext = {\n    compactNavigationTrigger: ReactElement | null;\n};\ntype WorkspaceShellProps = {\n    navigation: WorkspaceNavigation;\n    topBar: (context: WorkspaceTopBarContext) => ReactElement;\n    endDock?: ReactElement | undefined;\n    children: ReactNode;\n};\nexport declare const WorkspaceShell: ({ children, endDock, navigation, topBar, }: WorkspaceShellProps) => import(\"react\").JSX.Element;\ntype WorkspaceEndRailChatAction = {\n    label: string;\n    onActivate: () => void;\n    status: \"enabled\";\n} | {\n    label: string;\n    reason: string;\n    status: \"unavailable\";\n};\ntype WorkspaceEndRailProps = {\n    label: string;\n    topAction: ReactNode;\n    children?: ReactNode | undefined;\n    overlay?: ReactNode | undefined;\n    chatAction: WorkspaceEndRailChatAction;\n    className?: string | undefined;\n};\nexport declare const WorkspaceEndRail: ({ chatAction, children, className, label, overlay, topAction, }: WorkspaceEndRailProps) => import(\"react\").JSX.Element;\nexport type { WorkspaceCompactNavigation, WorkspaceEndRailChatAction, WorkspaceEndRailProps, WorkspaceNavigation, WorkspaceShellProps, WorkspaceTopBarContext, };\n",
     "./src/data-table/index.d.ts": "export type { TableColumnCapabilities, TableColumnDescriptor, TableSchema, } from \"./schema\";\nexport { duplicateColumnIds, findTableColumn, hideableColumnIds, sortableColumnIds, tableColumnIds, tableColumnSizing, visibleColumnIds, } from \"./schema\";\nexport { DataTable } from \"./table\";\nexport type { DataTableAriaSort, DataTableColumn, DataTableProps, DataTableRowAction, } from \"./table\";\n",
@@ -10345,7 +10717,7 @@
     "./src/hooks/use-mobile.d.ts": "export declare function useIsMobile(): boolean;\n",
     "./src/hooks/use-viewport-width.d.ts": "export declare function useViewportWidth(): number;\n",
     "./src/icons.d.ts": "export { BookOpenIcon as SkillIcon } from \"lucide-react\";\nexport { WandSparklesIcon as AiActionIcon } from \"lucide-react\";\nexport { BookOpenIcon as CaseLawIcon } from \"lucide-react\";\nexport { MessageSquarePlusIcon as NewChatIcon } from \"lucide-react\";\nexport { MessageSquareQuoteIcon as AddCommentIcon } from \"lucide-react\";\nexport { CopyIcon as CopyToClipboardIcon } from \"lucide-react\";\nexport { CopyIcon as CopyFromMenuIcon } from \"lucide-react\";\nexport { CopyIcon as DuplicateIcon } from \"lucide-react\";\nexport type { LucideIcon } from \"lucide-react\";\nexport { ActivityIcon, AlarmClockIcon, AlertCircleIcon, AlertTriangleIcon, AlignJustifyIcon, AlignLeftIcon, ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpDownIcon, ArrowUpIcon, AtSignIcon, BanIcon, BanknoteIcon, BellIcon, BlocksIcon, BoldIcon, BookOpenCheckIcon, BookTextIcon, BookmarkIcon, BookmarkPlusIcon, BracesIcon, BrainIcon, Building2Icon, BuildingIcon, CableIcon, CalendarClockIcon, CalendarIcon, CheckCheckIcon, CheckCircle2Icon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronsUpDownIcon, CircleAlertIcon, CircleCheckIcon, CircleDashedIcon, CircleDotIcon, CircleHelpIcon, CircleIcon, CircleOffIcon, CircleUserRoundIcon, ClipboardCheckIcon, ClipboardCopyIcon, ClipboardIcon, ClipboardListIcon, Clock3Icon, ClockIcon, CogIcon, Columns2Icon, Columns3Icon, ColumnsIcon, CommandIcon, CompassIcon, CopyPlusIcon, CornerDownLeftIcon, CpuIcon, CropIcon, DatabaseIcon, DollarSignIcon, DownloadIcon, EditIcon, EllipsisIcon, EllipsisVerticalIcon, EqualIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, FileBadgeIcon, FileCheckIcon, FileCodeIcon, FileDiffIcon, FileDigitIcon, FileDownIcon, FileIcon, FileImageIcon, FileOutputIcon, FilePenLineIcon, FilePlus2Icon, FilePlusIcon, FileQuestionIcon, FileSearchIcon, FileSpreadsheetIcon, FileTextIcon, FileUpIcon, FilterIcon, FilterXIcon, FlagIcon, FlaskConicalIcon, FoldHorizontalIcon, FolderIcon, FolderInputIcon, FolderOpenIcon, FolderPlusIcon, FolderSyncIcon, FolderTreeIcon, FunctionSquareIcon, GanttChartIcon, GaugeIcon, GitBranchIcon, GitCommitHorizontalIcon, GitPullRequestIcon, GlobeIcon, GraduationCapIcon, GripVerticalIcon, HashIcon, Heading1Icon, Heading2Icon, Heading3Icon, HelpCircleIcon, HighlighterIcon, HistoryIcon, ImageIcon, ImageOffIcon, InboxIcon, InfoIcon, ItalicIcon, KanbanIcon, KeyRoundIcon, KeyboardIcon, LandmarkIcon, LanguagesIcon, LaptopIcon, LayersIcon, LayoutDashboardIcon, LayoutGridIcon, LayoutTemplateIcon, LibraryBigIcon, LibraryIcon, Link2Icon, LinkIcon, ListChecksIcon, ListFilterIcon, ListIcon, ListMinusIcon, ListOrderedIcon, ListTodoIcon, ListTreeIcon, ListXIcon, LoaderCircleIcon, LockIcon, LockKeyholeIcon, LockOpenIcon, LogOutIcon, MailIcon, Maximize2Icon, MegaphoneIcon, MessageCircleQuestionIcon, MessageSquareIcon, MessageSquareTextIcon, MessageSquareWarningIcon, MessagesSquareIcon, Minimize2Icon, MinusIcon, MonitorIcon, MoonIcon, MoreHorizontalIcon, PackageIcon, PaletteIcon, PanelLeftIcon, PanelRightIcon, PaperclipIcon, PauseIcon, PenIcon, PenLineIcon, PencilIcon, PencilLineIcon, PhoneIcon, PinIcon, PinOffIcon, PlayIcon, PlugIcon, PlusIcon, PowerIcon, PrinterIcon, QuoteIcon, Redo2Icon, RefreshCcwIcon, RefreshCwIcon, RepeatIcon, RotateCcwIcon, RotateCwIcon, RouteIcon, Rows2Icon, Rows3Icon, SaveIcon, ScanSearchIcon, ScanTextIcon, ScissorsIcon, ScrollTextIcon, SearchIcon, SearchXIcon, SendIcon, ServerIcon, Settings2Icon, ShapesIcon, ShieldAlertIcon, ShieldCheckIcon, ShieldIcon, SigmaIcon, SignatureIcon, SlashIcon, SlidersHorizontalIcon, SparklesIcon, SplitIcon, SquareCheckIcon, SquareIcon, SquareMinusIcon, SquarePenIcon, StarIcon, StarOffIcon, StickyNoteIcon, StrikethroughIcon, SunIcon, TableIcon, TagIcon, TagsIcon, TerminalIcon, TextIcon, TextQuoteIcon, ToggleLeftIcon, Trash2Icon, TrashIcon, TriangleAlertIcon, UnderlineIcon, Undo2Icon, UndoIcon, UnfoldHorizontalIcon, UngroupIcon, UploadIcon, UserCheckIcon, UserIcon, UserPlusIcon, UserRoundIcon, UsersIcon, VideoIcon, WavesIcon, WindIcon, WorkflowIcon, WrapTextIcon, WrenchIcon, XCircleIcon, XIcon, XSquareIcon, ZapIcon, } from \"lucide-react\";\n",
-    "./src/index.d.ts": "export * from \"./components/accordion\";\nexport * from \"./components/application-rail\";\nexport * from \"./components/alert-dialog\";\nexport * from \"./components/workspace-shell\";\nexport * from \"./components/avatar\";\nexport * from \"./components/bidi-text\";\nexport * from \"./components/brand-icons\";\nexport * from \"./components/breadcrumb\";\nexport * from \"./components/button\";\nexport * from \"./components/checkbox\";\nexport * from \"./components/color-picker\";\nexport * from \"./components/combobox\";\nexport * from \"./components/command\";\nexport * from \"./components/copy-button\";\nexport * from \"./calendar\";\nexport * from \"./components/date-picker-popover\";\nexport * from \"./components/details-grid\";\nexport * from \"./components/destructive-action-confirmation\";\nexport * from \"./components/destructive-confirm-dialog\";\nexport * from \"./components/dialog\";\nexport * from \"./components/directional-icon\";\nexport * from \"./components/field\";\nexport * from \"./components/file-input\";\nexport * from \"./components/form\";\nexport * from \"./components/frame\";\nexport * from \"./components/hex-color-picker\";\nexport * from \"./components/input\";\nexport * from \"./components/inline-rename\";\nexport * from \"./components/input-group\";\nexport * from \"./components/list\";\nexport * from \"./components/search-field\";\nexport * from \"./components/input-otp\";\nexport * from \"./components/label\";\nexport * from \"./components/menu\";\nexport * from \"./components/menu-section\";\nexport * from \"./components/outline-rail\";\nexport * from \"./components/pagination\";\nexport * from \"./components/popover\";\nexport * from \"./components/preview-card\";\nexport * from \"./components/preview-pane\";\nexport * from \"./components/prose\";\nexport * from \"./components/scroll-area\";\nexport * from \"./components/scroll-to-top\";\nexport * from \"./components/secret-input\";\nexport * from \"./components/segmented-icon-toggle\";\nexport * from \"./components/select\";\nexport * from \"./components/separator\";\nexport * from \"./components/sheet\";\nexport * from \"./components/sidebar\";\nexport * from \"./components/skeleton\";\nexport * from \"./components/stella-mark\";\nexport * from \"./components/stella-wordmark\";\nexport * from \"./components/table\";\nexport * from \"./components/tabs\";\nexport * from \"./components/textarea\";\nexport * from \"./components/toast\";\nexport * from \"./components/tooltip\";\nexport * from \"./data-table\";\nexport * from \"./hooks/use-contained-handler\";\nexport * from \"./hooks/use-content-dir\";\nexport * from \"./hooks/use-latest\";\nexport * from \"./hooks/use-mobile\";\nexport * from \"./hooks/use-viewport-width\";\nexport * from \"./inspector\";\nexport * from \"./kanban\";\nexport * from \"./lib/control-size\";\nexport * from \"./lib/initials\";\nexport * from \"./lib/option-color\";\nexport * from \"./lib/overlay-layer\";\nexport * from \"./lib/typed-character\";\nexport * from \"./lib/utils\";\nexport * from \"./lib/week\";\nexport * from \"./review/review-author-avatar\";\nexport * from \"./review/review-comment-card\";\nexport * from \"./review/review-decision-actions\";\nexport * from \"./review/review-diff-text\";\nexport * from \"./review/review-out-of-date-notice\";\nexport * from \"./review/review-severity-dot\";\nexport * from \"./review/review-status-badge\";\n",
+    "./src/index.d.ts": "export * from \"./components/accordion\";\nexport * from \"./components/application-rail\";\nexport * from \"./components/alert-dialog\";\nexport * from \"./components/workspace-shell\";\nexport * from \"./components/avatar\";\nexport * from \"./components/badge\";\nexport * from \"./components/bidi-text\";\nexport * from \"./components/brand-icons\";\nexport * from \"./components/breadcrumb\";\nexport * from \"./components/button\";\nexport * from \"./components/checkbox\";\nexport * from \"./components/color-picker\";\nexport * from \"./components/combobox\";\nexport * from \"./components/command\";\nexport * from \"./components/copy-button\";\nexport * from \"./calendar\";\nexport * from \"./components/date-picker-popover\";\nexport * from \"./components/details-grid\";\nexport * from \"./components/destructive-action-confirmation\";\nexport * from \"./components/destructive-confirm-dialog\";\nexport * from \"./components/dialog\";\nexport * from \"./components/directional-icon\";\nexport * from \"./components/field\";\nexport * from \"./components/file-input\";\nexport * from \"./components/form\";\nexport * from \"./components/frame\";\nexport * from \"./components/hex-color-picker\";\nexport * from \"./components/input\";\nexport * from \"./components/inline-rename\";\nexport * from \"./components/input-group\";\nexport * from \"./components/list\";\nexport * from \"./components/search-field\";\nexport * from \"./components/input-otp\";\nexport * from \"./components/label\";\nexport * from \"./components/menu\";\nexport * from \"./components/menu-section\";\nexport * from \"./components/outline-rail\";\nexport * from \"./components/pagination\";\nexport * from \"./components/popover\";\nexport * from \"./components/preview-card\";\nexport * from \"./components/preview-pane\";\nexport * from \"./components/prose\";\nexport * from \"./components/scroll-area\";\nexport * from \"./components/scroll-to-top\";\nexport * from \"./components/secret-input\";\nexport * from \"./components/segmented-icon-toggle\";\nexport * from \"./components/select\";\nexport * from \"./components/separator\";\nexport * from \"./components/sheet\";\nexport * from \"./components/sidebar\";\nexport * from \"./components/skeleton\";\nexport * from \"./components/stella-mark\";\nexport * from \"./components/stella-wordmark\";\nexport * from \"./components/table\";\nexport * from \"./components/tabs\";\nexport * from \"./components/textarea\";\nexport * from \"./components/toast\";\nexport * from \"./components/tooltip\";\nexport * from \"./components/truncated-text\";\nexport * from \"./data-table\";\nexport * from \"./hooks/use-contained-handler\";\nexport * from \"./hooks/use-content-dir\";\nexport * from \"./hooks/use-latest\";\nexport * from \"./hooks/use-mobile\";\nexport * from \"./hooks/use-viewport-width\";\nexport * from \"./inspector\";\nexport * from \"./kanban\";\nexport * from \"./lib/control-size\";\nexport * from \"./lib/initials\";\nexport * from \"./lib/option-color\";\nexport * from \"./lib/overlay-layer\";\nexport * from \"./lib/typed-character\";\nexport * from \"./lib/utils\";\nexport * from \"./lib/week\";\nexport * from \"./review/review-author-avatar\";\nexport * from \"./review/review-comment-card\";\nexport * from \"./review/review-decision-actions\";\nexport * from \"./review/review-diff-text\";\nexport * from \"./review/review-out-of-date-notice\";\nexport * from \"./review/review-severity-dot\";\nexport * from \"./review/review-status-badge\";\n",
     "./src/inspector/chrome.d.ts": "import type * as React from \"react\";\nexport declare const Inspector: ({ className, ...props }: React.ComponentProps<\"aside\">) => React.JSX.Element;\nexport declare const InspectorRail: ({ className, ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\nexport declare const InspectorRailCell: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorRailContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorRailFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorRailIconButton: ({ className, ...props }: React.ComponentProps<\"button\">) => React.JSX.Element;\nexport declare const InspectorRailTab: ({ active, className, ...props }: React.ComponentProps<\"button\"> & {\n    active?: boolean;\n}) => React.JSX.Element;\nexport declare const InspectorHeader: ({ className, ...props }: React.ComponentProps<\"header\">) => React.JSX.Element;\nexport declare const InspectorHeaderText: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorTitle: ({ children, className, ...props }: React.ComponentProps<\"h2\">) => React.JSX.Element;\nexport declare const InspectorDescription: ({ className, ...props }: React.ComponentProps<\"p\">) => React.JSX.Element;\nexport declare const InspectorActions: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorSection: ({ className, ...props }: React.ComponentProps<\"section\">) => React.JSX.Element;\nexport declare const InspectorSectionTitle: ({ children, className, ...props }: React.ComponentProps<\"h3\">) => React.JSX.Element;\nexport declare const InspectorPropertyList: ({ className, ...props }: React.ComponentProps<\"dl\">) => React.JSX.Element;\nexport declare const InspectorProperty: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorPropertyLabel: ({ className, ...props }: React.ComponentProps<\"dt\">) => React.JSX.Element;\nexport declare const InspectorPropertyValue: ({ className, ...props }: React.ComponentProps<\"dd\">) => React.JSX.Element;\nexport declare const InspectorEmptyRow: ({ className, ...props }: React.ComponentProps<\"p\">) => React.JSX.Element;\n",
     "./src/inspector/dock.d.ts": "import type { ReactNode } from \"react\";\ntype InspectorResizeHandleProps = {\n    \"aria-orientation\": \"vertical\";\n    \"aria-valuemax\": number;\n    \"aria-valuemin\": number;\n    \"aria-valuenow\": number;\n    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;\n    onLostPointerCapture: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerCancel: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerMove: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerUp: (event: React.PointerEvent<HTMLElement>) => void;\n    tabIndex: number;\n};\nexport type InspectorDockMount = \"content\" | \"shell-end\";\ntype InspectorDockProps = {\n    children: ReactNode;\n    className?: string | undefined;\n    mount?: InspectorDockMount | undefined;\n    rail?: ReactNode | undefined;\n    resizeHandleLabel: string;\n    resizeHandleProps: InspectorResizeHandleProps;\n    onResetWidth?: (() => void) | undefined;\n    showPaneContent: boolean;\n    width: number;\n};\nexport declare const InspectorDock: ({ children, className, mount, onResetWidth, rail, resizeHandleLabel, resizeHandleProps, showPaneContent, width, }: InspectorDockProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/inspector/entity-tab.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nexport declare const InspectorEntityTab: ({ active, label, glyph, icon, inactiveIcon, onClose, onSelect, ...props }: InspectorEntityTabProps) => import(\"react\").JSX.Element;\ntype InspectorEntityTabPassthroughProps = Omit<ComponentProps<\"button\">, \"children\" | \"onAuxClick\" | \"onClick\">;\nexport type InspectorEntityTabInactiveIcon = \"dim\" | \"legible\";\nexport type InspectorEntityTabProps = {\n    active: boolean;\n    label: string;\n    glyph?: string | undefined;\n    icon: ReactNode;\n    inactiveIcon?: InspectorEntityTabInactiveIcon | undefined;\n    onClose?: (() => void) | undefined;\n    onSelect?: (() => void) | undefined;\n} & InspectorEntityTabPassthroughProps;\nexport declare const entityTabGlyph: (name: string, length?: number) => string;\nexport {};\n",
@@ -10378,6 +10750,7 @@
     "./src/lib/overlay-layer.d.ts": "export declare const BOARD_DRAG_OVERLAY_Z_INDEX = 75;\nexport declare const SHELL_CHROME_LAYER_CLASS_NAME = \"z-30\";\nexport declare const OVERLAY_LAYER_CLASS_NAMES: {\n    readonly chrome: \"z-[80]\";\n    readonly \"chrome-raised\": \"z-[81]\";\n    readonly default: \"z-[85]\";\n    readonly search: \"z-[86]\";\n    readonly popup: \"z-[100]\";\n    readonly \"search-child\": \"z-[100]\";\n};\nexport type OverlayLayer = keyof typeof OVERLAY_LAYER_CLASS_NAMES;\nexport declare const OVERLAY_COLLISION_PADDING = 8;\n",
     "./src/lib/panel-inset.d.ts": "export declare const DOCUMENT_PANEL_BOTTOM_INSET = \"--document-panel-bottom-inset\";\nexport declare const DOCUMENT_PANEL_SAFE_BOTTOM = \"max(env(safe-area-inset-bottom, 0px), var(--document-panel-bottom-inset, 0px))\";\nexport declare const publishDocumentPanelInset: (element: HTMLDivElement | null) => (() => void) | undefined;\n",
     "./src/lib/positioner-sizing.d.ts": "export declare const CONTENT_SIZED_POSITIONER_CLASS_NAME = \"w-max max-w-(--available-width)\";\nexport declare const IN_FLOW_POPUP_CLASS_NAME = \"relative!\";\n",
+    "./src/lib/scroll-edge-fade.d.ts": "export declare const SCROLL_EDGE_FADE_CLASS = \"mask-l-from-[calc(100%-min(var(--fade-size,1.5rem),var(--scroll-fade-left,0px)))] mask-r-from-[calc(100%-min(var(--fade-size,1.5rem),var(--scroll-fade-right,0px)))]\";\nexport declare const writeScrollEdgeFade: (node: HTMLElement) => void;\nexport declare const fadeScrollEdges: (node: HTMLElement | null) => (() => void) | undefined;\n",
     "./src/lib/typed-character.d.ts": "export type TypedCharacterEvent = Pick<KeyboardEvent, \"altKey\" | \"ctrlKey\" | \"getModifierState\" | \"isComposing\" | \"key\" | \"metaKey\">;\nexport declare const typedCharacter: (event: TypedCharacterEvent) => string | null;\n",
     "./src/lib/utils.d.ts": "import type * as React from \"react\";\nimport type { ClassValue } from \"clsx\";\nexport declare function cn(...inputs: ClassValue[]): string;\nexport declare const composeRefs: <T>(...refs: (React.Ref<T> | undefined)[]) => ((node: T | null) => (() => void) | undefined);\n",
     "./src/lib/week.d.ts": "export declare const getLocaleWeekInfo: (locale: string) => Intl.WeekInfo | undefined;\nexport declare const getFirstWeekday: (locale: string) => number;\nexport declare const getWeekendDays: (locale: string) => ReadonlySet<number>;\n",

@@ -126,6 +126,8 @@ const EXCLUDED_AUTOFIX = {
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",
+  "package-api-reports":
+    "API changes require explicit review and release intent",
 } as const;
 
 test("every committed generator has an explicit autofix purity decision", () => {

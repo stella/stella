@@ -13,7 +13,7 @@ checks:
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     run: |
       bun test scripts/package-api-report.test.ts scripts/changeset-entry.test.ts scripts/package-api-compatibility.test.ts scripts/package-api-export-space.test.ts
-      bun scripts/package-api-report.ts --check --base "$RATCHET_BASE_REF"
+      bun --preload ./scripts/offline-network-preload.ts scripts/package-api-report.ts --check --base "$RATCHET_BASE_REF"
 
   - name: Format
     env:

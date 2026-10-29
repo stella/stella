@@ -1686,10 +1686,25 @@ const GENERATOR_DECLARATIONS = [
       "scripts/package-api-export-space.ts",
       "scripts/publish-packages.ts",
     ],
-    checkInputs: ["scripts/changeset-entry.ts", ".changeset/*.md"],
+    checkInputs: [
+      ".prettierrc.yml",
+      "scripts/changeset-entry.ts",
+      "scripts/offline-network-preload.ts",
+      ".changeset/*.md",
+    ],
     write: ["bun", "scripts/package-api-report.ts", "--write"],
     check: null,
     checkedBy: "Published package API reports",
+    // The check compares against the pull request's Git base.
+    checkedWith: [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/package-api-report.ts",
+      "--check",
+      "--base",
+      '"$RATCHET_BASE_REF"',
+    ],
     // API changes require explicit review and release intent.
     autofix: false,
     after: [],

@@ -94,9 +94,9 @@ const declarationProgram = (
   rootNames: string[],
 ): ts.Program => {
   const host = ts.createCompilerHost(compilerOptions);
-  const originalRead = host.readFile;
-  const originalExists = host.fileExists;
-  const originalDirectoryExists = host.directoryExists;
+  const originalRead = host.readFile.bind(host);
+  const originalExists = host.fileExists.bind(host);
+  const originalDirectoryExists = host.directoryExists?.bind(host);
   const directories = new Set<string>();
   for (const file of files.keys()) {
     let directory = path.dirname(file);
@@ -682,10 +682,10 @@ if (import.meta.main) {
     const arg = args[index];
     if (arg === "--base") {
       const value = args.at(index + 1);
-      if (value === undefined || value.startsWith("--")) {
-        fail("--base requires a Git ref");
-      }
-      base = value;
+      base =
+        value === undefined || value.startsWith("--")
+          ? fail("--base requires a Git ref")
+          : value;
       index += 1;
       continue;
     }

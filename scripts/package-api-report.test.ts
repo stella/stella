@@ -74,8 +74,8 @@ const fixture = async (): Promise<string> => {
   return root;
 };
 
-const run = (root: string) =>
-  checkPackageApi({
+const run = async (root: string) =>
+  await checkPackageApi({
     root,
     base: "baseline",
     packageDirs: ["packages/fixture"],

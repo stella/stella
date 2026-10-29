@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import ts from "typescript6";
 
+/** `import type` marks the whole clause; TypeScript 6 spells it as a phase. */
+const typeOnlyImport = (clause: ts.ImportClause): boolean =>
+  clause.phaseModifier === ts.SyntaxKind.TypeKeyword;
+
 type RuntimeExportOptions = { program: ts.Program; file: string; name: string };
 
 // Following alias targets alone erases `export type` and `import type` edges.
@@ -34,7 +38,7 @@ export const hasRuntimeExport = ({
     (symbol.declarations ?? []).some((declaration) => {
       if (ts.isImportSpecifier(declaration)) {
         const clause = declaration.parent.parent;
-        if (declaration.isTypeOnly || clause.isTypeOnly) {
+        if (declaration.isTypeOnly || typeOnlyImport(clause)) {
           return false;
         }
         const module = moduleFrom(clause.parent.moduleSpecifier);
@@ -49,13 +53,13 @@ export const hasRuntimeExport = ({
       if (ts.isImportClause(declaration)) {
         const module = moduleFrom(declaration.parent.moduleSpecifier);
         return (
-          !declaration.isTypeOnly &&
+          !typeOnlyImport(declaration) &&
           module !== undefined &&
           fromModule(module, "default")
         );
       }
       if (ts.isNamespaceImport(declaration)) {
-        return !declaration.parent.isTypeOnly;
+        return !typeOnlyImport(declaration.parent);
       }
       if (ts.isImportEqualsDeclaration(declaration)) {
         return !declaration.isTypeOnly;
