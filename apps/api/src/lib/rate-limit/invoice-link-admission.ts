@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,6 +24,7 @@ export const createInvoiceLinkTokenAdmission =
         classifyFailure(
           new HandlerError({
             status: 503,
+            code: LIMITER_STORE_UNAVAILABLE.code,
             message: "Invoice link access is temporarily unavailable.",
             cause,
           }),
