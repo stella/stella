@@ -274,6 +274,71 @@ test("decreases need no baseline and merging main needs no generated edit", () =
   });
 }, 30_000);
 
+// timeout: exercises five real ratchet checks in an isolated Git clone.
+test("per-file shrink-only metrics follow Git-detected file moves", () => {
+  withClone((root) => {
+    const source = "apps/web/src/numeric-source.ts";
+    const destination = "apps/web/src/moved/numeric-destination.ts";
+    const numericCalls = (count: number) =>
+      `${Array.from(
+        { length: count },
+        (_, index) => `export const numeric${index} = Number(source${index});`,
+      ).join("\n")}\n`;
+    write({ root, relative: source, contents: numericCalls(20) });
+    commit(root, "add numeric fixture");
+    const base = git(root, "rev-parse", "HEAD");
+    git(root, "update-ref", "refs/remotes/origin/main", base);
+
+    const reset = () => {
+      git(root, "reset", "--hard", base);
+      git(root, "clean", "-fd");
+    };
+    const move = (contents = numericCalls(20)) => {
+      mkdirSync(path.dirname(path.join(root, destination)), {
+        recursive: true,
+      });
+      git(root, "mv", source, destination);
+      write({ root, relative: destination, contents });
+      commit(root, "move numeric fixture");
+      return check(root);
+    };
+
+    expect(move().code).toBe(0);
+
+    reset();
+    const increased = move(numericCalls(21));
+    expect(increased.code, increased.output).toBe(1);
+    expect(increased.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 1`,
+    );
+    expect(increased.output).toContain(`${destination}: 20 -> 21`);
+
+    reset();
+    expect(move(numericCalls(19)).code).toBe(0);
+
+    reset();
+    write({ root, relative: destination, contents: numericCalls(20) });
+    commit(root, "copy numeric fixture");
+    const copied = check(root);
+    expect(copied.code, copied.output).toBe(1);
+    expect(copied.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 20`,
+    );
+
+    reset();
+    const dissimilar = move(
+      "export const replacement = Number(replacement);\n",
+    );
+    expect(dissimilar.code, dissimilar.output).toBe(1);
+    expect(dissimilar.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 1`,
+    );
+    expect(dissimilar.output).toContain(
+      "edits below Git's similarity threshold are treated as a deletion plus an addition",
+    );
+  });
+}, 30_000);
+
 test("the measured base overrides stale headroom and explicit merge-group bases", () => {
   withClone((root) => {
     const oldBase = git(root, "rev-parse", "HEAD");
