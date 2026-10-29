@@ -777,6 +777,7 @@ describe("a docket at other courts", () => {
     "Okresní soud v Kolíně 65 A 3/2025",
     "rozsudek Okresního soudu v Kolíně 65 A 3/2025-12",
     "OS Kolín 65 A 3/2025",
+    "os Kolín 65 A 3/2025",
   ])(
     "a named court the corpus does not know never resolves another court's holder: %s",
     async (identifier) => {

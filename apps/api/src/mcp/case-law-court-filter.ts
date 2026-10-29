@@ -138,16 +138,17 @@ const courtVocabulary = (
 
 /**
  * The Czech and Slovak court short codes a citation writes in place of a
- * court's name (`KS Praha`, `OS Kolín`). `ÚS` is left out: it is also the
- * register of every Constitutional Court docket, and that court is always
- * recognised by name.
+ * court's name (`KS Praha`, `OS Kolín`), upper-cased because citations are
+ * typed in any case (`os Kolín`). `ÚS` is left out: it is also the register
+ * of every Constitutional Court docket, and that court is always recognised
+ * by name.
  */
 const courtShortCodes: ReadonlySet<string> = new Set(
   [
     ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.CZ),
     ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.SK),
   ]
-    .map(({ shortCode }) => shortCode)
+    .map(({ shortCode }) => shortCode.toUpperCase())
     .filter((shortCode) => shortCode !== "ÚS"),
 );
 
@@ -161,7 +162,9 @@ const COURT_NOUN = /(?:^|[^\p{L}])(?:soud|súd)\p{L}*/iu;
  */
 export const mentionsCourt = (text: string): boolean =>
   COURT_NOUN.test(text) ||
-  text.split(/[^\p{L}]+/u).some((word) => courtShortCodes.has(word));
+  text
+    .split(/[^\p{L}]+/u)
+    .some((word) => courtShortCodes.has(word.toUpperCase()));
 
 /** An apex court's abbreviation, and its English names where it has any. */
 const apexCourtAliases = (abbreviation: string): readonly string[] =>
