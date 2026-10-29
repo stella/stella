@@ -1,3 +1,0 @@
-{
-  "add-column": "The nullable reader_answer_language text column has no default, so PostgreSQL adds it in the catalog without rewriting user rows; lock acquisition is bounded by 5s and the statement by 30s."
-}
