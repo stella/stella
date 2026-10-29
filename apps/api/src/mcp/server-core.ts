@@ -35,6 +35,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { failureSink } from "@/api/lib/observability/failure";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
@@ -783,7 +784,6 @@ type BoundMcpToolResultOptions = {
   context: McpRequestResources;
   toolName: string;
   chargeReadBytes: typeof chargeMcpReadBytes;
-  captureError: McpServerDependencies["captureError"];
 };
 
 const boundMcpToolResult = async ({
@@ -795,7 +795,6 @@ const boundMcpToolResult = async ({
   context,
   toolName,
   chargeReadBytes,
-  captureError,
 }: BoundMcpToolResultOptions): Promise<CallToolResult> => {
   const policy = getTenantActionSizePolicy();
   const hasOutput =
@@ -834,15 +833,7 @@ const boundMcpToolResult = async ({
     if (Result.isOk(charged)) {
       return result;
     }
-    if (charged.error.reason === "unavailable") {
-      captureError(
-        charged.error,
-        handlerErrorContext("boundMcpToolResult.charged_error", {
-          phase: "read-fence",
-          source: "mcp",
-        }),
-      );
-    }
+    observeLimiterAdmissionFailure(charged.error, "mcp");
     const refusal = actionAdmissionRefusal(charged.error);
     return mcpStructuredErrorResult({
       code: refusal.code,
@@ -1035,7 +1026,6 @@ export const createMcpHttpRequestHandler = ({
         context,
         toolName,
         chargeReadBytes,
-        captureError,
       });
     };
     let consumesServices = definition.consumesServices;
@@ -1068,18 +1058,7 @@ export const createMcpHttpRequestHandler = ({
       return admitted.value;
     }
     if (ActionAdmissionError.is(admitted.error)) {
-      if (admitted.error.reason === "unavailable") {
-        captureError(
-          admitted.error,
-          handlerErrorContext(
-            "createMcpHttpRequestHandler.handleToolsCallRequest.admitted_error",
-            {
-              phase: "action-admission",
-              source: "mcp",
-            },
-          ),
-        );
-      }
+      observeLimiterAdmissionFailure(admitted.error, "mcp");
       const refusal = actionAdmissionRefusal(admitted.error);
       return mcpStructuredErrorResult({
         code: refusal.code,

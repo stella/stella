@@ -21,6 +21,7 @@ import { cn } from "@stll/ui/utils";
 
 import { readerCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
 import type { ReaderCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
+import { previewQuotation } from "@/components/legal-reader/citation-copy.logic";
 import type { SelectionCopyText } from "@/components/selection-toolbar-copy.logic";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
@@ -30,8 +31,6 @@ import {
   CapabilityActionChrome,
 } from "@/lib/organization/feature-access/capability-actions";
 
-/** How much of a long quotation the preview shows before trimming. */
-const PREVIEW_QUOTE_CHARS = 220;
 const MENU_ESTIMATED_HEIGHT_PX = 200;
 // Room for the options and a readable preview beside them.
 const MENU_MIN_WIDTH_PX = 416;
@@ -118,10 +117,7 @@ export const SelectionCopyMenu = ({
   // Preserve the text selection while positioning the portaled menu in the
   // viewport; open upward when the space below the trigger cannot fit it.
   const [menuBox, setMenuBox] = useState<ReaderCopyMenuBox | null>(null);
-  const previewQuote =
-    quote.length > PREVIEW_QUOTE_CHARS
-      ? `${quote.slice(0, PREVIEW_QUOTE_CHARS)}…`
-      : quote;
+  const previewQuote = previewQuotation(quote);
 
   return (
     <div className="relative">
@@ -173,8 +169,9 @@ export const SelectionCopyMenu = ({
             <MenuPreviewLayout
               preview={
                 // The menu's width is set from the toolbar, so the pane
-                // gets what the options leave.
-                <PreviewPane className="w-full">
+                // gets what the options leave. A citation longer than the
+                // box scrolls inside it rather than losing its last lines.
+                <PreviewPane className="w-full" overflow="scroll">
                   {previewMode !== null && (
                     <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
                       {textFor(previewMode, previewQuote).segments.map(

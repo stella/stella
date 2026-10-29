@@ -41,6 +41,13 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/web/src/lib/preload-error-recovery.ts",
+    class: "package-owned-client",
+    reason:
+      "Probes the bounded same-origin version manifest to distinguish deployment skew from transient chunk transport failures.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/api/src/db/sql-client.ts",
     class: "operator-configured-infrastructure",
     reason: "Creates every Bun SQL client and drizzle database for the API.",
@@ -1096,6 +1103,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Probes development service endpoints and local TCP ports for the configured stack.",
     transports: ["global:fetch", "module:node:net"],
+  },
+  {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",

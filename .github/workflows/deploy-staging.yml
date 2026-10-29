@@ -642,17 +642,59 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # A candidate's GitHub release stays a draft until production publishes it,
+  # and only a token with push access can see a draft. This job alone holds
+  # that scope and reads only the manifest, so promotion keeps a read-only
+  # token.
+  rc-manifest:
+    name: Resolve RC manifest images
+    needs: resolve
+    if: github.ref == 'refs/heads/main' && inputs.release_ref != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # read the candidate's draft release
+    outputs:
+      api: ${{ steps.manifest.outputs.api }}
+      web: ${{ steps.manifest.outputs.web }}
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve RC manifest images
+        timeout-minutes: 5
+        id: manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          [[ "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || { echo '::error::Expected an RC tag'; exit 1; }
+          mkdir -p "$RUNNER_TEMP/rc-manifest"
+          bash scripts/gh-retry.sh release download "$RELEASE_REF" --pattern release-manifest.json --dir "$RUNNER_TEMP/rc-manifest"
+          manifest="$RUNNER_TEMP/rc-manifest/release-manifest.json"
+          jq -e --arg sha "$DEPLOY_SHA" --arg ref "$RELEASE_REF" '.commit == $sha and .version == $ref and .webImage.targetEnvironment == "staging"' "$manifest" >/dev/null
+          echo "api=$(jq -er '.image.digest' "$manifest")" >> "$GITHUB_OUTPUT"
+          echo "web=$(jq -er '.webImage.digest' "$manifest")" >> "$GITHUB_OUTPUT"
+
   # The builds run after a skipped wake when staging was already up. A job's
   # default condition skips it when any job it depends on through `needs` was
   # skipped, which promoted nothing yet ended the run green, so promotion
   # names the build results it depends on instead.
   promote-staging:
     name: Promote staging images
-    needs: [resolve, staging-health, staging-wake, build-api, build-web]
+    needs:
+      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]
     if: >-
       !cancelled() && github.ref == 'refs/heads/main' &&
       needs.resolve.result == 'success' &&
-      ((inputs.release_ref != '' &&
+      ((inputs.release_ref != '' && needs.rc-manifest.result == 'success' &&
       (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')) ||
       (needs.build-api.result == 'success' && needs.build-web.result == 'success'))
     runs-on: ubuntu-24.04
@@ -718,27 +760,6 @@ jobs:
             exit 1
           fi
 
-      # Watches the dispatched run to completion: a promote that fails after
-      # the dispatch is accepted must fail this job, so verify-staging is
-      # skipped by `needs` instead of blocking on a commit that will never
-      # be served.
-      - name: Resolve RC manifest images
-        timeout-minutes: 5
-        id: rc-images
-        if: inputs.release_ref != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_REF: ${{ inputs.release_ref }}
-          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
-        run: |
-          [[ "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || { echo '::error::Expected an RC tag'; exit 1; }
-          mkdir -p "$RUNNER_TEMP/rc-manifest"
-          bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" --pattern release-manifest.json --dir "$RUNNER_TEMP/rc-manifest"
-          manifest="$RUNNER_TEMP/rc-manifest/release-manifest.json"
-          jq -e --arg sha "$DEPLOY_SHA" --arg ref "$RELEASE_REF" '.commit == $sha and .version == $ref and .webImage.targetEnvironment == "staging"' "$manifest" >/dev/null
-          echo "api=$(jq -er '.image.digest' "$manifest")" >> "$GITHUB_OUTPUT"
-          echo "web=$(jq -er '.webImage.digest' "$manifest")" >> "$GITHUB_OUTPUT"
-
       - name: Wait for the current staging owner
         timeout-minutes: 125
         env:
@@ -746,6 +767,10 @@ jobs:
           STAGING_OWNER_MODE: ${{ inputs.release_ref != '' && 'candidate' || 'ordinary' }}
         run: bash "$STAGING_OWNER_SCRIPT"
 
+      # Watches the dispatched run to completion: a promote that fails after
+      # the dispatch is accepted must fail this job, so verify-staging is
+      # skipped by `needs` instead of blocking on a commit that will never
+      # be served.
       - name: Deploy to staging
         # Waits for the infra staging promote; the job's other steps keep the rest.
         timeout-minutes: 350
@@ -757,14 +782,14 @@ jobs:
           workflow-file: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
           release-ref: ${{ inputs.release_ref || needs.build-api.outputs.release-ref }}
           target-environment: staging
-          image-digest: ${{ steps.rc-images.outputs.api || needs.build-api.outputs.digest }}
-          web-image-digest: ${{ steps.rc-images.outputs.web || needs.build-web.outputs.digest }}
+          image-digest: ${{ needs.rc-manifest.outputs.api || needs.build-api.outputs.digest }}
+          web-image-digest: ${{ needs.rc-manifest.outputs.web || needs.build-web.outputs.digest }}
           git-sha: ${{ inputs.release_ref == '' && needs.resolve.outputs.sha || '' }}
           # The infrastructure promote holds its own lease while it runs: the
           # first lease bridges until it starts, the second covers every later
           # step's timeout-minutes (scripts/staging-proof-lease.test.ts).
           staging-lease-before-hours: ${{ inputs.release_ref != '' && '1' || '' }}
-          staging-lease-after-hours: ${{ inputs.release_ref != '' && '3' || '' }}
+          staging-lease-after-hours: ${{ inputs.release_ref != '' && '4' || '' }}
           staging-lease-sha: ${{ inputs.release_ref != '' && needs.resolve.outputs.sha || '' }}
 
       # The commit staging is running, recorded where it outlives this run.

@@ -10,6 +10,8 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE = "apps/api/src/";
 const SHARED_OWNER = `${API_SOURCE}db/shared-pool-timeouts.ts`;
 const DEDICATED_OWNER = `${API_SOURCE}db/long-running-connection.ts`;
+const DEDICATED_BUDGET_OWNER = `${API_SOURCE}db/dedicated-connection-timeouts.ts`;
+const DEDICATED_OWNERS = new Set([DEDICATED_OWNER, DEDICATED_BUDGET_OWNER]);
 
 // These modules run under the migrator's independently reserved connection.
 const MIGRATION_OWNERS = new Set([
@@ -65,7 +67,7 @@ export const isTimeoutMutationSource = (file: string): boolean =>
   !/\.(?:test|spec|d)\.ts$/u.test(file) &&
   !STANDALONE_CONNECTION_OWNERS.has(file) &&
   file !== SHARED_OWNER &&
-  file !== DEDICATED_OWNER &&
+  !DEDICATED_OWNERS.has(file) &&
   !MIGRATION_OWNERS.has(file);
 
 type SourceLoader = (file: string) => string | undefined;
@@ -383,13 +385,14 @@ const inspectSql = (sql: string): string[] => {
 /** The dedicated timeout owner may only configure its own reserved client. */
 export const findDedicatedOwnerViolations = (
   source: string,
+  { file = DEDICATED_OWNER }: { file?: string } = {},
 ): TimeoutMutation[] => {
-  const parsed = sourceFile(DEDICATED_OWNER, source);
+  const parsed = sourceFile(file, source);
   const findings: TimeoutMutation[] = [];
   const setterAliases = new Set(SHARED_HANDLE_EXPORTS);
   const record = (node: ts.Node, setting: string): void => {
     findings.push({
-      file: DEDICATED_OWNER,
+      file,
       line:
         parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
       setting,
@@ -400,7 +403,7 @@ export const findDedicatedOwnerViolations = (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
-      const target = modulePath(DEDICATED_OWNER, node.moduleSpecifier.text);
+      const target = modulePath(file, node.moduleSpecifier.text);
       if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
         record(node, `shared-pool import ${node.moduleSpecifier.text}`);
       }
@@ -427,7 +430,7 @@ export const findDedicatedOwnerViolations = (
       if (specifier === undefined || !ts.isStringLiteral(specifier)) {
         record(node, "dynamic import");
       } else {
-        const target = modulePath(DEDICATED_OWNER, specifier.text);
+        const target = modulePath(file, specifier.text);
         if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
           record(node, `shared-pool import ${specifier.text}`);
         }
@@ -455,8 +458,8 @@ export const findApiTimeoutMutations = (
   source: string,
   load: SourceLoader = defaultSourceLoader,
 ): TimeoutMutation[] => {
-  if (file === DEDICATED_OWNER) {
-    return findDedicatedOwnerViolations(source);
+  if (DEDICATED_OWNERS.has(file)) {
+    return findDedicatedOwnerViolations(source, { file });
   }
   if (!isTimeoutMutationSource(file) || !MAY_MUTATE_TIMEOUT.test(source)) {
     return [];
@@ -541,7 +544,7 @@ export const checkApiTimeoutMutations = ({
 }: ScanOptions = {}): TimeoutMutation[] => {
   const findings: TimeoutMutation[] = [];
   for (const file of files) {
-    if (file !== DEDICATED_OWNER && !isTimeoutMutationSource(file)) {
+    if (!DEDICATED_OWNERS.has(file) && !isTimeoutMutationSource(file)) {
       continue;
     }
     findings.push(...findApiTimeoutMutations(file, read(file)));
@@ -556,9 +559,9 @@ if (import.meta.main) {
   const findings = checkApiTimeoutMutations();
   for (const { file, line, setting } of findings) {
     console.error(
-      file === DEDICATED_OWNER
+      DEDICATED_OWNERS.has(file)
         ? `${file}:${line}: dedicated timeout owner must use its reserved connection; forbidden ${setting}`
-        : `${file}:${line}: ${setting} mutation must use ${SHARED_OWNER} (or ${DEDICATED_OWNER} on a dedicated connection)`,
+        : `${file}:${line}: ${setting} mutation must use ${SHARED_OWNER} (or ${DEDICATED_BUDGET_OWNER} on a dedicated connection)`,
     );
   }
   if (findings.length > 0) {
