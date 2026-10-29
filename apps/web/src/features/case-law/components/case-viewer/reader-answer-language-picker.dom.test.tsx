@@ -60,3 +60,24 @@ test("hides the language picker when UI and document languages match", () => {
   );
   expect(view.queryByRole("button")).toBeNull();
 });
+
+test("keeps an active override reachable when UI and document languages match", async () => {
+  const changed: string[] = [];
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ReaderAnswerLanguagePicker
+        documentLanguage="en-GB"
+        value="fr"
+        disabled={false}
+        onChange={(value) => changed.push(value)}
+      />
+    </IntlProvider>,
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: messages.readerAnswers.answerLanguage }),
+  );
+  fireEvent.click(
+    await view.findByRole("menuitemradio", { name: /Document language/u }),
+  );
+  expect(changed).toEqual(["document"]);
+});

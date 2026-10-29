@@ -27,7 +27,11 @@ export const ReaderAnswerLanguagePicker = ({
 }) => {
   const t = useTranslations();
   const uiLanguage = useMessageLocale();
-  if (documentLanguage.split("-").at(0) === uiLanguage.split("-").at(0)) {
+  const documentLanguageBase = documentLanguage.split("-").at(0);
+  if (
+    documentLanguageBase === uiLanguage.split("-").at(0) &&
+    (value === "document" || value.split("-").at(0) === documentLanguageBase)
+  ) {
     return null;
   }
   const languageName = (language: string) =>
