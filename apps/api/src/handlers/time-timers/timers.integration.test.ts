@@ -313,6 +313,67 @@ describe("global timer lifecycle", () => {
     expect(entries).toHaveLength(1);
   });
 
+  test.each(["another matter", "no matter"] as const)(
+    "confirmation after assigning a timer from %s persists the destination and replays once",
+    async (initialAssignment) => {
+      const bothMatters = context([ids.wsA1, ids.wsA2]);
+      const started = await startTimer.handler(
+        createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+          ...bothMatters,
+          body: checkedBody(startTimer.config.body, {
+            matterId: initialAssignment === "another matter" ? ids.wsA1 : null,
+            description: "Research for the destination matter",
+          }),
+        }),
+      );
+      if ("code" in started) {
+        throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+      }
+      expect((await readTimer(started.id))?.workspaceId).toBe(
+        initialAssignment === "another matter" ? ids.wsA1 : null,
+      );
+      setSystemTime(new Date("2026-09-02T00:01:00.000Z"));
+      const reassigned = await updateTimer.handler(
+        createTestHandlerContext<Parameters<typeof updateTimer.handler>[0]>({
+          ...bothMatters,
+          params: { id: started.id },
+          body: checkedBody(updateTimer.config.body, { matterId: ids.wsA2 }),
+        }),
+      );
+      expect(reassigned).toMatchObject({ id: started.id, matterId: ids.wsA2 });
+      const confirmation = createTestHandlerContext<
+        Parameters<typeof confirmTimer.handler>[0]
+      >({
+        ...bothMatters,
+        params: { id: started.id },
+        body: checkedBody(confirmTimer.config.body, { timezoneId: "UTC" }),
+      });
+      const completed = await confirmTimer.handler(confirmation);
+      if ("code" in completed) {
+        throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+      }
+      expect(await readTimer(started.id)).toBeUndefined();
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: completed.id } },
+        }),
+      ).toMatchObject({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA2,
+        userId: ids.userA1,
+        source: TIME_ENTRY_SOURCE.TIMER,
+        status: BILLING_STATUS.DRAFT,
+        durationMinutes: 2,
+      });
+      const auditCount = auditEvents.length;
+      expect(await confirmTimer.handler(confirmation)).toEqual(completed);
+      expect(auditEvents).toHaveLength(auditCount);
+      expect(
+        await db.$count(timeEntries, eq(timeEntries.id, completed.id)),
+      ).toBe(1);
+    },
+  );
+
   test("replaying confirmation after entry deletion refuses to recreate it", async () => {
     const timer = await start();
     const completed = await confirm(timer.id);
