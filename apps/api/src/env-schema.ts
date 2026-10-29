@@ -9,6 +9,10 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
+import {
+  type AppleSignInInput,
+  resolveAppleSignIn,
+} from "@/api/env-apple-sign-in";
 import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
@@ -24,6 +28,7 @@ import {
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
 import { emailAddressSchema } from "@/api/lib/email/normalized-email";
+import { converterSettingsSchema } from "@/api/lib/files/converter-settings";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -268,8 +273,6 @@ export const envApiServerSchema = {
       v.maxLength(2),
     ),
   ),
-  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
-  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "0"),
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
@@ -371,9 +374,7 @@ export const envApiServerSchema = {
   ),
   FRONTEND_URL: v.pipe(v.string(), v.url()),
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-  GOTENBERG_URL: v.pipe(v.string(), v.url()),
-  GOTENBERG_USERNAME: v.string(),
-  GOTENBERG_PASSWORD: v.string(),
+  ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
@@ -508,6 +509,12 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
+
+  // Social login — Apple. The client secret is minted from the key in process.
+  APPLE_AUTH_CLIENT_ID: v.optional(v.string()),
+  APPLE_AUTH_TEAM_ID: v.optional(v.string()),
+  APPLE_AUTH_KEY_ID: v.optional(v.string()),
+  APPLE_AUTH_PRIVATE_KEY: v.optional(v.string()),
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_USAGE: featureFlagSchema,
@@ -971,7 +978,8 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = InboundMailReceivingInput &
-  EmailEventsInput & {
+  EmailEventsInput &
+  AppleSignInInput & {
     APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
     APP_REVIEW_ORGANIZATION_ID?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
@@ -1063,15 +1071,28 @@ const managedProviderCheckInvariantViolation = ({
   ) {
     return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
   }
+  const standardCredential =
+    !!OPENROUTER_API_KEY?.trim() ||
+    (OPENROUTER_WIF_POLICY_ID !== undefined && configuredSharedWifFields === 2);
+  const fastCredential =
+    !!OPENROUTER_FAST_TIER_API_KEY?.trim() ||
+    (OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined &&
+      configuredSharedWifFields === 2);
+  // Instance availability is answered once for the deployment, while each
+  // request dispatches on its own tier's credential. Requiring the standard
+  // credential beside the fast one (and the fast one under the free floor
+  // below) keeps the two answers equal for every organization's tier.
+  if (fastCredential && !standardCredential) {
+    return "OPENROUTER_FAST_TIER_API_KEY or OPENROUTER_FAST_TIER_WIF_POLICY_ID requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration for the standard tier.";
+  }
   // The free floor runs on the fast tier's own credential and never on the
   // standard one, so a managed free tier without it would refuse every
-  // request; refuse the configuration at boot instead.
-  if (
-    FEATURE_FREE_TIER &&
-    AI_PROVIDER === "openrouter" &&
-    !OPENROUTER_FAST_TIER_API_KEY?.trim() &&
-    !(OPENROUTER_FAST_TIER_WIF_POLICY_ID && configuredSharedWifFields === 2)
-  ) {
+  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
+  // deployment may still resolve to OpenRouter from its standard credential.
+  const openRouterMayServe =
+    AI_PROVIDER === "openrouter" ||
+    (AI_PROVIDER === undefined && standardCredential);
+  if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
     return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
@@ -1148,6 +1169,7 @@ const delegatedInvariantViolation = (
     EmailEventsInput &
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
+    AppleSignInInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
@@ -1167,7 +1189,11 @@ const delegatedInvariantViolation = (
     return inboundMail.error.message;
   }
   const emailEvents = resolveEmailEvents(input);
-  return emailEvents.isErr() ? emailEvents.error.message : null;
+  if (emailEvents.isErr()) {
+    return emailEvents.error.message;
+  }
+  const appleSignIn = resolveAppleSignIn(input);
+  return appleSignIn.isErr() ? appleSignIn.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
@@ -1219,6 +1245,10 @@ export const envApiInvariantViolation = ({
   EMAIL_EVENTS_QUEUE_URL,
   EMAIL_EVENTS_TOPIC_ARN,
   EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
+  APPLE_AUTH_CLIENT_ID,
+  APPLE_AUTH_TEAM_ID,
+  APPLE_AUTH_KEY_ID,
+  APPLE_AUTH_PRIVATE_KEY,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -1256,6 +1286,10 @@ export const envApiInvariantViolation = ({
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,
+    APPLE_AUTH_CLIENT_ID,
+    APPLE_AUTH_TEAM_ID,
+    APPLE_AUTH_KEY_ID,
+    APPLE_AUTH_PRIVATE_KEY,
     runtimeMode,
   });
   if (delegatedViolation !== null) {

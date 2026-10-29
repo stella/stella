@@ -347,8 +347,8 @@ describe("pl-courts nested tables", () => {
     const row = await rowById(DUMP_PAGE, 332_735);
     const nestedTable = [
       "<table><tbody><tr><td><p>Outer cell</p>",
-      "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
-      "</td></tr></tbody></table>",
+      "<table><tbody><tr><td><p>Nested cell</p></td><td><p>Nested side</p></td></tr></tbody></table>",
+      "</td><td><p>Side cell</p></td></tr></tbody></table>",
     ].join("");
     const decision = decisionFrom({
       listingRow: { ...row, textContent: nestedTable },

@@ -4,6 +4,7 @@ import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { panic } from "better-result";
 
 import { Button } from "@stll/ui/button";
+import { HorizontalScroller } from "@stll/ui/horizontal-scroller";
 import { cn } from "@stll/ui/utils";
 
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
@@ -16,15 +17,20 @@ type SuggestedAction = {
 
 export type SuggestedActionSurfaceName = "plain" | "floating" | "overlay";
 
-type SuggestedActionsProps = {
+/**
+ * `row` keeps chips on one line that scrolls sideways, with scroll controls
+ * the caller labels; `wrap` lays chips out over multiple rows; `vertical`
+ * stacks them.
+ */
+type SuggestedActionsLayout =
+  | { orientation?: "vertical" | "wrap"; scrollLabels?: never }
+  | { orientation: "row"; scrollLabels: { next: string; previous: string } };
+
+type SuggestedActionsProps = SuggestedActionsLayout & {
   actions: SuggestedAction[];
   onSelect: (id: string) => void;
   /** Accessible group label (callers pass a translated string). */
   label: string;
-  /**
-   * `wrap` lays chips out over multiple rows; `vertical` stacks them.
-   */
-  orientation?: "vertical" | "wrap";
   /**
    * `plain` suits a solid background. `floating` gives each chip an opaque
    * surface so it reads cleanly over document/editor content. `overlay` is
@@ -122,6 +128,8 @@ const UNMOVED_TRANSLATE = new Set(["", "none", "0px", "0px 0px"]);
 
 type SuggestedActionChipProps = {
   action: SuggestedAction;
+  /** Sizing within the group: a scrolling row keeps each chip whole. */
+  className: string;
   keyShortcut: string | undefined;
   onSelect: (id: string) => void;
   surface: SuggestedActionSurfaceName;
@@ -135,6 +143,7 @@ type SuggestedActionChipProps = {
  */
 const SuggestedActionChip = ({
   action,
+  className,
   keyShortcut,
   onSelect,
   surface,
@@ -192,7 +201,7 @@ const SuggestedActionChip = ({
   };
 
   return (
-    <SuggestedActionSurface className="max-w-full" surface={surface}>
+    <SuggestedActionSurface className={className} surface={surface}>
       <Button
         aria-keyshortcuts={keyShortcut}
         className={cn("text-foreground font-normal", "max-w-full")}
@@ -231,13 +240,14 @@ const SuggestedActionChip = ({
 };
 
 /**
- * A wrapping row (or stack) of click-to-run suggested-action chips.
+ * A row, wrapping row or stack of click-to-run suggested-action chips.
  */
 export const SuggestedActions = ({
   actions,
   onSelect,
   label,
   orientation = "wrap",
+  scrollLabels,
   surface = "plain",
   keyShortcut,
   className,
@@ -246,14 +256,17 @@ export const SuggestedActions = ({
     return null;
   }
 
-  const wraps = orientation === "wrap";
+  const row = orientation === "row";
 
-  return (
+  const group = (
     <div
       aria-label={label}
       className={cn(
-        "flex max-w-full gap-1.5",
-        wraps ? "flex-wrap items-start" : "flex-col items-start",
+        "flex gap-1.5",
+        // The scroller's viewport clips; the padding keeps the chips' shadow.
+        row ? "flex-nowrap items-center py-1" : "max-w-full items-start",
+        orientation === "wrap" && "flex-wrap",
+        orientation === "vertical" && "flex-col",
         className,
       )}
       role="group"
@@ -261,6 +274,7 @@ export const SuggestedActions = ({
       {actions.map((action) => (
         <SuggestedActionChip
           action={action}
+          className={cn(row ? "shrink-0" : "max-w-full")}
           key={action.id}
           keyShortcut={keyShortcut}
           onSelect={onSelect}
@@ -268,5 +282,17 @@ export const SuggestedActions = ({
         />
       ))}
     </div>
+  );
+
+  if (scrollLabels === undefined) {
+    return group;
+  }
+  return (
+    <HorizontalScroller
+      nextLabel={scrollLabels.next}
+      previousLabel={scrollLabels.previous}
+    >
+      {group}
+    </HorizontalScroller>
   );
 };

@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -17,7 +18,9 @@ import {
   CASE_LAW_SCENARIOS,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  seedSitemapReadBudget,
 } from "./corpus-seed";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { seedQueryPerf } from "./seed";
 
 /** Tenant statements, measured as `stella` under row security per profile. */
@@ -29,11 +32,14 @@ export const queryPerfRegistry = (
       budgetId: "statement.documents.searchHits",
       query: buildDocumentSearchQueries(seed.searchInput).hitsQuery,
       expectedRows: Math.min(seed.searchMatchCount, seed.searchInput.limit + 1),
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.documents.searchHits"],
     },
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     query: SQLWrapper;
     expectedRows: number;
+    ownerDeadlineMs: number | undefined;
   }[];
 
 /** Public corpus statements, measured on the corpus profile as its owner. */
@@ -52,14 +58,18 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
           },
         ),
       expectedRows: LEGISLATION_CANDIDATE_COUNT,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.legislation.candidateRows"],
     },
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
     expectedRows: number;
+    ownerDeadlineMs: number | undefined;
   }[];
 
 type ScheduledJobMeasurement = {
+  prepare?: typeof seedSitemapReadBudget;
   task: string;
   scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
 };
@@ -75,6 +85,11 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  "caseLaw.refreshSitemapShards.hourly": {
+    task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    prepare: seedSitemapReadBudget,
+    scenarios: [CASE_LAW_SCENARIOS.quiet],
+  },
   "caseLaw.reportFreshness.fiveMinute": {
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
@@ -123,7 +138,9 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
+  "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
-} as const satisfies Record<ReadBudgetId, "corpus" | "tenant">;
+} as const satisfies Record<ReadBudgetId, "corpus" | "tenant" | "coverage">;
