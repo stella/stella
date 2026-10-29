@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { format } from "prettier";
 
 import policyCensus from "./role-policy-census.json" with { type: "json" };
 import roleCensus from "./role-privilege-census.json" with { type: "json" };
@@ -297,10 +296,9 @@ export const assertCompleteCensus = (expected: Census, actual: Census) => {
   assertPolicyCensus(expected.policies, actual.policies);
 };
 
-const formatCensus = async (value: unknown) =>
-  await format(JSON.stringify(value), { parser: "json" });
+const formatCensus = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
-export const writeRolePrivilegeCensus = async (census: Census) => {
-  writeFileSync(censusPath, await formatCensus(census.roles));
-  writeFileSync(policyCensusPath, await formatCensus(census.policies));
+export const writeRolePrivilegeCensus = (census: Census) => {
+  writeFileSync(censusPath, formatCensus(census.roles));
+  writeFileSync(policyCensusPath, formatCensus(census.policies));
 };
