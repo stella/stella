@@ -15,7 +15,8 @@ import { createRandomValue } from "@/lib/uuid";
 const CHANNEL_NAME = "mcp-oauth";
 const MESSAGE_KIND = "stll.mcp-oauth";
 const REQUEST_TTL_MS = 10 * 60 * 1000;
-const observers = new Set<(outcome: McpOAuthOutcome) => void>();
+const outcomeEvents = new EventTarget();
+const OUTCOME_EVENT = "accepted-outcome";
 
 type PostMessageOpener = {
   postMessage: (message: unknown, targetOrigin: string) => void;
@@ -41,6 +42,15 @@ const mcpOAuthMessageSchema = v.variant("status", [
 
 export type McpOAuthOutcome =
   { status: "connected" } | { status: "error"; reason: string };
+
+class AcceptedMcpOAuthOutcomeEvent extends Event {
+  readonly outcome: McpOAuthOutcome;
+
+  constructor(outcome: McpOAuthOutcome) {
+    super(OUTCOME_EVENT);
+    this.outcome = outcome;
+  }
+}
 
 export type McpOAuthReceipt =
   | { type: "accepted"; outcome: McpOAuthOutcome }
@@ -106,9 +116,9 @@ export const openMcpOAuthWindow = (
     unsubscribe();
     window.clearTimeout(expiry);
     onOutcome?.(receipt.outcome);
-    for (const observer of observers) {
-      observer(receipt.outcome);
-    }
+    outcomeEvents.dispatchEvent(
+      new AcceptedMcpOAuthOutcomeEvent(receipt.outcome),
+    );
   });
   const expiry = window.setTimeout(unsubscribe, REQUEST_TTL_MS);
   // A new _blank window starts as same-origin about:blank. Navigation to
@@ -243,8 +253,13 @@ function subscribeToRawMcpOAuthOutcome(
 export function subscribeToMcpOAuthOutcome(
   handler: (outcome: McpOAuthOutcome) => void,
 ): () => void {
-  observers.add(handler);
+  const onOutcome = (event: Event) => {
+    if (event instanceof AcceptedMcpOAuthOutcomeEvent) {
+      handler(event.outcome);
+    }
+  };
+  outcomeEvents.addEventListener(OUTCOME_EVENT, onOutcome);
   return () => {
-    observers.delete(handler);
+    outcomeEvents.removeEventListener(OUTCOME_EVENT, onOutcome);
   };
 }

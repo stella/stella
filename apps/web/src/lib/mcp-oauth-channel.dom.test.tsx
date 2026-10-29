@@ -33,15 +33,15 @@ test("concurrent authorization windows deliver only their own completion", () =>
   const first: unknown[] = [];
   const second: unknown[] = [];
   try {
-    openMcpOAuthWindow("https://example.test/authorize", (outcome) =>
-      first.push(outcome),
-    );
+    openMcpOAuthWindow("https://example.test/authorize", (outcome) => {
+      first.push(outcome);
+    });
     const firstNonce = requireBrowserStorage("session")
       .unwrap()
       .getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
-    openMcpOAuthWindow("https://example.test/authorize", (outcome) =>
-      second.push(outcome),
-    );
+    openMcpOAuthWindow("https://example.test/authorize", (outcome) => {
+      second.push(outcome);
+    });
     const secondNonce = requireBrowserStorage("session")
       .unwrap()
       .getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
@@ -60,9 +60,9 @@ test("concurrent authorization windows deliver only their own completion", () =>
 test("a pending window refuses missing, foreign and other-origin completion", () => {
   const open = spyOn(window, "open").mockReturnValue(window);
   const observed: unknown[] = [];
-  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) =>
-    observed.push(outcome),
-  );
+  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) => {
+    observed.push(outcome);
+  });
   try {
     openMcpOAuthWindow("https://example.test/authorize");
     const nonce = requireBrowserStorage("session")
@@ -88,9 +88,9 @@ test("a pending window refuses missing, foreign and other-origin completion", ()
 test("completed authorization windows notify observers once", () => {
   const open = spyOn(window, "open").mockReturnValue(window);
   const observed: unknown[] = [];
-  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) =>
-    observed.push(outcome),
-  );
+  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) => {
+    observed.push(outcome);
+  });
   try {
     openMcpOAuthWindow("https://example.test/authorize");
     const nonce = requireBrowserStorage("session")
@@ -140,9 +140,9 @@ test("callback consumes its origin-scoped request nonce once", async () => {
   const { broadcastMcpOAuthOutcome } = await import("./mcp-oauth-channel");
   const open = spyOn(window, "open").mockReturnValue(window);
   const observed: unknown[] = [];
-  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) =>
-    observed.push(outcome),
-  );
+  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) => {
+    observed.push(outcome);
+  });
   try {
     openMcpOAuthWindow("https://example.test/authorize");
     expect(
@@ -192,11 +192,13 @@ test("unmounted request callbacks expire while mounted connection observers refr
   const open = spyOn(window, "open").mockReturnValue(window);
   const callbacks: unknown[] = [];
   const observed: unknown[] = [];
-  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) =>
-    observed.push(outcome),
-  );
+  const unsubscribe = subscribeToMcpOAuthOutcome((outcome) => {
+    observed.push(outcome);
+  });
   const RequestControl = () => {
-    const openWindow = useMcpOAuthWindow((outcome) => callbacks.push(outcome));
+    const openWindow = useMcpOAuthWindow((outcome) => {
+      callbacks.push(outcome);
+    });
     return createElement(
       "button",
       {
