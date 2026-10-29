@@ -5,6 +5,8 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
+import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
@@ -66,6 +68,11 @@ export const measureScheduledJobRun = async ({
           }),
       }),
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
+  // The search configuration is cached for 60 s, and the scheduled jobs run
+  // minutes apart, so a production run reads it cold. Every measured run does
+  // too, instead of depending on what an earlier run left in the cache.
+  resetPublicCaseLawConfigForTesting();
+  resetLocalCaseLawConfigForTesting();
   const measured = await measureJobStatements({
     database,
     run: async (db) =>
