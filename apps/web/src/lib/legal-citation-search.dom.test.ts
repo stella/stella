@@ -2,6 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
+import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
@@ -50,7 +54,10 @@ const decision = {
   decisionDate: "2025-05-01",
   decisionType: "rozsudek",
   sourceUrl: null,
-  headnote: null,
+  headnote: {
+    type: TEXT_FIELD_TYPE.ABSENT,
+    reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  },
   headline: null,
   keywords: null,
   textWithheldReason: null,
@@ -239,7 +246,9 @@ describe("shared legal citation lookup", () => {
     if (shared.type !== "decisions") {
       throw new TypeError("The ECLI should return a decision");
     }
-    expect(shared.items.at(0)?.id).toBe(ecliDecision.decisionId);
+    expect(shared.items.at(0)?.id).toBe(
+      toSafeId<"caseLawDecision">(ecliDecision.decisionId),
+    );
     expect(opened).toBe(true);
     const commandHit = citationCommandHits(shared).at(0);
     if (commandHit === undefined) {

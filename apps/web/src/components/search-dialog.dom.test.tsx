@@ -5,6 +5,10 @@ import type { AnyRouter } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import {
   SEARCH_PAGE_REACH,
@@ -94,7 +98,10 @@ const citationResponse = {
       decisionDate: "2026-01-29",
       decisionType: "judgment",
       sourceUrl: null,
-      headnote: null,
+      headnote: {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      },
       keywords: null,
       textWithheldReason: null,
       headline: null,
