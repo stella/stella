@@ -122,6 +122,7 @@ const matterSchema = v.strictObject({
     matter: archivePathSchema,
     tasks: recordFileSchema,
     timeEntries: recordFileSchema,
+    expenses: recordFileSchema,
     invoices: recordFileSchema,
   }),
   folders: v.array(folderSchema),

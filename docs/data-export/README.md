@@ -6,7 +6,7 @@ export is a set of ZIP parts plus one export manifest.
 
 Scope: every client matter of the organisation with its folders, documents
 (all live versions, or only current ones), tasks, time entries and
-invoices, and the organisation's contacts, clauses, templates and time
+invoices, expenses, and the organisation's contacts, clauses, templates and time
 entries without a matter. Not included: personal matters (matters without
 a client, which belong to one member), deleted document versions, `link`
 entities, and custom property values. This page describes the format; the machine-readable
@@ -31,14 +31,15 @@ organization/                       part 1 only
   contact-relationships.json / .csv
   clauses.json / .csv               JSON carries versions and variants
   templates.json / .csv             JSON carries versions
-  invoices-without-matter.json / .csv  client invoices with lines, payments and expenses
+  invoices-without-matter.json / .csv  client invoices with lines and payments
   time-entries-without-matter.json / .csv
   templates/<name>/<file> (v<n>).<ext>
 matters/<matter name> [<reference>]/
   matter.json                       with linked contacts and their roles
   tasks.json / .csv                 JSON carries assignees
+  expenses.json / .csv              all expenses, whether invoiced or unbilled
   time-entries.json / .csv
-  invoices.json / .csv              JSON carries invoice lines, payments and expenses
+  invoices.json / .csv              JSON carries invoice lines and payments
   documents/<folders>/<file>        current version of each document
   versions/<folders>/<file> (v<n>).<ext>   earlier versions
 ```

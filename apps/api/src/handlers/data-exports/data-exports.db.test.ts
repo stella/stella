@@ -877,6 +877,7 @@ describe("run ownership", () => {
     const lineId = createSafeId<"invoiceLine">();
     const paymentId = createSafeId<"invoicePayment">();
     const expenseId = createSafeId<"expense">();
+    const unbilledExpenseId = createSafeId<"expense">();
     const matterInvoiceId = createSafeId<"invoice">();
     const matterPaymentId = createSafeId<"invoicePayment">();
     const source = createExportSource({
@@ -888,7 +889,7 @@ describe("run ownership", () => {
       signal: new AbortController().signal,
       pace: async () => {},
     });
-    const baselineBytes = await source.measureRecords([]);
+    const baselineBytes = await source.measureRecords([ids.wsA1]);
     await testDb.insert(invoices).values({
       id: invoiceId,
       organizationId: ids.orgA,
@@ -927,19 +928,34 @@ describe("run ownership", () => {
       origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
       recordedBy: ids.userAdmin,
     });
-    await testDb.insert(expenses).values({
-      id: expenseId,
-      organizationId: ids.orgA,
-      workspaceId: ids.wsA1,
-      userId: ids.userA1,
-      matterId: documentId,
-      dateIncurred: "2026-09-30",
-      amount: cents(121),
-      currency: "EUR",
-      category: "filing_fee",
-      description: "Client invoice expense",
-      invoiceId,
-    });
+    await testDb.insert(expenses).values([
+      {
+        id: expenseId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        matterId: documentId,
+        dateIncurred: "2026-09-30",
+        amount: cents(121),
+        currency: "EUR",
+        category: "filing_fee",
+        description: "Client invoice expense",
+        invoiceId,
+      },
+      {
+        id: unbilledExpenseId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        matterId: documentId,
+        dateIncurred: "2026-09-29",
+        amount: cents(75),
+        currency: "EUR",
+        category: "filing_fee",
+        description: "Unbilled matter expense",
+        invoiceId: null,
+      },
+    ]);
     await testDb.insert(invoices).values({
       id: matterInvoiceId,
       organizationId: ids.orgA,
@@ -976,7 +992,6 @@ describe("run ownership", () => {
                   }),
                 ),
                 payments: v.array(v.object({ id: v.string() })),
-                expenses: v.array(v.object({ id: v.string() })),
               }),
             ),
           }),
@@ -991,19 +1006,49 @@ describe("run ownership", () => {
         workspaceId: null,
         lines: [{ id: lineId, workspaceId: ids.wsA1 }],
         payments: [{ id: paymentId }],
-        expenses: [{ id: expenseId }],
       });
+      expect(organizationInvoiceRows[0]).not.toHaveProperty("expenses");
       const measured = await source.measureRecords([]);
       expect(measured.organizationBytes).toBeGreaterThan(
         baselineBytes.organizationBytes,
       );
       expect(measured.matterBytes.size).toBe(0);
+      const measuredMatter = await source.measureRecords([ids.wsA1]);
+      const baselineMatterBytes = baselineBytes.matterBytes.get(ids.wsA1);
+      const measuredMatterBytes = measuredMatter.matterBytes.get(ids.wsA1);
+      expect(baselineMatterBytes).toBeDefined();
+      expect(measuredMatterBytes).toBeDefined();
+      if (
+        baselineMatterBytes === undefined ||
+        measuredMatterBytes === undefined
+      ) {
+        throw new Error("Matter measurement omitted a requested workspace");
+      }
+      expect(measuredMatterBytes).toBeGreaterThan(baselineMatterBytes);
 
       const matters = await Promise.all(
         [ids.wsA1, ids.wsA2].map(
           async (workspaceId) => await source.loadMatter(workspaceId, "all"),
         ),
       );
+      const matterExpenses = matters.flatMap((matter) =>
+        matter === null
+          ? []
+          : v.parse(
+              v.object({
+                expenses: v.object({
+                  rows: v.array(v.object({ id: v.string() })),
+                }),
+              }),
+              matter,
+            ).expenses.rows,
+      );
+      expect(matterExpenses.filter((row) => row.id === expenseId)).toHaveLength(
+        1,
+      );
+      expect(
+        matterExpenses.filter((row) => row.id === unbilledExpenseId),
+      ).toHaveLength(1);
       const matterInvoiceRows = matters.flatMap((matter) =>
         matter === null ? [] : matter.invoices.rows,
       );
@@ -1017,7 +1062,9 @@ describe("run ownership", () => {
         matterInvoiceRows.find((row) => row["id"] === matterInvoiceId),
       ).toMatchObject({ payments: [{ id: matterPaymentId }] });
     } finally {
-      await testDb.delete(expenses).where(eq(expenses.id, expenseId));
+      await testDb
+        .delete(expenses)
+        .where(inArray(expenses.id, [expenseId, unbilledExpenseId]));
       await testDb
         .delete(invoices)
         .where(inArray(invoices.id, [invoiceId, matterInvoiceId]));

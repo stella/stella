@@ -424,7 +424,25 @@ const readMatterRecords = async (
           .limit(DATA_EXPORT_PAGE_SIZE),
     );
   const timeEntryRows = await readAll(readTimeEntryRowsPage);
-  return { contactLinks, assignees, timeEntryRows };
+  const expenseRows = await readAll(
+    async (cursor) =>
+      await db(
+        async (tx) =>
+          await tx
+            .select()
+            .from(expenses)
+            .where(
+              and(
+                eq(expenses.organizationId, organizationId),
+                dataExportRecordScope(expenses, workspaceId),
+                after(expenses.id, cursor),
+              ),
+            )
+            .orderBy(asc(expenses.id))
+            .limit(DATA_EXPORT_PAGE_SIZE),
+      ),
+  );
+  return { contactLinks, assignees, timeEntryRows, expenseRows };
 };
 
 /** Invoice children follow the selected invoice, including lines billed across matters. */
@@ -481,23 +499,7 @@ const readInvoiceRecords = async (
             ),
       ),
   );
-  const expenseRows = await readForParents(
-    invoiceRows.map((row) => row.id),
-    async (invoiceIds) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select()
-            .from(expenses)
-            .where(
-              and(
-                eq(expenses.organizationId, organizationId),
-                inArray(expenses.invoiceId, invoiceIds),
-              ),
-            ),
-      ),
-  );
-  return { invoiceRows, lineRows, paymentRows, expenseRows };
+  return { invoiceRows, lineRows, paymentRows };
 };
 
 const invoiceRecords = (
@@ -511,19 +513,12 @@ const invoiceRecords = (
     records.paymentRows.toSorted((a, b) => compareCodeUnit(a.id, b.id)),
     (row) => row.invoiceId,
   );
-  const costs = groupBy(
-    records.expenseRows,
-    (row) => row.invoiceId ?? panic("Exported invoice expense has no invoice"),
-  );
   return table(INVOICE_COLUMNS, records.invoiceRows, (row) => ({
     lines: arrayOrEmpty(lines.get(String(row["id"]))).map((line) =>
       projectRecord(line, INVOICE_LINE_COLUMNS),
     ),
     payments: arrayOrEmpty(payments.get(String(row["id"]))).map((payment) =>
       projectRecord(payment, INVOICE_PAYMENT_COLUMNS),
-    ),
-    expenses: arrayOrEmpty(costs.get(String(row["id"]))).map((cost) =>
-      projectRecord(cost, EXPENSE_COLUMNS),
     ),
   }));
 };
@@ -665,6 +660,7 @@ const loadMatter = async (
       ),
     })),
     timeEntries: table(TIME_ENTRY_COLUMNS, records.timeEntryRows),
+    expenses: table(EXPENSE_COLUMNS, records.expenseRows),
     invoices: invoiceRecords(billing),
   };
 };
@@ -872,7 +868,7 @@ const measureRecords = async (
         dataExportRecordScope(invoices, null),
       ),
     ],
-    ...[invoiceLines, invoicePayments, expenses].map(
+    ...[invoiceLines, invoicePayments].map(
       (child) =>
         [
           child,
@@ -928,6 +924,7 @@ const measureRecords = async (
     [taskAssignees, taskAssignees.workspaceId],
     [workspaceContacts, workspaceContacts.workspaceId],
     [timeEntries, timeEntries.workspaceId],
+    [expenses, expenses.workspaceId],
     [invoices, invoices.workspaceId],
   ];
   const rows = await readForParents(
@@ -944,7 +941,7 @@ const measureRecords = async (
         async (tx) =>
           await tx.execute(
             sql`SELECT workspace_id::text AS workspace_id, COALESCE(SUM(bytes), 0)::bigint::text AS bytes FROM (${perRow} UNION ALL ${sql.join(
-              [invoiceLines, invoicePayments, expenses].map(
+              [invoiceLines, invoicePayments].map(
                 (child) =>
                   sql`SELECT ${invoices.workspaceId} AS workspace_id, ${expandedTextBytes(child)} AS bytes FROM ${child} INNER JOIN ${invoices} ON ${invoices.id} = ${child.invoiceId} WHERE ${inArray(invoices.workspaceId, ids)} AND ${child.organizationId} = ${organizationId}`,
               ),

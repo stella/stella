@@ -131,6 +131,7 @@ export type SourceMatter = {
   documents: readonly SourceDocument[];
   tasks: RecordTable;
   timeEntries: RecordTable;
+  expenses: RecordTable;
   invoices: RecordTable;
 };
 
@@ -297,7 +298,7 @@ const readme = ({
     "",
     "matters/<matter>/documents   current version of every document",
     'matters/<matter>/versions    earlier versions, named "<name> (v<n>)"',
-    "matters/<matter>/*.json      matter, tasks, time entries and invoices",
+    "matters/<matter>/*.json      matter, tasks, time entries, expenses and invoices",
     "organization/                contacts, clauses and templates (part 1)",
     "",
     "JSON files are the canonical records. CSV files are for spreadsheets:",
@@ -531,6 +532,12 @@ const matterEntries = async function* ({
     baseName: "time-entries",
     table: matter.timeEntries,
   });
+  const expenses = recordEntries({
+    context,
+    directory: matterDir,
+    baseName: "expenses",
+    table: matter.expenses,
+  });
   const invoices = recordEntries({
     context,
     directory: matterDir,
@@ -539,6 +546,7 @@ const matterEntries = async function* ({
   });
   yield* tasks.entries;
   yield* timeEntries.entries;
+  yield* expenses.entries;
   yield* invoices.entries;
 
   const documentsDir = `${matterDir}/documents`;
@@ -641,6 +649,7 @@ const matterEntries = async function* ({
       matter: matterJson,
       tasks: tasks.ref,
       timeEntries: timeEntries.ref,
+      expenses: expenses.ref,
       invoices: invoices.ref,
     },
     folders: matter.folders.map((folder) => ({

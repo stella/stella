@@ -189,6 +189,7 @@ const matterFixture = ({
         rows: [{ id: `task-${id}`, name: "=SUM(A1)" }],
       },
       timeEntries: emptyTable,
+      expenses: emptyTable,
       invoices: emptyTable,
     },
   };

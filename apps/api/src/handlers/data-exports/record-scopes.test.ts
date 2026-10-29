@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { getTableColumns, is } from "drizzle-orm";
+import { getColumns, is } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -102,8 +102,8 @@ const allCallsIn = (node: ts.Node): ts.CallExpression[] => {
 
 const enclosingFunctionBindings = (node: ts.Node) => {
   const bindings: { name: string; parameters: string[] }[] = [];
-  let current: ts.Node | undefined = node.parent;
-  while (current !== undefined && !ts.isSourceFile(current)) {
+  let current = node.parent;
+  while (!ts.isSourceFile(current)) {
     if (
       ts.isVariableDeclaration(current) &&
       ts.isIdentifier(current.name) &&
@@ -145,8 +145,8 @@ const scopedQueryCalls = (tableName: string) => {
       node.expression.text === "dataExportRecordScope" &&
       isIdentifierArgument(node.arguments.at(0), tableName)
     ) {
-      let ancestor: ts.Node | undefined = node.parent;
-      while (ancestor !== undefined && !ts.isSourceFile(ancestor)) {
+      let ancestor = node.parent;
+      while (!ts.isSourceFile(ancestor)) {
         if (
           ts.isVariableDeclaration(ancestor) &&
           ancestor.initializer !== undefined &&
@@ -196,7 +196,7 @@ const scopesFromReaderQueries = (tableName: string) => {
 
 const nullableWorkspaceRecordTables = () =>
   [...exportedRecordTables()].flatMap(([name, table]) => {
-    const workspaceColumn = Object.values(getTableColumns(table)).find(
+    const workspaceColumn = Object.values(getColumns(table)).find(
       (column) => column.name === "workspace_id",
     );
     return workspaceColumn === undefined || workspaceColumn.notNull

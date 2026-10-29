@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, getTableColumns, isNull } from "drizzle-orm";
+import { eq, getColumns, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -10,7 +10,7 @@ export const dataExportRecordScope = (
   table: PgTable,
   workspaceId: SafeId<"workspace"> | null,
 ): SQL => {
-  const workspaceColumn = Object.values(getTableColumns(table)).find(
+  const workspaceColumn = Object.values(getColumns(table)).find(
     (column) => column.name === "workspace_id",
   );
   if (workspaceColumn === undefined) {
