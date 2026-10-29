@@ -1242,6 +1242,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
       "apps/api/scripts/export-mcp-tool-registry.ts",
+      "apps/api/src/lib/safe-handler-factories.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-citation-projection.ts",

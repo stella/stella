@@ -1393,6 +1393,7 @@ describe("handleMcpHttpRequest", () => {
         "read_provision_history",
         "resolve_case_law_decision",
         "resolve_law_citation",
+        "verify_quote",
       ]);
       expect(
         listed.tools.find(({ name }) => name === "read_case_law_citations")

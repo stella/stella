@@ -12,9 +12,16 @@ import {
   measureWebHandoff,
 } from "@/api/tests/read-scaling/handoff";
 
+import { measureVerifyQuote } from "./verify-quote";
+
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
 export const mcpScalingScenarios = [
+  {
+    name: "verify_quote" satisfies McpToolName,
+    kind: "stored-decision" as const,
+    measure: measureVerifyQuote,
+  },
   {
     name: "list_documents" satisfies McpToolName,
     kind: "database-page" as const,

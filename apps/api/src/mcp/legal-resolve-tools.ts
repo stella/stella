@@ -64,7 +64,7 @@ const lawCountrySchema = countryInputSchema(
   "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
 );
 const decisionCountrySchema = countryInputSchema(
-  "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
+  "Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable.",
 );
 const resolveDecisionArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -72,7 +72,7 @@ const resolveDecisionArgsSchema = nullAsAbsent(
     identifier: v.pipe(
       citationText,
       v.description(
-        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
+        "Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law.",
       ),
     ),
   }),
@@ -158,7 +158,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+      "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: decision/text, continue with read_case_law_decision; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {

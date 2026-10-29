@@ -41,6 +41,7 @@ import {
   isMcpToolVisibleTo,
   type McpToolVisibleTo,
 } from "@/api/mcp/tool-visibility";
+import { VERIFY_QUOTE_TOOL_SET } from "@/api/mcp/verify-quote-tools";
 import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
 import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
@@ -50,6 +51,7 @@ export { MCP_STATIC_TOOL_NAMES };
 type DefaultMcpToolSets = readonly [
   typeof COMPAT_TOOL_SET,
   typeof STELLA_TOOL_SET,
+  typeof VERIFY_QUOTE_TOOL_SET,
   typeof DECISION_READER_TOOL_SET,
   typeof LEGISLATION_TOOL_SET,
   typeof LEGAL_RESOLVE_TOOL_SET,
@@ -68,6 +70,7 @@ type DefaultMcpToolSets = readonly [
 export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
+  VERIFY_QUOTE_TOOL_SET,
   DECISION_READER_TOOL_SET,
   LEGISLATION_TOOL_SET,
   LEGAL_RESOLVE_TOOL_SET,
@@ -95,6 +98,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS: readonly RegisteredMcpToolDefinition[
   [
     ...COMPAT_TOOL_SET.definitions,
     ...STELLA_TOOL_SET.definitions,
+    ...VERIFY_QUOTE_TOOL_SET.definitions,
     ...DECISION_READER_TOOL_SET.definitions,
     ...LEGISLATION_TOOL_SET.definitions,
     ...LEGAL_RESOLVE_TOOL_SET.definitions,
@@ -373,6 +377,7 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   resolve_law_citation: "corpus",
   case_law_coverage: "corpus",
   read_case_law_decision: "corpus",
+  verify_quote: "corpus",
   open_case_law_decision: "corpus",
   read_case_law_decision_blocks: "corpus",
   preview_cited_provision: "corpus",
@@ -408,6 +413,7 @@ export const MCP_PUBLIC_CORPUS_CLASS = {
   resolve_law_citation: "browse",
   case_law_coverage: "browse",
   read_case_law_decision: "browse",
+  verify_quote: "browse",
   open_case_law_decision: "browse",
   read_case_law_decision_blocks: "browse",
   preview_cited_provision: "browse",

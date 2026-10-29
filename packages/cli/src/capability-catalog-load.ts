@@ -12,6 +12,7 @@ import type {
   CapabilityCatalogEntry,
   CatalogTransport,
 } from "./generate-capability-tree.js";
+import { CAPABILITY_HANDLER_KINDS } from "./generated/mcp-contract.js";
 import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
 
 const jsonSchemaSchema = v.record(v.string(), v.unknown());
@@ -37,7 +38,7 @@ const catalogEntrySchema = v.object({
   featureAccess: v.optional(v.picklist(["required", "conditional"])),
   id: v.string(),
   description: v.optional(v.string()),
-  handlerKind: v.picklist(["workspace", "root", "session"]),
+  handlerKind: v.picklist(CAPABILITY_HANDLER_KINDS),
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
   confirmation: v.optional(v.literal("required")),

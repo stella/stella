@@ -31,6 +31,12 @@ type ReadBudget = {
 };
 
 export const READ_BUDGETS = {
+  "statement.caseLaw.quoteRecord": {
+    surface: "statement",
+    pages: 64,
+    reason:
+      "One decision by primary key, its source by primary key and its bounded identifier index range. 64 shared buffers allow index descent, visibility checks and TOAST access for the stored AST; independent of corpus cardinality.",
+  },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
     pages: 256,
@@ -90,6 +96,7 @@ export type ScheduledJobReads =
 
 /** The budgets each MCP tool's hot statements are measured against. */
 export const MCP_TOOL_READ_BUDGETS = {
+  verify_quote: ["statement.caseLaw.quoteRecord"],
   search: ["statement.documents.searchHits"],
   search_across_matters: ["statement.documents.searchHits"],
   search_legislation: ["statement.legislation.candidateRows"],

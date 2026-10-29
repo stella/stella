@@ -1,7 +1,9 @@
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
+import { decisionRecordQuery } from "@/api/handlers/case-law/decisions/get";
 import { legislationCandidateRowsStatement } from "@/api/handlers/legislation/search";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type {
   ReadBudgetId,
   ScheduledJobReadBudgetId,
@@ -43,6 +45,17 @@ export const queryPerfRegistry = (
 /** Public corpus statements, measured on the corpus profile as its owner. */
 export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   [
+    {
+      budgetId: "statement.caseLaw.quoteRecord",
+      build: (tx: TransactionOf<GatedTestDb>) =>
+        decisionRecordQuery(
+          asTestRaw<CaseLawPublicReadTransaction>(tx),
+          seed.quoteDecisionId,
+        ),
+      expectedRows: 1,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.caseLaw.quoteRecord"],
+    },
     {
       budgetId: "statement.legislation.candidateRows",
       build: (tx: TransactionOf<GatedTestDb>) =>
@@ -130,6 +143,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "statement.caseLaw.quoteRecord": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
   "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",

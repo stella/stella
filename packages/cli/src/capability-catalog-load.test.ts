@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
+import { CAPABILITY_HANDLER_KINDS } from "./generated/mcp-contract.js";
 
 // `parseCapabilityCatalog` is the trust boundary between the committed catalog
 // snapshot (produced api-side) and both consumers: build-time codegen (which
@@ -25,6 +26,16 @@ const validEntry = (
 });
 
 describe("parseCapabilityCatalog fail-closed parsing", () => {
+  test.each(CAPABILITY_HANDLER_KINDS)(
+    "preserves the API's %s handler kind",
+    (handlerKind) => {
+      expect(
+        parseCapabilityCatalog([validEntry({ handlerKind })])?.at(0)
+          ?.handlerKind,
+      ).toBe(handlerKind);
+    },
+  );
+
   test("preserves deployment ownership independently from caller feature access", () => {
     expect(
       parseCapabilityCatalog([validEntry({ feature: "FEATURE_EXAMPLE" })]),

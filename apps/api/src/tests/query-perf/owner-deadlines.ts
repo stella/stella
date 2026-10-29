@@ -9,5 +9,6 @@ export const QUERY_PERF_OWNER_DEADLINES = {
     CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
   "statement.legislation.candidateRows":
     PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
+  "statement.caseLaw.quoteRecord": PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse,
   "statement.documents.searchHits": undefined,
 } as const satisfies Record<ReadBudgetId, number | undefined>;

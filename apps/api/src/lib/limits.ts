@@ -619,6 +619,9 @@ export const LIMITS = {
    * citation; anything longer is prose and belongs in a text search.
    */
   caseLawIdentifierMaxLength: 256,
+  caseLawQuoteMaxChars: 4000,
+  caseLawQuoteMaxTokens: 128,
+  caseLawQuoteMaxSegments: 16,
   /**
    * Decisions listed when a reference names more than one. Past a handful the
    * reference names a list of decisions rather than a decision, and the

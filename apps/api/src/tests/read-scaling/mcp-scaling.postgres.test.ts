@@ -53,7 +53,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 readScalingViolations({ small: plain10, large: plain200 }),
               ).toEqual([]);
             }
-            const expectedRows = scenario.kind === "credential-mint" ? 1 : 10;
+            const expectedRows =
+              scenario.kind === "credential-mint" ||
+              scenario.kind === "stored-decision"
+                ? 1
+                : 10;
             expect(at10.rows).toBe(expectedRows);
             expect(at200.rows).toBe(expectedRows);
             expect(at10.statements).toBeGreaterThan(0);

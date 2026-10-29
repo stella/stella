@@ -142,7 +142,7 @@ const OPEN_DECISION_TOOL_DEFINITION = defineValibotMcpTool({
   name: "open_case_law_decision",
   annotations: { ...readOnlyAnnotations, title: "Open case-law decision" },
   description:
-    "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
+    "Open a decision the user asks to read/open: metadata, outline, small target window. paragraphs uses court-printed numbers (48 or 48-53); url opens that range in the web reader. Once per answer at most.",
   inputSchema: openDecisionArgs,
   _meta: {
     ui: {

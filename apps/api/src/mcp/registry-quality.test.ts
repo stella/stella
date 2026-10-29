@@ -363,6 +363,11 @@ test("every read tool permission declaration stays visible in review", () => {
         "name": "search_legislation",
         "reason": "public legislation corpus",
       },
+      {
+        "kind": "open-read",
+        "name": "verify_quote",
+        "reason": "public case-law corpus",
+      },
     ]
   `);
 });

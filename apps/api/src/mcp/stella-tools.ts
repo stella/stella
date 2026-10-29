@@ -698,7 +698,7 @@ const caseLawCoverageArgsSchema = nullAsAbsent(
     country: v.optional(
       v.pipe(
         countryInputSchema(
-          "Corpus country; omit for all jurisdictions, including those in preparation.",
+          "Corpus country; omit for all jurisdictions, including in preparation.",
         ),
         v.minLength(LIMITS.caseLawCoverageCountryMinLength),
       ),
@@ -771,7 +771,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     ),
     cursor: cursorInput({
       description:
-        "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
+        "Prior search_case_law cursor; same queries/order. Tracks each query's position, not prior output: overlapping queries can repeat decisions across pages. Key results by decisionId.",
       maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
     }),
     court: v.optional(
@@ -796,7 +796,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.minLength(1),
         v.maxLength(128),
         v.description(
-          'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+          'Exact metadata.category, e.g. "A"/"B"; does not imply Sbírka publication. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable.',
         ),
       ),
     ),
@@ -806,7 +806,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Provision cited, e.g. "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions apply across decision countries. Sections include subsections. Abbreviations mean the act in force today; name earlier acts by number (č. 65/1965 Sb.). With queries: topic decisions applying it; without: all citing decisions, exact total.',
         ),
       ),
     ),
@@ -814,7 +814,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
+          "True: nonempty stored legal sentence (právní věta); false: none. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable.",
         ),
       ),
     ),
@@ -856,7 +856,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.picklist(SEARCH_SORTS),
         v.description(
-          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
+          `Order; default '${DEFAULT_SEARCH_SORT}'. relevance blends text match, citation authority and court rank; newest sorts by decision date, undated last. Docket/ECLI queries use identity lookup and ignore sort.`,
         ),
       ),
     ),
@@ -864,7 +864,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
+          "Require every query word, including function words. Default off: questions include words absent from judgments; `searches[].queryUsed` reports required words. Set true when every word matters.",
         ),
       ),
     ),
@@ -906,7 +906,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(LIMITS.caseLawDecisionBatchMax),
       v.description(
-        `The decisions to read, at most ${LIMITS.caseLawDecisionBatchMax} per call. Each id is answered on its own, so one unknown id does not sink the rest.`,
+        `Decisions, max ${LIMITS.caseLawDecisionBatchMax}/call; each id answered independently, including unknown ids.`,
       ),
     ),
     max_chars: v.optional(
@@ -916,7 +916,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Requested page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. A batch stays within ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters the same way.`,
+          `Page chars per decision: 1–${MCP_CONTENT_MAX_CHARS}. Batch cap ${READ_DECISION_BATCH_MAX_TEXT_CHARS}: equal shares; unused chars finish whole decisions in input order; still-cut decisions keep equal shares. Omitted: share ${MCP_CONTENT_MAX_CHARS} chars by the same rule.`,
         ),
       ),
     ),
@@ -926,7 +926,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.integer(),
         v.minValue(LIMITS.caseLawDecisionFirstPage),
         v.description(
-          "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging.",
+          "Page N: Nth text window, default 1; applies to every batch decision. Keep max_chars fixed while paging.",
         ),
       ),
     ),
@@ -934,7 +934,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars.`,
+          `true: whole text, cap ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars shared per batch; unused shares finish whole decisions in input order. Longer text continues on page 2. No max_chars.`,
         ),
       ),
     ),
@@ -943,7 +943,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawDecisionTextVersionMaxLength),
         v.description(
-          "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only.",
+          "Prior textVersion; changed text returns the requested current page with versionChanged. Single decision only.",
         ),
       ),
     ),
@@ -952,7 +952,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawIdentifierMaxLength),
         v.description(
-          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full.",
+          "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. Replaces paging; no page/full.",
         ),
       ),
     ),
@@ -960,7 +960,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.array(v.picklist(DECISION_READ_INCLUDE)),
         v.description(
-          "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only.",
+          "Fields: details (court/date/ECLI/url/source_url), metadata (other publisher fields), textFields (published abstract/headnote/legalSentence/summary), source (publisher name), citations (summary), outline (single decision). Omit: all on page 1, none later or with query. []: text/identity only.",
         ),
       ),
     ),
@@ -973,7 +973,7 @@ const readCaseLawCitationsArgsSchema = nullAsAbsent(
     direction: v.pipe(
       v.picklist(CITATION_READ_DIRECTIONS),
       v.description(
-        "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+        "cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments.",
       ),
     ),
     doctrine: v.optional(
@@ -1002,8 +1002,7 @@ const readCaseLawCitationsArgsSchema = nullAsAbsent(
       ),
     ),
     cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous read_case_law_citations call to read the next page",
+      description: "Prior read_case_law_citations nextCursor for the next page",
     }),
   }),
 );
@@ -1119,7 +1118,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: `${SEARCH_CASE_LAW_TEXTS.description} Use \`url\` for the reader and \`source_url\` for the publisher.`,
+    description: `${SEARCH_CASE_LAW_TEXTS.description} Reader: \`url\`; publisher: \`source_url\`.`,
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1158,7 +1157,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+      "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1213,15 +1212,15 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
-      "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
-      "text_version; versionChanged flags changed text. " +
+      "Read `decision_ids[]` in order; `page`: `max_chars` window. " +
+      "Returns page/pageCount, textSource 'ast'/'fulltext'. Pass textVersion as " +
+      "text_version; versionChanged flags text changes. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches, neighbours and deep links. Page 1 adds " +
-      "reader/publisher URL, metadata, textFields and citation summaries (top " +
+      "`query`: matches/neighbours/deep links. Page 1: " +
+      "reader/publisher URLs, metadata, textFields, citation summaries (top " +
       `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
-      "Use read_case_law_citations for all citations. One id adds an outline. " +
-      "`include` picks fields; [] returns text and identity only.",
+      "All citations: read_case_law_citations. One id adds outline. " +
+      "`include` selects fields; []: text/identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -1254,17 +1253,17 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
-      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
-      "'unclassified' means unread; 'mixed' means mentions disagreed. " +
-      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
-      "'not_stated' does not mean followed; 'unread' means none " +
+      "Read citations/citing passages. `cited_by`: citers; `cites`: citations. " +
+      "`doctrine` AND `polarity` filters. `polarity`: " +
+      "'unclassified': unread; 'mixed': mentions disagreed. " +
+      "`doctrine`: reviewed 'distinguishes'/'limits'; rejected when unavailable. " +
+      "'not_stated' does not mean followed; 'unread': none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
-      "`passage.evidenceQuote` is the verbatim evidence when text is " +
+      "`passage.evidenceQuote`: verbatim evidence when text is " +
       `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
-      "characters, cut when `passage.truncated`; `passage.mention` is " +
-      "'sole', 'classified_section' (the mention polarity came from) or " +
-      "'latest_of_several' (it may not be). Pass nextCursor as cursor. Use " +
+      "chars, cut when `passage.truncated`; `passage.mention`: " +
+      "'sole', 'classified_section' (polarity source mention) or " +
+      "'latest_of_several' (may not be). Pass nextCursor as cursor. Use " +
       "`url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
