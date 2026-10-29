@@ -223,6 +223,7 @@
       "KanbanColumnHeader",
       "KanbanSubgroupBoard",
       "KanbanVirtualCell",
+      "LEGAL_TEXT_CLASS_NAME",
       "Label",
       "List",
       "ListEmpty",
@@ -1563,7 +1564,7 @@
       "PreviewCardTrigger"
     ],
     "./preview-pane": ["MenuPreviewLayout", "PreviewPane"],
-    "./prose": ["Prose"],
+    "./prose": ["LEGAL_TEXT_CLASS_NAME", "Prose"],
     "./review-author-avatar": ["ReviewAuthorAvatar", "UNKNOWN_AUTHOR_LABEL"],
     "./review-comment-card": ["ReviewCommentCard"],
     "./review-decision-actions": ["ReviewDecisionActions"],
