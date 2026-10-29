@@ -22,6 +22,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
 import { ANONYMIZED_CLASS } from "./shared-inlines";
 
 /** The statute a `xLexLink` names, as the link states it. */
@@ -38,6 +39,16 @@ type PlNcourtLegalReference = {
   address: string;
 };
 
+/** A statute link the publisher tagged and the anchor did not support. */
+type PlNcourtRejectedReference = {
+  text: string;
+  articles: string;
+  isapId: string;
+  reason: LexLinkRejection;
+  /** `link-dropped`: the words stay plain; `provision-dropped`: the act link stays. */
+  outcome: "link-dropped" | "provision-dropped";
+};
+
 export type PlNcourtContent = {
   /** Every attribute on the root, verbatim, keyed as printed. */
   attributes: Readonly<Record<string, string>>;
@@ -47,6 +58,8 @@ export type PlNcourtContent = {
   html: string;
   /** Every distinct statute link, in document order. */
   legalReferences: PlNcourtLegalReference[];
+  /** Every distinct statute link that was dropped or lost its provisions. */
+  rejectedLegalReferences: PlNcourtRejectedReference[];
   /** Unexpected element names, or #text/#cdata for stray text, each once. */
   unmappedMarkup: string[];
 };
@@ -76,6 +89,7 @@ const LAYOUT_TAGS = new Set(["xCOLGROUPx", "xCOLx"]);
 
 type RenderState = {
   legalReferences: PlNcourtLegalReference[];
+  rejectedReferences: PlNcourtRejectedReference[];
   seenReferences: Set<string>;
   unmapped: Set<string>;
 };
@@ -86,6 +100,20 @@ const textOf = (node: AnyNode): string => {
     return node.data;
   }
   return isTag(node) || isCDATA(node) ? node.children.map(textOf).join("") : "";
+};
+
+/** A link's words with each index as `(n)`, as `xArt` writes it. */
+const anchorTextOf = (node: AnyNode): string => {
+  if (isText(node)) {
+    return node.data;
+  }
+  if (!isTag(node) && !isCDATA(node)) {
+    return "";
+  }
+  const inner = node.children.map(anchorTextOf).join("");
+  return isTag(node) && (node.name === "xSUPx" || node.name === "xSUBx")
+    ? `(${inner.trim()})`
+    : inner;
 };
 
 const attributeOf = (element: Element, name: string): string =>
@@ -118,10 +146,40 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
       title: attributeOf(node, "xTitle"),
       address: attributeOf(node, "xAddress"),
     };
+    const anchor = anchorTextOf(node);
+    const verdict = judgeLexLink({
+      anchor,
+      articles: reference.articles,
+      title: reference.title,
+    });
     const key = JSON.stringify(reference);
-    if (!state.seenReferences.has(key)) {
-      state.seenReferences.add(key);
-      state.legalReferences.push(reference);
+    const firstSight = !state.seenReferences.has(key);
+    state.seenReferences.add(key);
+    if (verdict.type === "rejected") {
+      if (firstSight) {
+        state.rejectedReferences.push({
+          text: anchor.replaceAll(/\s+/gu, " ").trim(),
+          articles: reference.articles,
+          isapId: reference.isapId,
+          reason: verdict.reason,
+          outcome: "link-dropped",
+        });
+      }
+      return children();
+    }
+    if (firstSight && verdict.type === "act" && verdict.dropped !== undefined) {
+      state.rejectedReferences.push({
+        text: anchor.replaceAll(/\s+/gu, " ").trim(),
+        articles: reference.articles,
+        isapId: reference.isapId,
+        reason: verdict.dropped,
+        outcome: "provision-dropped",
+      });
+    }
+    if (firstSight) {
+      state.legalReferences.push(
+        verdict.type === "act" ? { ...reference, articles: "" } : reference,
+      );
     }
     const href =
       reference.isapId.length === 0
@@ -351,6 +409,7 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
   }
   const state: RenderState = {
     legalReferences: [],
+    rejectedReferences: [],
     seenReferences: new Set(),
     unmapped: new Set(),
   };
@@ -370,6 +429,7 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
     title,
     html,
     legalReferences: state.legalReferences,
+    rejectedLegalReferences: state.rejectedReferences,
     unmappedMarkup: [...state.unmapped],
   };
 };

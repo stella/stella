@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 15,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
+        "Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {

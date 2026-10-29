@@ -289,6 +289,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   linkedRulings: INSPECTED,
   lodgedOn: INSPECTED,
   lowerCourtJudgments: INSPECTED,
+  rejectedLegalReferences: INSPECTED,
   manifestations: INSPECTED,
   manifestationUri: INSPECTED,
   meansOfAppeal: INSPECTED,

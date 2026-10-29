@@ -35,7 +35,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.PL_KIO]: { mode: "off" },
   [ADAPTER_KEYS.PL_TK]: { mode: "off" },
   [ADAPTER_KEYS.PL_NSA]: { mode: "off" },
-  [ADAPTER_KEYS.PL_NCOURT]: { mode: "off" },
+  [ADAPTER_KEYS.PL_NCOURT]: { mode: "dry-run", dailyBudget: 10_000 },
   [ADAPTER_KEYS.AT_COURTS]: { mode: "off" },
   [ADAPTER_KEYS.AT_VFGH]: { mode: "off" },
   [ADAPTER_KEYS.AT_VWGH]: { mode: "off" },
