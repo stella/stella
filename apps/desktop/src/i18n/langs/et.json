@@ -299,7 +299,7 @@
     "moreOptions": "Rohkem valikuid",
     "moreItemActions": "Veel toiminguid kirjega {number}",
     "noResults": "Sobivaid lõikeid pole",
-    "noResultsDescription": "Kas soovite otsida „{query}” hoopis registritest?",
+    "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "noGroup": "Rühmata",
     "newGroupOption": "Uus rühm…",
     "copyItem": "Kopeeri kirje {number}",
