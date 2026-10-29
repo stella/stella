@@ -31,22 +31,11 @@ Matches the build's privacy manifest (`privacyManifests` in `app.config.ts`).
 
 ## App Review
 
-- Sign-in: the reviewer uses the restricted review account
-  (`APP_REVIEW_ACCOUNT_EMAIL`, `review@` the production domain), which the
-  API admits by password: on the sign-in page, "Use password". Its
-  organization holds sample matters. The password goes into App Store
-  Connect's review information only, never into this repository.
-- Notes for the reviewer:
-
-  > stella is a workspace for law firms. Sign in on the page that opens with
-  > the review account's email, choose "Use password", and enter the
-  > password above. The account's workspace holds sample matters to browse,
-  > a chat to ask about them, tasks and timers. Account deletion: Settings →
-  > Delete account opens the account page on the web, where deletion
-  > completes with an emailed code.
+App Review's sign-in details and notes go into App Store Connect only, never
+into this repository.
 
 ## Screenshots
 
 iPhone 6.9" (1320×2868) and iPad 13" (2064×2752), from the simulators
-signed in to the review account's sample workspace: the chats, a matter, a
-scan, tasks, a running timer on the Lock Screen, and the iPad split view.
+signed in to a sample workspace: the chats, a matter, a scan, tasks, a
+running timer on the Lock Screen, and the iPad split view.
