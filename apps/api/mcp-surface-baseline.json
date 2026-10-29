@@ -332,10 +332,10 @@
       "default": {"title": 22, "description": 547, "inputSchema": 1849, "outputSchema": 1406, "annotations": 99, "payloadUtf8Bytes": 4030}
     },
     "search_case_law": {
-      "advanced": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3321, "annotations": 93, "payloadUtf8Bytes": 9279},
-      "anonymized": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3321, "annotations": 93, "payloadUtf8Bytes": 9279},
-      "default": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3321, "annotations": 93, "payloadUtf8Bytes": 9279},
-      "law": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3321, "annotations": 93, "payloadUtf8Bytes": 9279}
+      "advanced": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3414, "annotations": 93, "payloadUtf8Bytes": 9372},
+      "anonymized": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3414, "annotations": 93, "payloadUtf8Bytes": 9372},
+      "default": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3414, "annotations": 93, "payloadUtf8Bytes": 9372},
+      "law": {"title": 15, "description": 499, "inputSchema": 5147, "outputSchema": 3414, "annotations": 93, "payloadUtf8Bytes": 9372}
     },
     "search_legislation": {
       "advanced": {"title": 18, "description": 722, "inputSchema": 2365, "outputSchema": 1832, "annotations": 96, "payloadUtf8Bytes": 5136},
