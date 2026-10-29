@@ -59,8 +59,9 @@ const PURE_AUTOFIX = {
   // Resolves the committed web theme against the lockfile-pinned Tailwind
   // palette with lightningcss; no network, clock or environment.
   "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
-  // Rewrites the web's icon module and wordmark for lucide's native build;
-  // reads only those committed files.
+  // Rewrites the web's icon module and wordmark for lucide's native build,
+  // and copies lucide-static's outlines, pinned by the lockfile, into the
+  // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",

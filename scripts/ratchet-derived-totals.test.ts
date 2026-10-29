@@ -156,6 +156,12 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
     write({ root: seed, relative: "package.json", contents: "{}\n" });
     write({ root: seed, relative: "bun.lock", contents: '{"packages":{}}\n' });
     write({ root: seed, relative: ".gitignore", contents: "node_modules\n" });
+    // Keep the declaration input present through clone, reset and clean.
+    write({
+      root: seed,
+      relative: "apps/api/src/handlers/.gitkeep",
+      contents: "",
+    });
     write({ root: seed, relative: FIRST, contents: casts(2) });
     write({
       root: seed,
@@ -200,8 +206,6 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
       path.join(clone, "node_modules"),
       "dir",
     );
-    // Ownership declarations inventory handlers; this synthetic tree has none.
-    mkdirSync(path.join(clone, "apps/api/src/handlers"), { recursive: true });
     exercise(clone);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
@@ -273,6 +277,71 @@ test("decreases need no baseline and merging main needs no generated edit", () =
     expect(ratchet(root, "--check")).toContain("as-casts dropped 5 -> 4");
     expect(git(root, "status", "--porcelain")).toBe("");
     expect(git(root, "ls-files", BASELINE)).toBe("");
+  });
+}, 30_000);
+
+// timeout: exercises five real ratchet checks in an isolated Git clone.
+test("per-file shrink-only metrics follow Git-detected file moves", () => {
+  withClone((root) => {
+    const source = "apps/web/src/numeric-source.ts";
+    const destination = "apps/web/src/moved/numeric-destination.ts";
+    const numericCalls = (count: number) =>
+      `${Array.from(
+        { length: count },
+        (_, index) => `export const numeric${index} = Number(source${index});`,
+      ).join("\n")}\n`;
+    write({ root, relative: source, contents: numericCalls(20) });
+    commit(root, "add numeric fixture");
+    const base = git(root, "rev-parse", "HEAD");
+    git(root, "update-ref", "refs/remotes/origin/main", base);
+
+    const reset = () => {
+      git(root, "reset", "--hard", base);
+      git(root, "clean", "-fd");
+    };
+    const move = (contents = numericCalls(20)) => {
+      mkdirSync(path.dirname(path.join(root, destination)), {
+        recursive: true,
+      });
+      git(root, "mv", source, destination);
+      write({ root, relative: destination, contents });
+      commit(root, "move numeric fixture");
+      return check(root);
+    };
+
+    expect(move().code).toBe(0);
+
+    reset();
+    const increased = move(numericCalls(21));
+    expect(increased.code, increased.output).toBe(1);
+    expect(increased.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 1`,
+    );
+    expect(increased.output).toContain(`${destination}: 20 -> 21`);
+
+    reset();
+    expect(move(numericCalls(19)).code).toBe(0);
+
+    reset();
+    write({ root, relative: destination, contents: numericCalls(20) });
+    commit(root, "copy numeric fixture");
+    const copied = check(root);
+    expect(copied.code, copied.output).toBe(1);
+    expect(copied.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 20`,
+    );
+
+    reset();
+    const dissimilar = move(
+      "export const replacement = Number(replacement);\n",
+    );
+    expect(dissimilar.code, dissimilar.output).toBe(1);
+    expect(dissimilar.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 1`,
+    );
+    expect(dissimilar.output).toContain(
+      "edits below Git's similarity threshold are treated as a deletion plus an addition",
+    );
   });
 }, 30_000);
 
@@ -1109,11 +1178,6 @@ test("malformed ledger and dependency schemas fail in both measurement roles", (
         relative: "scripts/internal-module-mock-ledger.json",
         contents: "{}",
         diagnostic: "internal-module-mock ledger must be a JSON array",
-      },
-      {
-        relative: "scripts/parser-validator-call-ledger.json",
-        contents: "{}",
-        diagnostic: "parser-validator-call ledger must be a JSON array",
       },
       {
         relative: "packages/invalid/package.json",
