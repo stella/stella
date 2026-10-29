@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { account } from "@/api/db/auth-schema";
 import { isBootstrapTokenMatch } from "@/api/lib/selfhost-auth";
 
 const readSecurityFixture = (relativePath: string) =>
@@ -132,7 +134,10 @@ describe("self-host auth bootstrap lifecycle", () => {
       "apps/api/drizzle/20260703233000_account_credential_singleton/migration.sql",
     );
 
-    expect(authSchemaSource).toContain("account_credential_singleton_uidx");
+    const singleton = getTableConfig(account).indexes.find(
+      (index) => index.config.name === "account_credential_singleton_uidx",
+    );
+    expect(singleton?.config.unique).toBe(true);
     expect(authSchemaSource).toContain("'credential'");
     expect(migrationSource).toContain("account_credential_singleton_uidx");
     expect(migrationSource).toContain("WHERE provider_id = 'credential'");

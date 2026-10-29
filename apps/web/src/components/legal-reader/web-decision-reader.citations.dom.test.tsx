@@ -68,9 +68,10 @@ afterAll(async () => {
 });
 
 const CITED_CASE = "II. ÚS 2495/26";
+const CITED_REFERENCE = `sp.\u00a0zn. ${CITED_CASE}`;
 const MISSING_CASE = "21 Cdo 1234/2025";
 const CITING_WORDS = "stěžovatel se dovolává závěrů";
-const CITING_PARAGRAPH = `Jak ${CITING_WORDS} nálezu sp. zn. ${CITED_CASE} a usnesení sp. zn. ${MISSING_CASE}.`;
+const CITING_PARAGRAPH = `Jak ${CITING_WORDS} nálezu ${CITED_REFERENCE} a usnesení sp. zn. ${MISSING_CASE}.`;
 const LATER_PARAGRAPH = `Soud připomíná, že ${CITED_CASE} je třeba číst spolu s ${CITED_CASE}.`;
 const HEADNOTE = "A court that ignores settled case law must explain why.";
 
@@ -85,7 +86,20 @@ const paragraph = (id: string, text: string, number: number) => ({
 
 const ast = {
   blocks: [
-    paragraph("citing", CITING_PARAGRAPH, 4),
+    {
+      ...paragraph("citing", CITING_PARAGRAPH, 4),
+      // Mirrors publisher runs around punctuation and a non-breaking space.
+      inlines: [
+        { text: `Jak ${CITING_WORDS} nálezu sp`, type: "text" as const },
+        { text: ".\u00a0", type: "text" as const },
+        { text: "zn. II. ", type: "text" as const },
+        { text: "ÚS 2495/26", type: "text" as const },
+        {
+          text: ` a usnesení sp. zn. ${MISSING_CASE}.`,
+          type: "text" as const,
+        },
+      ],
+    },
     paragraph("later", LATER_PARAGRAPH, 12),
   ],
   metadata: {
@@ -141,7 +155,7 @@ const missingId = toSafeId<"caseLawDecision">(
 
 const resolved = [
   {
-    citationText: `sp. zn. ${CITED_CASE}`,
+    citationText: CITED_REFERENCE,
     decision: {
       caseNumber: CITED_CASE,
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -203,6 +217,17 @@ const renderReader = async () => {
   const root = createRootRoute({
     component: () => (
       <WebDecisionReader
+        annotationAnchors={[
+          {
+            blockAnchorId: "anchor-citing",
+            color: "yellow",
+            endOffset: CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
+            id: "topic-over-citation",
+            kind: "highlight",
+            startOffset: CITING_PARAGRAPH.indexOf("zn."),
+            style: "underline",
+          },
+        ]}
         surface="development"
         citationAnchors={resolved}
         decision={decision}
@@ -241,6 +266,40 @@ const popup = async () => {
 };
 
 describe("a citation card in the decision text", () => {
+  test("a citation split by text runs, an overlapping mark, and an NBSP owns one court badge", async () => {
+    const view = await renderReader();
+    const paragraphElement = view.container.querySelector<HTMLElement>(
+      '[data-anchor="anchor-citing"]',
+    );
+    expect(paragraphElement).not.toBeNull();
+    expect(
+      paragraphElement?.querySelectorAll('[data-slot="court-badge"]'),
+    ).toHaveLength(2);
+
+    const citationLinks = paragraphElement?.querySelectorAll(
+      `[data-decision-citation="${citedId}"]`,
+    );
+    expect(citationLinks).toHaveLength(4);
+    const citationText = Array.from(citationLinks ?? [])
+      .map((link) => {
+        const copy = link.cloneNode(true);
+        if (!(copy instanceof Element)) {
+          return "";
+        }
+        for (const node of copy.querySelectorAll("[data-reader-chrome]")) {
+          node.remove();
+        }
+        return copy.textContent;
+      })
+      .join("");
+    expect(citationText).toBe(CITED_REFERENCE);
+    expect(
+      Array.from(citationLinks ?? []).flatMap((link) =>
+        Array.from(link.querySelectorAll('[data-slot="court-badge"]')),
+      ),
+    ).toHaveLength(1);
+  });
+
   test("describes the cited decision and offers its other mentions without echoing the citing paragraph", async () => {
     const view = await renderReader();
     const trigger = view.container.querySelector<HTMLElement>(

@@ -42,6 +42,8 @@ export type ReaderDecisionLinkProps = {
   treatment: ReaderCitationTreatment;
   /** The block whose text names the decision at this link. */
   blockId: string;
+  /** Only the citation range's first rendered segment owns its badge. */
+  showBadge: boolean;
 };
 
 export type ReaderStatuteLinkProps =

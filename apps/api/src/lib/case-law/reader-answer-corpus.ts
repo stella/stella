@@ -11,6 +11,7 @@ import {
   listOutgoingDecisionCitations,
 } from "@/api/lib/case-law/decision-citations";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 
 export const READER_ANSWER_RELATED_LIMITS = {
   decisions: 8,
@@ -26,6 +27,7 @@ export class ReaderAnswerCorpusError extends TaggedError(
 type ReaderAnswerParagraph = { paragraphId: string; text: string };
 export type ReaderAnswerDecision = {
   decisionId: SafeId<"caseLawDecision">;
+  language: string;
   paragraphs: ReaderAnswerParagraph[];
   decisionDate: string | null;
   court: string | null;
@@ -158,6 +160,7 @@ export const readReaderAnswerDecision = async (
       }
       return {
         decisionId: read.decision.id,
+        language: read.decision.language,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
         // Exactly the pieces the reader shows, headings and table cells
@@ -192,193 +195,208 @@ const queryTerms = (text: string) =>
   );
 
 /** User-derived ranking lives only in this call; no cache receives the query or excerpts. */
-export const readReaderAnswerRelated = async (
-  { decisionId, paragraphId, direction, query }: ReadReaderAnswerRelatedOptions,
-  {
-    readRelatedCandidates = readRelatedDecisionCandidates,
-    ...dependencies
-  }: ReaderAnswerCorpusDependencies = {},
-) =>
-  (
-    await Result.gen(async function* () {
-      const origin = yield* await readReaderAnswerDecision(
-        decisionId,
-        dependencies,
-      );
-      const anchor = origin?.paragraphs.find(
-        (paragraph) => paragraph.paragraphId === paragraphId,
-      );
-      if (anchor === undefined) {
-        return Result.ok([]);
-      }
-      const candidates = yield* await Result.tryPromise({
-        try: async () =>
-          await readRelatedCandidates(
-            decisionId,
-            direction,
-            dependencies.caseLawDb,
-          ),
-        catch: (cause) => cause,
-      });
-      if (candidates === null) {
-        return Result.ok([]);
-      }
-      const terms = queryTerms(
-        `${anchor.text.slice(0, READER_ANSWER_RELATED_LIMITS.queryChars)} ${query.slice(0, READER_ANSWER_RELATED_LIMITS.queryChars)}`,
-      );
-      const ranked: {
-        excerpt: ReaderAnswerRelatedExcerpt;
-        score: number;
-        order: number;
-      }[] = [];
-      // Only the fixed candidate budget enters the reader; every target is admitted independently.
-      for (const candidate of candidates
-        .filter(
-          ({ direction: candidateDirection }) =>
-            direction === "both" || candidateDirection === direction,
-        )
-        .slice(0, READER_ANSWER_RELATED_LIMITS.decisions)) {
-        const read = yield* await readReaderAnswerDecision(
-          candidate.decisionId,
+export const readReaderAnswerRelated = defineWindowedRead(
+  "reader-answer",
+  async (
+    {
+      decisionId,
+      paragraphId,
+      direction,
+      query,
+    }: ReadReaderAnswerRelatedOptions,
+    {
+      readRelatedCandidates = readRelatedDecisionCandidates,
+      ...dependencies
+    }: ReaderAnswerCorpusDependencies = {},
+  ) =>
+    (
+      await Result.gen(async function* () {
+        const origin = yield* await readReaderAnswerDecision(
+          decisionId,
           dependencies,
         );
-        if (read === null) {
-          continue;
-        }
-        for (const paragraph of read.paragraphs) {
-          if (paragraph.text.trim().length === 0) {
-            continue;
-          }
-          const words = queryTerms(paragraph.text);
-          let score = 0;
-          for (const term of terms) {
-            if (words.has(term)) {
-              score++;
-            }
-          }
-          const matches = Array.from(
-            paragraph.text.matchAll(READER_ANSWER_WORD_PATTERN),
-          ).filter((match) => terms.has(match[0].toLowerCase()));
-          const windowTerms = new Map<string, number>();
-          let left = 0;
-          let right = 0;
-          let excerptStart = 0;
-          let excerptScore = 0;
-          for (const match of matches) {
-            const start = Math.min(
-              Math.max(
-                0,
-                match.index - READER_ANSWER_RELATED_LIMITS.excerptChars / 2,
-              ),
-              Math.max(
-                0,
-                paragraph.text.length -
-                  READER_ANSWER_RELATED_LIMITS.excerptChars,
-              ),
-            );
-            const end = start + READER_ANSWER_RELATED_LIMITS.excerptChars;
-            while (true) {
-              const next = matches.at(right);
-              if (next === undefined || next.index + next[0].length > end) {
-                break;
-              }
-              const term = next[0].toLowerCase();
-              windowTerms.set(term, (windowTerms.get(term) ?? 0) + 1);
-              right++;
-            }
-            while (left < right) {
-              const previous =
-                matches.at(left) ??
-                panic("Excerpt window cursor exceeds its matched tokens");
-              if (previous.index >= start) {
-                break;
-              }
-              const term = previous[0].toLowerCase();
-              const remaining =
-                (windowTerms.get(term) ??
-                  panic("Excerpt window is missing a counted term")) - 1;
-              if (remaining === 0) {
-                windowTerms.delete(term);
-              } else {
-                windowTerms.set(term, remaining);
-              }
-              left++;
-            }
-            if (windowTerms.size > excerptScore) {
-              excerptStart = start;
-              excerptScore = windowTerms.size;
-            }
-          }
-          ranked.push({
-            excerpt: {
-              decisionId: read.decisionId,
-              direction: candidate.direction,
-              court: read.court,
-              decisionDate: read.decisionDate,
-              paragraphId: paragraph.paragraphId,
-              text: paragraph.text.slice(
-                excerptStart,
-                excerptStart + READER_ANSWER_RELATED_LIMITS.excerptChars,
-              ),
-            },
-            score,
-            order: ranked.length,
-          });
-        }
-      }
-      ranked.sort(
-        (left, right) => right.score - left.score || left.order - right.order,
-      );
-      const seen = new Set<string>();
-      const unique = ranked.filter(({ excerpt }) => {
-        const key = JSON.stringify([
-          excerpt.decisionId,
-          excerpt.paragraphId,
-          excerpt.direction,
-        ]);
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-      if (direction !== "both") {
-        return Result.ok(
-          unique
-            .slice(0, READER_ANSWER_RELATED_LIMITS.paragraphs)
-            .map(({ excerpt }) => excerpt),
+        const anchor = origin?.paragraphs.find(
+          (paragraph) => paragraph.paragraphId === paragraphId,
         );
-      }
-      // Rank within each direction before interleaving: strong precedent matches
-      // cannot consume the entire excerpt budget and hide later citing decisions.
-      const cited = unique.filter(
-        ({ excerpt }) => excerpt.direction === "cited",
-      );
-      const citing = unique.filter(
-        ({ excerpt }) => excerpt.direction === "citing",
-      );
-      const excerpts: ReaderAnswerRelatedExcerpt[] = [];
-      for (
-        let index = 0;
-        index < Math.max(cited.length, citing.length);
-        index++
-      ) {
-        for (const candidate of [cited.at(index), citing.at(index)]) {
-          if (candidate === undefined) {
+        if (anchor === undefined) {
+          return Result.ok([]);
+        }
+        const candidates = yield* await Result.tryPromise({
+          try: async () =>
+            await readRelatedCandidates(
+              decisionId,
+              direction,
+              dependencies.caseLawDb,
+            ),
+          catch: (cause) => cause,
+        });
+        if (candidates === null) {
+          return Result.ok([]);
+        }
+        const terms = queryTerms(
+          `${anchor.text.slice(0, READER_ANSWER_RELATED_LIMITS.queryChars)} ${query.slice(0, READER_ANSWER_RELATED_LIMITS.queryChars)}`,
+        );
+        const ranked: {
+          excerpt: ReaderAnswerRelatedExcerpt;
+          score: number;
+          order: number;
+        }[] = [];
+        // Admit every candidate independently, concurrently within the fixed budget.
+        const selected = candidates
+          .filter(
+            ({ direction: candidateDirection }) =>
+              direction === "both" || candidateDirection === direction,
+          )
+          .slice(0, READER_ANSWER_RELATED_LIMITS.decisions);
+        const reads = await Promise.all(
+          selected.map(async (candidate) => ({
+            candidate,
+            result: await readReaderAnswerDecision(
+              candidate.decisionId,
+              dependencies,
+            ),
+          })),
+        );
+        for (const { candidate, result } of reads) {
+          const read = yield* result;
+          if (read === null) {
             continue;
           }
-          excerpts.push(candidate.excerpt);
-          if (excerpts.length === READER_ANSWER_RELATED_LIMITS.paragraphs) {
-            return Result.ok(excerpts);
+          for (const paragraph of read.paragraphs) {
+            if (paragraph.text.trim().length === 0) {
+              continue;
+            }
+            const words = queryTerms(paragraph.text);
+            let score = 0;
+            for (const term of terms) {
+              if (words.has(term)) {
+                score++;
+              }
+            }
+            const matches = Array.from(
+              paragraph.text.matchAll(READER_ANSWER_WORD_PATTERN),
+            ).filter((match) => terms.has(match[0].toLowerCase()));
+            const windowTerms = new Map<string, number>();
+            let left = 0;
+            let right = 0;
+            let excerptStart = 0;
+            let excerptScore = 0;
+            for (const match of matches) {
+              const start = Math.min(
+                Math.max(
+                  0,
+                  match.index - READER_ANSWER_RELATED_LIMITS.excerptChars / 2,
+                ),
+                Math.max(
+                  0,
+                  paragraph.text.length -
+                    READER_ANSWER_RELATED_LIMITS.excerptChars,
+                ),
+              );
+              const end = start + READER_ANSWER_RELATED_LIMITS.excerptChars;
+              while (true) {
+                const next = matches.at(right);
+                if (next === undefined || next.index + next[0].length > end) {
+                  break;
+                }
+                const term = next[0].toLowerCase();
+                windowTerms.set(term, (windowTerms.get(term) ?? 0) + 1);
+                right++;
+              }
+              while (left < right) {
+                const previous =
+                  matches.at(left) ??
+                  panic("Excerpt window cursor exceeds its matched tokens");
+                if (previous.index >= start) {
+                  break;
+                }
+                const term = previous[0].toLowerCase();
+                const remaining =
+                  (windowTerms.get(term) ??
+                    panic("Excerpt window is missing a counted term")) - 1;
+                if (remaining === 0) {
+                  windowTerms.delete(term);
+                } else {
+                  windowTerms.set(term, remaining);
+                }
+                left++;
+              }
+              if (windowTerms.size > excerptScore) {
+                excerptStart = start;
+                excerptScore = windowTerms.size;
+              }
+            }
+            ranked.push({
+              excerpt: {
+                decisionId: read.decisionId,
+                direction: candidate.direction,
+                court: read.court,
+                decisionDate: read.decisionDate,
+                paragraphId: paragraph.paragraphId,
+                text: paragraph.text.slice(
+                  excerptStart,
+                  excerptStart + READER_ANSWER_RELATED_LIMITS.excerptChars,
+                ),
+              },
+              score,
+              order: ranked.length,
+            });
           }
         }
-      }
-      return Result.ok(excerpts);
-    })
-  ).mapError(
-    (cause) =>
-      new ReaderAnswerCorpusError({
-        message: "Could not read related decision excerpts",
-        cause,
-      }),
-  );
+        ranked.sort(
+          (left, right) => right.score - left.score || left.order - right.order,
+        );
+        const seen = new Set<string>();
+        const unique = ranked.filter(({ excerpt }) => {
+          const key = JSON.stringify([
+            excerpt.decisionId,
+            excerpt.paragraphId,
+            excerpt.direction,
+          ]);
+          if (seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+        if (direction !== "both") {
+          return Result.ok(
+            unique
+              .slice(0, READER_ANSWER_RELATED_LIMITS.paragraphs)
+              .map(({ excerpt }) => excerpt),
+          );
+        }
+        // Rank within each direction before interleaving: strong precedent matches
+        // cannot consume the entire excerpt budget and hide later citing decisions.
+        const cited = unique.filter(
+          ({ excerpt }) => excerpt.direction === "cited",
+        );
+        const citing = unique.filter(
+          ({ excerpt }) => excerpt.direction === "citing",
+        );
+        const excerpts: ReaderAnswerRelatedExcerpt[] = [];
+        for (
+          let index = 0;
+          index < Math.max(cited.length, citing.length);
+          index++
+        ) {
+          for (const candidate of [cited.at(index), citing.at(index)]) {
+            if (candidate === undefined) {
+              continue;
+            }
+            excerpts.push(candidate.excerpt);
+            if (excerpts.length === READER_ANSWER_RELATED_LIMITS.paragraphs) {
+              return Result.ok(excerpts);
+            }
+          }
+        }
+        return Result.ok(excerpts);
+      })
+    ).mapError(
+      (cause) =>
+        new ReaderAnswerCorpusError({
+          message: "Could not read related decision excerpts",
+          cause,
+        }),
+    ),
+);

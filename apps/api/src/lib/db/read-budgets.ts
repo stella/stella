@@ -28,6 +28,10 @@ type ReadBudget = {
    * stay above the budget, so the entry is removed as soon as it passes.
    */
   overBudget?: { reason: string };
+  /** Per-statement database deadline for a scheduled job. */
+  statementDeadlineMs?: number;
+  /** Wall-clock work budget; the job stops at its next durable boundary. */
+  runBudgetMs?: number;
 };
 
 export const READ_BUDGETS = {
@@ -42,6 +46,14 @@ export const READ_BUDGETS = {
     pages: 12_500,
     reason:
       "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation, three single-row queue probes and two eligible full-text partial-index probes per registered source (one missing-state row and at most failedThreshold + 1 failed rows). Both walks stay bounded as their corpora grow.",
+  },
+  "scheduled.caseLaw.refreshSitemapShards": {
+    surface: "scheduled-job",
+    pages: 18_000,
+    statementDeadlineMs: 30_000,
+    runBudgetMs: 15 * 60 * 1000,
+    reason:
+      "One 500-row change-log window, one indexed country-month decision range, and the replacement shard rows per step. A run stops between months after fifteen minutes, leaving the scheduler ceiling room for its current month, and every statement has a thirty-second database deadline.",
   },
   "statement.legislation.candidateRows": {
     surface: "statement",

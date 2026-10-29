@@ -15,6 +15,7 @@ import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grant
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
@@ -290,6 +291,11 @@ export const caseLawDecisionViewGrantStatements = () =>
   );
 
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  case_law_withdrawal_status: {
+    decision_id: "required",
+    status: "required",
+    withdrawn_at: "required",
+  },
   ...CENSUS_COLUMN_GRANTS_BY_RELATION,
   ...REVIEW_COLUMN_GRANTS_BY_RELATION,
   ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,

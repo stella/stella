@@ -255,6 +255,7 @@ test("recovery returns the parser failure to its fenced state owner", async () =
         signal: new AbortController().signal,
         fetchDocument: async () =>
           readPresent(new Response("<html>Publisher error page</html>")),
+        checkRetention: () => undefined,
       }),
     catch: (error) => error,
   });

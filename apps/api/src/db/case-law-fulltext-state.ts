@@ -9,6 +9,7 @@ import { eligibleDecisionTextSql } from "@/api/lib/case-law/fulltext-eligibility
 import type { OnlineIndexDeclaration } from "./online-ddl";
 
 const CASE_LAW_TEXT_STATE_CONSTRAINT = "case_law_decisions_text_state_valid";
+const CASE_LAW_TEXT_STATE_MIGRATION = "20261029094325_case_law_fulltext_state";
 
 const CASE_LAW_TEXT_STATE_INDEX = {
   MISSING: "case_law_decisions_text_state_missing_idx",
@@ -65,6 +66,7 @@ export const caseLawTextStateSchemaRules = (t: CaseLawTextStateColumns) => [
 /** Queue timestamps have a canonical UTC spelling, so text order is instant order. */
 export const CASE_LAW_TEXT_STATE_INDEXES = [
   {
+    introducedBy: CASE_LAW_TEXT_STATE_MIGRATION,
     createSql: `CREATE INDEX CONCURRENTLY "${CASE_LAW_TEXT_STATE_INDEX.MISSING}" ON public."case_law_decisions" USING btree ("source_id", "id") WHERE "redacted_at" IS NULL AND "metadata" -> '${ABSORBED_INTO_METADATA_KEY}' IS NULL AND "text_state" IS NULL`,
     definitionBody: `ON public.case_law_decisions USING btree (source_id, id) WHERE ((redacted_at IS NULL) AND ((metadata -> '${ABSORBED_INTO_METADATA_KEY}'::text) IS NULL) AND (text_state IS NULL))`,
     isUnique: false,
@@ -72,6 +74,7 @@ export const CASE_LAW_TEXT_STATE_INDEXES = [
     tableName: "case_law_decisions",
   },
   {
+    introducedBy: CASE_LAW_TEXT_STATE_MIGRATION,
     createSql: `CREATE INDEX CONCURRENTLY "${CASE_LAW_TEXT_STATE_INDEX.DUE}" ON public."case_law_decisions" USING btree ("source_id", ("text_state" ->> 'nextAttemptAt'), "id") WHERE "redacted_at" IS NULL AND "metadata" -> '${ABSORBED_INTO_METADATA_KEY}' IS NULL AND "text_state" ->> 'status' IN ('fetch_pending', 'fetch_failed')`,
     definitionBody: `ON public.case_law_decisions USING btree (source_id, ((text_state ->> 'nextAttemptAt'::text)), id) WHERE ((redacted_at IS NULL) AND ((metadata -> '${ABSORBED_INTO_METADATA_KEY}'::text) IS NULL) AND ((text_state ->> 'status'::text) = ANY (ARRAY['fetch_pending'::text, 'fetch_failed'::text])))`,
     isUnique: false,
@@ -79,6 +82,7 @@ export const CASE_LAW_TEXT_STATE_INDEXES = [
     tableName: "case_law_decisions",
   },
   {
+    introducedBy: CASE_LAW_TEXT_STATE_MIGRATION,
     createSql: `CREATE INDEX CONCURRENTLY "${CASE_LAW_TEXT_STATE_INDEX.STORED}" ON public."case_law_decisions" USING btree ("source_id", ("text_state" ->> 'verifiedAt'), "id") WHERE "redacted_at" IS NULL AND "metadata" -> '${ABSORBED_INTO_METADATA_KEY}' IS NULL AND "text_state" ->> 'status' = 'stored'`,
     definitionBody: `ON public.case_law_decisions USING btree (source_id, ((text_state ->> 'verifiedAt'::text)), id) WHERE ((redacted_at IS NULL) AND ((metadata -> '${ABSORBED_INTO_METADATA_KEY}'::text) IS NULL) AND ((text_state ->> 'status'::text) = 'stored'::text))`,
     isUnique: false,
@@ -86,10 +90,13 @@ export const CASE_LAW_TEXT_STATE_INDEXES = [
     tableName: "case_law_decisions",
   },
   {
+    introducedBy: CASE_LAW_TEXT_STATE_MIGRATION,
     createSql: `CREATE INDEX CONCURRENTLY "${CASE_LAW_TEXT_STATE_INDEX.FAILED}" ON public."case_law_decisions" USING btree ("source_id", "id") WHERE "redacted_at" IS NULL AND "metadata" -> '${ABSORBED_INTO_METADATA_KEY}' IS NULL AND "text_state" ->> 'status' = 'fetch_failed'`,
     definitionBody: `ON public.case_law_decisions USING btree (source_id, id) WHERE ((redacted_at IS NULL) AND ((metadata -> '${ABSORBED_INTO_METADATA_KEY}'::text) IS NULL) AND ((text_state ->> 'status'::text) = 'fetch_failed'::text))`,
     isUnique: false,
     name: CASE_LAW_TEXT_STATE_INDEX.FAILED,
     tableName: "case_law_decisions",
   },
-] as const satisfies readonly OnlineIndexDeclaration[];
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: string;
+})[];

@@ -67,6 +67,7 @@ import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/lan
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
+import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { decisionTextStateStatusColumn } from "@/api/lib/case-law/text-state-projection";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
@@ -187,6 +188,8 @@ export type DecisionIdentityRow = {
    * can hold several, which a list of candidates has to tell apart.
    */
   decisionType: string | null;
+  /** Bounded publisher headnote or classification, where recorded. */
+  subjectSummary?: string | null;
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
@@ -513,6 +516,9 @@ export const lookupDecisionsByIdentity = async ({
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
         decisionType: publishedCaseLawDecisions.decisionType,
+        subjectSummary: sql<
+          string | null
+        >`left(split_part(${publisherSummaryMetadataSql(publishedCaseLawDecisions.metadata)}, E'\\n', 1), ${LIMITS.caseLawLookupSubjectMaxChars})`,
         ecli: publishedCaseLawDecisions.ecli,
         id: publishedCaseLawDecisions.id,
         language: publishedCaseLawDecisions.language,

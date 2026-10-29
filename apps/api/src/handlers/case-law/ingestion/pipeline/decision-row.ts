@@ -3,6 +3,12 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
+import {
+  CASE_LAW_DECISIONS_SLUG_UIDX,
+  CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
+  CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
@@ -131,7 +137,10 @@ const insertDecisionRowTx = async (
       // The slug index is `(slug) WHERE slug IS NOT NULL`; the predicate
       // lets Postgres infer it as the only arbiter.
       .onConflictDoNothing({
-        target: caseLawDecisions.slug,
+        target: onlineUniqueIndexTarget(
+          CASE_LAW_DECISIONS_SLUG_UIDX,
+          caseLawDecisions,
+        ),
         where: isNotNull(caseLawDecisions.slug),
       })
       .returning({ id: caseLawDecisions.id });
@@ -414,7 +423,7 @@ export const writeDecisionRowWithSlug = async (
     isPgConstraintError(
       rowWrite.error,
       PG_ERROR.UNIQUE_VIOLATION,
-      "case_law_decisions_slug_uidx",
+      CASE_LAW_DECISIONS_SLUG_UIDX,
     )
   ) {
     // Only the ladder's last candidate can raise on the slug index.
@@ -432,12 +441,12 @@ export const isConcurrentIdentityInsert = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_document_idx",
+    CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
   ) ||
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_case_lang_null_idx",
+    CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
   ) ||
   isPgConstraintError(
     error,

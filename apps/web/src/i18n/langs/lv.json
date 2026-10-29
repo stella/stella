@@ -941,12 +941,16 @@
         "reasoning": "Argumentācija"
       },
       "errors": {
+        "analysisDisabled": "AI analīzes veidošana šajā serverī ir izslēgta. Lasiet nolēmuma tekstu vai mēģiniet vēlāk.",
         "answerIncomplete": "{source, select, organization {Jūsu organizācijas {provider} atslēga atgrieza nepilnīgu atbildi.} other {AI modelis atgrieza nepilnīgu atbildi.}}",
+        "decisionNotFound": "Šis tiesas nolēmums netika atrasts. Atveriet to vēlreiz meklēšanā.",
+        "documentUnparseable": "Nolēmuma teksts vēl nav gatavs analīzei. Lasiet sākotnējo avotu.",
+        "languageUnsupported": "AI analīze vēl neatbalsta šī nolēmuma valodu. Lasiet nolēmuma tekstu vai sākotnējo avotu.",
         "providerRefused": "{source, select, organization {{provider} noraidīja pieprasījumu, kas veikts ar jūsu organizācijas atslēgu. Pārbaudiet atslēgu, tās kvotu un norēķinus organizācijas iestatījumos.} other {AI pakalpojumu sniedzējs noraidīja pieprasījumu.}}",
         "providerUnavailable": "{source, select, organization {{provider} pašlaik nav pieejams ar jūsu organizācijas atslēgu.} other {AI pakalpojumu sniedzējs pašlaik nav pieejams.}}",
         "retryAfter": "Vēlreiz mēģināt varēsiet pēc {time}.",
-        "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}",
-        "unavailable": "Šim nolēmumam AI analīze nav pieejama."
+        "sourceRestricted": "Avots neatļauj AI analīzi. Lasiet nolēmuma tekstu vai sākotnējo avotu.",
+        "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}"
       },
       "generate": "Sagatavot AI kopsavilkumus",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokuments ir atjaunināts.",
       "expandProvisions": "Izvērst noteikumus",
-      "headMatter": "Ievaddaļa",
+      "headMatter": "Informācija par lietu",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
     },
     "research": {
@@ -1289,7 +1293,8 @@
       "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
       "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
       "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
-    }
+    },
+    "withdrawnByPublisher": "Izdevējs atsaucis"
   },
   "catalogue": {
     "addCustom": "Pievienot pielāgotu",
@@ -4891,7 +4896,9 @@
     "viewOnGithub": "Skatīt vietnē GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Atbildes valoda",
     "budgetError": "Atbilžu budžets ir izsmelts.",
+    "documentLanguage": "Dokumenta valoda ({language})",
     "expand": "Izvērst atbildi",
     "explain": "Izskaidrot",
     "followUp": "Uzdot papildjautājumu",

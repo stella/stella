@@ -941,12 +941,16 @@
         "reasoning": "Uvažování"
       },
       "errors": {
+        "analysisDisabled": "Generování AI analýzy je na tomto serveru vypnuté. Přečtěte si text rozhodnutí nebo to zkuste později.",
         "answerIncomplete": "{source, select, organization {Klíč vaší organizace pro {provider} vrátil neúplnou odpověď.} other {AI model vrátil neúplnou odpověď.}}",
+        "decisionNotFound": "Rozhodnutí nebylo nalezeno. Otevřete ho znovu z vyhledávání.",
+        "documentUnparseable": "Text rozhodnutí není připraven k analýze. Přečtěte si původní zdroj.",
+        "languageUnsupported": "AI analýza zatím nepodporuje jazyk tohoto rozhodnutí. Přečtěte si text rozhodnutí nebo původní zdroj.",
         "providerRefused": "{source, select, organization {{provider} odmítl požadavek s klíčem vaší organizace. Zkontrolujte klíč, jeho kvótu a fakturaci v nastavení organizace.} other {Poskytovatel AI požadavek odmítl.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pro klíč vaší organizace momentálně nedostupný.} other {Poskytovatel AI je momentálně nedostupný.}}",
         "retryAfter": "Znovu to můžete zkusit po {time}.",
-        "timedOut": "{source, select, organization {{provider} s klíčem vaší organizace neodpověděl včas.} other {AI model neodpověděl včas.}}",
-        "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
+        "sourceRestricted": "Zdroj nepovoluje AI analýzu. Přečtěte si text rozhodnutí nebo původní zdroj.",
+        "timedOut": "{source, select, organization {{provider} s klíčem vaší organizace neodpověděl včas.} other {AI model neodpověděl včas.}}"
       },
       "generate": "Sestavit právní věty pomocí AI",
       "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokument byl aktualizován.",
       "expandProvisions": "Rozbalit ustanovení",
-      "headMatter": "Úvodní část",
+      "headMatter": "Informace o věci",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
     },
     "research": {
@@ -1289,7 +1293,8 @@
       "versionAtDecisionDateInferred": "Znění k datu rozhodnutí (odvozené)",
       "versionBasisInferredCompact": "Datum rozhodnutí · odvozeno",
       "versionBasisInferredExplanation": "Znění je odvozeno z data rozhodnutí. Rozhodnutí neuvádí, které znění se použije."
-    }
+    },
+    "withdrawnByPublisher": "Staženo vydavatelem"
   },
   "catalogue": {
     "addCustom": "Přidat vlastní",
@@ -4891,7 +4896,9 @@
     "viewOnGithub": "Zobrazit na GitHubu"
   },
   "readerAnswers": {
+    "answerLanguage": "Jazyk odpovědi",
     "budgetError": "Rozpočet na odpovědi je vyčerpán.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
     "expand": "Rozbalit odpověď",
     "explain": "Vysvětlit",
     "followUp": "Položit doplňující otázku",
