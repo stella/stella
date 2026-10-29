@@ -115,7 +115,10 @@ import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapter
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   readPlNcourtContent,
   validatePlNcourtDocument,
@@ -980,6 +983,8 @@ const parseDocument = ({
         statutes,
         documentId: id,
         sourceSystem: PL_NCOURT_SOURCE_SYSTEM,
+        superscripts: true,
+        markup: PL_DECISION_MARKUP.COMMON_COURT,
       }),
     catch: errorTag,
   });

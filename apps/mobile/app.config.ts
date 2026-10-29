@@ -170,7 +170,7 @@ const readVariant = (value: string | undefined): Variant =>
     : (VARIANTS.find((variant) => variant === value) ??
       panic(`APP_VARIANT must be one of ${VARIANTS.join(", ")}`));
 
-/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number. */
+/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number plus 100. */
 const readBuildNumber = (value: string | undefined): number => {
   if (value === undefined) {
     return 1;

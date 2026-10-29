@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
@@ -14,6 +14,7 @@ import type {
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
@@ -39,8 +40,14 @@ const { readerAnswersOptions } = await import("./reader-answers-query");
 
 const { document: testDocument, window: testWindow } = globalThis;
 const originalFetch = globalThis.fetch;
+const originalAbortSignalTimeout = AbortSignal.timeout;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
+  restoreRealTimers();
+  Object.defineProperty(AbortSignal, "timeout", {
+    configurable: true,
+    value: originalAbortSignalTimeout,
+  });
   testDocument.getSelection()?.removeAllRanges();
   await act(async () => {
     cleanup();
@@ -100,6 +107,18 @@ const setup = () => {
     </StrictMode>
   );
   return { client, wrapper };
+};
+
+const advanceClock = async (milliseconds: number) => {
+  await act(async () => {
+    jest.advanceTimersByTime(milliseconds);
+  });
+  await act(
+    async () =>
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      }),
+  );
 };
 
 const fakeServer = (
@@ -1064,6 +1083,15 @@ test.each(["never", "hanging"] as const)(
   async (settlement) => {
     const server = pollingServer(settlement);
     const { wrapper } = setup();
+    jest.useFakeTimers();
+    Object.defineProperty(AbortSignal, "timeout", {
+      configurable: true,
+      value: (milliseconds: number) => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), milliseconds);
+        return controller.signal;
+      },
+    });
     const hook = renderHook(
       () =>
         useReaderAnswers({
@@ -1078,16 +1106,14 @@ test.each(["never", "hanging"] as const)(
       ),
     );
     server.releaseRecovery();
-    await waitFor(
-      () =>
-        expect(
-          hook.result.current.answers.at(0)?.messages.at(-1),
-        ).toMatchObject({
-          status: "failed",
-          errorCode: "timeout",
-        }),
-      { timeout: 7000 },
-    );
+    await advanceClock(300);
+    await advanceClock(5000);
+    await advanceClock(0);
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
+      status: "failed",
+      errorCode: "timeout",
+    });
+    restoreRealTimers();
     const settledReads = server.reads();
     await act(async () => {
       await sleep(50);
@@ -1110,7 +1136,6 @@ test.each(["never", "hanging"] as const)(
     });
     expect(server.deletions()).toBe(1);
   },
-  10_000,
 );
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.

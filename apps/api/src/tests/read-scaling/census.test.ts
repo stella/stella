@@ -20,6 +20,7 @@ import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { invoiceSendScalingScenarios } from "./invoice-sends";
 import { exactIconScalingScenario } from "./link-icons";
+import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
@@ -42,6 +43,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,
