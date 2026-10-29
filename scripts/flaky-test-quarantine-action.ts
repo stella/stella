@@ -56,6 +56,8 @@ export const reportFlakyTestQuarantine = (): void => {
     ],
     {
       cwd: workspace,
+      // Output streams straight to the job log; the limit only binds piped output.
+      maxBuffer: 2 ** 30,
       stdio: "inherit",
       env: { ...process.env, GH_TOKEN: token },
     },
