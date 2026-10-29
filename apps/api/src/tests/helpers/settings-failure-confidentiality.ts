@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect } from "bun:test";
 
 import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
@@ -7,6 +8,8 @@ import type {
   ServerAnalyticsCaptureParams,
 } from "@/api/lib/analytics/server-analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sanitizeDiagnosticErrorForOutput } from "@/api/lib/errors/handoff-diagnostics";
+import { serializeDevError } from "@/api/lib/errors/utils";
 import type { LogRecord } from "@/api/lib/observability/logger";
 
 type SettingsFailureOutputs = {
@@ -101,12 +104,65 @@ const errorPayload = (error: Error): Record<string, unknown> =>
       .map((key) => [key, Reflect.get(error, key)]),
   );
 
+const REPOSITORY_SOURCE = /(?:^|\/)(?:apps|packages)\/[A-Za-z0-9_./-]+\.ts$/u;
+const REPOSITORY_FRAME =
+  /(?:^|\/)(?:apps|packages)\/[A-Za-z0-9_./-]+\.ts:\d+(?::\d+)?/u;
+
+const reflectedValue = (object: object, key: PropertyKey): unknown =>
+  Reflect.get(object, key);
+
+const assertSourceLocations = (error: Error): void => {
+  const sourceURL = reflectedValue(error, "sourceURL");
+  const stack = reflectedValue(error, "stack");
+  expect(sourceURL).toBeString();
+  expect(sourceURL).toMatch(REPOSITORY_SOURCE);
+  expect(stack).toBeString();
+  expect(stack).toMatch(REPOSITORY_FRAME);
+  for (const key of ["line", "column", "originalLine", "originalColumn"]) {
+    const value = reflectedValue(error, key);
+    expect(
+      value === undefined ||
+        (typeof value === "number" && Number.isInteger(value) && value >= 0),
+    ).toBe(true);
+  }
+};
+
+const normalizeFrame = (value: unknown): unknown => {
+  expect(value).toBeString();
+  expect(value).toMatch(REPOSITORY_FRAME);
+  return "[repository-frame]";
+};
+
+const ownRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    panic("Expected an object record");
+  }
+  return Object.fromEntries(Object.entries(value));
+};
+
+const arrayValue = (value: unknown): unknown[] => {
+  if (!Array.isArray(value)) {
+    panic("Expected an array");
+  }
+  return value;
+};
+
+const normalizedDevProjection = (error: Error): unknown => {
+  const projection = serializeDevError(error);
+  expect(projection).toBeObject();
+  const record = ownRecord(projection);
+  normalizeFrame(record["stack"]);
+  expect(record["sourceURL"]).toMatch(REPOSITORY_SOURCE);
+  return { ...record, sourceURL: "[repository-source]", stack: "[stack]" };
+};
+
 const assertReturnedAllowlist = (returned: unknown): void => {
   const graph = descriptorGraph(returned);
   expect(JSON.stringify(graph)).not.toContain("cause");
   expect(JSON.stringify(graph)).not.toContain("metadata");
 
   if (returned instanceof Error) {
+    assertSourceLocations(returned);
     if ("code" in returned) {
       expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
         [
@@ -156,6 +212,12 @@ const assertReturnedAllowlist = (returned: unknown): void => {
         "stack",
       ].toSorted(compareKeys),
     );
+    expect(errorPayload(returned)).toStrictEqual({
+      _tag: "OrgAIConfigReadError",
+      message: "Decrypted organization AI configuration is unreadable",
+      name: "OrgAIConfigReadError",
+      reason: Reflect.get(returned, "reason"),
+    });
     return;
   }
   if (
@@ -217,51 +279,151 @@ export const assertSettingsFailureConfidential = ({
     expect(outputs.logRecords.at(0)).toEqual(diagnostic);
     expect(outputs.logRecords).toHaveLength(2);
     const requestRecord = outputs.logRecords.at(1);
-    expect(requestRecord?.severityText).toBe("ERROR");
-    expect(requestRecord?.message).toBe("request.failed");
-    expect(
-      Object.keys(requestRecord?.attributes ?? {}).toSorted(compareKeys),
-    ).toEqual(
-      [
-        "error.class",
-        "error.code",
-        "error.frame",
-        "error.status_code",
-        "error.type",
-        "failure.grade",
-        "failure.reason",
-        "failure.shadow",
-        "http.method",
-        "http.route",
-        "http.status_code",
-        "request.duration_ms",
-      ].toSorted(compareKeys),
-    );
+    const requestAttributes = ownRecord(requestRecord?.attributes);
+    expect(requestAttributes["request.duration_ms"]).toBeNumber();
+    const requestFrame = normalizeFrame(requestAttributes["error.frame"]);
+    const normalizedRequestRecord: Record<string, unknown> = {
+      ...ownRecord(requestRecord),
+      attributes: {
+        ...requestAttributes,
+        "error.frame": requestFrame,
+        "request.duration_ms": "[duration]",
+      },
+    };
+    expect(normalizedRequestRecord).toEqual({
+      severityText: "ERROR",
+      message: "request.failed",
+      attributes: {
+        "http.method": "GET",
+        "http.route": "/tests/handler-context",
+        "http.status_code": 503,
+        "request.duration_ms": "[duration]",
+        "error.type": "HandlerError",
+        "error.status_code": 503,
+        "error.class": "HandlerError",
+        "error.code": "ai_config_stored_unreadable",
+        "error.frame": "[repository-frame]",
+        "failure.grade": "defect",
+        "failure.reason": "tagged_failure",
+        "failure.shadow": "true",
+      },
+    });
     expect(outputs.developmentEntries).toHaveLength(1);
     const event = outputs.analyticsEvents.at(0);
     expect(outputs.analyticsEvents).toHaveLength(1);
-    expect(event?.event).toBe("$exception");
-    expect(Object.keys(event ?? {}).toSorted(compareKeys)).toEqual(
-      ["distinctId", "event", "properties"].toSorted(compareKeys),
+    if (event?.event !== "$exception") {
+      panic("Expected an exception analytics event");
+    }
+    const properties = ownRecord(event.properties);
+    normalizeFrame(properties["error.frame"]);
+    expect(properties["$exception_fingerprint"]).toBe(
+      '[["HandlerError"],"api.safeHandlerFailure",["[\\"request\\",\\"GET\\",\\"/tests/handler-context\\"]"],"ai_config_stored_unreadable","",{}]',
     );
-    expect(Object.keys(event?.properties ?? {}).toSorted(compareKeys)).toEqual(
-      [
-        "$exception_fingerprint",
-        "$exception_level",
-        "$exception_list",
-        "$exception_type",
-        "error.class",
-        "error.code",
-        "error.frame",
-        "failure.grade",
-        "failure.reason",
-        "failure.shadow",
-        "method",
-        "route",
-      ].toSorted(compareKeys),
+    const exceptionList = arrayValue(properties["$exception_list"]);
+    expect(exceptionList).toHaveLength(1);
+    const exceptionEntry = ownRecord(exceptionList.at(0));
+    const exceptionValue = exceptionEntry["value"];
+    expect(exceptionValue).toBeString();
+    expect(exceptionValue).toMatch(
+      /^HandlerError\[ai_config_stored_unreadable\] 503 tagged_failure defect at apps\/api\/src\/lib\/ai-config-response\.ts:\d+:\d+$/u,
+    );
+    const normalizedEvent: Record<string, unknown> = {
+      ...ownRecord(event),
+      properties: {
+        ...properties,
+        $exception_list: [
+          { ...exceptionEntry, value: "[classified-exception]" },
+        ],
+        "error.frame": "[repository-frame]",
+      },
+    };
+    expect(normalizedEvent).toEqual({
+      distinctId: "server",
+      event: "$exception",
+      properties: {
+        method: "GET",
+        route: "/tests/handler-context",
+        $exception_fingerprint:
+          '[["HandlerError"],"api.safeHandlerFailure",["[\\"request\\",\\"GET\\",\\"/tests/handler-context\\"]"],"ai_config_stored_unreadable","",{}]',
+        $exception_level: "error",
+        $exception_list: [
+          {
+            mechanism: { handled: true, synthetic: false, type: "generic" },
+            type: "HandlerError",
+            value: "[classified-exception]",
+          },
+        ],
+        $exception_type: "HandlerError",
+        "error.class": "HandlerError",
+        "error.code": "ai_config_stored_unreadable",
+        "error.frame": "[repository-frame]",
+        "failure.grade": "defect",
+        "failure.reason": "tagged_failure",
+        "failure.shadow": "true",
+      },
+    });
+
+    expect(outputs.captureEntries).toHaveLength(1);
+    const captureCall = arrayValue(outputs.captureEntries.at(0));
+    const capturedError = captureCall.at(0);
+    if (!(capturedError instanceof Error)) {
+      panic("Expected captureObservedError to receive an Error");
+    }
+    assertSourceLocations(capturedError);
+    expect(errorPayload(capturedError)).toStrictEqual(
+      errorPayload(storedAIConfigUnreadableError()),
+    );
+    const captureOptions = ownRecord(captureCall.at(1));
+    const captureRequest = captureOptions["request"];
+    if (!(captureRequest instanceof Request)) {
+      panic("Expected captureObservedError to receive a Request");
+    }
+    expect(captureRequest.method).toBe("GET");
+    expect(captureRequest.url).toBe("https://example.test/handler-context");
+    const normalizedCaptureOptions: Record<string, unknown> = {
+      ...captureOptions,
+      request: "[request]",
+    };
+    expect(normalizedCaptureOptions).toEqual({
+      fingerprintKey: "api.safeHandlerFailure",
+      scope: {
+        type: "request",
+        method: "GET",
+        routeTemplate: "/tests/handler-context",
+      },
+      request: "[request]",
+      context: { method: "GET", route: "/tests/handler-context" },
+      observation: {
+        grade: "defect",
+        reason: "tagged_failure",
+        evidenceDepth: 0,
+        rule: "tag",
+      },
+    });
+
+    const consoleCall = arrayValue(outputs.developmentEntries.at(0));
+    expect(consoleCall).toHaveLength(1);
+    const developmentError = consoleCall.at(0);
+    if (!(developmentError instanceof Error)) {
+      panic("Expected the development logger to receive an Error");
+    }
+    assertSourceLocations(developmentError);
+    const canonicalDevelopmentError = sanitizeDiagnosticErrorForOutput(
+      storedAIConfigUnreadableError(),
+    );
+    if (!(canonicalDevelopmentError instanceof Error)) {
+      panic("Expected the canonical development error to be an Error");
+    }
+    expect(errorPayload(developmentError)).toStrictEqual(
+      errorPayload(canonicalDevelopmentError),
+    );
+    expect(normalizedDevProjection(developmentError)).toStrictEqual(
+      normalizedDevProjection(canonicalDevelopmentError),
     );
   }
-  expect(outputs.captureEntries).toEqual([]);
+  if (isDirectFailure) {
+    expect(outputs.captureEntries).toEqual([]);
+  }
   expect(outputs.groupIdentifies).toEqual([]);
   assertReturnedAllowlist(outputs.returned);
 };

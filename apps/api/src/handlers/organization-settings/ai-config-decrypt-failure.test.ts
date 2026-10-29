@@ -126,7 +126,7 @@ describe("AI config handlers with an undecryptable stored config", () => {
         for (const reader of ["read", "update"] as const) {
           const analytics = installRecordingAnalytics();
           const logs = installRecordingLogger();
-          const capture = spyOn(captureModule, "captureError");
+          const capture = spyOn(captureModule, "captureObservedError");
           const devErrors = spyOn(console, "error").mockImplementation(
             () => undefined,
           );
