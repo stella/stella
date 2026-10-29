@@ -8,11 +8,9 @@ import {
   listDriveRootChildren,
   mapDriveChildrenToPage,
 } from "@/api/handlers/sharepoint/graph-client";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import {
-  type safeOutboundFetchBytes,
-  SafeOutboundFetchError,
-} from "@/api/lib/safe-outbound-fetch";
+import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 

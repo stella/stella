@@ -1,0 +1,7 @@
+{
+  "add-column": "The constant-false calendar policy uses PostgreSQL's fast-default catalog path and requested_scope is nullable without a default; neither addition scans or rewrites existing rows, under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "The legacy disable fence installs trigger metadata without scanning organization settings; lock acquisition is bounded by 1s lock_timeout and execution by 5s statement_timeout.",
+  "row-level-security": "FORCE RLS changes catalog flags on the existing delegated connection and OAuth state tables; owner-only policies are installed in the same transaction, with 1s lock_timeout and 5s statement_timeout.",
+  "drop-policy": "The OAuth-state UPDATE policy is replaced in the same short transaction with an explicit restrictive denial; connection SELECT/INSERT/DELETE policies remain, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The restrictive OAuth-state UPDATE denial and two exact table-owner policies install only catalog metadata, with no row scan, under 1s lock_timeout and 5s statement_timeout."
+}

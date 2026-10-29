@@ -11,8 +11,8 @@ import {
 } from "@stll/api-contract/microsoft365";
 import { Temporal } from "@stll/time";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";

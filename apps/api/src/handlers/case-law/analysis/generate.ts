@@ -32,6 +32,7 @@ import {
   resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   type AIErrorKind,
   classifyAIError,
@@ -653,7 +654,7 @@ type GenerateAnalysisOptions = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   /**
    * The reader asked to run again after a failure. Without it, a failure
    * record over this document answers for its hold, so polling never starts
@@ -685,6 +686,14 @@ const generatingResponse = (
   status: "generating",
   ...(partialTree.length === 0 ? {} : { partialTree }),
 });
+
+const analysisStartFailure = (cause: unknown) =>
+  new HandlerError({
+    status: 503,
+    code: "internal_error",
+    message: "Analysis generation could not start",
+    cause,
+  });
 
 export const generateAnalysis = async ({
   admitModelAction,
@@ -742,7 +751,7 @@ export const generateAnalysis = async ({
       // on the citation graph and written in the background, so a reader
       // never waits for it and a decision whose neighbourhood has not
       // moved costs one indexed query.
-      if (derivedAi) {
+      if (derivedAi && promptCachingEnabled !== null) {
         detached(
           refreshSignificance({
             admitModelAction,
@@ -843,6 +852,9 @@ export const generateAnalysis = async ({
   if (Result.isError(available)) {
     return Result.err(available.error);
   }
+  if (promptCachingEnabled === null) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
   if (reader === null) {
     return panic("An available analysis role must resolve a reader key");
   }
@@ -898,22 +910,17 @@ export const generateAnalysis = async ({
       });
     },
   });
-  const cannotStart = (cause: unknown) =>
-    new HandlerError({
-      status: 503,
-      message: "Analysis generation could not start",
-      cause,
-    });
+
   if (Result.isError(started)) {
     return Result.err(
       ActionAdmissionError.is(started.error)
         ? started.error
-        : cannotStart(started.error),
+        : analysisStartFailure(started.error),
     );
   }
   const claimed = started.value;
   if (claimed.isErr()) {
-    return Result.err(cannotStart(claimed.error));
+    return Result.err(analysisStartFailure(claimed.error));
   }
 
   // A claim lost to a failure filed since the read answers that failure;

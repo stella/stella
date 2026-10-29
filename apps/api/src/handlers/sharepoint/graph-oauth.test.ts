@@ -10,8 +10,8 @@ import {
   createPkce,
   refreshAccessToken,
 } from "@/api/handlers/sharepoint/graph-oauth";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
 
 describe("buildAuthorizeUrl", () => {

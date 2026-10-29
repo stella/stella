@@ -36,8 +36,8 @@ type PropertyHelperProps = {
 };
 
 // Labels are English-only identifiers for programmatic use
-// (debugging, logging, fallback display). For user-facing UI,
-// use the <PropertyName> component which renders via useLocale().
+// (debugging, logging, fallback display). User-facing UI shows the
+// host's translated property-type name instead.
 const propertyMap: Record<
   PropertyIconType,
   {

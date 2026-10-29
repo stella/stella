@@ -24,9 +24,9 @@ import {
   delegatedReadScopes,
   LEGACY_FILE_CAPABILITIES,
 } from "@/api/handlers/sharepoint/capabilities";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { RefreshToken } from "@/api/lib/secret-brands";
 
 const GRAPH_OAUTH_TIMEOUT_MS = 10_000;
@@ -169,7 +169,7 @@ const requestToken = async ({
       if (!response.value.ok) {
         throw new HandlerError({
           status: 502,
-          code: "upstream_unavailable",
+          code: "internal_error",
           message: `Microsoft token endpoint returned HTTP ${response.value.status}`,
         });
       }
@@ -183,7 +183,7 @@ const requestToken = async ({
       if (!parsed?.success) {
         throw new HandlerError({
           status: 502,
-          code: "upstream_unavailable",
+          code: "internal_error",
           message: "Invalid Microsoft token response",
         });
       }
@@ -195,7 +195,7 @@ const requestToken = async ({
     catch: (cause): HandlerError<502> =>
       new HandlerError({
         status: 502,
-        code: "upstream_unavailable",
+        code: "internal_error",
         message: HandlerError.is(cause)
           ? cause.message
           : "Failed to reach the Microsoft token endpoint",

@@ -27,6 +27,8 @@ const base = {
       decisionYearTo: 2026,
       pendingTextCount: 3,
       storedDecisions: 150,
+      publishedDecisions: 100,
+      courts: [{ court: "Nejvyšší soud", decisions: 100 }],
       knownGaps: {
         type: "not_reconciled",
         reason: "The source listing is not date-sliced.",
@@ -40,7 +42,11 @@ const base = {
 export const CASE_LAW_COVERAGE_FIXTURE = {
   generatedAt: asOf,
   provisionProcessing: [],
-  totals: { searchable: 100, stored: { decisions: 300, asOf: storedAsOf } },
+  totals: {
+    addedLastWeek: 10,
+    searchable: 100,
+    stored: { decisions: 300, asOf: storedAsOf },
+  },
   countries: [
     {
       ...base,
