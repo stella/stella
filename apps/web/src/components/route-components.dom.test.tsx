@@ -54,7 +54,11 @@ test("not found renders a message and a route back without redirecting", () => {
   expect(ui.getByRole("heading").textContent).toBe(
     "We could not find what you requested.",
   );
-  expect(ui.getByRole("link").getAttribute("href")).toBe("/workspaces");
+  expect(
+    ui
+      .getByRole("link", { name: en.auth.invitation.goToWorkspaces })
+      .getAttribute("href"),
+  ).toBe("/workspaces");
 });
 
 const errors = [

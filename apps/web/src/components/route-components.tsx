@@ -526,7 +526,7 @@ export const DefaultNotFoundComponent = () => {
           {t("errors.api.notFound")}
         </h1>
         <Button render={<Link to="/workspaces" />} variant="outline">
-          {t("common.goBack")}
+          {t("auth.invitation.goToWorkspaces")}
         </Button>
       </section>
     </main>
