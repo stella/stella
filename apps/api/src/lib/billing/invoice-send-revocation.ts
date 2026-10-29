@@ -37,7 +37,7 @@ type RevokeLiveInvoiceSendsOptions<TTx extends TransitionTransaction> =
       { type: "invoice" } | { type: "send"; sendId: SafeId<"invoiceSend"> };
   };
 
-/** Pending sends also close: a transport completion cannot reactivate an old link. */
+/** Revoke even expired and pending sends so reissuing cannot restore old authority. */
 const revokeInvoiceSendSelection = async <TTx extends TransitionTransaction>(
   tx: TTx,
   {
@@ -61,10 +61,10 @@ const revokeInvoiceSendSelection = async <TTx extends TransitionTransaction>(
     WHERE ${invoiceSends.organizationId} = ${organizationId}
       AND ${inArray(invoiceSends.invoiceId, invoiceIds)}
       AND ${invoiceSends.revokedAt} IS NULL
-      AND ${
+      ${
         target.type === "send"
-          ? sql`${invoiceSends.id} = ${target.sendId}`
-          : sql`${invoiceSends.expiresAt} > ${now}::timestamptz`
+          ? sql`AND ${invoiceSends.id} = ${target.sendId}`
+          : sql``
       }
     RETURNING ${invoiceSends.id} AS "id", ${invoiceSends.invoiceId} AS "invoiceId"
   `);

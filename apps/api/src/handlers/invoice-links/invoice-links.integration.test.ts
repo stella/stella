@@ -2459,6 +2459,86 @@ describe("opening an invoice link", () => {
     expect(JSON.stringify(await opened.json())).toContain("EDITED-REF");
   });
 
+  test("reverting with an advanced application clock permanently revokes live and expired links", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const [clock] = await testDb
+      .select({
+        now: sql`pg_catalog.clock_timestamp()`.mapWith(invoiceSends.expiresAt),
+      })
+      .from(sql`(VALUES (1)) AS clock(value)`);
+    if (clock === undefined) {
+      return panic("Expected the database clock for invoice link expiry");
+    }
+    const expiresAt = new Date(clock.now.getTime() + 86_400_000);
+    const applicationNow = new Date(expiresAt.getTime() + 86_400_000);
+    const live = await createStandaloneLink(invoiceId, { expiresAt });
+    await createStandaloneLink(invoiceId, {
+      expiresAt: new Date(clock.now.getTime() - 1000),
+    });
+    expect(expiresAt.getTime()).toBeLessThan(applicationNow.getTime());
+    expect((await post(server, "view", { token: live.token })).status).toBe(
+      200,
+    );
+
+    const recordAuditEvent = invoiceTransitionRecorder();
+    const moved = await tokenDb().scoped({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+    })(
+      async (tx) =>
+        await transitionStatus({
+          tx,
+          spec: DATABASE_TRANSITIONS.invoices,
+          id: invoiceId,
+          options: {
+            from: [INVOICE_STATUS.FINALIZED],
+            to: INVOICE_STATUS.DRAFT,
+          },
+          effectContext: {
+            organizationId: ids.orgA,
+            actorUserId: ids.userA1,
+            now: applicationNow,
+            recordAuditEvent,
+          },
+          recordTransitionAuditEvent: async (auditTx, row) =>
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+              resourceId: row.id,
+              changes: {
+                status: { old: INVOICE_STATUS.FINALIZED, new: row.status },
+              },
+            }),
+        }),
+    );
+    expect(moved.type).toBe("transitioned");
+    expect(
+      await updateInvoice.handler(
+        asTestRaw<Parameters<typeof updateInvoice.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId",
+            body: { reference: "CLOCK-SKEW-REISSUED" },
+          }),
+        ),
+      ),
+    ).toEqual({ id: invoiceId });
+    expect(
+      await transitionLinkedInvoice(invoiceId, { action: "finalize" }),
+    ).toEqual({ id: invoiceId });
+    expect((await post(server, "view", { token: live.token })).status).toBe(
+      404,
+    );
+    const revoked = await sendRows(invoiceId);
+    expect(revoked).toHaveLength(2);
+    for (const row of revoked) {
+      expect(row.revokedAt).toEqual(applicationNow);
+      expect(row.revokedByUserId).toBe(ids.userA1);
+    }
+  });
+
   test("the real sent-to-void transition revokes every send and preserves other invoices' links", async () => {
     const closed = await sentInvoice("void-transition@example.test");
     expect(
