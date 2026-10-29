@@ -71,6 +71,7 @@
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
+    "./case-law-source-languages": "./src/case-law-source-languages.ts",
     "./case-law-answer-completeness": "./src/case-law-answer-completeness.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
     "./decision-document-role": "./src/decision-document-role.ts",

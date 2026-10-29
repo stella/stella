@@ -6781,6 +6781,7 @@ describe("OpenAI-compatible MCP tools", () => {
           createdAt: new Date("2024-02-01T00:00:00.000Z"),
           updatedAt: new Date("2024-02-01T00:00:00.000Z"),
           source: { ...base.source, id: toSafeId<"caseLawSource">("src_1") },
+          sourceLanguages: null,
           judges: [],
           languageAlternates: [],
           citationsFrom: [],

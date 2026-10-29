@@ -5,6 +5,10 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
+import {
+  CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
+  type CaseLawWorkExpression,
+} from "@stll/api-contract/case-law-source-languages";
 import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
@@ -1610,7 +1614,17 @@ const noticeMetadata = (facts: EcjNoticeFacts) => ({
     ...manifestation,
     uri: toMetadataUrl(manifestation.uri, "decoded"),
   })),
-  workExpressions: facts.workExpressions,
+  [CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY]: facts.workExpressions.map(
+    ({ language, formats }): CaseLawWorkExpression => {
+      const rowLanguage = toEcjLanguage(`${CELLAR_LANGUAGE_PREFIX}${language}`);
+      return {
+        authorityCode: language,
+        language:
+          rowLanguage === undefined ? null : ecjRowLanguage(rowLanguage),
+        formats: [...formats],
+      };
+    },
+  ),
 });
 
 /** Rebuild URL diagnostics from this envelope, without carrying a saved sidecar. */
@@ -2976,7 +2990,7 @@ const EU_ECJ_SOURCE_FIELDS = {
   // work's language manifest: what makes a missing translation checkable.
   "notice.WORK/WORK_HAS_EXPRESSION": {
     disposition: "stored",
-    target: { type: "metadata", key: "workExpressions" },
+    target: { type: "metadata", key: CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY },
   },
   "notice.WORK/WORK_HAS_RESOURCE-TYPE": {
     disposition: "stored",

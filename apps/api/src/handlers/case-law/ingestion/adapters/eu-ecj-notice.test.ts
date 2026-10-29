@@ -13,6 +13,10 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
 
+import {
+  CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
+  caseLawSourceLanguagesOf,
+} from "@stll/api-contract/case-law-source-languages";
 import { writeZipEntry } from "@stll/docx-utils";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
@@ -1162,14 +1166,27 @@ describe("the work's language manifest", () => {
     // missing translation checkable, and a replay of the stored notice is
     // how rows written before it was kept come to state it.
     const decision = await decisionFrom(noticeEn);
-    const expressions = decision.metadata["workExpressions"];
+    const expressions =
+      decision.metadata[CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY];
 
     expect(Array.isArray(expressions)).toBe(true);
     const languages = Array.isArray(expressions)
       ? expressions.map((expression: unknown) =>
-          isRecord(expression) ? expression["language"] : undefined,
+          isRecord(expression) ? expression["authorityCode"] : undefined,
         )
       : [];
+    const stated: unknown[] = Array.isArray(expressions) ? expressions : [];
+    expect(stated).toContainEqual({
+      authorityCode: "GLE",
+      language: "ga",
+      formats: ["fmx4", "pdfa2a", "xhtml", "xml"],
+    });
+    // What the decision read serves: the tags rows of this corpus carry, so
+    // the held versions compare against the publisher's list directly.
+    const served = caseLawSourceLanguagesOf(decision.metadata);
+    expect(served).toHaveLength(24);
+    expect(served).toContain("en");
+    expect(served).toContain("cs");
     expect(languages).toHaveLength(24);
     expect(new Set(languages).size).toBe(24);
     expect(languages).toEqual(
@@ -1213,7 +1230,10 @@ describe("the work's language manifest", () => {
   test("a row stored without a notice states no manifest rather than an empty one", async () => {
     const decision = await decisionFrom(undefined);
 
-    expect(Object.hasOwn(decision.metadata, "workExpressions")).toBe(false);
+    expect(
+      Object.hasOwn(decision.metadata, CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY),
+    ).toBe(false);
+    expect(caseLawSourceLanguagesOf(decision.metadata)).toBeNull();
   });
 });
 

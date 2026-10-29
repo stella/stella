@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
+import { caseLawSourceLanguagesOf } from "@stll/api-contract/case-law-source-languages";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   hasUsableAst,
@@ -587,6 +588,10 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       }),
       documentUrl: decision.documentUrl,
       metadata,
+      // The publisher's list of the work's languages, served as its own field:
+      // the metadata projection is node-budgeted, and a multilingual record's
+      // manifest is exactly what that budget would cut.
+      sourceLanguages: caseLawSourceLanguagesOf(decision.metadata),
       // The whole publisher sentence the list and search cut a preview from.
       // Metadata only, deliberately: the rows read the same sources in SQL
       // and nothing else, so a reader asking for the rest of a cut line gets

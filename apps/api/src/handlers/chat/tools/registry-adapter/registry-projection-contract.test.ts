@@ -1780,6 +1780,7 @@ const CONTRACT_CORPUS = {
           // GUID-bearing publisher URLs; see the statute fixture above.
           sourceUrl: `https://example.test/decision/${uid(93)}`,
           sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
+          sourceLanguages: null,
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
@@ -2608,6 +2609,7 @@ describe("decision text in chat projection", () => {
       },
       sourceUrl: "https://example.test/decision/source",
       sourceAttributionUrl: "https://example.test/decision/attribution",
+      sourceLanguages: null,
       createdAt: new Date("2020-05-01T00:00:00.000Z"),
       updatedAt: new Date("2020-05-01T00:00:00.000Z"),
     } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
