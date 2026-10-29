@@ -50,6 +50,42 @@ const headings = (blocks: readonly Block[], level?: number): string[] =>
       : [],
   );
 
+test("uneven spaced chunks retain the words and numbered paragraphs of I. ÚS 618/2026", async () => {
+  const blocks = await parsedFixture("sk-us-i-us-618-2026", "I. ÚS 618/2026");
+  expect(headings(blocks, 2)).toEqual(["rozhodol:", "Odôvodnenie:"]);
+  const texts = paragraphs(blocks).map(textOf);
+  expect(texts.some((text) => text.includes("je vylúčený z konania"))).toBe(
+    true,
+  );
+  expect(
+    texts.some((text) => text.startsWith("Poučenie: Proti tomuto rozhodnutiu")),
+  ).toBe(true);
+  expect(texts.some((text) => text.includes("a o zmene a doplnení"))).toBe(
+    true,
+  );
+  expect(
+    paragraphs(blocks)
+      .filter((block) => block.role !== "holding" && block.number !== undefined)
+      .map((block) => block.number),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+});
+
+test.each([
+  ["sk-us-pl-us-1-2021", "PL. ÚS 1/2021", "a v súlade"],
+  ["sk-us-pl-us-10-2014", "PL. ÚS 10/2014", "i z hľadiska"],
+  ["sk-us-pl-us-10-2014", "PL. ÚS 10/2014", "a k predmetnej veci"],
+])(
+  "ordinary short words remain separate in %s: %s, %s",
+  async (name, caseNumber, phrase) => {
+    const blocks = await parsedFixture(name, caseNumber);
+    expect(
+      paragraphs(blocks)
+        .map(textOf)
+        .some((text) => text.includes(phrase)),
+    ).toBe(true);
+  },
+);
+
 describe("letter-spaced emphasis (PL. ÚS 15/98)", () => {
   test("short spaced words keep the gaps between them", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-15-98", "PL. ÚS 15/98");
