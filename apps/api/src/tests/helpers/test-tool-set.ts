@@ -55,12 +55,17 @@ type TestFetchMock =
  * only care about the URL string. This helper centralises the
  * widening so the per-test mock can use the input shape it asserts.
  */
-export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
-  // SAFETY: production code calls the mock with the URL it would
-  // pass to real `fetch`; the test asserts on that exact input.
-  // Absent fetch overloads are not exercised at runtime.
+export const asFetchMock = (fn: TestFetchMock): typeof fetch => {
+  const mockedFetch = Object.assign(fn, {
+    // The fake has no connection to warm up; preserve Bun's fetch surface.
+    preconnect: () => undefined,
+  });
+
+  // SAFETY: tests call the mock with the production URL shape they exercise;
+  // the no-op preconnect preserves Bun's fetch surface without network I/O.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  fn as unknown as typeof fetch;
+  return mockedFetch as unknown as typeof fetch;
+};
 
 /**
  * Narrow an `unknown` raw value to a caller-declared test shape.

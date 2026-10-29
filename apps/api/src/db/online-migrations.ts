@@ -1725,7 +1725,7 @@ const reportIndexReadiness = async ({
     assertIndexDefinition(index, artifact);
     if (artifact.isValid) {
       panic(
-        `Required migration index ${index.name} introduced by ${index.introducedBy} has a valid reindex artifact`,
+        `Required migration index ${index.name} ${typeof index.introducedBy === "string" ? `introduced by ${index.introducedBy}` : `owned by ${index.introducedBy.owner}`} has a valid reindex artifact`,
       );
     }
   }

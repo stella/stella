@@ -82,6 +82,7 @@
     "scripts/check-mcp-generated-tracking.ts",
     "scripts/check-migration-order.test.ts",
     "scripts/check-migration-order.ts",
+    "scripts/check-online-index-dependencies.ts",
     "scripts/check-oxlint-effective-config.ts",
     "scripts/check-oxlint-rule-coverage.test.ts",
     "scripts/check-oxlint-rule-coverage.ts",

@@ -28,6 +28,7 @@ import {
   plan,
   push,
   refreshLockfile,
+  resolveDerived,
 } from "./generated-conflicts";
 import { type Generator, GENERATORS } from "./generated-files";
 
@@ -346,19 +347,15 @@ describe("resolution across runs", () => {
 
   const env = {
     ...process.env,
-    GIT_AUTHOR_NAME: "Fixture",
-    GIT_AUTHOR_EMAIL: "fixture@example.invalid",
-    GIT_COMMITTER_NAME: "Fixture",
-    GIT_COMMITTER_EMAIL: "fixture@example.invalid",
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
   };
-  const run = (cwd: string, command: readonly string[]) => {
+  const run = (cwd: string, command: readonly string[], environment = env) => {
     const result = Bun.spawnSync([...command], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
-      env,
+      env: environment,
     });
     return {
       exitCode: result.exitCode,
@@ -370,6 +367,16 @@ describe("resolution across runs", () => {
     const result = run(cwd, ["git", "-c", "commit.gpgsign=false", ...args]);
     expect(result.exitCode, result.stderr).toBe(0);
     return result.stdout;
+  };
+  const configureGitFixture = (repo: string) => {
+    for (const [key, value] of [
+      ["user.name", "Fixture"],
+      ["user.email", "fixture@example.invalid"],
+      ["commit.gpgsign", "false"],
+      ["tag.gpgsign", "false"],
+    ] as const) {
+      git(repo, "config", "--local", key, value);
+    }
   };
   const write = (repo: string, file: string, text: string) => {
     mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
@@ -402,7 +409,19 @@ describe("resolution across runs", () => {
     const origin = path.join(root, "origin");
     mkdirSync(origin);
     git(origin, "init", "-q", "-b", "main");
+    configureGitFixture(origin);
     write(origin, MESSAGES, "type Messages = { a: string };\n");
+    const manifest = { name: "fixture" };
+    write(origin, "package.json", JSON.stringify(manifest));
+    write(
+      origin,
+      "bun.lock",
+      JSON.stringify({
+        lockfileVersion: 3,
+        workspaces: { "": manifest },
+        packages: {},
+      }),
+    );
     write(
       origin,
       NOTES,
@@ -458,6 +477,7 @@ describe("resolution across runs", () => {
     const origin = path.join(root, "origin");
     mkdirSync(origin);
     git(origin, "init", "-q", "-b", "main");
+    configureGitFixture(origin);
     write(origin, file, "base\n");
     git(origin, "add", ".");
     git(origin, "commit", "-qm", "base");
@@ -490,6 +510,7 @@ describe("resolution across runs", () => {
       "type Messages = { a: string; b: string; c: string };\n";
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
+    configureGitFixture(repo);
     git(repo, "checkout", "-q", "--detach", head);
     const planned = cli(
       repo,
@@ -528,6 +549,7 @@ describe("resolution across runs", () => {
   const publish = (origin: string, head: string, out: string) => {
     const bare = mkdtempSync(path.join(root, "publish-"));
     git(bare, "init", "-q", "--bare", ".");
+    configureGitFixture(bare);
     git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
     const mainTip = git(bare, "rev-parse", "refs/heads/main");
     const requests = path.join(bare, "requests");
@@ -825,6 +847,7 @@ describe("resolution across runs", () => {
     const { origin, head, main } = deletionFixture();
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
+    configureGitFixture(repo);
     git(repo, "checkout", "-q", "--detach", head);
     const planned = plan(path.join(repo, ".git"), head, main, [
       deletionGenerator("derived"),
@@ -847,6 +870,7 @@ describe("resolution across runs", () => {
 
     const bare = path.join(root, "publish.git");
     git(root, "init", "-q", "--bare", bare);
+    configureGitFixture(bare);
     git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
     const requests = path.join(root, "requests");
     apply({
@@ -905,6 +929,7 @@ describe("resolution across runs", () => {
       const { origin, head, main } = rejection.fixture();
       const bare = path.join(root, "publish.git");
       git(root, "init", "-q", "--bare", bare);
+      configureGitFixture(bare);
       git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
       const collected = path.join(root, "forged");
       mkdirSync(path.join(collected, "files"), { recursive: true });
@@ -944,6 +969,7 @@ describe("resolution across runs", () => {
     // Proof the attribute bites: a plain checkout merge reports no conflict.
     const plain = path.join(root, "plain");
     git(root, "clone", "-q", origin, plain);
+    configureGitFixture(plain);
     git(plain, "checkout", "-q", "--detach", head);
     const merged = run(plain, [
       "git",
@@ -1091,6 +1117,265 @@ describe("resolution across runs", () => {
     );
   });
 
+  const localGenerator = (extra = ""): Generator => ({
+    id: "fixture-local",
+    outputKind: "committed",
+    outputs: [MESSAGES],
+    inputs: [NOTES],
+    write: [
+      "bun",
+      "-e",
+      `const fs = require("node:fs"); fs.writeFileSync(${JSON.stringify(MESSAGES)}, fs.readFileSync(${JSON.stringify(NOTES)})); ${extra}`,
+    ],
+    check: [
+      "bun",
+      "-e",
+      `const fs = require("node:fs"); process.exit(fs.readFileSync(${JSON.stringify(MESSAGES)}, "utf-8") === fs.readFileSync(${JSON.stringify(NOTES)}, "utf-8") ? 0 : 1)`,
+    ],
+    autofix: true,
+    after: [],
+  });
+
+  test("local regeneration preserves both source edits and leaves an ordinary abortable merge", () => {
+    const { origin, head, main } = fixture();
+    git(origin, "switch", "-q", "feature");
+    const attributes = path.join(
+      origin,
+      git(origin, "rev-parse", "--git-path", "info/attributes"),
+    );
+    writeFileSync(attributes, "sentinel merge=text\n");
+    const result = resolveDerived({
+      repo: origin,
+      main,
+      generators: [localGenerator()],
+    });
+    expect(result.eligible).toBe(true);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    const output = readFileSync(path.join(origin, MESSAGES), "utf-8");
+    expect(output).toBe(readFileSync(path.join(origin, NOTES), "utf-8"));
+    expect(output).toContain("branch\n");
+    expect(output).toContain("main\n");
+    expect(git(origin, "ls-files", "-u")).toBe("");
+    expect(readFileSync(attributes, "utf-8")).toBe("sentinel merge=text\n");
+    git(origin, "merge", "--abort");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(readFileSync(path.join(origin, MESSAGES), "utf-8")).toBe(
+      `${git(origin, "show", `${head}:${MESSAGES}`)}\n`,
+    );
+  });
+
+  test("fixture merge needs no machine-level Git configuration", () => {
+    const { origin, main } = fixture();
+    git(origin, "switch", "-q", "feature");
+    const home = path.join(root, "empty-home");
+    mkdirSync(home);
+    const isolatedEnv = {
+      PATH: process.env["PATH"] ?? "",
+      HOME: home,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    };
+    const merged = run(
+      origin,
+      ["git", "merge", "--no-commit", "--no-ff", main],
+      isolatedEnv,
+    );
+    expect(merged.exitCode).toBe(1);
+    expect(merged.stderr).not.toContain("identity unknown");
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+  });
+
+  test("local regeneration refuses source conflicts without touching the index or files", () => {
+    const { origin, head, main } = fixture({
+      branchEdits: (repo) => write(repo, "source.ts", "branch\n"),
+      mainEdits: (repo) => write(repo, "source.ts", "main\n"),
+    });
+    git(origin, "switch", "-q", "feature");
+    const tree = git(origin, "write-tree");
+    expect(() =>
+      resolveDerived({ repo: origin, main, generators: [localGenerator()] }),
+    ).toThrow("source.ts: not a generated output");
+    expect(git(origin, "write-tree")).toBe(tree);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(
+      run(origin, ["git", "rev-parse", "--verify", "MERGE_HEAD"]).exitCode,
+    ).not.toBe(0);
+  });
+
+  test.each(["tracked", "staged", "untracked"])(
+    "local regeneration refuses %s dirty state without mutations",
+    (state) => {
+      const { origin, head, main } = fixture();
+      git(origin, "switch", "-q", "feature");
+      write(
+        origin,
+        state === "untracked" ? "untracked.txt" : NOTES,
+        "local work\n",
+      );
+      if (state === "staged") {
+        git(origin, "add", NOTES);
+      }
+      const status = git(origin, "status", "--porcelain");
+      const index = git(origin, "write-tree");
+      expect(() =>
+        resolveDerived({ repo: origin, main, generators: [localGenerator()] }),
+      ).toThrow("requires a clean index and work tree");
+      expect(git(origin, "status", "--porcelain")).toBe(status);
+      expect(git(origin, "write-tree")).toBe(index);
+      expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+      expect(
+        readFileSync(
+          path.join(origin, state === "untracked" ? "untracked.txt" : NOTES),
+          "utf-8",
+        ),
+      ).toBe("local work\n");
+    },
+  );
+
+  test.each([
+    {
+      name: "failed generator",
+      extra: "process.exit(7)",
+      message: "Generator fixture-local failed",
+    },
+    {
+      name: "out of scope write",
+      extra: 'fs.writeFileSync("outside.txt", "unexpected")',
+      message: "outside the owning generators' outputs: outside.txt",
+    },
+  ])("$name leaves a recoverable pending merge", ({ extra, message }) => {
+    const { origin, head, main } = fixture();
+    git(origin, "switch", "-q", "feature");
+    expect(() =>
+      resolveDerived({
+        repo: origin,
+        main,
+        generators: [localGenerator(extra)],
+      }),
+    ).toThrow(message);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("local regeneration refuses a new ignored file outside generator outputs", () => {
+    const ignored = "ignored-outside.txt";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, ".gitignore", `/${ignored}\n`),
+    });
+    git(origin, "switch", "-q", "feature");
+    expect(() =>
+      resolveDerived({
+        repo: origin,
+        main,
+        generators: [
+          localGenerator(
+            `fs.writeFileSync(${JSON.stringify(ignored)}, "unexpected")`,
+          ),
+        ],
+      }),
+    ).toThrow(`outside the owning generators' outputs: ${ignored}`);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("local regeneration validates lockfile consistency without a lockfile conflict", () => {
+    const manifest = { name: "fixture", dependencies: { a: "1.0.0" } };
+    const lockfile = {
+      lockfileVersion: 3,
+      workspaces: { "": manifest },
+      packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
+    };
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => {
+        write(repo, "package.json", JSON.stringify(manifest));
+        write(repo, "bun.lock", JSON.stringify(lockfile));
+      },
+      branchEdits: (repo) =>
+        write(
+          repo,
+          "package.json",
+          JSON.stringify({ ...manifest, dependencies: { a: "2.0.0" } }),
+        ),
+    });
+    git(origin, "switch", "-q", "feature");
+    expect(() =>
+      resolveDerived({ repo: origin, main, generators: [localGenerator()] }),
+    ).toThrow("lockfile workspace metadata differs from merged manifest");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "status", "--porcelain")).toBe("");
+  });
+
+  test("local regeneration refuses lockfile pin drift and leaves an abortable merge", () => {
+    const manifest = { name: "fixture", dependencies: { a: "1.0.0" } };
+    const lockfile = {
+      lockfileVersion: 3,
+      workspaces: { "": manifest },
+      packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
+    };
+    const drifted = {
+      ...lockfile,
+      packages: { a: ["a@2.0.0", "", {}, "sha512-other"] },
+    };
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => {
+        write(repo, "package.json", JSON.stringify(manifest));
+        write(repo, "bun.lock", JSON.stringify(lockfile));
+      },
+    });
+    git(origin, "switch", "-q", "feature");
+    const generator = localGenerator(
+      `fs.writeFileSync("bun.lock", ${JSON.stringify(JSON.stringify(drifted))})`,
+    );
+    expect(() =>
+      resolveDerived({ repo: origin, main, generators: [generator] }),
+    ).toThrow("frozen pins or policy");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(readFileSync(path.join(origin, "bun.lock"), "utf-8")).toBe(
+      JSON.stringify(lockfile),
+    );
+  });
+
+  test("local regeneration supports linked worktrees without rewriting shared attributes", () => {
+    const { origin, head, main } = fixture();
+    const linked = path.join(root, "linked");
+    git(origin, "worktree", "add", "-q", linked, "feature");
+    const attributes = git(
+      linked,
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-path",
+      "info/attributes",
+    );
+    writeFileSync(attributes, "sentinel merge=text\n");
+    resolveDerived({ repo: linked, main, generators: [localGenerator()] });
+    expect(git(linked, "rev-parse", "HEAD")).toBe(head);
+    expect(git(linked, "rev-parse", "MERGE_HEAD")).toBe(main);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(main);
+    expect(readFileSync(attributes, "utf-8")).toBe("sentinel merge=text\n");
+    expect(readFileSync(path.join(linked, MESSAGES), "utf-8")).toContain(
+      "branch\n",
+    );
+    expect(readFileSync(path.join(linked, MESSAGES), "utf-8")).toContain(
+      "main\n",
+    );
+    git(linked, "merge", "--abort");
+    expect(git(linked, "status", "--porcelain")).toBe("");
+  });
+
   test("a branch that moved between the jobs gets no merge from the old resolution", () => {
     const { origin, head, main } = fixture();
     const { out } = resolve({ origin, head, main });
@@ -1131,6 +1416,7 @@ describe("resolution across runs", () => {
     });
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
+    configureGitFixture(repo);
     const planned = cli(
       repo,
       "plan",

@@ -263,6 +263,25 @@ describe("online migrations", () => {
     },
   );
 
+  test("code-owned index artifact reports its source owner", async () => {
+    const index = ONLINE_MIGRATION_INDEXES.find(
+      ({ introducedBy }) => typeof introducedBy !== "string",
+    );
+    if (!index || typeof index.introducedBy === "string") {
+      throw new TypeError("Expected code-owned index fixture");
+    }
+    const harness = createHarness({
+      artifacts: {
+        [index.name]: [{ name: `${index.name}_ccnew`, isValid: true }],
+      },
+    });
+    expect(
+      await rejectionOf(reportOnlineMigrations(harness.pool)),
+    ).toMatchObject({
+      message: `Required migration index ${index.name} owned by ${index.introducedBy.owner} has a valid reindex artifact`,
+    });
+  });
+
   test.each([true, false])(
     "validates reindex artifacts before classifying pending work (valid=%s)",
     async (isValid) => {
