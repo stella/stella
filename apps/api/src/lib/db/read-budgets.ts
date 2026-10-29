@@ -37,6 +37,12 @@ export const READ_BUDGETS = {
     reason:
       "One decision by primary key, its source by primary key and its bounded identifier index range. 64 shared buffers allow index descent, visibility checks and TOAST access for the stored AST; independent of corpus cardinality.",
   },
+  "statement.caseLaw.coverageSources": {
+    surface: "statement",
+    pages: 256,
+    reason:
+      "Four fixture sources: eight date endpoint seeks at eight pages each (64), ninety precomputed court rows at two pages each (180), and twelve pages for the twenty-row uncached court source and grouped pending-text read: 256 pages total. Rejected filing dates must cost no heap walk.",
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,

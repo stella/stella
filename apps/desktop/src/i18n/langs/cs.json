@@ -299,7 +299,7 @@
     "moreOptions": "Další možnosti",
     "moreItemActions": "Další akce pro položku {number}",
     "noResults": "Žádné odpovídající výstřižky",
-    "noResultsDescription": "Chcete místo toho hledat „{query}“ v rejstřících?",
+    "noResultsSearchRegistries": "Hledat „{query}“ v rejstřících",
     "noGroup": "Bez skupiny",
     "newGroupOption": "Nová skupina…",
     "copyItem": "Kopírovat položku {number}",

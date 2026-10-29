@@ -1580,6 +1580,12 @@
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# mais} many {+# mais} other {+# mais}}",
+      "dismiss": "Ocultar aviso de conexão",
+      "stoppedWorking": "Sua conexão com <name>{server}</name> parou de funcionar.",
+      "waitingApproval": "Sua conexão com <name>{server}</name> está aguardando aprovação."
+    },
     "mention": {
       "category": {
         "entities": "Neste caso",
@@ -5066,6 +5072,16 @@
       "preferredNamePlaceholder": "Seu nome",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
+      "signInMethods": {
+        "confirmDescription": "Digite um novo código enviado para seu e-mail para desconectar este método de login.",
+        "confirmTitle": "Desconectar {provider}?",
+        "description": "Conecte contas que usam o mesmo endereço de e-mail verificado.",
+        "emailCode": "Código por e-mail",
+        "emailCodeDescription": "Você sempre pode entrar com um código enviado para seu e-mail.",
+        "lastMethod": "Conecte outra conta antes de desconectar esta.",
+        "title": "Métodos de login",
+        "unavailable": "O envio de e-mails precisa estar configurado para desconectar métodos de login."
+      },
       "timezone": "Fuso horário",
       "timezoneDescription": "Usado para carimbos de data/hora em notificações e e-mails",
       "timezoneSaved": "Fuso horário atualizado",

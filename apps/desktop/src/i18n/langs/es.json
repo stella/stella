@@ -299,7 +299,7 @@
     "moreOptions": "Más opciones",
     "moreItemActions": "Más acciones para el elemento {number}",
     "noResults": "No hay recortes coincidentes",
-    "noResultsDescription": "¿Quieres buscar «{query}» en los registros?",
+    "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "noGroup": "Sin grupo",
     "newGroupOption": "Grupo nuevo…",
     "copyItem": "Copiar elemento {number}",

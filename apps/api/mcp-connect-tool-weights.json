@@ -432,10 +432,10 @@
     {
       "name": "resolve_case_law_decision",
       "nameChars": 25,
-      "descriptionChars": 554,
-      "inputSchemaChars": 671,
-      "totalChars": 1250,
-      "estimatedTokens": 473
+      "descriptionChars": 538,
+      "inputSchemaChars": 681,
+      "totalChars": 1244,
+      "estimatedTokens": 472
     },
     {
       "name": "resolve_law_citation",
@@ -631,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 128635,
-    "estimatedTokens": 50962
+    "characters": 128629,
+    "estimatedTokens": 50961
   }
 }
