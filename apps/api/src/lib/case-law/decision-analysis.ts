@@ -13,8 +13,12 @@ import {
   readDecisionVersionedPayload,
 } from "@/api/lib/case-law/decision-versioned-payload";
 import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
-import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
+import {
+  parsePersistedCorpusAst,
+  readCorpusPayloadOrFallback,
+} from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -109,24 +113,25 @@ type DecisionAstPointers = {
 export const readDecisionAnalysisAst = async (
   { astS3Key, contentHash, documentAst, id }: DecisionAstPointers,
   readTombstones: CorpusTombstoneReader,
-  readPgAst?: () => Promise<unknown>,
+  readPgAst?: () => Promise<DocumentAst | EmptyAst | null>,
 ): Promise<DocumentAst | null> => {
+  const readRowAst = async () =>
+    readPgAst === undefined
+      ? parsePersistedCorpusAst(documentAst, id)
+      : await readPgAst();
   if (
     corpusStorageMode === "off" ||
     astS3Key === null ||
     contentHash === null
   ) {
-    return parseCachedDecisionAst(
-      readPgAst === undefined ? documentAst : await readPgAst(),
-    );
+    return parseCachedDecisionAst(await readRowAst());
   }
   const stored = await readCorpusPayloadOrFallback({
     documentId: id,
     key: astS3Key,
     step: "analysis.readDecisionAst",
     read: async () => await readCachedDecisionAst(astS3Key, readTombstones),
-    fallback: async () =>
-      readPgAst === undefined ? documentAst : await readPgAst(),
+    fallback: readRowAst,
   });
   return parseCachedDecisionAst(stored);
 };

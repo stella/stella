@@ -2599,6 +2599,7 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    textAvailability: hit.textAvailability,
     match,
     ...(hit.textWithheldReason === null
       ? {

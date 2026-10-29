@@ -330,6 +330,7 @@ const readDecisionTextGroup = async ({
           readCorpusTombstones,
           async () =>
             await readCachedDecisionRowAst({
+              documentId: pointer.id,
               key,
               onVersionChanged,
               read: async () => {

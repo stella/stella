@@ -130,6 +130,7 @@ export const resolveAnalysisInput = defineWindowedRead(
           readCorpusTombstones,
           async () =>
             await readCachedDecisionRowAst({
+              documentId: decision.id,
               key: decisionPayloadKey(decision),
               onVersionChanged: () => {
                 versionState.changed = true;

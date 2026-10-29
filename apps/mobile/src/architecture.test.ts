@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/mobile-updates";
 
 import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+import manifest from "../package.json" with { type: "json" };
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -179,6 +180,41 @@ describe("the app's dates", () => {
     expect(source.match(/relativeTime\(|RelativeTimeFormat/gu) ?? []).toEqual(
       [],
     );
+  });
+});
+
+describe("the app's dependencies", () => {
+  /** Test helpers run under Bun beside the tests and may use dev dependencies. */
+  const bundled = appModules.filter(
+    (name) => !name.split(path.sep).includes("test-support"),
+  );
+
+  /** `@scope/name/sub` and `name/sub` name the packages `@scope/name` and `name`. */
+  const packageOf = (specifier: string): string =>
+    specifier
+      .split("/")
+      .slice(0, specifier.startsWith("@") ? 2 : 1)
+      .join("/");
+
+  test("reads a scoped package's name from a subpath import", () => {
+    expect(packageOf("@stll/ui/matter-colors")).toBe("@stll/ui");
+    expect(packageOf("expo-router/stack")).toBe("expo-router");
+  });
+
+  // The release jobs install only `@stll/mobile...`, so a package that is
+  // linked at the workspace root but missing here type-checks and bundles
+  // locally, then fails the TestFlight archive.
+  test.each(bundled)("%s imports only packages the app depends on", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      importsOf(source)
+        .filter(
+          (specifier) =>
+            !specifier.startsWith(".") && !specifier.startsWith("@/"),
+        )
+        .map(packageOf)
+        .filter((pkg) => !Object.hasOwn(manifest.dependencies, pkg)),
+    ).toEqual([]);
   });
 });
 

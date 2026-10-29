@@ -94,6 +94,7 @@ export const caseLawWindowFixture = async (
       readStore: async () => await cache.read("immutable-fixture"),
       readPgAst: async () =>
         await readRow({
+          documentId: decisionId,
           key: "decision-id/updated-at/version-1",
           read: async () => {
             recordDbResult([{ documentAst: document }]);

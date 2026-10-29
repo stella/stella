@@ -3,12 +3,15 @@ import { expect, test } from "bun:test";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import { createDecisionRowAstCache } from "@/api/lib/case-law/decision-row-ast-cache";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import {
   currentReadWork,
   recordDbResult,
 } from "@/api/lib/observability/request-work";
+
+const decisionId = createSafeId<"caseLawDecision">();
 
 const astFor = (text: string): DocumentAst => ({
   version: 1,
@@ -44,13 +47,21 @@ test("database document windows transfer and parse no AST after their live versi
       return document;
     };
     const first = await runWithQueryCounter(async () => {
-      const ast = await cache({ key: "decision/update-1", read });
+      const ast = await cache({
+        documentId: decisionId,
+        key: "decision/update-1",
+        read,
+      });
       expect(currentReadWork()?.dbResultBytes).toBeGreaterThan(4000 * scale);
       expect(currentReadWork()?.astParses).toBe(1);
       return ast;
     });
     await runWithQueryCounter(async () => {
-      const cached = await cache({ key: "decision/update-1", read });
+      const cached = await cache({
+        documentId: decisionId,
+        key: "decision/update-1",
+        read,
+      });
       expect(currentReadWork()?.dbResultBytes).toBe(0);
       expect(cached).toBe(first);
       expect(currentReadWork()?.astParses).toBe(0);
@@ -58,7 +69,7 @@ test("database document windows transfer and parse no AST after their live versi
     });
     expect(reads).toBe(1);
     expect(Object.isFrozen(first?.blocks)).toBe(true);
-    await cache({ key: "decision/update-2", read });
+    await cache({ documentId: decisionId, key: "decision/update-2", read });
     expect(reads).toBe(2);
   }
 });
@@ -72,13 +83,14 @@ test("concurrent pages share one row payload query and a rejected query is retri
     return astFor("body");
   };
   const [first, second] = await Promise.all([
-    cache({ key: "v1", read }),
-    cache({ key: "v1", read }),
+    cache({ documentId: decisionId, key: "v1", read }),
+    cache({ documentId: decisionId, key: "v1", read }),
   ]);
   expect(first).toBe(second);
   expect(reads).toBe(1);
   const rejection = await rejectionOf(
     cache({
+      documentId: decisionId,
       key: "v2",
       read: async () => {
         throw new Error("database unavailable");
@@ -87,7 +99,9 @@ test("concurrent pages share one row payload query and a rejected query is retri
   );
   expect(rejection).toBeInstanceOf(Error);
   expect(String(rejection)).toContain("database unavailable");
-  expect(await cache({ key: "v2", read })).not.toBeNull();
+  expect(
+    await cache({ documentId: decisionId, key: "v2", read }),
+  ).not.toBeNull();
   expect(reads).toBe(2);
 });
 
@@ -98,7 +112,7 @@ test("a row AST larger than the budget is never retained", async () => {
     reads++;
     return astFor("x".repeat(10_000));
   };
-  await cache({ key: "oversized", read });
-  await cache({ key: "oversized", read });
+  await cache({ documentId: decisionId, key: "oversized", read });
+  await cache({ documentId: decisionId, key: "oversized", read });
   expect(reads).toBe(2);
 });

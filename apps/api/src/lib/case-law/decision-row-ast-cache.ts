@@ -11,6 +11,7 @@ export const DECISION_ROW_AST_VERSION_CHANGED = Symbol(
   "decision-row-ast-version-changed",
 );
 type ReadDecisionRowAstOptions = {
+  documentId: string;
   /** Live row id, update timestamp and payload identity, resolved after admission. */
   key: string;
   read: () => Promise<unknown>;
@@ -28,7 +29,12 @@ export const createDecisionRowAstCache = ({
     sizeOf: (ast) => JSON.stringify(ast).length * 3,
   });
   const inFlight = new Map<string, Promise<DecisionRowAstLoad>>();
-  return async ({ key, read, onVersionChanged }: ReadDecisionRowAstOptions) => {
+  return async ({
+    documentId,
+    key,
+    read,
+    onVersionChanged,
+  }: ReadDecisionRowAstOptions) => {
     const cached = cache.get(key);
     if (cached !== undefined) {
       recordReadWork("cacheHits");
@@ -49,7 +55,7 @@ export const createDecisionRowAstCache = ({
       if (value === DECISION_ROW_AST_VERSION_CHANGED) {
         return value;
       }
-      const ast = deepFreeze(parsePersistedCorpusAst(value));
+      const ast = deepFreeze(parsePersistedCorpusAst(value, documentId));
       cache.set(key, ast);
       return ast;
     })().finally(() => {

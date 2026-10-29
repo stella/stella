@@ -33,7 +33,7 @@ const normalizedProjections = new WeakMap<DocumentAst, Promise<ServedAst>>();
 type ReadServedAstOptions = {
   astS3Key: string | null;
   contentHash: string | null;
-  pgAst: DocumentAst | EmptyAst | null;
+  pgAst: unknown;
   readPgAst?: () => Promise<DocumentAst | EmptyAst | null>;
   decisionId: SafeId<"caseLawDecision">;
   corpusReadEnabled: boolean;
@@ -54,7 +54,7 @@ export const readServedDecisionAst = async ({
     astFrom(
       "row",
       readPgAst === undefined
-        ? parsePersistedCorpusAst(pgAst)
+        ? parsePersistedCorpusAst(pgAst, decisionId)
         : await readPgAst(),
     );
   const resolved =
