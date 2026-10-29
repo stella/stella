@@ -1,13 +1,8 @@
 import { panic, Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
-import type { RequestContext } from "@/api/http/context";
 import type { VerifyCaller } from "@/api/lib/api-handlers";
-import { recordAuditGroups } from "@/api/lib/audit-log";
-import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveInvoiceLink } from "@/api/lib/billing/invoice-links";
 import type { InvoiceLinkScope } from "@/api/lib/billing/invoice-links";
-import { resolveClientIp } from "@/api/lib/client-ip";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -66,7 +61,7 @@ export const verifyInvoiceLinkCaller =
  * Who an invoice link's audit rows name: the invoice, performed by the link
  * with its sending member retained as history when available.
  */
-const invoiceLinkAuditBindings = (
+export const invoiceLinkAuditBindings = (
   caller: InvoiceLinkCaller,
   workspaceId: InvoiceLinkScope["workspaceIds"][number] | null,
 ) => ({
@@ -86,31 +81,6 @@ const invoiceLinkAuditBindings = (
     },
   },
 });
-
-type InvoiceLinkAuditOptions = {
-  caller: InvoiceLinkCaller;
-  workspaceId: InvoiceLinkScope["workspaceIds"][number] | null;
-  context: Pick<RequestContext, "request" | "server">;
-};
-
-/** Service provenance survives deletion of the sending account. */
-export const createInvoiceLinkAuditRecorder =
-  ({ caller, workspaceId, context }: InvoiceLinkAuditOptions) =>
-  async (tx: Transaction, event: AuditEvent) => {
-    await recordAuditGroups({
-      tx,
-      groups: [
-        {
-          bindings: invoiceLinkAuditBindings(caller, workspaceId),
-          events: [event],
-        },
-      ],
-      requestMetadata: {
-        ipAddress: resolveClientIp(context.request, context.server),
-        userAgent: context.request.headers.get("user-agent"),
-      },
-    });
-  };
 
 /** A matter the invoice bills; every document read is scoped through it. */
 export const anchorMatter = (caller: InvoiceLinkCaller) =>

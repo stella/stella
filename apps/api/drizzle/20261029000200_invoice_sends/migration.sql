@@ -213,16 +213,24 @@ REVOKE ALL ON FUNCTION "invoice_link_original"(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION "invoice_link_original"(text) TO stella;
 
 --> statement-breakpoint
--- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; only the live token's send can receive its first-view timestamp
+-- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; rechecks token, organization, revocation, expiry and invoice state while stamping access, returning whether delivery is permitted
 CREATE FUNCTION "invoice_link_mark_viewed"(p_token_hash text)
-RETURNS void LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+RETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $$ BEGIN
+AS $$
+DECLARE v_live boolean;
+BEGIN
   PERFORM pg_catalog.set_config('app.invoice_link_hash', p_token_hash, true);
-  UPDATE public.invoice_sends SET first_viewed_at = pg_catalog.now()
-  WHERE id IN (SELECT send_id FROM public.invoice_link_scope(p_token_hash))
-    AND first_viewed_at IS NULL;
+  UPDATE public.invoice_sends s SET first_viewed_at = COALESCE(s.first_viewed_at, pg_catalog.clock_timestamp())
+  FROM public.invoice_link_scope(p_token_hash) live
+  WHERE s.id = live.send_id
+    AND s.organization_id = live.organization_id
+    AND s.organization_id = NULLIF(pg_catalog.current_setting('app.organization_id', true), '')
+    AND s.revoked_at IS NULL
+    AND s.expires_at > pg_catalog.clock_timestamp();
+  v_live := FOUND;
   PERFORM pg_catalog.set_config('app.invoice_link_hash', '', true);
+  RETURN v_live;
 END $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_mark_viewed"(text) FROM PUBLIC;

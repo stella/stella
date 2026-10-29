@@ -1,5 +1,11 @@
 import { panic } from "better-result";
-import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { getColumns, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import type {
+  AnyPgColumn,
+  PgAsyncDatabase,
+  PgQueryResultHKT,
+} from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -7,8 +13,10 @@ import type {
   SearchHistoryKind,
 } from "@/api/db/schema";
 import { accountAuditLogs, auditLogs } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 
 import {
@@ -430,21 +438,13 @@ type RecordAuditGroupsOptions = {
   recordAuditEvent?: AuditRecorder | undefined;
 };
 
-/** Retain request metadata when supplied; otherwise keep each tenant group's provenance. */
-export const recordAuditGroups = async ({
-  tx,
-  groups,
-  requestMetadata,
-  recordAuditEvent,
-}: RecordAuditGroupsOptions): Promise<void> => {
-  if (recordAuditEvent) {
-    await recordAuditEvent(
-      tx,
-      groups.flatMap(({ events }) => events),
-    );
-    return;
-  }
-  const rows = groups.flatMap(({ bindings, events }) => {
+type AuditRowsOptions = {
+  groups: RecordAuditGroupsOptions["groups"];
+  requestMetadata: AuditMetadata | undefined;
+};
+
+const auditRowsOf = ({ groups, requestMetadata }: AuditRowsOptions) =>
+  groups.flatMap(({ bindings, events }) => {
     const groupId = Bun.randomUUIDv7();
     const execution = executionColumns(bindings.execution, bindings.userId);
     return events.map((event) => ({
@@ -472,10 +472,84 @@ export const recordAuditGroups = async ({
       runId: runIdForEvent(event, execution),
     }));
   });
+
+/** Retain request metadata when supplied; otherwise keep each tenant group's provenance. */
+export const recordAuditGroups = async ({
+  tx,
+  groups,
+  requestMetadata,
+  recordAuditEvent,
+}: RecordAuditGroupsOptions): Promise<void> => {
+  if (recordAuditEvent) {
+    await recordAuditEvent(
+      tx,
+      groups.flatMap(({ events }) => events),
+    );
+    return;
+  }
+  const rows = auditRowsOf({ groups, requestMetadata });
   if (rows.length === 0) {
     return;
   }
   await insertAuditRows(tx, rows);
+};
+
+type RecordGatedAuditEventOptions = {
+  tx: Pick<Transaction, "execute" | "rollback">;
+  gate: SQL;
+  bindings: BackgroundAuditRecorderBindings;
+  event: AuditEvent;
+  requestMetadata: AuditMetadata;
+};
+
+/** The authorization predicate and audit insert are one statement; a denied delivery records nothing. */
+export const recordGatedAuditEvent = async ({
+  tx,
+  gate,
+  bindings,
+  event,
+  requestMetadata,
+}: RecordGatedAuditEventOptions): Promise<boolean> => {
+  // audit: skip - This canonical audit insertion owner writes the audit event itself.
+  const built = auditRowsOf({
+    groups: [{ bindings, events: [event] }],
+    requestMetadata,
+  }).at(0);
+  if (built === undefined) {
+    return panic("A single audit event produced no row");
+  }
+  const row = { id: createSafeId<"auditLog">(), ...built };
+  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(auditLogs);
+  const fields = Object.entries(row).map(([name, value]) => {
+    const column = columns[name];
+    if (column === undefined) {
+      return panic("Audit row contains an unknown column");
+    }
+    return { column, value };
+  });
+  const result = await tx.execute(
+    sql`INSERT INTO ${auditLogs} (${sql.join(
+      fields.map(({ column }) => sql.identifier(column.name)),
+      sql`, `,
+    )}) SELECT ${sql.join(
+      fields.map(({ column, value }) => sql.param(value, column)),
+      sql`, `,
+    )} WHERE ${gate} RETURNING ${auditLogs.id}`,
+  );
+  const inserted = executedRows(result);
+  if (inserted.length > 1) {
+    return panic("A single gated audit event inserted multiple rows");
+  }
+  if (inserted.length === 0) {
+    return false;
+  }
+  if (
+    event.action === AUDIT_ACTION.ACCESS ||
+    event.action === AUDIT_ACTION.DOWNLOAD
+  ) {
+    recordContentDeliveryReceipt();
+  }
+  return true;
 };
 
 /**

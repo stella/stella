@@ -193,6 +193,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-stable-geometry.fixture.ts", [
     "require-stable-geometry/require-stable-geometry",
   ]),
+  fixtureRuleOverride("require-invoice-link-delivery-gate.fixture.ts", [
+    "require-invoice-link-delivery-gate/require-invoice-link-delivery-gate",
+  ]),
   fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
     "no-raw-e2e-router-push/no-raw-e2e-router-push",
   ]),
@@ -1817,6 +1820,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/require-fingerprint-fields.ts",
+    "./.oxlint-plugins/require-invoice-link-delivery-gate.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -5485,6 +5489,14 @@ const config = defineConfig({
       rules: {
         "failure-sink-handle/failure-sink-handle": "error",
         "require-fingerprint-fields/require-fingerprint-fields": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/invoice-links/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/api/src/handlers/invoice-links/**/*.test.{ts,tsx}"],
+      rules: {
+        "require-invoice-link-delivery-gate/require-invoice-link-delivery-gate":
+          "error",
       },
     },
     {

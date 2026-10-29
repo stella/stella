@@ -33,6 +33,7 @@ import {
 } from "@/api/db/scoped";
 import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { createDownloadInvoiceLinkFile } from "@/api/handlers/invoice-links/download";
+import { buildLinkedEInvoice } from "@/api/handlers/invoice-links/e-invoice";
 import { parseInvoiceLinkInvoiceRow } from "@/api/handlers/invoice-links/function-rows";
 import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { createViewInvoiceLink } from "@/api/handlers/invoice-links/view";
@@ -42,6 +43,7 @@ import {
 } from "@/api/handlers/invoices/export-records";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import { INVOICE_DOCUMENT_PROJECTION } from "@/api/handlers/invoices/invoice-detail";
+import type { InvoicePdfRenderer } from "@/api/handlers/invoices/pdf/document";
 import { createInvoiceFormatters } from "@/api/handlers/invoices/pdf/render-helpers";
 import { qrSvg } from "@/api/handlers/invoices/pdf/typst/data";
 import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
@@ -60,7 +62,6 @@ import {
 } from "@/api/lib/billing/invoice-links";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { executedRows } from "@/api/lib/db/executed-rows";
 import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -127,26 +128,38 @@ const tokenDb = (): TokenScopedDatabase => ({
 type LinkRouteOptions = {
   budget: ReturnType<typeof rateLimit>;
   isAvailable?: () => boolean;
+  renderInvoice?: InvoicePdfRenderer;
+  buildEInvoice?: typeof buildLinkedEInvoice;
 };
 
 /** The production route table's shape, with test doubles for its seams. */
-const linkRoutes = ({ budget, isAvailable = () => true }: LinkRouteOptions) =>
+const linkRoutes = ({
+  budget,
+  isAvailable = () => true,
+  buildEInvoice = buildLinkedEInvoice,
+  renderInvoice = async () =>
+    Result.ok({
+      status: "rendered" as const,
+      pdf: PDF_BYTES,
+      compileMs: 1,
+      peakRssBytes: 1,
+    }),
+}: LinkRouteOptions) =>
   routes(
     {
       "/view": {
-        POST: createViewInvoiceLink({ db: tokenDb(), isAvailable }),
+        POST: createViewInvoiceLink({
+          db: tokenDb(),
+          isAvailable,
+          buildEInvoice,
+        }),
       },
       "/download": {
         POST: createDownloadInvoiceLinkFile({
           db: tokenDb(),
           isAvailable,
-          renderInvoice: async () =>
-            Result.ok({
-              status: "rendered" as const,
-              pdf: PDF_BYTES,
-              compileMs: 1,
-              peakRssBytes: 1,
-            }),
+          renderInvoice,
+          buildEInvoice,
         }),
       },
     },
@@ -516,12 +529,14 @@ const readSettlementFunction = async (tenant: Tenant, tokenHash: string) => {
     organizationId,
     userId: null,
     workspaceIds: [workspaceId],
-  })(async (tx) =>
-    executedRows(
-      await tx.execute(
-        sql`SELECT * FROM public.invoice_link_settlement(${tokenHash})`,
-      ),
-    ),
+  })(
+    async (tx) =>
+      await tx
+        .select({
+          latest_paid_on: sql`latest_paid_on::text`,
+          paid_amount: sql`paid_amount`.mapWith(Number),
+        })
+        .from(sql`public.invoice_link_settlement(${tokenHash})`),
   );
 };
 
@@ -898,6 +913,89 @@ describe("opening an invoice link", () => {
     expect(downloads).toHaveLength(2);
   });
 
+  test.each([
+    ["view", "revoked"],
+    ["view", "expired"],
+    ["pdf", "revoked"],
+    ["pdf", "expired"],
+    ["e_invoice", "revoked"],
+    ["e_invoice", "expired"],
+  ] as const)(
+    "%s refuses delivery and access audit when the link becomes %s after its work",
+    async (responseKind, invalidation) => {
+      const { invoiceId, token } = await sentInvoice(
+        `${responseKind}-${invalidation}@example.test`,
+      );
+      let completedWork = false;
+      const invalidate = async () => {
+        await testDb
+          .update(invoiceSends)
+          .set(
+            invalidation === "revoked"
+              ? { revokedAt: new Date() }
+              : { expiresAt: new Date(0) },
+          )
+          .where(eq(invoiceSends.invoiceId, invoiceId));
+        completedWork = true;
+      };
+      const target = serveForTest(
+        createHttpApp({
+          routes: linkRoutes({
+            budget: budgetOf(1000),
+            renderInvoice: async () => {
+              await invalidate();
+              return Result.ok({
+                status: "rendered" as const,
+                pdf: PDF_BYTES,
+                compileMs: 1,
+                peakRssBytes: 1,
+              });
+            },
+            buildEInvoice: async (linked) => {
+              const built = await buildLinkedEInvoice(linked);
+              if (built.isErr() || built.value === null) {
+                return panic(
+                  "Expected a built e-invoice before invalidating its link",
+                );
+              }
+              await invalidate();
+              return built;
+            },
+          }),
+          middleware: [errorBoundary],
+        }),
+      );
+      try {
+        const response =
+          responseKind === "view"
+            ? await post(target, "view", { token })
+            : await post(target, "download", { token, file: responseKind });
+        expect(completedWork).toBe(true);
+        expect(response.status).toBe(404);
+        expect(await response.json()).toMatchObject({
+          code: "invoice_link_unavailable",
+        });
+        const [sendRow] = await sendRows(invoiceId);
+        expect(sendRow?.firstViewedAt).toBeNull();
+        const accesses = await testDb
+          .select({ action: auditLogs.action })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.resourceId, invoiceId),
+              eq(
+                auditLogs.action,
+                responseKind === "view" ? "access" : "download",
+              ),
+            ),
+          );
+        expect(accesses).toEqual([]);
+      } finally {
+        await target.stop();
+      }
+    },
+  );
+
   test("a wrong or malformed token opens nothing", async () => {
     await sentInvoice("wrong@example.test");
     for (const token of ["0".repeat(64), "not-a-token", "A".repeat(64), 42]) {
@@ -1196,17 +1294,17 @@ describe("public invoice settlement projection", () => {
     const unpaid = await seedInvoice({ status: INVOICE_STATUS.SENT });
     const unpaidLink = await createStandaloneLink(unpaid);
     expect(await expectPaidDateParity(unpaid, unpaidLink.token)).toBeNull();
-    expect(
-      await readSettlementFunction("A", unpaidLink.tokenHash),
-    ).toMatchObject([{ latest_paid_on: null }]);
+    expect(await readSettlementFunction("A", unpaidLink.tokenHash)).toEqual([
+      { latest_paid_on: null, paid_amount: 0 },
+    ]);
 
     const partial = await seedInvoice({ status: INVOICE_STATUS.SENT });
     await addPayment(partial, { amount: 25_000, paidOn: "2026-10-02" });
     const partialLink = await createStandaloneLink(partial);
     expect(await expectPaidDateParity(partial, partialLink.token)).toBeNull();
-    expect(await readSettlementFunction("A", partialLink.tokenHash)).toEqual(
-      [],
-    );
+    expect(await readSettlementFunction("A", partialLink.tokenHash)).toEqual([
+      { latest_paid_on: null, paid_amount: 25_000 },
+    ]);
   });
 
   test("a paid invoice uses its latest non-voided payment date", async () => {

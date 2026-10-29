@@ -1,13 +1,11 @@
 import { Result } from "better-result";
-import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { INVOICE_STATUS } from "@/api/db/schema";
+import { deliverInvoiceLink } from "@/api/handlers/invoice-links/delivery";
 import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { buildLinkedEInvoice } from "@/api/handlers/invoice-links/e-invoice";
 import {
-  anchorMatter,
-  createInvoiceLinkAuditRecorder,
   linkUnavailable,
   verifyInvoiceLinkCaller,
 } from "@/api/handlers/invoice-links/link-access";
@@ -20,7 +18,6 @@ import {
 import { buildInvoiceTemplateData } from "@/api/handlers/invoices/pdf/typst/data";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -64,9 +61,11 @@ const timeBillingDeployed = () =>
 export const createViewInvoiceLink = ({
   db,
   isAvailable = timeBillingDeployed,
+  buildEInvoice = buildLinkedEInvoice,
 }: {
   db?: TokenScopedDatabase;
   isAvailable?: () => boolean;
+  buildEInvoice?: typeof buildLinkedEInvoice;
 } = {}) =>
   createSafeTokenHandler(
     config,
@@ -74,7 +73,11 @@ export const createViewInvoiceLink = ({
     async function* ({ caller, request, server }) {
       const opened = yield* Result.await(
         Result.tryPromise({
-          try: async () => await openLinkedInvoice(caller, { request, server }),
+          try: async () =>
+            await openLinkedInvoice(caller, {
+              context: { request, server },
+              buildEInvoice,
+            }),
           catch: readFailed,
         }),
       );
@@ -85,62 +88,52 @@ export const createViewInvoiceLink = ({
     },
   );
 
-type OpenRequest = Parameters<
-  typeof createInvoiceLinkAuditRecorder
->[0]["context"];
+type OpenInvoiceOptions = {
+  context: Parameters<typeof deliverInvoiceLink>[0]["context"];
+  buildEInvoice: typeof buildLinkedEInvoice;
+};
 
 const openLinkedInvoice = async (
   caller: InvoiceLinkCaller,
-  request: OpenRequest,
-) =>
-  await caller.db.scoped({
+  { context, buildEInvoice }: OpenInvoiceOptions,
+) => {
+  const linked = await caller.db.scoped({
     organizationId: caller.organizationId,
     userId: null,
     workspaceIds: caller.workspaceIds,
-  })(async (tx) => {
-    const linked = await loadLinkedInvoiceData(tx, caller);
-    if (linked === null) {
-      return null;
-    }
-    const { document } = linked;
-    const unavailable = invoiceDocumentError(document);
-    if (unavailable !== null) {
-      return Result.err(unavailable);
-    }
-    const data = buildInvoiceTemplateData({
-      ...invoiceDocumentRenderOptions(document),
-      paymentAmountMinor: linked.outstandingAmount,
-    });
-    if (data.isErr()) {
-      return Result.err(
-        new HandlerError({ status: 409, message: data.error.message }),
-      );
-    }
-    const eInvoice = await buildLinkedEInvoice(linked);
-    await tx.execute(
-      sql`SELECT public.invoice_link_mark_viewed(${caller.tokenHash})`,
+  })(async (tx) => await loadLinkedInvoiceData(tx, caller));
+  if (linked === null) {
+    return null;
+  }
+  const { document } = linked;
+  const unavailable = invoiceDocumentError(document);
+  if (unavailable !== null) {
+    return Result.err(unavailable);
+  }
+  const data = buildInvoiceTemplateData({
+    ...invoiceDocumentRenderOptions(document),
+    paymentAmountMinor: linked.outstandingAmount,
+  });
+  if (data.isErr()) {
+    return Result.err(
+      new HandlerError({ status: 409, message: data.error.message }),
     );
-    const recordAuditEvent = createInvoiceLinkAuditRecorder({
-      caller,
-      workspaceId: document.invoice.workspaceId,
-      context: request,
-    });
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.ACCESS,
-      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-      resourceId: document.invoice.id,
-      workspaceId: document.invoice.workspaceId ?? anchorMatter(caller),
-      metadata: { invoiceSendId: caller.sendId, via: "invoice_link" },
-    });
-    const { invoice } = document;
-    const paid = invoice.status === INVOICE_STATUS.PAID;
-    const payable =
-      paid ||
-      invoice.documentType === "credit_note" ||
-      linked.outstandingAmount === 0
-        ? null
-        : data.value.payment;
-    return Result.ok({
+  }
+  const eInvoice = await buildEInvoice(linked);
+  const { invoice } = document;
+  const paid = invoice.status === INVOICE_STATUS.PAID;
+  const payable =
+    paid ||
+    invoice.documentType === "credit_note" ||
+    linked.outstandingAmount === 0
+      ? null
+      : data.value.payment;
+  return await deliverInvoiceLink({
+    caller,
+    workspaceId: invoice.workspaceId,
+    delivery: { type: "view" },
+    context,
+    response: () => ({
       language: invoice.language,
       dir: data.value.dir,
       documentType: invoice.documentType,
@@ -175,8 +168,9 @@ const openLinkedInvoice = async (
             : null,
       },
       expiresAt: linked.send.expiresAt.toISOString(),
-    });
+    }),
   });
+};
 
 const handler = createViewInvoiceLink();
 declareAggregateMutation(handler, {
