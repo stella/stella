@@ -9,7 +9,6 @@ import type {
   InvoiceTotals,
 } from "@stll/invoicing";
 import type { CentsAmount } from "@stll/money";
-import { Temporal, todayFor } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,6 +23,7 @@ import {
   invoiceInMatter,
   invoiceTouchesMatter,
 } from "@/api/lib/billing/invoice-scope";
+import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -42,28 +42,21 @@ export const exportPaidDate = (
   },
   timeZone: TimeZoneId,
 ): string | null => {
-  if (invoice.status !== INVOICE_STATUS.PAID) {
-    return null;
-  }
-  let settledOn: string | null = null;
+  let latestPaidOn: string | null = null;
   for (const payment of invoice.payments) {
-    // ISO dates order as text.
     if (
       payment.voidedAt === null &&
-      (settledOn === null || payment.paidOn > settledOn)
+      (latestPaidOn === null || payment.paidOn > latestPaidOn)
     ) {
-      settledOn = payment.paidOn;
+      latestPaidOn = payment.paidOn;
     }
   }
-  if (settledOn !== null) {
-    return settledOn;
-  }
-  return invoice.paidAt === null
-    ? null
-    : todayFor(
-        timeZone,
-        Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
-      ).toString();
+  return invoiceSettledOn({
+    status: invoice.status,
+    paidAt: invoice.paidAt,
+    latestPaidOn,
+    timeZone,
+  });
 };
 
 /**
@@ -232,10 +225,14 @@ export const loadInvoiceExport = async (
     userIds.size === 0
       ? []
       : await selectTimekeeperNames(tx, { organizationId, userIds });
+  const timeZone = await readOrganizationTimeZone(tx, organizationId);
   return {
     matter,
     matters: new Map(matterRows.map((row) => [row.id, row])),
-    invoices,
+    invoices: invoices.map(({ payments, ...invoice }) => ({
+      ...invoice,
+      paidDate: exportPaidDate({ ...invoice, payments }, timeZone),
+    })),
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
       originals.map((original) => [
@@ -244,7 +241,7 @@ export const loadInvoiceExport = async (
       ]),
     ),
     timekeepers: new Map(timekeepers.map((u) => [u.id, u.name])),
-    timeZone: await readOrganizationTimeZone(tx, organizationId),
+    timeZone,
   };
 };
 
@@ -456,7 +453,7 @@ export const toExportRecords = (
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
       dueDate: invoice.dueDate,
-      paidDate: exportPaidDate(invoice, loaded.timeZone),
+      paidDate: invoice.paidDate,
       currency: invoice.currency,
       reference: invoice.reference,
       notes: invoice.notes,

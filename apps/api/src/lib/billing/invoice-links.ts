@@ -1,9 +1,11 @@
 import { sql } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
+import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -15,7 +17,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
  * Invoice links: the bearer credential an invoice email carries.
@@ -66,32 +67,55 @@ export type InvoiceLinkScope = {
   workspaceIds: SafeId<"workspace">[];
 };
 
-const scopeOf = (row: unknown, tokenHash: string): InvoiceLinkScope | null => {
-  if (
-    !isRecord(row) ||
-    typeof row["send_id"] !== "string" ||
-    typeof row["organization_id"] !== "string" ||
-    (row["user_id"] !== null && typeof row["user_id"] !== "string") ||
-    typeof row["invoice_id"] !== "string" ||
-    !isUnknownArray(row["workspace_ids"])
-  ) {
+const invoiceLinkScopeRowSchema = v.object({
+  send_id: v.pipe(v.string(), v.transform(brandPersistedInvoiceSendId)),
+  organization_id: v.pipe(
+    v.string(),
+    v.transform(brandPersistedOrganizationId),
+  ),
+  user_id: v.nullable(v.pipe(v.string(), v.transform(brandPersistedUserId))),
+  invoice_id: v.pipe(v.string(), v.transform(brandPersistedInvoiceId)),
+  workspace_ids: v.array(
+    v.pipe(v.string(), v.transform(brandPersistedWorkspaceId)),
+  ),
+  expires_at: v.union([
+    v.date(),
+    v.pipe(
+      v.string(),
+      v.transform(
+        (value) => new Date(Temporal.Instant.from(value).epochMilliseconds),
+      ),
+    ),
+  ]),
+});
+
+/** The same parser validates the SECURITY DEFINER result at entry and snapshot rechecks. */
+const parseInvoiceLinkScopeRow = (row: unknown) =>
+  v.parse(invoiceLinkScopeRowSchema, row);
+
+export const readInvoiceLinkScope = async (
+  tx: Transaction,
+  tokenHash: string,
+) => {
+  const result = await tx.execute(
+    sql`SELECT * FROM invoice_link_scope(${tokenHash})`,
+  );
+  const raw = executedRows(result).at(0);
+  if (raw === undefined) {
     return null;
   }
-  const workspaceIds = row["workspace_ids"].filter(
-    (id): id is string => typeof id === "string",
-  );
-  // An invoice that bills no matter has nothing a link could show.
-  if (workspaceIds.length === 0) {
+  const row = parseInvoiceLinkScopeRow(raw);
+  if (row.workspace_ids.length === 0) {
     return null;
   }
   return {
-    sendId: brandPersistedInvoiceSendId(row["send_id"]),
-    organizationId: brandPersistedOrganizationId(row["organization_id"]),
-    userId:
-      row["user_id"] === null ? null : brandPersistedUserId(row["user_id"]),
+    sendId: row.send_id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    invoiceId: row.invoice_id,
+    workspaceIds: row.workspace_ids,
+    expiresAt: row.expires_at,
     tokenHash,
-    invoiceId: brandPersistedInvoiceId(row["invoice_id"]),
-    workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
   };
 };
 
@@ -107,11 +131,7 @@ export const resolveInvoiceLink = async (
   if (typeof token !== "string" || !isInvoiceLinkTokenShape(token)) {
     return null;
   }
-  const result = await db.tenantless(
-    async (tx) =>
-      await tx.execute(
-        sql`SELECT * FROM invoice_link_scope(${hashInvoiceLinkToken(token)})`,
-      ),
+  return await db.tenantless(
+    async (tx) => await readInvoiceLinkScope(tx, hashInvoiceLinkToken(token)),
   );
-  return scopeOf(executedRows(result).at(0), hashInvoiceLinkToken(token));
 };

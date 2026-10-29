@@ -16,8 +16,10 @@ import { member, user as authUser } from "@/api/db/auth-schema";
 import {
   auditLogs,
   featureEnrolments,
+  INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
   invoiceLines,
+  invoicePayments,
   invoices,
   invoiceSends,
   sellerProfiles,
@@ -28,9 +30,14 @@ import {
   createScopedDb,
   createTenantlessDb,
 } from "@/api/db/scoped";
+import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { createDownloadInvoiceLinkFile } from "@/api/handlers/invoice-links/download";
 import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { createViewInvoiceLink } from "@/api/handlers/invoice-links/view";
+import {
+  loadInvoiceExport,
+  toExportRecords,
+} from "@/api/handlers/invoices/export-records";
 import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
 import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
 import listInvoiceSends from "@/api/handlers/invoices/sends/list";
@@ -40,8 +47,14 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import {
+  createInvoiceLinkToken,
+  hashInvoiceLinkToken,
+  resolveInvoiceLink,
+} from "@/api/lib/billing/invoice-links";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -394,6 +407,117 @@ const sendRows = async (invoiceId: SafeId<"invoice">) =>
     .select()
     .from(invoiceSends)
     .where(eq(invoiceSends.invoiceId, invoiceId));
+
+const createStandaloneLink = async (invoiceId: SafeId<"invoice">) => {
+  const token = createInvoiceLinkToken();
+  const tokenHash = hashInvoiceLinkToken(token);
+  await testDb.insert(invoiceSends).values({
+    id: createSafeId<"invoiceSend">(),
+    organizationId: ids.orgA,
+    invoiceId,
+    sentByUserId: ids.userA1,
+    recipients: ["settlement@example.test"],
+    language: "cs",
+    replyTo: "billing@firm.example.test",
+    tokenHash,
+    expiresAt: new Date(Date.now() + 86_400_000),
+    deliveryStatus: "delivered",
+  });
+  return { token, tokenHash };
+};
+
+const addPayment = async (
+  invoiceId: SafeId<"invoice">,
+  {
+    amount,
+    paidOn,
+    origin = INVOICE_PAYMENT_ORIGIN.RECORDED,
+    voided = false,
+  }: {
+    amount: number;
+    paidOn: string;
+    origin?: (typeof INVOICE_PAYMENT_ORIGIN)[keyof typeof INVOICE_PAYMENT_ORIGIN];
+    voided?: boolean;
+  },
+) =>
+  await testDb.insert(invoicePayments).values({
+    id: createSafeId<"invoicePayment">(),
+    organizationId: ids.orgA,
+    invoiceId,
+    amount: cents(amount),
+    paidOn,
+    method: "bank_transfer",
+    origin,
+    recordedBy: origin === INVOICE_PAYMENT_ORIGIN.LEGACY ? null : ids.userA1,
+    voidedAt: voided ? new Date("2026-10-05T12:00:00.000Z") : null,
+    voidedBy: voided ? ids.userA1 : null,
+  });
+
+const paidDateOf = (
+  result: ReturnType<typeof toExportRecords>,
+): string | null => {
+  if (result.isErr()) {
+    return panic("Expected invoice export records for settlement parity");
+  }
+  const record = result.value.at(0);
+  if (!record) {
+    return panic("Expected one invoice export record for settlement parity");
+  }
+  return record.paidDate;
+};
+
+const readPublicAndAuthenticatedPaidDates = async (
+  invoiceId: SafeId<"invoice">,
+  token: string,
+) => {
+  const { organizationId, workspaceId, userId } = tenantOf("A");
+  const database = tokenDb();
+  const scope = await resolveInvoiceLink(database, token);
+  if (scope === null) {
+    return panic("Expected a resolvable invoice link for settlement parity");
+  }
+  const linked = await database.scoped({
+    organizationId,
+    userId: null,
+    workspaceIds: scope.workspaceIds,
+  })((tx) => loadLinkedInvoiceData(tx, { ...scope, db: database }));
+  if (linked === null) {
+    return panic("Expected a linked invoice for settlement parity");
+  }
+  const publicRecords = toExportRecords(linked.exportData, [invoiceId]);
+  const authenticated = await createScopedDb(
+    testDb,
+    [workspaceId],
+    organizationId,
+    userId,
+  )((tx) =>
+    loadInvoiceExport(tx, {
+      organizationId,
+      workspaceId,
+      invoiceIds: [invoiceId],
+    }),
+  );
+  const authenticatedRecords = toExportRecords(authenticated, [invoiceId]);
+  return {
+    publicPaidDate: paidDateOf(publicRecords),
+    authenticatedPaidDate: paidDateOf(authenticatedRecords),
+  };
+};
+
+const readSettlementFunction = async (tenant: Tenant, tokenHash: string) => {
+  const { organizationId, workspaceId } = tenantOf(tenant);
+  return await tokenDb().scoped({
+    organizationId,
+    userId: null,
+    workspaceIds: [workspaceId],
+  })(async (tx) =>
+    executedRows(
+      await tx.execute(
+        sql`SELECT * FROM public.invoice_link_settlement(${tokenHash})`,
+      ),
+    ),
+  );
+};
 
 const invoiceStatus = async (invoiceId: SafeId<"invoice">) =>
   (
@@ -973,5 +1097,153 @@ describe("opening an invoice link", () => {
     expect(
       (await post(limitedServer, "view", { token: "0".repeat(64) })).status,
     ).toBe(429);
+  });
+});
+
+describe("public invoice settlement projection", () => {
+  const expectPaidDateParity = async (
+    invoiceId: SafeId<"invoice">,
+    token: string,
+  ) => {
+    const dates = await readPublicAndAuthenticatedPaidDates(invoiceId, token);
+    expect(dates.publicPaidDate).toBe(dates.authenticatedPaidDate);
+    return dates.publicPaidDate;
+  };
+
+  test("unpaid and partially paid invoices have no settlement date", async () => {
+    const unpaid = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    const unpaidLink = await createStandaloneLink(unpaid);
+    expect(await expectPaidDateParity(unpaid, unpaidLink.token)).toBeNull();
+    expect(await readSettlementFunction("A", unpaidLink.tokenHash)).toEqual([]);
+
+    const partial = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await addPayment(partial, { amount: 25_000, paidOn: "2026-10-02" });
+    const partialLink = await createStandaloneLink(partial);
+    expect(await expectPaidDateParity(partial, partialLink.token)).toBeNull();
+    expect(await readSettlementFunction("A", partialLink.tokenHash)).toEqual(
+      [],
+    );
+  });
+
+  test("a paid invoice uses its latest non-voided payment date", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await testDb
+      .update(invoices)
+      .set({ paidAt: new Date("2026-10-05T12:00:00.000Z") })
+      .where(eq(invoices.id, invoiceId));
+    await addPayment(invoiceId, { amount: 60_000, paidOn: "2026-10-03" });
+    await addPayment(invoiceId, { amount: 40_000, paidOn: "2026-10-04" });
+    await addPayment(invoiceId, {
+      amount: 100_000,
+      paidOn: "2026-10-06",
+      voided: true,
+    });
+    const link = await createStandaloneLink(invoiceId);
+    expect(await expectPaidDateParity(invoiceId, link.token)).toBe(
+      "2026-10-04",
+    );
+  });
+
+  test("a paid invoice loses its settlement date when its payment is voided back to sent", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await addPayment(invoiceId, { amount: 100_000, paidOn: "2026-10-03" });
+    const link = await createStandaloneLink(invoiceId);
+    expect(await expectPaidDateParity(invoiceId, link.token)).toBe(
+      "2026-10-03",
+    );
+    await testDb
+      .update(invoicePayments)
+      .set({ voidedAt: new Date(), voidedBy: ids.userA1 })
+      .where(eq(invoicePayments.invoiceId, invoiceId));
+    await testDb
+      .update(invoices)
+      .set({ status: INVOICE_STATUS.SENT, paidAt: null })
+      .where(eq(invoices.id, invoiceId));
+    expect(await expectPaidDateParity(invoiceId, link.token)).toBeNull();
+    expect(await readSettlementFunction("A", link.tokenHash)).toEqual([]);
+  });
+
+  test("a zero-total send uses the legacy paidAt date", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    await testDb
+      .update(invoices)
+      .set({ netAmount: cents(0), vatAmount: cents(0), totalAmount: cents(0) })
+      .where(eq(invoices.id, invoiceId));
+    await testDb
+      .update(invoiceLines)
+      .set({
+        unitPrice: cents(0),
+        netAmount: cents(0),
+        vatAmount: cents(0),
+        grossAmount: cents(0),
+      })
+      .where(eq(invoiceLines.invoiceId, invoiceId));
+    expect(
+      await send(invoiceId, ["zero-settlement@example.test"]),
+    ).toMatchObject({
+      invoiceStatus: INVOICE_STATUS.PAID,
+    });
+    const token = tokenSentTo("zero-settlement@example.test");
+    expect(await expectPaidDateParity(invoiceId, token)).not.toBeNull();
+  });
+
+  test("legacy payment rows retain their recorded paid date", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await testDb
+      .update(invoices)
+      .set({ paidAt: new Date("2026-10-05T12:00:00.000Z") })
+      .where(eq(invoices.id, invoiceId));
+    await addPayment(invoiceId, {
+      amount: 100_000,
+      paidOn: "2026-09-28",
+      origin: INVOICE_PAYMENT_ORIGIN.LEGACY,
+    });
+    const link = await createStandaloneLink(invoiceId);
+    expect(await expectPaidDateParity(invoiceId, link.token)).toBe(
+      "2026-09-28",
+    );
+  });
+
+  test("settlement function returns no rows for revoked, expired, or foreign-tenant links", async () => {
+    const revokedInvoice = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await addPayment(revokedInvoice, {
+      amount: 100_000,
+      paidOn: "2026-10-03",
+    });
+    const revoked = await createStandaloneLink(revokedInvoice);
+    expect(await readSettlementFunction("A", revoked.tokenHash)).toHaveLength(
+      1,
+    );
+    await testDb
+      .update(invoiceSends)
+      .set({ revokedAt: new Date() })
+      .where(eq(invoiceSends.tokenHash, revoked.tokenHash));
+    expect(await readSettlementFunction("A", revoked.tokenHash)).toEqual([]);
+
+    const expiredInvoice = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await addPayment(expiredInvoice, {
+      amount: 100_000,
+      paidOn: "2026-10-03",
+    });
+    const expired = await createStandaloneLink(expiredInvoice);
+    expect(await readSettlementFunction("A", expired.tokenHash)).toHaveLength(
+      1,
+    );
+    await testDb
+      .update(invoiceSends)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(invoiceSends.tokenHash, expired.tokenHash));
+    expect(await readSettlementFunction("A", expired.tokenHash)).toEqual([]);
+
+    const foreignInvoice = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await addPayment(foreignInvoice, {
+      amount: 100_000,
+      paidOn: "2026-10-03",
+    });
+    const foreign = await createStandaloneLink(foreignInvoice);
+    expect(await readSettlementFunction("A", foreign.tokenHash)).toHaveLength(
+      1,
+    );
+    expect(await readSettlementFunction("B", foreign.tokenHash)).toEqual([]);
   });
 });

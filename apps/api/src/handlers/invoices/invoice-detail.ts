@@ -14,13 +14,8 @@ import {
 const timeEntryContext = entityContextProjection(timeEntries.workItemId);
 const expenseContext = entityContextProjection(expenses.matterId);
 
-/** The line items and payments an invoice detail read loads with the invoice row. */
-export const INVOICE_DETAIL_RELATIONS = {
-  // Bounded by LIMITS.invoicePaymentsPerInvoice, enforced when one is recorded.
-  payments: {
-    columns: INVOICE_PAYMENT_COLUMNS,
-    orderBy: INVOICE_PAYMENT_ORDER,
-  },
+/** Invoice document content shared by PDFs, e-invoice output, and exports. */
+export const INVOICE_DOCUMENT_RELATIONS = {
   lines: {
     columns: INVOICE_LINE_COLUMNS,
     with: { workspace: { columns: { id: true, name: true, color: true } } },
@@ -69,6 +64,16 @@ export const INVOICE_DETAIL_RELATIONS = {
         expenseContext.reference(table.matterId),
     },
     with: { matter: { columns: { id: true, name: true } } },
+  },
+} as const;
+
+/** The line items and payment history loaded by an invoice detail read. */
+export const INVOICE_DETAIL_RELATIONS = {
+  ...INVOICE_DOCUMENT_RELATIONS,
+  // Bounded by LIMITS.invoicePaymentsPerInvoice, enforced when one is recorded.
+  payments: {
+    columns: INVOICE_PAYMENT_COLUMNS,
+    orderBy: INVOICE_PAYMENT_ORDER,
   },
 } as const;
 

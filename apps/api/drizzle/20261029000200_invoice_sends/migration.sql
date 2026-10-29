@@ -237,3 +237,23 @@ USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catal
   AND token_hash = NULLIF(pg_catalog.current_setting('app.invoice_link_hash', true), ''))
 WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_sends'::regclass)
   AND token_hash = NULLIF(pg_catalog.current_setting('app.invoice_link_hash', true), ''));
+
+--> statement-breakpoint
+-- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; only a live token in its organization can read its settled invoice's latest non-voided payment date, never payment rows or actor data
+CREATE FUNCTION "invoice_link_settlement"(p_token_hash text)
+RETURNS TABLE ("latest_paid_on" date)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT max(p.paid_on)
+    FROM public.invoice_link_scope(p_token_hash) s
+    JOIN public.invoices i ON i.id = s.invoice_id AND i.organization_id = s.organization_id
+    LEFT JOIN public.invoice_payments p ON p.invoice_id = i.id AND p.organization_id = i.organization_id AND p.voided_at IS NULL
+   WHERE i.status = 'paid'
+     AND s.organization_id = NULLIF(pg_catalog.current_setting('app.organization_id', true), '')
+   GROUP BY i.id
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION "invoice_link_settlement"(text) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION "invoice_link_settlement"(text) TO stella;

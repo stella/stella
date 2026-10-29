@@ -782,6 +782,9 @@ const INVOICE_SENDS_MIGRATION_PATH = nodePath.join(
 );
 
 const INVOICE_LINK_STATEMENT_PREFIXES = [
+  'CREATE FUNCTION "invoice_link_settlement"',
+  'REVOKE ALL ON FUNCTION "invoice_link_settlement"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_settlement"',
   'CREATE POLICY "invoice_sends_owner_viewed"',
   'CREATE FUNCTION "invoice_link_mark_viewed"',
   'REVOKE ALL ON FUNCTION "invoice_link_mark_viewed"',

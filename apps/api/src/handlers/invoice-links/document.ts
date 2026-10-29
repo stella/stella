@@ -4,18 +4,30 @@ import { asc, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   expenses,
+  INVOICE_STATUS,
   invoiceLines,
   invoices,
-  invoiceSends,
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
+import {
+  parseInvoiceLinkExpensesRow,
+  parseInvoiceLinkInvoiceRow,
+  parseInvoiceLinkLinesRow,
+  parseInvoiceLinkMattersRow,
+  parseInvoiceLinkOriginalRow,
+  parseInvoiceLinkSellerRow,
+  parseInvoiceLinkSettlementRow,
+  parseInvoiceLinkTimeRow,
+} from "@/api/handlers/invoice-links/function-rows";
 import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access";
 import {
   INVOICE_DOCUMENT_PROJECTION,
   INVOICE_SELLER_PROJECTION,
 } from "@/api/handlers/invoices/invoice-detail";
 import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
+import { readInvoiceLinkScope } from "@/api/lib/billing/invoice-links";
+import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import {
   selectTimekeeperNames,
   timekeeperIdsOf,
@@ -29,20 +41,20 @@ export const loadLinkedInvoiceData = async (
   tx: Transaction,
   caller: InvoiceLinkCaller,
 ) => {
-  const [send] = await tx
-    .select({ expiresAt: invoiceSends.expiresAt })
-    .from(sql`public.invoice_link_scope(${caller.tokenHash}) AS invoice_sends`);
-  const [invoice] = await tx
+  const send = await readInvoiceLinkScope(tx, caller.tokenHash);
+  const invoiceRows = await tx
     .select(INVOICE_DOCUMENT_PROJECTION)
     .from(sql`public.invoice_link_invoice(${caller.tokenHash}) AS invoices`);
+  const invoice = invoiceRows.map(parseInvoiceLinkInvoiceRow).at(0);
   if (!send || !invoice) {
     return null;
   }
-  const [seller] = await tx
+  const sellerRows = await tx
     .select(INVOICE_SELLER_PROJECTION)
     .from(
       sql`public.invoice_link_seller(${caller.tokenHash}) AS seller_profiles`,
     );
+  const seller = sellerRows.map(parseInvoiceLinkSellerRow).at(0);
   const lineRead = await readBounded(
     tx
       .select({
@@ -123,10 +135,10 @@ export const loadLinkedInvoiceData = async (
   ) {
     panic("Invoice document exceeds its bounded line or source limit");
   }
-  const lines = lineRead.rows;
-  const time = timeRead.rows;
-  const linkedExpenses = expenseRead.rows;
-  const matters = await tx
+  const lines = lineRead.rows.map(parseInvoiceLinkLinesRow);
+  const time = timeRead.rows.map(parseInvoiceLinkTimeRow);
+  const linkedExpenses = expenseRead.rows.map(parseInvoiceLinkExpensesRow);
+  const mattersRows = await tx
     .select({
       id: workspaces.id,
       name: workspaces.name,
@@ -134,18 +146,25 @@ export const loadLinkedInvoiceData = async (
       color: workspaces.color,
     })
     .from(sql`public.invoice_link_matters(${caller.tokenHash}) AS workspaces`);
-  const original = await tx
+  const matters = mattersRows.map(parseInvoiceLinkMattersRow);
+  const originalRows = await tx
     .select({
       id: invoices.id,
       invoiceNumber: invoices.invoiceNumber,
       invoiceDate: invoices.invoiceDate,
     })
     .from(sql`public.invoice_link_original(${caller.tokenHash}) AS invoices`);
-  const [stillLive] = await tx
-    .select({ expiresAt: invoiceSends.expiresAt })
-    .from(sql`public.invoice_link_scope(${caller.tokenHash}) AS invoice_sends`);
+  const original = originalRows.map(parseInvoiceLinkOriginalRow);
+  const settlementRows = await tx
+    .select({ latestPaidOn: sql`latest_paid_on::text` })
+    .from(sql`public.invoice_link_settlement(${caller.tokenHash})`);
+  const settlement = settlementRows.map(parseInvoiceLinkSettlementRow).at(0);
+  const stillLive = await readInvoiceLinkScope(tx, caller.tokenHash);
   if (!stillLive) {
     return null;
+  }
+  if (invoice.status === INVOICE_STATUS.PAID && settlement === undefined) {
+    return panic("Live settled invoice has no settlement projection");
   }
   const matterMap = new Map(matters.map((matter) => [matter.id, matter]));
   const workspaceId =
@@ -180,6 +199,7 @@ export const loadLinkedInvoiceData = async (
           organizationId: caller.organizationId,
           userIds: timekeeperIdsOf(time),
         });
+  const timeZone = await readOrganizationTimeZone(tx, caller.organizationId);
   return {
     send,
     document: {
@@ -192,7 +212,17 @@ export const loadLinkedInvoiceData = async (
     exportData: {
       matter,
       matters: matterMap,
-      invoices: [linkedInvoice],
+      invoices: [
+        {
+          ...linkedInvoice,
+          paidDate: invoiceSettledOn({
+            status: invoice.status,
+            paidAt: invoice.paidAt,
+            latestPaidOn: settlement?.latestPaidOn ?? null,
+            timeZone,
+          }),
+        },
+      ],
       sellers: new Map(seller ? [[seller.id, seller]] : []),
       originals: new Map(
         original.map((row) => [
@@ -201,7 +231,7 @@ export const loadLinkedInvoiceData = async (
         ]),
       ),
       timekeepers: new Map(timekeepers.map((user) => [user.id, user.name])),
-      timeZone: await readOrganizationTimeZone(tx, caller.organizationId),
+      timeZone,
     },
   };
 };

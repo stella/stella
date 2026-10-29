@@ -5,8 +5,8 @@ import { classifyFailure } from "@stll/errors";
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import {
-  INVOICE_DETAIL_RELATIONS,
   INVOICE_DOCUMENT_COLUMNS,
+  INVOICE_DOCUMENT_RELATIONS,
   INVOICE_SELLER_COLUMNS,
 } from "@/api/handlers/invoices/invoice-detail";
 import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
@@ -46,7 +46,7 @@ export const loadInvoiceDocument = async (
       organizationId: { eq: organizationId },
     },
     columns: INVOICE_DOCUMENT_COLUMNS,
-    with: INVOICE_DETAIL_RELATIONS,
+    with: INVOICE_DOCUMENT_RELATIONS,
   });
   if (!invoice) {
     return null;
