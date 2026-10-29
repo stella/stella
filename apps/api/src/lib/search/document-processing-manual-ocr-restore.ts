@@ -18,8 +18,8 @@ import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { transition } from "@/api/lib/db/transitions";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
 import {
-  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   DOCUMENT_OCR_PROCESSOR_VERSION,
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
 import { DOCUMENT_PROCESSING_RETRY_TRANSITIONS } from "@/api/lib/document-processing-retry";
 

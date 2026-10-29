@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   MATTER_REFERENCE_RETIRED_CODE,
@@ -19,15 +18,20 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+  userIdSchema,
+} from "@/api/lib/custom-schema";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -35,23 +39,20 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
   hasUsableSteward,
+  matterVisibilitySchema,
   readMatterMutationAuthority,
-  tMatterVisibility,
 } from "@/api/lib/workspaces/visibility";
 
-const updateWorkspaceBodySchema = t.Object({
-  name: t.Optional(tDefaultVarchar),
-  clientId: t.Optional(tSafeId("contact")),
-  reference: t.Optional(t.String({ maxLength: 64, minLength: 1 })),
-  billingReference: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
-  color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  // Pinned-first avatar on the matters list. Must be an existing
-  // workspace member (validated at handler time); pass null to clear.
-  // Only the current lead or an organization owner/admin may change it.
-  leadUserId: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
-  // Who can see the matter. Only the matter lead or an organization
-  // owner/admin may change it, and every change is audited.
-  visibility: t.Optional(tMatterVisibility()),
+const updateWorkspaceBodySchema = v.object({
+  name: v.optional(defaultVarcharSchema),
+  clientId: v.optional(resourceIdSchema("contact")),
+  reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
+  billingReference: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(128))),
+  ),
+  color: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  leadUserId: v.optional(v.nullable(userIdSchema)),
+  visibility: v.optional(matterVisibilitySchema()),
 });
 
 const config = {
@@ -305,7 +306,7 @@ const checkStewardshipChanges = async ({
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   workspace: { leadUserId: string | null; visibility: MatterVisibility };
-  body: { leadUserId?: string | null; visibility?: MatterVisibility };
+  body: Pick<UpdateWorkspaceHandlerProps["body"], "leadUserId" | "visibility">;
   visibilityChanged: boolean;
 }): Promise<StewardshipFailure | StewardFailure | null> => {
   if (
@@ -342,7 +343,7 @@ export type UpdateWorkspaceHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateWorkspaceBodySchema>;
+  body: v.InferOutput<typeof updateWorkspaceBodySchema>;
 };
 
 /** Lock the complete scope before deciding current reach and reading the row. */
@@ -587,7 +588,11 @@ export const updateWorkspaceHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  flushWorkspaceSearchRepairs([workspaceId]).catch(
+    createErrorCapture(
+      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
+    ),
+  );
 
   return Result.ok({});
 };

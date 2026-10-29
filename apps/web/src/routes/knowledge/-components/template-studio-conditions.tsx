@@ -12,13 +12,13 @@ import { serializeCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   ArrowLeftIcon,
   CircleHelpIcon,
   DuplicateIcon,
   ListFilterIcon,
   MessageCircleQuestionIcon,
   PlusIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -28,7 +28,7 @@ import { TextSeparator } from "@stll/ui/separator";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { ConditionGroupEditor } from "@/routes/knowledge/-components/condition-builder";
 import {
   emptyGroup,
@@ -756,10 +756,7 @@ const ConditionReusePicker = ({
               className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-start text-sm"
               onClick={() => {
                 if (!onRewrite(option.ref)) {
-                  notifyUserError(
-                    undefined,
-                    t("templates.studio.invalidExpression"),
-                  );
+                  notifyUserProblem(t("templates.studio.invalidExpression"));
                   return;
                 }
                 setOpen(false);
@@ -893,7 +890,7 @@ const ConditionRuleBuilder = ({
       setOpen(false);
       return;
     }
-    notifyUserError(undefined, t("templates.studio.invalidExpression"));
+    notifyUserProblem(t("templates.studio.invalidExpression"));
   };
 
   if (!open) {
@@ -994,7 +991,7 @@ const ConditionAiBuilder = ({
       aiPrompt: trimmedPrompt,
     });
     if (!onRewrite(path)) {
-      notifyUserError(undefined, t("templates.studio.invalidExpression"));
+      notifyUserProblem(t("templates.studio.invalidExpression"));
     }
   };
 

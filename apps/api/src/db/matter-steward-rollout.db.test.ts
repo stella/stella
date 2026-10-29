@@ -12,9 +12,9 @@ import { INTERNAL_MEMBER_ROLES, roles } from "@stll/permissions";
 
 import { auditLogs } from "@/api/db/schema";
 import {
-  createBackgroundAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import {
   brandPersistedOrganizationId,
@@ -34,7 +34,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261016100100_matter_visibility/migration.sql",
+  "../../drizzle/20261029072000_matter_visibility/migration.sql",
 );
 
 const migrationSql = readFileSync(MIGRATION_PATH, "utf-8")

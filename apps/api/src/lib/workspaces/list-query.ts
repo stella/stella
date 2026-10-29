@@ -45,6 +45,7 @@ export const readWorkspaceListRows = ({
         columns: {
           id: true,
           displayName: true,
+          type: true,
         },
         with: {
           responsibleAttorney: {

@@ -9,15 +9,17 @@ on:
     # 04:17 UTC daily, after nightly typecheck.
     - cron: "17 4 * * *"
   workflow_dispatch:
-    inputs:
-      dry-run-issue:
-        description: Exercise migration failure reporting without writing an issue
-        type: boolean
-        default: true
 
 permissions: {}
 
 env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
@@ -50,7 +52,7 @@ jobs:
           bun packages/sanctions/scripts/prove-real-editions.ts --generated --require-coverage 2>&1 | tee sanctions-real-editions.log
       - name: Upload edition measurements
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sanctions-real-editions
           path: sanctions-real-editions.log
@@ -161,7 +163,7 @@ jobs:
 
       - name: Upload replay diagnostics
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-workspace-replay-${{ github.run_id }}
           path: apps/web/e2e/test-results/workspace-soak/
@@ -170,7 +172,7 @@ jobs:
 
       - name: Upload server logs
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-workspace-replay-server-logs-${{ github.run_id }}
           path: |
@@ -349,7 +351,7 @@ jobs:
 
       - name: Upload build profile
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-web-build-profile
           path: web-build-profile/
@@ -574,9 +576,10 @@ jobs:
           persist-credentials: false
 
       - name: Resolve previous main state
+        timeout-minutes: 5
         id: base
         run: |
-          git fetch --no-tags origin refs/heads/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin refs/heads/main
           git checkout --detach FETCH_HEAD
           base=$(git rev-list -1 --first-parent --before="$(date -u -d '24 hours ago' +%FT%TZ)" HEAD)
           [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::No main commit exists before the nightly window"; exit 1; }
@@ -624,34 +627,3 @@ jobs:
             echo "Base: $BASE_SHA; candidate: $CANDIDATE_SHA."
             echo "Phase durations and rehearsal total: not run."
           } >> "$GITHUB_STEP_SUMMARY"
-
-  report-failure:
-    needs: migration-exact-base-upgrade
-    if: >-
-      always() && (needs.migration-exact-base-upgrade.result == 'failure'
-      || (github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled')
-      || (github.event_name == 'workflow_dispatch' && inputs.dry-run-issue))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    # Serialize issue discovery and creation to avoid duplicate open issues.
-    concurrency:
-      group: nightly-exact-base-failure-issue
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      # Files or updates the routine failure issue, without publishing logs.
-      issues: write
-    steps:
-      - name: Checkout report script
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: File or update the routine failure issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          # Manual branch dispatches may exercise reporting but never write.
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry-run-issue || github.ref != 'refs/heads/main') }}
-        run: bash scripts/report-exact-base-failure.sh

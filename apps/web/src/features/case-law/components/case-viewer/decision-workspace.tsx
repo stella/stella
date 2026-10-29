@@ -2,30 +2,36 @@ import { useCallback, useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
-import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
+import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@stll/decision-reader/decision-text.logic";
+import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text";
+import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
+import {
+  readerSelectionMatches,
+  visibleDecisionBlocks,
+  visibleReaderAnchorPiecesOf,
+} from "@stll/legal-ast/case-law-reader";
 import {
   type DocumentAst,
   parseDocumentAst,
 } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
+import { ScrollTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
+import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
@@ -33,16 +39,24 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
-import {
-  VIEWER_OVERLAY_BAR_BAND_PX,
-  VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
-} from "@/components/inspector/viewer-overlay-bar";
-import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type {
+  AnalysisMarginItem,
+  AnswerMarginItem,
+  ProvisionMarginItem,
+} from "@/components/legal-reader/margin-notes";
+import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
@@ -59,12 +73,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type {
-  AnalysisMarginItem,
-  AnswerMarginItem,
-  ProvisionMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -72,6 +81,7 @@ import {
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
+import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
@@ -79,11 +89,15 @@ import { decisionParagraphLanding } from "@/features/case-law/components/case-vi
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
-  READER_ASIDE_RESIZE_SLOT,
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
-import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference";
+import {
+  MarginCitationFilterBar,
+  useMarginCitationFilter,
+} from "@/features/case-law/components/case-viewer/margin-citation-filter";
+import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference.logic";
+import { READER_ASIDE_RESIZE_SLOT } from "@/features/case-law/components/case-viewer/reader-aside-slots";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -95,14 +109,21 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { APIError, isCancellation } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
+import { useUnresolvedCitationTelemetry } from "./paragraph-citation-telemetry";
+import {
+  citedDecisionRead,
+  resolveReaderAnswerCitation,
+} from "./reader-answer-citation.logic";
 import {
   attachReaderAnswerMarkers,
   jumpReaderAnswerCitation,
@@ -113,6 +134,7 @@ import {
   ReaderAnswerFailure,
   readerAnswerFailureKind,
 } from "./reader-answers.logic";
+import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 import { useReaderAnswers } from "./use-reader-answers";
 
 type DecisionWorkspaceDecision = Pick<
@@ -149,9 +171,9 @@ type DecisionWorkspaceBaseProps = {
 };
 
 /**
- * A reader without an account, or a member whose own workspace chunk has not
- * arrived yet. The layer is named and offered where it would be drawn instead
- * of being hidden, and the account is asked for on the run.
+ * A reader without an account, or a member whose AI gate (in the member chunk)
+ * has not arrived yet. The layer is named and offered where it would be drawn
+ * instead of being hidden, and the account is asked for on the run.
  *
  * Nothing is read here: the public decision payload deliberately carries no
  * persisted analysis (`case-law-public-route-invariants.test.ts`, "public
@@ -163,22 +185,21 @@ type DecisionWorkspaceBaseProps = {
  * thing this component can decide.
  */
 type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "gated";
+  aiMode: typeof DECISION_AI_MODE.gated;
   /**
-   * Opens the account gate. Absent while a member's workspace loads: the
+   * Opens the account gate. Absent while a member's AI gate loads: the
    * column then names the layer without offering a run nobody owns yet.
    */
   onRequestAnalysis?: (() => void) | undefined;
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "enabled";
+  aiMode: typeof DECISION_AI_MODE.enabled;
   ensureAIAvailable: () => Promise<boolean>;
 };
 
 export type DecisionWorkspaceProps =
-  | EnabledDecisionWorkspaceProps
-  | GatedDecisionWorkspaceProps;
+  EnabledDecisionWorkspaceProps | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
 /** A decision without a parsed body has no blocks to range over. */
@@ -197,6 +218,41 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
   <MatterIcon className={className} variant="all" />
 );
 
+type ReaderPanelToggleProps = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onPress: () => void;
+  pressed: boolean;
+};
+
+/** One toggle of the margin's floating display panel. */
+const ReaderPanelToggle = ({
+  icon: Icon,
+  label,
+  onPress,
+  pressed,
+}: ReaderPanelToggleProps) => {
+  const t = useTranslations();
+  return (
+    <Tooltip
+      content={t("caseLaw.notesFilter.toggleState", {
+        label,
+        state: pressed ? "on" : "off",
+      })}
+      render={
+        <InspectorRailIconButton
+          aria-label={label}
+          aria-pressed={pressed}
+          className={cn("rounded-none", pressed && "bg-muted text-foreground")}
+          onClick={onPress}
+        />
+      }
+    >
+      <Icon className="size-4" />
+    </Tooltip>
+  );
+};
+
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const user = useMaybeAuthenticatedUser();
   return (
@@ -211,32 +267,63 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
 type ParagraphLanding = ReturnType<typeof decisionParagraphLanding>;
 
-const ReaderStatusNotices = ({
-  answersError,
-  foreignDecisionFailed,
+export const ReaderStatusNotices = ({
+  answerFailures,
+  foreignDecisionError,
   isCreatingAnswer,
   paragraphLanding,
 }: {
-  answersError: unknown;
-  foreignDecisionFailed: boolean;
+  answerFailures: readonly ReaderAnswerFailureNotice[];
+  foreignDecisionError: unknown;
   isCreatingAnswer: boolean;
   paragraphLanding: ParagraphLanding;
 }) => {
   const t = useTranslations();
+  const reported = useRef(new Set<unknown>());
+  useExternalSyncEffect(() => {
+    for (const notice of answerFailures) {
+      const identity =
+        notice.type === "message" ? notice.messageId : notice.error;
+      if (reported.current.has(identity)) {
+        continue;
+      }
+      reported.current.add(identity);
+      const { error } = notice;
+      if (APIError.is(error) && error.status >= 400 && error.status < 500) {
+        notifyUserError(error, t("errors.actionFailed"));
+        continue;
+      }
+      const kind = readerAnswerFailureKind(error);
+      let fallback = t("readerAnswers.modelError");
+      if (kind === "budget") {
+        fallback = t("readerAnswers.budgetError");
+      } else if (kind === "network") {
+        fallback = t("readerAnswers.networkError");
+      } else if (kind === "timeout") {
+        fallback = t("readerAnswers.timeoutError");
+      }
+      notifyUserError(
+        kind === "network" && isCancellation(error)
+          ? new ReaderAnswerFailure({
+              kind: "request",
+              message: "Reader answer request failed",
+              cause: error,
+            })
+          : error,
+        fallback,
+      );
+    }
+    if (
+      foreignDecisionError !== null &&
+      foreignDecisionError !== undefined &&
+      !reported.current.has(foreignDecisionError)
+    ) {
+      reported.current.add(foreignDecisionError);
+      notifyUserError(foreignDecisionError, t("errors.actionFailed"));
+    }
+  }, [answerFailures, foreignDecisionError, t]);
   return (
     <>
-      {answersError !== null && (
-        <p role="alert" className="text-destructive px-4 py-2 text-sm">
-          {readerAnswerFailureKind(answersError) === "budget"
-            ? t("readerAnswers.budgetError")
-            : t("readerAnswers.networkError")}
-        </p>
-      )}
-      {foreignDecisionFailed && (
-        <p role="alert" className="text-destructive px-4 py-2 text-sm">
-          {t("errors.actionFailed")}
-        </p>
-      )}
       {isCreatingAnswer && (
         <p role="status" className="text-muted-foreground px-4 py-2 text-sm">
           {t("readerAnswers.loading")}
@@ -270,18 +357,59 @@ const ReaderStatusNotices = ({
   );
 };
 
+const decisionAnalysisView = (
+  analysisState: ReturnType<typeof useLazyDecisionAnalysis>["state"],
+) => {
+  const hasAnalysis =
+    analysisState.status === "done" ||
+    (analysisState.status === "generating" && analysisState.tree.length > 0);
+  // Streamed sections render as they arrive; the loader marks the remainder.
+  const isAnalyzing = analysisState.status === "generating";
+  const analysisTree = (() => {
+    if (analysisState.status === "done") {
+      return analysisState.analysis.tree;
+    }
+    if (analysisState.status === "generating") {
+      return analysisState.tree;
+    }
+    return [];
+  })();
+
+  // The written layers come whole with the finished analysis; a run still
+  // in flight streams only its tree, so there is nothing to show yet.
+  const completeAnalysis =
+    analysisState.status === "done" ? analysisState.analysis : null;
+
+  return { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis };
+};
+
+/** The cited-provision cards as margin notes, when the margin shows them. */
+const provisionMarginItems = (
+  shown: boolean,
+  cards: readonly DecisionProvisionCard[],
+): ProvisionMarginItem[] =>
+  shown
+    ? cards.map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+        citations,
+        id: `provision:${id}`,
+        kind: "provision",
+        startAnchorId,
+      }))
+    : [];
+
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   // The citation strip's own summary, already cached for this decision: a
   // later-treatment note is drawn only once it shows a later citing decision.
   // The strip reports a failed read; here it only keeps the note hidden.
-  const citationSummary = useQueryView(
+  const citationSummary = queryView(
     useQuery(decisionCitationSummaryOptions(decisionId)),
   );
   const citedLater =
     citationSummary.type === "items" &&
     hasIncomingCitations(citationSummary.items);
   const t = useTranslations();
+  const format = useFormatter();
   const ast = parseDocumentAst(decision.documentAst);
   const astBlocks = decisionBlocks(ast);
   // The case's citable name, for the legal copy modes.
@@ -301,7 +429,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     id: decisionId,
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
-  const mainRef = useRef<HTMLDivElement>(null);
+  const { element: contentElement, attach: attachContent } =
+    useReaderElement<HTMLElement>();
+  const {
+    readerRef: mainRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
   const provisions = useReaderProvisionMode(mainRef);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
@@ -356,7 +490,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     annotations.setActiveAnnotationId(id);
   };
   useExternalSyncEffect(() => {
-    const root = mainRef.current;
+    const root = viewportElement;
     if (root === null) {
       return undefined;
     }
@@ -366,28 +500,52 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       label: t("readerAnswers.expand"),
       onOpen: openAnswer,
     });
-  }, [visibleAnswers, openAnswer, t]);
+  }, [viewportElement, visibleAnswers, openAnswer, t]);
+  const answerCitations = visibleAnswers.flatMap((answer) =>
+    answer.messages.flatMap((message) => message.citations),
+  );
+  // These observers only watch the cache. A cited decision is fetched by the
+  // chip that shows it, and chips render only in an expanded card, which
+  // minimises once scrolled away: one read per distinct decision cited by the
+  // cards on screen, never one for every answer the filter keeps. The open
+  // action reads the same cache entries.
   const foreignDecisionIds = [
-    ...new Set(
-      answers.answers
-        .filter((answer) => answer.id === answers.activeAnswerId)
-        .flatMap((answer) =>
-          answer.messages.flatMap((message) =>
-            message.citations.map((citation) => citation.decisionId),
-          ),
-        ),
-    ),
+    ...new Set(answerCitations.map((citation) => citation.decisionId)),
   ].filter((id) => id !== decisionId);
   const foreignDecisions = useQueries({
-    queries: foreignDecisionIds.map((id) => decisionOptions(id)),
+    queries: foreignDecisionIds.map((id) => ({
+      ...decisionOptions(id),
+      enabled: false,
+    })),
   });
   const foreignDecisionError = foreignDecisions.find(
     (query) => query.error !== null,
   )?.error;
+  const citedDecisionReads = new Map(
+    foreignDecisionIds.map((id, index) => {
+      const query = foreignDecisions.at(index);
+      return [
+        id,
+        query === undefined
+          ? panic("Every cited decision must have a read")
+          : citedDecisionRead(queryView(query)),
+      ] as const;
+    }),
+  );
+  useUnresolvedCitationTelemetry({
+    blocks: astBlocks,
+    ranges: answerCitations
+      .filter((citation) => citation.decisionId === decisionId)
+      .map(({ paragraphId }) => ({
+        startAnchorId: paragraphId,
+        endAnchorId: paragraphId,
+      })),
+    source: decisionId,
+  });
   const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
     kind: "answer",
     id: answer.id,
-    startAnchorId: answer.anchor.paragraphId,
+    startAnchorId: answer.anchor.spans[0].paragraphId,
     answer,
     generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
@@ -395,7 +553,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     busy:
       answers.busyAnswerIds.has(answer.id) ||
       answer.messages.some((message) => message.status === "streaming"),
-    error: readerAnswerFailureKind(answers.errors.get(answer.id)),
     onOpen: () => openAnswer(answer.id),
     onFollowUp: (question) =>
       detached(
@@ -410,29 +567,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         answers.setVisibility(answer.id, visibility),
         "reader-answer.visibility",
       ),
-    citationLabel: (citation) => {
-      const foreignIndex = foreignDecisionIds.indexOf(citation.decisionId);
-      const foreignRead =
-        foreignIndex !== -1 ? foreignDecisions.at(foreignIndex) : undefined;
-      const foreignCited =
-        foreignRead?.data ??
-        queryClient.getQueryData(decisionOptions(citation.decisionId).queryKey);
-      const cited =
-        citation.decisionId === decisionId ? decision : foreignCited;
-      const citedAst = parseDocumentAst(cited?.documentAst);
-      const paragraph = citedAst?.blocks.find(
-        (block) => block.anchorId === citation.paragraphId,
-      );
-      const number = paragraph?.type === "paragraph" ? paragraph.number : null;
-      return citation.decisionId === decisionId
-        ? t("readerAnswers.citation", {
-            paragraph: number?.toString() ?? citation.paragraphId,
-          })
-        : t("readerAnswers.externalCitation", {
-            decision: cited?.caseNumber ?? citation.decisionId,
-            paragraph: number?.toString() ?? citation.paragraphId,
-          });
-    },
+    citationTarget: (citation) =>
+      resolveReaderAnswerCitation({
+        citation,
+        decisionId,
+        blocks: astBlocks,
+        formatNumber: format.number,
+        readCitedDecision: (id) =>
+          citedDecisionReads.get(id) ??
+          panic("Every cited decision must have a read"),
+      }),
+    language: decision.language,
     onCitation: (citation) =>
       detachedUserAction(
         jumpReaderAnswerCitation({
@@ -458,32 +603,37 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         },
       ),
   }));
-  const explain = async (spans: SelectionAnchor[]) => {
-    const span = spans.at(0);
-    if (
-      spans.length !== 1 ||
-      span === undefined ||
-      span.quote.length > READER_ANSWER_QUOTE_MAX_LENGTH
-    ) {
-      notifyUserError(
-        new ReaderAnswerFailure({
-          kind: "request",
-          message: "Selection is outside the reader answer anchor limits",
-        }),
-        t("readerAnswers.selectionError"),
-      );
-      return;
-    }
-    if (props.aiMode !== "enabled" || !(await props.ensureAIAvailable())) {
-      return;
-    }
-    setNotesFilter("all");
-    await answers.createExplain({
+  // A selection over any number of paragraphs is explained as a whole. The
+  // server checks it against the same visible pieces, so Explain is offered
+  // exactly where the server accepts it.
+  const explainableSpans = (
+    spans: SelectionAnchor[],
+  ): ReaderAnswerSpans | undefined => {
+    const [first, ...rest] = spans.map((span) => ({
       paragraphId: span.blockAnchorId,
       quote: span.quote,
       startOffset: span.startOffset,
       endOffset: span.endOffset,
-    });
+    }));
+    return first !== undefined &&
+      readerSelectionMatches(
+        visibleReaderAnchorPiecesOf(ast, decision.caseNumberType),
+        spans.map((span) => ({ ...span, anchorId: span.blockAnchorId })),
+      )
+      ? [first, ...rest]
+      : undefined;
+  };
+  const explain = async (spans: SelectionAnchor[]) => {
+    const selection = explainableSpans(spans);
+    if (
+      selection === undefined ||
+      props.aiMode !== "enabled" ||
+      !(await props.ensureAIAvailable())
+    ) {
+      return;
+    }
+    setNotesFilter("all");
+    await answers.createExplain({ spans: selection });
   };
   // Only an account may start a run, so only this branch polls. Everything
   // below reads `analysisState` alone: a gated reader never starts a run, so
@@ -495,7 +645,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const [panelWidth, setPanelWidth] = useState(220);
   // The same per-browser size the inspector's readers step, so a size chosen
   // in either place holds in both.
-  const textScale = useWebReaderTextScale();
+  const textScale = useWebReaderTextScale("decision");
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -542,25 +692,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     generateDecisionAnalysis();
   }, [ensureAIAvailable, generateDecisionAnalysis]);
 
-  const hasAnalysis =
-    analysisState.status === "done" ||
-    (analysisState.status === "generating" && analysisState.tree.length > 0);
-  const isAnalyzing =
-    analysisState.status === "generating" && analysisState.tree.length === 0;
-  const analysisTree = (() => {
-    if (analysisState.status === "done") {
-      return analysisState.analysis.tree;
-    }
-    if (analysisState.status === "generating") {
-      return analysisState.tree;
-    }
-    return [];
-  })();
+  const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
+    decisionAnalysisView(analysisState);
 
-  // The written layers come whole with the finished analysis; a run still
-  // in flight streams only its tree, so there is nothing to show yet.
-  const completeAnalysis =
-    analysisState.status === "done" ? analysisState.analysis : null;
+  // Contents places the sections as they stream in, beside the document's
+  // own headings; with AI notes filtered out it is the headings alone.
+  const analysisContents = useAnalysisReaderOutline(
+    showAiNotes && hasAnalysis ? analysisTree : null,
+  );
 
   // The passage the reader was sent to, marked for as long as they are on it.
   // A jump anywhere else in the document is them leaving it, so the marker
@@ -585,6 +724,19 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
     sessionId: landingSessionId,
+  });
+
+  const marginBlocks = visibleDecisionBlocks(ast, decision.caseNumberType);
+  const showsMarginProvisions =
+    provisions.expandProvisions && answerPlacement === "gutter";
+  const marginCitations = useMarginCitationFilter({
+    blocks: marginBlocks,
+    cards: prepareDecisionProvisionCards({
+      blocks: marginBlocks,
+      provisionAnchors,
+    }),
+    landingKey: landingRoute,
+    landingParagraphId: resolvedLandingAnchorId,
   });
 
   const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
@@ -638,6 +790,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <AiHeadnotes
         analysis={completeAnalysis}
         blocks={astBlocks}
+        language={decision.language}
         onAnchorClick={jumpToAnchor}
       />
     ) : null;
@@ -677,7 +830,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       id: heading.id,
       heading: heading.label,
       text: first?.summary ?? "",
-      category: heading.category,
+      accentVar: getCategoryVar(heading.category),
       depth: heading.depth,
       startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
     });
@@ -687,7 +840,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         kind: "annotation",
         id: annotation.id,
         text: annotation.summary,
-        category: heading.category,
+        accentVar: getCategoryVar(heading.category),
         depth: heading.depth + 1,
         startAnchorId: annotation.startAnchorId,
       });
@@ -720,7 +873,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   kind: "example",
                   id: `example:${note.category}`,
                   heading: t(`caseLaw.analysis.categories.${note.category}`),
-                  category: note.category,
+                  accentVar: getCategoryVar(note.category),
                   depth: 0,
                   lines: note.lines,
                   startAnchorId,
@@ -732,17 +885,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...(provisions.expandProvisions && answerPlacement === "gutter"
-      ? prepareDecisionProvisionCards({
-          blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
-          provisionAnchors,
-        }).map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
-          citations,
-          id: `provision:${id}`,
-          kind: "provision",
-          startAnchorId,
-        }))
-      : []),
+    ...provisionMarginItems(
+      showsMarginProvisions,
+      marginCitations.visibleCards,
+    ),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
@@ -762,66 +908,71 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   }[];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <ChromeHeaderActions>
-        <ReaderProvisionModeToggle mode={provisions} size="page" />
-      </ChromeHeaderActions>
+    // A member's reader is gated until its AI gate arrives, then enabled on
+    // the same mounted reader; the mode names which one it is now.
+    <div
+      className="flex h-full flex-col overflow-hidden"
+      data-ai-mode={props.aiMode}
+    >
+      {/* The margin's panel holds the toggle. Below `lg` neither is drawn
+          and the provisions open under their paragraphs, so the header holds
+          it, as the inspector's pane does. */}
+      {answerPlacement === "inline" && (
+        <ChromeHeaderActions>
+          <ReaderProvisionModeToggle mode={provisions} size="page" />
+        </ChromeHeaderActions>
+      )}
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
-      <div className="relative min-h-0 flex-1">
-        <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
-          {notesFilterOptions.map((option) => {
-            const Icon = option.icon;
-            const isActive = notesFilter === option.value;
-            return (
-              <Tooltip
-                content={option.label}
-                key={option.value}
-                render={
-                  <InspectorRailIconButton
-                    aria-label={option.label}
-                    aria-pressed={isActive}
-                    className={cn(
-                      "rounded-none",
-                      isActive && "bg-muted text-foreground",
-                    )}
-                    onClick={() => {
-                      annotations.clearActive();
-                      setNotesFilter(option.value);
-                    }}
-                  />
-                }
-              >
-                <Icon className="size-4" />
-              </Tooltip>
-            );
-          })}
-        </div>
-        {/* The text column is the grid's inline-end column at every width, so
-            the bar's corner of this box is the text's corner, as in the
-            inspector's reader. */}
-        <FloatingZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
+      {/* At `lg` the notes column stands at the text's inline start, so the
+          layout's margin is that column's width and the controls bar and the
+          docked composer start past it; below `lg` the grid is one column
+          and the margin is zero. */}
+      <div
+        className={cn(
+          LEGAL_READER_LAYOUT_CLASS_NAME,
+          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
+        )}
+        style={{ "--reader-aside-width": `${panelWidth}px` }}
+      >
+        <LegalReaderControls
+          textScale={textScale}
+          blocks={ast === null ? [] : ast.blocks}
+          content={contentElement}
+          analysis={analysisContents}
+          viewport={viewportElement}
+          key={decisionId}
         />
-
+        <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
+          {notesFilterOptions.map((option) => (
+            <ReaderPanelToggle
+              icon={option.icon}
+              key={option.value}
+              label={option.label}
+              onPress={() => {
+                annotations.clearActive();
+                setNotesFilter(option.value);
+              }}
+              pressed={notesFilter === option.value}
+            />
+          ))}
+          {/* The filter picks one source; the provisions show beside any. */}
+          <Separator orientation="vertical" />
+          <ReaderPanelToggle
+            icon={ScrollTextIcon}
+            label={t("caseLaw.viewer.provisionsCited")}
+            onPress={provisions.toggle}
+            pressed={provisions.expandProvisions}
+          />
+        </div>
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        {/* The composer centres on the text column, not on the pane: at `lg`
-            the analysis column stands beside the text, so the docked
-            composer's start inset is that column's width; below `lg` the
-            grid is one column and the inset is zero. */}
-        <div
-          className="h-full [--docked-composer-inset-start:0px] lg:[--docked-composer-inset-start:var(--reader-aside-width)]"
-          style={{ "--reader-aside-width": `${panelWidth}px` }}
-        >
+        {/* The composer centres on the text column, not on the pane. */}
+        <div className="h-full [--docked-composer-inset-start:var(--reader-margin-width)]">
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
             aiMode={props.aiMode}
@@ -833,9 +984,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               <OutlineRail
                 ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
-                // The zoom bar floats beside the rail's top; the rail starts
-                // below it so reaching for the bar never opens the outline.
-                topOffset={VIEWER_OVERLAY_BAR_BAND_PX}
+                // The shared breadcrumb and zoom row owns the top band.
+                topOffset={READER_BREADCRUMB_CLEARANCE}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
                   if (anchorId === undefined) {
@@ -882,10 +1032,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 scrollContainerRef={mainRef}
               />
             )}
-            <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+            <div
+              className="reader-scroll h-full overflow-y-auto"
+              ref={attachViewport}
+            >
               <ReaderStatusNotices
-                answersError={answers.error}
-                foreignDecisionFailed={foreignDecisionError !== undefined}
+                answerFailures={answers.failureNotices}
+                foreignDecisionError={foreignDecisionError}
                 isCreatingAnswer={answers.isCreating}
                 paragraphLanding={paragraphLanding}
               />
@@ -894,7 +1047,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
+                  gridTemplateColumns:
+                    "var(--reader-aside-width) minmax(0, 1fr)",
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
@@ -958,6 +1112,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     are measured against the space the layers above them leave
                     free instead of against the whole column. */}
                   <div className="relative flex-1">
+                    {showsMarginProvisions && (
+                      <MarginCitationFilterBar
+                        count={marginCitations.visibleCards.length}
+                        filter={marginCitations.filter}
+                        onShowAll={marginCitations.showAll}
+                        paragraphNumber={marginCitations.paragraphNumber}
+                      />
+                    )}
                     {visibleMarginItems.length > 0 && (
                       <MarginNotes
                         items={visibleMarginItems}
@@ -985,8 +1147,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                         return;
                       }
 
+                      // The handle is on the column's inline end, which is
+                      // its left edge in a right-to-left layout.
+                      const bounds = aside.getBoundingClientRect();
                       const newWidth =
-                        event.clientX - aside.getBoundingClientRect().left;
+                        getComputedStyle(aside).direction === "rtl"
+                          ? bounds.right - event.clientX
+                          : event.clientX - bounds.left;
                       setPanelWidth(Math.min(400, Math.max(120, newWidth)));
                     }}
                     onPointerUp={() => {
@@ -1001,11 +1168,16 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   </div>
                 </aside>
 
+                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click in a paragraph focuses it for the margin; the keyboard path is the paragraph's permalink, whose Enter click bubbles here */}
                 <main
                   className={cn(
                     "reader-paper min-w-0 pb-8",
-                    VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
                   )}
+                  onClick={containedEventHandler((event) =>
+                    marginCitations.focusParagraphAt(event.target),
+                  )}
+                  ref={attachContent}
                   data-slot="reader-document-column"
                 >
                   {/* Below lg the analysis column, and the offer in it, is
@@ -1079,6 +1251,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               ? (spans) => detached(explain(spans), "reader-answer.explain")
               : undefined
           }
+          explainRefusal={(spans) =>
+            explainableSpans(spans) === undefined
+              ? t("readerAnswers.selectionError")
+              : undefined
+          }
+          onSelectedSpansChange={marginCitations.selectSpans}
           scrollContainerRef={mainRef}
           target={annotationTarget}
         />

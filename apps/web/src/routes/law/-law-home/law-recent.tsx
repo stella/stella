@@ -6,12 +6,12 @@ import { useTranslations } from "use-intl";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import {
   AlertDialog,
-  AlertDialogPopup,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogClose,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogClose,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
@@ -23,9 +23,13 @@ import {
   LandingItemText,
   LandingSection,
 } from "@stll/ui/landing";
+import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import {
+  type LawHistoryCountry,
+  useLawHistory,
+} from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -61,9 +65,13 @@ type LawRecentProps = {
   onSearch: (query: string) => void;
 };
 
-export const LawRecent = ({ onSearch }: LawRecentProps) => {
+/** The selected jurisdiction's history: what was searched and opened there. */
+export const LawRecent = ({
+  country,
+  onSearch,
+}: LawRecentProps & { country: LawHistoryCountry }) => {
   const [filter, setFilter] = useState<LawRecentFilter>("all");
-  const history = useLawHistory(filter);
+  const history = useLawHistory({ filter, country });
   return (
     <LawRecentList
       onSearch={onSearch}
@@ -111,7 +119,7 @@ const ScopedLawRecentList = ({
       case "error":
         return "lawHome.recentLoadFailed" as const;
       case "pending":
-        return "common.loading" as const;
+        return undefined;
       case "ready":
         return entries.length === 0 ? ("lawHome.noRecent" as const) : undefined;
       default:
@@ -182,18 +190,55 @@ const ScopedLawRecentList = ({
             </Button>
           </div>
         )}
+        {history.list.status === "pending" && (
+          // The rows' own shape, so the list fills in place rather than
+          // swapping a status line for entries.
+          <div
+            aria-busy="true"
+            aria-label={t("common.loading")}
+            className="flex flex-col"
+            role="status"
+          >
+            {Array.from({ length: 3 }, (_, index) => (
+              <div
+                aria-hidden="true"
+                className="flex items-start gap-2 px-2 py-1.5"
+                key={index}
+              >
+                <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <Skeleton className="h-4 w-3/5" />
+                  <Skeleton className="h-3 w-2/5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {emptyLabel !== undefined ? (
           <LandingEmpty>{t(emptyLabel)}</LandingEmpty>
         ) : (
           entries.map((entry) => {
             const title = entry.kind === "search" ? entry.query : entry.title;
-            const text = (
-              <LandingItemText
-                icon={recentEntryIcon(entry)}
-                meta={relativeTime(entry.lastUsedAt)}
-                title={title}
-              />
-            );
+            const text =
+              entry.kind === "statute" ? (
+                <span className="flex min-w-0 items-start gap-2">
+                  {recentEntryIcon(entry)}
+                  <span className="min-w-0 flex-1">
+                    <span className="text-foreground block text-sm font-medium wrap-anywhere whitespace-normal">
+                      {title}
+                    </span>
+                    <span className="text-muted-foreground block truncate text-xs">
+                      {relativeTime(entry.lastUsedAt)}
+                    </span>
+                  </span>
+                </span>
+              ) : (
+                <LandingItemText
+                  icon={recentEntryIcon(entry)}
+                  meta={relativeTime(entry.lastUsedAt)}
+                  title={title}
+                />
+              );
             return (
               <div
                 className="group flex min-w-0 items-center gap-1"

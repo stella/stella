@@ -1,16 +1,16 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { approveTimeEntryBatch } from "@/api/lib/billing/time-entry-approval";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const approveTimeEntries = createSafeRootHandler(
   {
     contract: "patch",
     description:
-      "Approve up to 200 time entries in accessible matters. Only the assigned approver or an organization owner/admin may approve. Each id returns approved or a refusal reason; running timers and locked periods are refused. Approval records the actor and time, and clears the last return comment. Already approved entries can be retried safely.",
+      "Approve up to 200 submitted time entries in accessible matters. Only the assigned approver or an organization owner/admin may approve. A draft is refused as not_submitted unless it is the approver's own entry. Each id returns approved or a refusal reason; running timers and locked periods are refused. Approval records the actor and time, and clears the last return comment. Already approved entries can be retried safely.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -20,12 +20,13 @@ const approveTimeEntries = createSafeRootHandler(
       consumesServices: false,
     },
     access: "write",
-    body: t.Object({
-      ids: t.Array(tSafeId("timeEntry"), {
-        minItems: 1,
-        maxItems: LIMITS.timeEntriesApprovalBatchMax,
-        uniqueItems: true,
-      }),
+    body: v.object({
+      ids: v.pipe(
+        v.array(resourceIdSchema("timeEntry")),
+        v.minLength(1),
+        v.maxLength(LIMITS.timeEntriesApprovalBatchMax),
+        uniqueItems(),
+      ),
     }),
   },
   async function* ({

@@ -23,13 +23,14 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -154,6 +155,9 @@ const TOOL_COVERAGE = {
   add_matter_member: RUN,
   remove_matter_member: RUN,
   update_organization_settings: RUN,
+  mint_web_handoff: excluded(
+    "requires an OAuth consent context; covered by the handoff service tests",
+  ),
   prepare_feedback: RUN,
   submit_feedback: excluded("delivers the report to an external tracker"),
   list_capabilities: RUN,
@@ -423,6 +427,10 @@ const createOrganization = async (): Promise<Caller> => {
     slug: `firm-${organizationId}`,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
+  });
   await testDb.insert(member).values({
     id: mintAuthProviderIdValue(),
     organizationId,
@@ -437,7 +445,7 @@ const createOrganization = async (): Promise<Caller> => {
 const requestContext = async ({
   organizationId,
   userId,
-}: Caller): Promise<McpRequestContext> => {
+}: Caller): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, identity),
@@ -451,7 +459,7 @@ const requestContext = async ({
     tokenWorkspaceIds: undefined,
   });
   const workspaceIds = usable.map((workspace) => workspace.id);
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(

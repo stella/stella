@@ -2,7 +2,7 @@ import { Suspense, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
@@ -11,9 +11,9 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -58,19 +58,21 @@ import {
 } from "@/components/workspaces/table/group-columns";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSingleFlight } from "@/hooks/use-single-flight";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
-  WorkspaceProperty,
   SelectPropertyOption,
+  WorkspaceProperty,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateProperty,
   useSuggestPrompt,
@@ -98,12 +100,7 @@ type CreatePropertyProps = {
    *    column popover's "Edit column…" item).
    */
   triggerVariant?:
-    | "icon"
-    | "labelled"
-    | "panel"
-    | "blank-cell"
-    | "rail"
-    | "none";
+    "icon" | "labelled" | "panel" | "blank-cell" | "rail" | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;
@@ -165,8 +162,8 @@ export const CreateProperty = ({
     select: (properties) =>
       properties.find((property) => property.id === propertyId),
   });
-  const editingProperty = useQueryView(editingPropertyQuery);
-  useQueryViewError(editingProperty);
+  const editingProperty = queryView(editingPropertyQuery);
+  useQueryViewError(editingProperty, "CreateProperty:query");
   const action = propertyToolAction(
     editingProperty.type === "items" &&
       editingProperty.refetchError === undefined
@@ -808,7 +805,7 @@ const PropertyComposerBody = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-base font-semibold tracking-tight"
           maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {

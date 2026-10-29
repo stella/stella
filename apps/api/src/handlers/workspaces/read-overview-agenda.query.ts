@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, isNull, or } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
 import type { entities } from "@/api/db/schema";
 import {
   dueFromReaderDate,
@@ -79,7 +79,7 @@ true satisfies MissingAgendaColumn extends never ? true : never;
 true satisfies UnexpectedAgendaColumn extends never ? true : never;
 
 type ReadOverviewAgendaOptions = {
-  scopedDb: ScopedDb;
+  tx: Transaction;
   workspaceId: SafeId<"workspace">;
   /** The reader's local date (ISO); the database's today when absent. */
   agendaFrom: string | undefined;
@@ -92,44 +92,41 @@ type ReadOverviewAgendaOptions = {
  * bounds the deadlines before the limit applies.
  */
 export const readOverviewAgenda = async ({
-  scopedDb,
+  tx,
   workspaceId,
   agendaFrom,
 }: ReadOverviewAgendaOptions) => {
-  const rows = await scopedDb(
-    async (tx) =>
-      await tx.query.entities.findMany({
-        where: {
-          workspaceId: { eq: workspaceId },
-          RAW: (table) =>
-            and(
-              openAgendaTask(table),
-              or(isNull(table.dueDate), dueFromReaderDate(table, agendaFrom)),
-            ) ?? panic("Agenda condition is never empty"),
-        },
-        columns: AGENDA_TASK_COLUMNS,
+  const rows = await tx.query.entities.findMany({
+    where: {
+      workspaceId: { eq: workspaceId },
+      RAW: (table) =>
+        and(
+          openAgendaTask(table),
+          or(isNull(table.dueDate), dueFromReaderDate(table, agendaFrom)),
+        ) ?? panic("Agenda condition is never empty"),
+    },
+    columns: AGENDA_TASK_COLUMNS,
+    with: {
+      assignees: {
+        columns: {},
+        orderBy: { createdAt: "asc" },
+        limit: 1,
         with: {
-          assignees: {
-            columns: {},
-            orderBy: { createdAt: "asc" },
-            limit: 1,
-            with: {
-              user: {
-                columns: {
-                  name: true,
-                  email: true,
-                  image: true,
-                  deletedAt: true,
-                },
-              },
+          user: {
+            columns: {
+              name: true,
+              email: true,
+              image: true,
+              deletedAt: true,
             },
           },
         },
-        // Ascending due dates put undated tasks last.
-        orderBy: { dueDate: "asc", id: "asc" },
-        limit: LIMITS.overviewUpcomingAgenda,
-      }),
-  );
+      },
+    },
+    // Ascending due dates put undated tasks last.
+    orderBy: { dueDate: "asc", id: "asc" },
+    limit: LIMITS.overviewUpcomingAgenda,
+  });
   return rows.map((task) => {
     const assignee = task.assignees.at(0)?.user;
     return {

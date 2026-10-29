@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
@@ -29,8 +30,8 @@ import {
 } from "@/api/tests/helpers/auth-provider-id";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
@@ -144,7 +145,7 @@ if (!databaseUrl || !runPostgres) {
             }),
           );
         const before = await read();
-        if (before instanceof ElysiaCustomStatusResponse) {
+        if (before instanceof HttpStatusResponse) {
           panic("Fixture list must be readable");
         }
         expect(before.columns.map((column) => column.propertyId)).toEqual(
@@ -193,23 +194,20 @@ if (!databaseUrl || !runPostgres) {
             pending.push(
               ...workers.map(async (worker) => await worker.create()),
             );
-            const deadline = performance.now() + 5000;
-            while (performance.now() < deadline) {
-              const snapshot = await db.execute<{ waiting: number }>(sql`
-                SELECT count(*)::integer AS waiting FROM pg_stat_activity
-                WHERE pid IN (${sql.join(
-                  workers.map(({ pid }) => sql`${pid}`),
-                  sql`, `,
-                )})
-                  AND wait_event_type = 'Lock'`);
-              if (snapshot.at(0)?.waiting === workers.length) {
-                return;
-              }
-              await Bun.sleep(10);
-            }
-            panic(
-              "All column workers must reach the locked admission boundary",
-            );
+            await waitForExternalState({
+              description:
+                "every column worker waits at the locked admission boundary",
+              read: async () =>
+                (
+                  await db.execute<{ waiting: number }>(sql`
+                    SELECT count(*)::integer AS waiting FROM pg_stat_activity
+                    WHERE pid IN (${sql.join(
+                      workers.map(({ pid }) => sql`${pid}`),
+                      sql`, `,
+                    )})
+                      AND wait_event_type = 'Lock'`)
+                ).at(0)?.waiting === workers.length,
+            });
           });
         } finally {
           // Drain writers after releasing the control lock, before deleting fixture rows.
@@ -217,12 +215,10 @@ if (!databaseUrl || !runPostgres) {
         }
         const results = await Promise.all(pending);
         expect(
-          results.filter(
-            (result) => !(result instanceof ElysiaCustomStatusResponse),
-          ),
+          results.filter((result) => !(result instanceof HttpStatusResponse)),
         ).toHaveLength(1);
         const refused = results.filter(
-          (result) => result instanceof ElysiaCustomStatusResponse,
+          (result) => result instanceof HttpStatusResponse,
         );
         expect(refused).toHaveLength(workers.length - 1);
         // Only the admitted column is audited; refusals record nothing.
@@ -241,7 +237,7 @@ if (!databaseUrl || !runPostgres) {
           ),
         ).toBe(LIMITS.legalListColumnsPerList);
         const after = await read();
-        if (after instanceof ElysiaCustomStatusResponse) {
+        if (after instanceof HttpStatusResponse) {
           panic("At-cap list must be readable");
         }
         expect(after.columns).toHaveLength(LIMITS.legalListColumnsPerList);
@@ -251,9 +247,9 @@ if (!databaseUrl || !runPostgres) {
             .map((column) => column.propertyId),
         ).toEqual(initial);
         const admitted = results.find(
-          (result) => !(result instanceof ElysiaCustomStatusResponse),
+          (result) => !(result instanceof HttpStatusResponse),
         );
-        if (!admitted || admitted instanceof ElysiaCustomStatusResponse) {
+        if (!admitted || admitted instanceof HttpStatusResponse) {
           panic("One column must be admitted");
         }
         expect(after.columns.at(-1)?.id).toBe(admitted.id);
@@ -268,8 +264,8 @@ if (!databaseUrl || !runPostgres) {
           position: LIMITS.legalListColumnsPerList,
         });
         const overflow = await read();
-        expect(overflow).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (overflow instanceof ElysiaCustomStatusResponse) {
+        expect(overflow).toBeInstanceOf(HttpStatusResponse);
+        if (overflow instanceof HttpStatusResponse) {
           expect(overflow.code).toBe(409);
           expect(overflow.response).toHaveProperty(
             "code",

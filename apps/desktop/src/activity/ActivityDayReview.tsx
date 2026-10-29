@@ -20,12 +20,12 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { CopyButton } from "@stll/ui/copy-button";
 import {
   Dialog,
-  DialogPopup,
-  DialogHeader,
-  DialogTitle,
+  DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
 } from "@stll/ui/dialog";
 import { LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
@@ -829,7 +829,7 @@ const ReviewEntries = ({
           return (
             <div
               key={matter.id}
-              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 sm:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
+              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 min-[40rem]:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
             >
               <Checkbox
                 className="mt-0.5"
@@ -879,7 +879,7 @@ const ReviewEntries = ({
                   }
                 />
               </div>
-              <div className="col-start-2 flex items-center justify-between gap-2 sm:col-start-3 sm:flex-col sm:items-end">
+              <div className="col-start-2 flex items-center justify-between gap-2 min-[40rem]:col-start-3 min-[40rem]:flex-col min-[40rem]:items-end">
                 <div className="text-base font-semibold tabular-nums">
                   {t("hours", { hours: hours(group.roundedTenths / 10) })}
                   <span className="text-muted-foreground text-2xs block font-normal">

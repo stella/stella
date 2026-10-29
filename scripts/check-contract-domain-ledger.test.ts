@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
-  writeFileSync,
+  mkdtempSync,
   renameSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -60,6 +60,8 @@ test("moving a source preserves existing sites but cannot add or replace constra
     );
     expect(commit.exitCode).toBe(0);
     const baseCommit = commit.stdout.toString().trim();
+    // A checkout stands on a commit: the guard reads the fork point from HEAD.
+    git("update-ref", "HEAD", baseCommit);
     renameSync(path.join(repoRoot, original), path.join(repoRoot, moved));
     git("add", "-A");
     const check = (entries: string[]) => {

@@ -32,6 +32,7 @@ import {
 } from "@/api/db/scoped";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -42,9 +43,9 @@ import type {
   PositionSource,
 } from "@/api/lib/workflow/playbook-positions";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -90,12 +91,12 @@ const usableWorkspaces = async () =>
 /** A1's request, narrowed to `pinned` the way a chat thread narrows it. */
 const mcpContext = async (
   pinned?: readonly SafeId<"workspace">[],
-): Promise<McpRequestContext> => {
+): Promise<AuthorizedMcpRequestContext> => {
   const usable = (await usableWorkspaces()).filter(
     ({ id }) => pinned === undefined || pinned.includes(id),
   );
   const workspaceIds = usable.map(({ id }) => id);
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -129,7 +130,7 @@ const restContext = async () => ({
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/playbooks"),
-  route: "/playbooks",
+  route: "/v1/playbooks" satisfies ApiRoutePath,
   safeDb: membershipDbs().safeDb,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
@@ -202,7 +203,7 @@ const rowSecurityReturns = async (entityIds: SafeId<"entity">[]) =>
   );
 
 const listPlaybook = async (
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
   playbookId: SafeId<"playbookDefinition">,
 ) => {
   const result = await handleMcpToolCall({
@@ -215,7 +216,7 @@ const listPlaybook = async (
 };
 
 const savePlaybookCiting = async (
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
   entityId: SafeId<"entity">,
 ) => {
   const result = await handleMcpToolCall({

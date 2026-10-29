@@ -9,8 +9,8 @@ import {
 import { eq } from "drizzle-orm";
 
 import {
-  MATTER_VISIBILITY,
   isResourceType,
+  MATTER_VISIBILITY,
   REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
   type ResourceType,
@@ -33,7 +33,16 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const routeServer = serveRoutesForTest([
+  ...workspaceEventsRoute,
+  ...workspacesRoute,
+]);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 // An open matter tab refreshes its lists from `resource_set_updated` events on
 // the matter's event stream. A write must announce itself there whichever
@@ -121,7 +130,7 @@ const openResourceSetEvents = async (
   browser: HumanBrowser,
   workspaceId: SafeId<"workspace">,
 ) => {
-  const response = await workspaceEventsRoute.handle(
+  const response = await routeServer.fetch(
     new Request(`${BASE}/workspaces/${workspaceId}/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
@@ -198,7 +207,7 @@ const restUpdateMatter = async (
   fixture: MatterFixture,
   body: Record<string, unknown>,
 ) =>
-  await workspacesRoute.handle(
+  await routeServer.fetch(
     new Request(`${BASE}/workspaces/${fixture.workspaceId}`, {
       method: "POST",
       headers: {

@@ -9,7 +9,9 @@ import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
+import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
@@ -32,6 +34,7 @@ import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingu
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
@@ -50,8 +53,10 @@ import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
+import { RECEIVE_EMAIL_DELIVERABILITY_TASK } from "@/api/lib/scheduler/tasks/email-deliverability-receive";
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
@@ -260,7 +265,15 @@ const sameSchedule = (
  */
 type SchedulerJobMode = "recurring" | "oneShot";
 
-type DeclaredSchedulerJob = SchedulerJobDefinition & { mode: SchedulerJobMode };
+type DeclaredSchedulerJob = SchedulerJobDefinition & {
+  mode: SchedulerJobMode;
+  /**
+   * What one run reads: a measured budget, the shared load governor, or a
+   * shrink-only ledger entry for jobs registered before read budgets. See
+   * `@/api/lib/db/read-budgets`.
+   */
+  reads: ScheduledJobReads;
+};
 
 /**
  * Every job this deployment is expected to run, as data rather than as a
@@ -273,11 +286,21 @@ type DeclaredSchedulerJob = SchedulerJobDefinition & { mode: SchedulerJobMode };
  */
 export const DECLARED_SCHEDULER_JOBS = [
   {
+    description: "Precompute the public case-law coverage answer",
+    id: SCHEDULER_BACKFILL_IDS.coverage,
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60_000 },
+    task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Report scheduler pauses older than 24 hours",
     id: "scheduler.pauseAudit.hourly",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: AUDIT_SCHEDULER_PAUSES_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Release queued PDFs to the searchable-text worker",
@@ -288,6 +311,15 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: envBase.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES * 60_000,
     },
     task: DISPATCH_DOCUMENT_OCR_TASK,
+    reads: "unmeasured",
+  },
+  {
+    description: "Release queued native extraction runs to their worker",
+    id: "documentProcessing.dispatchNativeExtraction.twoMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
+    task: DISPATCH_NATIVE_EXTRACTION_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Dispatch document deadline scouts nothing has picked up",
@@ -295,6 +327,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -303,6 +336,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_BUFFER_INTENTS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Reconcile abandoned organization file reservations",
@@ -310,6 +344,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "File inbound mail deliveries from the provider queue",
@@ -321,6 +356,19 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECEIVE_INBOUND_MAIL_TASK,
+    reads: "unmeasured",
+  },
+  {
+    description: "Mark account addresses the mail provider refuses",
+    enabled:
+      resolveEmailEvents(env).unwrap(
+        "Boot validates the email events configuration",
+      ).type === "enabled",
+    id: "emailDeliverability.receive.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECEIVE_EMAIL_DELIVERABILITY_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete expired comparison staging objects and their rows",
@@ -328,6 +376,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete corpus objects from cancelled case-law uploads",
@@ -335,6 +384,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Recount the shards the public case-law sitemap index lists",
@@ -342,13 +392,19 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    reads: "unmeasured",
   },
   {
+    // Hourly: nothing alarms on these gauges at a finer resolution, and a
+    // source falls behind by sync cycles, not minutes. The id is the row's
+    // key and outlives its old cadence: a new id would register a second
+    // job beside the existing row, which only retires by task name.
     description: "Report case-law projection backlog and source freshness",
     id: "caseLaw.reportFreshness.fiveMinute",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
+    reads: { budget: "scheduled.caseLaw.reportFreshness" },
   },
   {
     description:
@@ -357,6 +413,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -371,6 +428,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: RESET_REVIEW_ORGANIZATION_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Refresh the Postgres case-law browse facet counts",
@@ -379,6 +437,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Recount the shards the public statute sitemap index lists",
@@ -386,6 +445,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Recount the statute facets the public listing offers",
@@ -397,6 +457,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: LEGISLATION_FACET_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_LEGISLATION_FACETS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Recount each case-law source's arrivals of the last week",
@@ -408,6 +469,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: SOURCE_ARRIVALS_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete raw objects of erased or never-written decisions",
@@ -415,6 +477,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -424,6 +487,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_RAW_ROWS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Find raw objects no live decision owns",
@@ -432,6 +496,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -440,6 +505,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Move stored agent client values to the shared envelope",
@@ -450,6 +516,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payload: { paused: false, completed: false },
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -459,6 +526,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+    reads: "load-governed",
   },
   {
     description:
@@ -468,6 +536,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+    reads: "load-governed",
   },
   {
     description: "Emit persisted backfill health gauges",
@@ -475,6 +544,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_HEARTBEAT_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Check data-correctness invariants over pipeline outputs",
@@ -482,6 +552,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: CHECK_DATA_INVARIANTS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -490,6 +561,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Periodically repair governed work rows for legacy tasks",
@@ -499,6 +571,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_WORK_OBLIGATIONS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Surface stuck and at-risk governed work as inbox signals",
@@ -508,6 +581,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: WORK_ATTENTION_SCOUT_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Repair stale chat search projections",
@@ -515,6 +589,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: REPAIR_CHAT_SEARCH_INDEX_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -523,6 +598,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REPAIR_SEARCH_PROJECTIONS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Re-enqueue flow-run steps no queued job owns anymore",
@@ -530,6 +606,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_FLOW_RUN_ORPHANS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Re-drive file derivatives no queued job owns anymore",
@@ -538,6 +615,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: REPAIR_FILE_DERIVATIVES_TASK,
+    reads: "unmeasured",
   },
   {
     description: "End chat turns whose owner stopped renewing its lease",
@@ -545,6 +623,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REAP_OWNERLESS_CHAT_TURNS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete expired unused registrations",
@@ -552,6 +631,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: SWEEP_REGISTRATIONS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete system audit runs past retention",
@@ -559,6 +639,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: DAY_IN_MS },
     task: PURGE_SYSTEM_AUDIT_RUNS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Redact expired completed provider event details",
@@ -566,6 +647,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
+    reads: "unmeasured",
     enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
   },
   {
@@ -574,6 +656,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_ACTION_COSTS_TASK,
+    reads: "unmeasured",
     enabled:
       isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
       env.ACTION_COST_RETENTION_DAYS !== undefined,
@@ -584,6 +667,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_CHAT_RUN_LOGS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Clear expired chat secret payloads",
@@ -591,6 +675,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: PURGE_CHAT_SECRETS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Re-drive document review runs no queued job owns anymore",
@@ -598,6 +683,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_DOCUMENT_REVIEW_RUNS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Re-drive list verification runs no queued job owns anymore",
@@ -605,6 +691,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_LIST_VERIFICATION_RUNS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -613,6 +700,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_BILINGUAL_RUNS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -621,6 +709,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_REPORT_EXPORTS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete style set packages a replacement left behind",
@@ -628,6 +717,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Delete template objects recorded by committed deletions",
@@ -635,6 +725,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -643,6 +734,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60_000 },
     task: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Sync tracked InfoSoud cases into matter agenda",
@@ -655,6 +747,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Advance contact screening backfills",
@@ -662,6 +755,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60_000 },
     task: BACKFILL_SANCTIONS_MONITORING_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Drain contact screening work",
@@ -669,6 +763,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60_000 },
     task: DRAIN_SANCTIONS_MONITORING_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Refresh global reference lists",
@@ -676,6 +771,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 2 * 60 * 60 * 1000 },
     task: REFRESH_SANCTIONS_SOURCES_TASK,
+    reads: "unmeasured",
   },
   {
     description: "Expire abandoned desktop edit sessions past their token TTL",
@@ -683,6 +779,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -697,6 +794,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: MEMORY_CURATOR_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -709,6 +807,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: 60 * 60 * 1000,
     },
     task: MEMORY_EXTRACTOR_TASK,
+    reads: "unmeasured",
   },
   {
     description:
@@ -720,6 +819,7 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: 5 * 60 * 1000,
     },
     task: CHAT_THREAD_COMPACTOR_TASK,
+    reads: "unmeasured",
   },
 ] as const satisfies readonly DeclaredSchedulerJob[];
 

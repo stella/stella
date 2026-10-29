@@ -15,10 +15,10 @@ import * as v from "valibot";
 
 import {
   createPrivateTaskSink,
-  probeSourceFingerprint,
-  waiverKey,
   type FixEvidence,
+  probeSourceFingerprint,
   type RemovalAssessment,
+  waiverKey,
 } from "./dated-waiver-fix-task";
 import {
   createProbeBudget,
@@ -30,19 +30,19 @@ import {
   githubRequest,
   listRemovalProposals,
   orphanRemovalProposals,
-  type RemovalProposal,
   type PublishedRemoval,
   publishRemoval,
+  type RemovalProposal,
   retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
+  type DatedWaiver,
   DAY_MS,
   dueWaivers,
   expiryInstant,
   loadWaivers,
-  type DatedWaiver,
 } from "./dated-waivers";
 
 const OUTPUT_LIMIT = 24_000;
@@ -542,7 +542,7 @@ const probeEntry = async ({
     const baseFiles = Object.fromEntries(
       changes.map(({ source, before }) => [source, before]),
     );
-    validateRemovalModules(files);
+    await validateRemovalModules(files);
     for (const { source, after } of changes) {
       writeFileSync(path.join(checkout, source), after);
     }
@@ -847,23 +847,6 @@ export const disarmRemoval = async (
   }
 };
 
-type ArmRemovalUnlessHeldOptions = {
-  removal: PublishedRemoval;
-  mergeHold: string | undefined;
-  run?: typeof runRemovalMerge;
-};
-
-export const armRemovalUnlessHeld = async ({
-  removal,
-  mergeHold,
-  run = runRemovalMerge,
-}: ArmRemovalUnlessHeldOptions) => {
-  if (mergeHold) {
-    return { signal: "dated-waiver-held", pr: removal.number } as const;
-  }
-  return armRemoval(removal, run);
-};
-
 export const renderHealingFailureSignal = (error: HealingRunError) => ({
   signal: "dated-waiver-failed",
   failures: error.failures.map(({ key, stage }) => ({ key, stage })),
@@ -1021,14 +1004,7 @@ const main = async (): Promise<void> => {
           disarm: disarmRemoval,
         }),
       armRemoval: async (removal) => {
-        console.log(
-          JSON.stringify(
-            await armRemovalUnlessHeld({
-              removal,
-              mergeHold: process.env["MERGE_HOLD"],
-            }),
-          ),
-        );
+        console.log(JSON.stringify(await armRemoval(removal)));
       },
     },
   });

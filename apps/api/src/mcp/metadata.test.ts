@@ -2,9 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import canonicalLogoPath from "@stll/api-contract/stella-logo-512.png" with { type: "file" };
+
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  getMcpProtectedResourceMetadataUrl,
+  getMcpResourceUrl,
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -12,8 +16,6 @@ import {
   MCP_LAW_RESOURCE_SCOPES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
-  getMcpProtectedResourceMetadataUrl,
-  getMcpResourceUrl,
   STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -26,8 +28,8 @@ import {
   getMcpLogoUri,
   getMcpProtectedResourceMetadata,
   getMcpServerIcons,
-  MCP_LOGO_PATH,
   getMcpWwwAuthenticateHeader,
+  MCP_LOGO_PATH,
 } from "@/api/mcp/metadata";
 
 describe("MCP protected resource metadata", () => {
@@ -237,14 +239,11 @@ describe("MCP protected resource metadata", () => {
 
 describe("MCP logo", () => {
   // Hosts that list the connector do not all render SVG, so the advertised
-  // logo must be a PNG the web app actually serves at its advertised size.
-  test("is a 512x512 PNG served from the web app's public assets", () => {
-    const logoFile = path.resolve(
-      import.meta.dir,
-      "../../../web/public/stella-logo-512.png",
-    );
-    expect(path.basename(logoFile)).toBe(MCP_LOGO_PATH);
-    const bytes = readFileSync(logoFile);
+  // logo must be a PNG at its advertised size. The web app publishes this
+  // package file under its own name.
+  test("is the canonical 512x512 PNG", () => {
+    expect(path.basename(canonicalLogoPath)).toBe(MCP_LOGO_PATH);
+    const bytes = readFileSync(canonicalLogoPath);
     expect([...bytes.subarray(0, 8)]).toEqual([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
     ]);

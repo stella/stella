@@ -51,6 +51,7 @@ export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.AT_FINDOK]: 1,
   [ADAPTER_KEYS.EU_ECJ]: 0,
   [ADAPTER_KEYS.HU_BHGY]: 0,
+  [ADAPTER_KEYS.UK_FCL]: 0,
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
@@ -90,9 +91,7 @@ export type RepublishedDecisionCandidate = {
 };
 
 type CandidateDisposition =
-  | "link"
-  | "separate_alias_group_survivor"
-  | "separate_already_retired";
+  "link" | "separate_alias_group_survivor" | "separate_already_retired";
 
 export type ApplyRepublishedDecisionOutcome =
   | { type: "linked"; retiredId: SafeId<"caseLawDecision"> }

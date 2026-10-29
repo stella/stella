@@ -45,10 +45,14 @@ const WINDOW_MODULES: Record<string, readonly string[]> = {
   ),
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
+    "src/mainview/AgentSubscriptionsSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
+  ],
+  "src-tauri/capabilities/accessibility-guide.json": [
+    "src/onboarding/AccessibilityGuideApp.tsx",
   ],
   "src-tauri/capabilities/onboarding.json": [
     "src/onboarding/OnboardingApp.tsx",
@@ -112,9 +116,32 @@ const invokedCommands = async (
   );
 };
 
-const grantedCommands = async (capabilityPath: string) => {
-  const source = await readSource(capabilityPath);
-  const capability: unknown = JSON.parse(source);
+// Tauri takes a permission either as its identifier or as an object that
+// carries the identifier with a scope.
+const permissionIdentifier = (
+  permission: unknown,
+  capabilityPath: string,
+): string => {
+  if (typeof permission === "string") {
+    return permission;
+  }
+  if (
+    typeof permission === "object" &&
+    permission !== null &&
+    "identifier" in permission &&
+    typeof permission.identifier === "string"
+  ) {
+    return permission.identifier;
+  }
+  throw new TypeError(
+    `${capabilityPath} has a permission without an identifier: ${JSON.stringify(permission)}`,
+  );
+};
+
+const capabilityPermissions = (
+  capability: unknown,
+  capabilityPath: string,
+): Set<string> => {
   if (
     typeof capability !== "object" ||
     capability === null ||
@@ -123,8 +150,23 @@ const grantedCommands = async (capabilityPath: string) => {
   ) {
     throw new TypeError(`Invalid Tauri capability: ${capabilityPath}`);
   }
-  return new Set(capability.permissions);
+  return new Set(
+    capability.permissions.map((permission: unknown) =>
+      permissionIdentifier(permission, capabilityPath),
+    ),
+  );
 };
+
+const grantedCommands = async (capabilityPath: string) =>
+  capabilityPermissions(
+    JSON.parse(await readSource(capabilityPath)),
+    capabilityPath,
+  );
+
+const pluginPermissions = (permissions: ReadonlySet<string>) =>
+  [...permissions].filter(
+    (permission) => permission.includes(":") && !permission.startsWith("core:"),
+  );
 
 const assertGrantedCommands = ({
   commands,
@@ -144,6 +186,36 @@ const assertGrantedCommands = ({
 };
 
 describe("window Tauri capabilities", () => {
+  test("the main webview has no plugin command authority", async () => {
+    const permissions = await grantedCommands(
+      "src-tauri/capabilities/default.json",
+    );
+    expect(pluginPermissions(permissions)).toEqual([]);
+  });
+
+  test("plugin authority counts in both permission entry shapes", () => {
+    const capabilityPath = "fixture.json";
+    expect(
+      pluginPermissions(
+        capabilityPermissions(
+          {
+            permissions: [
+              "core:default",
+              "allow-get-state",
+              "updater:default",
+              { identifier: "opener:allow-open-url", allow: [{ url: "*" }] },
+              { identifier: "core:window:allow-close" },
+            ],
+          },
+          capabilityPath,
+        ),
+      ),
+    ).toEqual(["updater:default", "opener:allow-open-url"]);
+    expect(() =>
+      capabilityPermissions({ permissions: [{ allow: [] }] }, capabilityPath),
+    ).toThrow(`${capabilityPath} has a permission without an identifier`);
+  });
+
   test.each(Object.entries(WINDOW_MODULES))(
     "%s grants every command its shell and branch invoke",
     async (capabilityPath, modules) => {

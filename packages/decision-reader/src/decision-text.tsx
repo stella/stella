@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import type { ReactElement, ReactNode, Ref } from "react";
 
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -32,7 +33,6 @@ import {
   footnoteParts,
   resolveDecisionLinkOverlaps,
   topMatterBlocks,
-  visibleDecisionBlocks,
   wrappedParagraphRuns,
 } from "./decision-text.logic";
 import type {
@@ -47,8 +47,9 @@ import {
   FulltextFallback,
   HighlightedText,
   InlineContent,
-  WrappedParagraphRun,
   rangesForPiece,
+  READER_PROSE_CLASS,
+  WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
 import { locateExternalCjeuCitations } from "./fallback-legal-anchors";
@@ -66,8 +67,8 @@ import type {
   CitationAnchorSource,
   CitedProvisionTarget,
   DecisionProvisionAnchor,
-  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
   ReaderDecision,
 } from "./reader-types";
 import { sanitizeHref } from "./sanitize-href";
@@ -273,7 +274,7 @@ const EditorialSupplementBody = ({
       ) : (
         <p
           className={cn(
-            "reader-justify",
+            READER_PROSE_CLASS,
             variant === "abstract" && "text-foreground-strong-muted",
           )}
           data-anchor={blockAnchorId}
@@ -592,6 +593,7 @@ const buildAnchorsByPieceId = ({
             decision: span.source.decision,
             citation: span.source,
             treatment: span.source.treatment,
+            blockId,
             children: marked,
           });
         },
@@ -745,12 +747,21 @@ export type PrepareDecisionTextPlacementsOptions = {
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
   externalProvisionAnchors?:
-    | readonly ExternalDecisionProvisionAnchor[]
-    | undefined;
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
 };
 
+/** Where one citation on a card sits, in its paragraph's rendered text. */
+export type DecisionProvisionCitationRange = {
+  citationId: string;
+  end: number;
+  start: number;
+};
+
 export type DecisionProvisionCard = ProvisionCardCitations & {
+  /** Every citation the card stands for, on the same offset axis as a
+   * reader selection anchored in the paragraph. */
+  ranges: DecisionProvisionCitationRange[];
   startAnchorId: string;
 };
 
@@ -775,7 +786,13 @@ export const prepareDecisionProvisionCards = ({
       (left, right) => left.start - right.start,
     );
     for (const card of provisionCardsOf(spans.map(({ source }) => source))) {
-      cards.push({ ...card, startAnchorId: block.anchorId });
+      const ranges: DecisionProvisionCitationRange[] = [];
+      for (const { end, source, start } of spans) {
+        if (card.citationIds.includes(source.id)) {
+          ranges.push({ citationId: source.id, end, start });
+        }
+      }
+      cards.push({ ...card, ranges, startAnchorId: block.anchorId });
     }
   }
   return cards;

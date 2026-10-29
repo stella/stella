@@ -8,12 +8,12 @@ import { compareCodeUnit } from "@stll/collation";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
-  correspondenceAttachments,
-  entities,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
+  correspondenceAttachments,
   correspondenceDropLogs,
   correspondenceFilers,
+  entities,
   matterInboundAddresses,
   workspaceMembers,
   workspaces,
@@ -24,8 +24,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
-  ingestInboundMail,
   InboundPersistenceError,
+  ingestInboundMail,
 } from "@/api/lib/email/inbound/ingest";
 import { parseInboundMessage } from "@/api/lib/email/inbound/message";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
@@ -33,9 +33,10 @@ import {
   receiveSesInboundMail,
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -178,6 +179,10 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Inbound integration",
         slug: `inbound-${organizationId}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(member).values([
         {

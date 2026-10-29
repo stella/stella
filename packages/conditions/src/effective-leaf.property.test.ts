@@ -4,12 +4,12 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import { isEffectiveLeaf } from "./effective-leaf";
-import { type FoldHandlers, foldCondition } from "./fold";
+import { foldCondition, type FoldHandlers } from "./fold";
 import {
   BUILTIN_FIELDS,
+  type Combinator,
   COMPARE_OPS,
   type CompareNode,
-  type Combinator,
   type ConditionNode,
   type Operand,
   PREDICATE_OPS,

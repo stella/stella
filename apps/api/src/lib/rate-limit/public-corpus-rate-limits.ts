@@ -1,10 +1,11 @@
+import type { RouteEntry } from "@/api/http/route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPublicCorpusAdmissionMetric } from "@/api/lib/observability/request-metrics";
 import {
   getPublicCorpusClassPolicy,
   type PublicCorpusClass,
-  resolvePublicCorpusPolicy,
+  publicCorpusClassOf,
 } from "@/api/public-corpus-policy";
 
 import type { RateLimitOptions } from "./contracts";
@@ -21,8 +22,8 @@ export const createPublicCorpusAddressRateLimitOptions = (
       failurePolicy: "fail_open_local",
       scope: `public-corpus-${routeClass}`,
     }),
-    skip: (request: Request) =>
-      resolvePublicCorpusPolicy(request)?.class !== routeClass,
+    skip: (_request: Request, entry: RouteEntry | undefined) =>
+      publicCorpusClassOf(entry) !== routeClass,
   }) as const satisfies RateLimitOptions;
 
 export const createPublicCorpusGlobalRateLimitOptions = (
@@ -57,8 +58,8 @@ export const createPublicCorpusGlobalRateLimitOptions = (
         max,
       });
     },
-    skip: (request: Request) =>
-      resolvePublicCorpusPolicy(request)?.class !== routeClass,
+    skip: (_request: Request, entry: RouteEntry | undefined) =>
+      publicCorpusClassOf(entry) !== routeClass,
   } as const satisfies RateLimitOptions;
 };
 

@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
 
@@ -18,6 +17,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockDesktopEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -526,7 +526,7 @@ if (!databaseUrl || !runPostgresTests) {
             const writerStarted = Promise.withResolvers<undefined>();
             const writeAfterMove = async () => {
               if (owner === "desktop-open") {
-                const sessionDb = drizzle({
+                const sessionDb = createDatabase({
                   client: writer.sql,
                   relations: databaseRelations,
                   logger: {

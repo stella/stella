@@ -40,8 +40,8 @@ import {
   hashPdfSigningToken,
   lockedCreatorAccess,
   openPdfSigningSession,
-  redeemPdfSigningHandoff,
   recordPdfSigningHandoffFailure,
+  redeemPdfSigningHandoff,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";

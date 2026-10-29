@@ -154,11 +154,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/handlers/organization-settings/ai-availability/get.test.ts": {
-    "count": 6,
-    "owner": "ai",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/handlers/organization-settings/read.test.ts": {
     "count": 2,
     "owner": "guards",
@@ -300,7 +295,7 @@
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
   "apps/api/src/lib/chat/openrouter-credential.test.ts": {
-    "count": 12,
+    "count": 10,
     "owner": "ai",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
@@ -404,11 +399,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/oauth-cli-client-document.db.test.ts": {
-    "count": 1,
-    "owner": "security",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/rate-limit/action-background-admission.test.ts": {
     "count": 2,
     "owner": "pricing",
@@ -464,11 +454,6 @@
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/stella-openrouter-text-adapter.test.ts": {
-    "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/tanstack-ai-provider-wire.test.ts": {
     "count": 5,
     "owner": "ai",
@@ -486,11 +471,6 @@
   },
   "apps/api/src/lib/usage/member-capacity.db.test.ts": {
     "count": 5,
-    "owner": "pricing",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/usage/organization-access-state.db.test.ts": {
-    "count": 6,
     "owner": "pricing",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },

@@ -1,8 +1,9 @@
-import { Result } from "better-result";
-import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -12,11 +13,17 @@ import {
 } from "@/api/db/entity-feature-policies";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
+import {
+  invoiceInMatter,
+  invoiceMatterShare,
+  invoiceTouchesMatter,
+  invoiceWithinMatterAllowlist,
+} from "@/api/lib/billing/invoice-scope";
 import {
   NARRATIVE_LANGUAGE_MAX_LENGTH,
   NARRATIVE_LANGUAGE_PATTERN,
@@ -53,7 +60,7 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
@@ -79,7 +86,6 @@ import {
   errorResult,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
@@ -92,6 +98,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type BillingToolName =
   | "list_time_entries"
@@ -198,20 +205,27 @@ const invoiceListTextFieldSpecs = (
 ];
 
 type InvoiceTimeEntryTextItem = {
+  workspaceId: string;
   narrative: string;
   invoiceNarrative: string | null;
   entity: { name: string } | null;
 };
 
 type InvoiceExpenseTextItem = {
+  workspaceId: string;
   description: string;
   invoiceDescription: string | null;
   entity: { name: string } | null;
 };
 
 type InvoiceLineTextItem = {
+  workspaceId: string;
+  workspace: { name: string };
+  recordedDescription: string | null;
+  recordedUnit: string | null;
   description: string;
   unit: string | null;
+  exemptionReason: string | null;
 };
 
 /** Buyer as it reads on the document: every field is authored text. */
@@ -280,7 +294,7 @@ const invoiceDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "invoice.timeEntries[].narrative",
     items: (payload) => payload.invoice.timeEntries,
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.narrative,
     apply: (item, value) => {
       item.narrative = value;
@@ -289,7 +303,7 @@ const invoiceDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "invoice.timeEntries[].invoiceNarrative",
     items: (payload) => payload.invoice.timeEntries,
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.invoiceNarrative,
     apply: (item, value) => {
       item.invoiceNarrative = value;
@@ -304,7 +318,7 @@ const invoiceDetailTextFieldSpecs = (
         ): item is InvoiceTimeEntryTextItem & { entity: { name: string } } =>
           item.entity !== null,
       ),
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.entity.name,
     apply: (item, value) => {
       item.entity.name = value;
@@ -313,7 +327,7 @@ const invoiceDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "invoice.expenses[].description",
     items: (payload) => payload.invoice.expenses,
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.description,
     apply: (item, value) => {
       item.description = value;
@@ -322,7 +336,7 @@ const invoiceDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "invoice.expenses[].invoiceDescription",
     items: (payload) => payload.invoice.expenses,
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.invoiceDescription,
     apply: (item, value) => {
       item.invoiceDescription = value;
@@ -335,7 +349,7 @@ const invoiceDetailTextFieldSpecs = (
         (item): item is InvoiceExpenseTextItem & { entity: { name: string } } =>
           item.entity !== null,
       ),
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.entity.name,
     apply: (item, value) => {
       item.entity.name = value;
@@ -344,7 +358,7 @@ const invoiceDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "invoice.lines[].description",
     items: (payload) => payload.invoice.lines,
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.description,
     apply: (item, value) => {
       item.description = value;
@@ -353,10 +367,46 @@ const invoiceDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "invoice.lines[].unit",
     items: (payload) => payload.invoice.lines,
-    scope: () => workspaceId,
+    scope: (item) => item.workspaceId,
     read: (item) => item.unit,
     apply: (item, value) => {
       item.unit = value;
+    },
+  }),
+  ...["recordedDescription", "recordedUnit"].map((field) =>
+    defineTextFieldSpec({
+      path: `invoice.lines[].${field}`,
+      items: (payload: InvoiceDetailTextPayload) => payload.invoice.lines,
+      scope: (item: InvoiceLineTextItem) => item.workspaceId,
+      read: (item: InvoiceLineTextItem) =>
+        field === "recordedDescription"
+          ? item.recordedDescription
+          : item.recordedUnit,
+      apply: (item: InvoiceLineTextItem, value) => {
+        if (field === "recordedDescription") {
+          item.recordedDescription = value;
+        } else {
+          item.recordedUnit = value;
+        }
+      },
+    }),
+  ),
+  defineTextFieldSpec({
+    path: "invoice.lines[].exemptionReason",
+    items: (payload) => payload.invoice.lines,
+    scope: (item) => item.workspaceId,
+    read: (item) => item.exemptionReason,
+    apply: (item, value) => {
+      item.exemptionReason = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.lines[].workspace.name",
+    items: (payload: InvoiceDetailTextPayload) => payload.invoice.lines,
+    scope: (item) => item.workspaceId,
+    read: (item) => item.workspace.name,
+    apply: (item, value) => {
+      item.workspace.name = value;
     },
   }),
 ];
@@ -370,7 +420,7 @@ const resolveTimeEntryWorkspace = async ({
   context,
   timeEntryId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   timeEntryId: SafeId<"timeEntry">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -388,27 +438,87 @@ const resolveTimeEntryWorkspace = async ({
   return row?.workspaceId ?? null;
 };
 
-/** Resolve the accessible workspace that owns an invoice, or null. */
+/** Resolve a participating matter only inside both row and credential scope. */
 const resolveInvoiceWorkspace = async ({
   context,
   invoiceId,
+  matterId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
+  matterId?: string;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
+    return null;
+  }
+  const requestedMatterId =
+    matterId === undefined
+      ? undefined
+      : getAccessibleWorkspaceId({
+          accessibleWorkspaceIdSet: context.accessibleWorkspaceIdSet,
+          workspaceId: matterId,
+        });
+  if (requestedMatterId === null) {
     return null;
   }
   const row = await context.scopedDb((tx) =>
     tx.query.invoices.findFirst({
       where: {
         id: { eq: invoiceId },
-        workspaceId: { in: context.accessibleWorkspaceIds },
+        RAW: (table) =>
+          requestedMatterId === undefined
+            ? invoiceWithinMatterAllowlist(
+                table,
+                context.accessibleWorkspaceIds,
+              )
+            : sql`${invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds)} AND ${invoiceInMatter(table, requestedMatterId)}`,
       },
-      columns: { workspaceId: true },
+      columns: { workspaceId: true, originalInvoiceId: true },
+      with: {
+        lines: {
+          columns: { workspaceId: true },
+          orderBy: { position: "asc", id: "asc" },
+          limit: 1,
+          where:
+            requestedMatterId === undefined
+              ? undefined
+              : { workspaceId: { eq: requestedMatterId } },
+        },
+      },
     }),
   );
-  return row?.workspaceId ?? null;
+  if (requestedMatterId !== undefined) {
+    return row === undefined ? null : requestedMatterId;
+  }
+  const ownMatter = row?.workspaceId ?? row?.lines.at(0)?.workspaceId;
+  if (ownMatter !== undefined) {
+    return ownMatter;
+  }
+  const originalInvoiceId = row?.originalInvoiceId;
+  if (originalInvoiceId === null || originalInvoiceId === undefined) {
+    return null;
+  }
+  // An empty credit draft inherits a participating matter from its original,
+  // after both invoices pass complete row and credential authorization.
+  const original = await context.scopedDb((tx) =>
+    tx.query.invoices.findFirst({
+      where: {
+        id: { eq: originalInvoiceId },
+        organizationId: { eq: context.organizationId },
+        RAW: (table) =>
+          invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds),
+      },
+      columns: { workspaceId: true },
+      with: {
+        lines: {
+          columns: { workspaceId: true },
+          orderBy: { position: "asc", id: "asc" },
+          limit: 1,
+        },
+      },
+    }),
+  );
+  return original?.workspaceId ?? original?.lines.at(0)?.workspaceId ?? null;
 };
 
 /**
@@ -419,7 +529,7 @@ const loadUserNames = async ({
   context,
   userIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   userIds: readonly string[];
 }): Promise<Map<string, string>> => {
   if (userIds.length === 0) {
@@ -473,7 +583,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_from: v.optional(
         v.pipe(
-          ISO_DATE_SCHEMA,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "List only entries worked on or after this ISO date (YYYY-MM-DD)",
@@ -482,7 +592,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_to: v.optional(
         v.pipe(
-          ISO_DATE_SCHEMA,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "List only entries worked on or before this ISO date (YYYY-MM-DD)",
@@ -784,7 +894,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
       ),
       date_worked: v.optional(
         v.pipe(
-          ISO_DATE_SCHEMA,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "Date the work was done (ISO YYYY-MM-DD); required when creating",
@@ -1004,7 +1114,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveTimeEntryTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
@@ -1079,7 +1192,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveTimeEntryTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
@@ -1141,7 +1257,10 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTimeEntryTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETE_TIME_ENTRY_PROJECTION, {
@@ -1161,7 +1280,7 @@ const resolveRateArgsSchema = nullAsAbsent(
       v.description("User ID to resolve the rate for"),
     ),
     date: v.pipe(
-      ISO_DATE_SCHEMA,
+      apiDateSchema,
       v.maxLength(10),
       v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
     ),
@@ -1197,7 +1316,10 @@ const handleResolveRateTool: McpToolHandler<
       ),
   );
   if (Result.isError(validated)) {
-    return internalFailureResult(validated.error);
+    return internalFailureResult(
+      validated.error,
+      "mcp.handleResolveRateTool.validated_error",
+    );
   }
   if (!validated.value) {
     return errorResult("user_id is not a member of this organization");
@@ -1214,7 +1336,10 @@ const handleResolveRateTool: McpToolHandler<
     return Result.ok(rate);
   });
   if (Result.isError(resolved)) {
-    return internalFailureResult(resolved.error);
+    return internalFailureResult(
+      resolved.error,
+      "mcp.handleResolveRateTool.resolved_error",
+    );
   }
 
   // Passthrough: only a rate amount (minor units) and currency code, no
@@ -1276,16 +1401,32 @@ const readInvoiceDetail = async ({
   invoiceId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
 }) =>
   await context.scopedDb((tx) =>
     tx.query.invoices.findFirst({
-      where: { id: { eq: invoiceId }, workspaceId: { eq: workspaceId } },
+      where: {
+        id: { eq: invoiceId },
+        RAW: (table) =>
+          sql`${invoiceInMatter(table, workspaceId)} AND ${invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds)}`,
+      },
       with: INVOICE_DETAIL_RELATIONS,
     }),
   );
+
+/** A listed line without its release stamp, always with its matter. */
+const projectInvoiceLine = <
+  Line extends { releasedAt: unknown; workspace: unknown },
+>({
+  releasedAt: _releasedAt,
+  ...line
+}: Line) => ({
+  ...line,
+  workspace:
+    line.workspace ?? panic("Invoice line has no participating matter"),
+});
 
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
@@ -1303,12 +1444,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   // Detail mode.
   if (input.invoice_id !== undefined) {
     const invoiceId = brandPersistedInvoiceId(input.invoice_id);
-    const workspaceId = await resolveInvoiceWorkspace({ context, invoiceId });
+    const workspaceId = await resolveInvoiceWorkspace({
+      context,
+      invoiceId,
+      ...(input.matter_id === undefined ? {} : { matterId: input.matter_id }),
+    });
     if (!workspaceId) {
       return notFoundResult("Invoice not found or not accessible");
-    }
-    if (input.matter_id !== undefined && input.matter_id !== workspaceId) {
-      return errorResult("invoice_id does not belong to matter_id");
     }
     const invoiceRow = await readInvoiceDetail({
       context,
@@ -1319,16 +1461,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       return notFoundResult("Invoice not found or not accessible");
     }
     const totals = readInvoiceTotals(invoiceRow);
-    if (totals.isErr()) {
-      return internalFailureResult(totals.error);
-    }
 
     const invoice = {
       id: invoiceRow.id,
-      // Detail mode may be reached by invoice_id alone (no matter_id), so carry
-      // the resolved owning workspace on the invoice; the chat ref-mediation
-      // layer reads it to mint the line items' entity refs.
+      // A client invoice has no owning matter; retain a participating matter
+      // for invoice navigation. Source references carry their own matter.
       workspaceId,
+      clientId: invoiceRow.clientId,
       invoiceNumber: invoiceRow.invoiceNumber,
       documentType: invoiceRow.documentType,
       originalInvoiceId: invoiceRow.originalInvoiceId,
@@ -1354,10 +1493,20 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       updatedAt: invoiceRow.updatedAt.toISOString(),
       timeEntries: invoiceRow.timeEntries.map((te) => {
         const workItem = te.workItem;
+        const entryWorkspaceId =
+          te.workspaceId ?? panic("Invoiced time entry has no matter");
         return {
           id: te.id,
+          workspaceId: entryWorkspaceId,
           entityId: te.workItemId,
-          entityReference: te.workItemReference,
+          entityReference:
+            te.workItemReference?.type === "available"
+              ? {
+                  type: te.workItemReference.type,
+                  id: te.workItemReference.id,
+                  workspaceId: entryWorkspaceId,
+                }
+              : te.workItemReference,
           dateWorked: te.dateWorked,
           billedMinutes: te.billedMinutes,
           rateAtEntry: te.rateAtEntry,
@@ -1366,15 +1515,29 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           invoiceNarrative: te.invoiceNarrative,
           noCharge: te.noCharge,
           status: te.status,
-          entity: workItem ? { id: workItem.id, name: workItem.name } : null,
+          entity: workItem
+            ? {
+                id: workItem.id,
+                name: workItem.name,
+                workspaceId: entryWorkspaceId,
+              }
+            : null,
         };
       }),
       expenses: invoiceRow.expenses.map((ex) => {
         const entity = ex.matter;
         return {
           id: ex.id,
+          workspaceId: ex.workspaceId,
           entityId: ex.matterId,
-          entityReference: ex.matterReference,
+          entityReference:
+            ex.matterReference?.type === "available"
+              ? {
+                  type: ex.matterReference.type,
+                  id: ex.matterReference.id,
+                  workspaceId: ex.workspaceId,
+                }
+              : ex.matterReference,
           dateIncurred: ex.dateIncurred,
           amount: ex.amount,
           currency: ex.currency,
@@ -1383,13 +1546,13 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           invoiceDescription: ex.invoiceDescription,
           billable: ex.billable,
           markup: ex.markup,
-          entity: entity ? { id: entity.id, name: entity.name } : null,
+          entity: entity
+            ? { id: entity.id, name: entity.name, workspaceId: ex.workspaceId }
+            : null,
         };
       }),
-      lines: invoiceRow.lines.map(
-        ({ releasedAt: _releasedAt, ...line }) => line,
-      ),
-      totals: totals.value,
+      lines: invoiceRow.lines.map(projectInvoiceLine),
+      totals,
     };
 
     const textFields = runTextFieldSpecs(
@@ -1424,6 +1587,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     tx
       .select({
         id: invoices.id,
+        clientId: invoices.clientId,
+        matterShare: invoiceMatterShare(invoices, workspaceId),
         invoiceNumber: invoices.invoiceNumber,
         documentType: invoices.documentType,
         originalInvoiceId: invoices.originalInvoiceId,
@@ -1438,7 +1603,11 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       .from(invoices)
       .where(
         and(
-          eq(invoices.workspaceId, workspaceId),
+          invoiceTouchesMatter(invoices, workspaceId),
+          invoiceWithinMatterAllowlist(
+            invoices,
+            context.accessibleWorkspaceIds,
+          ),
           cursor === null
             ? undefined
             : invoicePageCursor.keysetAfter({
@@ -1499,7 +1668,10 @@ const handleGetUsageTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(entitlement)) {
-    return internalFailureResult(entitlement.error);
+    return internalFailureResult(
+      entitlement.error,
+      "mcp.handleGetUsageTool.entitlement_error",
+    );
   }
 
   // Passthrough: plan/seat/period/remaining-units are organization billing
@@ -1538,6 +1710,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { timeEntry: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1638,6 +1811,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { rate: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
@@ -1656,13 +1830,13 @@ export const BILLING_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "List invoices in a matter, or read one invoice in detail. Pass " +
-      "invoice_id to get a single invoice with its lines, totals with the " +
-      "VAT breakdown, taxable supply date, seller profile id, buyer details, " +
-      "and attached time entries and expenses. Otherwise pass matter_id to " +
-      "list the matter's " +
-      "invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
-      "and total (integer minor currency units).",
+      "List invoices in a matter or read one. Pass invoice_id for one " +
+      "invoice: lines with their recorded source values, totals with the VAT " +
+      "breakdown, taxable supply date, seller profile id, buyer, and attached " +
+      "time entries and expenses; a client invoice needs access to every " +
+      "matter it bills. Otherwise pass matter_id to list. Returns id, number " +
+      "(null before numbering), document type, original invoice id, " +
+      "reference, status, dates, currency and total (integer minor units).",
     inputSchema: listInvoicesArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
@@ -1670,6 +1844,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1700,6 +1875,10 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
+    permissions: {
+      type: "all",
+      permissions: { organizationSettings: ["update"] },
+    },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",

@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 

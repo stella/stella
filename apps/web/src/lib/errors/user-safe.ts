@@ -8,6 +8,11 @@ import {
   type ToAPIErrorProps,
 } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
+import {
+  ClientOperationError,
+  isUserSafeClientOperation,
+} from "@/lib/errors/client";
+import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
 
 const SERVER_ERROR_THRESHOLD = 500;
 
@@ -38,10 +43,17 @@ export const userErrorFromThrown = (
   error: unknown,
   fallback: string,
 ): string => {
-  if (AuthClientError.is(error)) {
+  if (
+    AuthClientError.is(error) ||
+    EmptyUploadFileError.is(error) ||
+    (ClientOperationError.is(error) && isUserSafeClientOperation(error.action))
+  ) {
     return error.message;
   }
   if (APIError.is(error)) {
+    if (error.transportKind !== undefined) {
+      return error.message;
+    }
     return displayedMessage(error, fallback);
   }
   return fallback;

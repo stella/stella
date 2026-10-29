@@ -21,8 +21,8 @@ import { member } from "@/api/db/auth-schema";
 import {
   organizationSettings,
   timeEntries,
-  timeTimers,
   timeEntryTimerStates,
+  timeTimers,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";

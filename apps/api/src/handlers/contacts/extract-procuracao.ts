@@ -1,15 +1,17 @@
 import { Result } from "better-result";
 import { and, eq, gt, lt, or } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
 import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -17,11 +19,16 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
-import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
+import {
+  headObject,
+  readTenantS3ArrayBuffer,
+  S3ObjectMissingError,
+} from "@/api/lib/s3-presign";
 import {
   extractFileText,
   resolveExtractionMimeType,
@@ -34,8 +41,8 @@ const MAX_SOURCE_CHARS = 30_000;
 const EXTRACT_TIMEOUT_MS = 60_000;
 const PROCESSING_LEASE_MS = 3 * 60 * 1000;
 
-const extractProcuracaoBodySchema = t.Object({
-  uploadId: tSafeId("contactExtractionUpload"),
+const extractProcuracaoBodySchema = v.object({
+  uploadId: resourceIdSchema("contactExtractionUpload"),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output
@@ -119,6 +126,10 @@ const extractProcuracao = createSafeRootHandler(
     user,
     safeDb,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForTask({
@@ -197,11 +208,20 @@ const extractProcuracao = createSafeRootHandler(
       const objectHead = await headObject(key);
       if (Result.isError(objectHead)) {
         return Result.err(
-          new HandlerError({
-            status: 422,
-            message: "The source upload is incomplete",
-            cause: objectHead.error,
-          }),
+          S3ObjectMissingError.is(objectHead.error)
+            ? new HandlerError({
+                status: 422,
+                message: "The source upload is incomplete",
+                cause: objectHead.error,
+              })
+            : classifyFailure(
+                new HandlerError({
+                  status: 500,
+                  message: "Failed to read the source upload",
+                  cause: objectHead.error,
+                }),
+                "upstream_unavailable",
+              ),
         );
       }
       if (
@@ -390,7 +410,11 @@ const extractProcuracao = createSafeRootHandler(
       );
     }
 
-    getS3().delete(key).catch(captureError);
+    getS3()
+      .delete(key)
+      .catch(
+        createErrorCapture(handlerErrorContext("extractProcuracao.rejection")),
+      );
 
     return extractionResult;
   },

@@ -4,6 +4,12 @@
 # No merge/rebase chains are inferred: an ambiguous relation is refused.
 set -euo pipefail
 export GIT_NO_REPLACE_OBJECTS=1
+# Resolved without dirname: callers may run this with only bash and git.
+script_dir="${BASH_SOURCE[0]%/*}"
+if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then
+  script_dir=.
+fi
+retry_script="$script_dir/retry.sh"
 # Merge-group receipt: the merge queue fast-forwards main to the merge-group
 # commit, so that group's ci-result check run sits on the commit that lands.
 # A successful one from a merge_group run of ci.yml can stand in for main/heavy
@@ -156,7 +162,7 @@ for commit in "${commits[@]}"; do
   metadata=$(bash "$gh_retry_script" api "repos/$repo/commits/$commit")
   jq -e --arg sha "$commit" '.sha == $sha' <<< "$metadata" >/dev/null || refuse 'commit is unavailable in repository'
   if ! git cat-file -e "$commit^{commit}"; then
-    git fetch --no-tags "https://github.com/$repo.git" "$commit"
+    "$BASH" "$retry_script" git fetch --no-tags "https://github.com/$repo.git" "$commit" >&2
   fi
   tree=$(git rev-parse --verify "$commit^{tree}")
   jq -e --arg tree "$tree" '.commit.tree.sha == $tree' <<< "$metadata" >/dev/null || refuse 'repository tree does not match local commit'
@@ -165,7 +171,7 @@ tree=$(git rev-parse --verify "$sha^{tree}")
 [[ "$tree" == "$(git rev-parse --verify "$proof^{tree}")" ]] || refuse 'trees differ'
 main=$(git rev-parse --verify 'origin/main^{commit}')
 history=$(git rev-list --first-parent "$main")
-if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
+if [[ "$allow_pr_head" == false && $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
   comparison=$(bash "$gh_retry_script" api "repos/$repo/compare/$sha...main")
   jq -e --arg sha "$sha" '(.status == "ahead" or .status == "identical") and .merge_base_commit.sha == $sha' <<< "$comparison" >/dev/null \
     || refuse 'RELEASE_HEAVY_NOT_GREEN: target is not on repository main'
@@ -198,14 +204,27 @@ if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
     relation=squash
   fi
 else
-  [[ "$allow_pr_head" == true && "$sha" == "$proof" ]] || refuse 'target is not on main'
+  [[ "$sha" == "$proof" ]] || refuse 'target is not on main'
   pulls=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/pulls?per_page=100")
-  jq -e --arg repo "$repo" --arg sha "$sha" --arg base "$main" '
-    [.[][] | select(.merged_at == null and .state == "open" and (.title | startswith("chore: release v")) and
+  release_version=$(git show "$sha:VERSION" | tr -d '[:space:]')
+  allow_merged=false
+  if [[ "$allow_pr_head" == false ]]; then
+    while IFS= read -r tag; do
+      if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then allow_merged=true; break; fi
+    done < <(git tag --points-at "$sha" --list "v$release_version-rc.*")
+  fi
+  jq -e --arg repo "$repo" --arg sha "$sha" --arg title "chore: release v$release_version" --argjson allow_merged "$allow_merged" '
+    [.[][] | select(.draft == false and .title == $title and
+      ((.merged_at == null and .state == "open") or
+       ($allow_merged and .state == "closed" and (.merged_at | type) == "string" and .merged_at != "")) and
       .head.sha == $sha and .head.repo.full_name == $repo and .base.repo.full_name == $repo and
       .base.ref == "main")] | length == 1
-  ' <<< "$pulls" >/dev/null || refuse 'open release PR relation is unverified'
-  git merge-base --is-ancestor "$main" "$proof" || refuse 'PR head does not contain current main tip'
+  ' <<< "$pulls" >/dev/null || refuse 'release PR head relation is unverified'
+  # The complete release delta retains its VERSION bump across corrections.
+  # Main may be merged into the release branch without rewriting its history.
+  main=$(git merge-base "$sha" origin/main)
+  candidate_tree_verifier="${RELEASE_CANDIDATE_TREE_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-candidate-tree.mjs}"
+  GH_RETRY_SCRIPT="$gh_retry_script" node "$candidate_tree_verifier" "$main" "$proof" "$repo" || refuse 'release PR changes executable or unbound build input'
   relation=pr-head
 fi
 if [[ "$sha" != "$proof" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

@@ -21,15 +21,15 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import {
-  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   DOCUMENT_OCR_PROCESSOR_VERSION,
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
 import {
   createDocumentProcessingReconciliationPhases,
-  processDocumentProcessingRun,
   markRunFailed,
   persistMissingNativeExtractionRuns,
   persistOcrProjection,
+  processDocumentProcessingRun,
 } from "@/api/lib/document-processing-queue";
 import {
   DocumentProcessingJobError,

@@ -9,6 +9,11 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import {
+  OAuthAccountList,
+  OAuthAccountRow,
+} from "@/components/oauth-consent/oauth-account";
+
 type ConsentAccountRowsProps = {
   activeOrganizationId: string | null;
   disabled: boolean;
@@ -29,27 +34,15 @@ export const ConsentAccountRows = ({
   organizationName,
   organizations,
 }: ConsentAccountRowsProps) => {
-  const t = useTranslations("consent");
   const tCommon = useTranslations("common");
-  const tAccount = useTranslations("settings.account");
   const tOrganization = useTranslations("organization");
   return (
-    <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1 text-sm">
-      <dt className="text-muted-foreground self-start sm:self-center">
-        {tAccount("title")}
-      </dt>
-      <dd className="flex min-w-0 flex-col items-start gap-x-3 sm:flex-row sm:items-center sm:justify-between">
-        <bdi className="min-w-0 break-all">{email}</bdi>
-        <Button
-          variant="link"
-          size="xs"
-          className="-ms-2 min-h-11 self-start sm:ms-0 sm:self-auto"
-          disabled={disabled}
-          onClick={onAccountSwitch}
-        >
-          {t("useAnotherAccount")}
-        </Button>
-      </dd>
+    <OAuthAccountList>
+      <OAuthAccountRow
+        disabled={disabled}
+        email={email}
+        onAccountSwitch={onAccountSwitch}
+      />
       {organizationName ? (
         <>
           <dt className="text-muted-foreground">{tCommon("organization")}</dt>
@@ -87,7 +80,7 @@ export const ConsentAccountRows = ({
           </dd>
         </>
       ) : null}
-    </dl>
+    </OAuthAccountList>
   );
 };
 
@@ -106,7 +99,10 @@ export const ConsentDecisionBar = ({
   const t = useTranslations("consent");
   const tCommon = useTranslations("common");
   return (
-    <div className="border-border/64 bg-background flex shrink-0 flex-col gap-2 border-t px-6 py-4">
+    <div
+      className="border-border/64 bg-background flex shrink-0 flex-col gap-2 border-t px-6 py-4"
+      data-slot="consent-decision-bar"
+    >
       {hasError ? (
         <p className="text-destructive text-sm">{t("error")}</p>
       ) : null}

@@ -3,8 +3,8 @@ import { expect, test } from "bun:test";
 import type { FieldContent } from "@/api/db/schema-validators";
 
 import {
-  selectCanonicalFileContents,
   type DeletionFileFieldRow,
+  selectCanonicalFileContents,
 } from "./delete-file-snapshot";
 
 const fileContent = (

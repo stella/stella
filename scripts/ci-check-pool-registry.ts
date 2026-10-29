@@ -9,23 +9,59 @@ class CheckPoolRegistryError extends Error {
 }
 
 /** Jobs whose checks live in .github/ci-checks/<job>.yml. */
-export const CHECK_POOL_JOBS = ["ci-checks-policy", "ci-checks-rest"] as const;
+export const CHECK_POOL_JOBS = [
+  "ci-checks-policy",
+  "ci-checks-rest",
+  "code-quality-web-rest",
+] as const;
 export type CheckPoolJob = (typeof CHECK_POOL_JOBS)[number];
 
 /** Step names stay unique across jobs: guards key checks by name. */
 export const CHECK_POOL_STEP_NAMES = {
   "ci-checks-policy": "Run policy checks",
   "ci-checks-rest": "Run repository checks",
+  "code-quality-web-rest": "Run independent code-quality checks",
 } as const satisfies Record<CheckPoolJob, string>;
-const POOL_COMMAND = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// The pool step writes the job's `needs` to a file and runs the pool on it:
+// ci-plan's outputs can exceed the 128 KiB limit of one environment value.
+// `exec` makes the pool the step's process, so a cancelled run signals it and
+// it prints its running checks' processes and logs before it stops them.
+const POOL_COMMAND = new RegExp(
+  [
+    String.raw`^needs_file=\$\(mktemp\)`,
+    String.raw`cat > "\$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
+    String.raw`\$\{\{ toJSON\(needs\) \}\}`,
+    "CI_CHECK_POOL_NEEDS_JSON",
+    String.raw`CI_CHECK_POOL_NEEDS_FILE="\$needs_file" exec bun scripts/ci-check-pool\.ts run ([\w-]+)$`,
+  ].join("\n"),
+  "u",
+);
 
-/** One check: the fields of the workflow step it replaced, verbatim. */
+/** The pool step's script for `job`, exactly as the workflow declares it. */
+export const checkPoolStepRun = (job: CheckPoolJob) =>
+  [
+    "needs_file=$(mktemp)",
+    `cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
+    // Built, not written literally: a `${...}` in a plain string reads as a
+    // broken template literal to the linter.
+    ["$", "{{ toJSON(needs) }}"].join(""),
+    "CI_CHECK_POOL_NEEDS_JSON",
+    `CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ${job}`,
+    "",
+  ].join("\n");
+
+/**
+ * One check: the fields of the workflow step it replaced, verbatim. Its time
+ * limit is its generated budget, or a stricter `timeout-minutes` its author
+ * declared.
+ */
 export type PoolCheck = {
   name: string;
   id: string | undefined;
   condition: string;
   run: string;
   env: Readonly<Record<string, string>>;
+  /** An explicit cap below the generated budget, as its author declared it. */
   timeoutMinutes: number | undefined;
   /** `continue-on-error` as declared: a literal or a `${{ }}` expression. */
   continueOnError: boolean | string | undefined;
@@ -152,6 +188,82 @@ export const readCheckPool = (
   job: CheckPoolJob,
   read: ReadCheckPool = readWorkingTreeCheckPool,
 ) => parseCheckPool(read(job));
+
+/**
+ * Every pooled check's wall-time budget, generated from measured durations
+ * by scripts/ci-check-budgets.ts; one entry per pooled check, no other.
+ */
+export const CHECK_BUDGETS_PATH = ".github/ci-checks/budgets.json";
+export type CheckBudget = {
+  minutes: number;
+  samples: number;
+  p95Seconds?: number;
+  p99Seconds?: number;
+};
+export type CheckBudgets = Readonly<
+  Record<CheckPoolJob, Readonly<Record<string, CheckBudget>>>
+>;
+
+const BUDGET_KEYS = new Set(["minutes", "samples", "p95Seconds", "p99Seconds"]);
+const isBudget = (value: unknown): value is CheckBudget =>
+  record(value) &&
+  Object.keys(value).every((key) => BUDGET_KEYS.has(key)) &&
+  Number.isInteger(value["minutes"]) &&
+  Number(value["minutes"]) >= 1 &&
+  Number.isInteger(value["samples"]) &&
+  Number(value["samples"]) >= 0;
+
+export const parseCheckBudgets = (source: string): CheckBudgets => {
+  const parsed: unknown = JSON.parse(source);
+  if (
+    !record(parsed) ||
+    Object.keys(parsed).toSorted().join(",") !==
+      CHECK_POOL_JOBS.toSorted().join(",")
+  ) {
+    throw new CheckPoolRegistryError(
+      `${CHECK_BUDGETS_PATH} declares exactly the pooled jobs`,
+    );
+  }
+  const jobBudgets = (job: CheckPoolJob): Record<string, CheckBudget> => {
+    const budgets = parsed[job];
+    if (!record(budgets)) {
+      throw new CheckPoolRegistryError(`${job}: invalid check budgets`);
+    }
+    return Object.fromEntries(
+      Object.entries(budgets).map(([name, budget]) => {
+        if (!isBudget(budget)) {
+          throw new CheckPoolRegistryError(`${job}: invalid budget: ${name}`);
+        }
+        return [name, budget];
+      }),
+    );
+  };
+  return {
+    "ci-checks-policy": jobBudgets("ci-checks-policy"),
+    "ci-checks-rest": jobBudgets("ci-checks-rest"),
+    "code-quality-web-rest": jobBudgets("code-quality-web-rest"),
+  } satisfies CheckBudgets;
+};
+
+export const readCheckBudgets = (root: string = ROOT) =>
+  parseCheckBudgets(readFileSync(path.join(root, CHECK_BUDGETS_PATH), "utf-8"));
+
+/** A pooled check's generated budget; a check without one cannot run. */
+export const checkBudgetMinutes = (
+  budgets: CheckBudgets,
+  job: CheckPoolJob,
+  name: string,
+) => {
+  const budget = Object.hasOwn(budgets[job], name)
+    ? budgets[job][name]
+    : undefined;
+  if (budget === undefined) {
+    throw new CheckPoolRegistryError(
+      `${name}: no budget in ${CHECK_BUDGETS_PATH}; run bun scripts/ci-check-budgets.ts refresh`,
+    );
+  }
+  return budget.minutes;
+};
 
 /** Where the pool leaves per-check outcomes for the receipt recorder. */
 export const checkPoolResultsPath = (job: CheckPoolJob, runnerTemp: string) =>

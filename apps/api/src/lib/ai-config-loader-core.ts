@@ -1,7 +1,9 @@
+import { AI_UNAVAILABLE_REASON } from "@stll/api-contract/organization-ai-availability";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type OrgAIConfigRow = {
   aiConfigEncrypted: string | null | undefined;
@@ -29,35 +31,25 @@ const decodeNullableByteaText = (value: string | null | undefined) => {
 };
 
 /**
- * Discriminated outcome of a decrypt attempt. `corrupt` is deliberately not
- * an exception here: callers that only need best-effort config (the shared
- * per-request auth resolve, which every authenticated request runs through)
- * must be able to degrade to `null` without a throw ever reaching them.
- * Callers that are about to use the config for an actual AI call should use
- * {@link decryptOrgAIConfigRowOrThrow} instead, which turns `corrupt` into a
- * typed `ConfigurationError`. The failure is captured once, here, regardless
- * of which path the caller takes.
+ * Decryption reports corruption separately from an absent configuration.
+ * Runtime calls and settings editing refuse corruption: switching processors
+ * or overwriting stored configuration requires a readable configuration.
+ * The failure is captured once here.
  */
 export type DecryptOrgAIConfigRowResult =
   | { status: "ok"; config: OrgAIConfig | null }
   | { status: "corrupt"; error: unknown };
 
 /**
- * Whether the request context managed to read the org's stored AI config.
- * `unreadable` means a stored row exists but did not decrypt, which is not
- * the same as "no config": a caller that treats it as absent would run the
- * org's traffic on the instance provider and meter it to the wrong source.
- * `own_key_required` means the org has no config and its access state bars
- * the instance provider. `member_assignment_required` means the requesting
- * member holds no seat assignment in an organization that admits only
- * assigned members to AI work, whichever key would serve it. Only `ok` lets a
- * null config reach the instance.
+ * AI admission in the request context. Absent settings may use instance
+ * defaults after organization and seat admission. A failed settings read is
+ * `unreadable`: privacy preferences are unknown and AI work must be refused.
  */
 export const ORG_AI_CONFIG_STATUS = {
   ok: "ok",
-  unreadable: "unreadable",
-  ownKeyRequired: "own_key_required",
-  memberAssignmentRequired: "member_assignment_required",
+  unreadable: AI_UNAVAILABLE_REASON.unreadable,
+  ownKeyRequired: AI_UNAVAILABLE_REASON.ownKeyRequired,
+  memberAssignmentRequired: AI_UNAVAILABLE_REASON.memberAssignmentRequired,
 } as const;
 
 export type OrgAIConfigStatus =
@@ -76,16 +68,18 @@ export const decryptOrgAIConfigRow = async ({
   }
 
   // Exactly one of ciphertext/IV present is a malformed row, not "no
-  // config": report it as corrupt so AI-invoking callers fail closed
-  // instead of silently falling back to the default provider.
+  // config": report it as corrupt so each caller can choose its policy.
   if (!ciphertext || !iv) {
     const error = new Error(
       "organization AI config row has ciphertext or IV but not both",
     );
-    captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
-    });
+    captureError(
+      error,
+      handlerErrorContext("aiConfig.validateEncryptionFields", {
+        organizationId,
+        source: "loadOrgAIConfig",
+      }),
+    );
     return { status: "corrupt", error };
   }
 
@@ -93,34 +87,15 @@ export const decryptOrgAIConfigRow = async ({
     const config = await decrypt(organizationId, ciphertext, iv);
     return { status: "ok", config };
   } catch (error) {
-    captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
-    });
+    captureError(
+      error,
+      handlerErrorContext("aiConfig.decrypt", {
+        organizationId,
+        source: "loadOrgAIConfig",
+      }),
+    );
     return { status: "corrupt", error };
   }
-};
-
-/**
- * Use only from paths that are about to act on the org's AI config (issue an
- * AI request, pick a provider/model). Silently treating a corrupt row as "no
- * config" there could mis-route or mis-bill, so this surfaces a typed
- * {@link ConfigurationError} instead. Do not use this from shared
- * per-request context builders (auth resolve, MCP capability context) — a
- * corrupted row must not fail every request for the org; use
- * {@link decryptOrgAIConfigRow} and degrade to `null` there instead.
- */
-export const decryptOrgAIConfigRowOrThrow = async (
-  input: DecryptOrgAIConfigRowInput,
-): Promise<OrgAIConfig | null> => {
-  const result = await decryptOrgAIConfigRow(input);
-  if (result.status === "corrupt") {
-    throw new ConfigurationError({
-      message: "Stored organization AI configuration is invalid",
-      cause: result.error,
-    });
-  }
-  return result.config;
 };
 
 export type PromptCachingPreferenceRow = {

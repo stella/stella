@@ -2,6 +2,7 @@
   "version": 1,
   "globs": [
     ".github/ci-checks/*.yml",
+    ".github/ci-checks/budgets.json",
     ".github/ci-event-policy.json",
     ".oxlint-plugins/**",
     "apps/api/scripts/*.test.ts",
@@ -10,7 +11,6 @@
     "apps/api/scripts/chat-mutation-matrix.ts",
     "apps/api/scripts/content-delivery-guard.ts",
     "apps/api/scripts/deployment-feature-guard.ts",
-    "apps/api/scripts/exact-mirror-guard.ts",
     "apps/api/scripts/export-capability-catalog.ts",
     "apps/api/scripts/mcp-coverage-guard.ts",
     "apps/api/scripts/mcp-surface-baseline.ts",
@@ -18,6 +18,7 @@
     "oxlint.config.ts",
     "oxlint.design.config.ts",
     "oxlint.result-boundary.config.ts",
+    "oxlint.tailwind.config.ts",
     "packages/scripts/src/prepared-generated-sources.test.ts",
     "packages/scripts/src/query-cache-types.ts",
     "packages/scripts/src/result-consumption.ts",
@@ -66,7 +67,6 @@
     "scripts/check-desktop-rust-inputs.ts",
     "scripts/check-docker-host-mounts.test.ts",
     "scripts/check-docker-host-mounts.ts",
-    "scripts/check-format-environment.ts",
     "scripts/check-gh-retry.test.ts",
     "scripts/check-gh-retry.ts",
     "scripts/check-instruction-references.ts",
@@ -76,7 +76,6 @@
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-workspace-versions.ts",
-    "scripts/check-main-merge-hold.test.sh",
     "scripts/check-marketing-content.ts",
     "scripts/check-marketing-recordings.test.ts",
     "scripts/check-marketing-recordings.ts",
@@ -125,6 +124,8 @@
     "scripts/check-test-input-coverage.ts",
     "scripts/check-test-retries.test.ts",
     "scripts/check-test-retries.ts",
+    "scripts/check-tracked-file-sizes.test.ts",
+    "scripts/check-tracked-file-sizes.ts",
     "scripts/check-web-docker-platform.test.ts",
     "scripts/check-workflow-shells.test.ts",
     "scripts/check-workflow-shells.ts",
@@ -152,6 +153,8 @@
     "scripts/cli-runtime-pack.test.ts",
     "scripts/code-check-affected.test.ts",
     "scripts/code-check-affected.ts",
+    "scripts/codemod-icons.test.ts",
+    "scripts/codemod-icons.ts",
     "scripts/crawl-posture.ts",
     "scripts/create-release-manifest.test.sh",
     "scripts/dated-waiver-healing-workflow.test.ts",
@@ -178,6 +181,7 @@
     "scripts/docker-source-closure.test.ts",
     "scripts/document-identity-guard.test.ts",
     "scripts/document-identity-guard.ts",
+    "scripts/draft-release-reads.test.ts",
     "scripts/e2e-geometry-shards.test.ts",
     "scripts/e2e-shard-budget.test.ts",
     "scripts/e2e-spec-shards.test.ts",
@@ -218,6 +222,7 @@
     "scripts/oxlint-override-union.test.ts",
     "scripts/oxlint-plugin-test-coverage.test.ts",
     "scripts/pre-push-policy.test.ts",
+    "scripts/prepare-maintenance-release-gates.test.ts",
     "scripts/prepare-maintenance-release.property.test.ts",
     "scripts/prepare-release-tag.test.sh",
     "scripts/prepare-typecheck-base.sh",
@@ -239,6 +244,7 @@
     "scripts/release-channel.test.sh",
     "scripts/release-pull-requests.sh",
     "scripts/release-pull-requests.test.sh",
+    "scripts/release-rc-selection.test.ts",
     "scripts/release-version-dispatch.test.ts",
     "scripts/report-dependency-malware-failure.test.ts",
     "scripts/resolve-promoted-release.test.ts",
@@ -256,6 +262,7 @@
     "scripts/sql-perf-detector.test.ts",
     "scripts/sql-perf-suppressions.ts",
     "scripts/stage-web-runtime.test.ts",
+    "scripts/staging-wake.test.ts",
     "scripts/stll-registry-resolutions.test.ts",
     "scripts/suppression-waivers.ts",
     "scripts/task-result-cache.test.ts",
@@ -279,7 +286,17 @@
     "scripts/workflow-cache-policy.test.ts",
     "scripts/workflow-call-permissions.test.ts",
     "scripts/workflow-concurrency.test.ts",
-    "scripts/workflow-run-trust.test.ts"
+    "scripts/workflow-run-trust.test.ts",
+    "scripts/workflow-skipped-needs.test.ts"
   ],
-  "changeScoped": []
+  "changeScoped": [
+    {
+      "path": "scripts/check-publish-reproducibility.sh",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/generate-npm-release-jobs.ts",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
+    }
+  ]
 }

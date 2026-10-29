@@ -37,6 +37,7 @@ import { ProvisionHistory } from "@/features/statutes/components/provision-histo
 import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
@@ -55,8 +56,9 @@ import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status"
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -81,7 +83,7 @@ export const ProvisionInspectorView = ({
   const navigate = useNavigate();
   const search = useRouterState({ select: (state) => state.location.search });
   const citingFilters = readProvisionCitingSearch(search);
-  const countsView = useQueryView(
+  const countsView = queryView(
     useQuery(
       statuteCitationCountsOptions({
         eli: payload.eli,
@@ -95,11 +97,11 @@ export const ProvisionInspectorView = ({
           (row) => row.anchor === payload.anchorId,
         )?.decisionCount ?? 0)
       : null;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("provision");
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
-  const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  const versionsView = queryView(versionsQuery);
+  useQueryViewError(versionsView, "ProvisionInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
   const availableVersions = optionalArray(versions);
@@ -139,7 +141,7 @@ export const ProvisionInspectorView = ({
     };
     updateView({ id: tab.id, label: tab.label, payload: nextPayload });
   };
-  const leadingView = useQueryView(
+  const leadingView = queryView(
     useQuery(
       topCitingDecisionsOptions({
         anchor: payload.anchorId,
@@ -158,7 +160,7 @@ export const ProvisionInspectorView = ({
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
   // search yet; the fetch is the one `ProvisionWording` already makes.
-  const { isSuccess: wordingReady } = useQuery(
+  const { data: statute, isSuccess: wordingReady } = useQuery(
     statuteOptions(payload.documentId),
   );
   // Cmd/Ctrl+F belongs to the provision in front of the reader rather than to
@@ -184,7 +186,19 @@ export const ProvisionInspectorView = ({
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
       ref={panelRef}
     >
-      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <InspectorTabHeader
+        label={tab.label}
+        labelOverflow="wrap"
+        labelContent={
+          statute === undefined ? undefined : (
+            <>
+              <span className="block">{payload.provisionLabel}</span>
+              <StatuteDisplayLabel statute={statute} />
+            </>
+          )
+        }
+        onClose={onClose}
+      />
       <InspectorFindBar find={find} />
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}

@@ -1,14 +1,16 @@
+import { STELLA_LOGO_FILE_NAME } from "@stll/api-contract/stella-logo";
+
 import { env } from "@/api/env";
 import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { McpMode } from "@/api/mcp/constants";
 import {
-  getMcpResourceScopes,
   getMcpProtectedResourceMetadataUrl,
+  getMcpResourceScopes,
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
-  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_DISCOVERY_ALLOW_HEADER,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_EXPOSE_HEADERS,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
@@ -69,10 +71,10 @@ export const createMcpDiscoveryPreflightHeaders = () => {
 
 // User-facing identifiers (auth.md PRM) shown to a person during the agent
 // claim ceremony and by MCP hosts listing the connector. The logo is a raster
-// PNG served from the web app's public assets: several hosts do not render SVG
-// icons, so every advertised logo points at this one file.
+// PNG the web app serves from `@stll/api-contract`: several hosts do not render
+// SVG icons, so every advertised logo points at this one file.
 const RESOURCE_NAME = "stella";
-export const MCP_LOGO_PATH = "stella-logo-512.png";
+export const MCP_LOGO_PATH = STELLA_LOGO_FILE_NAME;
 export const getMcpLogoUri = () =>
   new URL(MCP_LOGO_PATH, `${env.FRONTEND_URL.replace(/\/$/u, "")}/`).toString();
 

@@ -1,9 +1,9 @@
 {
   "apps/api": {
-    "count": 129,
+    "count": 123,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
-      "apps/api/src/handlers/case-law/citation-kind.ts": 2,
+      "apps/api/src/handlers/case-law/citation-kind.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 2,
       "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts": 2,
@@ -18,7 +18,7 @@
       "apps/api/src/lib/ai-config.ts": 6,
       "apps/api/src/lib/ai-provider-probe.ts": 2,
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
-      "apps/api/src/lib/buffer-intent-reconciliation.ts": 7,
+      "apps/api/src/lib/buffer-intent-reconciliation.ts": 5,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
       "apps/api/src/lib/document-processing-ocr-result.ts": 1,
       "apps/api/src/lib/document-review/review-extract.ts": 2,
@@ -27,7 +27,6 @@
       "apps/api/src/lib/docx/ooxml.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 3,
       "apps/api/src/lib/errors/tagged-errors.ts": 3,
-      "apps/api/src/lib/feature-access/registry.ts": 1,
       "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
@@ -46,7 +45,6 @@
       "apps/api/src/lib/scouts/document-deadlines.logic.ts": 5,
       "apps/api/src/lib/tanstack-ai-generate.ts": 1,
       "apps/api/src/lib/template-binding/binding-sources.ts": 1,
-      "apps/api/src/lib/uploads/entity-create.ts": 1,
       "apps/api/src/lib/usage/organization-access.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 3,
@@ -55,7 +53,7 @@
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
-      "apps/api/src/mcp/tool-types.ts": 8,
+      "apps/api/src/mcp/tool-types.ts": 7,
       "apps/api/src/mcp/upload-purpose-gate.ts": 1,
       "apps/api/src/tests/helpers/provider-wire-contract.ts": 3,
       "apps/api/src/tests/pglite-test-db.ts": 1
@@ -68,7 +66,7 @@
     }
   },
   "apps/web": {
-    "count": 18,
+    "count": 17,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 3,
       "apps/web/src/components/ai-suggestions/review-position-header.tsx": 1,
@@ -77,12 +75,11 @@
       "apps/web/src/components/workspaces/property-helpers.tsx": 2,
       "apps/web/src/features/statutes/components/statute-table.tsx": 1,
       "apps/web/src/lib/api-contract.ts": 1,
-      "apps/web/src/lib/eden-client.ts": 1,
+      "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/workspaces/format-duration.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3,
       "apps/web/src/lib/workspaces/queries/billing-codes.ts": 1,
-      "apps/web/src/lib/workspaces/queries/rates.ts": 1,
-      "apps/web/src/lib/workspaces/queries/time-entries.ts": 1
+      "apps/web/src/lib/workspaces/queries/rates.ts": 1
     }
   },
   "packages/business-registries": {

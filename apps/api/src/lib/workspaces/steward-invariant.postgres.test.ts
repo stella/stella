@@ -1,16 +1,24 @@
 import { panic, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
+import { INTERNAL_MEMBER_ROLES } from "@stll/permissions";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  ORGANIZATION_ACCESS_STATE,
+  ORGANIZATION_ACCESS_STATE_ORIGIN,
+  organizationAccessStates,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   lockMatterStewardship,
   withAggregateRowQuery,
 } from "@/api/lib/db/aggregate-lock";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { hasUsableSteward } from "@/api/lib/workspaces/visibility";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -34,6 +42,197 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("matter steward invariant (postgres)", () => {
+    test("overlapping matter handovers wait and commit without deadlocking", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const organizationId = mintAuthProviderId<"organization">();
+        const firstLeadId = mintAuthProviderId<"user">();
+        const secondLeadId = mintAuthProviderId<"user">();
+        const firstMatterId = createSafeId<"workspace">();
+        const sharedMatterId = createSafeId<"workspace">();
+        const lastMatterId = createSafeId<"workspace">();
+        const workspaceIds = [firstMatterId, sharedMatterId, lastMatterId];
+        const userIds = [firstLeadId, secondLeadId];
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Concurrent stewardship",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        try {
+          await db.insert(organizationAccessStates).values({
+            organizationId,
+            state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+            origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+          });
+          await db.insert(user).values(
+            userIds.map((id) => ({
+              id,
+              name: "Matter lead",
+              email: `${id}@stewardship.example.test`,
+            })),
+          );
+          await db.insert(member).values(
+            userIds.map((userId) => ({
+              id: mintAuthProviderIdValue(),
+              organizationId,
+              userId,
+              role: "member" as const,
+              createdAt: new Date(),
+            })),
+          );
+          await db.transaction(async (tx) => {
+            await insertWorkspaceRowsInTransaction({
+              tx,
+              candidateUserIds: userIds,
+              rows: workspaceIds.map((id) => ({
+                id,
+                organizationId,
+                name: "Stewarded matter",
+                reference: id,
+                visibility: MATTER_VISIBILITY.assignedOnly,
+                leadUserId: firstLeadId,
+              })),
+            });
+            await tx
+              .insert(workspaceMembers)
+              .values(
+                workspaceIds.flatMap((workspaceId) =>
+                  userIds.map((userId) => ({ workspaceId, userId })),
+                ),
+              );
+          });
+          await withInterleaving({
+            databaseUrl,
+            schedules: [["a.handover", "b.handover", "a.commit", "b.commit"]],
+            a: {
+              steps: [
+                {
+                  name: "handover",
+                  run: async (tx) => {
+                    const matters = [firstMatterId, sharedMatterId];
+                    await lockMatterStewardship({
+                      tx,
+                      requests: [
+                        { organizationId, workspaceIds: matters, userIds },
+                      ],
+                      mode: "update",
+                    });
+                    await tx
+                      .update(workspaces)
+                      .set({ leadUserId: secondLeadId })
+                      .where(
+                        and(
+                          eq(workspaces.organizationId, organizationId),
+                          inArray(workspaces.id, matters),
+                        ),
+                      );
+                  },
+                },
+              ],
+            },
+            b: {
+              steps: [
+                {
+                  name: "handover",
+                  run: async (tx) => {
+                    const matters = [lastMatterId, sharedMatterId];
+                    await lockMatterStewardship({
+                      tx,
+                      requests: [
+                        { organizationId, workspaceIds: matters, userIds },
+                      ],
+                      mode: "update",
+                    });
+                    await tx
+                      .update(workspaces)
+                      .set({ leadUserId: firstLeadId })
+                      .where(
+                        and(
+                          eq(workspaces.organizationId, organizationId),
+                          inArray(workspaces.id, matters),
+                        ),
+                      );
+                  },
+                },
+              ],
+            },
+            reset: async () => undefined,
+            readState: async () =>
+              await db.transaction(async (tx) => {
+                await lockMatterStewardship({
+                  tx,
+                  requests: [{ organizationId, workspaceIds, userIds }],
+                  mode: "update",
+                });
+                return await tx
+                  .select({
+                    id: workspaces.id,
+                    leadUserId: workspaces.leadUserId,
+                    visibility: workspaces.visibility,
+                    leadAssignmentId: workspaceMembers.id,
+                    leadMemberRole: member.role,
+                  })
+                  .from(workspaces)
+                  .leftJoin(
+                    workspaceMembers,
+                    and(
+                      eq(workspaceMembers.workspaceId, workspaces.id),
+                      eq(workspaceMembers.userId, workspaces.leadUserId),
+                    ),
+                  )
+                  .leftJoin(
+                    member,
+                    and(
+                      eq(member.organizationId, workspaces.organizationId),
+                      eq(member.userId, workspaces.leadUserId),
+                    ),
+                  )
+                  .where(
+                    and(
+                      eq(workspaces.organizationId, organizationId),
+                      inArray(workspaces.id, workspaceIds),
+                    ),
+                  )
+                  .limit(workspaceIds.length);
+              }),
+            invariant: ({ blocked, outcomes, state }) => {
+              // The interleaving owner records this only after Postgres reports a lock wait.
+              expect(blocked).toContain("b.handover");
+              expect(outcomes).toEqual({
+                a: { status: "committed" },
+                b: { status: "committed" },
+              });
+              expect(state).toHaveLength(workspaceIds.length);
+              expect(
+                new Map(state.map((matter) => [matter.id, matter.leadUserId])),
+              ).toEqual(
+                new Map([
+                  [firstMatterId, secondLeadId],
+                  [sharedMatterId, firstLeadId],
+                  [lastMatterId, firstLeadId],
+                ]),
+              );
+              for (const matter of state) {
+                expect(matter.visibility).toBe(MATTER_VISIBILITY.assignedOnly);
+                expect(matter.leadAssignmentId).not.toBeNull();
+                expect(
+                  INTERNAL_MEMBER_ROLES.some(
+                    (role) => role === matter.leadMemberRole,
+                  ),
+                ).toBe(true);
+              }
+            },
+          });
+        } finally {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await db.delete(user).where(inArray(user.id, userIds));
+        }
+      });
+    });
+
     test.each([
       "role change",
       "assignment deletion",

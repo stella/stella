@@ -46,8 +46,7 @@ export type CreatePlaybookDefinitionResult = {
 };
 
 export type CreatePlaybookDefinitionOrigin =
-  | { type: "authored" }
-  | { type: "starter"; starterId: StarterPlaybookId };
+  { type: "authored" } | { type: "starter"; starterId: StarterPlaybookId };
 
 type CreatePlaybookDefinitionArgs = {
   /** Admits the save's ask derivations; see `deriveAutoAsks`. */
@@ -57,9 +56,9 @@ type CreatePlaybookDefinitionArgs = {
   /** Matters the caller can access; a newly added source must be in one. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   recordAuditEvent: AuditRecorder;
   body: CreatePlaybookDefinitionBody;
   origin: CreatePlaybookDefinitionOrigin;

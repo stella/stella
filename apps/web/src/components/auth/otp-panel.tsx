@@ -160,7 +160,10 @@ export const OTPPanel = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OTPPanel:failure",
+        scope: { type: "handler", handlerId: "OTPPanel:failure" },
+      });
     },
   });
 
@@ -206,6 +209,7 @@ export const OTPPanel = ({
 
       setResetConfirmation(null);
       if (isTwoFactorRedirect(signInData)) {
+        await invalidateSession.mutateAsync();
         await navigate({
           to: "/auth/two-factor",
           search: { redirectTo, linkProvider },
@@ -227,7 +231,13 @@ export const OTPPanel = ({
           return;
         })
         .catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "OTPPanel.mutationFn:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OTPPanel.mutationFn:failure",
+            },
+          });
         });
 
       await invalidateSession.mutateAsync();
@@ -236,6 +246,10 @@ export const OTPPanel = ({
     onError: (error) => {
       analytics.captureError(
         AlreadyToastedError.is(error) ? error.cause : error,
+        {
+          fingerprintKey: "OTPPanel:failure-2",
+          scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+        },
       );
       // Only the structured sign-in error already toasted a message in the
       // mutationFn (marked by AlreadyToastedError); every other throw

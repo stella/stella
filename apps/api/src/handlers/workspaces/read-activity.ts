@@ -1,7 +1,9 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { chatMessages, chatThreads, entities, fields } from "@/api/db/schema";
 import {
@@ -16,7 +18,7 @@ import {
 } from "@/api/handlers/workspaces/activity-scope";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
   pgTimestampCursorBoundary,
@@ -32,13 +34,17 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.workspaceActivityPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.workspaceActivityPageSizeMax),
+        ),
+      ),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

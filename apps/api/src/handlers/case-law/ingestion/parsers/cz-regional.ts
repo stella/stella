@@ -23,7 +23,12 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
+import type {
+  Block,
+  DecisionDocumentAst,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
@@ -74,7 +79,7 @@ export type ParseRegionalInput = {
 };
 
 type ParseRegionalOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -254,7 +259,7 @@ export const parseRegionalDecision = (
     numbered,
   );
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "justice.cz",

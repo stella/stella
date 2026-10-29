@@ -16,11 +16,12 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   entityOptions,
   workspaceFilesOptions,
@@ -46,8 +47,8 @@ export const ListSourceForm = ({
   const analytics = useAnalytics();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const filesView = useQueryView(useQuery(workspaceFilesOptions(workspaceId)));
-  useQueryViewError(filesView);
+  const filesView = queryView(useQuery(workspaceFilesOptions(workspaceId)));
+  useQueryViewError(filesView, "ListSourceForm:query");
   const files = filesView.type === "items" ? filesView.items : [];
   const schema = v.object({
     sourceEntityId: v.pipe(
@@ -90,7 +91,7 @@ export const ListSourceForm = ({
       const listApi = api.lists({
         workspaceId: toSafeId<"workspace">(workspaceId),
       });
-      return unwrapEden(
+      return unwrapApiResponse(
         await listApi["item-sources"].post({
           listId: toSafeId<"legalList">(listId),
           itemEntityId: toSafeId<"entity">(itemEntityId),
@@ -113,7 +114,10 @@ export const ListSourceForm = ({
       onClose();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ListSourceForm:failure",
+        scope: { type: "handler", handlerId: "ListSourceForm:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

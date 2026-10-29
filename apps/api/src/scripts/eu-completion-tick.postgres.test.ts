@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 import { Temporal } from "@stll/time";
 
@@ -27,8 +28,8 @@ import {
 import sparqlFixture from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
-  withPublisherGateFixture,
   abortableSleep,
+  withPublisherGateFixture,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { ecjCompletionFingerprint } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
@@ -1031,7 +1032,7 @@ if (!databaseUrl || !enabled) {
             });
           } finally {
             await slot.close();
-            session.release();
+            await session.release();
           }
         });
       });
@@ -1408,21 +1409,17 @@ if (!databaseUrl || !enabled) {
               if (blockerPid === undefined) {
                 panic("Missing withdrawal backend pid");
               }
-              let blocked = false;
-              for (let probe = 0; probe < 300; probe++) {
-                const activity = await observer.sql.unsafe<
-                  { blocked: boolean }[]
-                >(
-                  "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1::int = ANY(pg_blocking_pids(pid))) AS blocked",
-                  [blockerPid],
-                );
-                if (activity.at(0)?.blocked === true) {
-                  blocked = true;
-                  break;
-                }
-                await Bun.sleep(10);
-              }
-              expect(blocked).toBe(true);
+              await waitForExternalState({
+                description: "a backend waits on the withdrawal",
+                timeoutMs: 3000,
+                read: async () =>
+                  (
+                    await observer.sql.unsafe<{ blocked: boolean }[]>(
+                      "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1::int = ANY(pg_blocking_pids(pid))) AS blocked",
+                      [blockerPid],
+                    )
+                  ).at(0)?.blocked === true,
+              });
               await blocker.sql.unsafe("COMMIT");
               const report = await running;
               expect(report).toMatchObject({ attempted: 1, applied: 0 });

@@ -16,6 +16,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, chatThreads, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, createSafeDb } from "@/api/db/scoped";
 import renameThread from "@/api/handlers/chat/threads/rename";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -141,7 +142,7 @@ const rename = async (threadId: SafeId<"chatThread">, title: string) => {
       query: {},
       recordAuditEvent,
       request: new Request(`http://localhost/v1/chat/threads/${threadId}`),
-      route: "/v1/chat/threads/:threadId/title",
+      route: "/v1/chat/threads/:threadId/title" satisfies ApiRoutePath,
       safeDb: ownerDb(),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -186,7 +187,7 @@ const exportEntries = async (
       query: { resourceType, resourceId },
       recordAuditEvent: unwrittenAuditRecorder,
       request: new Request("http://localhost/v1/audit-logs/export"),
-      route: "/v1/audit-logs/export",
+      route: "/v1/audit-logs/export" satisfies ApiRoutePath,
       safeDb: reader,
       session: { activeOrganizationId: ids.orgA },
       set: { headers: {} },

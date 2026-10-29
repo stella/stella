@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { SKILL_RESOURCE_FOLDERS } from "@stll/skills/format";
 
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -34,19 +35,28 @@ const RESOURCE_FOLDER_LIST = [...SKILL_RESOURCE_FOLDERS]
   .map((folder) => `${folder}/`)
   .join(", ");
 
-const previousResourceSchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: PREVIOUS_RESOURCE_PATH_MAX }),
-  content: t.String({ maxLength: PREVIOUS_RESOURCE_CONTENT_MAX }),
+const previousResourceSchema = v.object({
+  path: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(PREVIOUS_RESOURCE_PATH_MAX),
+  ),
+  content: v.pipe(v.string(), v.maxLength(PREVIOUS_RESOURCE_CONTENT_MAX)),
 });
 
-const generateDraftBodySchema = t.Object({
-  intent: t.String({ minLength: 1, maxLength: INTENT_MAX_CHARS }),
-  examples: t.Optional(t.String({ maxLength: EXAMPLES_MAX_CHARS })),
-  previousDraft: t.Optional(t.String({ maxLength: PREVIOUS_DRAFT_MAX_CHARS })),
-  previousResources: t.Optional(
-    t.Array(previousResourceSchema, { maxItems: PREVIOUS_RESOURCES_MAX }),
+const generateDraftBodySchema = v.object({
+  intent: v.pipe(v.string(), v.minLength(1), v.maxLength(INTENT_MAX_CHARS)),
+  examples: v.optional(v.pipe(v.string(), v.maxLength(EXAMPLES_MAX_CHARS))),
+  previousDraft: v.optional(
+    v.pipe(v.string(), v.maxLength(PREVIOUS_DRAFT_MAX_CHARS)),
   ),
-  feedback: t.Optional(t.String({ maxLength: FEEDBACK_MAX_CHARS })),
+  previousResources: v.optional(
+    v.pipe(
+      v.array(previousResourceSchema),
+      v.maxLength(PREVIOUS_RESOURCES_MAX),
+    ),
+  ),
+  feedback: v.optional(v.pipe(v.string(), v.maxLength(FEEDBACK_MAX_CHARS))),
 });
 
 const config = {
@@ -121,6 +131,10 @@ const generateSkillDraft = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -175,6 +189,7 @@ const generateSkillDraft = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not generate skill draft. Please try again.",
           cause,
         });
@@ -189,6 +204,7 @@ const generateSkillDraft = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Skill draft was empty. Please try again.",
         }),
       );

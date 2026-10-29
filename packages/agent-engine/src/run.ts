@@ -3,10 +3,10 @@ import { withSandbox } from "@tanstack/ai-sandbox";
 import { panic } from "better-result";
 
 import {
+  type AgentHarness,
   defineStellaSandbox,
   SANDBOX_NO_MCP,
   STELLA_WORKSPACE_ROOT,
-  type AgentHarness,
   type StellaSandboxInput,
 } from "./sandbox";
 
@@ -46,6 +46,7 @@ const HARNESS_PROVIDER_ID = "stella";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const STELLA_CODEX_HOME = `${STELLA_WORKSPACE_ROOT}/.codex`;
 const TRUSTED_MCP_TOOL_APPROVAL_MODE = '"approve"';
+const SHELL_ENVIRONMENT_EXCLUDES = `["${HARNESS_KEY_ENV}"]`;
 
 const harnessBaseUrl = (input: StellaSandboxRunInput): string => {
   if (input.harnessProvider === "openai") {
@@ -88,6 +89,11 @@ export const buildCodexAdapterConfig = (input: StellaSandboxRunInput) => {
       [`model_providers.${provider}.base_url`]: `"${harnessBaseUrl(input)}"`,
       [`model_providers.${provider}.env_key`]: `"${HARNESS_KEY_ENV}"`,
       [`model_providers.${provider}.wire_api`]: `"responses"`,
+      // Codex itself reads the provider credential before it launches tools.
+      // Its shell environment policy removes that credential from every
+      // model-authored command, so ordinary inspection cannot exchange the
+      // operator's provider authority into user-visible command output.
+      "shell_environment_policy.exclude": SHELL_ENVIRONMENT_EXCLUDES,
       ...(input.mcp === SANDBOX_NO_MCP
         ? {}
         : {

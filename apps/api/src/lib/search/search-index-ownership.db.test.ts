@@ -38,13 +38,9 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 setDefaultTimeout(120_000);
 
 // Copying entities into a new matter has to leave every copy reachable by
-// search without indexing any of them twice. Ownership decides that split:
-// a copy whose file a durable extraction run will read is indexed when that
-// run completes, and every other copy carries a dirty mark committed with
-// the copy itself. What is asserted here is the part no type can hold --
-// that the split covers each copy exactly once, that the mark shares the
-// fate of the transaction that wrote it, and that a drain then rebuilds
-// each marked projection once and never the extracted one.
+// name immediately. Durable extraction owns only document content; every copy
+// carries a dirty mark committed with the copy itself. The projection writer
+// is idempotent and source-fenced, so the name repair and extraction may race.
 
 const ORGANIZATION_ID = "org-search-index-ownership";
 const SEED_AT = new Date("2026-01-01T00:00:00.000Z");
@@ -207,8 +203,8 @@ test("every copy is owned exactly once, by extraction or by a mark", () => {
   ]);
 });
 
-test("the copies' marks share the fate of the duplicate transaction", async () => {
-  const marked = copiesOwnedBy(SEARCH_INDEX_OWNER.searchMark);
+test("every copy's mark shares the fate of the duplicate transaction", async () => {
+  const marked = duplicatedCopies.map((copy) => copy.entityId);
 
   // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
   // type-aware lint; capture the rejection explicitly instead.
@@ -232,8 +228,8 @@ test("the copies' marks share the fate of the duplicate transaction", async () =
   expect(await queuedSourceIds()).toEqual([...marked].toSorted());
 });
 
-test("a drain rebuilds each marked copy once and never the extracted one", async () => {
-  const marked = copiesOwnedBy(SEARCH_INDEX_OWNER.searchMark);
+test("a drain rebuilds every copy once, including extraction-owned content", async () => {
+  const marked = duplicatedCopies.map((copy) => copy.entityId);
   await enqueueEntitySearchRepairs(asTx(), marked);
 
   const repaired: string[] = [];
@@ -243,9 +239,7 @@ test("a drain rebuilds each marked copy once and never the extracted one", async
 
   expect(outcome).toEqual({ failed: 0, repaired: marked.length });
   expect([...repaired].toSorted()).toEqual([...marked].toSorted());
-  for (const extracted of copiesOwnedBy(SEARCH_INDEX_OWNER.durableExtraction)) {
-    expect(repaired).not.toContain(extracted);
-  }
+  expect(repaired).toContain(entityId(10));
 
   // A second drain finds nothing: one repair per copy, not one per pass.
   expect(await queuedSourceIds()).toEqual([]);

@@ -12,17 +12,17 @@ import path from "node:path";
 
 import {
   boundedInstallProblems,
-  installWorkflowPolicy,
   compositeInstallProblems,
+  installWorkflowPolicy,
 } from "./ci-install-policy";
 import {
+  type Classification,
   conditionOperands,
   impliesCondition,
   importProblems,
+  type InstallFreeInvocation,
   installFreeInvocations,
   lexShell,
-  type Classification,
-  type InstallFreeInvocation,
 } from "./install-free-ci";
 import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
@@ -1569,6 +1569,7 @@ describe("install-free invocation classification", () => {
       '"$RELEASE_TOOLING/scripts/retry.sh"',
       "./scripts/retry.sh",
       "tooling/retry.sh",
+      '"$NETWORK_RETRY_SCRIPT"',
     ]) {
       expect(
         classify(`bash ${helper} bun ci --ignore-scripts`).map(

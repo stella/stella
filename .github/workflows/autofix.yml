@@ -17,11 +17,17 @@ on:
         description: Owning generator ID
         required: true
         type: string
-  # Workflow files are never fixed (the App cannot push them), but every one
-  # feeds the job classification digests, so no path is filtered out. A test
-  # derives this from the generators and the Tauri alignment.
+  # Workflow files are never fixed (the App cannot push them), so a workflow
+  # edit runs autofix only where a generator or the Tauri alignment reads that
+  # workflow. A test derives this list from the generators.
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - "**"
+      - "!.github/workflows/**"
+      - .github/workflows/autofix.yml
+      - .github/workflows/ci.yml
+      - .github/workflows/release.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
@@ -84,6 +90,10 @@ jobs:
           set -euo pipefail
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid pull request number."; exit 1; }
           bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          if jq -e '.head.ref | startswith("release/v")' "$RUNNER_TEMP/regeneration-pr.json" >/dev/null; then
+            echo "::error::Release branches cannot be rewritten by autofix."
+            exit 1
+          fi
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json" >> "$GITHUB_OUTPUT"
 
       - name: Checkout regeneration head
@@ -139,6 +149,10 @@ jobs:
           echo "$RETRY_HASH  $RUNNER_TEMP/gh-retry.sh" | sha256sum --check
           echo "$EVENT_HASH  $GITHUB_EVENT_PATH" | sha256sum --check
           bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          if jq -e '.head.ref | startswith("release/v")' "$RUNNER_TEMP/regeneration-pr.json" >/dev/null; then
+            echo "::error::Release branches cannot be rewritten by autofix."
+            exit 1
+          fi
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json"
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
 
@@ -308,6 +322,7 @@ jobs:
     # job above; fork pull requests keep the CI drift guards alone.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
+      && !startsWith(github.event.pull_request.head.ref, 'release/v')
       && github.event.pull_request.user.login != 'dependabot[bot]'
       && github.actor != 'dependabot[bot]'
       && github.actor != 'autofix-ci[bot]'
@@ -450,6 +465,28 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
+      - name: Checkout lockfile tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            packages/scripts/src/generated-files.ts
+            scripts/autofix-protected-paths.ts
+            scripts/baseline-paths.ts
+            scripts/bun-lock-text.ts
+            scripts/generated-conflicts.ts
+            scripts/generated-files.ts
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve lockfile tooling across source checkout
+        run: |
+          cp -R "$GITHUB_WORKSPACE/.workflow-tooling" "$RUNNER_TEMP/workflow-tooling"
+          rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"
+
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -509,6 +546,17 @@ jobs:
             echo "::notice::Alignment fixer sources changed; CI enforces alignment without automatic edits."
           fi
 
+      # Reconcile merged manifest metadata without moving existing package
+      # pins. The helper restores bun.lock and fails on any resolution change.
+      - name: Refresh merged lockfile
+        timeout-minutes: 5
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          NPM_TOKEN: ""
+        run: |
+          bun --no-install --no-env-file "$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts" refresh-lock --repo "$GITHUB_WORKSPACE"
+          cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"
+
       - name: Install dependencies
         timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -565,16 +613,18 @@ jobs:
               continue
             fi
             protected_path=false
-            for pattern in "${protected[@]}"; do
-              # Protected entries are glob patterns, so expansion must stay unquoted.
-              # shellcheck disable=SC2254
-              case "$path" in
-                $pattern)
-                  protected_path=true
-                  break
-                  ;;
-              esac
-            done
+            if [[ "$path" != .changeset/README.md ]]; then
+              for pattern in "${protected[@]}"; do
+                # Protected entries are glob patterns, so expansion must stay unquoted.
+                # shellcheck disable=SC2254
+                case "$path" in
+                  $pattern)
+                    protected_path=true
+                    break
+                    ;;
+                esac
+              done
+            fi
             [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
             # Astro's checker owns apps/landing types (astro:* modules); the
@@ -600,8 +650,15 @@ jobs:
                 cp -p "$backup/$path" "$path"
               done
             }
+            # Restrict even safe fixes to the reviewed rule list. Never enable
+            # suggestions or dangerous fixes; CI reports all remaining rules.
+            bun scripts/autofix-safe-rules.ts > "$RUNNER_TEMP/autofix-safe-rule-args"
+            safe_rule_args=()
+            while IFS= read -r arg; do
+              safe_rule_args+=("$arg")
+            done < "$RUNNER_TEMP/autofix-safe-rule-args"
             lint_status=0
-            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${safe_rule_args[@]}" "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
               restore_lint_paths
               exit "$lint_status"
@@ -628,8 +685,7 @@ jobs:
             fi
           fi
           if (( ${#format_paths[@]} > 0 )); then
-            bun run format:guard
-            bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+            bun fmt --ignore-unknown "${format_paths[@]}"
           fi
 
       # Final outputs must reflect lint and formatting rewrites, including
@@ -689,7 +745,8 @@ jobs:
           while IFS= read -r pattern; do
             protected+=("$pattern")
           done < "$RUNNER_TEMP/autofix-protected-paths"
-          protected_specs=()
+          # The exact README is generated documentation, never a release entry.
+          protected_specs=(':(exclude,literal).changeset/README.md')
           for pattern in "${protected[@]}"; do
             protected_specs+=(":(glob)$pattern")
           done
@@ -741,6 +798,13 @@ jobs:
             excludes+=(":(exclude,literal)$path")
           done
 
+          # Installation and fixers ran after refresh, so re-check their final
+          # output against the exact pins that refresh approved before allowing
+          # bun.lock through the generic changed-path boundary.
+          bun --no-install --no-env-file "$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts" \
+            assert-frozen-lock --repo "$GITHUB_WORKSPACE" \
+            --frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"
+          excludes+=(":(exclude,literal)bun.lock")
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . "${excludes[@]}")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then

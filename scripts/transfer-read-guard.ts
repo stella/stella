@@ -1,10 +1,29 @@
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
+import {
+  type ArrowFunctionExpression,
+  type BindingPattern,
+  type BindingRestElement,
+  type CallExpression,
+  type Expression as OxcExpression,
+  type FormalParameterRest,
+  type Function as FunctionNode,
+  type MemberExpression,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty as Property,
+  parseSource,
+  type SpreadElement,
+  type Statement,
+  type TSParameterProperty,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
+
+type Expression = OxcExpression | SpreadElement;
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LEDGER_REL = BASELINE_PATHS.transferRead;
@@ -29,677 +48,926 @@ type BaselineEntry = {
   reason: string;
 };
 
-const unwrap = (node: ts.Expression): ts.Expression => {
-  let value = node;
-  while (
-    ts.isParenthesizedExpression(value) ||
-    ts.isAsExpression(value) ||
-    ts.isSatisfiesExpression(value) ||
-    ts.isNonNullExpression(value) ||
-    ts.isTypeAssertionExpression(value)
-  ) {
-    value = value.expression;
-  }
-  return value;
-};
-
-const propertyName = (node: ts.PropertyName): string | undefined => {
-  if (
-    ts.isIdentifier(node) ||
-    ts.isStringLiteral(node) ||
-    ts.isNumericLiteral(node)
-  ) {
-    return node.text;
-  }
-  if (ts.isComputedPropertyName(node)) {
-    const value = unwrap(node.expression);
-    if (ts.isStringLiteral(value)) {
-      return value.text;
-    }
-  }
-  return undefined;
-};
-
-const callName = (node: ts.Expression): string | undefined => {
-  const value = unwrap(node);
-  if (ts.isIdentifier(value)) {
-    return value.text;
-  }
-  if (ts.isPropertyAccessExpression(value)) {
-    return value.name.text;
-  }
-  if (
-    ts.isElementAccessExpression(value) &&
-    ts.isStringLiteral(value.argumentExpression)
-  ) {
-    return value.argumentExpression.text;
-  }
-  return undefined;
-};
-
-const isFunction = (node: ts.Node): node is ts.FunctionLikeDeclaration =>
-  ts.isArrowFunction(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isFunctionDeclaration(node) ||
-  ts.isMethodDeclaration(node) ||
-  ts.isGetAccessorDeclaration(node) ||
-  ts.isSetAccessorDeclaration(node);
-
-const bindingNames = (name: ts.BindingName): string[] => {
-  if (ts.isIdentifier(name)) {
-    return [name.text];
-  }
-  return name.elements.flatMap((element) =>
-    ts.isBindingElement(element) ? bindingNames(element.name) : [],
-  );
-};
-
-/**
- * Finds a `name` variable declared directly in a block or source file. The
- * wrapper distinguishes "declared without a const initializer" from "absent".
- */
-const declarationIn = (
-  scope: ts.Node,
-  name: string,
-): { initializer: ts.Expression | undefined } | undefined => {
-  if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
-    return undefined;
-  }
-  for (const statement of scope.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-    for (const declaration of statement.declarationList.declarations) {
-      if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
-        return {
-          initializer:
-            statement.declarationList.getFirstToken()?.kind ===
-            ts.SyntaxKind.ConstKeyword
-              ? declaration.initializer
-              : undefined,
-        };
-      }
-    }
-  }
-  return undefined;
-};
-
-const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
-  let scope = from.parent;
-  while (!ts.isSourceFile(scope)) {
-    if (
-      isFunction(scope) &&
-      scope.parameters.some((parameter) =>
-        bindingNames(parameter.name).includes(name),
-      )
-    ) {
-      return undefined;
-    }
-    const declared = declarationIn(scope, name);
-    if (declared !== undefined) {
-      return declared.initializer;
-    }
-    scope = scope.parent;
-  }
-  return declarationIn(scope, name)?.initializer;
-};
-
-const resolve = (node: ts.Expression, depth = 0): ts.Expression => {
-  const value = unwrap(node);
-  if (!ts.isIdentifier(value) || depth >= 8) {
-    return value;
-  }
-  const bound = bindingOf(value, value.text);
-  return bound === undefined ? value : resolve(bound, depth + 1);
-};
-
-const timeoutProperties = (node: ts.Expression, depth = 0): ts.Node[] => {
-  if (depth >= 8) {
-    return [];
-  }
-  const value = resolve(node);
-  if (!ts.isObjectLiteralExpression(value)) {
-    return [];
-  }
-  const found: ts.Node[] = [];
-  for (const property of value.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      found.push(...timeoutProperties(property.expression, depth + 1));
-    } else if (
-      (ts.isPropertyAssignment(property) ||
-        ts.isShorthandPropertyAssignment(property)) &&
-      propertyName(property.name) === "timeoutMs"
-    ) {
-      found.push(property);
-    }
-  }
-  return found;
-};
-
-// Callback identities follow their enclosing declaration and call position,
-// rather than source locations, so moving code does not reset the budget.
-const scopeName = (node: ts.FunctionLikeDeclaration): string => {
-  if (node.name !== undefined) {
-    return node.name.getText();
-  }
-  let parent = node.parent;
-  while (
-    ts.isParenthesizedExpression(parent) ||
-    ts.isAsExpression(parent) ||
-    ts.isSatisfiesExpression(parent)
-  ) {
-    parent = parent.parent;
-  }
-  if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent)) {
-    return parent.name.getText();
-  }
-  if (ts.isCallExpression(parent)) {
-    const index = parent.arguments.findIndex(
-      (arg) => arg === node || (ts.isExpression(arg) && unwrap(arg) === node),
-    );
-    const declaration = ts.findAncestor(
-      parent,
-      (ancestor) => ts.isVariableDeclaration(ancestor) || isFunction(ancestor),
-    );
-    const prefix =
-      declaration !== undefined && ts.isVariableDeclaration(declaration)
-        ? `${declaration.name.getText()}/`
-        : "";
-    return `${prefix}${callName(parent.expression) ?? "call"}[${index}]`;
-  }
-  return "callback";
-};
-
-const isConstant = (node: ts.Expression, depth = 0): boolean => {
-  if (depth >= 8) {
-    return true;
-  }
-  const value = resolve(node);
-  if (ts.isNumericLiteral(value)) {
-    return true;
-  }
-  if (ts.isIdentifier(value)) {
-    return /^[A-Z][A-Z_\d]*$/u.test(value.text);
-  }
-  if (ts.isPropertyAccessExpression(value)) {
-    const root = value.expression;
-    return ts.isIdentifier(root) && /^[A-Z][A-Z_\d]*$/u.test(root.text);
-  }
-  if (ts.isElementAccessExpression(value)) {
-    return (
-      ts.isIdentifier(value.expression) &&
-      /^[A-Z][A-Z_\d]*$/u.test(value.expression.text)
-    );
-  }
-  if (ts.isBinaryExpression(value)) {
-    return (
-      isConstant(value.left, depth + 1) && isConstant(value.right, depth + 1)
-    );
-  }
-  return (
-    ts.isPrefixUnaryExpression(value) && isConstant(value.operand, depth + 1)
-  );
-};
-
-const isBodyAccess = (node: ts.Node): boolean =>
-  (ts.isPropertyAccessExpression(node) && node.name.text === "body") ||
-  (ts.isElementAccessExpression(node) &&
-    ts.isStringLiteral(node.argumentExpression) &&
-    node.argumentExpression.text === "body");
-
-const isOne = (node: ts.Expression): boolean => {
-  const value = resolve(node);
-  return ts.isNumericLiteral(value) && Number(value.text) === 1;
-};
-
-const queryChain = (node: ts.CallExpression): ts.CallExpression[] => {
-  let top = node;
-  while (
-    ts.isPropertyAccessExpression(top.parent) &&
-    top.parent.expression === top &&
-    ts.isCallExpression(top.parent.parent)
-  ) {
-    top = top.parent.parent;
-  }
-  const calls: ts.CallExpression[] = [];
-  let current = unwrap(top);
-  while (ts.isCallExpression(current)) {
-    calls.push(current);
-    const expression = unwrap(current.expression);
-    if (
-      !ts.isPropertyAccessExpression(expression) &&
-      !ts.isElementAccessExpression(expression)
-    ) {
-      break;
-    }
-    current = unwrap(expression.expression);
-  }
-  return calls;
-};
-
-const containsIdentifier = (node: ts.Node, name: string): boolean => {
-  if (ts.isIdentifier(node) && node.text === name) {
-    return true;
-  }
-  return (
-    ts.forEachChild(
-      node,
-      (child) => containsIdentifier(child, name) || undefined,
-    ) === true
-  );
-};
-
-const sameExpression = (left: ts.Expression, right: ts.Expression): boolean =>
-  resolve(left).getText().replace(/\s/gu, "") ===
-  resolve(right).getText().replace(/\s/gu, "");
-
+/** Conservative syntax census: JSON/text may also carry user-sized content.
+ * Existing bounded metadata and paginated reads retain explicit baseline reasons. */
 type ImportedCallOptions = {
-  call: ts.CallExpression;
+  call: CallExpression;
   module: string;
   name: string;
 };
 
-const callsImported = ({
-  call,
-  module,
-  name,
-}: ImportedCallOptions): boolean => {
-  const expression = unwrap(call.expression);
-  if (!ts.isIdentifier(expression)) {
-    return false;
-  }
-  const source = call.getSourceFile();
-  return source.statements.some((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== module
-    ) {
-      return false;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    return (
-      bindings !== undefined &&
-      ts.isNamedImports(bindings) &&
-      bindings.elements.some(
-        (element) =>
-          element.name.text === expression.text &&
-          (element.propertyName?.text ?? element.name.text) === name,
-      )
-    );
-  });
-};
-
 type SentinelBoundaryOptions = {
-  cap: ts.Expression;
-  boundary: ts.Expression;
-};
-
-const matchesSentinelBoundary = ({
-  cap,
-  boundary,
-}: SentinelBoundaryOptions): boolean => {
-  const value = resolve(cap);
-  if (
-    ts.isBinaryExpression(value) &&
-    value.operatorToken.kind === ts.SyntaxKind.PlusToken &&
-    isOne(value.right)
-  ) {
-    return sameExpression(boundary, value.left);
-  }
-  const compared = resolve(boundary);
-  return (
-    ts.isNumericLiteral(value) &&
-    ts.isNumericLiteral(compared) &&
-    Number(value.text) > 1 &&
-    Number(value.text) === Number(compared.text) + 1
-  );
-};
-
-const queryResultBinding = (node: ts.CallExpression) => {
-  const declaration = ts.findAncestor(node, ts.isVariableDeclaration);
-  if (declaration === undefined || !ts.isIdentifier(declaration.name)) {
-    return undefined;
-  }
-  if (
-    !ts.isVariableDeclarationList(declaration.parent) ||
-    declaration.parent.declarations.length !== 1
-  ) {
-    return undefined;
-  }
-  const chain = new Set(queryChain(node));
-  let ancestor = node.parent;
-  while (ancestor !== declaration) {
-    if (
-      ts.isCallExpression(ancestor) &&
-      !chain.has(ancestor) &&
-      !["scopedDb", "safeDb", "await", "tryPromise"].includes(
-        callName(ancestor.expression) ?? "",
-      )
-    ) {
-      return undefined;
-    }
-    ancestor = ancestor.parent;
-  }
-  const statement = ts.findAncestor(declaration, ts.isVariableStatement);
-  if (statement === undefined || !ts.isBlock(statement.parent)) {
-    return undefined;
-  }
-  const nextIndex = statement.parent.statements.indexOf(statement) + 1;
-  const following = statement.parent.statements.at(nextIndex);
-  if (following === undefined) {
-    return undefined;
-  }
-  return {
-    rowName: declaration.name.text,
-    following,
-    rest: statement.parent.statements.slice(nextIndex + 1),
-  };
-};
-
-const objectOption = (
-  options: ts.ObjectLiteralExpression,
-  name: string,
-): ts.Expression | undefined => {
-  const property = options.properties.find(
-    (candidate) =>
-      (ts.isPropertyAssignment(candidate) ||
-        ts.isShorthandPropertyAssignment(candidate)) &&
-      propertyName(candidate.name) === name,
-  );
-  if (property === undefined) {
-    return undefined;
-  }
-  if (ts.isPropertyAssignment(property)) {
-    return unwrap(property.initializer);
-  }
-  if (ts.isShorthandPropertyAssignment(property)) {
-    return property.name;
-  }
-  return undefined;
+  cap: Expression;
+  boundary: Expression;
 };
 
 type CursorPageConsumptionOptions = {
-  following: ts.Statement;
-  rest: readonly ts.Statement[];
+  following: Statement;
+  rest: readonly Statement[];
   rowName: string;
-  cap: ts.Expression;
-};
-
-const consumesCursorPage = ({
-  following,
-  rest,
-  rowName,
-  cap,
-}: CursorPageConsumptionOptions): boolean => {
-  if (
-    !ts.isVariableStatement(following) ||
-    following.declarationList.declarations.length !== 1
-  ) {
-    return false;
-  }
-  const page = following.declarationList.declarations.at(0);
-  if (
-    page === undefined ||
-    !ts.isIdentifier(page.name) ||
-    page.initializer === undefined
-  ) {
-    return false;
-  }
-  const call = unwrap(page.initializer);
-  if (
-    !ts.isCallExpression(call) ||
-    !callsImported({
-      call,
-      module: "@/api/lib/pagination",
-      name: "createCursorPage",
-    })
-  ) {
-    return false;
-  }
-  const options = call.arguments.at(0);
-  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
-    return false;
-  }
-  const rows = objectOption(options, "rows");
-  const limit = objectOption(options, "limit");
-  if (
-    rows === undefined ||
-    !ts.isIdentifier(rows) ||
-    rows.text !== rowName ||
-    limit === undefined ||
-    !matchesSentinelBoundary({ cap, boundary: limit })
-  ) {
-    return false;
-  }
-  if (rest.some((item) => containsIdentifier(item, rowName))) {
-    return false;
-  }
-  return rest.some(
-    (item) =>
-      ts.isReturnStatement(item) &&
-      containsIdentifier(item, page.name.getText()),
-  );
+  cap: Expression;
 };
 
 type OverflowExitOptions = {
-  following: ts.Statement;
+  following: Statement;
   rowName: string;
-  cap: ts.Expression;
+  cap: Expression;
 };
 
-const exitsOnOverflow = ({
-  following,
-  rowName,
-  cap,
-}: OverflowExitOptions): boolean => {
-  if (!ts.isIfStatement(following)) {
-    return false;
-  }
-  const condition = unwrap(following.expression);
-  if (
-    !ts.isBinaryExpression(condition) ||
-    condition.operatorToken.kind !== ts.SyntaxKind.GreaterThanToken
-  ) {
-    return false;
-  }
-  const length = unwrap(condition.left);
-  if (
-    !ts.isPropertyAccessExpression(length) ||
-    length.name.text !== "length" ||
-    !ts.isIdentifier(length.expression) ||
-    length.expression.text !== rowName ||
-    !matchesSentinelBoundary({ cap, boundary: condition.right })
-  ) {
-    return false;
-  }
-  const branch = following.thenStatement;
-  const exit = ts.isBlock(branch) ? branch.statements.at(-1) : branch;
-  if (exit === undefined || containsIdentifier(branch, rowName)) {
-    return false;
-  }
-  if (ts.isReturnStatement(exit) || ts.isThrowStatement(exit)) {
-    return true;
-  }
-  return (
-    ts.isExpressionStatement(exit) &&
-    ts.isCallExpression(exit.expression) &&
-    callsImported({
-      call: exit.expression,
-      module: "better-result",
-      name: "panic",
-    })
-  );
-};
-
-// A sentinel is safe only when its own result is checked against its own cap,
-// before subsequent consumers, and the overflow branch exits without rows.
-const rejectsOverflow = (
-  node: ts.CallExpression,
-  cap: ts.Expression,
-): boolean => {
-  const binding = queryResultBinding(node);
-  if (binding === undefined) {
-    return false;
-  }
-  return (
-    consumesCursorPage({ ...binding, cap }) ||
-    exitsOnOverflow({
-      following: binding.following,
-      rowName: binding.rowName,
-      cap,
-    })
-  );
-};
-
-const paginationNames = (root: ts.Node): Set<string> =>
-  new Set(
-    isFunction(root)
-      ? root.parameters.flatMap((parameter) => bindingNames(parameter.name))
-      : [],
-  );
-
-const PAGINATION_INPUT =
-  /^(?:cursor|page|offset|pageIndex|pageNumber|after|before)$/u;
 type PaginationReferenceOptions = {
-  node: ts.Node;
+  node: Node;
   inputs: ReadonlySet<string>;
   depth?: number;
 };
 
-const referencesPagination = ({
-  node,
-  inputs,
-  depth = 0,
-}: PaginationReferenceOptions): boolean => {
-  if (depth >= 8) {
-    return false;
-  }
-  if (ts.isIdentifier(node)) {
-    if (
-      ts.isPropertyAccessExpression(node.parent) &&
-      node.parent.name === node
-    ) {
-      return false;
-    }
-    if (inputs.has(node.text) && PAGINATION_INPUT.test(node.text)) {
-      return true;
-    }
-    const bound = bindingOf(node, node.text);
-    if (
-      bound !== undefined &&
-      referencesPagination({ node: bound, inputs, depth: depth + 1 })
-    ) {
-      return true;
-    }
-  }
-  if (
-    ts.isPropertyAccessExpression(node) &&
-    PAGINATION_INPUT.test(node.name.text) &&
-    ts.isIdentifier(node.expression) &&
-    inputs.has(node.expression.text)
-  ) {
-    return true;
-  }
-  return (
-    ts.forEachChild(
-      node,
-      (child) =>
-        referencesPagination({ node: child, inputs, depth: depth + 1 }) ||
-        undefined,
-    ) === true
-  );
-};
-
 type LimitDispositionOptions = {
-  node: ts.CallExpression;
-  cap: ts.Expression;
-  root: ts.Node;
+  node: CallExpression;
+  cap: Expression;
+  root: Node;
 };
 
-const limitDisposition = ({
-  node,
-  cap,
-  root,
-}: LimitDispositionOptions):
-  | "exempt"
-  | "fixed-page-size"
-  | "constant-limit" => {
-  if (isOne(cap) || rejectsOverflow(node, cap)) {
-    return "exempt";
+const PAGINATION_INPUT =
+  /^(?:cursor|page|offset|pageIndex|pageNumber|after|before)$/u;
+class TransferReadInspector {
+  readonly parsed;
+  readonly parents = new Map<Node, Node>();
+  readonly file: string;
+  readonly source: string;
+  constructor({ file, source }: { file: string; source: string }) {
+    this.file = file;
+    this.source = source;
+    this.parsed = parseSource(file, source);
+    walk(this.parsed.program, (node, ancestors) => {
+      const parent = ancestors.at(-1);
+      if (parent !== undefined) {
+        this.parents.set(node, parent);
+      }
+    });
   }
-  const chain = queryChain(node);
-  const inputs = paginationNames(root);
-  if (
-    chain.some(
-      (call) =>
-        callName(call.expression) === "offset" &&
-        call.arguments.some((argument) =>
-          referencesPagination({ node: argument, inputs }),
-        ),
-    )
-  ) {
-    return "exempt";
-  }
-  if (
-    chain.some(
-      (call) =>
-        callName(call.expression) === "where" &&
-        call.arguments.some((argument) =>
-          referencesPagination({ node: argument, inputs }),
-        ),
-    )
-  ) {
-    return "exempt";
-  }
-  if (
-    referencesPagination({ node: root, inputs }) ||
-    /(?:PAGE_SIZE|pageSize|pageLimit)/u.test(cap.getText())
-  ) {
-    return "fixed-page-size";
-  }
-  return "constant-limit";
-};
+  readonly parentOf = (node: Node): Node =>
+    this.parents.get(node) ?? panic("Missing syntax parent");
+  readonly textOf = (node: Node): string =>
+    node.type === "Identifier"
+      ? node.name
+      : this.source.slice(node.start, node.end);
+  readonly ancestorOf = (
+    node: Node,
+    predicate: (node: Node) => boolean,
+  ): Node | undefined => {
+    for (
+      let current: Node | undefined = node;
+      current !== undefined;
+      current = this.parents.get(current)
+    ) {
+      if (predicate(current)) {
+        return current;
+      }
+    }
+    return undefined;
+  };
+  readonly unwrap = (node: Expression): Expression => {
+    let value = node;
+    while (
+      value.type === "ParenthesizedExpression" ||
+      value.type === "TSAsExpression" ||
+      value.type === "TSSatisfiesExpression" ||
+      value.type === "TSNonNullExpression" ||
+      value.type === "TSTypeAssertion"
+    ) {
+      value = value.expression;
+    }
+    return value;
+  };
 
-const isPredicateSubquery = (
-  node: ts.CallExpression,
-  predicates: ReadonlyMap<string, number>,
-) => {
-  const parent = node.parent;
-  if (!ts.isCallExpression(parent) || !ts.isIdentifier(parent.expression)) {
-    return false;
-  }
-  const name = parent.expression.text;
-  const argument = predicates.get(name);
-  if (argument === undefined || parent.arguments.at(argument) !== node) {
-    return false;
-  }
-  let scope = parent.parent;
-  while (!ts.isSourceFile(scope)) {
+  readonly propertyName = (node: Node): string | undefined => {
+    if (node.type === "Identifier") {
+      return node.name;
+    }
     if (
-      declarationIn(scope, name) !== undefined ||
-      (isFunction(scope) &&
-        (scope.name?.getText() === name ||
-          scope.parameters.some((parameter) =>
-            bindingNames(parameter.name).includes(name),
-          ))) ||
-      (ts.isBlock(scope) &&
-        scope.statements.some(
-          (statement) =>
-            (ts.isFunctionDeclaration(statement) ||
-              ts.isClassDeclaration(statement)) &&
-            statement.name?.text === name,
-        ))
+      node.type === "Literal" &&
+      (typeof node.value === "string" || typeof node.value === "number")
+    ) {
+      return String(node.value);
+    }
+    return undefined;
+  };
+  readonly propertyKey = (property: Property): string | undefined => {
+    if (!property.computed) {
+      return this.propertyName(property.key);
+    }
+    if (property.key.type === "PrivateIdentifier") {
+      return undefined;
+    }
+    const key = this.unwrap(property.key);
+    return key.type === "Literal" && typeof key.value === "string"
+      ? key.value
+      : undefined;
+  };
+  readonly memberName = (member: MemberExpression): string | undefined => {
+    if (!member.computed) {
+      return this.propertyName(member.property);
+    }
+    return member.property.type === "Literal" &&
+      typeof member.property.value === "string"
+      ? member.property.value
+      : undefined;
+  };
+  readonly callName = (node: Expression): string | undefined => {
+    const value = this.unwrap(node);
+    if (value.type === "Identifier") {
+      return value.name;
+    }
+    if (value.type === "MemberExpression") {
+      return this.memberName(value);
+    }
+    return undefined;
+  };
+  readonly isFunction = (
+    node: Node,
+  ): node is FunctionNode | ArrowFunctionExpression =>
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression";
+  readonly bindingNames = (
+    name:
+      | BindingPattern
+      | BindingRestElement
+      | FormalParameterRest
+      | TSParameterProperty,
+  ): string[] => {
+    if (name.type === "TSParameterProperty") {
+      return this.bindingNames(name.parameter);
+    }
+    if (name.type === "Identifier") {
+      return [name.name];
+    }
+    if (name.type === "AssignmentPattern") {
+      return this.bindingNames(name.left);
+    }
+    if (name.type === "RestElement") {
+      return this.bindingNames(name.argument);
+    }
+    if (name.type === "ArrayPattern") {
+      return name.elements.flatMap((element) =>
+        element === null ? [] : this.bindingNames(element),
+      );
+    }
+    return name.properties.flatMap((element) =>
+      this.bindingNames(
+        element.type === "RestElement" ? element.argument : element.value,
+      ),
+    );
+  };
+  /**
+   * Finds a `name` variable declared directly in a block or this.source file. The
+   * wrapper distinguishes "declared without a const initializer" from "absent".
+   */
+  readonly declarationIn = (
+    scope: Node,
+    name: string,
+  ): { initializer: Expression | undefined } | undefined => {
+    if (scope.type !== "BlockStatement" && scope.type !== "Program") {
+      return undefined;
+    }
+    for (let statement of scope.body) {
+      if (
+        statement.type === "ExportNamedDeclaration" &&
+        statement.declaration !== null
+      ) {
+        statement = statement.declaration;
+      }
+      if (statement.type !== "VariableDeclaration") {
+        continue;
+      }
+      for (const declaration of statement.declarations) {
+        if (
+          declaration.id.type === "Identifier" &&
+          declaration.id.name === name
+        ) {
+          return {
+            initializer:
+              statement.kind === "const"
+                ? (declaration.init ?? undefined)
+                : undefined,
+          };
+        }
+      }
+    }
+    return undefined;
+  };
+
+  readonly bindingOf = (from: Node, name: string): Expression | undefined => {
+    let scope = this.parentOf(from);
+    while (scope.type !== "Program") {
+      if (
+        this.isFunction(scope) &&
+        scope.params.some((parameter) =>
+          this.bindingNames(parameter).includes(name),
+        )
+      ) {
+        return undefined;
+      }
+      const declared = this.declarationIn(scope, name);
+      if (declared !== undefined) {
+        return declared.initializer;
+      }
+      scope = this.parentOf(scope);
+    }
+    return this.declarationIn(scope, name)?.initializer;
+  };
+
+  readonly resolve = (node: Expression, depth = 0): Expression => {
+    const value = this.unwrap(node);
+    if (value.type !== "Identifier" || depth >= 8) {
+      return value;
+    }
+    const bound = this.bindingOf(value, value.name);
+    return bound === undefined ? value : this.resolve(bound, depth + 1);
+  };
+
+  readonly timeoutProperties = (node: Expression, depth = 0): Node[] => {
+    if (depth >= 8) {
+      return [];
+    }
+    const value = this.resolve(node);
+    if (value.type !== "ObjectExpression") {
+      return [];
+    }
+    const found: Node[] = [];
+    for (const property of value.properties) {
+      if (property.type === "SpreadElement") {
+        found.push(...this.timeoutProperties(property.argument, depth + 1));
+      } else if (
+        ((!property.shorthand &&
+          !property.method &&
+          property.kind === "init") ||
+          property.shorthand) &&
+        this.propertyKey(property) === "timeoutMs"
+      ) {
+        found.push(property);
+      }
+    }
+    return found;
+  };
+
+  // Callback identities follow their enclosing declaration and call position,
+  // rather than this.source locations, so moving code does not reset the budget.
+  readonly scopeName = (
+    node: FunctionNode | ArrowFunctionExpression,
+  ): string => {
+    if (node.type !== "ArrowFunctionExpression" && node.id !== null) {
+      return this.textOf(node.id);
+    }
+    const method = this.parentOf(node);
+    if (
+      method.type === "MethodDefinition" ||
+      (method.type === "Property" && method.method)
+    ) {
+      return this.textOf(method.key);
+    }
+    let parent = this.parentOf(node);
+    while (
+      parent.type === "ParenthesizedExpression" ||
+      parent.type === "TSAsExpression" ||
+      parent.type === "TSSatisfiesExpression"
+    ) {
+      parent = this.parentOf(parent);
+    }
+    if (parent.type === "VariableDeclarator") {
+      return this.textOf(parent.id);
+    }
+    if (parent.type === "Property") {
+      return this.textOf(parent.key);
+    }
+    if (parent.type === "CallExpression") {
+      const index = parent.arguments.findIndex(
+        (argument) =>
+          argument === node ||
+          (argument.type !== "SpreadElement" && this.unwrap(argument) === node),
+      );
+      const declaration = this.ancestorOf(
+        parent,
+        (ancestor) =>
+          ancestor.type === "VariableDeclarator" || this.isFunction(ancestor),
+      );
+      const prefix =
+        declaration?.type === "VariableDeclarator"
+          ? `${this.textOf(declaration.id)}/`
+          : "";
+      return `${prefix}${this.callName(parent.callee) ?? "call"}[${index}]`;
+    }
+    return "callback";
+  };
+
+  readonly isConstant = (node: Expression, depth = 0): boolean => {
+    if (depth >= 8) {
+      return true;
+    }
+    const value = this.resolve(node);
+    if (value.type === "Literal" && typeof value.value === "number") {
+      return true;
+    }
+    if (value.type === "Identifier") {
+      return /^[A-Z][A-Z_\d]*$/u.test(value.name);
+    }
+    if (value.type === "MemberExpression") {
+      const root = value.object;
+      return root.type === "Identifier" && /^[A-Z][A-Z_\d]*$/u.test(root.name);
+    }
+    if (value.type === "BinaryExpression") {
+      // `#field in object` tests a private name, never a constant.
+      return (
+        value.left.type !== "PrivateIdentifier" &&
+        this.isConstant(value.left, depth + 1) &&
+        this.isConstant(value.right, depth + 1)
+      );
+    }
+    // `??`, `||` and `&&` between constants pick a constant.
+    if (value.type === "LogicalExpression") {
+      return (
+        this.isConstant(value.left, depth + 1) &&
+        this.isConstant(value.right, depth + 1)
+      );
+    }
+    return (
+      value.type === "UnaryExpression" &&
+      this.isConstant(value.argument, depth + 1)
+    );
+  };
+
+  readonly isBodyAccess = (node: Node): boolean =>
+    node.type === "MemberExpression" && this.memberName(node) === "body";
+  readonly isOne = (node: Expression): boolean => {
+    const value = this.resolve(node);
+    return (
+      value.type === "Literal" &&
+      typeof value.value === "number" &&
+      value.value === 1
+    );
+  };
+  readonly queryChain = (node: CallExpression): CallExpression[] => {
+    let top = node;
+    for (;;) {
+      const member = this.parentOf(top);
+      const call = this.parents.get(member);
+      if (
+        member.type !== "MemberExpression" ||
+        member.computed ||
+        member.object !== top ||
+        call?.type !== "CallExpression"
+      ) {
+        break;
+      }
+      top = call;
+    }
+    const calls: CallExpression[] = [];
+    let current = this.unwrap(top);
+    while (current.type === "CallExpression") {
+      calls.push(current);
+      const expression = this.unwrap(current.callee);
+      if (expression.type !== "MemberExpression") {
+        break;
+      }
+      current = this.unwrap(expression.object);
+    }
+    return calls;
+  };
+  readonly containsIdentifier = (node: Node, name: string): boolean => {
+    let found = false;
+    walk(node, (child) => {
+      if (child.type === "Identifier" && child.name === name) {
+        found = true;
+      }
+    });
+    return found;
+  };
+
+  readonly sameExpression = (left: Expression, right: Expression): boolean =>
+    this.textOf(this.resolve(left)).replace(/\s/gu, "") ===
+    this.textOf(this.resolve(right)).replace(/\s/gu, "");
+
+  readonly callsImported = ({
+    call,
+    module,
+    name,
+  }: ImportedCallOptions): boolean => {
+    const expression = this.unwrap(call.callee);
+    if (expression.type !== "Identifier") {
+      return false;
+    }
+    return this.parsed.program.body.some(
+      (statement) =>
+        statement.type === "ImportDeclaration" &&
+        statement.source.value === module &&
+        statement.specifiers.some(
+          (specifier) =>
+            specifier.type === "ImportSpecifier" &&
+            specifier.local.name === expression.name &&
+            this.propertyName(specifier.imported) === name,
+        ),
+    );
+  };
+
+  readonly matchesSentinelBoundary = ({
+    cap,
+    boundary,
+  }: SentinelBoundaryOptions): boolean => {
+    const value = this.resolve(cap);
+    if (
+      value.type === "BinaryExpression" &&
+      value.operator === "+" &&
+      this.isOne(value.right)
+    ) {
+      return this.sameExpression(boundary, value.left);
+    }
+    const compared = this.resolve(boundary);
+    return (
+      value.type === "Literal" &&
+      compared.type === "Literal" &&
+      Number(value.value) > 1 &&
+      Number(value.value) === Number(compared.value) + 1
+    );
+  };
+
+  readonly queryResultBinding = (node: CallExpression) => {
+    const declaration = this.ancestorOf(
+      node,
+      (ancestor) => ancestor.type === "VariableDeclarator",
+    );
+    if (
+      declaration?.type !== "VariableDeclarator" ||
+      declaration.id.type !== "Identifier"
+    ) {
+      return undefined;
+    }
+    const list = this.parentOf(declaration);
+    if (list.type !== "VariableDeclaration" || list.declarations.length !== 1) {
+      return undefined;
+    }
+    const chain = new Set(this.queryChain(node));
+    let ancestor = this.parentOf(node);
+    while (ancestor !== declaration) {
+      if (
+        ancestor.type === "CallExpression" &&
+        !chain.has(ancestor) &&
+        !["scopedDb", "safeDb", "await", "tryPromise"].includes(
+          this.callName(ancestor.callee) ?? "",
+        )
+      ) {
+        return undefined;
+      }
+      ancestor = this.parentOf(ancestor);
+    }
+    const statement = this.ancestorOf(
+      declaration,
+      (candidate) => candidate.type === "VariableDeclaration",
+    );
+    if (statement?.type !== "VariableDeclaration") {
+      return undefined;
+    }
+    const block = this.parentOf(statement);
+    if (block.type !== "BlockStatement") {
+      return undefined;
+    }
+    const nextIndex = block.body.indexOf(statement) + 1;
+    const following = block.body.at(nextIndex);
+    if (following === undefined) {
+      return undefined;
+    }
+    return {
+      rowName: declaration.id.name,
+      following,
+      rest: block.body.slice(nextIndex + 1),
+    };
+  };
+
+  readonly objectOption = (
+    options: ObjectExpression,
+    name: string,
+  ): Expression | undefined => {
+    const property = options.properties.find(
+      (candidate) =>
+        ((candidate.type === "Property" &&
+          !candidate.method &&
+          candidate.kind === "init") ||
+          (candidate.type === "Property" && candidate.shorthand)) &&
+        this.propertyKey(candidate) === name,
+    );
+    if (property === undefined) {
+      return undefined;
+    }
+    if (
+      property.type === "Property" &&
+      !property.shorthand &&
+      !property.method &&
+      property.kind === "init"
+    ) {
+      return this.unwrap(property.value);
+    }
+    if (property.type === "Property" && property.shorthand) {
+      return property.value;
+    }
+    return undefined;
+  };
+
+  readonly consumesCursorPage = ({
+    following,
+    rest,
+    rowName,
+    cap,
+  }: CursorPageConsumptionOptions): boolean => {
+    if (
+      following.type !== "VariableDeclaration" ||
+      following.declarations.length !== 1
     ) {
       return false;
     }
-    scope = scope.parent;
-  }
-  return true;
-};
+    const page = following.declarations.at(0);
+    if (page?.id.type !== "Identifier" || page.init === null) {
+      return false;
+    }
+    const call = this.unwrap(page.init);
+    if (
+      call.type !== "CallExpression" ||
+      !this.callsImported({
+        call,
+        module: "@/api/lib/pagination",
+        name: "createCursorPage",
+      })
+    ) {
+      return false;
+    }
+    const options = call.arguments.at(0);
+    if (options?.type !== "ObjectExpression") {
+      return false;
+    }
+    const rows = this.objectOption(options, "rows");
+    const limit = this.objectOption(options, "limit");
+    if (
+      rows?.type !== "Identifier" ||
+      rows.name !== rowName ||
+      limit === undefined ||
+      !this.matchesSentinelBoundary({ cap, boundary: limit })
+    ) {
+      return false;
+    }
+    if (rest.some((item) => this.containsIdentifier(item, rowName))) {
+      return false;
+    }
+    return rest.some(
+      (item) =>
+        item.type === "ReturnStatement" &&
+        this.containsIdentifier(item, this.textOf(page.id)),
+    );
+  };
 
-/** Conservative syntax census: JSON/text may also carry user-sized content.
- * Existing bounded metadata and paginated reads retain explicit baseline reasons. */
+  readonly exitsOnOverflow = ({
+    following,
+    rowName,
+    cap,
+  }: OverflowExitOptions): boolean => {
+    if (following.type !== "IfStatement") {
+      return false;
+    }
+    const condition = this.unwrap(following.test);
+    if (condition.type !== "BinaryExpression" || condition.operator !== ">") {
+      return false;
+    }
+    const length = this.unwrap(condition.left);
+    if (
+      length.type !== "MemberExpression" ||
+      this.propertyName(length.property) !== "length" ||
+      length.object.type !== "Identifier" ||
+      length.object.name !== rowName ||
+      !this.matchesSentinelBoundary({ cap, boundary: condition.right })
+    ) {
+      return false;
+    }
+    const branch = following.consequent;
+    const exit = branch.type === "BlockStatement" ? branch.body.at(-1) : branch;
+    if (exit === undefined || this.containsIdentifier(branch, rowName)) {
+      return false;
+    }
+    if (exit.type === "ReturnStatement" || exit.type === "ThrowStatement") {
+      return true;
+    }
+    return (
+      exit.type === "ExpressionStatement" &&
+      exit.expression.type === "CallExpression" &&
+      this.callsImported({
+        call: exit.expression,
+        module: "better-result",
+        name: "panic",
+      })
+    );
+  };
+
+  // A sentinel is safe only when its own result is checked against its own cap,
+  // before subsequent consumers, and the overflow branch exits without rows.
+  readonly rejectsOverflow = (
+    node: CallExpression,
+    cap: Expression,
+  ): boolean => {
+    const binding = this.queryResultBinding(node);
+    if (binding === undefined) {
+      return false;
+    }
+    return (
+      this.consumesCursorPage({ ...binding, cap }) ||
+      this.exitsOnOverflow({
+        following: binding.following,
+        rowName: binding.rowName,
+        cap,
+      })
+    );
+  };
+
+  readonly paginationNames = (root: Node): Set<string> =>
+    new Set(
+      this.isFunction(root)
+        ? root.params.flatMap((parameter) => this.bindingNames(parameter))
+        : [],
+    );
+
+  readonly referencesPagination = ({
+    node,
+    inputs,
+    depth = 0,
+  }: PaginationReferenceOptions): boolean => {
+    if (depth >= 8) {
+      return false;
+    }
+    if (node.type === "Identifier") {
+      const parent = this.parents.get(node);
+      if (
+        parent?.type === "MemberExpression" &&
+        !parent.computed &&
+        parent.property === node
+      ) {
+        return false;
+      }
+      if (inputs.has(node.name) && PAGINATION_INPUT.test(node.name)) {
+        return true;
+      }
+      const bound = this.bindingOf(node, node.name);
+      if (
+        bound !== undefined &&
+        this.referencesPagination({ node: bound, inputs, depth: depth + 1 })
+      ) {
+        return true;
+      }
+    }
+    if (
+      node.type === "MemberExpression" &&
+      !node.computed &&
+      node.property.type === "Identifier" &&
+      PAGINATION_INPUT.test(node.property.name) &&
+      node.object.type === "Identifier" &&
+      inputs.has(node.object.name)
+    ) {
+      return true;
+    }
+    let found = false;
+    walk(node, (child, ancestors) => {
+      if (ancestors.length === 1) {
+        if (
+          this.referencesPagination({ node: child, inputs, depth: depth + 1 })
+        ) {
+          found = true;
+        }
+        return "skip-children";
+      }
+      return undefined;
+    });
+    return found;
+  };
+
+  readonly limitDisposition = ({
+    node,
+    cap,
+    root,
+  }: LimitDispositionOptions):
+    "exempt" | "fixed-page-size" | "constant-limit" => {
+    if (this.isOne(cap) || this.rejectsOverflow(node, cap)) {
+      return "exempt";
+    }
+    const chain = this.queryChain(node);
+    const inputs = this.paginationNames(root);
+    if (
+      chain.some(
+        (call) =>
+          this.callName(call.callee) === "offset" &&
+          call.arguments.some((argument) =>
+            this.referencesPagination({ node: argument, inputs }),
+          ),
+      )
+    ) {
+      return "exempt";
+    }
+    if (
+      chain.some(
+        (call) =>
+          this.callName(call.callee) === "where" &&
+          call.arguments.some((argument) =>
+            this.referencesPagination({ node: argument, inputs }),
+          ),
+      )
+    ) {
+      return "exempt";
+    }
+    if (
+      this.referencesPagination({ node: root, inputs }) ||
+      /(?:PAGE_SIZE|pageSize|pageLimit)/u.test(this.textOf(cap))
+    ) {
+      return "fixed-page-size";
+    }
+    return "constant-limit";
+  };
+
+  readonly isPredicateSubquery = (
+    node: CallExpression,
+    predicates: ReadonlyMap<string, number>,
+  ) => {
+    const parent = this.parentOf(node);
+    if (
+      parent.type !== "CallExpression" ||
+      parent.callee.type !== "Identifier"
+    ) {
+      return false;
+    }
+    const name = parent.callee.name;
+    const argument = predicates.get(name);
+    if (argument === undefined || parent.arguments.at(argument) !== node) {
+      return false;
+    }
+    let scope = this.parentOf(parent);
+    while (scope.type !== "Program") {
+      if (
+        this.declarationIn(scope, name) !== undefined ||
+        (this.isFunction(scope) &&
+          (("id" in scope ? scope.id?.name : undefined) === name ||
+            scope.params.some((parameter) =>
+              this.bindingNames(parameter).includes(name),
+            ))) ||
+        (scope.type === "BlockStatement" &&
+          scope.body.some(
+            (statement) =>
+              (statement.type === "FunctionDeclaration" ||
+                statement.type === "ClassDeclaration") &&
+              statement.id?.name === name,
+          ))
+      ) {
+        return false;
+      }
+      scope = this.parentOf(scope);
+    }
+    return true;
+  };
+
+  readonly isSeparateScope = (node: Node, root: Node): boolean => {
+    if (root.type === "Program" || ("id" in node && node.id !== null)) {
+      return true;
+    }
+    const parent = this.parentOf(node);
+    return (
+      parent.type === "VariableDeclarator" ||
+      parent.type === "MethodDefinition" ||
+      (parent.type === "Property" && parent.method)
+    );
+  };
+  scan = (): ReadFinding[] => {
+    const imported = new Map<string, string>();
+    const subqueryPredicates = new Map<string, number>();
+    for (const statement of this.parsed.program.body) {
+      if (statement.type !== "ImportDeclaration") {
+        continue;
+      }
+      for (const element of statement.specifiers) {
+        if (element.type !== "ImportSpecifier") {
+          continue;
+        }
+        const name = this.propertyName(element.imported) ?? element.local.name;
+        imported.set(element.local.name, name);
+        if (statement.source.value !== "drizzle-orm") {
+          continue;
+        }
+        switch (name) {
+          case "inArray":
+          case "notInArray":
+            subqueryPredicates.set(element.local.name, 1);
+            break;
+          case "exists":
+          case "notExists":
+            subqueryPredicates.set(element.local.name, 0);
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    const findings: ReadFinding[] = [];
+    const scanScope = (root: Node, name: string) => {
+      const totalTimeouts: Node[] = [];
+      // A mutable record: `visit` sets this from a closure, which control-flow
+      // narrowing of a plain `let` would not see after `visit(root)` returns.
+      const body = { read: false };
+      const record = (kind: FindingKind, node: Node) =>
+        findings.push({
+          file: this.file,
+          function: name,
+          kind,
+          line: this.parsed.locate(node.start).line,
+        });
+      const visit = (node: Node): "skip-children" | undefined => {
+        if (
+          node !== root &&
+          this.isFunction(node) &&
+          this.isSeparateScope(node, root)
+        ) {
+          scanScope(node, `${name}/${this.scopeName(node)}`);
+          return "skip-children";
+        }
+        if (this.isBodyAccess(node)) {
+          body.read = true;
+        }
+        if (node.type === "CallExpression") {
+          const resolvedCall = this.resolve(node.callee);
+          const named = this.callName(
+            resolvedCall.type === "CallExpression"
+              ? resolvedCall.callee
+              : resolvedCall,
+          );
+          const called =
+            named === undefined ? undefined : (imported.get(named) ?? named);
+          if (
+            called !== undefined &&
+            [
+              "arrayBuffer",
+              "blob",
+              "text",
+              "json",
+              "pipeTo",
+              "pipeThrough",
+              "getReader",
+            ].includes(called)
+          ) {
+            body.read = true;
+          }
+          if (
+            called === "timeout" &&
+            resolvedCall.type === "MemberExpression" &&
+            this.textOf(this.resolve(resolvedCall.object)) === "AbortSignal"
+          ) {
+            totalTimeouts.push(node);
+          }
+          if (called !== undefined && /fetch/iu.test(called)) {
+            for (const argument of node.arguments) {
+              for (const property of this.timeoutProperties(argument)) {
+                record("numeric-timeout", property);
+                totalTimeouts.push(property);
+              }
+            }
+          }
+          const cap = node.arguments.at(0);
+          if (
+            this.file !== BOUNDED_OWNER &&
+            /^apps\/api\/src\/(?:handlers|lib)\//u.test(this.file) &&
+            called === "limit" &&
+            cap !== undefined &&
+            this.isConstant(cap)
+          ) {
+            // Predicate subqueries stay in Postgres; their limit does not
+            // truncate a collection transferred to the application.
+            const disposition = this.isPredicateSubquery(
+              node,
+              subqueryPredicates,
+            )
+              ? "exempt"
+              : this.limitDisposition({ node, cap, root });
+            if (disposition !== "exempt") {
+              record(disposition, node);
+            }
+          }
+        }
+        return undefined;
+      };
+      walk(root, visit);
+      if (
+        body.read &&
+        !(
+          this.file === "packages/fetch/src/index.ts" &&
+          name === "module/executeFetchWithTimeout"
+        )
+      ) {
+        for (const node of totalTimeouts) {
+          record("total-timeout-body", node);
+        }
+      }
+    };
+    scanScope(this.parsed.program, "module");
+    return findings;
+  };
+}
 export const findTransferReads = (
   file: string,
   source: string,
@@ -711,149 +979,7 @@ export const findTransferReads = (
   ) {
     return [];
   }
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const imported = new Map<string, string>();
-  const subqueryPredicates = new Map<string, number>();
-  for (const statement of parsed.statements) {
-    if (!ts.isImportDeclaration(statement)) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings !== undefined && ts.isNamedImports(bindings)) {
-      for (const element of bindings.elements) {
-        imported.set(
-          element.name.text,
-          element.propertyName?.text ?? element.name.text,
-        );
-        if (
-          ts.isStringLiteral(statement.moduleSpecifier) &&
-          statement.moduleSpecifier.text === "drizzle-orm"
-        ) {
-          const name = element.propertyName?.text ?? element.name.text;
-          switch (name) {
-            case "inArray":
-            case "notInArray":
-              subqueryPredicates.set(element.name.text, 1);
-              break;
-            case "exists":
-            case "notExists":
-              subqueryPredicates.set(element.name.text, 0);
-              break;
-            default:
-              break;
-          }
-        }
-      }
-    }
-  }
-  const findings: ReadFinding[] = [];
-  const scanScope = (root: ts.Node, name: string) => {
-    const totalTimeouts: ts.Node[] = [];
-    // A mutable record: `visit` sets this from a closure, which control-flow
-    // narrowing of a plain `let` would not see after `visit(root)` returns.
-    const body = { read: false };
-    const record = (kind: FindingKind, node: ts.Node) =>
-      findings.push({
-        file,
-        function: name,
-        kind,
-        line:
-          parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
-      });
-    const visit = (node: ts.Node) => {
-      if (
-        node !== root &&
-        isFunction(node) &&
-        (ts.isSourceFile(root) ||
-          node.name !== undefined ||
-          ts.isVariableDeclaration(node.parent))
-      ) {
-        scanScope(node, `${name}/${scopeName(node)}`);
-        return;
-      }
-      if (isBodyAccess(node)) {
-        body.read = true;
-      }
-      if (ts.isCallExpression(node)) {
-        const resolvedCall = resolve(node.expression);
-        const named = callName(
-          ts.isCallExpression(resolvedCall)
-            ? resolvedCall.expression
-            : resolvedCall,
-        );
-        const called =
-          named === undefined ? undefined : (imported.get(named) ?? named);
-        if (
-          called !== undefined &&
-          [
-            "arrayBuffer",
-            "blob",
-            "text",
-            "json",
-            "pipeTo",
-            "pipeThrough",
-            "getReader",
-          ].includes(called)
-        ) {
-          body.read = true;
-        }
-        if (
-          called === "timeout" &&
-          (ts.isPropertyAccessExpression(resolvedCall) ||
-            ts.isElementAccessExpression(resolvedCall)) &&
-          resolve(resolvedCall.expression).getText(parsed) === "AbortSignal"
-        ) {
-          totalTimeouts.push(node);
-        }
-        if (called !== undefined && /fetch/iu.test(called)) {
-          for (const argument of node.arguments) {
-            for (const property of timeoutProperties(argument)) {
-              record("numeric-timeout", property);
-              totalTimeouts.push(property);
-            }
-          }
-        }
-        const cap = node.arguments.at(0);
-        if (
-          file !== BOUNDED_OWNER &&
-          /^apps\/api\/src\/(?:handlers|lib)\//u.test(file) &&
-          called === "limit" &&
-          cap !== undefined &&
-          isConstant(cap)
-        ) {
-          // Predicate subqueries stay in Postgres; their limit does not
-          // truncate a collection transferred to the application.
-          const disposition = isPredicateSubquery(node, subqueryPredicates)
-            ? "exempt"
-            : limitDisposition({ node, cap, root });
-          if (disposition !== "exempt") {
-            record(disposition, node);
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(root);
-    if (
-      body.read &&
-      !(
-        file === "packages/fetch/src/index.ts" &&
-        name === "module/executeFetchWithTimeout"
-      )
-    ) {
-      for (const node of totalTimeouts) {
-        record("total-timeout-body", node);
-      }
-    }
-  };
-  scanScope(parsed, "module");
-  return findings;
+  return new TransferReadInspector({ file, source }).scan();
 };
 
 const entryKey = ({

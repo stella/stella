@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
@@ -20,12 +21,17 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
-import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
   statuteOptions,
@@ -38,8 +44,13 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -52,7 +63,7 @@ export const StatuteInspectorView = ({
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("statute");
   const {
     data: statute,
     isError,
@@ -62,13 +73,19 @@ export const StatuteInspectorView = ({
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
-  const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  const versionsView = queryView(versionsQuery);
+  useQueryViewError(versionsView, "StatuteInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
+  const {
+    readerRef: contentRef,
+    element: contentElement,
+    attach: attachContent,
+  } = useReaderElement<HTMLDivElement>();
+  const { element: viewportElement, attach: attachViewport } =
+    useReaderElement<HTMLDivElement>();
   // Cmd/Ctrl+F belongs to the act in front of the reader rather than to the
   // decision behind it, for as long as there is wording to search.
   const find = useInspectorFind({
@@ -93,7 +110,10 @@ export const StatuteInspectorView = ({
   const activeLegal = {
     type: "statute",
     documentId: payload.documentId,
-    title: payload.statuteTitle,
+    title:
+      statute === undefined
+        ? payload.statuteTitle
+        : statuteDisplayLabel(statute).text,
   } as const satisfies ActiveLegalDocument;
 
   return (
@@ -101,27 +121,48 @@ export const StatuteInspectorView = ({
       // The pane is resizable down to 320px and nothing inside it may widen
       // it: `min-w-0` lets this column shrink past its content's intrinsic
       // width, and the clip is the backstop for a child that still refuses.
-      className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden"
+      className={cn(
+        LEGAL_READER_LAYOUT_CLASS_NAME,
+        "bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden",
+      )}
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <>
-            {statute !== undefined && (
-              <OpenOriginalButton
-                href={statute.documentUrl ?? statute.sourceUrl}
-                size="icon-xs"
+        actions={[
+          ...(statute === undefined
+            ? []
+            : [
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={statute.documentUrl ?? statute.sourceUrl}
+                      size="icon-xs"
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            // The wording moves to the page, so the tab that held it goes.
+            render: () => (
+              <StatuteMainViewAction
+                onMoveToMain={onClose}
+                payload={payload}
+                searchQuery={find.findQuery}
               />
-            )}
-            {/* The wording moves to the page, so the tab that held it goes. */}
-            <StatuteMainViewAction
-              onMoveToMain={onClose}
-              payload={payload}
-              searchQuery={find.findQuery}
-            />
-          </>
-        }
+            ),
+          },
+        ]}
         label={tab.label}
+        labelOverflow="wrap"
+        labelContent={
+          statute === undefined ? undefined : (
+            <StatuteDisplayLabel statute={statute} />
+          )
+        }
         onClose={onClose}
       />
       <InspectorFindBar find={find} />
@@ -130,7 +171,11 @@ export const StatuteInspectorView = ({
         aiMode="enabled"
         className="min-h-0 flex-1"
       >
-        <ScrollArea axis="vertical" className="h-full">
+        <ScrollArea
+          axis="vertical"
+          className="h-full"
+          viewportRef={attachViewport}
+        >
           {/* The gutter and the room the composer needs belong to the column;
               the text root inside it carries the reader's own scale. */}
           <div data-slot="reader-document-column">
@@ -139,9 +184,9 @@ export const StatuteInspectorView = ({
             <div
               className={cn(
                 "flex flex-col gap-4 pb-4",
-                VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+                LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
               )}
-              ref={contentRef}
+              ref={attachContent}
               {...textScale.rootProps}
             >
               {isPending && <StatuteInspectorLoader />}
@@ -174,12 +219,12 @@ export const StatuteInspectorView = ({
             </div>
           </div>
         </ScrollArea>
-        <FloatingZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
+        <LegalReaderControls
+          textScale={textScale}
+          blocks={preparedReader.blocks}
+          content={contentElement}
+          viewport={viewportElement}
+          key={payload.documentId}
         />
       </LegalReaderAIChat>
     </div>

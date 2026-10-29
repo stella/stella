@@ -1,5 +1,6 @@
 import { TaggedError } from "better-result";
 import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -10,17 +11,21 @@ import {
   chatThreadCompactions,
   chatThreads,
   desktopEditSessions,
-  docxSuggestions,
   documentProcessingRuns,
+  docxSuggestions,
   entityDeletionCleanupRequests,
+  expenses,
   fields,
   fileComparisonUploads,
   folioCollabRooms,
+  invoiceLines,
+  invoices,
   pendingUploads,
   propertyDependencies,
   styleSets,
-  templateVersions,
   templates,
+  templateVersions,
+  timeEntries,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -122,6 +127,84 @@ export class WorkspaceStorageTeardownBoundError extends TaggedError(
   workspaceId: SafeId<"workspace">;
 }> {}
 
+export class WorkspaceBillingHistoryError extends TaggedError(
+  "WorkspaceBillingHistoryError",
+)<{
+  message: string;
+  workspaceId: SafeId<"workspace">;
+}> {}
+
+// Billing records that outlive a matter deletion request: issued documents
+// with their snapshots, and the unbilled time and expenses not yet on one.
+// The same policy drives the deletion fence and the foreign-key coverage
+// census.
+export const WORKSPACE_DELETION_RETAINED_TABLES = [
+  invoices,
+  invoiceLines,
+  timeEntries,
+  expenses,
+] as const;
+
+type RetainedTable = (typeof WORKSPACE_DELETION_RETAINED_TABLES)[number];
+
+const cascadesFrom = (child: PgTable, parent: PgTable) =>
+  child !== parent &&
+  getTableConfig(child).foreignKeys.some(
+    (key) =>
+      key.onDelete === "cascade" && key.reference().foreignTable === parent,
+  );
+
+const retainedDocuments = WORKSPACE_DELETION_RETAINED_TABLES.filter((table) =>
+  WORKSPACE_DELETION_RETAINED_TABLES.some((other) =>
+    cascadesFrom(other, table),
+  ),
+);
+const retainedDocumentStage: readonly RetainedTable[] =
+  WORKSPACE_DELETION_RETAINED_TABLES.filter(
+    (table) =>
+      retainedDocuments.includes(table) ||
+      retainedDocuments.some((document) => cascadesFrom(table, document)),
+  );
+
+/**
+ * The order in which a deliberate removal (the review reset, test cleanup)
+ * deletes retained billing records: documents with their lines first, then
+ * the records the lines bill. A line that still bills
+ * an entry or expense refuses that record's deletion
+ * (`invoice_lines_source_reference_check`), so no stage may delete a billed
+ * record while its line remains.
+ */
+export const WORKSPACE_DELETION_RETAINED_STAGES: readonly (readonly RetainedTable[])[] =
+  [
+    retainedDocumentStage,
+    WORKSPACE_DELETION_RETAINED_TABLES.filter(
+      (table) => !retainedDocumentStage.includes(table),
+    ),
+  ];
+
+/**
+ * The matter still has rows that outlive it. The deletion fence reads this
+ * inside its status transition, under the matter row lock, so concurrent
+ * billing inserts cannot pass their foreign-key check until it completes.
+ */
+export const workspaceRetainsBillingHistory = ({
+  organizationId,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+}) =>
+  sql`EXISTS (${sql.join(
+    WORKSPACE_DELETION_RETAINED_TABLES.map(
+      (table) => sql`
+        SELECT 1 FROM ${table}
+        WHERE ${table.workspaceId} = ${workspaceId}
+          AND ${table.organizationId} = ${organizationId}
+      `,
+    ),
+    sql` UNION ALL `,
+  )})`;
+
 class WorkspaceStorageTeardownStateError extends TaggedError(
   "WorkspaceStorageTeardownStateError",
 )<{
@@ -169,7 +252,6 @@ export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "document_processing_runs.id": "derived-key-cleanup-request",
   "document_processing_runs.source_file_id": "field-file-alias",
   "document_translation_runs.source_file_id": "field-file-alias",
-  "expenses.receipt_file_id": "reserved-no-writer",
   "extracted_content.source_file_id": "field-file-alias",
   "fields.content": "cleanup-request",
   "fields.file_id": "reserved-no-writer",

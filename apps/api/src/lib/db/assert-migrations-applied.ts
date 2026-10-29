@@ -97,7 +97,9 @@ export const assertMigrationsApplied = async (): Promise<void> => {
         },
         query: async (query, params = []) =>
           await connection.unsafe(query, [...params]),
-        release: () => connection.release(),
+        release: async () => {
+          await connection.release();
+        },
       };
     },
   });

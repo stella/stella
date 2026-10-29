@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -26,7 +27,7 @@ const createContext = ({
     request: new Request("https://example.test/v1/workspaces", {
       method: "PUT",
     }),
-    route: "/v1/workspaces",
+    route: "/v1/workspaces" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     featureAccessSnapshot: createFeatureAccessSnapshot({

@@ -1,6 +1,6 @@
 import {
-  count,
   and,
+  count,
   eq,
   inArray,
   isNotNull,
@@ -31,13 +31,13 @@ import {
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
-  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
-  bufferObjectCleanupIntents,
   accountDeletionEffectChunks,
   accountDeletionRequests,
   accountExports,
   agentSkills,
   aiMemories,
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
   chatThreads,
   contacts,
   correspondence,
@@ -48,13 +48,14 @@ import {
   entities,
   fileChatThreads,
   fileComparisonUploads,
-  folioCollabRoomTokens,
   folioCollabRooms,
+  folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
-  pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
+  pendingUploads,
   rateEntries,
   searchHistoryEntries,
   searchHistoryOwners,
@@ -68,8 +69,8 @@ import {
   workObligationEvents,
   workObligations,
   workspaceMembers,
-  workspaceViewTemplates,
   workspaces,
+  workspaceViewTemplates,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import {
@@ -102,9 +103,9 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
-  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
   consumeInBatches,
   createS3DeletionEffectChunks,
+  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
 } from "@/api/lib/destructive-effect-chunks";
 import {
   clearCorrespondenceAssignmentsForOffboarding,
@@ -267,6 +268,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
 };
 
 export const REVOKE_OAUTH_TOKENS_TABLES = [
+  mcpWebHandoff,
   oauthAccessToken,
   oauthRefreshToken,
   oauthConsent,
@@ -281,6 +283,8 @@ export const revokeOAuthTokensAndGrants = async (
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
   await revokeAllUserOAuthTokens(tx, currentUserId);
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx.delete(mcpWebHandoff).where(eq(mcpWebHandoff.userId, currentUserId));
   await tx.delete(oauthConsent).where(eq(oauthConsent.userId, currentUserId));
   await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
 };

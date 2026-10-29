@@ -4,7 +4,16 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -32,32 +41,7 @@ type RecordedRequest = { method: string; path: string; body: unknown };
 const requests: RecordedRequest[] = [];
 const unexpectedRequests: string[] = [];
 const answers: (Response | Promise<Response>)[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      const text = await request.text();
-      requests.push({
-        method: request.method,
-        path: pathname,
-        body: text === "" ? null : JSON.parse(text),
-      });
-      const answer = answers.shift();
-      if (answer === undefined) {
-        unexpectedRequests.push(`${request.method} ${pathname}`);
-        return panic(
-          `Unexpected network request: ${request.method} ${pathname}`,
-        );
-      }
-      return await answer;
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { EditorState } = await import("@tiptap/pm/state");
@@ -137,7 +121,12 @@ const { QueryClient, QueryClientProvider, useQuery } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
-const { verificationRunOptions } = await import("./queries");
+const { avtKeys, verificationRunOptions } = await import("./queries");
+const { fileOptions } = await import("@/lib/files/queries");
+const { useInspectorCommandStore } =
+  await import("@/components/inspector/inspector-command-store");
+const { PDF_CLAIM_BOX_ATTRIBUTE } = await import("./original-pdf-claim-box");
+const { PDF } = await import("@libpdf/core");
 const { VerificationView } = await import("./verification-view");
 const { STATE_META } = await import("./types");
 const { EMPTY_CLAIM_REVIEW } = await import("./claim-review.logic");
@@ -159,7 +148,37 @@ const workspaceId = "0199a3c4-5b6d-7e8f-9a0b-000000009099";
 const actorId = "0199a3c4-5b6d-7e8f-9a0b-000000009098";
 const at = "2026-09-01T10:00:00Z";
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        if (pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        const text = await request.text();
+        requests.push({
+          method: request.method,
+          path: pathname,
+          body: text === "" ? null : JSON.parse(text),
+        });
+        const answer = answers.shift();
+        if (answer === undefined) {
+          unexpectedRequests.push(`${request.method} ${pathname}`);
+          return panic(
+            `Unexpected network request: ${request.method} ${pathname}`,
+          );
+        }
+        return await answer;
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   hostDocument = null;
   hostLoading = null;
@@ -624,7 +643,7 @@ test("a rejected review restores the claim and attention queue and surfaces the 
   ).toBe(false);
 });
 
-test("a DOCX verification offers its original beside the reading view; a PDF one does not", async () => {
+test("a DOCX and a PDF verification both offer their original beside the reading view", async () => {
   await mount();
   const views = messages.avt.verification.documentView;
   expect(
@@ -657,8 +676,18 @@ test("a DOCX verification offers its original beside the reading view; a PDF one
       pageNumber: block.ordinal,
     })),
   });
-  expect(screen.queryByRole("tablist", { name: views.label })).toBeNull();
+  expect(
+    screen
+      .getByRole("tablist", { name: views.label })
+      .textContent.includes(views.original),
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole("tab", { name: views.reading })
+      .getAttribute("aria-selected"),
+  ).toBe("true");
   expect(claimButton(1).getAttribute("aria-pressed")).toBe("true");
+  expect(requests).toEqual([]);
 });
 
 const nextFrame = async () => {
@@ -827,4 +856,196 @@ test("a step taken while the original is still loading scrolls the viewer once i
   await waitFor(() => {
     expect(hostScrolls).toEqual([{ blockId: "b2", fieldId: run.fileFieldId }]);
   });
+});
+
+/** The seeded run, its claims anchored on the pages of a PDF. */
+const seededPdfRun = (): VerificationRun => {
+  const run = seededRun();
+  return {
+    ...run,
+    claims: run.claims.map((claim) => ({
+      ...claim,
+      anchor: {
+        type: "pdf-page" as const,
+        pageNumber: 1,
+        start: claim.anchor.start,
+        end: claim.anchor.end,
+      },
+    })),
+    blocks: [
+      {
+        ordinal: 0,
+        blockId: "p1",
+        kind: "pdf-page" as const,
+        pageNumber: 1,
+        text: run.claims.map((claim) => claim.text).join("\n"),
+      },
+    ],
+  };
+};
+
+const seedPdfFile = async (
+  client: InstanceType<typeof QueryClient>,
+  run: VerificationRun,
+  bytes: Uint8Array,
+) => {
+  client.setQueryData(
+    fileOptions({
+      workspaceId,
+      fieldId: run.fileFieldId,
+      purpose: "display",
+    }).queryKey,
+    {
+      fileId: "0199a3c4-5b6d-7e8f-9a0b-000000009097",
+      fileName: "statement.pdf",
+      mimeType: "application/pdf",
+      originalMimeType: "application/pdf",
+      buffer: bytes.slice().buffer,
+    },
+  );
+};
+
+const onePagePdf = async () => {
+  const pdf = PDF.create();
+  pdf
+    .addPage({ size: "letter" })
+    .drawText("The parties signed the agreement in July.", {
+      x: 72,
+      y: 700,
+      size: 12,
+    });
+  return await pdf.save();
+};
+
+const openOriginal = () => {
+  fireEvent.click(
+    screen.getByRole("tab", {
+      name: messages.avt.verification.documentView.original,
+    }),
+  );
+};
+
+test("the original PDF mounts its viewer and claim boxes inside the PDF store", async () => {
+  // happy-dom lays nothing out: the pane reports a width to fit the pages to.
+  const clientWidth =
+    Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth") ??
+    panic("happy-dom defines clientWidth");
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get: () => 640,
+  });
+  // What the viewer's error boundaries caught. PDF.js cannot draw pages
+  // under happy-dom, so the file viewer itself reports a failed load; what
+  // must never reach a boundary is a viewer part read outside its store.
+  const caught: unknown[] = [];
+  const consoleError = spyOn(console, "error").mockImplementation(
+    (...args: unknown[]) => {
+      caught.push(...args.filter((arg) => arg instanceof Error));
+    },
+  );
+  try {
+    const run = seededPdfRun();
+    const { client } = await mount(run);
+    await seedPdfFile(client, run, await onePagePdf());
+    openOriginal();
+    await nextFrame();
+    await nextFrame();
+    expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    await waitFor(() => {
+      expect(
+        client
+          .getQueryCache()
+          .findAll({ queryKey: ["pdf-document"] })
+          .map((query) => query.queryKey.at(-1)),
+      ).toContain("document");
+    });
+    expect(
+      caught.filter(
+        (error) =>
+          error instanceof Error && error.message.includes("PDFProvider"),
+      ),
+    ).toEqual([]);
+  } finally {
+    consoleError.mockRestore();
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidth);
+  }
+});
+
+test("going to a PDF claim whose box is drawn leaves the scrolling to the box", async () => {
+  const run = seededPdfRun();
+  await mount(run);
+  const requested: number[] = [];
+  const { requestPdfPageScroll } = useInspectorCommandStore.getState();
+  useInspectorCommandStore.setState({
+    requestPdfPageScroll: ({ pageNumber }) => {
+      requested.push(pageNumber);
+    },
+  });
+  const boxes: HTMLElement[] = [];
+  try {
+    // A selected claim, so opening the original goes to it.
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-pressed="false"]',
+      ) ?? panic("Missing a verdict tile"),
+    );
+
+    // No box drawn yet: the page is requested, and the box follows it.
+    openOriginal();
+    expect(requested).toEqual([1]);
+
+    // Every claim's box is drawn: only the box scrolls, no page request.
+    for (const claim of run.claims) {
+      const box = document.createElement("div");
+      box.setAttribute(PDF_CLAIM_BOX_ATTRIBUTE, claim.id);
+      document.body.append(box);
+      boxes.push(box);
+    }
+    fireEvent.click(
+      screen.getByRole("tab", {
+        name: messages.avt.verification.documentView.reading,
+      }),
+    );
+    openOriginal();
+    expect(requested).toEqual([1]);
+  } finally {
+    for (const box of boxes) {
+      box.remove();
+    }
+    useInspectorCommandStore.setState({ requestPdfPageScroll });
+  }
+});
+
+test("page text that cannot be read shows a retryable failure, not every claim as not located", async () => {
+  const run = seededPdfRun();
+  const { client } = await mount(run);
+  // The page texts are read as soon as the original opens.
+  client.setQueryDefaults(avtKeys.all(workspaceId), { enabled: true });
+  // Bytes no PDF reader accepts: the page-text read fails.
+  await seedPdfFile(client, run, new TextEncoder().encode("not a pdf"));
+  openOriginal();
+
+  const failure = await screen.findByRole("alert");
+  expect(failure.textContent).toContain(
+    messages.avt.verification.pdfTextFailed,
+  );
+  expect(screen.queryByText(/not located in the original/u)).toBeNull();
+
+  const pagesQuery = () =>
+    client
+      .getQueryCache()
+      .findAll({
+        queryKey: [...avtKeys.all(workspaceId), "original-pdf-pages"],
+      })
+      .at(0)?.state;
+  const failuresBefore = pagesQuery()?.errorUpdateCount ?? 0;
+  fireEvent.click(
+    within(failure).getByRole("button", { name: messages.common.retry }),
+  );
+  await waitFor(() => {
+    expect(pagesQuery()?.errorUpdateCount).toBe(failuresBefore + 1);
+  });
+  expect(screen.getByRole("alert").textContent).toContain(
+    messages.avt.verification.pdfTextFailed,
+  );
 });

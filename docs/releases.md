@@ -8,15 +8,16 @@ Stella-specific deploy details.
 
 <!-- BEGIN GENERATED RELEASE ARTIFACT CONTRACT -->
 
-Each release publishes two container artifacts:
+Each release candidate builds three container artifacts once:
 
 - The API image is portable and is the image used by the self-host
   Compose contract.
-- The Web image is built for the release workflow's selected hosted
-  target environment; self-hosted operators must build the web image with
+- The staging Web image and production Web image use their respective
+  hosted public URLs; self-hosted operators must build the web image with
   their own public URLs.
-- `release-manifest.json` records both `image` and `webImage` with
-  digest-qualified references.
+- `release-manifest.json` records `image`, `webImage` and
+  `productionWebImage` with digest-qualified references.
+- The final release aliases these proven digests without rebuilding images.
 
 <!-- END GENERATED RELEASE ARTIFACT CONTRACT -->
 
@@ -48,19 +49,58 @@ Schema changes should follow an expand/contract sequence:
 Application rollback must not require database rollback. Destructive migrations
 should lag the release that stopped using the old data.
 
+### Migration completion and deployment failure
+
+Run the release's migration entrypoint to completion before replacing serving
+application instances. A migration error exits nonzero and stops promotion;
+the existing application version keeps serving. Deferred online work keeps
+migration running: it logs `migrate.online_deferred`, waits, and retries until
+settled. A deferral does not authorize an application rollout.
+
+Schema lock contention gets bounded retries. Exhausted attempts, a spent retry
+budget, or changed migration receipts stop migration with an error. Earlier
+committed steps may remain applied; a rerun reads the migration ledger again.
+Inspect migration task logs and the failed promotion workflow before rerunning.
+The deployment result retains the migration exit status and task diagnostics.
+
+`migrate.lock_attempt` records each observed work step's terminal outcome and
+lock waits, including requested mode, table, wait duration, and blocker activity
+with query fingerprints. Attempt counts include bounded statement retries. Fingerprints strip literals and quoted identifiers before
+truncation. Existing `migrate.phase_duration` and
+`migrate.online_step_duration` records include `retriesSpent`; these fields use
+the existing log pipeline and require no additional metrics. Lock inspection is
+sampled, so waits shorter than the inspection interval may not be observed.
+
 ## Staging Verification
 
-`deploy-staging.yml` runs on `main` only. Its optional `sha` input pins the
-commit to deploy; blank deploys the tip of `main`. A pinned commit must be a
-full SHA that `main` contains (`git merge-base --is-ancestor`), so a release
-candidate can be deployed and verified while `main` keeps moving. Any other
-value fails the run before anything is built. The run builds, promotes and
-smokes that one commit. It records a Deployment as `in_progress` after
-promotion and marks it `success` only when the gating web
-and API chat smokes pass. The `staging/verified` commit status records the same
-result on the deployed SHA and links to the workflow run. A new promotion resets
-that status to `pending`; a failed or incomplete gating smoke records `failure`.
-The API model-turn smoke retains its separate report-only policy.
+`deploy-staging.yml` executes its trusted workflow from `main`. A normal
+pinned `sha` must be a full SHA contained by `main`. Release proofs instead
+supply `release_candidate=true`, `release_ref=vX.Y.Z-rc.N` and the exact release
+pull request head. The candidate verifier checks that commit against its merge
+base on `main` (`git merge-base <rc-sha> origin/main`), so later unrelated
+merges do not invalidate it. The complete base-to-RC range includes the version
+bump and every release correction. With `release_ref`, staging
+uses the RC manifest's API and staging web digests and skips its build jobs.
+
+When staging is off, an RC proof starts it through `staging-power.yml` with a
+2 h lease and waits for readiness before promotion. Other staging dispatches
+still refuse an off environment. After promotion the deployment is
+`in_progress`; gating web and API chat smokes must pass before it becomes
+`success`. `staging/verified` records the result on the exact deployed SHA and
+links to its workflow run. Promotion resets the status to `pending`; failed or
+incomplete smokes record `failure`. Before each write, the workflow rechecks the
+newest run and status owner, so a superseded proof cannot overwrite its
+replacement's status. The API model-turn smoke remains report-only.
+
+Hosted deployment configuration must set `DEPLOY_ENVIRONMENT=staging` on the
+staging API and `DEPLOY_ENVIRONMENT=production` on the production API. The marker
+is independent of the image's build mode. It is optional at API startup: when
+absent, `/ready` returns `deployEnvironment: null` and server analytics omit
+`deploy_environment`. A configured value is returned by `/ready` and stamped on
+server analytics events. Hosted deployment verification requires the expected
+marker as well as the exact commit SHA; an unset or mismatched marker blocks
+verification. Configure it in the hosted deployment before promoting these
+images. Self-hosted and local runtimes can leave it unset.
 
 The repository variable `STAGING_STATE` declares environment prerequisites as
 JSON. Missing keys (or an unset variable) mean on: every check gates. The allowed
@@ -90,145 +130,121 @@ or change deployed feature flags.
 
 ## Creating A Release
 
-1. Ensure CI is green on `main`.
-2. Generate and review any required migration files.
-3. Run `bun run marketing:stale`; if anything is stale, `bun run
-   marketing:reshoot` re-records only the stale captures (see
-   `apps/landing/public/media/products/README.md`, "Reshooting on release").
-4. In one commit, bump `VERSION` and add the matching changelog note. A
-   release other than a maintenance release (`bun run release:maintenance`)
-   must embed a screenshot or video in it; see `docs/changelog/README.md`:
+A release is proved on the release branch before production changes. Its RC and
+final tags point at the same commit; the final release promotes the images built
+by the RC run.
 
-   ```bash
-   printf "X.Y.Z\n" > VERSION
-   $EDITOR docs/changelog/vX.Y.Z.md
-   git add VERSION docs/changelog/vX.Y.Z.md
-   git commit -m "chore: release vX.Y.Z"
-   ```
+1. Start with a clean checkout of `main`, green CI, and reviewed migrations.
+   Run `bun run marketing:stale`; `bun run marketing:reshoot` re-records stale
+   captures (see `apps/landing/public/media/products/README.md`).
+2. Run `bun run release:maintenance`. It derives the next patch version from
+   the newest final `vX.Y.Z` tag, applies pending changesets, writes `VERSION`
+   and `docs/changelog/vX.Y.Z.md`, creates one release commit on
+   `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
+   open release pull request blocks another cut. The command runs the existing
+   pre-cut heavy, dependency-audit and npm-publish-lag gates before writing.
+   The npm gate checks that same newest final tag, regardless of main's
+   `VERSION`.
+   `--allow-unproven-main` permits missing heavy evidence at the cut only;
+   dependency waivers require `WAIVE_DEPENDENCY_AUDIT=true` and
+   `WAIVER_REASON='<reason>'`. There is no `--refresh` path.
+3. Opening or updating that pull request starts `release-proof.yml`, which
+   dispatches `release-tag.yml` with `mode=rc` and the exact head SHA. The tag
+   workflow verifies the candidate against its merge base with `main` and runs the release
+   gates, including changelog and CLI coupling. It refuses an existing final
+   tag. Otherwise it allocates `vX.Y.Z-rc.N`, where `N` is one greater than the
+   highest existing RC number. A tag already on this SHA is reused. `VERSION`
+   stays `X.Y.Z`; the RC suffix belongs to the tag.
+4. `release.yml` accepts the RC only while its commit is the open release pull
+   request's head. It builds and smokes the multi-architecture API image with
+   `STELLA_VERSION=X.Y.Z`, builds both hosted web images and the extension ZIP,
+   and creates a draft prerelease with the immutable manifest. It boots the
+   exact production web image, fetches its index and three hashed assets, and
+   checks that its configuration differs from staging only in declared
+   environment keys.
+5. The RC run dispatches staging with `release_ref` and its exact SHA. Staging
+   promotes the manifest digests without building, then runs its existing
+   smokes. The RC run also dispatches `main-heavy.yml` and `main-pr-depth.yml`
+   for that SHA. Finalization requires trusted green `staging/verified`,
+   `main/heavy` and `main/pr-depth` evidence on the exact RC commit. A later
+   `main` commit or tree-equivalent commit cannot replace it.
+6. Completion of those proof workflows invokes `release-tag.yml`'s `finalize`
+   job. It rechecks release health, finds the RC tag on the proved SHA, pushes
+   `vX.Y.Z` on that same SHA and publishes the RC prerelease. An existing final
+   tag is a no-op. Finalization performs no dependency install or approval wait.
+   A red proof produces no final tag or production promotion; pushing a fix to
+   the release branch creates the next RC number and proves it again.
+7. The final tag starts `release.yml` in alias mode. Build, image smoke and web
+   build jobs do not run. It assigns the final image tags to the RC digests,
+   creates the final manifest and draft release, and promotes production. The
+   promote dispatch reuses a successful or active promotion for this release,
+   or production already serving its SHA, before considering another dispatch.
+   Production migrations run inside the infra promotion; rollout waits for
+   them to finish. Both API `/ready` and web `version.json` must report the
+   release SHA, and API `/ready` must report `deployEnvironment: production`.
+   Staging proof verification requires `deployEnvironment: staging`.
+8. After production verification, separate idempotent jobs publish the GitHub
+   release with `--latest=false`, advance image `:latest` aliases to the proved
+   digests, and start release health if that ref has no health run. Rerunning a
+   partially failed final run checks those receipts and completes missing work.
+   `release-complete` reports missing synchronous receipts: production,
+   published release, image `:latest` aliases and health-run dispatch. It does
+   not wait for the separate npm or desktop workflows, or the health window.
+9. `publish-npm.yml` and `release-desktop.yml` accept a successful
+   `promote-production` job for that exact ref even if another job made the
+   overall release run red. RC runs publish no npm versions or dist-tags.
+   Stable npm publication checks out the exact RC-proved release SHA, builds
+   and packs the CLI using the unchanged version-codegen and trusted-publishing
+   workflow, then runs the plain-Node smoke and production compatibility canary
+   on that tarball. Package versions remain Changesets-owned. Desktop reruns
+   resume the build or carry-forward path and its publication steps. GitHub
+   Latest advances only after the desktop assets are ready.
+10. Squash-merge the release pull request through the ordinary queue once its
+    checks pass. Its release-branch commit is not an ancestor of `main`; the
+    squash merge does not retag, rebuild or refresh the release branch. Autofix
+    leaves `release/v*` heads untouched, and their branch rules prohibit force
+    pushes and deletion.
 
-   For RCs, use matching values such as `VERSION=1.2.3-rc.1` and
-   `docs/changelog/v1.2.3-rc.1.md`.
+Final-run retries also accept the same release pull request after its squash
+merge, provided its recorded head still equals the RC SHA. New RC tags require
+an open release pull request. Changelog corrections can be pushed as later
+commits to produce the next RC; executable fixes land on main first and reach
+the release branch by merging main into it. Every candidate verifies the full
+range from that merge base.
 
-   A pull request that changes `VERSION` (or any migration) also runs the
-   `migration-upgrade-rehearsal` CI job: it applies the schema of the release
-   production currently serves from that release's published image, fills the
-   registered high-volume tables with scale-shaped rows, then runs this
-   commit's migrate entrypoint under a budget, reruns it, and checks schema
-   parity. Its summary reports the base release and the timings.
-   `scripts/rehearse-migration-upgrade.sh` runs the same rehearsal locally
-   against an empty database.
+A pull request that changes `VERSION` or migrations also runs
+`migration-upgrade-rehearsal`: it starts with the schema of the release
+production currently serves, fills registered high-volume tables with
+scale-shaped rows, runs this commit's migration entrypoint under a budget,
+reruns it, and checks schema parity. Its summary records the base release and
+timings. `scripts/rehearse-migration-upgrade.sh` runs the rehearsal locally
+against an empty database.
 
-   The same pull request runs `scripts/check-cli-release-coupling.ts`: a
-   stable release is refused while a pending changeset names `@stll/cli`,
-   because the CLI that has to ship with the release does not have a version
-   yet. `bun run release:maintenance` applies every pending changeset in the
-   release commit, so a release prepared with it leaves none pending. A
-   hand-cut release needs `bun run changeset:version` in the same commit, plus
-   `bun run changeset --empty`: the generated bumps are release-gated paths,
-   and the changeset policy asks for an added entry beside them. The check
-   also refuses a commit whose CLI version is behind npm's
-   `latest`, or equals it while the generated contract surface differs from
-   the published tarball.
+The CLI coupling gate refuses a pending changeset naming `@stll/cli`, a CLI
+version behind npm's `latest`, or a version equal to `latest` whose generated
+contract differs from the published tarball. Maintenance preparation consumes
+all pending changesets in its release commit. A hand-prepared release needs
+`bun run changeset:version` in the same commit and an empty changeset beside the
+generated bumps. Non-maintenance releases also require a screenshot or video in
+the changelog note; see `docs/changelog/README.md`.
 
-5. Merge the commit to `main` and note its SHA. This version commit is the
-   only commit that can ship under that version. The push dispatches
-   `release-tag.yml` with its exact SHA; missing gates fail the tag run.
-   `main` stays open: later merges do not affect this release.
-6. Deploy that exact commit to staging:
+After stable publication, `release-health.yml` waits until 60 minutes after
+publication, then compares production-only `release_failure_window` events with
+the previous stable release. Only events stamped with
+`deploy_environment=production` count; staging and unstamped events are
+excluded. An `unclassified`
+failure, or a new handler/error-class/code fingerprint occurring at least three
+times, makes the release unhealthy; an unavailable query makes it inconclusive.
+The workflow uploads `release-health.json` and alerts on a non-healthy verdict.
+It uses `POSTHOG_RELEASE_HEALTH_API_KEY` for query read and
+`POSTHOG_PROJECT_ID` to identify the project.
 
-   ```bash
-   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha> -F release_candidate=true
-   gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
-   ```
-
-   Both gates first refuse a candidate whose VERSION is already tagged or whose
-   SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
-   `release_candidate` false and skip this check. The release-candidate heavy run dispatches
-   `main-pr-depth.yml` for the same SHA. The staging run also refuses a
-   SHA that `main` does not contain. When its smokes pass,
-   the commit carries `staging/verified` = `success`. `main-heavy.yml`
-   records `main/heavy`, while `main-pr-depth.yml` records `main/pr-depth`, on the same commit. If the run is cancelled because
-   a newer staging dispatch replaced it while it waited, dispatch it again
-   with the same `sha`; tagging refuses until `staging/verified` is green.
-
-   A commit that landed through the merge queue usually needs neither heavy
-   status. The queue fast-forwards `main` to the merge-group commit, so the
-   `ci-result` check of that merge group's CI run sits on the release commit
-   itself. That check is the merge-group receipt: a `ci-result` check run on
-   the release commit, created by GitHub Actions, concluded `success`, in a
-   `merge_group` run of `.github/workflows/ci.yml` from `main`'s queue that
-   also completed successfully. It stands in for both `main/heavy` and
-   `main/pr-depth`. If any merge-group `ci-result` on the commit is not a
-   success, or a `ci-result` check run cannot be tied to its workflow run, the
-   receipt is refused and the two statuses are required. `staging/verified` is
-   required either way.
-
-   A merge-group run validates only its own group's diff, so the receipt also
-   needs every commit since the previous release tag to have reached `main`
-   through a validated merge group. The gate runs
-   `bun scripts/check-release-queue-history.ts --require` over that range; an
-   admin merge, a direct push, or history that cannot be read keeps
-   `main/heavy` and `main/pr-depth` required, and the log names the commits
-   the receipt does not cover.
-
-7. Tag the commit once `staging/verified` is green and it carries either the
-   merge-group receipt or green `main/heavy` and `main/pr-depth`:
-
-   ```bash
-   gh workflow run release-tag.yml --ref main -f sha=<release-sha>
-   ```
-
-   `release-tag.yml` tags exactly that commit, and refuses unless
-   `staging/verified` is `success` on it and it carries the merge-group
-   receipt or `success` on both `main/heavy` and `main/pr-depth`; the refusal
-   names each gate that is missing or not green. It checks them again right
-   before pushing the tag. Leaving `sha` blank selects the version commit;
-   an explicit SHA must name that same commit. Tree-identical release PR
-   evidence may satisfy the existing proof checks, but later main commits
-   cannot replace the version commit. The workflow also runs the CLI coupling
-   check against that commit. The other independent gates continue when one
-   fails, and one final verdict lists each gate that failed or did not run. If
-   dependency installation fails, the dependency-audit gate remains unrun.
-   `-F dry_run=true` evaluates all gates and reports them without pushing the
-   tag. The tag then triggers `release.yml`.
-
-8. Wait for the release workflow. It builds and attests the immutable
-   images, creates the GitHub release as a draft with the manifest attached,
-   and promotes stable releases automatically; the release is published and
-   the `latest` image aliases advance only after `https://api.stll.app/ready`
-   and the web origin report the exact release commit. A failed promotion
-   leaves the tag, the immutable images, and the draft; rerunning the
-   workflow for the same tag reuses them. RCs continue to target staging and
-   are published as prereleases once the staging promotion finishes.
-9. Once production serves a stable release, `release.yml` dispatches
-   `release-health.yml`. It waits until 60 minutes after publication, then
-   compares the release's failure fingerprints (handler, error class and
-   code, counted by the API as `release_failure_window` analytics events)
-   with the previous stable release's. Any `unclassified` failure, or a
-   fingerprint the previous release never produced that occurs at least
-   three times, makes the release unhealthy; a query that cannot answer
-   makes it inconclusive. The run records the verdict as
-   `release-health.json` on the GitHub release and fails unless the verdict
-   is healthy, which alerts through `scheduled-run-alerts.yml`. The query
-   reads the `POSTHOG_RELEASE_HEALTH_API_KEY` secret (a PostHog personal API
-   key limited to query read) and the `POSTHOG_PROJECT_ID` variable.
-
-   The next production promotion refuses while the previous stable release
-   is unhealthy, inconclusive, or still inside its window without a
-   verdict. After investigating, re-dispatch `release.yml` for the new tag
-   with `acknowledge_unhealthy_release` set to that previous release.
-
-10. After a stable release succeeds, `publish-npm.yml` checks out the same
-    release commit, packs the CLI, installs that exact tarball under plain Node,
-    and runs its unauthenticated compatibility canary against production. Only
-    then can the hardened npm publishing job publish `@stll/cli`.
-
-Changing `packages/cli/package.json` on `main` does not publish the CLI by
-itself. This ordering is deliberate: the API must advertise support for the
-packed CLI's generated protocol contract, capabilities, and resource scopes
-before the client becomes public. A manual CLI publish is recovery-only and
-requires `release_ref` to name the stable release currently served by
-production.
+The next production promotion refuses while the previous release is unhealthy,
+inconclusive or still inside its window without a verdict. After investigating,
+re-dispatch `release.yml` with `acknowledge_unhealthy_release` naming that previous
+release. Changing `packages/cli/package.json` on `main` does not publish the CLI;
+manual publication is recovery-only and requires the stable release currently
+served by production.
 
 ## Package Versions
 

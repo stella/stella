@@ -48,9 +48,10 @@ import {
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import { processUploadedMailJob } from "@/api/lib/email/inbound/upload-queue";
 import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -170,7 +171,7 @@ const signedEml = async () => {
   expect(signed.errors).toEqual([]);
   const publicKeyRecord = publicKey
     .export({ type: "spki", format: "der" })
-    .toString("base64");
+    .toBase64();
   const verifyOriginal = createOriginalSignatureVerifier(() => ({
     resolve: async (domain: string, rrtype: string) =>
       domain === "case._domainkey.example.com" && rrtype === "TXT"
@@ -221,6 +222,10 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Uploaded mail",
         slug: `uploaded-mail-${organizationId}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(member).values([
         {

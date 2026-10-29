@@ -1,5 +1,50 @@
 # @stll/chat
 
+## 0.2.10
+
+### Patch Changes
+
+- Updated dependencies [[`276fe8f`](https://github.com/stella/stella/commit/276fe8f46a263509a6e864505a9bdd75ffa75f56), [`dd1480b`](https://github.com/stella/stella/commit/dd1480bd335acd79fe88484b69416410c215786c), [`051ed71`](https://github.com/stella/stella/commit/051ed716e83bcc8d822317735bef0b06cd7cd6a0), [`85a8893`](https://github.com/stella/stella/commit/85a88937362ad495f74f167b557250608862b77d), [`58b429b`](https://github.com/stella/stella/commit/58b429b124f1a5ff110e20b31a0f8fc6143c8e65), [`106c7d6`](https://github.com/stella/stella/commit/106c7d6e21e240156f8d98305315cb5fe1ed1a84), [`0d610b6`](https://github.com/stella/stella/commit/0d610b62b0101f921a36b37439a0406a40db8797)]:
+  - @stll/ui@0.54.0
+
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [[`48c0025`](https://github.com/stella/stella/commit/48c002525572684e4c8e96ad50eec065313295b0), [`e4836e1`](https://github.com/stella/stella/commit/e4836e18472a659a03e9e7d80156685739ce3aed), [`4dde81d`](https://github.com/stella/stella/commit/4dde81dd999d620a00b9000f0d8431b9e4d5ae98), [`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b), [`7746519`](https://github.com/stella/stella/commit/774651920e9c2c16bdb352a117b2a51f21e35cc5), [`b942114`](https://github.com/stella/stella/commit/b9421146019be23569fb7f3cba3b8f094422d7a3)]:
+  - @stll/ui@0.53.0
+
+## 0.2.8
+
+### Patch Changes
+
+- Updated dependencies [[`4fe45ad`](https://github.com/stella/stella/commit/4fe45ad8fc654bb759207c22008d38bc15344091)]:
+  - @stll/ui@0.52.0
+
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [[`7835dfd`](https://github.com/stella/stella/commit/7835dfd514ad56fce2a4f00fd4bf0bd522188d34), [`281665b`](https://github.com/stella/stella/commit/281665baa193e2ab2b3acba0da3a259ec16a770a), [`a765cda`](https://github.com/stella/stella/commit/a765cdaeb5718de31b707958364dfde7b6c98594), [`2dd1699`](https://github.com/stella/stella/commit/2dd16994dfba74f35540d47b1582e428ba7b4bc1), [`85a56db`](https://github.com/stella/stella/commit/85a56dbbf73156b5b7e4a0e37c73db382aa02ada)]:
+  - @stll/ui@0.51.0
+
+## 0.2.6
+
+### Patch Changes
+
+- [#6567](https://github.com/stella/stella/pull/6567) [`76bfdfd`](https://github.com/stella/stella/commit/76bfdfdbf1ede83c7d3dc1db8a8dcc919e479d2a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `getChatLinkSite`, which returns the registrable domain of a link hostname so link icons can be requested once per site.
+- Updated dependencies [[`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc)]:
+  - @stll/ui@0.50.1
+
+## 0.2.5
+
+### Patch Changes
+
+- [#6712](https://github.com/stella/stella/pull/6712) [`e4bf82f`](https://github.com/stella/stella/commit/e4bf82f52d7a36d63b9beb829861b47f3c2d11bc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `zod` 4.6.6 or later.
+- Updated dependencies [[`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64), [`17830cc`](https://github.com/stella/stella/commit/17830cc0f3578c1ad26acae77374ef9e959fa77f), [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a), [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8), [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952)]:
+  - @stll/ui@0.50.0
+  - @stll/ai-catalog@0.8.2
+
 ## 0.2.4
 
 ### Patch Changes

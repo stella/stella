@@ -29,8 +29,7 @@ const AUTO_INFRA_OFFSET = "auto";
 // `auto` lets the runner pick (and later reuse) a worktree-owned offset; a
 // number pins it. Unset means `auto`, which resolves to 0 in the root checkout.
 export type InfraOffsetSetting =
-  | { type: "auto" }
-  | { type: "fixed"; offset: number };
+  { type: "auto" } | { type: "fixed"; offset: number };
 
 export type DevRunnerConfig = {
   devInstance: string | undefined;
@@ -50,10 +49,7 @@ export type DevRunnerConfigInput = {
 };
 
 export type DevRunnerConfigErrorCode =
-  | "invalid-integer"
-  | "missing-value"
-  | "out-of-range"
-  | "unknown-argument";
+  "invalid-integer" | "missing-value" | "out-of-range" | "unknown-argument";
 
 const DevRunnerConfigErrorBase: TaggedErrorClass<"DevRunnerConfigError"> =
   TaggedError("DevRunnerConfigError");

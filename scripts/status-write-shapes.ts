@@ -1,163 +1,187 @@
 import { panic } from "better-result";
-import ts from "typescript6";
 
-import { parseSource } from "./parse-memo.ts";
+import {
+  type BindingPattern,
+  type BindingRestElement,
+  type Expression as OxcExpression,
+  type FormalParameterRest,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty as Property,
+  parseSource,
+  type Program,
+  type SpreadElement,
+  staticPropertyName,
+  type TemplateLiteral,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
+
+type Expression = OxcExpression | SpreadElement;
 
 export type StatusColumns = Readonly<Record<string, readonly string[]>>;
 
-const unwrap = (expression: ts.Expression): ts.Expression => {
+const unwrap = (expression: Expression): Expression => {
   if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression) ||
-    ts.isNonNullExpression(expression)
+    expression.type === "ParenthesizedExpression" ||
+    expression.type === "TSAsExpression" ||
+    expression.type === "TSSatisfiesExpression" ||
+    expression.type === "TSNonNullExpression" ||
+    expression.type === "ChainExpression"
   ) {
     return unwrap(expression.expression);
   }
   return expression;
 };
-
-const propertyName = (name: ts.PropertyName): string | undefined => {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
-    return name.text;
+const stringValue = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
-  if (
-    ts.isComputedPropertyName(name) &&
-    ts.isStringLiteralLike(name.expression)
-  ) {
-    return name.expression.text;
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
   }
   return undefined;
 };
-
-const methodName = (expression: ts.Expression): string | undefined => {
+const propertyName = (name: Node): string | undefined =>
+  name.type === "Identifier" ? name.name : stringValue(name);
+const methodName = (expression: Expression): string | undefined => {
   const member = unwrap(expression);
-  if (ts.isPropertyAccessExpression(member)) {
-    return member.name.text;
+  if (member.type !== "MemberExpression") {
+    return undefined;
   }
-  if (
-    ts.isElementAccessExpression(member) &&
-    ts.isStringLiteralLike(member.argumentExpression)
-  ) {
-    return member.argumentExpression.text;
-  }
-  return undefined;
+  return member.computed
+    ? stringValue(member.property)
+    : propertyName(member.property);
 };
-
-const receiver = (expression: ts.Expression): ts.Expression | undefined => {
+const receiver = (expression: Expression): Expression | undefined => {
   const member = unwrap(expression);
-  return ts.isPropertyAccessExpression(member) ||
-    ts.isElementAccessExpression(member)
-    ? member.expression
-    : undefined;
+  return member.type === "MemberExpression" ? member.object : undefined;
 };
-
 type Binding =
   | { type: "import"; source: string; name: string }
-  | { type: "value"; expression: ts.Expression }
+  | { type: "value"; expression: Expression }
   | { type: "shadow" };
-
-const isScope = (node: ts.Node): boolean =>
-  ts.isSourceFile(node) ||
-  ts.isBlock(node) ||
-  ts.isFunctionLike(node) ||
-  ts.isForStatement(node) ||
-  ts.isForOfStatement(node) ||
-  ts.isForInStatement(node) ||
-  ts.isCatchClause(node);
-
-const bindingsFor = (source: ts.SourceFile) => {
-  const scopes = new Map<ts.Node, Map<string, Binding>>();
-  const scopeOf = (node: ts.Node): ts.Node => {
-    let scope = node;
-    while (!isScope(scope)) {
-      scope = scope.parent;
+const isScope = (node: Node): boolean =>
+  node.type === "Program" ||
+  node.type === "BlockStatement" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "ForStatement" ||
+  node.type === "ForOfStatement" ||
+  node.type === "ForInStatement" ||
+  node.type === "CatchClause";
+const bindingsFor = (source: Program) => {
+  const parents = new Map<Node, Node>();
+  walk(source, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
     }
-    return scope;
-  };
-  const declare = (node: ts.Node, name: ts.BindingName, binding: Binding) => {
-    if (!ts.isIdentifier(name)) {
-      for (const element of name.elements) {
-        if (ts.isBindingElement(element)) {
-          declare(node, element.name, { type: "shadow" });
+  });
+  const scopes = new Map<Node, Map<string, Binding>>();
+  const declare = (
+    node: Node,
+    name: BindingPattern | BindingRestElement | FormalParameterRest,
+    binding: Binding,
+  ): void => {
+    if (name.type !== "Identifier") {
+      if (name.type === "AssignmentPattern") {
+        declare(node, name.left, { type: "shadow" });
+      } else if (name.type === "RestElement") {
+        declare(node, name.argument, { type: "shadow" });
+      } else if (name.type === "ArrayPattern") {
+        for (const element of name.elements) {
+          if (element !== null) {
+            declare(node, element, { type: "shadow" });
+          }
+        }
+      } else {
+        for (const element of name.properties) {
+          declare(
+            node,
+            element.type === "RestElement" ? element.argument : element.value,
+            { type: "shadow" },
+          );
         }
       }
       return;
     }
-    const scope = scopeOf(node);
+    let scope = node;
+    while (!isScope(scope)) {
+      const parent = parents.get(scope);
+      if (parent === undefined) {
+        panic("Missing binding scope");
+      }
+      scope = parent;
+    }
     const entries = scopes.get(scope) ?? new Map<string, Binding>();
-    entries.set(name.text, binding);
+    entries.set(name.name, binding);
     scopes.set(scope, entries);
   };
-  const collect = (node: ts.Node) => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteralLike(node.moduleSpecifier)
-    ) {
-      const importSource = node.moduleSpecifier.text;
-      const defaultName = node.importClause?.name;
-      if (defaultName !== undefined) {
-        declare(node, defaultName, {
-          type: "import",
-          source: importSource,
-          name: "default",
-        });
-      }
-      const named = node.importClause?.namedBindings;
-      if (named !== undefined && ts.isNamedImports(named)) {
-        for (const item of named.elements) {
-          declare(node, item.name, {
-            type: "import",
-            source: importSource,
-            name: (item.propertyName ?? item.name).text,
-          });
+  walk(source, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (node.type === "ImportDeclaration") {
+      for (const item of node.specifiers) {
+        let name = "default";
+        if (item.type === "ImportNamespaceSpecifier") {
+          name = "*";
+        } else if (item.type === "ImportSpecifier") {
+          name = propertyName(item.imported) ?? "";
         }
-      } else if (named !== undefined) {
-        declare(node, named.name, {
+        declare(node, item.local, {
           type: "import",
-          source: importSource,
-          name: "*",
+          source: node.source.value,
+          name,
         });
       }
     }
-    if (ts.isImportEqualsDeclaration(node)) {
+    if (node.type === "TSImportEqualsDeclaration") {
       const reference = node.moduleReference;
       declare(
         node,
-        node.name,
-        ts.isExternalModuleReference(reference) &&
-          ts.isStringLiteralLike(reference.expression)
-          ? { type: "import", source: reference.expression.text, name: "*" }
+        node.id,
+        reference.type === "TSExternalModuleReference"
+          ? { type: "import", source: reference.expression.value, name: "*" }
           : { type: "shadow" },
       );
     }
-    if (ts.isVariableDeclaration(node)) {
+    if (node.type === "VariableDeclarator") {
       declare(
-        node.parent,
-        node.name,
-        node.initializer === undefined
+        parent ?? node,
+        node.id,
+        node.init === null
           ? { type: "shadow" }
-          : { type: "value", expression: node.initializer },
+          : { type: "value", expression: node.init },
       );
     }
-    if (ts.isParameter(node)) {
-      declare(node.parent, node.name, { type: "shadow" });
+    if (
+      node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ArrowFunctionExpression"
+    ) {
+      for (const parameter of node.params) {
+        declare(
+          node,
+          parameter.type === "TSParameterProperty"
+            ? parameter.parameter
+            : parameter,
+          { type: "shadow" },
+        );
+      }
     }
-    ts.forEachChild(node, collect);
-  };
-  collect(source);
-  return (name: string, node: ts.Node): Binding | undefined => {
-    let current = node;
-    while (true) {
+  });
+  return (name: string, node: Node): Binding | undefined => {
+    for (
+      let current: Node | undefined = node;
+      current !== undefined;
+      current = parents.get(current)
+    ) {
       const binding = scopes.get(current)?.get(name);
       if (binding !== undefined) {
         return binding;
       }
-      if (ts.isSourceFile(current)) {
-        return undefined;
-      }
-      current = current.parent;
     }
+    return undefined;
   };
 };
 
@@ -173,27 +197,27 @@ type StatusWriteOptions = {
 };
 
 type Mutation =
-  | { type: "value"; expression: ts.Expression }
+  | { type: "value"; expression: Expression }
   | { type: "property"; name: string | undefined };
 
-const mutationsFor = (source: ts.SourceFile) => {
+const mutationsFor = (source: Program) => {
   const bindingFor = bindingsFor(source);
   const literalKey = (
-    expression: ts.Expression,
-    seen = new Set<ts.Node>(),
+    expression: Expression,
+    seen = new Set<Node>(),
   ): string | undefined => {
     const value = unwrap(expression);
     if (seen.has(value)) {
       return undefined;
     }
     seen.add(value);
-    if (ts.isStringLiteralLike(value)) {
-      return value.text;
+    if (stringValue(value) !== undefined) {
+      return stringValue(value);
     }
-    if (!ts.isIdentifier(value)) {
+    if (value.type !== "Identifier") {
       return undefined;
     }
-    const binding = bindingFor(value.text, value);
+    const binding = bindingFor(value.name, value);
     if (binding !== undefined && mutations.has(origin(value) ?? binding)) {
       return undefined;
     }
@@ -201,30 +225,34 @@ const mutationsFor = (source: ts.SourceFile) => {
       ? literalKey(binding.expression, seen)
       : undefined;
   };
-  const payloadKey = (name: ts.PropertyName): string | undefined =>
-    ts.isComputedPropertyName(name)
-      ? literalKey(name.expression)
-      : propertyName(name);
+  const payloadKey = (property: Property): string | undefined => {
+    if (!property.computed) {
+      return propertyName(property.key);
+    }
+    return property.key.type === "PrivateIdentifier"
+      ? undefined
+      : literalKey(property.key);
+  };
   const mutations = new Map<Binding, Mutation[]>();
   const origin = (
-    expression: ts.Expression,
+    expression: Expression,
     seen = new Set<Binding>(),
   ): Binding | undefined => {
     const value = unwrap(expression);
-    if (!ts.isIdentifier(value)) {
+    if (value.type !== "Identifier") {
       return undefined;
     }
-    const binding = bindingFor(value.text, value);
+    const binding = bindingFor(value.name, value);
     if (binding === undefined || seen.has(binding)) {
       return undefined;
     }
     seen.add(binding);
     return binding.type === "value" &&
-      ts.isIdentifier(unwrap(binding.expression))
+      unwrap(binding.expression).type === "Identifier"
       ? (origin(binding.expression, seen) ?? binding)
       : binding;
   };
-  const recordMutation = (expression: ts.Expression, mutation: Mutation) => {
+  const recordMutation = (expression: Expression, mutation: Mutation) => {
     const binding = origin(expression);
     if (binding === undefined) {
       return;
@@ -233,39 +261,35 @@ const mutationsFor = (source: ts.SourceFile) => {
     previous.push(mutation);
     mutations.set(binding, previous);
   };
-  const collectMutations = (node: ts.Node) => {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-    ) {
-      const left = unwrap(node.left);
-      if (ts.isIdentifier(left)) {
+  const collectMutations = (node: Node) => {
+    if (node.type === "AssignmentExpression") {
+      const left = node.left;
+      if (left.type === "Identifier") {
         recordMutation(left, { type: "value", expression: node.right });
-      } else {
+      } else if (
+        left.type !== "ArrayPattern" &&
+        left.type !== "ObjectPattern"
+      ) {
+        // A destructuring target mutates no single receiver.
         const object = receiver(left);
         if (object !== undefined) {
           recordMutation(object, {
             type: "property",
             name:
               methodName(left) ??
-              (ts.isElementAccessExpression(left)
-                ? literalKey(left.argumentExpression)
+              (left.type === "MemberExpression" && left.computed
+                ? literalKey(left.property)
                 : undefined),
           });
         }
       }
     }
-    if (ts.isCallExpression(node)) {
+    if (node.type === "CallExpression") {
       const first = node.arguments.at(0);
-      const calledObject = receiver(node.expression);
-      if (
-        first !== undefined &&
-        calledObject !== undefined &&
-        ts.isIdentifier(calledObject)
-      ) {
-        const object = calledObject.text;
-        const method = methodName(node.expression);
+      const calledObject = receiver(node.callee);
+      if (first !== undefined && calledObject?.type === "Identifier") {
+        const object = calledObject.name;
+        const method = methodName(node.callee);
         if (
           object === "Object" &&
           (method === "assign" || method === "defineProperties")
@@ -286,9 +310,8 @@ const mutationsFor = (source: ts.SourceFile) => {
         }
       }
     }
-    ts.forEachChild(node, collectMutations);
   };
-  collectMutations(source);
+  walk(source, collectMutations);
   return { bindingFor, literalKey, payloadKey, mutations, origin };
 };
 
@@ -298,18 +321,18 @@ const tablesFor = (
 ) => {
   const { bindingFor, mutations, origin } = inspector;
   const tableOf = (
-    expression: ts.Expression,
-    seen = new Set<ts.Node>(),
+    expression: Expression,
+    seen = new Set<Node>(),
   ): string | undefined => {
     const value = unwrap(expression);
     if (seen.has(value)) {
       return undefined;
     }
     seen.add(value);
-    if (ts.isIdentifier(value)) {
-      const binding = bindingFor(value.text, value);
+    if (value.type === "Identifier") {
+      const binding = bindingFor(value.name, value);
       if (binding === undefined) {
-        return Object.hasOwn(columns, value.text) ? value.text : undefined;
+        return Object.hasOwn(columns, value.name) ? value.name : undefined;
       }
       if (binding.type === "value") {
         if (mutations.has(origin(value) ?? binding)) {
@@ -322,11 +345,10 @@ const tablesFor = (
         : undefined;
     }
     if (
-      (ts.isPropertyAccessExpression(value) ||
-        ts.isElementAccessExpression(value)) &&
-      ts.isIdentifier(value.expression)
+      value.type === "MemberExpression" &&
+      value.object.type === "Identifier"
     ) {
-      const binding = bindingFor(value.expression.text, value.expression);
+      const binding = bindingFor(value.object.name, value.object);
       const name = methodName(value);
       return binding?.type === "import" &&
         binding.name === "*" &&
@@ -338,18 +360,18 @@ const tablesFor = (
     return undefined;
   };
   const knownOtherTable = (
-    expression: ts.Expression,
-    seen = new Set<ts.Node>(),
+    expression: Expression,
+    seen = new Set<Node>(),
   ): boolean => {
     const value = unwrap(expression);
     if (seen.has(value)) {
       return false;
     }
     seen.add(value);
-    if (ts.isIdentifier(value)) {
-      const binding = bindingFor(value.text, value);
+    if (value.type === "Identifier") {
+      const binding = bindingFor(value.name, value);
       if (binding === undefined) {
-        return !Object.hasOwn(columns, value.text);
+        return !Object.hasOwn(columns, value.name);
       }
       if (binding.type === "value") {
         return (
@@ -364,8 +386,8 @@ const tablesFor = (
       );
     }
     const object = receiver(value);
-    if (object !== undefined && ts.isIdentifier(object)) {
-      const binding = bindingFor(object.text, object);
+    if (object?.type === "Identifier") {
+      const binding = bindingFor(object.name, object);
       const name = methodName(value);
       return (
         binding?.type === "import" &&
@@ -379,16 +401,16 @@ const tablesFor = (
   };
   const lifecycleKeys = [...new Set(Object.values(columns).flat())];
   const mutationKeys = (
-    expression: ts.Expression,
+    expression: Expression,
   ): readonly string[] | undefined => {
     const value = unwrap(expression);
-    if (!ts.isCallExpression(value)) {
+    if (value.type !== "CallExpression") {
       return undefined;
     }
     const argument = value.arguments.at(0);
     if (
-      (methodName(value.expression) === "update" ||
-        methodName(value.expression) === "insert") &&
+      (methodName(value.callee) === "update" ||
+        methodName(value.callee) === "insert") &&
       argument !== undefined
     ) {
       const table = tableOf(argument);
@@ -397,7 +419,7 @@ const tablesFor = (
       }
       return knownOtherTable(argument) ? undefined : lifecycleKeys;
     }
-    const target = receiver(value.expression);
+    const target = receiver(value.callee);
     return target === undefined ? undefined : mutationKeys(target);
   };
   return { lifecycleKeys, mutationKeys };
@@ -406,28 +428,23 @@ const tablesFor = (
 const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
   const { bindingFor, mutations, origin, payloadKey } = inspector;
   const containsStatus = (
-    expression: ts.Expression,
+    expression: Expression,
     keys: readonly string[],
-    seen = new Set<ts.Node>(),
+    seen = new Set<Node>(),
   ): boolean => {
     const value = unwrap(expression);
     if (seen.has(value)) {
       return false;
     }
     seen.add(value);
-    if (ts.isConditionalExpression(value)) {
+    if (value.type === "ConditionalExpression") {
       return (
-        containsStatus(value.whenTrue, keys, seen) ||
-        containsStatus(value.whenFalse, keys, seen)
+        containsStatus(value.consequent, keys, seen) ||
+        containsStatus(value.alternate, keys, seen)
       );
     }
-    if (
-      ts.isBinaryExpression(value) &&
-      (value.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
-        value.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
-        value.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
-    ) {
-      if (value.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+    if (value.type === "LogicalExpression") {
+      if (value.operator === "&&") {
         return containsStatus(value.right, keys, seen);
       }
       return (
@@ -435,8 +452,8 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
         containsStatus(value.right, keys, seen)
       );
     }
-    if (ts.isIdentifier(value)) {
-      const binding = bindingFor(value.text, value);
+    if (value.type === "Identifier") {
+      const binding = bindingFor(value.name, value);
       if (binding?.type !== "value") {
         return true;
       }
@@ -458,41 +475,50 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
       );
     }
     if (
-      ts.isCallExpression(value) &&
-      ts.isPropertyAccessExpression(value.expression) &&
-      ts.isIdentifier(value.expression.expression)
+      value.type === "CallExpression" &&
+      value.callee.type === "MemberExpression" &&
+      !value.callee.computed &&
+      value.callee.object.type === "Identifier" &&
+      value.callee.property.type === "Identifier"
     ) {
       const argument = value.arguments.at(0);
       if (
-        value.expression.expression.text === "Object" &&
-        value.expression.name.text === "freeze" &&
+        value.callee.object.name === "Object" &&
+        value.callee.property.name === "freeze" &&
         argument !== undefined
       ) {
         return containsStatus(argument, keys, seen);
       }
     }
-    if (!ts.isObjectLiteralExpression(value)) {
-      return !ts.isLiteralExpression(value);
+    if (value.type !== "ObjectExpression") {
+      return !(
+        value.type === "TemplateLiteral" ||
+        (value.type === "Literal" &&
+          (typeof value.value === "string" ||
+            typeof value.value === "number" ||
+            typeof value.value === "bigint" ||
+            "regex" in value))
+      );
     }
     return value.properties.some((property) =>
-      ts.isSpreadAssignment(property)
-        ? containsStatus(property.expression, keys, seen)
-        : payloadKey(property.name) === undefined ||
-          keys.includes(payloadKey(property.name) ?? ""),
+      property.type === "SpreadElement"
+        ? containsStatus(property.argument, keys, seen)
+        : payloadKey(property) === undefined ||
+          keys.includes(payloadKey(property) ?? ""),
     );
   };
   const conflictSetWrites = (
-    expression: ts.Expression,
+    expression: Expression,
     keys: readonly string[],
-    seen = new Set<ts.Node>(),
+    seen = new Set<Node>(),
   ): boolean => {
     const value = unwrap(expression);
     if (seen.has(value)) {
       return false;
     }
     seen.add(value);
-    if (ts.isIdentifier(value)) {
-      const binding = bindingFor(value.text, value);
+    if (value.type === "Identifier") {
+      const binding = bindingFor(value.name, value);
       if (binding?.type !== "value") {
         return true;
       }
@@ -505,30 +531,25 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
         ) || conflictSetWrites(binding.expression, keys, seen)
       );
     }
-    if (ts.isConditionalExpression(value)) {
+    if (value.type === "ConditionalExpression") {
       return (
-        conflictSetWrites(value.whenTrue, keys, seen) ||
-        conflictSetWrites(value.whenFalse, keys, seen)
+        conflictSetWrites(value.consequent, keys, seen) ||
+        conflictSetWrites(value.alternate, keys, seen)
       );
     }
-    if (!ts.isObjectLiteralExpression(value)) {
+    if (value.type !== "ObjectExpression") {
       return true;
     }
     return value.properties.some((property) => {
-      if (ts.isSpreadAssignment(property)) {
-        return conflictSetWrites(property.expression, keys, seen);
+      if (property.type === "SpreadElement") {
+        return conflictSetWrites(property.argument, keys, seen);
       }
       if (
-        ts.isPropertyAssignment(property) &&
-        payloadKey(property.name) === "set"
+        property.kind === "init" &&
+        !property.method &&
+        payloadKey(property) === "set"
       ) {
-        return containsStatus(property.initializer, keys);
-      }
-      if (
-        ts.isShorthandPropertyAssignment(property) &&
-        property.name.text === "set"
-      ) {
-        return containsStatus(property.name, keys);
+        return containsStatus(property.value, keys);
       }
       return false;
     });
@@ -539,33 +560,24 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
 const sqlTextFor = (
   literalKey: ReturnType<typeof mutationsFor>["literalKey"],
 ) => {
-  const sqlText = (template: ts.TemplateLiteral): string => {
-    if (ts.isNoSubstitutionTemplateLiteral(template)) {
-      return template.text;
-    }
-    let text = template.head.text;
-    for (const span of template.templateSpans) {
-      const value = unwrap(span.expression);
+  const sqlText = (template: TemplateLiteral): string => {
+    let text = template.quasis.at(0)?.value.cooked ?? "";
+    for (const [index, expression] of template.expressions.entries()) {
+      const value = unwrap(expression);
       const name = literalKey(value) ?? methodName(value) ?? "__dynamic__";
-      text += `${name}${span.literal.text}`;
+      text += `${name}${template.quasis.at(index + 1)?.value.cooked ?? ""}`;
     }
     return text;
   };
-  const concatenatedSql = (expression: ts.Expression): string => {
+  const concatenatedSql = (expression: Expression): string => {
     const value = unwrap(expression);
-    if (ts.isStringLiteral(value)) {
-      return value.text;
+    if (value.type === "Literal" && typeof value.value === "string") {
+      return value.value;
     }
-    if (
-      ts.isTemplateExpression(value) ||
-      ts.isNoSubstitutionTemplateLiteral(value)
-    ) {
+    if (value.type === "TemplateLiteral") {
       return sqlText(value);
     }
-    if (
-      ts.isBinaryExpression(value) &&
-      value.operatorToken.kind === ts.SyntaxKind.PlusToken
-    ) {
+    if (value.type === "BinaryExpression" && value.operator === "+") {
       return concatenatedSql(value.left) + concatenatedSql(value.right);
     }
     return "__dynamic__";
@@ -580,75 +592,70 @@ export const statusWriteCalls = ({
   content,
   file,
   columns,
-}: StatusWriteOptions): ts.Node[] => {
-  const source = parseSource({ text: content, fileName: file });
+}: StatusWriteOptions): Node[] => {
+  const source = parseSource(file, content).program;
   const inspector = mutationsFor(source);
   const { lifecycleKeys, mutationKeys } = tablesFor(columns, inspector);
   const { containsStatus, conflictSetWrites } = payloadsFor(inspector);
   const { sqlText, concatenatedSql } = sqlTextFor(inspector.literalKey);
-  const matches: ts.Node[] = [];
-  const recordSql = (node: ts.Node, text: string) => {
+  const matches: Node[] = [];
+  const recordSql = (node: Node, text: string) => {
     const count = countRawLifecycleSqlWrites(text, lifecycleKeys);
     for (let index = 0; index < count; index += 1) {
       matches.push(node);
     }
   };
-  const visit = (node: ts.Node) => {
+  const visit = (node: Node, ancestors: readonly Node[]) => {
+    const parent = ancestors.at(-1);
     if (
-      ts.isCallExpression(node) &&
-      (methodName(node.expression) === "set" ||
-        methodName(node.expression) === "onConflictDoUpdate")
+      node.type === "CallExpression" &&
+      (methodName(node.callee) === "set" ||
+        methodName(node.callee) === "onConflictDoUpdate")
     ) {
-      const target = receiver(node.expression);
+      const target = receiver(node.callee);
       const keys = target === undefined ? undefined : mutationKeys(target);
       const payload = node.arguments.at(0);
       if (
         keys !== undefined &&
         payload !== undefined &&
-        (methodName(node.expression) === "onConflictDoUpdate"
+        (methodName(node.callee) === "onConflictDoUpdate"
           ? conflictSetWrites(payload, keys)
           : containsStatus(payload, keys))
       ) {
         matches.push(node);
       }
     }
-    if (ts.isTaggedTemplateExpression(node)) {
-      recordSql(node, sqlText(node.template));
+    if (node.type === "TaggedTemplateExpression") {
+      recordSql(node, sqlText(node.quasi));
     } else if (
-      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
-      !ts.isTaggedTemplateExpression(node.parent)
+      node.type === "Literal" &&
+      typeof node.value === "string" &&
+      parent?.type !== "TaggedTemplateExpression"
     ) {
-      recordSql(node, node.text);
+      recordSql(node, node.value);
     } else if (
-      ts.isTemplateExpression(node) &&
-      !ts.isTaggedTemplateExpression(node.parent)
+      node.type === "TemplateLiteral" &&
+      parent?.type !== "TaggedTemplateExpression"
     ) {
       recordSql(node, sqlText(node));
     }
     if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.PlusToken &&
-      !(
-        ts.isBinaryExpression(node.parent) &&
-        node.parent.operatorToken.kind === ts.SyntaxKind.PlusToken
-      )
+      node.type === "BinaryExpression" &&
+      node.operator === "+" &&
+      !(parent?.type === "BinaryExpression" && parent.operator === "+")
     ) {
       recordSql(node, concatenatedSql(node));
     }
-    ts.forEachChild(node, visit);
   };
-  visit(source);
+  walk(source, visit);
   return matches;
 };
 
 const visibleSqlText = (text: string): string => {
   const visible: string[] = [];
   let state:
-    | "code"
-    | "string"
-    | "identifier"
-    | "line-comment"
-    | "block-comment" = "code";
+    "code" | "string" | "identifier" | "line-comment" | "block-comment" =
+    "code";
   let blockDepth = 0;
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
@@ -787,98 +794,89 @@ export const countRawLifecycleSqlWrites = (
 export const unmanagedTransitionTables = (
   content: string,
 ): readonly string[] => {
-  const source = parseSource({
-    text: content,
-    fileName: "transition-specs.ts",
-  });
+  const source = parseSource("transition-specs.ts", content).program;
   const bindingFor = bindingsFor(source);
   const objectOf = (
-    expression: ts.Expression,
-    seen = new Set<ts.Node>(),
-  ): ts.ObjectLiteralExpression | undefined => {
+    expression: Expression,
+    seen = new Set<Node>(),
+  ): ObjectExpression | undefined => {
     const value = unwrap(expression);
     if (seen.has(value)) {
       return undefined;
     }
     seen.add(value);
-    if (ts.isObjectLiteralExpression(value)) {
+    if (value.type === "ObjectExpression") {
       return value;
     }
-    if (!ts.isIdentifier(value)) {
+    if (value.type !== "Identifier") {
       return undefined;
     }
-    const binding = bindingFor(value.text, value);
+    const binding = bindingFor(value.name, value);
     return binding?.type === "value"
       ? objectOf(binding.expression, seen)
       : undefined;
   };
   const hasUnmanaged = (
-    object: ts.ObjectLiteralExpression,
-    seen = new Set<ts.Node>(),
+    object: ObjectExpression,
+    seen = new Set<Node>(),
   ): boolean => {
     if (seen.has(object)) {
       return false;
     }
     seen.add(object);
-    return object.properties.some((property) => {
-      if (!ts.isSpreadAssignment(property)) {
-        return propertyName(property.name) === "unmanaged";
+    const unmanagedOptions = object.properties.map((property) => {
+      if (property.type !== "SpreadElement") {
+        const name = staticPropertyName(property);
+        if (name === undefined) {
+          panic("Transition spec option keys must be static");
+        }
+        return name === "unmanaged";
       }
-      const spread = objectOf(property.expression);
+      const spread = objectOf(property.argument);
       return spread !== undefined && hasUnmanaged(spread, seen);
     });
+    return unmanagedOptions.includes(true);
   };
-  let declarations: ts.ObjectLiteralExpression | undefined;
-  const visit = (node: ts.Node) => {
+  let declarations: ObjectExpression | undefined;
+  const visit = (node: Node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "TRANSITIONS" &&
-      node.initializer !== undefined
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.id.name === "TRANSITIONS" &&
+      node.init !== null
     ) {
-      declarations = objectOf(node.initializer);
+      declarations = objectOf(node.init);
     }
-    ts.forEachChild(node, visit);
   };
-  visit(source);
+  walk(source, visit);
   if (declarations === undefined) {
     return panic(
       "Transition specs require a statically readable TRANSITIONS object",
     );
   }
   const unmanaged = new Set<string>();
-  const collect = (
-    object: ts.ObjectLiteralExpression,
-    seen = new Set<ts.Node>(),
-  ) => {
+  const collect = (object: ObjectExpression, seen = new Set<Node>()) => {
     if (seen.has(object)) {
       return;
     }
     seen.add(object);
     for (const property of object.properties) {
-      if (ts.isSpreadAssignment(property)) {
-        const spread = objectOf(property.expression);
+      if (property.type === "SpreadElement") {
+        const spread = objectOf(property.argument);
         if (spread === undefined) {
           panic("Transition spec spreads must be statically readable");
         }
         collect(spread, seen);
         continue;
       }
-      if (
-        !ts.isPropertyAssignment(property) &&
-        !ts.isShorthandPropertyAssignment(property)
-      ) {
+      if (property.method || property.kind !== "init") {
         panic("Transition spec entries must be properties");
       }
-      const name = propertyName(property.name);
+      const name = staticPropertyName(property);
       if (name === undefined) {
         panic("Transition spec table keys must be static");
       }
-      const value = objectOf(
-        ts.isPropertyAssignment(property)
-          ? property.initializer
-          : property.name,
-      );
+      const value = objectOf(property.value);
       if (value !== undefined && hasUnmanaged(value)) {
         unmanaged.add(name);
       }

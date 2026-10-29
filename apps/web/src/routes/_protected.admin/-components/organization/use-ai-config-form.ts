@@ -20,7 +20,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { api } from "@/lib/api";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
@@ -52,11 +52,22 @@ type PersistAIConfigOptions = {
   nextRoles: RoleModelOverrides;
 };
 
+const AI_CONFIG_MUTATION_OPTIONS = {
+  exceptionScope: {
+    type: "handler",
+    handlerId: "useAIConfigForm.aiMutation.useSettingsMutation",
+  },
+  invalidate: aiConfigKeys.all,
+} as const;
+
 /**
  * Sole owner of the AI settings page's edit, dirty and save model: the
  * provider/model/decision state and the auxiliary key and toggle sections all
  * save through `saveSettings`.
  */
+const removeAIConfig = async () =>
+  unwrapApiResponse(await api["organization-settings"]["ai-config"].delete({}));
+
 export const useAIConfigForm = ({
   readState,
   organizationId,
@@ -162,7 +173,7 @@ export const useAIConfigForm = ({
       overrideModels: serialized.overrides,
       ...(decision === undefined ? {} : { decision }),
     });
-    const data = unwrapEden(response);
+    const data = unwrapApiResponse(response);
     queryClient.setQueryData(
       aiDefaultsPreviewOptions({
         organizationId,
@@ -190,10 +201,10 @@ export const useAIConfigForm = ({
   };
 
   const aiMutation = useSettingsMutation({
-    invalidate: aiConfigKeys.all,
+    ...AI_CONFIG_MUTATION_OPTIONS,
     mutationFn: async () => {
       if (providers.length === 0 || recoveryAction === "remove") {
-        unwrapEden(await api["organization-settings"]["ai-config"].delete({}));
+        await removeAIConfig();
         setStoredProviders([]);
         setProviders([]);
         setRecoveryAction("keep");

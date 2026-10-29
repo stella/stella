@@ -1,0 +1,1 @@
+{"min-w-[20rem]":{"valid":true,"declarations":[["","min-width","20rem"]],"values":{"20rem":{"p":[],"f":[],"u":false}}},"py-[clamp(.25rem,.5cqw,.45rem)]":{"valid":true,"declarations":[["","padding-block","clamp(.25rem, .5cqw, .45rem)"]],"values":{"clamp(.25rem, .5cqw, .45rem)":{"p":[],"f":[],"u":false}}}}

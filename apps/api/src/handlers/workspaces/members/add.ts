@@ -1,7 +1,6 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -12,16 +11,14 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUserId } from "@/api/lib/custom-schema";
+import { userIdSchema } from "@/api/lib/custom-schema";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { readMatterMutationAuthority } from "@/api/lib/workspaces/visibility";
 
-const addWorkspaceMemberBodySchema = t.Object({
-  userId: tUserId,
-});
+const addWorkspaceMemberBodySchema = v.object({ userId: userIdSchema });
 
 const config = {
   contract: "patch",
@@ -43,7 +40,7 @@ export type AddWorkspaceMemberProps = {
   workspaceId: SafeId<"workspace">;
   actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof addWorkspaceMemberBodySchema>;
+  body: v.InferOutput<typeof addWorkspaceMemberBodySchema>;
 };
 
 // Shared add-member logic reused by the HTTP handler and the

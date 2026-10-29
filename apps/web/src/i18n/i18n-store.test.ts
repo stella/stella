@@ -306,7 +306,10 @@ const expectFailedCsSwitchIsReported = async (
     expect(state.lang).toBe("en");
     expect(state.loadedLang).toBe("en");
     expect(state.isLoaded).toBe(true);
-    expect(captureSpy).toHaveBeenCalledWith(bundleError);
+    expect(captureSpy).toHaveBeenCalledWith(bundleError, {
+      fingerprintKey: "loadMessages:failure",
+      scope: { type: "handler", handlerId: "loadMessages:failure" },
+    });
     expect(toastSpy).toHaveBeenCalledWith({
       type: "error",
       title: en.common.languageLoadFailed,

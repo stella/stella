@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
-  toChatSourceCitationHref,
   type ChatSourceCitationTarget,
+  toChatSourceCitationHref,
 } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";

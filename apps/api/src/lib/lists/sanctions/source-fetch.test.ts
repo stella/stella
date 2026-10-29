@@ -2,16 +2,18 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { SANCTIONS_SOURCES, readUnListVersion } from "@stll/sanctions";
+import { readUnListVersion, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsSource } from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   fetchStreamWithResolvedAddress,
+  type safeOutboundFetchStream,
+} from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import {
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
-  type safeOutboundFetchStream,
 } from "@/api/lib/safe-outbound-fetch";
 
 import { SANCTIONS_SOURCE_CONFIG } from "./source-config";

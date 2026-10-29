@@ -56,6 +56,10 @@ const fixture = async () => {
       [organizationId],
     );
     await client.query(
+      `INSERT INTO organization_access_states (organization_id, state, origin) VALUES ($1, 'self_managed_keys', 'creation') ON CONFLICT (organization_id) DO NOTHING`,
+      [organizationId],
+    );
+    await client.query(
       `INSERT INTO workspaces (id, organization_id, name, reference, visibility) VALUES ($1, $2, 'Matter', $3, $4)`,
       [
         matters[index],

@@ -95,7 +95,12 @@ const addVisibleWorkspaceSelectTest = (table: WorkspaceScopedTable) => {
   const tableName = getTableName(table);
 
   test(`${tableName}: correct workspace IDs → rows visible`, async () => {
-    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) => tx.$count(table));
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) => tx.$count(table),
+      ids.userA1,
+    );
     expect(c).toBeGreaterThan(0);
   });
 };
@@ -104,7 +109,12 @@ const addVisibleOrganizationSelectTest = (table: OrganizationScopedTable) => {
   const tableName = getTableName(table);
 
   test(`${tableName}: correct org ID → rows visible`, async () => {
-    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) => tx.$count(table));
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) => tx.$count(table),
+      ids.userA1,
+    );
     expect(c).toBeGreaterThan(0);
   });
 };
@@ -114,7 +124,7 @@ const addAffectedMutationTest = (
   scopeLabel: "workspace" | "org",
 ) => {
   test(`UPDATE ${getTableName(table)} in own ${scopeLabel} → affected`, async () => {
-    const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
+    const rows = await scopedQuery([ids.wsA1], ids.orgA, query, ids.userA1);
     expect(rows).toHaveLength(1);
   });
 };
@@ -828,20 +838,25 @@ describe("workspace INSERT — correct scope", () => {
   });
 
   test("INSERT invoice → succeeds", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const rows = await tx
-        .insert(invoices)
-        .values({
-          id: testId(),
-          organizationId: ids.orgA,
-          workspaceId: ids.wsA1,
-          invoiceNumber: "RLS-POS-001",
-          invoiceDate: "2025-06-01",
-          currency: "USD",
-        })
-        .returning({ id: invoices.id });
-      expect(rows).toHaveLength(1);
-    });
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const rows = await tx
+          .insert(invoices)
+          .values({
+            id: testId(),
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA1,
+            invoiceNumber: "RLS-POS-001",
+            invoiceDate: "2025-06-01",
+            currency: "USD",
+          })
+          .returning({ id: invoices.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
   });
 
   test("INSERT caseLawMatterLink → succeeds", async () => {
@@ -1338,22 +1353,27 @@ describe("workspace DELETE — correct scope", () => {
   });
 
   test("DELETE invoice in own workspace → succeeds", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = testId();
-      await tx.insert(invoices).values({
-        id: delId,
-        organizationId: ids.orgA,
-        workspaceId: ids.wsA1,
-        invoiceNumber: "DEL-001",
-        invoiceDate: "2025-07-01",
-        currency: "USD",
-      });
-      const rows = await tx
-        .delete(invoices)
-        .where(eq(invoices.id, delId))
-        .returning({ id: invoices.id });
-      expect(rows).toHaveLength(1);
-    });
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const delId = testId();
+        await tx.insert(invoices).values({
+          id: delId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          invoiceNumber: "DEL-001",
+          invoiceDate: "2025-07-01",
+          currency: "USD",
+        });
+        const rows = await tx
+          .delete(invoices)
+          .where(eq(invoices.id, delId))
+          .returning({ id: invoices.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
   });
 
   test("DELETE caseLawMatterLink in own workspace → succeeds", async () => {

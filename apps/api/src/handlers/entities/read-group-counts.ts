@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TASK_STATUSES } from "@stll/api-contract";
 
@@ -13,7 +13,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { tFind } from "@/api/lib/entities/find-schema";
 import {
   buildKanbanGroupCondition,
@@ -26,6 +26,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -45,16 +46,16 @@ const TASK_STATUS_SQL_VALUES = TASK_STATUSES.map((statusValue) => {
   return sql.raw(`'${statusValue}'`);
 });
 
-const readGroupCountsBodySchema = t.Object({
-  groupByPropertyId: t.Union([
-    t.Literal(STATUS_GROUP_ID),
-    t.Literal(KIND_GROUP_ID),
-    tSafeId("property"),
+const readGroupCountsBodySchema = v.object({
+  groupByPropertyId: v.union([
+    v.literal(STATUS_GROUP_ID),
+    v.literal(KIND_GROUP_ID),
+    resourceIdSchema("property"),
   ]),
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+  filters: v.optional(
+    v.pipe(v.array(tConditionNode), v.maxLength(LIMITS.viewFiltersCount)),
   ),
-  find: t.Optional(tFind),
+  find: v.optional(tFind),
 });
 
 const config = {
@@ -131,7 +132,7 @@ const readGroupCounts = createSafeHandler(
               count: sql<number>`count(*)::int`,
             })
             .from(entities)
-            .where(and(baseConditions, eq(entities.kind, "task")))
+            .where(and(baseConditions, workTask(entities)))
             .groupBy(statusBucketExpr),
         ),
       );

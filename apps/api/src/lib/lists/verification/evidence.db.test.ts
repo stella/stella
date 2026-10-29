@@ -17,8 +17,8 @@ import {
   entities,
   entityVersions,
   legalListFactDetails,
-  legalListItemSources,
   legalListItems,
+  legalListItemSources,
   legalLists,
   workspaces,
 } from "@/api/db/schema";

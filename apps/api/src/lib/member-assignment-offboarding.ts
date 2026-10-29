@@ -20,33 +20,34 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  chatToolGrants,
+  contacts,
   correspondence,
   desktopEditHandoffs,
-  folioCollabRoomTokens,
-  entities,
-  pdfSigningSessions,
-  timeEntries,
   desktopEditSessions,
   desktopPresence,
-  flowRuns,
+  entities,
   flowDefinitions,
+  flowRuns,
   flowRunSteps,
-  mcpUserConnections,
-  chatToolGrants,
-  sharepointConnections,
-  sharepointOAuthState,
+  folioCollabRoomTokens,
   mcpOAuthState,
-  contacts,
+  mcpUserConnections,
+  mcpWebHandoff,
+  pdfSigningSessions,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
+  sharepointConnections,
+  sharepointOAuthState,
   taskAssignees,
+  timeEntries,
+  WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_STATUS,
+  workObligationEvents,
+  workObligations,
   workspaceMembers,
   workspaces,
-  workObligations,
-  workObligationEvents,
-  WORK_OBLIGATION_STATUS,
-  WORK_OBLIGATION_EVENT_TYPE,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
@@ -60,6 +61,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockChatOwnerStoredContentTransitionOnTx,
+  tryLockAccountChatOwnerStoredContentTransitionsOnTx,
+} from "@/api/lib/chat/thread-stored-content-egress";
 import {
   lockMatterStewardship,
   lockOpenSigningPage,
@@ -1018,13 +1023,23 @@ export const selectMemberCleanupWorkspaceIds = async ({
 };
 
 /** Freeze every organization and cleanup matter before account erasure mutates membership. */
+
 export const tryLockAccountMemberCleanup = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ) => {
+  // Chat egress fences precede every membership row lock; a compaction in
+  // flight for any of the account's organizations is a busy refusal.
+  if (
+    (await tryLockAccountChatOwnerStoredContentTransitionsOnTx(tx, userId)) ===
+    "busy"
+  ) {
+    abortTransaction(removalBusy());
+  }
   const workspaceIds = await selectMemberCleanupWorkspaceIds({ tx, userId });
   const memberships = await tx
     .select({ organizationId: member.organizationId })
+
     .from(member)
     .where(eq(member.userId, userId));
   const matters =
@@ -1454,6 +1469,10 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ) => {
+  await lockChatOwnerStoredContentTransitionOnTx(tx, {
+    organizationId,
+    userId,
+  });
   await lockOrganizationCleanupWorkspaces({
     tx,
     organizationId,
@@ -1680,6 +1699,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [oauthAccessToken.userId, "cleared"],
   [oauthRefreshToken.userId, "cleared"],
   [oauthConsent.userId, "cleared"],
+  [mcpWebHandoff.userId, "cleared"],
   [agentRegistration.boundUserId, "cleared"],
   [agentDelegation.userId, "cleared"],
   [folioCollabRoomTokens.userId, "cleared"],

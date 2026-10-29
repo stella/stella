@@ -1,12 +1,11 @@
 import { panic } from "better-result";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
-  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
   MATTER_STEWARD_HANDOVER_MAX_MATTERS,
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
   MATTER_VISIBILITY,
 } from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
@@ -140,20 +139,16 @@ export const readMatterMutationAuthority = async (
   };
 };
 
-/**
- * Request schema for a matter visibility. A literal union rather than
- * `t.UnionEnum`: wrapped in `t.Optional`, a union enum coerces an absent field
- * to its first member, which would turn "not stated" into the widest level.
- */
-export const tMatterVisibility = (options?: { description?: string }) =>
-  t.Union(
-    [
-      t.Literal(MATTER_VISIBILITY.allMembers),
-      t.Literal(MATTER_VISIBILITY.adminsAndAssigned),
-      t.Literal(MATTER_VISIBILITY.assignedOnly),
-    ],
-    options,
-  );
+export const matterVisibilitySchema = (options?: { description?: string }) => {
+  const schema = v.picklist([
+    MATTER_VISIBILITY.allMembers,
+    MATTER_VISIBILITY.adminsAndAssigned,
+    MATTER_VISIBILITY.assignedOnly,
+  ]);
+  return options?.description
+    ? v.pipe(schema, v.description(options.description))
+    : schema;
+};
 
 /**
  * The steward invariant: an assigned-only matter is reached only by its

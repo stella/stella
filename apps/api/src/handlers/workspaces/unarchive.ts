@@ -20,6 +20,8 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "covered", by: "save_matter" },
+  // The one operation an archived matter admits.
+  workspaceStatus: "active-or-archived",
 } satisfies WorkspaceHandlerConfig;
 
 export type UnarchiveWorkspaceHandlerProps = {

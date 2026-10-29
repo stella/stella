@@ -9,10 +9,10 @@ import {
 import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
-  projectMcpFeatureInput,
   isMcpDescriptorFeatureEnabled,
+  projectMcpFeatureInput,
 } from "@/api/mcp/feature-access";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
@@ -31,7 +31,7 @@ import {
  * without it, and dispatch refuses only the confirmation-gated ones.
  */
 const isStaticToolAvailableToConfirmation = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean => {
   if (context.toolConfirmation !== TOOL_CONFIRMATION.unavailable) {
@@ -46,7 +46,7 @@ const isStaticToolAvailableToConfirmation = (
  * discovery and, on a call by name, answered as an unknown tool.
  */
 export const isStaticToolShownToMemberRole = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean => definition.isVisibleToMemberRole?.(context.memberRole) ?? true;
 
@@ -57,7 +57,7 @@ export const isStaticToolShownToMemberRole = (
  * `permission_denied` naming the member role, the credential, or the account.
  */
 const isStaticToolVisibleToRole = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean =>
   hasMcpToolAuthority(context, definition) &&
@@ -73,7 +73,7 @@ const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
  * enum whole; only a read that produced the set narrows it.
  */
 export const resolveOfferedRegistrySlugs = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
   mode: McpMode,
 ): Promise<readonly BusinessRegistrySlug[] | undefined> => {
   if (mode !== "default" || context.loadEnabledRegistrySlugs === undefined) {
@@ -184,7 +184,7 @@ const narrowBusinessRegistryTool = (
  * its local all-scopes preflight reachable when the primary grant is absent.
  */
 type OfferedStaticMcpToolOptions = {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
   audience?: "model" | "app";
@@ -244,6 +244,23 @@ export const loadOfferedStaticMcpToolDefinitions = async (
     offered,
   );
 };
+
+/**
+ * The offered tools a session can finish a call to. `tools/list` keeps a
+ * compound tool discoverable on its primary scope alone; anything that depends
+ * on the tool (a skill, a reference workflow) needs every scope it needs.
+ */
+export const usableStaticMcpToolNames = (
+  offered: readonly McpToolDefinition[],
+  grantedScopes: readonly string[] | undefined,
+): ReadonlySet<string> =>
+  new Set(
+    offered.flatMap(({ additionalScopes = [], name }) =>
+      additionalScopes.every((scope) => hasGrantedScope(grantedScopes, scope))
+        ? [name]
+        : [],
+    ),
+  );
 
 /** `undefined` grants every scope (a caller that does not filter by scope). */
 export const hasGrantedScope = (

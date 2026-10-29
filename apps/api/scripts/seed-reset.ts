@@ -13,12 +13,12 @@
  */
 
 import { panic } from "better-result";
-import { SQL } from "bun";
 import path from "node:path";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
+import { createSqlClient } from "@/api/db/sql-client";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { migrationCreatedRoles } from "./migration-roles";
@@ -47,7 +47,7 @@ if (!/^[a-z_][a-z0-9_]*$/u.test(database) || database === ADMIN_DATABASE) {
 }
 
 url.pathname = `/${ADMIN_DATABASE}`;
-const admin = new SQL({ max: 1, url: url.toString() });
+const admin = createSqlClient({ max: 1, url: url.toString() });
 await runScriptWithErrorOutput(async () => {
   try {
     await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);

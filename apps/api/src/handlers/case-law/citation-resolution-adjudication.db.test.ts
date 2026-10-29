@@ -19,10 +19,10 @@ import {
 import {
   CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
+  CITATION_RESOLUTION_STATUS,
   countsByRule,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
-  CITATION_RESOLUTION_STATUS,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

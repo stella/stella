@@ -34,7 +34,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261016100100_matter_visibility/migration.sql",
+  "../../drizzle/20261029072000_matter_visibility/migration.sql",
 );
 
 const migrationSql = readFileSync(MIGRATION_PATH, "utf-8")
@@ -167,7 +167,7 @@ const connectionOver = (database: PGlite): OnlineMigrationConnection => ({
 const applyVisibility = async (database: PGlite) => {
   await database.exec(migrationSql);
   const connection = connectionOver(database);
-  await repair.repair(connection, tables);
+  await repair.repair(connection, createUngatedTableGateForTests(connection));
 };
 
 const migrated = async (): Promise<PGlite> => {

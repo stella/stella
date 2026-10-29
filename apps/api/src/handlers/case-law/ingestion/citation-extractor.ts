@@ -7,10 +7,10 @@ import {
   PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
   PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
   PL_AUTHORITY_FILE_NUMBER_SOURCE,
-  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   PL_KIO_DOCKET_SOURCE,
   PL_TK_DISTINCTIVE_DOCKET_SOURCE,
   PL_TK_DOCKET_SOURCE,
+  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   polishAdministrativeDocketOf,
   polishConstitutionalDocketKey,
   polishKioDocketKey,
@@ -544,8 +544,7 @@ const hungarianConstitutionalDesignation = (value: string): string | null => {
  * opinion, a Constitutional Court decision). Null for text that is neither.
  */
 type HungarianCitationForm =
-  | { type: "docket"; registry: string }
-  | { type: "published" };
+  { type: "docket"; registry: string } | { type: "published" };
 
 export const hungarianCitationForm = (
   citationText: string,
@@ -588,11 +587,13 @@ const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{
 // PL_TK_PATTERN/PL_TK_BARE_PATTERN's phantom-duplicate lookbehind exactly,
 // or a whitespace run this pattern still combines into one citation but
 // the lookbehind no longer recognizes lets the Tribunal symbol at the
-// tail phantom-duplicate as a second, separate citation. Group
+// tail phantom-duplicate as a second, separate citation. A division
+// code may carry a trailing dot ("IV P. 498/99", "VIII Kz. 123/15"); the
+// dedup key drops it. Group
 // `caseNumber` captures the bare case number to deduplicate against the
 // unprefixed pattern below.
 const PL_PREFIXED_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}\.?(?:[\s/]{1,3}[A-Za-z]{1,5}\.?)?\s*\d{1,6}\/\d{2,4})`,
   "gu",
 );
 
@@ -878,6 +879,20 @@ const PL_NSA_WSA_PATTERN = new RegExp(
   "gu",
 );
 
+// The seated register spelled with dots, "II S.A./Po 1234/01". The capture
+// is loose about the seat; it stands only when the undotted spelling parses
+// as an administrative docket (`foldPolishDottedRegister`).
+const PL_NSA_WSA_DOTTED_PATTERN = new RegExp(
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>(?:[IVX]{1,4}\s{0,3})?S\.\s?A\.\s{0,3}\/\s{0,3}\p{Lu}\p{Ll}?\s{1,3}\d{1,6}\/\d{2}(?:\d{2})?)(?!\d)`,
+  "gu",
+);
+
+const POLISH_DOTTED_REGISTER_RE = /(?<![\p{L}\d.])S\.\s?A\.(?=\s{0,3}\/)/gu;
+
+/** "II S.A./Po 1234/01" in the register's undotted spelling, "II SA/Po". */
+const foldPolishDottedRegister = (text: string): string =>
+  text.replace(POLISH_DOTTED_REGISTER_RE, "SA");
+
 // The pre-2004 seatless Warsaw form, including a joined range of numbers
 // the bare Polish pattern does not read ("I SA 1234-1236/98"). The range
 // stays one citation keyed with both ends, as a consolidated Czech docket
@@ -1121,6 +1136,7 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
+  PL_NSA_WSA_DOTTED_PATTERN,
   PL_NSA_SEATLESS_PATTERN,
   PL_NSA_PRE_REFORM_RESOLUTION_PATTERN,
 
@@ -1366,7 +1382,8 @@ const canonicalizeDedupKey = (text: string): string => {
     .trim();
   // A leading `N/` some registers print ahead of an administrative docket
   // ("12/II SA/Po 1234/99") is not part of it.
-  const spaced = polishAdministrativeDocketOf(normalized) ?? normalized;
+  const undotted = foldPolishDottedRegister(normalized);
+  const spaced = polishAdministrativeDocketOf(undotted) ?? normalized;
 
   // Read before the registry dot is stripped below: in a Hungarian docket
   // that dot is the separator ("Pfv. 20.187/2017/12").
@@ -2042,6 +2059,15 @@ export const extractCitations = (
         ) {
           continue;
         }
+        if (
+          pattern === PL_NSA_WSA_DOTTED_PATTERN &&
+          (caseNumber === undefined ||
+            polishAdministrativeDocketOf(
+              foldPolishDottedRegister(caseNumber),
+            ) === null)
+        ) {
+          continue;
+        }
         const cueGate = CUE_GATED_PATTERN_BY_PATTERN.get(pattern);
         if (cueGate !== undefined) {
           const before = section.text.slice(
@@ -2188,8 +2214,7 @@ export type DecisionCitationExtraction = {
 };
 
 export type DecisionCitationRejection =
-  | CitationScopesRejectedError
-  | UsCitationRejection;
+  CitationScopesRejectedError | UsCitationRejection;
 
 /** A cited decision as the citation graph's row source reads it. */
 const extractedCitationOf = ({

@@ -12,9 +12,9 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -26,7 +26,10 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   dialogMatterVisibility,
@@ -40,15 +43,16 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 
-const SelectedClient = ({
+export const SelectedClient = ({
   client,
   onClear,
   clearLabel,
@@ -150,8 +154,8 @@ const CreateMatterDialogBody = ({
   const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
-  const workspacesDataView = useQueryView(workspacesDataQuery);
-  useQueryViewError(workspacesDataView);
+  const workspacesDataView = queryView(workspacesDataQuery);
+  useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
 
@@ -342,6 +346,7 @@ const CreateMatterDialogBody = ({
                 ? t("workspaces.parties.changeClient")
                 : t("workspaces.parties.noClientOptional")
             }
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
           {selectedClient === null && visibility === "assigned_only" ? (
             <p className="text-muted-foreground text-xs">

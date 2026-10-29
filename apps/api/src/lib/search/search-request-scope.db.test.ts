@@ -34,6 +34,7 @@ import type {
 import { createPgFtsSearchReader } from "@/api/lib/search/pg-fts-provider";
 import { readSearchPreview } from "@/api/lib/search/preview";
 import type { FacetBucket, GlobalSearchHit } from "@/api/lib/search/types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -241,6 +242,15 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  await Promise.all(
+    [organizationId, otherOrganizationId].map(
+      async (id) =>
+        await recordNewOrganizationAccessState(testDb, {
+          organizationId: id,
+          now: new Date(),
+        }),
+    ),
+  );
   await testDb.insert(member).values(
     (
       [

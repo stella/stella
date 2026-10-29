@@ -1,5 +1,25 @@
 # @stll/agent-input
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`0ecb2de`](https://github.com/stella/stella/commit/0ecb2de044bc19abd46d44ac933d0f3c1cd724ef), [`15e7031`](https://github.com/stella/stella/commit/15e7031924012f3998e399392d1add7eb603583d)]:
+  - @stll/text-normalize@0.5.0
+
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b)]:
+  - @stll/text-normalize@0.4.0
+
+## 0.2.0
+
+### Minor Changes
+
+- [#5894](https://github.com/stella/stella/pull/5894) [`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add strict whole-token numeric parsers for machine input. Reject malformed CLI pagination tokens while preserving localized tool-value normalization.
+
 ## 0.1.8
 
 ### Patch Changes

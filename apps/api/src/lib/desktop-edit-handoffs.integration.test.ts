@@ -13,9 +13,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   consumeDesktopEditHandoff,
+  DesktopHandoffAccountMismatchError,
   readDesktopEditHandoffAccess,
   recordDesktopHandoffFailure,
-  DesktopHandoffAccountMismatchError,
 } from "@/api/lib/desktop-edit-handoffs";
 import {
   createDesktopEditHandoffToken,

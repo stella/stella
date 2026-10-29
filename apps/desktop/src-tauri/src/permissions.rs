@@ -277,9 +277,15 @@ pub const ACCESSIBILITY_SETTINGS_URL: &str =
 pub fn open_settings(app: &AppHandle, permission: Permission) -> Result<(), String> {
   let url = settings_url(app, permission)
     .ok_or_else(|| "this permission has no settings page here".to_string())?;
-  opener::open(url).map_err(crate::logging::with_cause_logged(
-    "system settings could not be opened",
-  ))
+  opener::open(url)
+    .map_err(crate::logging::with_cause_logged(
+      "system settings could not be opened",
+    ))
+    .inspect(|()| {
+      if permission == Permission::Accessibility {
+        crate::accessibility_guide::show(app);
+      }
+    })
 }
 
 /// Asks the OS where it can ask, and otherwise opens the settings page.

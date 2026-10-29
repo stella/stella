@@ -9,25 +9,58 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { readDecisions } from "./ci-job-classification/decisions";
 import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
+  decisionPathForKey,
 } from "./ci-job-classification/inputs";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
 
-test("the autofix generator reads every classification input and writes only the decisions", () => {
+test("the classification generator reads and writes every input it owns", () => {
   const generator = GENERATORS.find(
     ({ id }) => id === "ci-job-classification-digests",
   );
   expect(generator?.inputs).toEqual(CLASSIFICATION_INPUT_GLOBS);
-  expect(generator?.outputs).toEqual([CLASSIFICATION_DECISIONS_PATH]);
-  expect(generator?.autofix).toBe(true);
+  expect(generator?.outputs).toEqual([
+    `${CLASSIFICATION_DECISIONS_PATH}/**`,
+    ".github/ci-job-classification-sources.json",
+  ]);
+  // The autofix action may not modify .github/, where every output lives.
+  expect(generator?.autofix).toBe(false);
   expect(generator?.write).toEqual([
     "bun",
     "scripts/check-ci-job-classification.ts",
     "--write",
   ]);
+});
+
+test("the classification input paths load alone, without packages or siblings", () => {
+  // The autofix planner reads them from a sparse checkout without package
+  // dependencies, so the module imports nothing beyond the runtime.
+  const root = mkdtempSync(path.join(tmpdir(), "classification-inputs-"));
+  try {
+    const copy = path.join(root, "inputs.ts");
+    writeFileSync(
+      copy,
+      readFileSync(
+        path.join(import.meta.dir, "ci-job-classification/inputs.ts"),
+        "utf-8",
+      ),
+    );
+    const loaded = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        `const m = await import(${JSON.stringify(copy)}); if (!m.CLASSIFICATION_INPUT_GLOBS.length) process.exit(2);`,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(loaded.exitCode, loaded.stderr.toString()).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 const SCRIPT = path.join(import.meta.dir, "check-ci-job-classification.ts");
@@ -69,10 +102,16 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
-    writeFileSync(
-      path.join(root, CLASSIFICATION_DECISIONS_PATH),
-      `${JSON.stringify(decisions, null, 2)}\n`,
-    );
+    // One file per decision, the directory replaced as a whole.
+    rmSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
+      recursive: true,
+      force: true,
+    });
+    for (const [key, decision] of Object.entries(decisions)) {
+      const file = path.join(root, decisionPathForKey(key));
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`);
+    }
   };
   const git = (...args: string[]) => {
     const result = Bun.spawnSync(["git", "-C", root, ...args], {
@@ -122,10 +161,8 @@ const run = (root: string, ...args: string[]) => {
   };
 };
 
-const decisionsIn = (root: string): Record<string, Decision> =>
-  JSON.parse(
-    readFileSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), "utf-8"),
-  );
+const decisionsIn = (root: string) =>
+  readDecisions({ type: "working-tree", root });
 
 const BEFORE = "jobs: {check: {env: {MODE: one}, steps: []}}";
 const AFTER = "jobs: {check: {env: {MODE: two}, steps: []}}";
@@ -219,7 +256,7 @@ test("a new job is never classified by the refresh", () => {
   expect(decisionsIn(root)).toEqual(decisions);
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
-  expect(check.stderr).toContain(keyOf("added"));
+  expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
   expect(check.stderr).toContain("<choose ordinary, support, or priority>");
 });
 
@@ -291,7 +328,7 @@ test("pre-push refreshes a mechanical digest and asks for a commit, then passes"
   expect(first.exitCode).toBe(1);
   expect(first.stdout).toContain("Refreshed 1 mechanical");
   expect(first.stderr).toBe(
-    `Commit the refreshed ${CLASSIFICATION_DECISIONS_PATH} and push again.\n`,
+    `Commit the refreshed decision files (${decisionPathForKey(keyOf("check"))}) and push again.\n`,
   );
   commitAll("refresh");
   expect(run(root, "--pre-push")).toEqual({

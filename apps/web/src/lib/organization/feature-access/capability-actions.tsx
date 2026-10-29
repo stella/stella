@@ -1,7 +1,8 @@
-import { createContext, use, useId } from "react";
+import { createContext, createElement, use, useId } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -12,15 +13,17 @@ import { api } from "@/lib/api";
 import { roleOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { optionalOrganizationSettingsOptions } from "@/queries/organization-settings";
 
 import {
   CAPABILITY_REASON_KEYS,
-  resolveActionCapabilities,
   isCapabilityActionVisible,
+  resolveActionCapabilities,
 } from "./action-capabilities.logic";
 import type {
   ActionCapabilities,
@@ -32,7 +35,7 @@ const documentOcrAvailabilityOptions = (organizationId: string) =>
   queryOptions({
     queryKey: ["document-ocr-availability", organizationId],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["document-ocr-availability"].get({
           fetch: { signal },
         }),
@@ -93,27 +96,45 @@ const useLiveActionCapabilities = (
     enabled: needs("verification") || needs("legalLists"),
   });
   const roleQuery = useQuery({ ...roleOptions, enabled });
-  const ai = useQueryView(aiQuery);
-  const deepl = useQueryView(deeplQuery);
-  const ocr = useQueryView(ocrQuery);
-  const desktop = useQueryView(desktopQuery);
-  const settings = useQueryView(settingsQuery);
-  const role = useQueryView(roleQuery);
-  useQueryViewError(ai);
-  useQueryViewError(deepl);
-  useQueryViewError(ocr);
-  useQueryViewError(desktop);
-  useQueryViewError(settings);
-  useQueryViewError(role);
+  const ai = queryView(aiQuery);
+  const deepl = queryView(deeplQuery);
+  const ocr = queryView(ocrQuery);
+  const desktop = queryView(desktopQuery);
+  const settings = queryView(settingsQuery);
+  const role = queryView(roleQuery);
+  useQueryViewError(ai, "useLiveActionCapabilities:query");
+  useQueryViewError(deepl, "useLiveActionCapabilities:query-2");
+  useQueryViewError(ocr, "useLiveActionCapabilities:query-3");
+  useQueryViewError(desktop, "useLiveActionCapabilities:query-4");
+  useQueryViewError(settings, "useLiveActionCapabilities:query-5");
+  useQueryViewError(role, "useLiveActionCapabilities:query-6");
   return resolveActionCapabilities({
     role: role.type === "items" ? role.items : undefined,
-    ai: ai.type === "items" ? ai.items.available : undefined,
-    deepl: deepl.type === "items" ? deepl.items.configured : undefined,
-    ocr: ocr.type === "items" ? ocr.items.available : undefined,
-    desktop: desktop.type === "items" ? desktop.items.type : undefined,
-    settings: settings.type === "items" ? settings.items : undefined,
+    ai: capabilityObservation(ai, (items) => items.available),
+    deepl: capabilityObservation(deepl, (items) => items.configured),
+    ocr: capabilityObservation(ocr, (items) => items),
+    desktop: capabilityObservation(desktop, (items) => items.type),
+    settings: capabilityObservation(settings, (items) => items),
   });
 };
+
+function capabilityObservation<T, TValue>(
+  view: QueryView<T, unknown>,
+  project: (items: T) => TValue,
+): TValue | undefined | { status: "error" } {
+  switch (view.type) {
+    case "items":
+      return project(view.items);
+    case "error":
+      return { status: "error" };
+    case "pending":
+    case "empty":
+      return undefined;
+    default:
+      view satisfies never;
+      return panic("Unknown capability observation");
+  }
+}
 
 export const useActionCapabilities = (
   capability?: Capability | null,
@@ -122,6 +143,49 @@ export const useActionCapabilities = (
   const live = useLiveActionCapabilities(fixture === null, capability);
   return fixture ?? live;
 };
+
+/**
+ * Renders `children` only where `CapabilityAction` renders `action`. Chrome
+ * that belongs to the action but sits outside its render function (a
+ * separator before it) is rendered through this, so it never outlives the
+ * action and reads capabilities only where the action does.
+ */
+export const CapabilityActionChrome = ({
+  action,
+  children,
+}: {
+  action: ActionDescriptor;
+  children: ReactElement;
+}) =>
+  createElement(
+    renderCapabilityActionChromeContent,
+    {
+      action,
+      capabilities: useActionCapabilities(action.capability),
+    },
+    children,
+  );
+
+function renderCapabilityActionChromeContent({
+  action,
+  capabilities,
+  children,
+}: {
+  action: ActionDescriptor;
+  capabilities: ActionCapabilities;
+  children?: ReactElement;
+}): ReactElement | null {
+  const state =
+    action.capability === null
+      ? null
+      : capabilities.capabilities[action.capability];
+  if (state?.type === "pending") {
+    return null;
+  }
+  return isCapabilityActionVisible(action, capabilities)
+    ? (children ?? null)
+    : null;
+}
 
 type CapabilityActionChildProps = {
   disabled?: boolean;
@@ -148,6 +212,12 @@ export const CapabilityAction = ({
       : resolved.capabilities[action.capability];
   if (state === null || state.type === "available") {
     return children({});
+  }
+  if (state.type === "pending") {
+    return null;
+  }
+  if (state.type === "error") {
+    return null;
   }
   if (!isCapabilityActionVisible(action, resolved)) {
     return null;

@@ -5,9 +5,7 @@ import type { PublicCrawlOptions } from "@/public-crawl-policy";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type CacheClass =
-  | "private-no-store"
-  | "public-anonymous"
-  | "public-indexable";
+  "private-no-store" | "public-anonymous" | "public-indexable";
 
 export const SSR_CACHE_CLASS_HEADER = "x-stella-cache-class";
 
@@ -26,6 +24,9 @@ export const ROUTE_CACHE_CLASSES = {
   "/chat": "private-no-store",
   "/settings": "private-no-store",
   "/time": "private-no-store",
+  "/time/approvals": "private-no-store",
+  "/auth/handoff": "private-no-store",
+  "/auth/reauth": "private-no-store",
   "/auth/error": "private-no-store",
   "/auth/organization": "private-no-store",
   "/auth/otp": "private-no-store",
@@ -48,6 +49,8 @@ export const ROUTE_CACHE_CLASSES = {
   "/law/": "public-indexable",
   "/tools/": "public-indexable",
   "/admin": "private-no-store",
+  "/contacts": "private-no-store",
+  "/workspaces": "private-no-store",
   "/workspaces/$workspaceId": "private-no-store",
   "/chat/$threadId": "private-no-store",
   "/chat/new": "private-no-store",
@@ -151,6 +154,12 @@ export const documentResponsePolicyHeaders = ({
   match,
   crawl,
 }: DocumentResponsePolicyOptions) => {
+  if (match?.fullPath === "/auth/handoff") {
+    return {
+      ...ssrCacheClassHeaders("private-no-store"),
+      "Referrer-Policy": "no-referrer",
+    };
+  }
   if (!match || match.ssr === false || match.status !== "success") {
     return ssrCacheClassHeaders("private-no-store");
   }

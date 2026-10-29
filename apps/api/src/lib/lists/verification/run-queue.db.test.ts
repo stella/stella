@@ -17,8 +17,8 @@ import {
   legalListVerificationRuns,
   organizationSettings,
   properties,
-  workspaces,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";

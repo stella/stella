@@ -1,5 +1,6 @@
 import { ECLI_COURT_REGISTRY, type RegisteredCourt } from "./case-law-courts";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
+import { GBR_EWHC_DIVISIONS } from "./decision-docket-grammar";
 import { SK_COURT_TIERS } from "./sk-court-tiers";
 
 /**
@@ -115,6 +116,25 @@ export const COURT_NAME_REGISTRY = {
   EU: [
     { pattern: /court\s+of\s+justice/iu, shortCode: "CJEU" },
     { pattern: /general\s+court/iu, shortCode: "GC" },
+  ],
+  GBR: [
+    { pattern: /^UKSC$/iu, shortCode: "UKSC" },
+    { pattern: /^UKPC$/iu, shortCode: "UKPC" },
+    { pattern: /^UKHL$/iu, shortCode: "UKHL" },
+    { pattern: /^EWCA\s+Civ$/iu, shortCode: "EWCA Civ" },
+    { pattern: /^EWCA\s+Crim$/iu, shortCode: "EWCA Crim" },
+    { pattern: /^UKUT$/iu, shortCode: "UKUT" },
+    { pattern: /^UKFTT$/iu, shortCode: "UKFTT" },
+    { pattern: /^EAT$/iu, shortCode: "EAT" },
+    { pattern: /^EWFC$/iu, shortCode: "EWFC" },
+    { pattern: /^EWCOP$/iu, shortCode: "EWCOP" },
+    {
+      pattern: new RegExp(
+        String.raw`^EWHC(?:\s+\((?:${GBR_EWHC_DIVISIONS.join("|")})\))?$`,
+        "iu",
+      ),
+      shortCode: "EWHC",
+    },
   ],
   // Hungary issues no ECLI, so the name is the only source there is. The
   // Kúria is written out rather than abbreviated in Hungarian prose, which is

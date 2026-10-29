@@ -1,5 +1,11 @@
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  stableBoundingBox,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const field = (page: Page, side: string) =>
   page.locator(`input[type="number"][id$="-${side}"]`);
@@ -11,8 +17,9 @@ const openFixture = async (page: Page) => {
   await page.locator('[role="dialog"] summary').click();
 };
 
-const readBox = async (page: Page) =>
-  box(page).evaluate((element) => {
+const readBox = async (page: Page) => {
+  await waitForStableGeometry(page, box(page).locator(".."));
+  return await box(page).evaluate((element) => {
     const preview = element.parentElement?.querySelector("canvas");
     if (!(preview instanceof HTMLCanvasElement)) {
       throw new Error("PDF preview is missing");
@@ -28,6 +35,7 @@ const readBox = async (page: Page) =>
       surfaceHeight: surface.height,
     };
   });
+};
 
 const readAppliedMargins = async (page: Page) =>
   page.locator("[data-crop-output]").evaluate((element) => {
@@ -123,11 +131,7 @@ test("numeric edits and pointer resizing update the same crop rectangle", async 
   await field(page, "top").fill("30");
   expect((await readBox(page)).y).toBeCloseTo(30 / 297, 2);
   const handle = page.locator('[data-crop-handle="e"]');
-  const start = await handle.boundingBox();
-  expect(start).not.toBeNull();
-  if (!start) {
-    throw new Error("Right crop handle is missing");
-  }
+  const start = await stableBoundingBox(page, handle);
   const before = await readBox(page);
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();

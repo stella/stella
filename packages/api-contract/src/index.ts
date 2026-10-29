@@ -1,6 +1,8 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export type { ConversionRefusal } from "./conversion-refusal";
+
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
   currencyCodeSchema,
@@ -25,6 +27,7 @@ export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
 export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
+  caseLawAnalysisProgressSchema,
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
@@ -32,6 +35,7 @@ export {
 export type {
   CaseLawAnalysisFailureCode,
   CaseLawAnalysisKeySource,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "./case-law-analysis";
 export {
@@ -41,6 +45,7 @@ export {
   BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   parseBrowserControlCommand,
@@ -54,6 +59,7 @@ export type {
   BrowserControlErrorCode,
   BrowserControlResult,
   BrowserControlSnapshot,
+  BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
 } from "./browser-control";
@@ -62,7 +68,10 @@ export {
   DEFAULT_INVOICE_DUE_DAYS,
   INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
@@ -74,9 +83,11 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLanguage,
   InvoiceLineSource,
   InvoiceStatus,
   TimeEntrySource,
@@ -212,6 +223,7 @@ export {
   CONTACT_IMPORT_SCHEMA_VERSION,
   CONTACT_IMPORT_TARGET_FIELDS,
   CONTACT_IMPORT_TAX_ID_SCHEMES,
+  CONTACT_IMPORT_WARNING_CODE,
   parseContactImportMapping,
 } from "./contact-import";
 export type {
@@ -222,6 +234,7 @@ export type {
   ContactImportMappingParseResult,
   ContactImportTargetField,
   ContactImportTaxIdScheme,
+  ContactImportWarningCode,
 } from "./contact-import";
 export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -361,6 +374,7 @@ export {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./document-version-upload";
@@ -447,6 +461,7 @@ export type {
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  OAuthConsentClient,
   VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
@@ -458,6 +473,7 @@ export {
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
+  REALTIME_CHANNEL_EVENT_TYPES,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
   resourceDeletedChange,
@@ -542,6 +558,7 @@ export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
   UserRealtimeEvent,
@@ -1005,8 +1022,15 @@ export {
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
+export * from "./vat-rate-presets";
+export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
+export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";

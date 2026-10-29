@@ -8,12 +8,13 @@
  */
 
 import {
-  recordDocumentPacingOutcome,
   type OnDemandDocumentDeps,
+  recordDocumentPacingOutcome,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   recordDocumentFetchRequest,
@@ -26,17 +27,30 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
     // and an abandoned recording must not sit on a stalled pool forever.
     await withTimeout(
       async () =>
-        await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
+        await withPublicReadIo(
+          "hydration",
+          async () =>
+            await recordDocumentFetchRequest(
+              decisionId,
+              getCaseLawIngestionDb(),
+            ),
+        ),
       { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
     ),
   recordPacingOutcome: recordDocumentPacingOutcome,
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
   fetchDocument: async (decision, adapterKey) =>
-    await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
-      decisionId: decision.id,
-      scopedDb: getCaseLawIngestionDb(),
-      // The unit races its own wall-clock budget; the signal aborts the download.
-      signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-    }),
+    await withPublicReadIo(
+      "hydration",
+      async (io) =>
+        await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
+          decisionId: decision.id,
+          scopedDb: getCaseLawIngestionDb(),
+          signal: AbortSignal.any([
+            AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+            ...(io.signal === undefined ? [] : [io.signal]),
+          ]),
+        }),
+    ),
 };

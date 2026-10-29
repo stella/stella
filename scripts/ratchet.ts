@@ -74,10 +74,10 @@ import {
   isExcludedTestInclusiveSource,
 } from "./source-globs";
 import {
-  unmanagedTransitionTables,
   statusWriteCalls,
+  unmanagedTransitionTables,
 } from "./status-write-shapes";
-import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
+import { countUndeclaredApiClientWrites } from "./undeclared-api-client-writes";
 import {
   countUnsignalledSkips,
   isExcludedSkipSource,
@@ -88,6 +88,16 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
+
+// The single owners of a transport: callers reach fetch, Bun SQL and SQS
+// clients through them, so their own acquisition is the capability, not a
+// legacy site.
+const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
+  "apps/api/src/db/sql-client.ts",
+  "apps/api/src/lib/email/sns-queue-drain.ts",
+]);
 
 // Shared source globs + exclusions for the app-source metrics.
 const APP_SOURCE_GLOBS = [
@@ -363,6 +373,72 @@ const countAsCasts: FileCounter = (content, { file }) => {
   visit(source);
   return total;
 };
+
+const isObviousNumericCoercionLiteral = (node: ts.Expression): boolean => {
+  let expression = node;
+  while (ts.isParenthesizedExpression(expression)) {
+    expression = expression.expression;
+  }
+  if (
+    ts.isStringLiteralLike(expression) ||
+    ts.isNumericLiteral(expression) ||
+    ts.isBigIntLiteral(expression) ||
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    expression.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  return (
+    ts.isPrefixUnaryExpression(expression) &&
+    (expression.operator === ts.SyntaxKind.PlusToken ||
+      expression.operator === ts.SyntaxKind.MinusToken) &&
+    (ts.isNumericLiteral(expression.operand) ||
+      ts.isBigIntLiteral(expression.operand))
+  );
+};
+
+const countRawNumericCoercions: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const isGlobalCoercion =
+        ts.isIdentifier(callee) &&
+        (callee.text === "Number" ||
+          callee.text === "parseInt" ||
+          callee.text === "parseFloat");
+      const isNumberParser =
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "Number" &&
+        (callee.name.text === "parseInt" || callee.name.text === "parseFloat");
+      const argument = node.arguments.at(0);
+      if (
+        (isGlobalCoercion || isNumberParser) &&
+        argument !== undefined &&
+        !isObviousNumericCoercionLiteral(argument)
+      ) {
+        total += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return total;
+};
+
+const RAW_NUMERIC_COERCION_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedRawNumericCoercionSource = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/scripts/") ||
+  file.includes("/evals/") ||
+  file === "packages/agent-input/src/numeric-token.ts";
 
 // `transition` is also an ordinary word and a discriminator value
 // (`kind: "transition"`), so it counts only in a class-list position.
@@ -1412,7 +1488,7 @@ const countUnhandledDetachedPromises = (content: string): number => {
 // counters extract module specifiers per line and resolve them against the
 // importing file's path. Deliberately NOT literal-stripped: import specifiers
 // ARE string literals. Fidelity limits: the specifier must sit on the same
-// line as its `from`/`import(`/`import` keyword (oxfmt formats imports that
+// line as its `from`/`import(`/`import` keyword (bun fmt formats imports that
 // way), and an import-shaped string inside a template literal would count
 // (stable noise; none today).
 const MODULE_SPECIFIER =
@@ -3060,10 +3136,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       for (const file of scanRepoFiles(context, [
         "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
       ])) {
-        if (
-          !isApiProductionModule(file) ||
-          file === "apps/api/src/lib/safe-outbound-fetch.ts"
-        ) {
+        if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
           continue;
         }
         for (const capability of outboundTransportReferences({
@@ -3157,6 +3230,17 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["packages/*/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countAsCasts,
+  },
+  {
+    scope: "file",
+    id: "raw-numeric-coercions",
+    description:
+      "Number/parseInt/parseFloat calls on non-literal arguments in app and package source; syntax-only, so variable number/bigint conversions are conservatively counted; tests, generated files, scripts/evals, and numeric-token's parser are excluded; each file only shrinks",
+    include: RAW_NUMERIC_COERCION_SOURCE_GLOBS,
+    exclude: isExcludedRawNumericCoercionSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countRawNumericCoercions,
   },
   {
     scope: "file",
@@ -3289,7 +3373,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "undeclared-eden-writes",
+    id: "undeclared-api-client-writes",
     description:
       "Eden post/put/patch/delete calls in apps/web outside an invokeCapability or useCapabilityMutation callback, so they run without declaring a catalog capability; each file's count can only shrink",
     include: ["apps/web/src/**/*.{ts,tsx}"],
@@ -3297,7 +3381,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     perFile: true,
     growth: "shrink-only",
     count: ((content, { file }) =>
-      countUndeclaredEdenWrites(content, file)) satisfies FileCounter,
+      countUndeclaredApiClientWrites(content, file)) satisfies FileCounter,
   },
   {
     scope: "file",
@@ -4680,6 +4764,26 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
 ].join("\n");
 const EXPECTED_PACKAGE_AS_CASTS = 2;
 
+const SELF_TEST_RAW_NUMERIC_COERCIONS = [
+  "Number(amount)",
+  "parseInt(text, 10)",
+  "parseFloat(decimal)",
+  "Number.parseInt(text, 10)",
+  "Number.parseFloat(decimal)",
+  'Number("12")',
+  "Number(12)",
+  "Number(12n)",
+  "Number(true)",
+  "Number(null)",
+  "Number(-12)",
+  "Number(+12n)",
+  "schema.Number(amount)",
+  "other.parseInt(text)",
+  "// Number(amount) and parseInt(text)",
+  'const example = "Number(amount)";',
+].join("\n");
+const EXPECTED_RAW_NUMERIC_COERCIONS = 5;
+
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,
   `const helper = cn("rounded", active && "transition");`,
@@ -4854,12 +4958,12 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
-  'import { api, memoriesApi as memories } from "@/lib/api";',
+const UNDECLARED_API_CLIENT_WRITE_FIXTURE_LINES = [
+  'import { api, apiClient as client } from "@/lib/api";',
   'import { invokeCapability } from "@/lib/capabilities/capability-request";',
   'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";',
   "await api.items.post(body);",
-  "await memories({ id }).delete();",
+  "await client.v1.memories({ id }).delete();",
   "const route = api.items({ id });",
   "await route.patch(body);",
   'await invokeCapability("items.create", async (request) => await api.items.post(body, request));',
@@ -4867,10 +4971,10 @@ const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
   "await api.items.get();",
   "map.delete(key);",
 ];
-const SELF_TEST_UNDECLARED_EDEN_WRITES = `${UNDECLARED_EDEN_WRITE_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_UNDECLARED_API_CLIENT_WRITES = `${UNDECLARED_API_CLIENT_WRITE_FIXTURE_LINES.join("\n")}\n`;
 // The bare post, the aliased delete and the write through `route`; declared
 // writes, reads and unrelated `delete` calls are excluded.
-const EXPECTED_UNDECLARED_EDEN_WRITES = 3;
+const EXPECTED_UNDECLARED_API_CLIENT_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -6068,6 +6172,61 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const rawNumericCoercionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "raw-numeric-coercions";
+  const metric = RATCHET_METRICS.find((entry) => entry.id === id);
+  const measured = requireSnapshot(snapshot, id);
+  if (metric?.scope !== "file") {
+    return [`${id} is not registered as a file metric`];
+  }
+  if (metric.growth !== "shrink-only" || metric.perFile !== true) {
+    failures.push(`${id} is not per-file shrink-only`);
+  }
+  if (measured.count !== EXPECTED_RAW_NUMERIC_COERCIONS) {
+    failures.push(
+      `${id} counted ${measured.count}, expected ${EXPECTED_RAW_NUMERIC_COERCIONS}`,
+    );
+  }
+  for (const file of [
+    "apps/web/src/raw-numeric-coercions.test.ts",
+    "apps/web/src/raw-numeric-coercions.gen.ts",
+    "apps/web/src/scripts/raw-numeric-coercions.ts",
+    "packages/example/src/evals/raw-numeric-coercions.ts",
+    "packages/agent-input/src/numeric-token.ts",
+  ]) {
+    if (file in measured.files) {
+      failures.push(`${id} counted excluded source ${file}`);
+    }
+  }
+  const newCall = "Number(variable)";
+  const after = metric.count(`${SELF_TEST_RAW_NUMERIC_COERCIONS}\n${newCall}`, {
+    file: "apps/web/src/raw-numeric-coercions.ts",
+    role: "head",
+  });
+  const change = diffMetric(
+    id,
+    {
+      count: after,
+      files: { "apps/web/src/raw-numeric-coercions.ts": after },
+    },
+    {
+      count: EXPECTED_RAW_NUMERIC_COERCIONS,
+      files: {
+        "apps/web/src/raw-numeric-coercions.ts": EXPECTED_RAW_NUMERIC_COERCIONS,
+      },
+    },
+    metricGate(metric),
+  );
+  if (
+    after !== EXPECTED_RAW_NUMERIC_COERCIONS + 1 ||
+    change.status !== "regressed"
+  ) {
+    failures.push(`${id} did not reject a newly added Number(variable) call`);
+  }
+  return failures;
+};
+
 const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
@@ -6508,6 +6667,36 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
+      "apps/web/src/raw-numeric-coercions.ts",
+      SELF_TEST_RAW_NUMERIC_COERCIONS,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.test.ts",
+      "Number(testValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.gen.ts",
+      "Number(generatedValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/scripts/raw-numeric-coercions.ts",
+      "Number(scriptValue)",
+    );
+    writeFixture(
+      root,
+      "packages/example/src/evals/raw-numeric-coercions.ts",
+      "Number(evalValue)",
+    );
+    writeFixture(
+      root,
+      "packages/agent-input/src/numeric-token.ts",
+      "Number(tokenValue)",
+    );
+    writeFixture(
+      root,
       "apps/web/src/legacy-paint-transitions.tsx",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS,
     );
@@ -6567,8 +6756,8 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/web/src/undeclared-eden-writes.ts",
-      SELF_TEST_UNDECLARED_EDEN_WRITES,
+      "apps/web/src/undeclared-api-client-writes.ts",
+      SELF_TEST_UNDECLARED_API_CLIENT_WRITES,
     );
     writeFixture(
       root,
@@ -6914,6 +7103,7 @@ const runSelfTest = (): number => {
     failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
     failures.push(...asCastSelfTestFailures(snapshot));
+    failures.push(...rawNumericCoercionSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
@@ -6986,7 +7176,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
-      ["undeclared-eden-writes", EXPECTED_UNDECLARED_EDEN_WRITES],
+      ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
         "ad-hoc-relative-time-formatting",

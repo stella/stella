@@ -8,14 +8,15 @@ import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
 import marketingCaseLaw from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
-import { setFixedBrowserTime } from "../helpers/clock";
 import {
   getMarketingAgentThreadId,
   MARKETING_AGENT_FIRST_QUESTION,
   MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import { TIME_TRACKING_ENTRIES_SELECTOR } from "./capture-readiness";
 import { CAPTURE_DPR } from "./captures";
 import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
@@ -487,9 +488,8 @@ test("capture landing product screenshots", async ({
         await expect(page.getByRole("grid")).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-time-entries") {
-        // The total row renders only once the day's entries have loaded.
         await expect(
-          page.getByText("Total", { exact: true }).first(),
+          page.locator(TIME_TRACKING_ENTRIES_SELECTOR).first(),
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-invoice-entries") {

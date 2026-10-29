@@ -334,7 +334,7 @@ test("a complete subtree commits every copied row", async () => {
     entityVersions: 3,
     extractionRuns: 1,
     fields: 1,
-    searchMarks: 2,
+    searchMarks: 3,
   });
 });
 

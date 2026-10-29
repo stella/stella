@@ -16,21 +16,21 @@ import {
   scopeOutputLines,
 } from "./ci-plan-scope";
 import {
-  BUDGET_MS,
-  MAX_CHANGED_TEST_FILES,
-  REPEATS,
   annotationData,
   annotationProperty,
+  BUDGET_MS,
   executeGate,
   failureAnnotation,
+  MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
+  REPEATS,
+  type Report,
   reportExitCode,
   runOnce,
   selectTargets,
-  trialCommand,
-  type Report,
   type Target,
+  trialCommand,
 } from "./flake-gate";
 
 // Markdown reads consume temporary CLI output only.
@@ -43,11 +43,23 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
   expect(source).toContain("github.event_name == 'pull_request'");
   expect(source).toContain("matrix.shard == 'rest-web'");
   expect(source).toContain(
-    ["CHANGED_FILES_JSON: $", "{{ needs.ci-plan.outputs.changed_files }}"].join(
-      "",
-    ),
+    [
+      `cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'\n`,
+      "          $",
+      "{{ needs.ci-plan.outputs.changed_files }}\n",
+      "          CHANGED_FILES_JSON\n",
+      `          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
+    ].join(""),
   );
-  expect(source).toContain("bun scripts/flake-gate.ts --blocking");
+  expect(source).not.toContain("CHANGED_FILES_JSON: $");
+  // Repeated tests read the API runtime their own jobs generate.
+  expect(source).toContain(
+    [
+      "          bun --cwd=packages/cli run codegen:runtime\n",
+      "          bun --cwd=apps/api run generate:capability-runtime\n",
+      `          cat > "$RUNNER_TEMP/changed-files.json"`,
+    ].join(""),
+  );
   expect(MAX_CHANGED_TEST_FILES).toBeGreaterThan(0);
   expect(REPEATS).toBe(5);
 });
@@ -330,6 +342,72 @@ test.each(["api", "web"] as const)(
   },
 );
 
+test("a failed Bun trial exposes its captured failure without changing its verdict", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "fixture.test.ts",
+      'import {expect,test} from "bun:test"; test("visible trial reason",()=>expect("actual").toBe("expected"));',
+    );
+    const diagnostics: string[] = [];
+    const outcome = await runOnce({
+      target: targetFor(root),
+      seed: 11,
+      timeoutMs: 10_000,
+      onFailureOutput: (output) => {
+        diagnostics.push(output);
+      },
+    });
+    expect(outcome).toMatchObject({ passed: false, status: 1, ranTests: true });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain("visible trial reason");
+    expect(diagnostics[0]).toContain('"expected"');
+  });
+});
+
+test("the gate reports bounded output only for the first failed trial of each file", async () => {
+  let elapsed = 0;
+  const diagnostics: string[] = [];
+  const report = await executeGate({
+    targets: [
+      targetFor(".", "first.test.ts"),
+      targetFor(".", "second.test.ts"),
+    ],
+    skipped: [],
+    now: () => elapsed,
+    reportFailureOutput: (output) => {
+      diagnostics.push(output);
+    },
+    run: async ({ seed, onFailureOutput }) => {
+      elapsed += 1;
+      if (seed > 1) {
+        onFailureOutput?.(`${"x".repeat(32_768)}failure seed ${seed}`);
+      }
+      return {
+        type: "executed",
+        passed: seed === 1,
+        status: seed === 1 ? 0 : 1,
+        ranTests: true,
+        failedTests: seed === 1 ? [] : ["fixture"],
+      };
+    },
+  });
+  expect(diagnostics).toHaveLength(2);
+  for (const [index, output] of diagnostics.entries()) {
+    expect(output).toContain(index === 0 ? "first.test.ts" : "second.test.ts");
+    expect(output).toContain("seed 2");
+    expect(output).toEndWith("failure seed 2\n");
+    expect(output.length).toBeLessThan(16_512);
+  }
+  expect(
+    report.results.map(({ runs, failures }) => ({ runs, failures })),
+  ).toEqual([
+    { runs: REPEATS, failures: REPEATS - 1 },
+    { runs: REPEATS, failures: REPEATS - 1 },
+  ]);
+  expect(reportExitCode(report, true)).toBe(1);
+});
+
 test("fixture strings and comments do not classify a Bun test as Playwright", async () => {
   await withFixture((root) => {
     write(
@@ -417,6 +495,41 @@ test("selected files replace package directory filters and exclude failing sibli
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
       { type: "executed", passed: true },
     );
+  });
+});
+
+test("package ignore patterns keep dedicated tests out of normal repeat trials", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "packages/filtered/package.json",
+      JSON.stringify({
+        scripts: {
+          test: "bun test src --path-ignore-patterns '**/*.property.test.ts'",
+        },
+      }),
+    );
+    const eligible = "packages/filtered/src/ordinary.test.ts";
+    const dedicated = "packages/filtered/src/nested/edition.property.test.ts";
+    for (const file of [eligible, dedicated]) {
+      write(
+        root,
+        file,
+        'import {test} from "bun:test"; test("case", () => {});',
+      );
+    }
+    const selected = selectTargets({
+      root,
+      changed: [eligible, dedicated],
+      hasDb: false,
+    });
+    expect(selected.targets.map(({ file }) => file)).toEqual([eligible]);
+    expect(selected.skipped).toEqual([
+      {
+        file: dedicated,
+        reason: "not gated (excluded by package test script)",
+      },
+    ]);
   });
 });
 
@@ -695,14 +808,23 @@ test("prepare c", () => { prepared += 1; });
 test("requires preparation", () => { expect(prepared).toBe(3); });
 `,
     );
+    const fixtureOutput: string[] = [];
     const report = await executeGate({
       targets: [targetFor(root)],
       skipped: [],
+      reportFailureOutput: (output) => {
+        fixtureOutput.push(output);
+      },
     });
     const result = report.results.at(0);
     expect(result?.runs).toBe(REPEATS);
     expect(result?.failures).toBeGreaterThan(0);
     expect(reportExitCode(report, true)).toBe(1);
+    expect(fixtureOutput).toHaveLength(1);
+    expect(fixtureOutput[0]?.includes("(fail) requires preparation")).toBe(
+      true,
+    );
+    expect(fixtureOutput[0]?.includes("error:")).toBe(true);
     write(root, "empty.test.ts", "export {};\n");
     expect(
       await runOnce({
@@ -713,6 +835,35 @@ test("requires preparation", () => { expect(prepared).toBe(3); });
     ).toMatchObject({ type: "executed", passed: false });
   });
 }, 30_000);
+
+test("the order-dependence self-test keeps fixture failures out of parent output", async () => {
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      "test",
+      "./scripts/flake-gate.test.ts",
+      "-t",
+      "the real runner detects order dependence and rejects zero-test success",
+    ],
+    {
+      cwd: path.resolve(import.meta.dir, ".."),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const [status, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  expect(status).toBe(0);
+  const parentOutput = `${stdout}\n${stderr}`;
+  expect(parentOutput.includes("(fail) requires preparation")).toBe(false);
+  expect(parentOutput.includes("::error")).toBe(false);
+  expect(
+    /\/tmp\/flake-gate-[^/\s]+\/fixture\.test\.ts/u.test(parentOutput),
+  ).toBe(false);
+});
 
 test("the pinned Bun accepts native rerun and shuffle flags", async () => {
   await withFixture(async (root) => {
@@ -811,10 +962,49 @@ test("pending", async () => await new Promise(() => {}));
   });
 });
 
+test("the CLI reads a changed-file list larger than one environment variable from its file", async () => {
+  const { CHANGED_FILES_PATH: _suppliedChanged, ...inherited } = process.env;
+  await withFixture(async (root) => {
+    const changed = Array.from(
+      { length: 5000 },
+      (_, index) =>
+        `apps/web/src/features/generated/area-${String(index)}/module.ts`,
+    );
+    const list = path.join(root, "changed-files.json");
+    await Bun.write(list, `${JSON.stringify(changed)}\n`);
+    // Linux refuses a single environment string above 128 KiB.
+    expect((await Bun.file(list).text()).length).toBeGreaterThan(128 * 1024);
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "flake-gate.ts"),
+        "--blocking",
+      ],
+      {
+        cwd: root,
+        env: {
+          ...inherited,
+          // Reading the diff instead of the file would fail on this base.
+          BASE_SHA: "refs/heads/missing-flake-gate-fixture-base",
+          CHANGED_FILES_PATH: list,
+          GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),
+        },
+        stdout: "ignore",
+        stderr: "ignore",
+      },
+    );
+    expect(await child.exited).toBe(0);
+    const report: unknown = await Bun.file(
+      path.join(root, "flake-gate-report.json"),
+    ).json();
+    expect(report).toMatchObject({ results: [], errors: [] });
+  });
+}, 30_000);
+
 test("the CLI emits a JSON error report and report/blocking exit codes on an unreadable diff", async () => {
   // The CI step that repeats this file supplies its own changed-file list,
   // which the CLI prefers over the diff; drop it so the diff is read.
-  const { CHANGED_FILES_JSON: _suppliedChanged, ...inherited } = process.env;
+  const { CHANGED_FILES_PATH: _suppliedChanged, ...inherited } = process.env;
   await withFixture(async (root) => {
     for (const blocking of [false, true]) {
       const child = Bun.spawn(
@@ -886,4 +1076,65 @@ test("a failed file annotation cannot inject workflow commands through its name"
   });
   expect(annotation.split("\n")).toHaveLength(1);
   expect(annotation).not.toContain("\n::warning::");
+});
+
+test("a failing gate names each failing test with its first assertion line", async () => {
+  let trial = 0;
+  const report = await executeGate({
+    targets: [
+      targetFor("/fixture", "a.test.ts"),
+      targetFor("/fixture", "b.test.ts"),
+    ],
+    skipped: [],
+    run: async ({ target }) => {
+      trial += 1;
+      if (target.file.endsWith("b.test.ts")) {
+        return {
+          type: "executed",
+          passed: false,
+          status: 134,
+          ranTests: false,
+          failedTests: [],
+          failureDetails: [],
+        };
+      }
+      return {
+        type: "executed",
+        passed: false,
+        status: 1,
+        ranTests: true,
+        failedTests: ["math > adds"],
+        failureDetails: [
+          {
+            name: "math > adds",
+            detail:
+              trial === 1 ? "Expected: 2 Received: 3" : "later trial line",
+          },
+        ],
+      };
+    },
+  });
+  const markdown = renderReport(report);
+  expect(markdown).toContain("math > adds: Expected: 2 Received: 3");
+  expect(markdown).not.toContain("later trial line");
+  expect(markdown).toContain(
+    "a trial failed with exit status 134 and named no test",
+  );
+});
+
+test("a failing trial that names tests without details still names them", async () => {
+  const report = await executeGate({
+    targets: [targetFor("/fixture", "a.test.ts")],
+    skipped: [],
+    run: async () => ({
+      type: "executed",
+      passed: false,
+      status: 1,
+      ranTests: true,
+      failedTests: ["math > adds"],
+    }),
+  });
+  const markdown = renderReport(report);
+  expect(markdown).toContain("math > adds");
+  expect(markdown).not.toContain("named no test");
 });

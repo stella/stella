@@ -36,8 +36,8 @@ import {
   operatorsFor,
   removeChild,
   replaceChild,
-  type ValueEditorKind,
   valueEditorFor,
+  type ValueEditorKind,
 } from "./logic";
 
 /**

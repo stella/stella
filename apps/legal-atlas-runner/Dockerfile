@@ -1,5 +1,5 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim)
-FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS base
+# Pin to digest for supply-chain integrity (oven/bun:1.4.4-slim)
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS base
 WORKDIR /app
 
 FROM base AS install-inputs
@@ -53,7 +53,9 @@ ENV NODE_ENV=production
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js.map /app/legal-atlas.js.map
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js.map /app/eu-ecj-refetch.js.map
 WORKDIR /app
 USER stella
 ENTRYPOINT ["bun", "/app/legal-atlas.js"]

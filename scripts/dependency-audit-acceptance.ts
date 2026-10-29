@@ -6,9 +6,9 @@
 // - `untilPatched`: the acceptance lapses once the package's latest published
 //   release is outside the advisory's vulnerable range, i.e. a fix exists and
 //   the dependency should be bumped instead.
-// An entry with either term also lapses once `bun audit` stops reporting its
-// advisory (the dependency was bumped or dropped), so a temporary acceptance
-// is removed in the change that resolves it instead of lingering.
+// An acceptance whose advisory `bun audit` no longer reports never lapses:
+// nothing is left to fail on, so the guard warns and the scheduled
+// remediation removes the stale entry instead.
 // Anything that cannot be evaluated fails closed: a date that is not a real
 // calendar day, a non-boolean `untilPatched`, an advisory without a
 // vulnerable range, or a registry lookup that failed.
@@ -43,6 +43,8 @@ type LapsedAcceptancesOptions = {
   current: readonly CurrentAdvisory[];
   /** Today's date as YYYY-MM-DD. */
   today: string;
+  /** Date expiry can be scoped to owner changes; defaults to enforcing it. */
+  enforceDateExpiry?: boolean;
   /** The package's latest published version, or undefined when the lookup failed. */
   latestVersion: (pkg: string) => string | undefined;
 };
@@ -89,7 +91,7 @@ export const expiringAcceptances = ({
     }
     const daysRemaining =
       (Date.parse(`${expiresOn}T00:00:00Z`) - todayTime) / 86_400_000;
-    if (daysRemaining < 0 || daysRemaining > ACCEPTANCE_WARNING_DAYS) {
+    if (daysRemaining > ACCEPTANCE_WARNING_DAYS) {
       return [];
     }
     return [{ id, package: pkg, expiresOn }];
@@ -100,6 +102,7 @@ export const lapsedAcceptances = ({
   accepted,
   current,
   today,
+  enforceDateExpiry = true,
   latestVersion,
 }: LapsedAcceptancesOptions): LapsedAcceptance[] => {
   const currentById = new Map(
@@ -119,21 +122,20 @@ export const lapsedAcceptances = ({
     if (entry.expiresOn === undefined && entry.untilPatched !== true) {
       continue;
     }
-    if (entry.expiresOn !== undefined) {
-      if (!isCalendarDate(entry.expiresOn)) {
-        lapse(
-          `expiresOn "${entry.expiresOn}" is not a YYYY-MM-DD calendar date`,
-        );
-        continue;
-      }
-      if (today > entry.expiresOn) {
-        lapse(`the acceptance expired on ${entry.expiresOn}`);
-        continue;
-      }
+    if (entry.expiresOn !== undefined && !isCalendarDate(entry.expiresOn)) {
+      lapse(`expiresOn "${entry.expiresOn}" is not a YYYY-MM-DD calendar date`);
+      continue;
     }
     const advisory = currentById.get(entry.id);
     if (advisory === undefined) {
-      lapse("the advisory is no longer reported; remove the acceptance");
+      continue;
+    }
+    if (
+      enforceDateExpiry &&
+      entry.expiresOn !== undefined &&
+      today > entry.expiresOn
+    ) {
+      lapse(`the acceptance expired on ${entry.expiresOn}`);
       continue;
     }
     if (entry.untilPatched !== true) {

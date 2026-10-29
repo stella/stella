@@ -20,13 +20,13 @@ import type { SearchProjectionKind } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
   createSearchProjectionRepairDeps,
   drainSearchProjectionRepairQueue,
   enqueueContactSearchRepairs,
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
   flushSearchRepairs,
+  SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
 } from "@/api/lib/search/projection-repair-queue";
 import type { SearchProjectionRepairDeps } from "@/api/lib/search/projection-repair-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

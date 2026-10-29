@@ -140,6 +140,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
+  document_review_finding_decisions: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   document_review_findings: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -260,6 +264,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   mcp_user_connections: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
+  mcp_web_handoff: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },

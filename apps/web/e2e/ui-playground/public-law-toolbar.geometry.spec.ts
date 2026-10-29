@@ -10,8 +10,13 @@
  * phone, a split-pane and a desktop width.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 /** Mirrors PUBLIC_LAW_TOOLBAR_BENCH_WIDTHS; the spec stays out of the app graph. */
 const BENCH_WIDTHS = [360, 600, 1024] as const;
@@ -40,8 +45,12 @@ type ToolbarGeometry = {
   };
 };
 
-const readGeometry = async (page: Page, width: number) =>
-  page.evaluate((benchWidth): ToolbarGeometry => {
+const readGeometry = async (page: Page, width: number) => {
+  const toolbarLocator = page.locator(
+    `[data-playground-section="public-law-toolbar:${width}"]`,
+  );
+  await waitForStableGeometry(page, toolbarLocator);
+  return await page.evaluate((benchWidth): ToolbarGeometry => {
     const section = document.querySelector(
       `[data-playground-section="public-law-toolbar:${benchWidth}"]`,
     );
@@ -85,6 +94,7 @@ const readGeometry = async (page: Page, width: number) =>
       },
     };
   }, width);
+};
 
 const overlaps = (a: Box, b: Box) =>
   a.left < b.right - TOLERANCE_PX &&

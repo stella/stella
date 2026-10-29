@@ -92,7 +92,7 @@ describe.skipIf(!runPostgresTests)("workspace insert policy (postgres)", () => {
               }
               const rows = await client<{ id: string }[]>`
                 SELECT id FROM workspaces WHERE id = ${workspaceId}`;
-              expect(rows).toEqual(allowed ? [{ id: workspaceId }] : []);
+              expect([...rows]).toEqual(allowed ? [{ id: workspaceId }] : []);
             } finally {
               await client`DELETE FROM organization WHERE id = ${organizationId}`;
               await client`DELETE FROM "user" WHERE id = ${userId}`;

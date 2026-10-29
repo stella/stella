@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, TransactionRollbackError } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -278,23 +278,41 @@ const organizationCredentialTables = () => {
 
 const handledMemberTables = async (omittedDelete?: PgTable) => {
   const handled = new Set<string>();
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
   // Only awaited statements reach this transport; constructing a builder or
   // declaring a cleanup disposition cannot satisfy the guard.
-  const database = drizzle(async (query) => {
+  const database = drizzle(async (query, params) => {
     const table = /^(?:delete from|update) "([^"]+)"/u.exec(query)?.at(1);
     if (table !== undefined) {
       handled.add(table);
     }
+    if (table === "mcp_web_handoff") {
+      expect(query).toContain('"mcp_web_handoff"."user_id" = $1');
+      expect(query).toContain('"mcp_web_handoff"."organization_id" = $2');
+      expect(params).toEqual([userId, organizationId]);
+    }
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
     }
+    // Advisory fences report their physical identity and acquisition.
+    if (query.includes("AS key1")) {
+      return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
+    }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
-  const transaction = new Proxy(database, {
+  const transactionHandle = Object.assign(database, {
+    rollback() {
+      throw new TransactionRollbackError();
+    },
+  });
+  const transaction = new Proxy(transactionHandle, {
     get: (target, property, receiver) => {
       if (property === "transaction") {
+        // Each savepoint is its own handle, as the driver's are, so the
+        // aggregate lock history of the enclosing transaction stays open.
         return async (run: (savepoint: typeof database) => Promise<unknown>) =>
-          await run(transaction);
+          await run(new Proxy(transaction, {}));
       }
       if (property === "delete") {
         return (table: PgTable) =>
@@ -306,8 +324,8 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     },
   });
   await removeOrganizationMemberInTransaction(asTestRaw(transaction), {
-    organizationId: mintAuthProviderId<"organization">(),
-    userId: mintAuthProviderId<"user">(),
+    organizationId,
+    userId,
     actorUserId: mintAuthProviderId<"user">(),
     memberId: mintAuthProviderIdValue(),
   });

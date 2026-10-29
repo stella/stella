@@ -2,9 +2,12 @@ import type { MCPToolSource } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { TextSearch } from "@stll/text-search";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -31,10 +34,35 @@ import { logger } from "@/api/lib/observability/logger";
 
 export const TENANT_ID_REDACTION_PLACEHOLDER = "[internal-id-removed]";
 
-const findTenantId = (
-  text: string,
-  workspaceIds: readonly string[],
-): string | undefined => workspaceIds.find((id) => text.includes(id));
+type TenantIdMatcher = {
+  ids: readonly string[];
+  search: TextSearch;
+  replacements: string[];
+};
+
+// Request surfaces share the same id array. Weak keys release the native
+// automaton with the request; the snapshot also covers callers mutating an array.
+const tenantIdMatchers = new WeakMap<readonly string[], TenantIdMatcher>();
+
+const tenantIdMatcher = (workspaceIds: readonly string[]): TenantIdMatcher => {
+  const cached = tenantIdMatchers.get(workspaceIds);
+  if (
+    cached !== undefined &&
+    cached.ids.length === workspaceIds.length &&
+    cached.ids.every((id, index) => id === workspaceIds[index])
+  ) {
+    return cached;
+  }
+  const ids = [...workspaceIds];
+  const patterns = [...new Set(ids)];
+  const matcher = {
+    ids,
+    search: new TextSearch(patterns, { allLiteral: true }),
+    replacements: patterns.map(() => TENANT_ID_REDACTION_PLACEHOLDER),
+  };
+  tenantIdMatchers.set(workspaceIds, matcher);
+  return matcher;
+};
 
 export type ModelIngressSurface = "system-prompt" | "tool-schemas";
 
@@ -51,13 +79,19 @@ export const assertModelSurfaceFreeOfTenantIds = ({
   surface: ModelIngressSurface;
   workspaceIds: readonly SafeId<"workspace">[];
 }): void => {
-  if (findTenantId(serialized, workspaceIds) === undefined) {
+  if (!tenantIdMatcher(workspaceIds).search.isMatch(serialized)) {
     return;
   }
   const error = new TelemetryError({
     message: `Model-bound ${surface} embeds a tenant workspace id`,
   });
-  captureError(error, { source: "model-ingress-guard", surface });
+  captureError(
+    error,
+    handlerErrorContext(`chat.assertModelSurfaceFreeOfTenantIds.${surface}`, {
+      source: "model-ingress-guard",
+      surface,
+    }),
+  );
   if (surface === "system-prompt") {
     panic(error.message);
   }
@@ -75,16 +109,25 @@ type RedactionState = { paths: string[] };
 
 const redactString = (
   value: string,
-  workspaceIds: readonly string[],
+  matcher: TenantIdMatcher,
   path: string,
   state: RedactionState,
 ): string => {
   let redacted = value;
-  for (const id of workspaceIds) {
-    if (redacted.includes(id)) {
-      state.paths.push(path);
-      redacted = redacted.replaceAll(id, () => TENANT_ID_REDACTION_PLACEHOLDER);
+  let passes = 0;
+  // Overlapping UUIDs use native leftmost-longest selection, rather than id
+  // order. Recheck the result: the contract is that no tenant id survives.
+  // Non-overlapping occurrences retain the sequential guard's output.
+  while (matcher.search.isMatch(redacted)) {
+    if (passes >= matcher.search.length) {
+      panic("Tenant id redaction did not converge");
     }
+    for (const _pattern of matcher.search.whichMatch(redacted)) {
+      state.paths.push(path);
+    }
+    // oxlint-disable-next-line require-function-replacer/require-function-replacer -- TextSearch takes literal replacement arrays, not String replacement syntax.
+    redacted = matcher.search.replaceAll(redacted, matcher.replacements);
+    passes += 1;
   }
   return redacted;
 };
@@ -97,13 +140,13 @@ const redactString = (
  */
 const redactContainerInPlace = (
   container: Record<string, unknown> | unknown[],
-  workspaceIds: readonly string[],
+  matcher: TenantIdMatcher,
   path: string,
   state: RedactionState,
 ): void => {
   const visit = (entry: unknown, key: string | number, entryPath: string) => {
     if (typeof entry === "string") {
-      const redacted = redactString(entry, workspaceIds, entryPath, state);
+      const redacted = redactString(entry, matcher, entryPath, state);
       if (redacted !== entry) {
         if (Array.isArray(container) && typeof key === "number") {
           container[key] = redacted;
@@ -114,7 +157,7 @@ const redactContainerInPlace = (
       return;
     }
     if (Array.isArray(entry) || isPlainObject(entry)) {
-      redactContainerInPlace(entry, workspaceIds, entryPath, state);
+      redactContainerInPlace(entry, matcher, entryPath, state);
     }
   };
 
@@ -151,7 +194,7 @@ export const redactTenantIdsDeep = <T extends object>({
   const state: RedactionState = { paths: [] };
   const redacted = structuredClone(value);
   if (Array.isArray(redacted) || isPlainObject(redacted)) {
-    redactContainerInPlace(redacted, workspaceIds, "$", state);
+    redactContainerInPlace(redacted, tenantIdMatcher(workspaceIds), "$", state);
   }
   if (state.paths.length > 0) {
     logger.warn("chat.model_ingress_redacted", {
@@ -262,7 +305,12 @@ export const redactModelSystemPrompt = ({
   workspaceIds: readonly SafeId<"workspace">[];
 }): GuardedSystemPrompt => {
   const state: RedactionState = { paths: [] };
-  const redacted = redactString(system, workspaceIds, "$", state);
+  const redacted = redactString(
+    system,
+    tenantIdMatcher(workspaceIds),
+    "$",
+    state,
+  );
   if (state.paths.length > 0) {
     // Mixed-provenance prompt: the id arrived through interpolated model
     // output or user text, so the hit is routine and the redaction is the

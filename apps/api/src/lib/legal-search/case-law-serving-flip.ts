@@ -44,17 +44,17 @@ import {
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import {
+  type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
   corpusIndexManifestDigest,
   corpusIndexManifestIsPartial,
   corpusIndexRoute,
   requireCorpusIndexManifest,
-  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusProjectionCensusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
-  readCorpusIndexProjectionConvergenceTx,
   type CorpusIndexProjectionConvergenceStatus,
+  readCorpusIndexProjectionConvergenceTx,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { eraseServedElsewhereDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
@@ -63,15 +63,15 @@ import {
   readCorpusIndexProjectionRevisionTx,
 } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
-  censusIndexes,
-  checkIndexesHoldDocuments,
-  CorpusGenerationProjectionMovedError,
-  requireConverged,
   type CensusEvidence,
+  censusIndexes,
   type CensusRefusal,
+  checkIndexesHoldDocuments,
   type CorpusGenerationNotConvergedError,
+  CorpusGenerationProjectionMovedError,
   type CorpusIndexReader,
   type IndexRefusal,
+  requireConverged,
 } from "@/api/lib/legal-search/corpus-index-promotion-gates";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 

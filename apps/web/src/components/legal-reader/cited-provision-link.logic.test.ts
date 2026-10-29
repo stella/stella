@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  citedProvisionClick,
   CITED_PROVISION_CLICK,
+  citedProvisionClick,
 } from "@/components/legal-reader/cited-provision-link.logic";
 
 const plain = {

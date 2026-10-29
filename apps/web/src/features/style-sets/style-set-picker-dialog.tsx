@@ -7,10 +7,10 @@ import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -26,8 +26,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 export type StyleSelection =
-  | { type: "stella" }
-  | { type: "custom"; styleSetId: string };
+  { type: "stella" } | { type: "custom"; styleSetId: string };
 
 type StyleSetPickerDialogProps = {
   open: boolean;
@@ -88,7 +87,13 @@ const StyleSetPickerDialogBody = ({
 
   const handleSubmit = () => {
     submit().catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "StyleSetPickerDialogBody.handleSubmit:failure",
+        scope: {
+          type: "handler",
+          handlerId: "StyleSetPickerDialogBody.handleSubmit:failure",
+        },
+      });
       setCreating(false);
       notifyUserError(error, t("errors.actionFailed"));
     });

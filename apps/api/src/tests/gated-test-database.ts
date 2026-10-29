@@ -10,15 +10,19 @@
  * constructing a client anywhere else.
  */
 import { panic } from "better-result";
-import { SQL } from "bun";
-import type { TransactionSQL } from "bun";
+import type { SQL, TransactionSQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Logger } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { forceClosePool } from "@/api/db/sql-close";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
+import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { withWorkspaceCreation } from "@/api/lib/workspaces/create-workspace-row";
 import type {
   NormalizedWorkspaceCreationRow,
@@ -37,10 +41,25 @@ export const withGatedWorkspaceCreation = async <T>({
   rows,
   insert,
 }: GatedWorkspaceCreationOptions<T>) =>
-  await withWorkspaceCreation({ tx: drizzle({ client: tx }), rows, insert });
+  await withWorkspaceCreation({
+    tx: createDatabase({ client: tx }),
+    rows,
+    insert,
+  });
 
 const openDatabase = (client: SQL, logger?: Logger) =>
-  drizzle({ client, relations: databaseRelations, logger });
+  createDatabase({
+    client,
+    relations: databaseRelations,
+    logger: {
+      logQuery: (query, params) => {
+        queryCountLogger.logQuery(query, params);
+        if (logger !== undefined && logger !== queryCountLogger) {
+          logger.logQuery(query, params);
+        }
+      },
+    },
+  });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
 
@@ -67,7 +86,9 @@ export const openGatedTestDatabase = (
   databaseUrl: string,
   { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
 ): GatedTestDatabase => {
-  const client = new SQL({ url: databaseUrl, max });
+  const client = instrumentSqlTransactionCounts(
+    runTransactionsInCallerContext(createSqlClient({ url: databaseUrl, max })),
+  );
   const cleanupSteps: CleanupStep[] = [];
 
   afterAll(async () => {
@@ -111,7 +132,7 @@ type OpenClientOptions = {
   };
 };
 
-type GatedTestClientScope = {
+export type GatedTestClientScope = {
   /** Opens a client with a pool of its own, closed when the scope ends. */
   readonly openClient: (options?: OpenClientOptions) => GatedTestClient;
 };
@@ -140,12 +161,16 @@ export const withGatedTestClients = async <T>(
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({
-      url: clientDatabaseUrl,
-      max,
-      idleTimeout,
-      connection,
-    });
+    const client = instrumentSqlTransactionCounts(
+      runTransactionsInCallerContext(
+        createSqlClient({
+          url: clientDatabaseUrl,
+          max,
+          idleTimeout,
+          connection,
+        }),
+      ),
+    );
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };

@@ -10,24 +10,15 @@ import {
   sql,
 } from "drizzle-orm";
 
-import {
-  INVOICE_LINE_SOURCE,
-  INVOICE_STATUS,
-  TIME_ENTRY_ACTIVITY_GROUP,
-} from "@stll/api-contract";
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  billingArrangements,
-  invoiceLines,
-  invoices,
-  timeEntries,
-} from "@/api/db/schema";
+import { billingArrangements, timeEntries } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
-  type AuditRecorder,
   type AuditEvent,
+  type AuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -71,21 +62,6 @@ export const billingArrangementResponse = (
   };
 };
 
-export const lockBillingArrangement = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-) => {
-  // Same matter lock as timer/invoice guards; it also serializes first-row creation.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
-  const rows = await tx
-    .select()
-    .from(billingArrangements)
-    .where(eq(billingArrangements.workspaceId, workspaceId))
-    .limit(1)
-    .for("update");
-  return rows.at(0);
-};
-
 type ReadBillingUsageOptions = {
   workspaceId: SafeId<"workspace">;
   currency: string;
@@ -113,17 +89,15 @@ const billingUsageProjection = ({
     typeof currencyValue === "string"
       ? currencyValue
       : sql`${sql.identifier(getTableName(billingArrangements))}.${sql.identifier(currencyValue.name)}`;
-  // PostgreSQL numeric arithmetic prevents intermediate product/sum overflow;
-  // half-up integer division matches prorateHourlyCents per entry, not after summing.
-  const legacyCondition = sql`e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.invoice_attachment = 'charged' AND i.workspace_id = ${workspaceId} AND i.status <> ${INVOICE_STATUS.VOID} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``} AND NOT EXISTS (SELECT 1 FROM ${invoiceLines} l WHERE l.invoice_id = i.id AND l.time_entry_id = e.id AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL)`;
-  const legacyAmount = sql`COALESCE((SELECT SUM(FLOOR((e.rate_at_entry::numeric * e.billed_minutes + 30) / 60)) FROM ${timeEntries} e JOIN ${invoices} i ON i.id = e.invoice_id AND i.organization_id = e.organization_id WHERE ${legacyCondition} AND i.currency = ${currency}), 0)`;
-  const legacyMismatch = sql`(SELECT COUNT(*) FROM ${timeEntries} e JOIN ${invoices} i ON i.id = e.invoice_id AND i.organization_id = e.organization_id WHERE ${legacyCondition} AND i.currency <> ${currency})`;
+  // Complete-invoice RLS hides shared invoices from partial members. The
+  // narrowly authorized aggregate still counts every charge against this matter's cap.
+  const reserved = sql`public.stella_matter_reserved_charges(${workspaceId},${currency},${excludeInvoiceId ?? null})`;
   return {
-    billedAmount: sql<string>`(${legacyAmount} + COALESCE((SELECT SUM(l.net_amount) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency = ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}), 0))::text`,
+    billedAmount: sql<string>`(SELECT amount::text FROM ${reserved})`,
     approvedAmount: sql<string>`COALESCE((SELECT SUM(FLOOR((e.rate_at_entry::numeric * e.billed_minutes + 30) / 60)) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency = ${currency}), 0)::text`,
     // Reserved invoice charges and approved unbilled work are counted apart:
     // an invoice is checked against what is reserved, the cap status against both.
-    billedMismatchCount: sql<string>`(${legacyMismatch} + (SELECT COUNT(*) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency <> ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}))::text`,
+    billedMismatchCount: sql<string>`(SELECT mismatches::text FROM ${reserved})`,
     approvedMismatchCount: sql<string>`(SELECT COUNT(*) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency <> ${currency})::text`,
   };
 };

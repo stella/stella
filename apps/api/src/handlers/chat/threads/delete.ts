@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
@@ -10,7 +10,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { deleteS3Keys } from "@/api/lib/files/utils";
@@ -32,10 +33,8 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
 } satisfies HandlerConfig;
 
 const deleteThread = createSafeRootHandler(
@@ -184,6 +183,7 @@ const deleteThread = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockThreadStoredContentTransitionOnTx(tx, params.threadId);
         const result = await tx
           .delete(chatThreads)
           .where(

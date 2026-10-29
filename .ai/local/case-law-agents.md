@@ -117,6 +117,15 @@ the court. This enables re-parsing without re-downloading.
 
 ### 4. No heuristics where structure exists
 
+Bump a source's `SOURCE_FINGERPRINT_VERSIONS` entry only when its fingerprint
+changes over the same stored bytes: what the adapter passes to
+`sourceFingerprint` from bytes it already stores, or the hashing itself. A
+change to which bytes an adapter stores is not fingerprint-only; those rows
+must be rewritten through the normal changed path when next observed. Bump the
+parser version separately only when parser output changes. A fingerprint-only
+version lets ingestion refresh the stored hash from stored raw without parsing,
+rewriting the decision, or reindexing it.
+
 If the source gives you structure (HTML tags, JSON sections,
 RTF markers), use it. Do not write regex-based heuristics to
 split or classify text when the source already provides the
@@ -142,10 +151,16 @@ Individual adapters should NOT sanitize. The pipeline applies
 chars) to ALL fields including `sourceRaw`. This ensures
 consistency and prevents PostgreSQL text column rejections.
 
-### 6. Validate every parser with validateAndLog
+### 6. Keep text-retention validation in the ingestion pipeline
 
-Every parser MUST call `validateAndLog()` after producing
-blocks. The validator checks:
+Text-retention validation belongs to the ingestion pipeline. New parsers and
+adapters do not import or call `validateAndLog()` or `validateAst()`.
+`no-parser-validator-calls` enforces this boundary; legacy imports and calls
+remain in the shrinking `scripts/parser-validator-call-ledger.json` ledger.
+Do not add ledger entries for new parsers. Focused tests may exercise the shared
+validator on parser output.
+
+The pipeline validator checks:
 
 - Content retention (>90% of source text preserved)
 - Missing meaningful words (<15 allowed)
@@ -223,7 +238,7 @@ still walked for content.
 A decision shown with a flat structure is visibly imperfect and a user
 can still read and cite it. A decision missing a paragraph looks
 complete and is wrong, and neither the reader nor the AI pipeline has
-any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
+any way to know. The pipeline validator's CONTENT_LOSS and MISSING_WORDS are
 the completeness guard and must be treated as errors; heading levels
 and section boundaries are fidelity and may carry a known tail.
 
@@ -440,6 +455,11 @@ restarts the slice. A saved page that disappears after a withdrawal must also
 restart from page zero, not retry the invalid offset forever. The follow-up
 window must begin at the snapshot boundary plus one, not at a fresh rolling
 lookback, or a long crawl/outage creates a permanent gap.
+
+Reconciliation slices get this pass from the shared walker
+(`listReconciliationSlice` in `ingestion/slice-listing.ts`): it lists every
+non-empty slice twice and refuses one whose two passes name different
+identities, so an adapter verifies only the windows its own cursor walks.
 
 **The steady-state follow-up is a frontier, not a window.** Once the sweep has
 seen the collection, the cursor carries the last publisher window it verified
@@ -732,7 +752,7 @@ When adding a new country adapter:
 4. **Extract ALL metadata** — every field the API exposes goes
    into `IngestionResult.metadata`
 5. **Write a parser** (if HTML/JSON structure allows) — produce
-   `DocumentAst` blocks; call `validateAndLog()`
+   `DocumentAst` blocks; text-retention validation belongs to the ingestion pipeline
 6. **Register** in `adapters/index.ts` and
    `adapter-registry-lazy.ts`
 7. **Add adapter key** to `consts.ts` `ADAPTER_KEYS`

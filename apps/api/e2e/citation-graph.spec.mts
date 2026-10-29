@@ -5,6 +5,7 @@ import type * as v from "valibot";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages" with { type: "json" };
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 
 import type { READ_CASE_LAW_CITATIONS_PROJECTION } from "../src/lib/chat/case-law-citation-projection";
 import type { openDecisionOutput } from "../src/lib/chat/decision-reader-projections";
@@ -158,6 +159,7 @@ const mountGraph = async ({
       hostName,
       pagedResult,
       expandedResults,
+      handoffTool,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -241,6 +243,18 @@ const mountGraph = async ({
             }
             const { name, arguments: args } = params;
             calls.push({ name, arguments: args });
+            // The host declines the sign-in handoff, so links open unchanged.
+            if (name === handoffTool) {
+              reply({
+                jsonrpc: "2.0",
+                id,
+                result: {
+                  isError: true,
+                  content: [{ type: "text", text: "Handoff declined." }],
+                },
+              });
+              break;
+            }
             if (name === "open_case_law_decision") {
               const decisionId = args["decision_id"];
               if (typeof decisionId !== "string") {
@@ -328,6 +342,7 @@ const mountGraph = async ({
       initialPage: { ...firstPage, direction },
       pagedResult: morePage,
       expandedResults: expansionPages,
+      handoffTool: MCP_WEB_HANDOFF_TOOL_NAME,
     },
   );
   expect(mounted).toBe("mounted");

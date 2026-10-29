@@ -41,14 +41,16 @@ describePostgres("matter membership validation (postgres)", () => {
         // LIKE derives the fixture's column types and defaults from the
         // migrated schema; a private search path keeps the repair isolated.
         await session
-          .unsafe(`
+          .unsafe(
+            `
           CREATE SCHEMA ${schema};
           SET search_path TO ${schema}, public;
           CREATE TABLE workspaces (LIKE public.workspaces INCLUDING DEFAULTS);
           CREATE TABLE workspace_members (LIKE public.workspace_members INCLUDING DEFAULTS);
           CREATE TABLE member (LIKE public.member INCLUDING DEFAULTS);
           CREATE TABLE audit_logs (LIKE public.audit_logs INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES);
-        `)
+        `,
+          )
           .simple();
         await session`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
           VALUES (${workspaceId}, 'validation-org', 'Matter', ${workspaceId},
@@ -104,11 +106,11 @@ describePostgres("matter membership validation (postgres)", () => {
         const remainingMemberships = await session<
           { id: string }[]
         >`SELECT id FROM workspace_members`;
-        expect(remainingMemberships).toEqual([{ id: retainedId }]);
+        expect([...remainingMemberships]).toEqual([{ id: retainedId }]);
         const timestamps = await session<
           { recorded: boolean }[]
         >`SELECT bool_and(created_at IS NOT NULL) AS recorded FROM audit_logs`;
-        expect(timestamps).toEqual([{ recorded: true }]);
+        expect([...timestamps]).toEqual([{ recorded: true }]);
 
         await session.unsafe(migration).simple();
         await session`COMMIT`;
@@ -118,7 +120,7 @@ describePostgres("matter membership validation (postgres)", () => {
         await session
           .unsafe(`RESET search_path; DROP SCHEMA IF EXISTS ${schema} CASCADE`)
           .simple();
-        session.release();
+        await session.release();
       }
     });
   }, 30_000);

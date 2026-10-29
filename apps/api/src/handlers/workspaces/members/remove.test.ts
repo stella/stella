@@ -1,17 +1,20 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   auditLogs,
   correspondence,
-  desktopEditSessions,
   desktopEditHandoffs,
+  desktopEditSessions,
   timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -27,7 +30,23 @@ import {
   removeWorkspaceMemberHandler,
 } from "./remove";
 
+// Every advisory acquisition in these fixtures succeeds under one identity.
+const ADVISORY_LOCK_ROW = { acquired: true, key1: 1, key2: 2 };
+const executeRemovalStatement = (workspaceId: string) => async (query: SQL) => {
+  const { sql: statement } = new PgDialect().sqlToQuery(query);
+  if (statement.includes("stella_lock_matter_stewardship")) {
+    return [{ id: workspaceId }];
+  }
+  if (statement.includes("AS acquired") || statement.includes("AS key1")) {
+    return [ADVISORY_LOCK_ROW];
+  }
+  // These matters are not assigned-only, so steward repair changes no rows.
+  return [];
+};
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
+beforeEach(() => {
+  revokeWorkspaceSseAccessMock.mockClear();
+});
 const removeWorkspaceMember = createRemoveWorkspaceMember({
   broadcastSessionEvent: () => undefined,
   broadcastWorkspaceResourceSetUpdated: () => undefined,
@@ -63,6 +82,7 @@ const createContext = ({
     managedAIResidency: "eu" as const,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
+    route: "/v1/workspaces/:workspaceId/members/:userId" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },
@@ -81,6 +101,7 @@ describe("removeWorkspaceMember", () => {
     let deleteCalled = false;
 
     const { safeDb } = createScopedDbMock({
+      execute: executeRemovalStatement(workspaceId),
       select: (selectedFields: Record<string, unknown>) => {
         if ("role" in selectedFields) {
           return createSelectQueryMock([{ role: "owner" }]);
@@ -88,10 +109,21 @@ describe("removeWorkspaceMember", () => {
         return {
           from: (table: unknown) => ({
             where: () => ({
-              limit: () => ({
-                for: async () =>
-                  table === timeEntries ? [{ id: "timer_test" }] : [],
-              }),
+              limit: (count: number) =>
+                Object.assign(
+                  createSelectQueryMock(
+                    table === workspaces
+                      ? [{ organizationId: "org_timer_test" }]
+                      : [],
+                  )
+                    .from()
+                    .where()
+                    .limit(count),
+                  {
+                    for: async () =>
+                      table === timeEntries ? [{ id: "timer_test" }] : [],
+                  },
+                ),
               for: async () => {
                 if (table === workspaces) {
                   return [{ leadUserId: null }];
@@ -144,7 +176,7 @@ describe("removeWorkspaceMember", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      execute: async () => [],
+      execute: executeRemovalStatement("ws_test123"),
       select: (selectedFields: Record<string, unknown>) => {
         if ("role" in selectedFields) {
           return createSelectQueryMock([{ role: "owner" }]);
@@ -164,9 +196,18 @@ describe("removeWorkspaceMember", () => {
                     table === workspaces ? [{ id: "ws_test123" }] : [],
                 }),
               }),
-              limit: () => ({
-                for: async () => [],
-              }),
+              limit: (count: number) =>
+                Object.assign(
+                  createSelectQueryMock(
+                    table === workspaces
+                      ? [{ organizationId: "org_test123" }]
+                      : [],
+                  )
+                    .from()
+                    .where()
+                    .limit(count),
+                  { for: async () => [] },
+                ),
               for: async () => {
                 if (table === workspaces) {
                   return [

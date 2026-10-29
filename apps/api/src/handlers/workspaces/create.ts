@@ -1,7 +1,6 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { defaultMatterVisibilityFor } from "@stll/api-contract";
 
@@ -16,7 +15,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -25,8 +24,8 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tDefaultVarchar,
-  tSafeId,
+  defaultVarcharSchema,
+  resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
@@ -38,6 +37,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -45,28 +45,29 @@ import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
-import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
+import { matterVisibilitySchema } from "@/api/lib/workspaces/visibility";
 
 // `visibility` decides who can see the matter. Unless the creator chooses,
 // a matter without a client is personal (assigned_only, led by its creator)
 // and a client matter gets the client default (defaultMatterVisibilityFor).
 // `memberUserIds` adds members alongside the creator either way.
-const createWorkspaceBodySchema = t.Object({
-  id: tSafeId("workspace"),
-  clientId: t.Optional(
-    tSafeId("contact", {
+const createWorkspaceBodySchema = v.object({
+  id: resourceIdSchema("workspace"),
+  clientId: v.optional(
+    resourceIdSchema("contact", {
       description: "Contact ID to attach in the client role",
     }),
   ),
-  memberUserIds: t.Optional(
-    t.Array(t.String({ maxLength: 128 }), {
-      maxItems: LIMITS.workspaceMembersCount - 1,
-    }),
+  memberUserIds: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(128))),
+      v.maxLength(LIMITS.workspaceMembersCount - 1),
+    ),
   ),
-  name: withDescription(tDefaultVarchar, "Matter name"),
-  filePropertyName: tDefaultVarchar,
-  visibility: t.Optional(
-    tMatterVisibility({
+  name: withDescription(defaultVarcharSchema, "Matter name"),
+  filePropertyName: defaultVarcharSchema,
+  visibility: v.optional(
+    matterVisibilitySchema({
       description:
         "Who can see the matter: all_members (every internal member), " +
         "admins_and_assigned (owners, admins and assigned members) or " +
@@ -103,7 +104,7 @@ export type CreateWorkspaceHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof createWorkspaceBodySchema>;
+  body: v.InferOutput<typeof createWorkspaceBodySchema>;
 };
 
 // Shared matter-creation logic reused by the HTTP handler and the
@@ -360,7 +361,11 @@ export const createWorkspaceHandler = async function* ({
     }),
   );
 
-  flushWorkspaceSearchRepairs([txResult.id]).catch(captureError);
+  flushWorkspaceSearchRepairs([txResult.id]).catch(
+    createErrorCapture(
+      handlerErrorContext("createWorkspaceHandler.flushWorkspaceSearchRepairs"),
+    ),
+  );
 
   return Result.ok({ id: txResult.id });
 };

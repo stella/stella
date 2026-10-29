@@ -29,9 +29,10 @@ type SelectionToolbarProps = {
 
 /**
  * The floating bar over selected text, shared by the document reader's
- * mark-up bar and the chat's selection actions. It owns placement only:
- * reading the selection and choosing the actions stay with each host,
- * because what counts as a selection differs between them.
+ * mark-up bar, the PDF viewer's selection bar and the chat's selection
+ * actions. It owns placement only: reading the selection and choosing the
+ * actions stay with each host, because what counts as a selection differs
+ * between them. The actions they share live in `selection-toolbar-actions`.
  */
 export const SelectionToolbar = ({
   anchorRect,
@@ -77,11 +78,16 @@ export const SelectionToolbar = ({
     bounds: boundaryRect,
   });
 
+  // `w-max`: a fixed box without a width shrinks to the room between its
+  // `left` and the viewport's edge, before the translate centres it. Near
+  // the right edge that squeezed the bar into rows, and the squeezed width
+  // then fed the clamp above. The bar takes its own width; `maxWidth` alone
+  // decides when it wraps.
   return createPortal(
     <div
       aria-label={ariaLabel}
       className={cn(
-        "bg-popover text-popover-foreground fixed z-[100] -translate-x-1/2 rounded-md border p-1 text-xs shadow-md",
+        "bg-popover text-popover-foreground fixed z-[100] w-max -translate-x-1/2 rounded-md border p-1 text-xs shadow-md",
         className,
       )}
       ref={attachBar}

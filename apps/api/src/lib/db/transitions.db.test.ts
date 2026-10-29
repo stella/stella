@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import { pgTable, text, integer, primaryKey } from "drizzle-orm/pg-core";
+import { integer, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";

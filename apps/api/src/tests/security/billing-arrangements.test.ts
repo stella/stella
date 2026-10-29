@@ -5,6 +5,7 @@ import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import {
   billingArrangements,
+  CORRESPONDENCE_REVIEW_RESET_SETTING,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -154,12 +155,13 @@ describe("billing arrangement scope", () => {
 
   test("every application policy requires matter and organization scope", async () => {
     const policies = await testDb.execute<{
+      name: string;
       command: string;
       using: string | null;
       withCheck: string | null;
       appRole: boolean;
     }>(sql`
-      SELECT policy.polcmd AS command,
+      SELECT policy.polname AS name, policy.polcmd AS command,
         pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS using,
         pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS "withCheck",
         (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'stella') = ANY(policy.polroles) AS "appRole"
@@ -167,14 +169,27 @@ describe("billing arrangement scope", () => {
       WHERE policy.polrelid = 'public.billing_arrangements'::regclass
       ORDER BY policy.polcmd
     `);
-    expect(policies.rows.map((policy) => policy.command).toSorted()).toEqual([
-      "a",
-      "d",
-      "r",
-      "w",
-    ]);
-    for (const policy of policies.rows) {
-      expect(policy.appRole).toBe(true);
+    // The review reset owner pair is the only policy outside the application
+    // role; it is fenced to the table owner and the organization being reset.
+    const ownerPolicies = policies.rows.filter((policy) => !policy.appRole);
+    expect(
+      ownerPolicies.map(({ name, command }) => `${name}:${command}`).toSorted(),
+    ).toEqual(["review_reset_owner_delete:d", "review_reset_owner_select:r"]);
+    for (const policy of ownerPolicies) {
+      expect(policy.using).toContain("pg_get_userbyid");
+      expect(policy.using).toContain("relowner");
+      expect(policy.using).toContain(
+        CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId,
+      );
+      expect(policy.withCheck).toBeNull();
+    }
+    const applicationPolicies = policies.rows.filter(
+      (policy) => policy.appRole,
+    );
+    expect(
+      applicationPolicies.map((policy) => policy.command).toSorted(),
+    ).toEqual(["a", "d", "r", "w"]);
+    for (const policy of applicationPolicies) {
       const expression =
         policy.command === "a" ? policy.withCheck : policy.using;
       expect(expression).not.toBeNull();

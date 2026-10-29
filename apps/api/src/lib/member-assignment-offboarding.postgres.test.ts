@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test, setDefaultTimeout } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import {
@@ -12,26 +12,26 @@ import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
-  properties,
   auditLogs,
+  contacts,
   desktopEditHandoffs,
-  pdfSigningSessions,
   desktopEditSessions,
   desktopPresence,
-  searchHistoryEntries,
+  entities,
   entityVersions,
   flowDefinitions,
   flowRuns,
   flowRunSteps,
   mcpConnectors,
-  mcpUserConnections,
   mcpOAuthState,
+  mcpUserConnections,
+  pdfSigningSessions,
+  properties,
+  searchHistoryEntries,
   sharepointConnections,
   sharepointOAuthState,
-  workObligations,
-  contacts,
-  entities,
   taskAssignees,
+  workObligations,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -58,6 +58,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -118,6 +119,12 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: new Date(),
           })),
         );
+        for (const id of [organizationId, otherOrganizationId]) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          });
+        }
         await db.insert(member).values([
           {
             id: memberId,
@@ -340,6 +347,10 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Assignment organization",
             slug: organizationId,
             createdAt: new Date(),
+          });
+          await recordNewOrganizationAccessState(checkDb, {
+            organizationId,
+            now: new Date(),
           });
           try {
             await checkDb.insert(member).values([
@@ -636,6 +647,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Contact organization",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
         });
         try {
           await db.insert(member).values([
@@ -1187,6 +1202,10 @@ if (!databaseUrl || !runPostgresTests) {
           slug: organizationId,
           createdAt: new Date(),
         });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
+        });
         try {
           await db.insert(member).values(
             [actorUserId, userId].map((id) => ({
@@ -1414,6 +1433,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Busy fixture",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(holdingDb, {
+          organizationId,
+          now: new Date(),
         });
         let writer: Promise<void> | undefined;
         try {

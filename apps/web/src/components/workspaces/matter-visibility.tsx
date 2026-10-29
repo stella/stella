@@ -39,7 +39,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 
 /** Copy and icon for each level, widest first (the order MATTER_VISIBILITIES lists). */
@@ -192,7 +192,7 @@ export const MatterVisibilityBadge = ({
  */
 export const useCanStewardMatter = (leadUserId: string | null): boolean => {
   const currentUser = useAuthenticatedUser();
-  const roleView = useQueryView(
+  const roleView = queryView(
     useQuery({ ...roleOptions, staleTime: Number.POSITIVE_INFINITY }),
   );
   const role =

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
@@ -18,8 +19,8 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/
 import {
   ADD_MATTER_MEMBER_PROJECTION,
   REMOVE_MATTER_MEMBER_PROJECTION,
-  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
+  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,7 +32,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
@@ -50,10 +50,10 @@ import {
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
+  legalCitationLinkFields,
   nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  legalCitationLinkFields,
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -62,6 +62,8 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
@@ -218,6 +220,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // and never appears on the anonymized surface.
   access: "read",
   readClass: "tenant",
+  permissions: { type: "all", permissions: { auditLog: ["read"] } },
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",
@@ -479,6 +482,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
       "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
   },
   access: "read",
+  permissions: openMcpRead("public legislation corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
@@ -514,7 +518,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
-        return internalFailureResult(block.error);
+        return internalFailureResult(
+          block.error,
+          "mcp.handleSearchBoeLegislationTool.block_error",
+        );
       }
       return toolDataResult({ lawId, blockId, block: block.value });
     }
@@ -526,7 +533,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
-        return internalFailureResult(related.error);
+        return internalFailureResult(
+          related.error,
+          "mcp.handleSearchBoeLegislationTool.related_error",
+        );
       }
       return toolDataResult(related.value);
     }
@@ -548,7 +558,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
       catch: mapBoeError,
     });
     if (Result.isError(detail)) {
-      return internalFailureResult(detail.error);
+      return internalFailureResult(
+        detail.error,
+        "mcp.handleSearchBoeLegislationTool.detail_error",
+      );
     }
     return toolDataResult(detail.value);
   }
@@ -585,7 +598,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
     catch: mapBoeError,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleSearchBoeLegislationTool.result_error",
+    );
   }
   // Publisher search has no held corpus identity. Its existing source URL
   // remains primary through the same citation resolver as corpus reads.
@@ -672,7 +688,10 @@ const handleListAuditLogTool: McpToolHandler<
     }),
   );
   if (Result.isError(page)) {
-    return internalFailureResult(page.error);
+    return internalFailureResult(
+      page.error,
+      "mcp.handleListAuditLogTool.page_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LIST_AUDIT_LOG_OUTPUT_SCHEMA, {
@@ -782,7 +801,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.isoDate())),
+          v.nullable(apiDateSchema),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),
@@ -895,7 +914,7 @@ const handleAddMember = async ({
   requestedWorkspaceId,
   userId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
 }): Promise<
@@ -922,7 +941,10 @@ const handleAddMember = async ({
     }),
   );
   if (Result.isError(added)) {
-    return internalFailureResult(added.error);
+    return internalFailureResult(
+      added.error,
+      "mcp.handleAddMember.added_error",
+    );
   }
   return toolDataResult(
     projectionPayload(ADD_MATTER_MEMBER_PROJECTION, {
@@ -937,7 +959,7 @@ const handleRemoveMember = async ({
   userId,
   reassignTo,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
   reassignTo?: string | undefined;
@@ -973,7 +995,10 @@ const handleRemoveMember = async ({
     }),
   );
   if (Result.isError(removed)) {
-    return internalFailureResult(removed.error);
+    return internalFailureResult(
+      removed.error,
+      "mcp.handleRemoveMember.removed_error",
+    );
   }
   return toolDataResult(
     projectionPayload(REMOVE_MATTER_MEMBER_PROJECTION, {
@@ -1061,7 +1086,10 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleUpdateOrganizationSettingsTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(UPDATE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),

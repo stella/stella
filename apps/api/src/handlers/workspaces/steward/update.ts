@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import { recoverMatterSteward } from "@/api/db/root";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import { userIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
@@ -22,7 +23,7 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({}),
-  body: t.Object({ stewardUserId: tUserId }),
+  body: v.object({ stewardUserId: userIdSchema }),
 } as const satisfies HandlerConfig;
 
 type RecoverMatterStewardDependencies = {
@@ -84,7 +85,7 @@ export const createRecoverMatterSteward = ({
 const endpoint = createRecoverMatterSteward({
   recoverInTransaction: recoverMatterSteward,
 });
-declareAggregateMutation(endpoint.handler, {
+declareAggregateMutation(endpoint, {
   type: "aggregate",
   aggregates: ["workspace"],
 });

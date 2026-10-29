@@ -1,5 +1,3 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   afterEach,
@@ -12,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   MATTER_VISIBILITY,
@@ -21,16 +20,16 @@ import {
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  BILLING_STATUS,
-  TIME_ENTRY_SOURCE,
   auditLogs,
+  BILLING_STATUS,
+  featureEnrolments,
   organizationSettings,
   rateTables,
+  TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -127,8 +126,8 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   },
 });
 
-const checkedBody = <T>(schema: TSchema, body: T) => {
-  expect(Value.Check(schema, body)).toBe(true);
+const checkedBody = <T>(schema: v.GenericSchema, body: T) => {
+  expect(v.is(schema, body)).toBe(true);
   return body;
 };
 
