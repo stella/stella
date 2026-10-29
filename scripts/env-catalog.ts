@@ -1448,6 +1448,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Release-only secret: the short-lived federated Chrome Web Store access token.
+  "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
   "APP_VARIANT",
   "APPLE_TEAM_ID",
@@ -1540,6 +1542,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
+  // The staging proof gate shares its monitor state across workflow steps.
+  "STAGING_PROOF_STATE_PATH",
+  "STAGING_PROOF_PREFLIGHT",
   // The same script requests a candidate's power lease without waiting for
   // readiness, for the hours the promotion asks.
   "STAGING_LEASE_ONLY",
