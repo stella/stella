@@ -35,8 +35,8 @@ jobs:
     if: github.repository == 'stella/stella'
     runs-on: ubuntu-24.04
     # Listing takes about a minute; resolve runs are followed for at most 15
-    # minutes and publish runs for 20.
-    timeout-minutes: 45
+    # minutes and up to three publish runs for 20 minutes each.
+    timeout-minutes: 80
     permissions:
       # Starting the per-branch resolve runs and the publish runs, and
       # reading their state and artifacts.
@@ -70,7 +70,7 @@ jobs:
                   pageInfo { hasNextPage endCursor }
                   nodes {
                     number mergeable isCrossRepository headRefName headRefOid updatedAt author { login }
-                    commits(last: 1) { nodes { commit { committedDate } } }
+                    commits(last: 1) { nodes { commit { committedDate messageHeadline statusCheckRollup { state } checkSuites(first: 100) { pageInfo { hasNextPage } nodes { status } } } } }
                   }
                 }
               }
@@ -112,7 +112,19 @@ jobs:
               core.info(activity.line);
               return false;
             });
-            // A head that already had a resolve run usually conflicts in
+            const headCommit = pull => pull.commits?.nodes?.[0]?.commit;
+            const green = pull => headCommit(pull)?.statusCheckRollup?.state === 'SUCCESS';
+            // Count published merge heads even before their first check appears.
+            // Dispatch runs are serialized; each waits for its publishes before
+            // the next main push can reserve the remaining capacity.
+            const active = nodes.filter(pull => headCommit(pull)?.messageHeadline
+              === 'chore: merge main and regenerate conflicted generated files'
+              && (headCommit(pull)?.checkSuites?.pageInfo?.hasNextPage
+                || !headCommit(pull)?.checkSuites?.nodes?.length
+                || headCommit(pull).checkSuites.nodes.some(suite => suite.status !== 'COMPLETED')));
+            const publishSlots = Math.max(0, 3 - active.length);
+            core.setOutput('publish-slots', String(publishSlots));
+            // Within each check tier, a previously planned head usually conflicts in
             // source files, which a newer main does not clear. Heads not yet
             // planned go first, then the most recently updated, so a few stale
             // pull requests never take every slot from new generated-only
@@ -124,7 +136,8 @@ jobs:
             const planned = new Set(runs.map(run => run.head_sha));
             const updated = pull => Date.parse(pull.updatedAt) || 0;
             const pulls = eligible
-              .sort((a, b) => Number(planned.has(a.headRefOid)) - Number(planned.has(b.headRefOid))
+              .sort((a, b) => Number(green(b)) - Number(green(a))
+                || Number(planned.has(a.headRefOid)) - Number(planned.has(b.headRefOid))
                 || updated(b) - updated(a));
             // Only an accepted dispatch takes one of the 8 slots: a branch
             // that refuses the dispatch never starts a run, so it would stay
@@ -156,8 +169,12 @@ jobs:
               return undefined;
             };
             const started = [];
+            const outcomes = [];
             for (const pull of pulls) {
-              if (started.length === 8) break;
+              if (started.length === 8 || publishSlots === 0) {
+                outcomes.push(`deferred #${pull.number}: ${publishSlots === 0 ? 'ci-capacity' : 'dispatch-capacity'}`);
+                continue;
+              }
               let id;
               try {
                 // `ref` is the pull request's branch: the run, its caches and
@@ -174,7 +191,8 @@ jobs:
                 // it. Any other failure (auth, rate limit, server) affects every
                 // branch alike, so the run fails instead of walking the list.
                 if (error.status !== 422) throw error;
-                core.notice(`#${pull.number}: not dispatched (422)`);
+                outcomes.push(`deferred #${pull.number}: dispatch-refused (422)`);
+                core.notice(outcomes.at(-1));
                 continue;
               }
               // The next step follows exactly these runs. A run that cannot be
@@ -183,10 +201,12 @@ jobs:
                 core.warning(`#${pull.number}: the dispatched resolve run was not found`);
                 continue;
               }
+              outcomes.push(`dispatched #${pull.number}: resolve-run ${id}`);
               started.push(id);
             }
             const summary = [
               ...deferred,
+              ...outcomes,
               `resolved: ${started.length}; deferred-active: ${deferred.length}; other-skipped: ${nodes.length - started.length - deferred.length}`,
             ].join('\n');
             core.info(summary.split('\n').at(-1));
@@ -200,6 +220,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           RUNS: ${{ steps.dispatch.outputs.runs }}
+          PUBLISH_SLOTS: ${{ steps.dispatch.outputs.publish-slots }}
         with:
           # One failed status read must not end a half-hour follow.
           retries: 2
@@ -207,6 +228,14 @@ jobs:
             const { owner, repo } = context.repo;
             const POLL_MS = 20_000;
             const ids = JSON.parse(process.env.RUNS);
+            const slots = Number(process.env.PUBLISH_SLOTS);
+            if (!Number.isInteger(slots) || slots < 0 || slots > 3) {
+              core.setFailed('Invalid publication capacity');
+              return;
+            }
+            const report = async (id, type) => {
+              await core.summary.addRaw(`resolve-run ${id}: ${type}\n`).write();
+            };
             const settle = async (runs, polls) => {
               const done = new Map();
               for (let poll = 0; ; poll += 1) {
@@ -248,6 +277,7 @@ jobs:
             const failures = [];
             const resolved = await settle(ids, 45);
             const publishes = [];
+            let reserved = 0;
             for (const id of ids) {
               const run = resolved.get(id);
               if (run === undefined) {
@@ -255,13 +285,23 @@ jobs:
                 continue;
               }
               if (run.conclusion !== 'success') {
+                await report(id, 'resolve-failed');
                 core.warning(`Resolve run ended ${run.conclusion}: ${run.html_url}`);
                 continue;
               }
               const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
                 owner, repo, run_id: id, name: 'generated-conflicts',
               });
-              if (artifacts.length === 0) continue;
+              if (artifacts.length !== 1 || artifacts[0].expired) {
+                await report(id, 'no-validated-resolution');
+                continue;
+              }
+              if (reserved >= slots) {
+                await report(id, 'deferred-ci-capacity');
+                continue;
+              }
+              // Reserve before dispatch: a missing run id may still publish.
+              reserved += 1;
               const publish = await dispatchRun({
                 workflow_id: 'generated-conflicts-publish.yml',
                 ref: 'main',
@@ -270,18 +310,22 @@ jobs:
                 claimed: new Set(publishes),
               });
               if (publish === undefined) {
+                await report(id, 'publish-run-missing');
                 core.warning(`The publish run for resolve run ${id} was not found`);
-                continue;
+                break;
               }
+              await report(id, `publish-dispatched ${publish}`);
               publishes.push(publish);
-            }
-            const published = await settle(publishes, 60);
-            for (const id of publishes) {
-              const run = published.get(id);
-              if (run === undefined) {
-                failures.push(`publish run ${id} did not finish within 20 minutes`);
-              } else if (run.conclusion !== 'success') {
-                failures.push(`publish run ended ${run.conclusion}: ${run.html_url}`);
+              // One pending concurrency slot exists per publish group. Follow
+              // each publication before starting another, so none replaces it.
+              const published = await settle([publish], 60);
+              const result = published.get(publish);
+              if (result === undefined) {
+                failures.push(`publish run ${publish} did not finish within 20 minutes`);
+                break;
+              }
+              if (result.conclusion !== 'success') {
+                failures.push(`publish run ended ${result.conclusion}: ${result.html_url}`);
               }
             }
             if (failures.length > 0) core.setFailed(failures.join('\n'));

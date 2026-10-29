@@ -19,6 +19,7 @@ import {
   assertLockfileWorkspaces,
   classifyConflicts,
   collect,
+  type ConflictRefusal,
   conflictsOf,
   indentationOnly,
   isAllowedResolution,
@@ -244,35 +245,69 @@ describe("classification", () => {
     }
   });
 
-  const leftToPeople: { name: string; path: string; kind?: "delete-modify" }[] =
-    [
-      { name: "source", path: "apps/api/src/index.ts" },
-      { name: "the root lockfile", path: "bun.lock" },
-      { name: "a nested lockfile", path: "apps/desktop/src-tauri/Cargo.lock" },
-      { name: "a baseline", path: "apps/api/mcp-surface-baseline.json" },
-      { name: "a changeset", path: ".changeset/new.md" },
-      {
-        name: "a job classification decision",
-        path: ".github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fci.yml%2Fcheck.json",
-      },
-      { name: "hand-written regions", path: "DESIGN.md" },
-      {
-        name: "a generator autofix may not run",
-        path: "packages/ai-catalog/upstream/openrouter.gen.json",
-      },
-      {
-        name: "a product screenshot",
-        path: "apps/landing/public/media/products/workspace-light.png",
-      },
-      { name: "delete/modify", path: MESSAGES, kind: "delete-modify" },
-    ];
-  for (const { name, path: file, kind } of leftToPeople) {
+  const leftToPeople: {
+    name: string;
+    path: string;
+    kind?: "delete-modify";
+    type: ConflictRefusal["type"];
+  }[] = [
+    { name: "source", type: "source-conflict", path: "apps/api/src/index.ts" },
+    { name: "the root lockfile", type: "lockfile", path: "bun.lock" },
+    {
+      name: "a nested lockfile",
+      type: "lockfile",
+      path: "apps/desktop/src-tauri/Cargo.lock",
+    },
+    {
+      name: "a baseline",
+      type: "protected-path",
+      path: "apps/api/mcp-surface-baseline.json",
+    },
+    { name: "a changeset", type: "protected-path", path: ".changeset/new.md" },
+    {
+      name: "a job classification decision",
+      type: "protected-path",
+      path: ".github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fci.yml%2Fcheck.json",
+    },
+    {
+      name: "hand-written regions",
+      type: "partial-generated",
+      path: "DESIGN.md",
+    },
+    {
+      name: "a generator autofix may not run",
+      type: "generator-ineligible",
+      path: "packages/ai-catalog/upstream/openrouter.gen.json",
+    },
+    {
+      name: "a product screenshot",
+      type: "source-conflict",
+      path: "apps/landing/public/media/products/workspace-light.png",
+    },
+    {
+      name: "delete/modify",
+      type: "delete-modify",
+      path: MESSAGES,
+      kind: "delete-modify",
+    },
+  ];
+  for (const { name, path: file, kind, type } of leftToPeople) {
     test(`leaves ${name} to people`, () => {
       const result = classifyConflicts([
         { path: MESSAGES, kind: "both-modified" },
         { path: file, kind: kind ?? "both-modified" },
       ]);
       expect(result.eligible).toBe(false);
+      if (result.eligible) {
+        return;
+      }
+      expect(result.refusals).toEqual([
+        {
+          path: file,
+          type,
+          message: result.reasons.at(0),
+        },
+      ]);
     });
   }
 

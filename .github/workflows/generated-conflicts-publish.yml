@@ -24,7 +24,8 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.resolve_run_id }}
+  # Serialize the capacity check with publication, including manual dispatches.
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 permissions: {}
@@ -88,6 +89,32 @@ jobs:
               owner, repo, run_id: run.id, name: 'generated-conflicts',
             });
             if (artifacts.length !== 1 || artifacts[0].expired) return;
+            const query = `query($owner: String!, $repo: String!, $cursor: String) {
+              repository(owner: $owner, name: $repo) {
+                pullRequests(states: OPEN, baseRefName: "main", first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes { commits(last: 1) { nodes { commit { messageHeadline statusCheckRollup { state } checkSuites(first: 100) { pageInfo { hasNextPage } nodes { status } } } } } }
+                }
+              }
+            }`;
+            let active = 0;
+            let cursor = null;
+            do {
+              const page = await github.graphql(query, { owner, repo, cursor });
+              const pulls = page.repository.pullRequests;
+              active += pulls.nodes.filter(pull => {
+                const commit = pull.commits?.nodes?.[0]?.commit;
+                return commit?.messageHeadline === 'chore: merge main and regenerate conflicted generated files'
+                  && (commit?.checkSuites?.pageInfo?.hasNextPage
+                    || !commit?.checkSuites?.nodes?.length
+                    || commit.checkSuites.nodes.some(suite => suite.status !== 'COMPLETED'));
+              }).length;
+              cursor = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
+            } while (cursor);
+            if (active >= 3) {
+              await core.summary.addRaw(`resolution: deferred-ci-capacity (${active} active)\n`).write();
+              return;
+            }
             core.setOutput('branch', run.head_branch);
             core.setOutput('head', run.head_sha);
             core.setOutput('run', String(run.id));

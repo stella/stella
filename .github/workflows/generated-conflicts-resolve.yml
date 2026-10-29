@@ -80,6 +80,8 @@ jobs:
           bun --no-install --no-env-file scripts/generated-conflicts.ts plan \
             --git-dir .git --head "$HEAD_SHA" --main "$MAIN_SHA" > "$RUNNER_TEMP/plan.json"
           cat "$RUNNER_TEMP/plan.json"
+          jq -r 'if .eligible then "resolution: planned" elif (.conflicts | length) == 0 then "resolution: no-conflicts" else .refusals[] | "resolution: \(.type) \(.path)" end' \
+            "$RUNNER_TEMP/plan.json" >> "$GITHUB_STEP_SUMMARY"
           eligible=$(jq -r '.eligible' "$RUNNER_TEMP/plan.json")
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
           if [[ "$eligible" == true ]]; then
