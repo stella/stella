@@ -4212,15 +4212,25 @@ describe("personal search history capabilities", () => {
   });
 
   test("lists own history without a kind filter when kind is omitted", async () => {
-    const queries: string[] = [];
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const database = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: (condition: SQL) => {
-            queries.push(new PgDialect().sqlToQuery(condition).sql);
-            return { orderBy: () => ({ limit: async () => [] }) };
-          },
-        }),
+      select: (projection: SelectedFields) => ({
+        from: (table: PgTable) => {
+          const query = new QueryBuilder().select(projection).from(table);
+          return {
+            where: (condition: SQL) => {
+              const scopedQuery = query.where(condition);
+              return Object.assign(scopedQuery, {
+                orderBy: () => ({
+                  limit: async () => {
+                    queries.push(scopedQuery.toSQL());
+                    return [];
+                  },
+                }),
+              });
+            },
+          };
+        },
       }),
     });
     const result = await handleCapabilityCall({
@@ -4237,9 +4247,10 @@ describe("personal search history capabilities", () => {
       scope: { organizationId: "org_1", userId: "user_1" },
     });
     expect(queries).toHaveLength(1);
-    expect(queries.at(0)).not.toContain('"kind"');
-    expect(queries.at(0)).toContain('"organization_id"');
-    expect(queries.at(0)).toContain('"user_id"');
+    expect(queries.at(0)?.sql).not.toMatch(/"kind"\s*=\s*\$/u);
+    expect(queries.at(0)?.sql).toContain('"organization_id"');
+    expect(queries.at(0)?.sql).toContain('"user_id"');
+    expect(queries.at(0)?.params).toEqual(["org_1", "user_1"]);
   });
 
   test("deletes and clears own history through the shared handlers", async () => {
@@ -4268,11 +4279,9 @@ describe("personal search history capabilities", () => {
           }
           if (table === searchHistoryTombstones) {
             return {
-              values: (
-                rows: readonly (typeof searchHistoryTombstones.$inferInsert)[],
-              ) => ({
+              values: (row: typeof searchHistoryTombstones.$inferInsert) => ({
                 onConflictDoUpdate: async () => {
-                  tombstoneRows.push(...rows);
+                  tombstoneRows.push(row);
                 },
               }),
             };
@@ -4348,7 +4357,13 @@ describe("personal search history capabilities", () => {
           return {
             where: () => ({
               returning: async () => [
-                { id: entryId, kind: "search", lookupKey },
+                {
+                  id: entryId,
+                  kind: "search",
+                  lookupKey,
+                  baseLookupKey: null,
+                  country: "CZE",
+                },
               ],
             }),
           };

@@ -724,7 +724,7 @@ test("clear confirmation resets across countries and submits the selected countr
             items: [
               {
                 ...seed[0],
-                query: `History ${url.searchParams.get("country")}`,
+                query: `History ${String(url.searchParams.get("country"))}`,
               },
             ],
             nextCursor: null,
