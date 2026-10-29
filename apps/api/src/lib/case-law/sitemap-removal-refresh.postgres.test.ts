@@ -53,7 +53,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       .where(eq(caseLawSitemapCountryGenerations.country, country));
   });
 
-  test("generation inserts and updates keep a whole-generationCountry row beside a monthly change in the same transaction", async () => {
+  test("generation inserts and updates keep a whole-country row beside a monthly change in the same transaction", async () => {
     const generationCountry = "XSG";
     const generationSourceId = createSafeId<"caseLawSource">();
     const generationDecisionId = createSafeId<"caseLawDecision">();

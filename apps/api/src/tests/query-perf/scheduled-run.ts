@@ -1,7 +1,11 @@
 import { panic, Result } from "better-result";
 import { type Logger, type SQL, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
+import { createSafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
@@ -20,6 +24,7 @@ import {
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { analyzePlan, type PlanViolation } from "./plan-analyzer";
+import { rollbackTaskDatabase, withQueryPerfRollback } from "./rollback";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -36,7 +41,10 @@ const leadingKeyword = (text: string) =>
     ?.toLowerCase() ?? "";
 
 const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
-const READ_KEYWORDS: ReadonlySet<string> = new Set([
+const PLAN_KEYWORDS: ReadonlySet<string> = new Set([
+  "insert",
+  "update",
+  "delete",
   "select",
   "with",
   "values",
@@ -62,16 +70,11 @@ const asQuery = ({ text, params }: CapturedStatement): SQL => {
 const noopTask = () => undefined;
 
 /**
- * Pages one run of a declared job reads. The job's registered task runs once
- * against the fixture through a client that records every statement it
- * issues; each recorded read is then analyzed in one transaction under the
- * committed planner settings, and the run costs the sum. Measuring the task
- * rather than a hand-kept list of its statements means a statement added to
- * the job is measured without anyone registering it.
- *
- * Only reading jobs are measured this way: a write would change the fixture
- * the next scenario reads, so a job that writes fails here until its replay
- * runs inside a rolled-back transaction.
+ * Run the registered task inside a rollback envelope, then replay every data
+ * statement in order with EXPLAIN ANALYZE in another rollback envelope. Writes
+ * see the same earlier writes as the task did, and neither pass consumes the
+ * next scenario's fixture. Capture enforces transaction controls; replay
+ * measures every data statement and preserves explicit table locks.
  */
 export const measureScheduledJobRun = async ({
   database,
@@ -111,68 +114,103 @@ export const measureScheduledJobRun = async ({
     connection: QUERY_PERF_CONNECTION_SETTINGS,
     logger,
   });
-  const outcome = await task(
-    asTestRaw<SchedulerTaskContext>({
-      db,
-      job: { id: job.id, task: job.task },
-      payload: null,
-      signal: new AbortController().signal,
-      scheduleContinuation: noopTask,
-      logger: {
-        debug: noopTask,
-        error: noopTask,
-        info: noopTask,
-        warn: noopTask,
-      },
-    }),
+  // This isolated corpus fixture has one task-written identity sequence. Its
+  // values survive rollback; restoring it keeps captured log-id parameters
+  // attached to the same rows when the task's writes are replayed.
+  const sequence = v.parse(
+    v.object({ last_value: v.bigint(), is_called: v.boolean() }),
+    executedRows(
+      await db.execute(
+        sql`SELECT last_value, is_called FROM case_law_sitemap_changes_id_seq`,
+      ),
+    ).at(0),
   );
-  if (outcome !== undefined && !Result.isOk(outcome)) {
-    return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
-  }
-  const reads = captured.filter(({ text }) => {
-    const keyword = leadingKeyword(text);
-    if (SESSION_KEYWORDS.has(keyword)) {
-      return false;
+  captured.length = 0;
+  try {
+    const outcome = await withQueryPerfRollback(
+      db,
+      async (tx) =>
+        await task(
+          asTestRaw<SchedulerTaskContext>({
+            db: rollbackTaskDatabase(db, tx),
+            job: { id: job.id, task: job.task },
+            payload: null,
+            dueAt: DueSlot.of({ nextRunAt: new Date("2000-01-01") }),
+            runId: createSafeId<"schedulerJobRun">(),
+            signal: new AbortController().signal,
+            scheduleContinuation: noopTask,
+            logger: {
+              debug: noopTask,
+              error: noopTask,
+              info: noopTask,
+              warn: noopTask,
+            },
+          }),
+        ),
+    );
+    if (outcome !== undefined && !Result.isOk(outcome)) {
+      return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
     }
-    if (!READ_KEYWORDS.has(keyword)) {
-      return panic(
-        `${jobId} issued a ${keyword || "blank"} statement; a writing job needs a rolled-back replay before it can be measured`,
+    const replay = captured.filter(({ text }) => {
+      const keyword = leadingKeyword(text);
+      if (SESSION_KEYWORDS.has(keyword)) {
+        return false;
+      }
+      if (!PLAN_KEYWORDS.has(keyword) && keyword !== "lock") {
+        return panic(
+          `${jobId} issued a ${keyword || "blank"} statement; no query-perf replay is defined for it`,
+        );
+      }
+      return true;
+    });
+    if (replay.length === 0) {
+      return panic(`${jobId} issued no statement to measure`);
+    }
+    const statements = await withQueryPerfRollback(database, async (tx) => {
+      await tx.execute(
+        sql`SELECT setval('case_law_sitemap_changes_id_seq', ${sequence.last_value}, ${sequence.is_called})`,
       );
-    }
-    return true;
-  });
-  if (reads.length === 0) {
-    return panic(`${jobId} issued no statement to measure`);
-  }
-  const statements = await database.transaction(async (tx) => {
-    await applyPlannerSettings(tx);
-    const measured: {
-      metrics: QueryPerfMetrics;
-      planViolations: PlanViolation[];
-      statement: string;
-    }[] = [];
-    for (const statement of reads) {
-      // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
-      const plan = await explainOwnerStatement(tx, asQuery(statement));
-      const normalized = statement.text.replaceAll(/\s+/gu, " ").slice(0, 160);
-      measured.push({
-        metrics: metricsFromPlan(plan),
-        planViolations: analyzePlan({
-          document: plan,
-          owner: jobId,
-          ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+      await applyPlannerSettings(tx);
+      const measured: {
+        metrics: QueryPerfMetrics;
+        planViolations: PlanViolation[];
+        statement: string;
+      }[] = [];
+      for (const statement of replay) {
+        // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
+        if (leadingKeyword(statement.text) === "lock") {
+          await tx.execute(asQuery(statement));
+          continue;
+        }
+        const plan = await explainOwnerStatement(tx, asQuery(statement));
+        const normalized = statement.text
+          .replaceAll(/\s+/gu, " ")
+          .slice(0, 160);
+        measured.push({
+          metrics: metricsFromPlan(plan),
+          planViolations: analyzePlan({
+            document: plan,
+            owner: jobId,
+            ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+            statement: normalized,
+            profileId: "corpus",
+          }),
           statement: normalized,
-          profileId: "corpus",
-        }),
-        statement: normalized,
-      });
-    }
-    await assertPlannerSettings(tx, "owner");
-    return measured;
-  });
-  return {
-    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
-    planViolations: statements.flatMap(({ planViolations }) => planViolations),
-    statements,
-  };
+        });
+      }
+      await assertPlannerSettings(tx, "owner");
+      return measured;
+    });
+    return {
+      metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+      planViolations: statements.flatMap(
+        ({ planViolations }) => planViolations,
+      ),
+      statements,
+    };
+  } finally {
+    await db.execute(
+      sql`SELECT setval('case_law_sitemap_changes_id_seq', ${sequence.last_value}, ${sequence.is_called})`,
+    );
+  }
 };

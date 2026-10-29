@@ -4,6 +4,7 @@ import { getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -288,24 +289,46 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           served: ServedCaseLaw,
         ) => {
           await serveCaseLaw(db, served);
-          const generation = describeServed(served);
-          const run = await measureScheduledJobRun({
+          const measurement =
+            SCHEDULED_JOB_MEASUREMENTS[jobId] ??
+            panic(`No measurement for ${jobId}`);
+          const release = await measurement.prepare?.({
             database: db,
+            served,
             openClient,
-            jobId,
-            task,
           });
-          log({
-            event: "read_budget_job_run",
-            jobId,
-            generation,
-            ...run.metrics,
-            statements: run.statements,
-          });
-          for (const violation of run.planViolations) {
-            note(violation.message);
+          try {
+            const generation = describeServed(served);
+            const snapshot = async () =>
+              executedRows(
+                await db.execute(sql`SELECT
+            (SELECT jsonb_agg(to_jsonb(row) ORDER BY to_jsonb(row)::text) FROM ${schema.caseLawSitemapChanges} row) AS changes,
+            (SELECT jsonb_agg(to_jsonb(row) ORDER BY to_jsonb(row)::text) FROM ${schema.caseLawSitemapShards} row) AS shards,
+            (SELECT jsonb_agg(to_jsonb(row) ORDER BY to_jsonb(row)::text) FROM ${schema.caseLawSitemapShardCounts} row) AS counts,
+            (SELECT jsonb_agg(to_jsonb(row) ORDER BY to_jsonb(row)::text) FROM ${schema.systemAuditRuns} row) AS audits`),
+              );
+            const before = await snapshot();
+            const run = await measureScheduledJobRun({
+              database: db,
+              openClient,
+              jobId,
+              task,
+            });
+            expect(await snapshot()).toEqual(before);
+            log({
+              event: "read_budget_job_run",
+              jobId,
+              generation,
+              ...run.metrics,
+              statements: run.statements,
+            });
+            for (const violation of run.planViolations) {
+              note(violation.message);
+            }
+            return run.metrics;
+          } finally {
+            await release?.();
           }
-          return run.metrics;
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.

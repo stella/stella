@@ -18,6 +18,7 @@ import {
   CASE_LAW_SCENARIOS,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  seedSitemapReadBudget,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { seedQueryPerf } from "./seed";
@@ -68,6 +69,7 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   }[];
 
 type ScheduledJobMeasurement = {
+  prepare?: typeof seedSitemapReadBudget;
   task: string;
   scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
 };
@@ -85,6 +87,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 > = {
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    prepare: seedSitemapReadBudget,
     scenarios: [CASE_LAW_SCENARIOS.quiet],
   },
   "caseLaw.reportFreshness.fiveMinute": {

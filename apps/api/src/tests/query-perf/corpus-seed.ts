@@ -1,15 +1,23 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { corpusIndexGenerations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  tryLockCaseLawSitemapMonth,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import type {
+  GatedTestClientScope,
+  GatedTestDb,
+} from "@/api/tests/gated-test-database";
 
 /**
  * The corpus profile: public corpus tables seeded in the shape production
@@ -411,3 +419,76 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
 export type CorpusReadBudgetSeed = Awaited<
   ReturnType<typeof seedCorpusReadBudgets>
 >;
+
+type SeedSitemapReadBudgetOptions = {
+  database: GatedTestDb;
+  served: ServedCaseLaw;
+  openClient: GatedTestClientScope["openClient"];
+};
+
+/** One available dirty month beside a growing backlog held by another run. */
+export const seedSitemapReadBudget = async ({
+  database,
+  served: { serving },
+  openClient,
+}: SeedSitemapReadBudgetOptions) => {
+  const scenario =
+    SCENARIO_GENERATIONS.find(({ generation }) => generation === serving) ??
+    panic(`Unknown sitemap scenario ${serving}`);
+  const sourceId = "01990000-00c0-7000-8000-000000000001";
+  await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+    VALUES (${sourceId}::uuid, 'query-perf-sitemap', 'Sitemap fixture', false)
+    ON CONFLICT (id) DO NOTHING`);
+  await database.execute(
+    sql`DELETE FROM case_law_decisions WHERE source_id = ${sourceId}::uuid`,
+  );
+  for (let first = 1; first <= scenario.rows; first += SEED_CHUNK_ROWS) {
+    const last = Math.min(first + SEED_CHUNK_ROWS - 1, scenario.rows);
+    await database.execute(sql`INSERT INTO case_law_decisions
+      (id, source_id, country, court, language, case_number, decision_date)
+      SELECT ('01990000-00c1-7000-8000-' || lpad(to_hex(i), 12, '0'))::uuid,
+        ${sourceId}::uuid, CASE WHEN i = 1 THEN 'XQT' ELSE 'XQN' END,
+        'Fixture court', 'xx', i::text, DATE '2024-01-01'
+      FROM generate_series(${first}, ${last}) i`);
+  }
+  // Existing shards represent the unrelated, previously refreshed months.
+  await database.execute(sql`DELETE FROM case_law_sitemap_shards`);
+  await database.execute(sql`INSERT INTO case_law_sitemap_shards
+    (country, year, month, bucket, total, last_modified_at)
+    SELECT 'XQN', (1000 + i / 12)::text, lpad((1 + i % 12)::text, 2, '0'),
+      'all', 1, '2026-01-01'::timestamptz FROM generate_series(1, ${scenario.rows}) i`);
+  await database.execute(sql`DELETE FROM case_law_sitemap_changes`);
+  // Many committed changes of the same month exercise the bounded queue
+  // page and its full-month consumption without adding dirty months.
+  await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
+    SELECT 'XQT', '2024', '01', (1000000 + i)::text::xid8
+    FROM generate_series(1, 2000) i`);
+  await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
+    SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
+    FROM generate_series(1, ${scenario.rows}) i`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
+  const acquired = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const holding = withAggregateTransaction(openClient().db, async (tx) => {
+    if (
+      !(await tryLockCaseLawSitemapMonth({
+        tx,
+        month: { country: "XQN", year: "2024", month: "01" },
+      }))
+    ) {
+      panic("Sitemap fixture backlog month is already held");
+    }
+    acquired.resolve(undefined);
+    await release.promise;
+  });
+  await Promise.race([
+    acquired.promise,
+    holding.then(() => panic("Sitemap fixture lock released before capture")),
+  ]);
+  return async () => {
+    release.resolve(undefined);
+    await holding;
+  };
+};
