@@ -14,6 +14,7 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { compareTextFidelity, normalizeInlineLayout } from "./at-ris-markup";
 import {
   inlinesToPlainText,
+  isExcludedHtmlTag,
   visibleHtmlText,
   walkInlines,
 } from "./shared-inlines";
@@ -224,6 +225,10 @@ export const parseFindokDecisionXml = (
           normalizeInlineLayout([{ type: "text", text: node.data }]),
         );
       }
+      return;
+    }
+    // A script or style prints nothing; the inline walk only skips nested ones.
+    if (isExcludedHtmlTag(node.tagName.toLowerCase())) {
       return;
     }
     if (/^h[1-6]$/u.test(node.tagName)) {
