@@ -33,6 +33,7 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -567,6 +568,7 @@ test("a stale equal fingerprint advances its version once without rewriting", as
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     );
   };
@@ -610,6 +612,7 @@ test("a stale equal hash without stored raw follows the changed path", async () 
         metadataUrlSchema: undefined,
         sourceFingerprintVersion: 1,
         statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
       }),
   );
   expect(outcome.inserted).toBe(true);
@@ -646,6 +649,7 @@ test("a stale unequal fingerprint follows the changed path", async () => {
         metadataUrlSchema: undefined,
         sourceFingerprintVersion: 1,
         statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
       }),
   );
   expect(outcome.inserted).toBe(true);
@@ -682,6 +686,7 @@ test("an unavailable stale stored source follows the changed path", async () => 
         metadataUrlSchema: undefined,
         sourceFingerprintVersion: 1,
         statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
       }),
   );
   expect(outcome.inserted).toBe(true);
@@ -721,6 +726,7 @@ test("a forced refresh does not read a stale stored source", async () => {
         metadataUrlSchema: undefined,
         sourceFingerprintVersion: 1,
         statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
       }),
   );
   expect(outcome.inserted).toBe(true);
@@ -757,6 +763,7 @@ test("unchanged fixture bytes recompute a stale fingerprint without rewriting", 
         metadataUrlSchema: undefined,
         sourceFingerprintVersion: 1,
         statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
       }),
   );
   expect(outcome.inserted).toBe(false);

@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Pressione {shortcut} para navegar pelo histórico e escolher um recorte.",
     "welcomeShortcutTitle": "Abra em qualquer lugar.",
     "welcomeStart": "Começar a copiar",
-    "welcomeTitle": "Conheça sua área de transferência"
+    "welcomeTitle": "Conheça sua área de transferência",
+    "registryIdentifierSearchHint": "Insira {identifiers}."
   },
   "activity": {
     "title": "Atividade",

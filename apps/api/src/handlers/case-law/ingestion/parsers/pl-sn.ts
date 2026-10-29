@@ -1427,7 +1427,7 @@ const SAME_PLACE_PT = 2;
 /** `3`, `- 3 -`, `3/16`, `Strona 3 z 16`, `str. 3`: page 3's own number. */
 const isPageNumber = (text: string, pageNumber: number): boolean => {
   const match =
-    /^(?:(?:strona|str\.)\s*)?[-–—]?\s*(?<page>\d{1,4})\s*[-–—]?(?:\s*(?:z|\/)\s*\d{1,4})?$/iu.exec(
+    /^(?:(?:strona|str\.) ?)?[-–—]? ?(?<page>\d{1,4}) ?[-–—]?(?: ?(?:z|\/) ?\d{1,4})?$/iu.exec(
       text.replace(/\s+/gu, " ").trim(),
     );
   return match?.groups?.["page"] === String(pageNumber);
@@ -1502,6 +1502,7 @@ const withoutRepeatedFurniture = (
       .replace(/\d+/gu, "#")
       .replace(/\s+/gu, " ")
       .trim();
+
   const letterheadCandidate = (line: PdfTextLine, height: number): boolean =>
     inEdgeZone(line, height) &&
     setSmall(line, bodySize) &&

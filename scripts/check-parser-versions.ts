@@ -55,7 +55,7 @@ const OUTPUT_UNCHANGED =
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
-type SourceTree = ReadonlyMap<string, string>;
+export type SourceTree = ReadonlyMap<string, string>;
 export type ParserOutputBoundary = {
   path: string;
   reason: string;
@@ -112,7 +112,7 @@ type RegisteredParserSource = {
 
 type SourceOwnersResult = {
   owners: ReadonlyMap<string, SourceOwner>;
-  /** By a key derived from the constant's name (`sk-collection-parser-version`). */
+  /** By declaring file and sorted stamped-in modules. */
   recordOwners: ReadonlyMap<string, RecordVersionOwner>;
   registeredSources: readonly RegisteredParserSource[];
   parserFiles: ReadonlySet<string>;
@@ -419,7 +419,7 @@ class StaticTree {
               version: value.value,
               stampedIn: new Set<string>(),
             };
-            record.stampedIn.add(file);
+            record.stampedIn.add(module);
             this.recordVersions.set(identity, record);
             continue;
           }
@@ -612,33 +612,23 @@ class StaticTree {
       version,
       stampedIn,
     } of this.recordVersions.values()) {
-      const key = name.toLowerCase().replaceAll("_", "-");
+      const identity = JSON.stringify([file, [...stampedIn].toSorted()]);
       if (!Number.isSafeInteger(version) || version < 1) {
         errors.push(
           `Record version ${name} in ${file} is not a positive integer`,
         );
         continue;
       }
-      if (recordOwners.has(key)) {
+      if (recordOwners.has(identity)) {
         errors.push(
-          `Record version ${name} in ${file} shares its name with another; rename one`,
+          `Record version stream in ${file} stamped by ${[...stampedIn].toSorted().join(", ")} has multiple declarations; keep one version constant for this stream`,
         );
         continue;
       }
-      // Every module that stamps the version reads what it versions; the
-      // declaring module states the records' shape.
-      const parsers = new Set<string>([file]);
-      const packages = new Set<string>();
-      for (const module of stampedIn) {
-        const output = this.outputOf(module);
-        for (const parser of output.parsers) {
-          parsers.add(parser);
-        }
-        for (const dependency of output.packages) {
-          packages.add(dependency);
-        }
-      }
-      recordOwners.set(key, {
+      // The declaration's own closure determines the record output; the
+      // stamping modules identify which semantic stream owns that version.
+      const { parsers, packages } = this.outputOf(file);
+      recordOwners.set(identity, {
         module: [...stampedIn].toSorted().join(", "),
         version,
         parsers,
@@ -707,6 +697,21 @@ export const sourceOwners = (
   files: SourceTree,
   boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
 ): SourceOwnersResult => new StaticTree(files, boundaries).owners();
+
+/**
+ * The repository modules each file imports by value (static imports and
+ * dynamic ones with a literal specifier; type-only imports are erased), and
+ * everything a file reaches through them, itself included. The same walk
+ * the version guard runs, without its output boundaries, for checks that
+ * need the whole reachable graph (the retention projections' independence).
+ */
+export const valueImportGraph = (files: SourceTree) => {
+  const tree = new StaticTree(files, []);
+  return {
+    imports: (file: string): readonly string[] => tree.imports(file),
+    closure: (file: string): ReadonlySet<string> => tree.closure(file),
+  };
+};
 
 // Match the original source rather than transpiled output: local types and
 // unused imports can be erased, but deleting them still needs a version decision.
@@ -996,7 +1001,19 @@ export const checkParserVersions = ({
   for (const [key, current] of after.recordOwners) {
     const previous = before.recordOwners.get(key);
     if (previous !== undefined) {
-      compare(key, `${current.name} in ${current.file}`, previous, current);
+      compare(
+        current.name.toLowerCase().replaceAll("_", "-"),
+        `${current.name} in ${current.file}`,
+        previous,
+        current,
+      );
+    }
+  }
+  for (const [identity, previous] of before.recordOwners) {
+    if (!after.recordOwners.has(identity)) {
+      errors.push(
+        `Record version ${previous.name} in ${previous.file} disappeared or changed its stamped-in modules; keep the record stream identity stable and bump its version when its output changes`,
+      );
     }
   }
   return errors;

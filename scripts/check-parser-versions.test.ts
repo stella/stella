@@ -956,21 +956,48 @@ test("a patched dependency the tree does not hold fails closed", () => {
 test("a version an imported module stamps on its own records is checked like an adapter's", () => {
   const withCollections = (
     tree: Map<string, string>,
-    { version = 9, body = "'base'", patch = "git-blob:old" } = {},
+    {
+      version = 9,
+      body = "'base'",
+      patch = "git-blob:old",
+      name = "COLLECTION_PARSER_VERSION",
+      duplicateName,
+      consumer = "A",
+    }: {
+      version?: number;
+      body?: string;
+      patch?: string;
+      name?: string;
+      duplicateName?: string;
+      consumer?: "A" | "B";
+    } = {},
   ) => {
-    const adapterA = `${ADAPTERS}adapter-a.ts`;
-    tree.set(
-      adapterA,
-      ['import { enrich } from "./collections";', tree.get(adapterA)].join(
-        "\n",
-      ),
-    );
+    for (const key of ["A", "B"] as const) {
+      const adapter = `${ADAPTERS}adapter-${key.toLowerCase()}.ts`;
+      const source = tree.get(adapter) ?? "";
+      const withoutEnrichmentImport = source.replace(
+        'import { enrich } from "./collections";\n',
+        "",
+      );
+      tree.set(
+        adapter,
+        key === consumer
+          ? `import { enrich } from "./collections";\n${withoutEnrichmentImport}`
+          : withoutEnrichmentImport,
+      );
+    }
     tree.set(
       `${ADAPTERS}collections.ts`,
       [
         'import { read } from "pdf-reader";',
-        `export const COLLECTION_PARSER_VERSION = ${version};`,
-        `export const enrich = () => ({ parserVersion: COLLECTION_PARSER_VERSION, text: read(${body}) });`,
+        `export const ${name} = ${version};`,
+        `export const enrich = () => ({ parserVersion: ${name}, text: read(${body}) });`,
+        ...(duplicateName === undefined
+          ? []
+          : [
+              `export const ${duplicateName} = ${version};`,
+              `export const enrichAgain = () => ({ parserVersion: ${duplicateName} });`,
+            ]),
       ].join("\n"),
     );
     tree.set(
@@ -1017,6 +1044,61 @@ test("a version an imported module stamps on its own records is checked like an 
   expect(changed(base, withCollections(fixture(), { version: 8 }))).toEqual([
     `${record}: parser version 8 must not be lower than base 9`,
   ]);
+
+  // Renaming the declaration keeps the same stream identity. A parser bump
+  // cannot waive the record version's independent output change.
+  expect(
+    changed(
+      base,
+      withCollections(fixture({ versions: { A: 2 } }), {
+        body: "'changed'",
+        name: "COLLECTION_OUTPUT_VERSION",
+      }),
+    ),
+  ).toEqual([
+    expect.stringContaining(
+      "COLLECTION_OUTPUT_VERSION in apps/api/src/handlers/case-law/ingestion/adapters/collections.ts: parser version 9 must exceed base 9",
+    ),
+  ]);
+  expect(
+    changed(
+      base,
+      withCollections(fixture({ versions: { A: 2 } }), {
+        body: "'changed'",
+        name: "COLLECTION_OUTPUT_VERSION",
+        version: 10,
+      }),
+    ),
+  ).toEqual([]);
+
+  // Moving the stamp to another consumer creates a different identity; the
+  // missing base stream must be reported even when both parser owners bump.
+  expect(
+    changed(
+      base,
+      withCollections(fixture({ versions: { A: 2, B: 2 } }), {
+        consumer: "B",
+      }),
+    ),
+  ).toEqual([
+    expect.stringContaining(
+      "COLLECTION_PARSER_VERSION in apps/api/src/handlers/case-law/ingestion/adapters/collections.ts disappeared or changed its stamped-in modules",
+    ),
+  ]);
+  expect(
+    changed(
+      base,
+      withCollections(fixture(), {
+        duplicateName: "COLLECTION_CACHE_VERSION",
+      }),
+    ),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining(
+        "Record version stream in apps/api/src/handlers/case-law/ingestion/adapters/collections.ts stamped by apps/api/src/handlers/case-law/ingestion/adapters/adapter-a.ts has multiple declarations",
+      ),
+    ]),
+  );
 });
 
 test("the queue compares against its exact base while pull requests use the merge-base", () => {

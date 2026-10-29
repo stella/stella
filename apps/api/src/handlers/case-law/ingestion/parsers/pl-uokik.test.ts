@@ -849,3 +849,43 @@ describe("a court ruling's header", () => {
     );
   });
 });
+
+test.each([
+  ["2023", "2024"],
+  ["1", "2"],
+])(
+  "different printed numbers %s and %s remain in small text at the page edge",
+  async (first, second) => {
+    const read = await readBuilt([
+      [{ text: `Kwota ${first}`, x: 72, y: 40, size: 8 }],
+      [{ text: `Kwota ${second}`, x: 72, y: 40, size: 8 }],
+    ]);
+    const text = read.body.join(" ");
+    expect(text).toContain(`Kwota ${first}`);
+    expect(text).toContain(`Kwota ${second}`);
+  },
+);
+
+test("a merged footer keeps its repeated address pieces and current page number out of the body", async () => {
+  const footer = (number: string): Drawn[] => [
+    { text: "Office address 30", x: 72, y: 60, size: 8 },
+    { text: "office@example.test", x: 72, y: 45, size: 8 },
+    { text: number, x: 300, y: 30, size: 8 },
+  ];
+  const read = await readBuilt([
+    footer("1"),
+    footer("2"),
+    [
+      {
+        text: "Office address 30 3 office@example.test",
+        x: 72,
+        y: 45,
+        size: 8,
+      },
+    ],
+  ]);
+  const text = read.body.join(" ");
+  expect(text).not.toContain("Office address 30");
+  expect(text).not.toContain("office@example.test");
+  expect(text).toContain(BODY_LINES[0]);
+});

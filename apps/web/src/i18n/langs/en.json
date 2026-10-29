@@ -941,12 +941,16 @@
         "reasoning": "Reasoning"
       },
       "errors": {
+        "analysisDisabled": "AI analysis generation is disabled on this server. Read the decision text or try again later.",
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "decisionNotFound": "This decision could not be found. Reopen it from search.",
+        "documentUnparseable": "The decision text is not ready for analysis. Read the original source.",
+        "languageUnsupported": "AI analysis does not yet support this decision’s language. Read the decision text or original source.",
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
         "retryAfter": "You can try again after {time}.",
-        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}",
-        "unavailable": "AI analysis is not available for this decision."
+        "sourceRestricted": "The source does not permit AI analysis. Read the decision text or original source.",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}"
       },
       "generate": "Generate AI headnotes",
       "invitation": "With a free account, AI drafts working notes on this decision.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "The document was updated.",
       "expandProvisions": "Expand provisions",
-      "headMatter": "Head matter",
+      "headMatter": "Case information",
       "sourceAttribution": "The source data is freely available at <link>{source}</link>."
     },
     "research": {
@@ -4886,7 +4890,9 @@
     "viewOnGithub": "View on GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Answer language",
     "budgetError": "The answer budget is exhausted.",
+    "documentLanguage": "Document language ({language})",
     "expand": "Expand answer",
     "explain": "Explain",
     "followUp": "Ask a follow-up",

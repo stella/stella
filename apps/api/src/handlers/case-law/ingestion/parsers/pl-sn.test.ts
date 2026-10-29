@@ -7,6 +7,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   assemblePlSnParagraphs,
+  extractPlPdfLetterheadContent,
   extractPlPdfSeparatedContent,
   extractPlSnLines,
   parsePlSnDecisionPdf,
@@ -223,6 +224,50 @@ const readSupremeCourtPage = async (
     ),
   };
 };
+
+const readLetterheadPage = async (
+  footer: string,
+  { x = 250, y = 36 }: { x?: number; y?: number } = {},
+): Promise<string> => {
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  for (const [index, text] of [
+    "Ordinary body text line one.",
+    "Ordinary body text line two.",
+    "Ordinary body text line three.",
+  ].entries()) {
+    page.drawText(text, { x: 72, y: 700 - index * 15, size: 12 });
+  }
+  page.drawText(footer, { x, y, size: 12 });
+  const content = await extractPlPdfLetterheadContent(
+    await pdf.save(),
+    PL_PDF_PARAGRAPH_START.INDENT,
+  );
+  return plainText(assemblePlSnParagraphs(content.body)).join("\n");
+};
+
+describe("page numbers on letterhead pages", () => {
+  test.each([
+    "1",
+    "-1-",
+    "1/16",
+    "Strona 1 z 16",
+    "str.1",
+    "Strona   1   z   16",
+  ])("removes the centered page number form %s", async (footer) => {
+    const text = await readLetterheadPage(footer);
+    expect(text).not.toContain(footer);
+    expect(text).toContain("Ordinary body text line one.");
+  });
+
+  test("keeps another page's number and a left-aligned body reference", async () => {
+    const wrongPage = await readLetterheadPage("2");
+    expect(wrongPage).toContain("2");
+
+    const bodyReference = await readLetterheadPage("str. 1", { x: 72, y: 700 });
+    expect(bodyReference).toContain("str. 1");
+  });
+});
 
 describe("small digits the text layer prints as a line of their own", () => {
   test("a thousands group stays in its amount", async () => {
