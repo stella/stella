@@ -296,22 +296,7 @@ function Button({
   const isActivationPreservingDisabled = accessibleDisabled !== undefined;
 
   const defaultProps = {
-    children: (
-      <>
-        {loading ? (
-          <Loader
-            animation="none"
-            className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
-            data-slot="button-loader"
-            size="sm"
-            variant="decorative"
-          />
-        ) : (
-          icon
-        )}
-        {children}
-      </>
-    ),
+    children: buttonContent({ children, icon, loading }),
     className: cn(
       variant === "plain"
         ? cn(BUTTON_PLAIN_CLASS, BUTTON_PLAIN_SHAPE_CLASS[shape], className)
@@ -359,6 +344,63 @@ function Button({
     tooltip: tooltipContent,
     trigger: button,
   });
+}
+
+/**
+ * What the button shows. Loading never changes its width: with an `icon`,
+ * the loader takes the icon's place; without one, the label stays in place
+ * but transparent (still the accessible name) and the loader sits over its
+ * centre, so a row of buttons does not shift when one starts saving.
+ */
+function buttonContent({
+  children,
+  icon,
+  loading,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  loading: boolean | undefined;
+}): ReactNode {
+  if (!loading) {
+    return (
+      <>
+        {icon}
+        {children}
+      </>
+    );
+  }
+  const hasIcon = icon !== undefined && icon !== null && icon !== false;
+  const loader = (
+    <Loader
+      animation="none"
+      className={cn(
+        "[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0",
+        !hasIcon && "absolute inset-0 m-auto",
+      )}
+      data-slot="button-loader"
+      size="sm"
+      variant="decorative"
+    />
+  );
+  if (hasIcon) {
+    return (
+      <>
+        {loader}
+        {children}
+      </>
+    );
+  }
+  return (
+    <>
+      <span
+        className="inline-flex items-center gap-[inherit] opacity-0"
+        data-slot="button-label"
+      >
+        {children}
+      </span>
+      {loader}
+    </>
+  );
 }
 
 export type {

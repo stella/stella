@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type * as React from "react";
 
 import { Field as FieldPrimitive } from "@base-ui/react/field";
@@ -27,6 +28,16 @@ type TextareaProps = React.ComponentProps<"textarea"> & {
    * table cell or a row must not push its neighbours around.
    */
   fieldSizing?: "content" | "fixed";
+  /**
+   * The most lines it grows to before it scrolls. Without it the field grows
+   * with its content without end.
+   */
+  maxRows?: number | undefined;
+  /**
+   * Shows `length / maxLength` under the end of the field. Needs `maxLength`;
+   * the browser still enforces the limit.
+   */
+  showCount?: boolean | undefined;
 };
 
 const Textarea = ({
@@ -35,8 +46,11 @@ const Textarea = ({
   unstyled = false,
   inline = false,
   fieldSizing = "content",
+  maxRows,
+  showCount = false,
   dir,
   onChange,
+  style,
   ...props
 }: TextareaProps) => {
   const controlSize = typeof size === "number" ? CONTROL_SIZE.default : size;
@@ -45,8 +59,17 @@ const Textarea = ({
     value: props.value,
     defaultValue: props.defaultValue,
   });
+  const [typedLength, setTypedLength] = useState(() =>
+    textLength(props.defaultValue),
+  );
+  const length =
+    props.value === undefined ? typedLength : textLength(props.value);
+  const counted = showCount && props.maxLength !== undefined;
   const handleChange: NonNullable<TextareaProps["onChange"]> = (event) => {
     contentDir.trackValue(event.currentTarget.value);
+    if (counted) {
+      setTypedLength(event.currentTarget.value.length);
+    }
     onChange?.(event);
   };
   return (
@@ -76,13 +99,35 @@ const Textarea = ({
               fieldSizing === "content"
                 ? "field-sizing-content"
                 : "field-sizing-fixed resize-none",
+              // One line is `1lh`; the block padding is added on top so the
+              // last allowed line is not cut.
+              maxRows !== undefined &&
+                "max-h-[calc(var(--textarea-max-rows)*1lh+--spacing(3))]",
+              counted && "pb-6",
             )}
             data-slot="textarea"
             {...mergeProps(defaultProps, props, { onChange: handleChange })}
             dir={contentDir.dir}
+            style={
+              maxRows === undefined
+                ? style
+                : ({
+                    ...style,
+                    "--textarea-max-rows": maxRows,
+                  } as React.CSSProperties)
+            }
           />
         )}
       />
+      {counted ? (
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground pointer-events-none absolute end-3 bottom-1.5 text-xs tabular-nums"
+          data-slot="textarea-count"
+        >
+          {length}/{props.maxLength}
+        </span>
+      ) : null}
     </span>
   );
 };
@@ -93,5 +138,12 @@ const TEXTAREA_SIZE_CLASS_NAMES = {
   [CONTROL_SIZE.default]: undefined,
   [CONTROL_SIZE.lg]: "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
 } as const satisfies Record<ControlSize, string | undefined>;
+
+function textLength(value: TextareaProps["value"]): number {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  return String(value).length;
+}
 
 export { Textarea, type TextareaProps };

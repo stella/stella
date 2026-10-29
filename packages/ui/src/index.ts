@@ -38,6 +38,7 @@ export * from "./components/input-group";
 export * from "./components/list";
 export * from "./components/search-field";
 export * from "./components/input-otp";
+export * from "./components/kbd";
 export * from "./components/label";
 export * from "./components/menu";
 export * from "./components/menu-section";

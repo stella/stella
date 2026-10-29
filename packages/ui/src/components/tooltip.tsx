@@ -11,6 +11,7 @@ import {
   IN_FLOW_POPUP_CLASS_NAME,
 } from "../lib/positioner-sizing";
 import { cn } from "../lib/utils";
+import { Kbd, type KbdKey } from "./kbd";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
 
@@ -28,8 +29,14 @@ const TooltipPopup = ({
   sideOffset = 4,
   side = "top",
   children,
+  shortcut,
   ...props
 }: TooltipPrimitive.Popup.Props & {
+  /**
+   * The keys that do the same as the trigger, shown after the label and
+   * spelled for the reader's platform (`["mod", "K"]`).
+   */
+  shortcut?: readonly KbdKey[] | undefined;
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
@@ -60,7 +67,14 @@ const TooltipPopup = ({
           className="relative size-full overflow-clip px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-current:opacity-100 **:data-current:transition-opacity **:data-current:data-ending-style:opacity-0 data-instant:transition-none **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:truncate **:data-previous:opacity-100 **:data-previous:transition-opacity **:data-previous:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-starting-style:opacity-0"
           data-slot="tooltip-viewport"
         >
-          {children}
+          {shortcut === undefined ? (
+            children
+          ) : (
+            <span className="flex items-center gap-2">
+              {children}
+              <Kbd keys={shortcut} />
+            </span>
+          )}
         </TooltipPrimitive.Viewport>
       </TooltipPrimitive.Popup>
     </TooltipPrimitive.Positioner>

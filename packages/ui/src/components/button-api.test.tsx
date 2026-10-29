@@ -219,3 +219,34 @@ describe("Button consolidated additions", () => {
     expect(markup).toContain("text-muted-foreground");
   });
 });
+
+describe("Button loading keeps its width", () => {
+  test("without an icon the label stays, transparent, under a centred loader", () => {
+    const markup = renderToStaticMarkup(<Button loading>Save draft</Button>);
+
+    expect(markup).toContain('data-slot="button-label"');
+    expect(markup).toMatch(/data-slot="button-label"[^>]*>Save draft</u);
+    expect(markup).toContain("opacity-0");
+    expect(markup).toContain("absolute inset-0 m-auto");
+    expect(markup).toContain('aria-busy="true"');
+  });
+
+  test("with an icon the loader takes the icon's place", () => {
+    const markup = renderToStaticMarkup(
+      <Button icon={<svg data-testid="icon" />} loading>
+        Retry
+      </Button>,
+    );
+
+    expect(markup).not.toContain("button-label");
+    expect(markup).not.toContain('data-testid="icon"');
+    expect(markup).not.toContain("absolute inset-0 m-auto");
+  });
+
+  test("an idle button renders its content directly", () => {
+    const markup = renderToStaticMarkup(<Button>Save draft</Button>);
+
+    expect(markup).not.toContain("button-label");
+    expect(markup).not.toContain("button-loader");
+  });
+});

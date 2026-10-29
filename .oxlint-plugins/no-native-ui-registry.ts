@@ -213,6 +213,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   }),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
+  kbd: noNative(
+    "key caps; a rule for raw <kbd> follows once the existing key hints " +
+      "render through Kbd, so it lands without a backlog",
+  ),
   label: native("Label from @stll/ui/label", { elements: ["label"] }),
   landing: noNative("landing page sections"),
   "layout-tokens": notComponent("inspector layout tokens"),

@@ -259,20 +259,23 @@ an `overflow-hidden` container where an outside ring would be clipped.
 When a screen needs a look the components lack, add it once here and in
 `packages/ui`, under these names:
 
-| Concept                                                            | API                                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                        |
-| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)          |
-| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options              |
-| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                       |
-| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                          |
-| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                               |
-| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                           |
-| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                  |
-| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                    |
-| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`) |
-| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                           |
-| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds          |
+| Concept                                                            | API                                                                                    |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                      |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                        |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
+| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
+| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                              |
+| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                       |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                     |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                        |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                             |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                                         |
+| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                |
+| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                  |
+| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
+| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 

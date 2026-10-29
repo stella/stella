@@ -77,6 +77,7 @@
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",
     "./list": "./src/components/list.tsx",
+    "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
     "./matter-icon": "./src/components/matter-icon.tsx",
