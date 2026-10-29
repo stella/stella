@@ -18,6 +18,20 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 
+/** Facets offered without the optional court/year matrix. */
+export const DEFAULT_CASE_LAW_SEARCH_FACETS = [
+  "court",
+  "decisionType",
+  "source",
+  "language",
+  "year",
+] as const;
+
+export const CASE_LAW_SEARCH_FACET_NAMES = [
+  ...DEFAULT_CASE_LAW_SEARCH_FACETS,
+  "courtYear",
+] as const;
+
 /**
  * The orders the case-law browse listing (no query) may be read in: by
  * decision date, either way. A listing has nothing to rank, so relevance is
@@ -241,3 +255,6 @@ export const searchPageEnd = ({
     ? SEARCH_PAGE_END.COMPLETE
     : SEARCH_PAGE_END.STOPPED;
 };
+
+export const GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE =
+  "global_search_rank_work_limit";

@@ -114,6 +114,7 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
@@ -1562,6 +1563,11 @@ const walkSlice = async ({
   summary.keyable = items.length;
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   await lease.beforeDatabaseMark();
+  await storeListingObservations(scopedDb, {
+    sourceId,
+    adapterKey,
+    observations: [...listing.value.observations.values()],
+  });
   const refresh = await refreshTrackedReconciliationItems(scopedDb, {
     revisionOf: reconciliation.revisionOf,
     sourceId,
@@ -1663,8 +1669,9 @@ const walkSlice = async ({
     sourceId,
     coverage: {
       slice,
-      reported: summary.keyable,
-      collected: summary.heldBefore + summary.written,
+      reported: summary.keyable + listing.value.observations.size,
+      collected:
+        summary.heldBefore + summary.written + listing.value.observations.size,
     },
   });
   return summary;

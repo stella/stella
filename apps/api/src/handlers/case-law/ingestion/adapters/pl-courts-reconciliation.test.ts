@@ -774,7 +774,7 @@ describe("pl-courts buildDecision", () => {
 });
 
 describe("pl-courts quarantined items", () => {
-  test("a listed record stating nothing is counted, not listed", async () => {
+  test("a listed record stating nothing is retained as a separate observation", async () => {
     mockFetchWithBodies([
       {
         pattern: SEARCH_PATTERN,
@@ -791,7 +791,14 @@ describe("pl-courts quarantined items", () => {
         sourceDocumentId: quarantineIdOf(UNKEYED_SEARCH_ITEM),
       },
     ]);
-    expect(page.withoutStableFields).toBe(1);
+    expect(page.withoutStableFields).toBeUndefined();
+    expect(page.observations).toMatchObject([
+      {
+        identity: { source: "pl-courts" },
+        payload: {},
+        reason: "no-usable-id",
+      },
+    ]);
   });
 
   test("a page whose every record is keyed states no uncounted record", async () => {

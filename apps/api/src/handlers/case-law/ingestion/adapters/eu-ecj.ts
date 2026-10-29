@@ -1,4 +1,5 @@
 // parser-output-unchanged: [eu-ecj] keyed rows gain only a repair alias; legacy null-id rows replay under the same identity.
+// parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
 // parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
@@ -1219,11 +1220,22 @@ const parseManifestation = (
     // A parse that lost source text is worse than no parse: the reader
     // renders the AST, so the missing paragraphs would be invisible.
     // Fall through to the stripped-text fallback, which keeps
-    // everything, and let the ERROR the validator already logged say
-    // which decision needs the parser fixed.
+    // everything. The fallback stores no AST, so the pipeline's retention
+    // check never sees this parse; the error below is what says which
+    // decision needs the parser fixed.
     const lostContent = parsed.validationIssues.some(
       (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
     );
+    if (lostContent) {
+      logger.error("case_law.ingestion.parse_lost_content_fallback", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex: input.celex,
+        caseNumber: input.caseNumber,
+        codes: parsed.validationIssues.join(","),
+        ...(input.language === undefined ? {} : { language: input.language }),
+        ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
+      });
+    }
     // An unmatched layout is not a page: the whole body is the document
     // and its text is the Court's, so rule 10 keeps it exactly as before.
     // Only a page built out of the publisher's chrome is refused, and

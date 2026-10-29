@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import {
   isKeyableListingIdentity,
@@ -7,7 +7,9 @@ import {
 import {
   isQuarantineListingIdentity,
   isQuarantineSourceDocumentId,
+  LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
   quarantineIdentity,
   quarantineSourceDocumentId,
 } from "@/api/lib/legal-search/quarantine-identity";
@@ -121,5 +123,44 @@ describe("quarantineIdentity", () => {
     ] as const) {
       expect(isQuarantineListingIdentity(identity)).toBe(false);
     }
+  });
+});
+
+describe("noncanonical listing observations", () => {
+  test("content addressing is stable across JSON object order and separated by source", () => {
+    const payload = { note: "Listed record", malformedId: null };
+    const first = quarantinedListingObservation({
+      source: QUARANTINE_NAMESPACE.SK_US,
+      payload,
+      reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+    });
+    const reordered = quarantinedListingObservation({
+      source: QUARANTINE_NAMESPACE.SK_US,
+      payload: { malformedId: null, note: "Listed record" },
+      reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+    });
+    const otherSource = quarantinedListingObservation({
+      source: QUARANTINE_NAMESPACE.PL_COURTS,
+      payload,
+      reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+    });
+    expect(first.identity).toEqual(reordered.identity);
+    expect(first.identity.fingerprint).not.toBe(
+      otherSource.identity.fingerprint,
+    );
+    expect(first.payload).toBe(payload);
+    expectTypeOf(first.identity).not.toExtend<string>();
+    expect(first.identity).not.toHaveProperty("sourceDocumentId");
+  });
+
+  test("different exposed values remain distinct observations", () => {
+    const identity = (payload: unknown) =>
+      quarantinedListingObservation({
+        source: QUARANTINE_NAMESPACE.SK_US,
+        payload,
+        reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+      }).identity;
+    expect(identity(null)).not.toEqual(identity({}));
+    expect(identity({ text: "A" })).not.toEqual(identity({ text: "B" }));
   });
 });

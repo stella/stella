@@ -76,6 +76,7 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
   countQuarantineCollisions,
   quarantinePeerCollisions,
@@ -89,6 +90,14 @@ type DbSlot = {
   acquire: (signal?: AbortSignal) => Promise<void>;
   release: () => void;
 };
+
+const STOP_LOGGER = {
+  [INGESTION_STOP_KIND.DEADLINE]: logger.info,
+  [INGESTION_STOP_KIND.SOURCE_UNREACHABLE]: logger.error,
+  [INGESTION_STOP_KIND.PUBLISHER_REFUSAL]: logger.error,
+  [INGESTION_STOP_KIND.ADAPTER_ERROR]: logger.error,
+  [INGESTION_STOP_KIND.INTERNAL_ERROR]: logger.error,
+} as const satisfies Record<IngestionStopKind, typeof logger.info>;
 
 type PipelineInput = {
   onDocumentObservation?: DocumentStageObserver;
@@ -129,6 +138,8 @@ type PipelineInput = {
    * while capping concurrent DB pressure.
    */
   dbSlot?: DbSlot;
+  /** Revalidate the caller's grant before each bounded decision batch. */
+  acquireBatchAdmission?: () => Promise<"granted" | "paused">;
   corpus?: CaseLawCorpusDependencies;
 };
 
@@ -188,7 +199,7 @@ const batchHaltReason = (
         `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
       );
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return CYCLE_HALT_REASON.TIMEOUT;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -207,7 +218,7 @@ const batchStopKind = (
     case "failure-streak":
       return stop.stopKind;
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return INGESTION_STOP_KIND.DEADLINE;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -222,8 +233,12 @@ const pageItemCount = ({
   decisions,
   supplements,
   unreadItems,
+  observations,
 }: SyncPage): number =>
-  decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
+  decisions.length +
+  (supplements?.length ?? 0) +
+  (unreadItems?.length ?? 0) +
+  (observations?.length ?? 0);
 
 const PAGE_SLOT = {
   HELD: "held",
@@ -246,6 +261,7 @@ const runScopedIngestionPipeline = async ({
   maxDecisions,
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
+  acquireBatchAdmission,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
   const resolveSourceContract = createSourceContractResolver(scopedDb);
@@ -403,7 +419,7 @@ const runScopedIngestionPipeline = async ({
         deadline?.signal.aborted || pageSignal.aborted
           ? INGESTION_STOP_KIND.DEADLINE
           : observedPageResult.value.error.stopKind;
-      logger.error(
+      STOP_LOGGER[pageStopKind](
         "case_law.ingestion.adapter_halted",
         sanitizeErrorAttributesForOutput({
           adapterKey: adapter.key,
@@ -464,7 +480,7 @@ const runScopedIngestionPipeline = async ({
       await dbSlot.acquire(deadline?.signal);
       return PAGE_SLOT.HELD;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (deadline?.signal.aborted) {
         return PAGE_SLOT.CYCLE_ENDED;
       }
       throw error;
@@ -490,6 +506,13 @@ const runScopedIngestionPipeline = async ({
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
+      if (
+        deadline?.signal.aborted ||
+        (await acquireBatchAdmission?.()) === "paused"
+      ) {
+        stopKind = INGESTION_STOP_KIND.DEADLINE;
+        return CYCLE_HALT_REASON.TIMEOUT;
+      }
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
         // A page's records are applied whatever their size; one over the
         // byte bound goes alone, and is reported.
@@ -516,6 +539,7 @@ const runScopedIngestionPipeline = async ({
           polarityRules,
           context: { adapterKey: adapter.key, cursor },
           failureStreak: consecutiveFailures,
+          signal: deadline?.signal,
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
         },
@@ -745,6 +769,14 @@ const runScopedIngestionPipeline = async ({
     page: SyncPage;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
+    if (page.observations !== undefined && page.observations.length > 0) {
+      await sourceLease.beforeDatabaseMark();
+      await storeListingObservations(scopedDb, {
+        sourceId: source.id,
+        adapterKey: adapter.key,
+        observations: page.observations,
+      });
+    }
     const s3FailuresBefore = s3UploadFailures;
     reportPageQuarantineCollisions(page.decisions);
     const halted = await applyPageDecisions({
@@ -827,7 +859,7 @@ const runScopedIngestionPipeline = async ({
 
       if (haltReason) {
         stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-        logger.error("case_law.ingestion.adapter_halted", {
+        STOP_LOGGER[stopKind]("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",
           reason: haltReason,

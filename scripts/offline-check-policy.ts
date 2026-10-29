@@ -2,17 +2,21 @@ import { Result, TaggedError } from "better-result";
 import { readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import {
+  type Expression,
+  type Node,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import {
   lexShell,
   parseBunFlags,
   programWords,
   SOURCE_FILE,
 } from "./install-free-ci";
-import { parseSource } from "./parse-memo";
+import { parseSyntax } from "./parse-memo";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 export class OfflineCheckPolicyError extends TaggedError(
@@ -219,6 +223,16 @@ export const offlineCheckViolations = (
 
 const importCapability = (file: string, capability: string) =>
   `${file}:${capability}`;
+const INERT_IMPORT_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".json",
+  ".text",
+  ".txt",
+]);
+type ImportLoader =
+  | { type: "default" }
+  | { type: "loader"; loader: string }
+  | { type: "unsupported" };
+const DEFAULT_IMPORT_LOADER = { type: "default" } as const;
 
 export const parseOfflineImportAllowances = (
   value: unknown,
@@ -247,26 +261,29 @@ export const parseOfflineImportAllowances = (
     };
   });
 };
-const isRawFetchCall = (node: ts.Node): boolean => {
+const isRawFetchCall = (node: Node, parent: Node | undefined): boolean => {
   if (
-    ts.isPropertyAccessExpression(node) &&
-    ts.isCallExpression(node.parent) &&
-    node.parent.expression === node
+    node.type === "MemberExpression" &&
+    !node.computed &&
+    parent?.type === "CallExpression" &&
+    parent.callee === node
   ) {
     return false;
   }
-  const expression = ts.isCallExpression(node) ? node.expression : node;
-  if (ts.isIdentifier(expression)) {
+  const expression = node.type === "CallExpression" ? node.callee : node;
+  if (expression.type === "Identifier") {
     return (
-      ts.isCallExpression(node) &&
-      ["fetch", "fetchWithTimeout"].includes(expression.text)
+      node.type === "CallExpression" &&
+      ["fetch", "fetchWithTimeout"].includes(expression.name)
     );
   }
   return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === "fetch" &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === "globalThis"
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier" &&
+    expression.property.name === "fetch" &&
+    expression.object.type === "Identifier" &&
+    expression.object.name === "globalThis"
   );
 };
 
@@ -277,21 +294,86 @@ const forbiddenBunMembers = new Set([
   "spawn",
   "spawnSync",
 ]);
-const isBunGlobal = (node: ts.Expression): boolean => {
+const isBunGlobal = (node: Expression): boolean => {
+  // An optional chain (`globalThis?.Bun`) is wrapped as a whole.
   if (
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isNonNullExpression(node)
+    node.type === "ParenthesizedExpression" ||
+    node.type === "ChainExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression"
   ) {
     return isBunGlobal(node.expression);
   }
   return (
-    (ts.isIdentifier(node) && node.text === "Bun") ||
-    (ts.isPropertyAccessExpression(node) &&
-      node.name.text === "Bun" &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "globalThis")
+    (node.type === "Identifier" && node.name === "Bun") ||
+    (node.type === "MemberExpression" &&
+      !node.computed &&
+      node.property.type === "Identifier" &&
+      node.property.name === "Bun" &&
+      node.object.type === "Identifier" &&
+      node.object.name === "globalThis")
   );
+};
+
+// A module specifier written as a string or a template without
+// substitutions.
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+const propertyName = (node: Node): string | undefined =>
+  node.type === "Identifier" ? node.name : literalText(node);
+const staticImportLoader = (attributes: readonly Node[]): ImportLoader => {
+  if (attributes.length === 0) {
+    return DEFAULT_IMPORT_LOADER;
+  }
+  const attribute = attributes.at(0);
+  if (
+    attributes.length !== 1 ||
+    attribute?.type !== "ImportAttribute" ||
+    propertyName(attribute.key) !== "type"
+  ) {
+    return { type: "unsupported" };
+  }
+  const loader = literalText(attribute.value);
+  return loader === undefined
+    ? { type: "unsupported" }
+    : { type: "loader", loader };
+};
+const dynamicImportLoader = (options: Node | null): ImportLoader => {
+  if (options === null) {
+    return DEFAULT_IMPORT_LOADER;
+  }
+  if (options.type !== "ObjectExpression" || options.properties.length !== 1) {
+    return { type: "unsupported" };
+  }
+  const withProperty = options.properties.at(0);
+  if (
+    withProperty?.type !== "Property" ||
+    withProperty.computed ||
+    propertyName(withProperty.key) !== "with" ||
+    withProperty.value.type !== "ObjectExpression" ||
+    withProperty.value.properties.length !== 1
+  ) {
+    return { type: "unsupported" };
+  }
+  const typeProperty = withProperty.value.properties.at(0);
+  if (
+    typeProperty?.type !== "Property" ||
+    typeProperty.computed ||
+    propertyName(typeProperty.key) !== "type"
+  ) {
+    return { type: "unsupported" };
+  }
+  const loader = literalText(typeProperty.value);
+  return loader === undefined
+    ? { type: "unsupported" }
+    : { type: "loader", loader };
 };
 
 type OfflineImportGraphOptions = {
@@ -306,7 +388,9 @@ export const offlineImportGraphViolations = ({
   repositoryRoot,
 }: OfflineImportGraphOptions) => {
   const sourceRoot = realpathSync(repositoryRoot);
-  const pending = [...entries];
+  const pending: { file: string; parserFile: string }[] = entries.map(
+    (file) => ({ file, parserFile: file }),
+  );
   const visited = new Set<string>();
   const violations: OfflineCheckPolicyError[] = [];
   const allowed = new Map(
@@ -337,21 +421,25 @@ export const offlineImportGraphViolations = ({
     if (candidate === undefined) {
       break;
     }
-    const resolvedEntry = Result.try(() => realpathSync(candidate));
+    const resolvedEntry = Result.try(() => realpathSync(candidate.file));
     if (resolvedEntry.isErr()) {
-      violation(candidate, "Cannot read offline check source");
+      violation(candidate.file, "Cannot read offline check source");
       continue;
     }
     const file = resolvedEntry.value;
-    if (visited.has(file) || file.endsWith(".json")) {
+    const visitKey = `${file}\0${candidate.parserFile}`;
+    if (
+      visited.has(visitKey) ||
+      INERT_IMPORT_EXTENSIONS.has(path.extname(candidate.parserFile))
+    ) {
       continue;
     }
-    visited.add(file);
-    const source = parseSource({
-      fileName: file,
+    visited.add(visitKey);
+    const source = parseSyntax({
+      fileName: candidate.parserFile,
       text: readFileSync(file, "utf-8"),
     });
-    const follow = (specifier: string) => {
+    const follow = (specifier: string, loader: ImportLoader) => {
       if (specifier === "node:child_process" || specifier === "child_process") {
         classify(file, "node:child_process", "node:child_process is forbidden");
         return;
@@ -378,10 +466,32 @@ export const offlineImportGraphViolations = ({
       ) {
         return;
       }
-      pending.push(resolved.value);
+      if (loader.type === "unsupported") {
+        classify(file, "dynamic-module", "Import loader cannot be enumerated");
+        return;
+      }
+      pending.push({
+        file: resolved.value,
+        parserFile:
+          loader.type === "default"
+            ? resolved.value
+            : `${resolved.value}.${loader.loader}`,
+      });
     };
-    const visit = (node: ts.Node): void => {
-      if (isRawFetchCall(node)) {
+    const followTarget = (target: Node | undefined, loader: ImportLoader) => {
+      const specifier = target === undefined ? undefined : literalText(target);
+      if (specifier === undefined) {
+        classify(
+          file,
+          "dynamic-module",
+          "Dynamic module target cannot be enumerated",
+        );
+      } else {
+        follow(specifier, loader);
+      }
+    };
+    walk(source.program, (node, ancestors) => {
+      if (isRawFetchCall(node, ancestors.at(-1))) {
         classify(
           file,
           "fetch",
@@ -389,75 +499,62 @@ export const offlineImportGraphViolations = ({
         );
       }
       if (
-        ts.isPropertyAccessExpression(node) &&
-        isBunGlobal(node.expression) &&
-        forbiddenBunMembers.has(node.name.text)
+        node.type === "MemberExpression" &&
+        !node.computed &&
+        node.property.type === "Identifier" &&
+        isBunGlobal(node.object) &&
+        forbiddenBunMembers.has(node.property.name)
       ) {
         classify(
           file,
-          `Bun.${node.name.text}`,
-          `Bun.${node.name.text} is forbidden`,
+          `Bun.${node.property.name}`,
+          `Bun.${node.property.name} is forbidden`,
         );
       }
-      if (ts.isElementAccessExpression(node) && isBunGlobal(node.expression)) {
+      if (
+        node.type === "MemberExpression" &&
+        node.computed &&
+        isBunGlobal(node.object)
+      ) {
         violation(file, "Computed access on Bun is forbidden");
       }
       if (
-        ts.isVariableDeclaration(node) &&
-        node.initializer &&
-        isBunGlobal(node.initializer)
+        node.type === "VariableDeclarator" &&
+        node.init &&
+        isBunGlobal(node.init)
       ) {
         // Aliasing or destructuring the global would hide transport member references.
         violation(file, "Aliasing the Bun global is forbidden");
       }
-      if (
-        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-        node.moduleSpecifier &&
-        ts.isStringLiteralLike(node.moduleSpecifier) &&
-        !(
-          ts.isImportDeclaration(node) &&
-          node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-        ) &&
-        !(ts.isExportDeclaration(node) && node.isTypeOnly)
-      ) {
-        follow(node.moduleSpecifier.text);
+      if (node.type === "ImportDeclaration" && node.importKind !== "type") {
+        follow(node.source.value, staticImportLoader(node.attributes));
       }
       if (
-        ts.isImportEqualsDeclaration(node) &&
-        !node.isTypeOnly &&
-        ts.isExternalModuleReference(node.moduleReference)
+        (node.type === "ExportNamedDeclaration" ||
+          node.type === "ExportAllDeclaration") &&
+        node.source &&
+        node.exportKind !== "type"
       ) {
-        const target = node.moduleReference.expression;
-        if (ts.isStringLiteralLike(target)) {
-          follow(target.text);
-        } else {
-          classify(
-            file,
-            "dynamic-module",
-            "Dynamic module target cannot be enumerated",
-          );
-        }
+        follow(node.source.value, staticImportLoader(node.attributes));
       }
       if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require"))
+        node.type === "TSImportEqualsDeclaration" &&
+        node.importKind !== "type" &&
+        node.moduleReference.type === "TSExternalModuleReference"
       ) {
-        const target = node.arguments.at(0);
-        if (target && ts.isStringLiteralLike(target)) {
-          follow(target.text);
-        } else {
-          classify(
-            file,
-            "dynamic-module",
-            "Dynamic module target cannot be enumerated",
-          );
-        }
+        followTarget(node.moduleReference.expression, DEFAULT_IMPORT_LOADER);
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
+      if (node.type === "ImportExpression") {
+        followTarget(node.source, dynamicImportLoader(node.options));
+      }
+      if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      ) {
+        followTarget(node.arguments.at(0), DEFAULT_IMPORT_LOADER);
+      }
+    });
   }
   for (const [key, reason] of allowed) {
     if (reason.trim() === "") {

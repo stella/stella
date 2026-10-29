@@ -1,12 +1,14 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import {
   type DecisionQueryIntent,
   parseDecisionQuery,
@@ -15,6 +17,7 @@ import {
 import {
   countedSearchTotal,
   type DecisionSearchMatch,
+  DEFAULT_CASE_LAW_SEARCH_FACETS,
   DEFAULT_SEARCH_EXCERPT,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_END,
@@ -160,6 +163,7 @@ import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
+import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -384,6 +388,7 @@ export const searchDecisionsHandler = async ({
   body,
   caseLawDb,
   observer,
+  signal,
 }: SearchDecisionsHandlerArgs) => {
   const countryRead = readPublicLawCountry(body.country, {
     domain: "caseLaw",
@@ -433,6 +438,7 @@ export const searchDecisionsHandler = async ({
           : scopedBody,
       caseLawDb,
       observer,
+      signal,
     });
   }
 
@@ -447,16 +453,9 @@ export const searchDecisionsHandler = async ({
   return await searchPostgresDecisions(postgresBody, caseLawDb);
 };
 
-type CaseLawSearchFacet =
-  "court" | "year" | "decisionType" | "source" | "language";
+type CaseLawSearchFacet = (typeof DEFAULT_CASE_LAW_SEARCH_FACETS)[number];
 
-export const CASE_LAW_SEARCH_FACETS = [
-  "court",
-  "year",
-  "decisionType",
-  "source",
-  "language",
-] as const satisfies readonly CaseLawSearchFacet[];
+export const CASE_LAW_SEARCH_FACETS = DEFAULT_CASE_LAW_SEARCH_FACETS;
 
 type CaseLawSearchPlanOptions = {
   match?: "all" | "any";
@@ -674,6 +673,7 @@ export const caseLawSearchPlan = ({
       d.decision_date,
       d.decision_type,
       d.source_url,
+      ${publicRowHoldsDocumentFor(alias(publishedCaseLawDecisions, "d"))} AS has_document,
       coalesce((src.descriptor ->> 'allowsDerivedAi')::boolean, true) AS allows_derived_ai,
       ${publisherHeadnoteMetadataSql(sql.raw("d.metadata"))} AS headnote,
       ${publisherKeywordsMetadataSql(sql.raw("d.metadata"))} AS keywords,
@@ -926,6 +926,13 @@ const searchCursorAfterRow = (
   }
 };
 
+const readSearchDocumentPresence = (value: unknown): boolean => {
+  if (typeof value !== "boolean") {
+    return panic("Search row is missing its document presence projection");
+  }
+  return value;
+};
+
 const presentPostgresSearchPage = async ({
   body,
   caseLawDb,
@@ -984,6 +991,9 @@ const presentPostgresSearchPage = async ({
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
+      textAvailability: readSearchDocumentPresence(row["has_document"])
+        ? DECISION_TEXT_AVAILABILITY.AVAILABLE
+        : DECISION_TEXT_AVAILABILITY.METADATA_ONLY,
       textWithheldReason: decisionTextWithheldReason({
         allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
       }),
@@ -1019,31 +1029,32 @@ const presentPostgresSearchPage = async ({
     : SEARCH_TOTAL_NOT_COUNTED;
 
   const sourceBuckets = cappedSourceFacetBuckets(facetBuckets(sourceResultRaw));
-  const facets: DecisionSearchFacets | null = !isFirstPage
-    ? null
-    : {
-        courtYear: null,
-        court: groupCourtsByTier({
-          buckets: facetBuckets(courtResultRaw),
-          country: body.country,
-          courtWeights,
-          perTierLimit: LIMITS.caseLawFacetLimit,
-        }),
-        // Already newest-first from the statement; the year is the key it
-        // grouped and ordered by.
-        year: facetBuckets(yearResultRaw),
-        decisionType: decisionTypeKindBuckets(
-          facetBuckets(decisionTypeResultRaw),
-        ),
-        source: labelSourceBuckets(
-          sourceBuckets,
-          await readCaseLawSourceNames(
-            caseLawDb,
-            sourceBuckets.map((bucket) => bucket.value),
+  const facets: DecisionSearchFacets | null =
+    !isFirstPage || body.facets?.length === 0
+      ? null
+      : {
+          courtYear: null,
+          court: groupCourtsByTier({
+            buckets: facetBuckets(courtResultRaw),
+            country: body.country,
+            courtWeights,
+            perTierLimit: LIMITS.caseLawFacetLimit,
+          }),
+          // Already newest-first from the statement; the year is the key it
+          // grouped and ordered by.
+          year: facetBuckets(yearResultRaw),
+          decisionType: decisionTypeKindBuckets(
+            facetBuckets(decisionTypeResultRaw),
           ),
-        ),
-        language: facetBuckets(languageResultRaw),
-      };
+          source: labelSourceBuckets(
+            sourceBuckets,
+            await readCaseLawSourceNames(
+              caseLawDb,
+              sourceBuckets.map((bucket) => bucket.value),
+            ),
+          ),
+          language: facetBuckets(languageResultRaw),
+        };
 
   return { hits, facets, total, nextCursor };
 };
@@ -1111,6 +1122,20 @@ export const searchPostgresDecisions = async (
     read: (tx: CaseLawPublicReadTransaction) => Promise<RawRows>,
   ): Promise<RawRows> => (isFirstPage ? await caseLawDb(read) : []);
 
+  const readRequestedFacet = async (
+    facet: CaseLawSearchFacet,
+  ): Promise<RawRows> => {
+    if (
+      !isFirstPage ||
+      (body.facets !== undefined && !body.facets.includes(facet))
+    ) {
+      return [];
+    }
+    return await caseLawDb(
+      async (tx) => await readCaseLawSearchFacet(tx, plan, facet),
+    );
+  };
+
   // Skip the expensive COUNT(*) and the facet queries on paginated requests;
   // these values describe the result set, not the page.
   const [
@@ -1124,15 +1149,11 @@ export const searchPostgresDecisions = async (
   ] = await Promise.all([
     caseLawDb(async (tx) => await readCaseLawSearchHits(tx, plan)),
     onFirstPage(async (tx) => await readCaseLawSearchTotal(tx, plan)),
-    onFirstPage(async (tx) => await readCaseLawSearchFacet(tx, plan, "court")),
-    onFirstPage(async (tx) => await readCaseLawSearchFacet(tx, plan, "year")),
-    onFirstPage(
-      async (tx) => await readCaseLawSearchFacet(tx, plan, "decisionType"),
-    ),
-    onFirstPage(async (tx) => await readCaseLawSearchFacet(tx, plan, "source")),
-    onFirstPage(
-      async (tx) => await readCaseLawSearchFacet(tx, plan, "language"),
-    ),
+    readRequestedFacet("court"),
+    readRequestedFacet("year"),
+    readRequestedFacet("decisionType"),
+    readRequestedFacet("source"),
+    readRequestedFacet("language"),
   ]);
 
   const strictHitsResult = arrayOrEmpty(hitsResultRaw);
@@ -1662,6 +1683,9 @@ export const pageDecisionRowsStatement = (
   const eligibleRows = tx
     .select({
       ...columns,
+      hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions).as(
+        "has_document",
+      ),
       sourceDescriptor: caseLawSources.descriptor,
       headnote: columns.headnote.as("headnote"),
       keywords: columns.keywords.as("keywords"),
@@ -2188,6 +2212,9 @@ export const decisionHitsPage = ({
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
+        textAvailability: row.hasDocument
+          ? DECISION_TEXT_AVAILABILITY.AVAILABLE
+          : DECISION_TEXT_AVAILABILITY.METADATA_ONLY,
         textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
         keywords: readDecisionKeywords(row.keywords),
         headnote: readDecisionHeadnote({
@@ -2263,6 +2290,7 @@ const caseLawFacetAggregateCache = createCorpusAggregateCache({
 });
 
 type ReadCaseLawSearchFacetsOptions = {
+  signal?: AbortSignal | undefined;
   observer: RegistryRequestObservation;
   body: SearchDecisionsBody;
   serving: ServingCorpusIndexGeneration;
@@ -2281,7 +2309,7 @@ type ReadCaseLawSearchFacetsOptions = {
 };
 
 type CaseLawSearchFacetsRead = {
-  facets: DecisionSearchFacets;
+  facets: DecisionSearchFacets | null;
   total: SearchTotal;
 };
 
@@ -2297,6 +2325,7 @@ type CaseLawSearchFacetsRead = {
  * to an error a reader sees instead of their results.
  */
 const readCaseLawSearchFacets = async ({
+  signal,
   observer,
   body,
   serving,
@@ -2341,6 +2370,7 @@ const readCaseLawSearchFacets = async ({
   }
 
   const aggregates = caseLawFacetAggregateCache.reader({
+    signal,
     target: { ...serving, indexId, aggregationFilter },
     scope: {
       type: "public_corpus",
@@ -2352,10 +2382,12 @@ const readCaseLawSearchFacets = async ({
         ...input,
         filter: aggregationFilter,
         observer,
+        signal,
       }),
   });
   const read = await readCorpusSearchFacets({
     aggregate: aggregates.aggregate,
+    ...(body.facets === undefined ? {} : { requestedFacets: body.facets }),
     excludedSourceIds: registry.value.excludedSourceIds,
     // The year buckets run to one year past this one, so a decision a
     // publisher dated ahead still lands in a bucket of its own.
@@ -2384,34 +2416,59 @@ const readCaseLawSearchFacets = async ({
     courtWeights,
     perTierLimit: LIMITS.caseLawFacetLimit,
   });
-  if (read.value.courtYear === null) {
+  if (body.facets?.includes("courtYear") && read.value.courtYear === null) {
     logger.warn("case_law.search_court_year.unavailable", {
       reason: "unreadable_aggregation",
     });
   }
+  // A matrix-only consumer has no filter rail; derive its presentation from
+  // the courts the matrix itself returned without a second aggregation.
+  const matrixCourtCounts = new Map<string, number>();
+  if (read.value.courtYear !== null) {
+    for (const bucket of read.value.courtYear.buckets) {
+      matrixCourtCounts.set(
+        bucket.court,
+        (matrixCourtCounts.get(bucket.court) ?? 0) + bucket.count,
+      );
+    }
+  }
+  const matrixCourts = groupCourtsByTier({
+    buckets: [...matrixCourtCounts].map(([value, count]) => ({
+      value,
+      count,
+      label: null,
+    })),
+    country: body.country,
+    courtWeights,
+    perTierLimit: LIMITS.caseLawFacetLimit,
+  });
   const courtYear = presentCourtYear({
     matrix: read.value.courtYear,
-    courts: courtFacets,
+    courts:
+      body.facets?.includes("court") === false ? matrixCourts : courtFacets,
     country: body.country,
     courtWeights,
   });
   return {
-    facets: {
-      court: courtFacets,
-      courtYear,
-      year,
-      decisionType: foldStatedDecisionTypeBuckets(decisionType),
-      source: labelSourceBuckets(
-        source.map(({ value, label, count }) => ({
-          value,
-          label,
-          count,
-          countType: FACET_COUNT_TYPE.ESTIMATE,
-        })),
-        registry.value.nameById,
-      ),
-      language,
-    },
+    facets:
+      body.facets?.length === 0
+        ? null
+        : {
+            court: courtFacets,
+            courtYear,
+            year,
+            decisionType: foldStatedDecisionTypeBuckets(decisionType),
+            source: labelSourceBuckets(
+              source.map(({ value, label, count }) => ({
+                value,
+                label,
+                count,
+                countType: FACET_COUNT_TYPE.ESTIMATE,
+              })),
+              registry.value.nameById,
+            ),
+            language,
+          },
     total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),
   };
 };
@@ -2495,6 +2552,7 @@ const cursorMatchesCorpusReadTarget = (
 ): boolean => cursor === null || cursor.target === target;
 
 type SearchCorpusIndexDecisionsOptions = {
+  signal?: AbortSignal | undefined;
   body: SearchDecisionsBody;
   caseLawDb: CaseLawPublicReadDb;
   observer: RegistryRequestObservation;
@@ -2555,6 +2613,7 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
 });
 
 export const searchCorpusIndexDecisions = async ({
+  signal,
   body,
   caseLawDb,
   observer,
@@ -2888,6 +2947,7 @@ export const searchCorpusIndexDecisions = async ({
     omit: RelaxedExclusions | null,
   ) =>
     readCorpusIndexSearchPage({
+      signal,
       hitDispositions,
       observer,
       cluster: serving.cluster,
@@ -2957,6 +3017,7 @@ export const searchCorpusIndexDecisions = async ({
   // the slower arm, and which arm that was is the whole point of the pair.
   const facetRead = isFirstPage
     ? readCaseLawSearchFacets({
+        signal,
         observer,
         body,
         serving,

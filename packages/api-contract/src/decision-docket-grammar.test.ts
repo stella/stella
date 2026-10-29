@@ -457,6 +457,7 @@ describe("British neutral citations", () => {
         jurisdiction: "GBR",
         formatted: citation,
         canonical: "[2024]ewhc123",
+        filingYear: { type: "none-in-format" },
       });
     }
   });
@@ -536,6 +537,7 @@ describe("Slovak Constitutional Court dockets", () => {
         jurisdiction: "SVK",
         formatted,
         canonical,
+        filingYear: grammar.filingYear(typed),
       });
     }
   });

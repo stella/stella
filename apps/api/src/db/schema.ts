@@ -159,3 +159,7 @@ export * from "./schema/desktop-presence";
 export * from "./schema/desktop-device-proof-replay";
 
 export * from "./schema/mcp-web-handoff";
+
+export * from "./schema/case-law-withdrawal-status";
+
+export * from "./schema/case-law-listing-observations";

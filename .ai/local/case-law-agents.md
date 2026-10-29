@@ -151,10 +151,41 @@ Individual adapters should NOT sanitize. The pipeline applies
 chars) to ALL fields including `sourceRaw`. This ensures
 consistency and prevents PostgreSQL text column rejections.
 
-### 6. Validate every parser with validateAndLog
+### 6. Every source declares a retention projection; the pipeline runs the oracle
 
-Every parser MUST call `validateAndLog()` after producing
-blocks. The validator checks:
+Every source MUST declare how its decisions are checked against what
+the publisher served: a `RetentionPolicy` in
+`ingestion/retention/sources/<adapter-key>.ts`, registered in
+`RETENTION_POLICIES` (`retention/retention-sources.ts`, total over every
+adapter and import key, so a new source does not compile without one).
+The projection reads the stored `sourceRaw` alone and returns the
+decision text as the publisher served it (the HTML content region, the
+JSON text fields, the paragraphs of a Word, RTF or PDF file), or states
+per record why there is none (`no-text`) or why the raw cannot be read
+(`unreadable`). A source that never builds a parsed document declares
+`unparsed` with its reason.
+
+A projection never imports parser code: the
+`retention-source-independence` lint rule keeps parser modules, adapters
+and `@stll/legal-ast` out of `retention/sources/`, because a check
+against the parser's own intermediate text cannot see text dropped
+before that point. Re-implement the selection from `sourceRaw`. The same
+holds for every helper a projection imports, transitively:
+`scripts/retention-projection-imports.test.ts` walks the whole value import
+graph from `retention/sources/`. HTML is handed to the oracle as paragraphs
+(`sources/html-paragraphs.ts`), so headings and bare text are measured too.
+A source policy the oracle reads both sides with (CourtListener's) is
+attached in `retention-sources.ts`, not in the projection.
+
+The pipeline starts the oracle (`retention/retention-check.ts`) for every
+decision with a usable AST once its row write has committed, off the
+write's path (`startDecisionRetentionCheck`, handed to `detached`); a drain
+that stores parsed documents outside the pipeline starts the same shared
+check (`startProjectedRetentionCheck`) with a projection of the bytes it
+fetched. A check never rejects, a PDF over `PDF_PROJECTION_MAX_BYTES` is
+left unchecked, and past `MAX_RETENTION_CHECKS_IN_FLIGHT` a decision is
+logged unchecked rather than queued.
+The oracle checks:
 
 - Content retention (>90% of source text preserved)
 - Missing meaningful words (<15 allowed)
@@ -162,9 +193,15 @@ blocks. The validator checks:
 - Inline/plainText consistency
 - Duplicate and tiny block detection
 
-If the validator flags content loss, investigate the source
-— you're probably using the wrong endpoint or missing a
-section. Don't suppress the warning.
+Parsers never log the retention signal: the `retention-oracle-owner` lint
+rule confines `validateAndLog` to the retention check. A parser or
+adapter may call the pure measurement `validateAst` when its verdict
+decides something (choosing between two parses, falling back to
+stripped text, failing a parse), and uses the verdict without logging.
+
+If the oracle flags content loss, investigate the parser or the source
+(the wrong endpoint, a missing section) and fix it there. Never loosen
+the tolerances or narrow the projection to make a parse pass.
 
 ### 7. Anonymization must be preserved
 
@@ -232,8 +269,8 @@ still walked for content.
 A decision shown with a flat structure is visibly imperfect and a user
 can still read and cite it. A decision missing a paragraph looks
 complete and is wrong, and neither the reader nor the AI pipeline has
-any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
-the completeness guard and must be treated as errors; heading levels
+any way to know. The retention oracle's CONTENT_LOSS and MISSING_WORDS
+are the completeness guard and must be treated as errors; heading levels
 and section boundaries are fidelity and may carry a known tail.
 
 ### 11. Emit a parse signal every stored decision is covered by
@@ -254,14 +291,16 @@ one number, and a case can carry both a judgment and an opinion.
 | `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
 | `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                |
 | `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).         |
+| `case_law.retention.unverifiable`             | ERROR | A parsed decision whose retention could not be measured; `reason` says why.              |
+| `case_law.retention.unchecked`                | INFO  | Text held in a separately stored document (`separate-document`), a known blind spot.     |
 
 The ERROR events are the ones to act on. Sweep for them to find
 decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
 means most can be re-parsed without touching the court's site.
 
 `ast_missing`, `decision_empty` and `ast_markup_residue` come from the
-pipeline as well as from a parser, so they also cover sources whose parser
-never runs — which is the case that would otherwise be silent, since a
+pipeline's stored-document report as well as from the retention check, so
+they also cover sources whose parser never runs — which is the case that would otherwise be silent, since a
 parser that is not called cannot report anything.
 
 Residue outranks content loss when both fire, and the log line carries
@@ -537,23 +576,19 @@ net. Publisher identities are opaque and byte-exact: if general text
 sanitization would change an identity, reject the canonical value or discard
 the alias. Never reserve the rewritten value, which may be another document's
 legitimate exact key.
-If a counted row exposes no publisher identity at all, durably quarantine its
-verbatim listing payload under a content-addressed audit identity; do not let
-one poison row pin every later record in the slice. A publisher id the
-decision table cannot persist is no identity either: quarantine that row at the
-adapter boundary too. Build the identity only through
-`quarantineIdentity` in `lib/legal-search/quarantine-identity.ts`: it
-owns the `<namespace>-quarantine:<sha256>` form, normalises whitespace, and
-takes the stable fields the adapter names at the call site, never listing
-position, render markup, highlight markers, update timestamps or the malformed
-identity itself. `ListingIdentity` has no variant for a record with nothing to
-key on, and `listingIdentityKey` panics on an unkeyable one, so a listed record
-is always both reported and collected. The crawl and the reconciliation build
-both store the quarantined record as its listing-only row, which the walk
-counts as held: there is no detail to ask for until the id recovers. A
-listing entry with no body at all, such as a result the publisher counts but
-will not serve, holds nothing to store; log it rather than inventing an
-identity for it. Continue emitting that
+If a counted row exposes no usable publisher identity, retain its verbatim
+listing payload. Existing stable-field quarantine identities continue to use
+`quarantineIdentity` in `lib/legal-search/quarantine-identity.ts`; recovered
+publisher identities emit the same bounded repair-only aliases.
+For SK-US and PL-courts records with no usable stable fields, use
+`quarantinedListingObservation`: its branded object identity is separate from
+canonical decision identities and cannot enter their matching paths. Store
+these records in `case_law_listing_observations`, keyed by source and stable
+listing fingerprint, before advancing crawl or reconciliation progress.
+Unserved listing slots are stored there with the typed `unserved-listing-record`
+reason and the source's slice and offset. Replays preserve the immutable raw
+record. Views may filter observations, but ingestion never drops them.
+For existing stable-field quarantine rows, continue emitting that
 quarantine fingerprint as a repair-only alias after a publisher identity
 recovers, so the repair enriches the audited row instead of inserting a
 duplicate. Repair-only aliases may adopt an existing row only while it is still
@@ -760,7 +795,8 @@ When adding a new country adapter:
 4. **Extract ALL metadata** — every field the API exposes goes
    into `IngestionResult.metadata`
 5. **Write a parser** (if HTML/JSON structure allows) — produce
-   `DocumentAst` blocks; call `validateAndLog()`
+   `DocumentAst` blocks; declare its retention projection in
+   `ingestion/retention/sources/` (rule 6); the pipeline runs the oracle
 6. **Register** in `adapters/index.ts` and
    `adapter-registry-lazy.ts`
 7. **Add adapter key** to `consts.ts` `ADAPTER_KEYS`

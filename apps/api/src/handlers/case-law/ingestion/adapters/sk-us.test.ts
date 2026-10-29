@@ -807,10 +807,8 @@ describe("sk-us listSlicePage", () => {
         page: 1,
       });
 
-      // The 99 served records, in the publisher's order; the one it will not
-      // serve has nothing to key or store, so it is no item of the page and
-      // stays out of both `reported` and `collected`. The page count is still
-      // the publisher's.
+      // Served records retain canonical identities; the refused slot is
+      // separate, durable evidence rather than a fabricated decision.
       expect(page.totalPages).toBe(3);
       expect(page.items.map(({ identity }) => identity)).toEqual(
         Array.from({ length: 100 }, (_, offset) => 100 + offset)
@@ -820,8 +818,17 @@ describe("sk-us listSlicePage", () => {
             sourceDocumentId: documentAt(index).documentId,
           })),
       );
-      // Counted, so coverage shows the gap, and named by its offset.
-      expect(page.withoutStableFields).toBe(1);
+      expect(page.withoutStableFields).toBeUndefined();
+      expect(page.observations).toMatchObject([
+        {
+          reason: "unserved-listing-record",
+          payload: {
+            type: "unserved",
+            slice: "2025-04",
+            offset: UNSERVED_INDEX,
+          },
+        },
+      ]);
       expect(
         logs
           .at("WARN")
@@ -865,7 +872,13 @@ describe("sk-us listSlicePage", () => {
     expect(page.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: PLENARY_OPINION.documentId },
     ]);
-    expect(page.withoutStableFields).toBe(1);
+    expect(page.withoutStableFields).toBeUndefined();
+    expect(page.observations).toMatchObject([
+      {
+        reason: "no-usable-id",
+        payload: { mkDocumentType: "Rozhodnutie - Nález", index: 1 },
+      },
+    ]);
     expect(page.totalPages).toBe(1);
   });
 

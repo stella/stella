@@ -13,7 +13,8 @@ import {
   chatSkillMenuAvailability,
   type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The skills chat cannot offer the caller, keyed by id, with the tools each
@@ -32,7 +33,7 @@ export const useChatUnavailableSkills = (
     ),
     enabled: organizationId !== undefined && userId !== undefined,
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useChatUnavailableSkills:query");
   const data =
     dataView.type === "items" && dataView.refetchError === undefined
@@ -94,7 +95,7 @@ export const useComposerSkillAvailability = ({
     ...chatUnavailableSkillsOptions(organizationId, userId, query ?? undefined),
     enabled: enabled && known,
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useComposerSkillAvailability:query");
   const data =
     dataView.type === "items" && dataView.refetchError === undefined

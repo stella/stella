@@ -16,7 +16,7 @@
       "ecosystems": ["rust"],
       "sbom": "projects/desktop-tauri/sbom.cdx.json",
       "notice": "projects/desktop-tauri/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 700
+      "dependencies_with_licenses": 699
     }
   ],
   "containers": []

@@ -25,6 +25,7 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
@@ -33,6 +34,7 @@ import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawListingObservations,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -43,6 +45,7 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
@@ -91,7 +94,9 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -106,6 +111,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 const insertedValues = () =>
   Object.assign(Promise.resolve(undefined), {
     onConflictDoUpdate: async () => await Promise.resolve(undefined),
+    onConflictDoNothing: async () => await Promise.resolve(undefined),
   });
 
 const baseResult = (
@@ -145,26 +151,42 @@ const testSourceLease = (
   source,
 });
 
+type CursorOnlyDbOptions = {
+  onInsert?: (input: { table: unknown; values: unknown }) => void;
+  onRead?: (table: unknown) => void;
+};
+
 const cursorOnlyDb =
-  (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
+  (
+    onCursor: (cursor: string | null | undefined) => void,
+    options: CursorOnlyDbOptions = {},
+  ): ScopedDb =>
   async (callback) => {
     const tx = {
-      insert: () => ({ values: insertedValues }),
+      insert: (table: unknown) => ({
+        values: (values: unknown) => {
+          options.onInsert?.({ table, values });
+          return insertedValues();
+        },
+      }),
       query: {
         caseLawDecisions: { findFirst: async () => undefined },
       },
       select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            for: () => ({ limit: async () => await Promise.resolve([]) }),
-            limit: async () =>
-              await Promise.resolve(
-                table === caseLawSources
-                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                  : [],
-              ),
-          }),
-        }),
+        from: (table: unknown) => {
+          options.onRead?.(table);
+          return {
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                    : [],
+                ),
+            }),
+          };
+        },
       }),
       execute: async () => await Promise.resolve([]),
       update: (table: unknown) => ({
@@ -184,8 +206,8 @@ const cursorOnlyDb =
       }),
     };
 
-    // SAFETY: these cases exercise only the case_law_sources cursor update;
-    // the fake implements that chain.
+    // SAFETY: the fake implements the cursor and observation insert chains
+    // exercised by these cases.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return await callback(tx as unknown as Transaction);
   };
@@ -2382,4 +2404,111 @@ describe("processDecision — source raw upload failure", () => {
     const failure = logs.at("ERROR").at(0);
     expect(failure?.attributes?.["error.code"]).toBe("AccessDenied");
   });
+});
+
+test("a no-id observation is durable before the cursor and never enters canonical identity reads", async () => {
+  const source = caseLawSourceRow({
+    adapterKey: ADAPTER_KEYS.SK_US,
+    name: "Observation source",
+  });
+  const observation = quarantinedListingObservation({
+    source: "sk-us",
+    payload: { documentId: null, preserved: "Publisher statement" },
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+  const original = skUsAdapter.fetchPage;
+  const events: string[] = [];
+  try {
+    skUsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [],
+        observations: [observation],
+        nextCursor: "cursor-2",
+      });
+    const scopedDb = cursorOnlyDb(
+      (cursor) => {
+        events.push(`cursor:${cursor}`);
+      },
+      {
+        onInsert: ({ table, values }) => {
+          expect(table).toBe(caseLawListingObservations);
+          expect(values).toMatchObject([
+            { sourceId: source.id, payload: { listing: observation.payload } },
+          ]);
+          events.push("observation");
+        },
+        onRead: (table) => {
+          if (
+            table === caseLawDecisions ||
+            table === caseLawDecisionIdentifiers
+          ) {
+            return expect.unreachable(
+              "A no-id observation entered the canonical identity path",
+            );
+          }
+        },
+      },
+    );
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+      acquireStoredTotalAdmission: async () => "held",
+    });
+    expect(result.inserted).toBe(0);
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(events).toEqual(["observation", "cursor:cursor-2"]);
+  } finally {
+    skUsAdapter.fetchPage = original;
+  }
+});
+
+test("an observation write failure prevents cursor progress", async () => {
+  const source = caseLawSourceRow({
+    adapterKey: ADAPTER_KEYS.SK_US,
+    name: "Observation source",
+  });
+  const observation = quarantinedListingObservation({
+    source: "sk-us",
+    payload: null,
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+  const original = skUsAdapter.fetchPage;
+  const cursors: (string | null | undefined)[] = [];
+  const failure = new SQL.PostgresError("Observation write refused", {
+    code: "42501",
+  });
+  try {
+    skUsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [],
+        observations: [observation],
+        nextCursor: "cursor-2",
+      });
+    const scopedDb = cursorOnlyDb(
+      (cursor) => {
+        cursors.push(cursor);
+      },
+      {
+        onInsert: () => {
+          throw failure;
+        },
+      },
+    );
+    expect(
+      await rejectionOf(
+        runIngestionPipeline({
+          source,
+          sourceLease: testSourceLease(source),
+          scopedDb,
+          maxPages: 1,
+          acquireStoredTotalAdmission: async () => "held",
+        }),
+      ),
+    ).toBe(failure);
+    expect(cursors).toEqual([]);
+  } finally {
+    skUsAdapter.fetchPage = original;
+  }
 });

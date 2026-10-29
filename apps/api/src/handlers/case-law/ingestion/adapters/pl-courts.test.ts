@@ -347,8 +347,8 @@ describe("pl-courts nested tables", () => {
     const row = await rowById(DUMP_PAGE, 332_735);
     const nestedTable = [
       "<table><tbody><tr><td><p>Outer cell</p>",
-      "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
-      "</td></tr></tbody></table>",
+      "<table><tbody><tr><td><p>Nested cell</p></td><td><p>Nested side</p></td></tr></tbody></table>",
+      "</td><td><p>Side cell</p></td></tr></tbody></table>",
     ].join("");
     const decision = decisionFrom({
       listingRow: { ...row, textContent: nestedTable },
@@ -621,4 +621,69 @@ describe("SAOS detail refusals preserve the dump crawl's storage policy", () => 
       }
     },
   );
+});
+
+test("no-id dump listings are observations and never request a canonical detail", async () => {
+  const original = globalThis.fetch;
+  const payloads = [
+    null,
+    {},
+    { id: "not-a-publisher-id", rawField: "Publisher statement" },
+  ];
+  let listingRequests = 0;
+  try {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (!url.pathname.includes("/dump/")) {
+        return panic("A no-id listing reached the canonical detail path");
+      }
+      listingRequests += 1;
+      return Response.json({ items: payloads });
+    });
+    const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap(
+      "A listing page is readable",
+    );
+    expect(page.decisions).toEqual([]);
+    expect(page.observations?.map(({ payload }) => payload)).toEqual(payloads);
+    expect(page.observations?.map(({ reason }) => reason)).toEqual(
+      payloads.map(() => "no-usable-id"),
+    );
+    expect(listingRequests).toBe(1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("reconciliation retains every malformed listing value without canonical detail", async () => {
+  const original = globalThis.fetch;
+  const payloads = [
+    null,
+    {},
+    { id: "not-a-publisher-id", rawField: "Publisher statement" },
+  ];
+  try {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (!url.pathname.includes("/search/")) {
+        return panic("A no-id observation reached the canonical detail path");
+      }
+      return Response.json({
+        items: payloads,
+        info: { totalResults: payloads.length },
+      });
+    });
+    const reconciliation = plCourtsAdapter.reconciliation;
+    if (reconciliation === undefined) {
+      return panic("PL-courts has listing reconciliation");
+    }
+    const page = await reconciliation.listSlicePage({
+      slice: "2026-01-01",
+      page: 0,
+    });
+    expect(page.items).toEqual([]);
+    expect(page.observations?.map(({ payload }) => payload)).toEqual(payloads);
+    expect(page.withoutStableFields).toBeUndefined();
+  } finally {
+    globalThis.fetch = original;
+  }
 });

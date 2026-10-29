@@ -62,6 +62,7 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,
@@ -69,6 +70,11 @@ import {
   type SourceRawParts,
 } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
+
+export type {
+  ListingObservation,
+  ListingObservationIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 
 export { EMPTY_AST };
 export type { EmptyAst };
@@ -624,6 +630,8 @@ export type SliceCoverage = {
 
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
+  /** Captured listings with no canonical identity; stored outside the decision path. */
+  observations?: readonly ListingObservation[] | undefined;
   decisions: IngestionResult[];
   /** Failed item builds retained as listing-only rows for reconciliation. */
   itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
@@ -1133,6 +1141,8 @@ export type ReconciliationListingItem = {
 };
 
 export type ReconciliationSlicePage = {
+  /** Captured source evidence with no canonical listing identity. */
+  observations?: readonly ListingObservation[] | undefined;
   items: ReconciliationListingItem[];
   /**
    * Records the page lists that state no stable field at all (no publisher

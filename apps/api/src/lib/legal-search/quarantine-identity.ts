@@ -18,9 +18,12 @@
  * stable fields: each one moves while the record does not.
  */
 
+import * as v from "valibot";
+
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 
 /**
  * Quarantine namespaces, one per adapter that builds the identity. The
@@ -220,3 +223,57 @@ export const isQuarantineListingIdentity = (
   QUARANTINE_PREFIXES.some((prefix) =>
     identity.sourceDocumentId.startsWith(prefix),
   );
+
+/** A captured listing is evidence, never a canonical decision identity. */
+const listingObservationIdentitySchema = v.pipe(
+  v.object({
+    source: v.picklist([
+      QUARANTINE_NAMESPACE.SK_US,
+      QUARANTINE_NAMESPACE.PL_COURTS,
+    ]),
+    fingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
+  }),
+  v.brand("ListingObservationIdentity"),
+);
+
+export type ListingObservationIdentity = v.InferOutput<
+  typeof listingObservationIdentitySchema
+>;
+
+export const LISTING_OBSERVATION_REASONS = [
+  "no-usable-id",
+  "unserved-listing-record",
+] as const;
+export const LISTING_OBSERVATION_REASON = {
+  NO_USABLE_ID: LISTING_OBSERVATION_REASONS[0],
+  UNSERVED_RECORD: LISTING_OBSERVATION_REASONS[1],
+} as const;
+export type ListingObservationReason =
+  (typeof LISTING_OBSERVATION_REASONS)[number];
+
+export type ListingObservation = {
+  readonly identity: ListingObservationIdentity;
+  readonly reason: ListingObservationReason;
+  /** The record exactly as the listing exposed it, including malformed fields. */
+  readonly payload: unknown;
+};
+
+type QuarantinedListingObservationOptions = {
+  source: ListingObservationIdentity["source"];
+  payload: unknown;
+  reason: ListingObservationReason;
+};
+
+/** Content addressing makes replay a fixed point without deciding which court record it is. */
+export const quarantinedListingObservation = ({
+  source,
+  payload,
+  reason,
+}: QuarantinedListingObservationOptions): ListingObservation => ({
+  identity: v.parse(listingObservationIdentitySchema, {
+    source,
+    fingerprint: fingerprintReconciliationPayload({ source, payload }),
+  }),
+  reason,
+  payload,
+});

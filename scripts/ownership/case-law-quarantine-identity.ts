@@ -6,13 +6,12 @@ export default {
     "The identity of a listed case-law record that states no usable publisher id",
   owner: ["apps/api/src/lib/legal-search/quarantine-identity.ts"],
   summary:
-    "`quarantineIdentity` builds `<namespace>-quarantine:<sha256>` from the " +
-    "stable fields an adapter names, with one namespace per adapter in " +
-    "`QUARANTINE_NAMESPACE`. `ListingIdentity` has no variant for an unkeyed " +
-    "record and `listingIdentityKey` panics on an unkeyable one, so every " +
-    "listed record is stored, listing-only if need be (case-law AGENTS.md " +
-    "rule 20). The reconciliation walk counts a quarantine identity held " +
-    "without detail. Adapters that minted their own quarantine digests " +
-    "before this module keep them for the rows they already store.",
+    "`quarantineIdentity` owns existing stable-field quarantine keys and bounded " +
+    "repair aliases. `quarantinedListingObservation` owns a separate branded " +
+    "source-and-fingerprint identity for SK-US and PL-courts listings without " +
+    "usable stable fields, including unserved listing slots. These immutable " +
+    "raw observations are stored in `case_law_listing_observations` before " +
+    "crawl or reconciliation progress; they never enter canonical identity " +
+    "matching or alias adoption.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

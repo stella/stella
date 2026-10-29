@@ -1,5 +1,32 @@
 # @stll/business-registries
 
+## 0.13.5
+
+### Patch Changes
+
+- [#7327](https://github.com/stella/stella/pull/7327) [`1e1877f`](https://github.com/stella/stella/commit/1e1877f1bceaa48b7765ba88ba483649c85bac53) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Entity checks read each SOAP response in one strict pass, and fast-xml-parser is no longer a dependency. A character reference in a response is decoded rather than kept as literal text.
+
+## 0.13.4
+
+### Patch Changes
+
+- Updated dependencies [[`5a279ca`](https://github.com/stella/stella/commit/5a279cac4dcaa80087c6c92f2e621ad124c661d9)]:
+  - @stll/text-normalize@0.5.1
+
+## 0.13.3
+
+### Patch Changes
+
+- Updated dependencies [[`0ecb2de`](https://github.com/stella/stella/commit/0ecb2de044bc19abd46d44ac933d0f3c1cd724ef), [`15e7031`](https://github.com/stella/stella/commit/15e7031924012f3998e399392d1add7eb603583d)]:
+  - @stll/text-normalize@0.5.0
+
+## 0.13.2
+
+### Patch Changes
+
+- Updated dependencies [[`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b)]:
+  - @stll/text-normalize@0.4.0
+
 ## 0.13.1
 
 ### Patch Changes

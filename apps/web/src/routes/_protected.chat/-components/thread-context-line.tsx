@@ -12,6 +12,7 @@ import {
 import type { ChatReference } from "@/components/references/reference.logic";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatListWithMore } from "@/i18n/list-format";
 
 import { layoutThreadContext } from "./thread-context-line.logic";
 
@@ -59,9 +60,6 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
   const hiddenNames = [
     ...layout.hidden.matters.map((matter) => matter.name),
     ...layout.hidden.files.map((file) => file.name),
-    ...(layout.unnamedCount > 0
-      ? [t("chat.historyContext.unnamed", { count: layout.unnamedCount })]
-      : []),
   ];
 
   return (
@@ -86,7 +84,15 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
               count: layout.overflowCount,
             })}
           </span>
-          <span className="sr-only">{format.list(hiddenNames)}</span>
+          <span className="sr-only">
+            {formatListWithMore({
+              items: hiddenNames,
+              additionalCount: layout.unnamedCount,
+              formatList: (items) => format.list(items),
+              formatMore: (count) =>
+                t("chat.historyContext.unnamed", { count }),
+            })}
+          </span>
         </InlinePill>
       ) : null}
     </span>

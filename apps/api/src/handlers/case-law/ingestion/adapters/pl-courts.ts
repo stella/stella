@@ -70,7 +70,6 @@ import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/inge
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
-  isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -78,7 +77,10 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
@@ -97,9 +99,12 @@ import { isKeyableListingIdentity } from "@/api/lib/legal-search/ingestion-types
 import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
+import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -586,7 +591,7 @@ export type SaosItem = {
 };
 
 type SaosDumpResponse = {
-  items?: SaosItem[] | null;
+  items?: unknown[] | null;
   queryTemplate?: {
     pageNumber?: { value?: number | null } | null;
     pageSize?: { value?: number | null } | null;
@@ -594,7 +599,7 @@ type SaosDumpResponse = {
 };
 
 /** A dump answer the crawl will read: `items` stated, whatever it holds. */
-type SaosDumpPage = SaosDumpResponse & { items: SaosItem[] };
+type SaosDumpPage = SaosDumpResponse & { items: unknown[] };
 
 type SaosSearchResponse = {
   info?: {
@@ -809,7 +814,7 @@ export const normalizeSaosDumpItem = (
  * current one unread until a later sweep.
  */
 const isSaosDumpPage = (value: unknown): value is SaosDumpPage =>
-  isRecord(value) && isArrayOf(value["items"], isRecord);
+  isRecord(value) && Array.isArray(value["items"]);
 
 const isSaosSearchResponse = (value: unknown): value is SaosSearchResponse =>
   isRecord(value) &&
@@ -1460,6 +1465,28 @@ export const plCourtsListingIdentity = (
   }
 };
 
+/** Capture unnameable source evidence before consulting canonical identity paths. */
+export const plCourtsListingObservation = (
+  payload: unknown,
+): ListingObservation | null => {
+  if (isRecord(payload)) {
+    const item = normalizeSaosDumpItem(payload);
+    const docket = primaryCaseNumber({ preferred: item });
+    if (
+      plCourtsSourceDocumentId(item.id) !== undefined ||
+      docket !== undefined ||
+      plCourtsQuarantineId(item, docket) !== undefined
+    ) {
+      return null;
+    }
+  }
+  return quarantinedListingObservation({
+    source: QUARANTINE_NAMESPACE.PL_COURTS,
+    payload,
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+};
+
 /** The court a quarantined row is filed under where the item names none. */
 const PL_COURTS_UNNAMED_COURT = "SAOS";
 
@@ -1748,6 +1775,8 @@ export const buildPlDecision = ({
         keywords,
         statutes,
         documentId: upstreamId ?? String(saosId ?? caseNumber),
+        superscripts: true,
+        markup: PL_DECISION_MARKUP.COMMON_COURT,
       });
 
       documentAst = parserResult.documentAst;
@@ -2016,7 +2045,15 @@ const rawPartsOf = (
 const parseItemWithDetail = async (
   raw: unknown,
   signal?: AbortSignal,
-): Promise<IngestionItem | null> => {
+): Promise<
+  | IngestionItem
+  | { type: "observation"; observation: ListingObservation }
+  | null
+> => {
+  const observation = plCourtsListingObservation(raw);
+  if (observation !== null) {
+    return { type: "observation", observation };
+  }
   if (!isRecord(raw)) {
     return null;
   }
@@ -2089,13 +2126,15 @@ const plCourtsDaySlices = createCalendarDaySliceWalk({
 
 /** The search endpoint's answer, read only for what a slice walk needs. */
 type SaosSliceResponse = {
-  items?: Record<string, unknown>[] | null;
+  items?: unknown[] | null;
   info?: { totalResults?: number | null } | null;
 };
 
 const isSaosSliceResponse = (value: unknown): value is SaosSliceResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value["items"], isRecord) &&
+  (value["items"] === undefined ||
+    value["items"] === null ||
+    Array.isArray(value["items"])) &&
   isSaosSearchResponse(value);
 
 type ListPlCourtsDayPageOptions = {
@@ -2114,7 +2153,7 @@ export type PlCourtsDayPage = {
    * kept as an envelope part, so what the walk carries has to be what the
    * search answered with.
    */
-  records: Record<string, unknown>[];
+  records: unknown[];
   /** 0 for a day the publisher lists no judgment for. */
   totalPages: number;
 };
@@ -2235,20 +2274,24 @@ const listPlCourtsSlicePage = async ({
     ...(signal === undefined ? {} : { signal }),
   });
   const items: ReconciliationListingItem[] = [];
-  // Listed, but with no stable field to name or store it by (case-law
-  // AGENTS.md rule 20): counted, so the walk reports the gap.
-  let withoutStableFields = 0;
+  const observations: ListingObservation[] = [];
   for (const record of records) {
+    const observation = plCourtsListingObservation(record);
+    if (observation !== null) {
+      observations.push(observation);
+      continue;
+    }
     const identity = plCourtsListingIdentity(normalizeSaosDumpItem(record));
     if (identity === undefined) {
-      withoutStableFields += 1;
-    } else {
-      items.push({ identity, payload: record });
+      panic(
+        "A SAOS listing without an identity must be captured as an observation",
+      );
     }
+    items.push({ identity, payload: record });
   }
   return {
     items,
-    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
+    ...(observations.length === 0 ? {} : { observations }),
     totalPages,
   };
 };

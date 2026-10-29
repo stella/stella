@@ -9,7 +9,7 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getDisplayName } from "@/lib/get-display-name";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
@@ -26,9 +26,7 @@ export const CorrespondenceAssigneeField = ({
   assigneeId,
 }: CorrespondenceAssigneeFieldProps) => {
   const t = useTranslations();
-  const membersView = useQueryView(
-    useQuery(workspaceMembersOptions(workspaceId)),
-  );
+  const membersView = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const members = workspaceMemberOptionsFromView(membersView);
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });

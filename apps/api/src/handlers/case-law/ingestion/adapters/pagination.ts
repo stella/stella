@@ -20,6 +20,7 @@ import type {
   DecisionSupplement,
   IngestionItem,
   IngestionResult,
+  ListingObservation,
   SyncPage,
   UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -209,6 +210,7 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
     signal?: AbortSignal,
   ) => Promise<
     | IngestionItem
+    | { type: "observation"; observation: ListingObservation }
     | { type: "item_build_failed"; decision: IngestionResult | null }
     | { type: "unread"; item: UnreadListedItem }
     | null
@@ -612,6 +614,7 @@ const materialiseConfiguredWalks = ({
 };
 
 type ParsedPageItems = {
+  observations: ListingObservation[];
   decisions: IngestionResult[];
   supplements: DecisionSupplement[];
   unreadItems: UnreadListedItem[];
@@ -636,6 +639,7 @@ const parsePageItems = async ({
   parseItem,
   signal,
 }: ParsePageItemsOptions): Promise<ParsedPageItems> => {
+  const observations: ListingObservation[] = [];
   const decisions: IngestionResult[] = [];
   const supplements: DecisionSupplement[] = [];
   const unreadItems: UnreadListedItem[] = [];
@@ -662,6 +666,9 @@ const parsePageItems = async ({
         const item = result.value;
         switch (item?.type) {
           case undefined:
+            break;
+          case "observation":
+            observations.push(item.observation);
             break;
           case "decision":
             decisions.push(item.decision);
@@ -699,6 +706,7 @@ const parsePageItems = async ({
     });
   }
   return {
+    observations,
     decisions,
     supplements,
     unreadItems,
@@ -956,6 +964,7 @@ export const createPagePaginatedFetch = <TResponse>(
           signal,
         });
         const {
+          observations,
           decisions,
           supplements,
           unreadItems,
@@ -1040,6 +1049,7 @@ export const createPagePaginatedFetch = <TResponse>(
 
         return Result.ok({
           decisions,
+          ...(observations.length === 0 ? {} : { observations }),
           ...(itemsSkipped === 0
             ? {}
             : {

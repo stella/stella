@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
+  ListingObservation,
   ReconciliationListingItem,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -35,6 +36,8 @@ import { logger } from "@/api/lib/observability/logger";
 export const MAX_SLICE_PAGES = 200;
 
 export type ListedSlice = {
+  /** Durable source evidence kept outside canonical identity matching. */
+  observations: Map<string, ListingObservation>;
   /** Distinct keyable identities, first listing of each. */
   keyed: Map<string, ReconciliationListingItem>;
   /** Items the publisher listed, including repeats. */
@@ -128,6 +131,7 @@ const listSlicePass = async ({
 > => {
   const listing: ListedSlice = {
     keyed: new Map(),
+    observations: new Map(),
     listed: 0,
     duplicate: 0,
     pages: 0,
@@ -173,7 +177,20 @@ const listSlicePass = async ({
           : AbortSignal.any([signal, timeoutSignal]),
     });
     listing.pages += 1;
-    listing.listed += listed.items.length + (listed.withoutStableFields ?? 0);
+    listing.listed +=
+      listed.items.length +
+      (listed.observations?.length ?? 0) +
+      (listed.withoutStableFields ?? 0);
+    if (listed.observations !== undefined) {
+      for (const observation of listed.observations) {
+        const key = observation.identity.fingerprint;
+        if (listing.observations.has(key)) {
+          repeats += 1;
+        } else {
+          listing.observations.set(key, observation);
+        }
+      }
+    }
     listing.withoutStableFields += listed.withoutStableFields ?? 0;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);
@@ -248,7 +265,11 @@ const reportUnstoredRecords = (
 
 const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
   first.keyed.size === second.keyed.size &&
-  [...first.keyed.keys()].every((identityKey) => second.keyed.has(identityKey));
+  [...first.keyed.keys()].every((identityKey) =>
+    second.keyed.has(identityKey),
+  ) &&
+  first.observations.size === second.observations.size &&
+  [...first.observations.keys()].every((key) => second.observations.has(key));
 
 /**
  * Every page of one slice, or an error. Never a partial listing: an

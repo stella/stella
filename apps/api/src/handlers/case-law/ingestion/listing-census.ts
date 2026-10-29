@@ -462,7 +462,12 @@ const countSlice = async ({
   // between it and what is stored.
   return listing
     .andThen((listed) => listed)
-    .map((listed) => listed.keyed.size + unstoredRecordCount(listed));
+    .map(
+      (listed) =>
+        listed.keyed.size +
+        listed.observations.size +
+        unstoredRecordCount(listed),
+    );
 };
 
 /** The checkpoint a call starts counting from, and the value it replaces. */

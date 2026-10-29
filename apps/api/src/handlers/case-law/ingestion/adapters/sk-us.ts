@@ -133,10 +133,15 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
-import type { QuarantineIdentity } from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  ListingObservation,
+  QuarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1019,6 +1024,27 @@ const skUsRecordIdentity = (
   return quarantine === null
     ? { type: "no-stable-fields" }
     : { type: "quarantined", quarantine };
+};
+
+/** Capture unnameable source evidence without constructing a decision identity. */
+export const skUsListingObservation = (
+  payload: unknown,
+): ListingObservation | null => {
+  if (isRecord(payload)) {
+    const documentId = payload["documentId"];
+    if (
+      (typeof documentId === "string" &&
+        isPersistableSourceDocumentId(documentId)) ||
+      skUsQuarantineIdentity(payload) !== null
+    ) {
+      return null;
+    }
+  }
+  return quarantinedListingObservation({
+    source: QUARANTINE_NAMESPACE.SK_US,
+    payload,
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
 };
 
 /**
@@ -2522,38 +2548,38 @@ const listSkUsSlicePage = async ({
 
   // The window lists every result in offset order, an unserved one in its
   // own slot, so a position is the publisher's offset.
-  const firstOffset = page * LISTING_PAGE_SIZE;
-  const listed = items.flatMap((item, index) => {
+  const observations: ListingObservation[] = [];
+  const listed = items.flatMap((item) => {
     switch (item.type) {
       case "served": {
         const identity = skUsListingIdentity(item.document);
         if (identity === null) {
-          // Not a record anything can key or store, so not an item; the page
-          // counts it below. The walk reports the count per slice, and this
-          // names the offset, which the count cannot.
-          logger.warn("case_law.ingestion.unkeyable_listing_record", {
-            adapterKey: ADAPTER_KEYS.SK_US,
-            slice,
-            resultIndex: firstOffset + index,
-            reason: UNKEYABLE_LISTING_RECORD_REASON,
-          });
+          observations.push(
+            skUsListingObservation(item.document) ??
+              panic("An unnameable SK-US listing must have an observation"),
+          );
           return [];
         }
         return [{ identity, payload: item.document }];
       }
       case "unserved":
         warnUnservedListingRecord(slice, item.offset);
+        observations.push(
+          quarantinedListingObservation({
+            source: QUARANTINE_NAMESPACE.SK_US,
+            payload: { type: "unserved", slice, offset: item.offset },
+            reason: LISTING_OBSERVATION_REASON.UNSERVED_RECORD,
+          }),
+        );
         return [];
       default:
         item satisfies never;
         return panic("Unhandled SK ÚS listing result");
     }
   });
-  // Every result left out above, served or not, states no stable field.
-  const withoutStableFields = items.length - listed.length;
   return {
     items: listed,
-    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
+    ...(observations.length === 0 ? {} : { observations }),
     // Still the publisher's count, unserved records included: it sizes the
     // walk, and the walk's offsets are the publisher's.
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
@@ -3392,6 +3418,7 @@ export const skUsAdapter = defineSourceAdapter({
 
         const decisions: IngestionResult[] = [];
         const unreadItems: UnreadListedItem[] = [];
+        const observations: ListingObservation[] = [];
         let failed = 0;
         // One context for the page: the vocabularies are fetched once for
         // it, and a docket listed twice on it costs one facet query and one
@@ -3401,6 +3428,13 @@ export const skUsAdapter = defineSourceAdapter({
         for (const item of items) {
           switch (item.type) {
             case "unserved":
+              observations.push(
+                quarantinedListingObservation({
+                  source: QUARANTINE_NAMESPACE.SK_US,
+                  payload: { type: "unserved", year, offset: item.offset },
+                  reason: LISTING_OBSERVATION_REASON.UNSERVED_RECORD,
+                }),
+              );
               failed++;
               logger.warn("case_law.ingestion.unserved_listing_record", {
                 adapterKey: ADAPTER_KEYS.SK_US,
@@ -3417,6 +3451,11 @@ export const skUsAdapter = defineSourceAdapter({
               panic("Unhandled SK ÚS listing result");
           }
           const doc = item.document;
+          const observation = skUsListingObservation(doc);
+          if (observation !== null) {
+            observations.push(observation);
+            continue;
+          }
           try {
             const attempted = await buildPlainTextItem({
               decisionOf: (value) => {
@@ -3502,6 +3541,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (hasMore) {
           return {
             decisions,
+            ...(observations.length === 0 ? {} : { observations }),
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year, offset: nextOffset }),

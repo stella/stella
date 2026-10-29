@@ -14,7 +14,9 @@ import type {
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
+  LISTING_OBSERVATION_REASON,
   QUARANTINE_NAMESPACE,
+  quarantinedListingObservation,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -419,4 +421,61 @@ test("a keyed record whose quarantine peer is also listed quarantined is a repor
   } finally {
     logs.restore();
   }
+});
+
+test("identity proofs retain noncanonical observations and count only exact repeats", async () => {
+  const observation = (payload: unknown) =>
+    quarantinedListingObservation({
+      source: QUARANTINE_NAMESPACE.SK_US,
+      payload,
+      reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+    });
+  const a = observation({ note: "A" });
+  const b = observation({ note: "B" });
+  const listing = unwrapListing(
+    await listReconciliationSlice({
+      adapterKey: "sk-us",
+      proof: SLICE_LISTING_PROOF.IDENTITIES,
+      revisionOf: payloadRevision,
+      listSlicePage: async () => ({
+        items: [],
+        observations: [a, b, a],
+        totalPages: 1,
+      }),
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      slice: "2026-01-01",
+      sleep: async () => undefined,
+    }),
+  );
+  expect(listing.keyed.size).toBe(0);
+  expect([...listing.observations.values()]).toEqual([a, b]);
+  expect(listing.listed).toBe(3);
+  expect(listing.duplicate).toBe(1);
+  expect(unstoredRecordCount(listing)).toBe(0);
+});
+
+test("a changed noncanonical observation invalidates a two-pass identity proof", async () => {
+  let pass = 0;
+  const listing = await listReconciliationSlice({
+    adapterKey: "sk-us",
+    proof: SLICE_LISTING_PROOF.IDENTITIES,
+    revisionOf: payloadRevision,
+    listSlicePage: async () => ({
+      items: [],
+      observations: [
+        quarantinedListingObservation({
+          source: QUARANTINE_NAMESPACE.SK_US,
+          payload: { revision: ++pass },
+          reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+        }),
+      ],
+      totalPages: 1,
+    }),
+    pageDelayMs: 0,
+    pageTimeoutMs: 5000,
+    slice: "2026-01-01",
+    sleep: async () => undefined,
+  });
+  expect(listing.isErr()).toBe(true);
 });
