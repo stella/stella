@@ -41,10 +41,23 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/web/src/lib/preload-error-recovery.ts",
+    class: "package-owned-client",
+    reason:
+      "Probes the bounded same-origin version manifest to distinguish deployment skew from transient chunk transport failures.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/api/src/db/sql-client.ts",
     class: "operator-configured-infrastructure",
     reason: "Creates every Bun SQL client and drizzle database for the API.",
     transports: ["module:bun"],
+  },
+  {
+    path: "packages/parameter-store/src/read-parameter.ts",
+    class: "vendor-sdk",
+    reason: "Reads one deployment parameter from the configured AWS account.",
+    transports: ["module:@aws-sdk/client-ssm"],
   },
   {
     path: "packages/start-runtime/src/local-module-loader.ts",
@@ -544,12 +557,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@tanstack/ai-mcp"],
   },
   {
-    path: "apps/api/src/lib/auth/session-bearer.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth plugin APIs for bearer session handling.",
-    transports: ["module:better-auth/plugins"],
-  },
-  {
     path: "apps/api/src/lib/auth/session-lifetime.ts",
     class: "vendor-sdk",
     reason: "Uses Better Auth APIs and database helpers for session lifetimes.",
@@ -627,11 +634,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/scripts/better-auth-sign-in-replay.ts",
     class: "operator-configured-infrastructure",
     reason: "Runs an authentication replay against the configured API origin.",
-    transports: [
-      "global:fetch",
-      "module:better-auth",
-      "module:better-auth/plugins",
-    ],
+    transports: ["global:fetch", "module:better-auth"],
   },
   {
     path: "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
@@ -1096,6 +1099,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Probes development service endpoints and local TCP ports for the configured stack.",
     transports: ["global:fetch", "module:node:net"],
+  },
+  {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",

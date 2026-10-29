@@ -1,25 +1,31 @@
 import type { Err } from "better-result";
 import { panic, Result } from "better-result";
-import { and, desc, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { rateEntries } from "@/api/db/schema";
+import { billingCodes, rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
+import { indexRateEntries, selectEffectiveRateEntry } from "./rate-selection";
+
 type RateLookup = {
   dateWorked: string;
+  activityCode?: string | null | undefined;
   userId: SafeId<"user">;
 };
 
 export type ResolvedRate = { hourlyRate: number; currency: string };
 
-export const rateLookupKey = ({ dateWorked, userId }: RateLookup) =>
-  `${userId}:${dateWorked}`;
+export const rateLookupKey = ({
+  dateWorked,
+  userId,
+  activityCode,
+}: RateLookup) => `${userId}:${dateWorked}:${activityCode ?? ""}`;
 
 type WorkspaceRateLookup = RateLookup & { workspaceId: SafeId<"workspace"> };
 
@@ -112,8 +118,18 @@ export const resolveWorkspaceRatesInTransaction = async ({
       hourlyRate: rateEntries.hourlyRate,
       userId: rateEntries.userId,
       role: rateEntries.role,
+      activityCode: billingCodes.code,
+      activityCodeId: rateEntries.activityCodeId,
     })
     .from(rateEntries)
+    .leftJoin(
+      billingCodes,
+      and(
+        eq(billingCodes.id, rateEntries.activityCodeId),
+        eq(billingCodes.workspaceId, rateEntries.workspaceId),
+        eq(billingCodes.type, "activity"),
+      ),
+    )
     .where(
       and(
         inArray(rateEntries.workspaceId, workspaceIds),
@@ -135,32 +151,12 @@ export const resolveWorkspaceRatesInTransaction = async ({
     .orderBy(desc(rateEntries.effectiveFrom), desc(rateEntries.id))
     .limit(LIMITS.rateEntriesPerTable * defaultTables.length);
 
-  const entriesByUser = new Map<string, typeof entries>();
-  const entriesByRole = new Map<string, typeof entries>();
-  const defaultEntries = new Map<string, typeof entries>();
   for (const entry of entries) {
-    if (entry.userId === null && entry.role === null) {
-      const bucket = defaultEntries.get(entry.rateTableId);
-      if (bucket) {
-        bucket.push(entry);
-      } else {
-        defaultEntries.set(entry.rateTableId, [entry]);
-      }
-      continue;
-    }
-    const buckets = entry.userId === null ? entriesByRole : entriesByUser;
-    const selector = entry.userId ?? entry.role;
-    if (selector === null) {
-      panic("Rate entry has no selector");
-    }
-    const key = `${entry.rateTableId}:${selector}`;
-    const bucket = buckets.get(key);
-    if (bucket) {
-      bucket.push(entry);
-    } else {
-      buckets.set(key, [entry]);
+    if (entry.activityCodeId !== null && entry.activityCode === null) {
+      panic("Rate activity must name an activity code in the same matter");
     }
   }
+  const indexedEntries = indexRateEntries(entries);
 
   for (const lookup of lookups) {
     const defaultTable = tablesByWorkspace.get(lookup.workspaceId);
@@ -173,35 +169,14 @@ export const resolveWorkspaceRatesInTransaction = async ({
     if (roles === undefined) {
       continue;
     }
-    const userEntry = entriesByUser
-      .get(`${defaultTable.id}:${lookup.userId}`)
-      ?.find(
-        (entry) =>
-          entry.effectiveFrom <= lookup.dateWorked &&
-          (entry.effectiveTo === null ||
-            entry.effectiveTo >= lookup.dateWorked),
-      );
-    const roleEntry = roles
-      .map((role) =>
-        entriesByRole
-          .get(`${defaultTable.id}:${role}`)
-          ?.find(
-            (entry) =>
-              entry.effectiveFrom <= lookup.dateWorked &&
-              (entry.effectiveTo === null ||
-                entry.effectiveTo >= lookup.dateWorked),
-          ),
-      )
-      .find((entry) => entry !== undefined);
-    const defaultEntry = defaultEntries
-      .get(defaultTable.id)
-      ?.find(
-        (entry) =>
-          entry.effectiveFrom <= lookup.dateWorked &&
-          (entry.effectiveTo === null ||
-            entry.effectiveTo >= lookup.dateWorked),
-      );
-    const entry = userEntry ?? roleEntry ?? defaultEntry;
+    const entry = selectEffectiveRateEntry({
+      entries: indexedEntries,
+      rateTableId: defaultTable.id,
+      userId: lookup.userId,
+      roles,
+      activityCode: lookup.activityCode ?? null,
+      dateWorked: lookup.dateWorked,
+    });
     if (entry) {
       resolved.set(workspaceRateLookupKey(lookup), {
         hourlyRate: entry.hourlyRate,
@@ -242,21 +217,23 @@ export const resolveRate = async function* ({
   workspaceId,
   userId,
   dateWorked,
+  activityCode,
 }: {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   dateWorked: string;
+  activityCode?: string | null | undefined;
 }): AsyncGenerator<Err<never, SafeDbError>, ResolvedRate | null, unknown> {
   const rates = yield* Result.await(
     safeDb(
       async (tx) =>
         await resolveRatesInTransaction({
-          lookups: [{ dateWorked, userId }],
+          lookups: [{ dateWorked, userId, activityCode }],
           tx,
           workspaceId,
         }),
     ),
   );
-  return rates.get(rateLookupKey({ dateWorked, userId })) ?? null;
+  return rates.get(rateLookupKey({ dateWorked, userId, activityCode })) ?? null;
 };

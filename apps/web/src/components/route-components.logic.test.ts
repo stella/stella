@@ -1,8 +1,18 @@
-import { describe, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   isNetworkError,
@@ -12,10 +22,25 @@ import {
 } from "./route-components.logic";
 import type { RouteErrorSupport } from "./route-components.logic";
 
+GlobalRegistrator.register({ url: "http://localhost:3000/" });
+Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
+  configurable: true,
+  value: "running-build",
+});
+
+afterAll(async () => {
+  Reflect.deleteProperty(globalThis, "__APP_COMMIT_SHA__");
+  await unregisterDomEnvironment();
+});
+
+afterEach(() => {
+  mock.restore();
+});
+
 type SupportOptions = Parameters<typeof resolveRouteErrorSupport>[0];
 
 describe("route error recovery", () => {
-  test("reloads for every browser dynamic-import failure shape", () => {
+  test("keeps every unconfirmed dynamic-import failure on the retry path", () => {
     const messages = [
       "Failed to fetch dynamically imported module: https://example.test/chunk.js",
       "error loading dynamically imported module: https://example.test/chunk.js",
@@ -26,24 +51,24 @@ describe("route error recovery", () => {
 
     for (const message of messages) {
       expect(resolveRouteErrorRecovery(new TypeError(message))).toEqual({
-        type: "reload-page",
+        type: "retry-route",
       });
     }
   });
 
-  test("records the retry before reloading a cached rejected import", async () => {
+  test("a same-build rejected import retries without reloading", async () => {
     const actions: string[] = [];
-    let finishRecording: () => void = () => undefined;
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ commit: "running-build" })),
+    );
 
     const recovery = recoverRouteError({
       error: new TypeError(
         "Failed to fetch dynamically imported module: https://example.test/chunk.js",
       ),
-      recordRetryStarted: async () =>
-        new Promise<void>((resolve) => {
-          actions.push("record");
-          finishRecording = resolve;
-        }),
+      recordRetryStarted: async () => {
+        actions.push("record");
+      },
       reloadPage: () => {
         actions.push("reload");
       },
@@ -52,10 +77,8 @@ describe("route error recovery", () => {
       },
     });
 
-    expect(actions).toEqual(["record"]);
-    finishRecording();
     await recovery;
-    expect(actions).toEqual(["record", "reload"]);
+    expect(actions).toEqual(["record", "retry"]);
   });
 
   test("keeps ordinary route errors on the in-app retry path", async () => {

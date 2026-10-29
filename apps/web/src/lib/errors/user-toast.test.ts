@@ -136,6 +136,25 @@ describe("notifyUserError", () => {
     expect(add).toHaveBeenCalledTimes(2);
   });
 
+  test("aborted fetch errors are neither shown nor reported", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const abort = new DOMException("Cancelled", "AbortError");
+    const error = toAPIError({
+      status: 0,
+      value: null,
+      kind: "aborted",
+      cause: abort,
+    });
+
+    expect(notifyUserError(error, FAILURE)).toBe(false);
+    expect(notifyUserError(abort, FAILURE)).toBe(false);
+    expect(userVisibleReports(capture)).toEqual([]);
+    expect(add).not.toHaveBeenCalled();
+  });
+
   test("a missing optional cause shows the message and reports nothing", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,

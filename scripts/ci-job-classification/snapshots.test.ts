@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -142,7 +143,9 @@ test("a bumped pin snapshots the new revision and preserves the review decision"
     path.join(fixture.root, ".github/ci-job-classification-decisions"),
   )
     .map((name) =>
-      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+      decisionKeyFromPath(
+        `.github/ci-job-classification-decisions/${name}/decision.json`,
+      ),
     )
     .find((key) => key.startsWith("supplier7:"));
   expect(remoteDecision).toBe("supplier7:.github/workflows/shared.yml/shared");
@@ -257,7 +260,9 @@ test("a bump of one of two workflows from one source moves only that job's decis
     path.join(root, ".github/ci-job-classification-decisions"),
   )
     .map((name) =>
-      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+      decisionKeyFromPath(
+        `.github/ci-job-classification-decisions/${name}/decision.json`,
+      ),
     )
     .filter((key) => key.startsWith("supplier"))
     .toSorted();
@@ -397,7 +402,9 @@ const createConvergingFixture = (
     path.join(root, ".github/ci-job-classification-decisions"),
   )
     .map((name) =>
-      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+      decisionKeyFromPath(
+        `.github/ci-job-classification-decisions/${name}/decision.json`,
+      ),
     )
     .filter((key) => key.startsWith("supplier"));
   const kindOf = (sha: string) => {
@@ -493,10 +500,18 @@ test("nested composite actions retain the reusable workflow checkout mount", () 
     ".github/workflows/shared.yml",
   ]);
   // Fixture review decisions are explicit; production refresh never invents them.
+  rmSync(path.join(fixture.root, ".github/ci-job-classification-decisions"), {
+    recursive: true,
+  });
+  mkdirSync(path.join(fixture.root, ".github/ci-job-classification-decisions"));
   generateClassification({
-    ...inputs,
+    ...readClassificationInputs(fixture.root),
     observeJobs: (jobs) => {
       for (const [key, job] of jobs) {
+        rmSync(path.dirname(path.join(fixture.root, decisionPathForKey(key))), {
+          recursive: true,
+          force: true,
+        });
         writeDecision(fixture.root, key, {
           kind: "ordinary",
           qualifier: `fixture ${key}`,
@@ -508,10 +523,10 @@ test("nested composite actions retain the reusable workflow checkout mount", () 
   const generated = generateClassification(
     readClassificationInputs(fixture.root),
   );
-  expect(generated.isOk()).toBe(true);
   if (generated.isErr()) {
     throw generated.error;
   }
+  expect(generated.isOk()).toBe(true);
   const nested = generated.value.nodes.filter(
     (node) => node.type === "metadata" && node.path.includes("/actions/"),
   );

@@ -51,12 +51,27 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
+            const startedAt = Date.now();
+            const HEAD_ACTIVE_MINUTES = 15;
+            const headActivity = ({ number, committedDate, runStartedAt }) => {
+              const committedAt = Date.parse(committedDate ?? '');
+              if (!Number.isFinite(committedAt)) return { type: 'eligible' };
+              const ageMinutes = Math.max(0, Math.floor((runStartedAt - committedAt) / 60_000));
+              if (ageMinutes >= HEAD_ACTIVE_MINUTES) return { type: 'eligible' };
+              return {
+                type: 'deferred-active',
+                line: `deferred #${number}: head-active (${ageMinutes} min < ${HEAD_ACTIVE_MINUTES})`,
+              };
+            };
             const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
             const query = `query($owner: String!, $repo: String!, $cursor: String) {
               repository(owner: $owner, name: $repo) {
                 pullRequests(states: OPEN, baseRefName: "main", first: 50, after: $cursor) {
                   pageInfo { hasNextPage endCursor }
-                  nodes { number mergeable isCrossRepository headRefName headRefOid updatedAt author { login } }
+                  nodes {
+                    number mergeable isCrossRepository headRefName headRefOid updatedAt author { login }
+                    commits(last: 1) { nodes { commit { committedDate } } }
+                  }
                 }
               }
             }`;
@@ -78,13 +93,25 @@ jobs:
               await new Promise(resolve => setTimeout(resolve, 20_000));
               nodes = await list();
             }
-            const eligible = nodes.filter(pull => pull.mergeable === 'CONFLICTING'
+            const candidates = nodes.filter(pull => pull.mergeable === 'CONFLICTING'
               && !pull.isCrossRepository
               && pull.author?.login !== 'dependabot[bot]'
               && /^[A-Za-z0-9._/-]+$/u.test(pull.headRefName)
               && !pull.headRefName.includes('..') && !pull.headRefName.startsWith('-')
               && pull.headRefName !== 'main'
               && /^[0-9a-f]{40}$/u.test(pull.headRefOid));
+            const deferred = [];
+            const eligible = candidates.filter(pull => {
+              const activity = headActivity({
+                number: pull.number,
+                committedDate: pull.commits?.nodes?.[0]?.commit?.committedDate,
+                runStartedAt: startedAt,
+              });
+              if (activity.type === 'eligible') return true;
+              deferred.push(activity.line);
+              core.info(activity.line);
+              return false;
+            });
             // A head that already had a resolve run usually conflicts in
             // source files, which a newer main does not clear. Heads not yet
             // planned go first, then the most recently updated, so a few stale
@@ -158,6 +185,12 @@ jobs:
               }
               started.push(id);
             }
+            const summary = [
+              ...deferred,
+              `resolved: ${started.length}; deferred-active: ${deferred.length}; other-skipped: ${nodes.length - started.length - deferred.length}`,
+            ].join('\n');
+            core.info(summary.split('\n').at(-1));
+            await core.summary.addRaw(`${summary}\n`).write();
             core.setOutput('runs', JSON.stringify(started));
 
       # A resolve run that ends without a resolution (a plan left to people)

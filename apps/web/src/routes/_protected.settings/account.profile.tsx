@@ -66,15 +66,18 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 
 import {
@@ -83,13 +86,21 @@ import {
 } from "./-components/account/deletion-reassignments.logic";
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
-  component: ProfilePage,
-  pendingComponent: ProfilePagePending,
   loader: async ({ context }) => {
     // Prime the session query the page suspends on so the fetch starts during
     // navigation instead of after the component mounts and suspends.
     await ensureRouteQueryData(context.queryClient, sessionOptions);
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.profile",
+      to: "/settings/account/profile",
+    }),
+  },
+  component: ProfilePage,
+  pendingComponent: ProfilePagePending,
+  head: () => ({ meta: [{ title: pageTitle("common.profile") }] }),
 });
 
 const SESSION_ROW_KEYS = ["a", "b", "c"];
@@ -586,6 +597,7 @@ function ProfilePageBody() {
 
       <ChatNotificationsCard />
 
+      <SignInMethods />
       <TwoFactorCard />
 
       <SessionsCard />

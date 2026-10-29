@@ -135,6 +135,10 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
+    },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
