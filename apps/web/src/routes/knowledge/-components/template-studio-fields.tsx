@@ -62,7 +62,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   invalidateTemplateClauseSources,
@@ -1118,7 +1118,7 @@ const FieldConditionSection = ({
           className="self-start"
           onClick={() => {
             if (actions?.wrapFieldInCondition(field.path) !== true) {
-              notifyUserError(undefined, t("errors.actionFailed"));
+              notifyUserProblem(t("errors.actionFailed"));
             }
           }}
           size="sm"
@@ -1154,11 +1154,11 @@ const FieldConditionSection = ({
         disabled={!condition.canRemove}
         onClick={() => {
           if (actions?.unwrapFieldCondition(field.path) !== true) {
-            notifyUserError(undefined, t("errors.actionFailed"));
+            notifyUserProblem(t("errors.actionFailed"));
           }
         }}
         size="sm"
-        title={
+        tooltip={
           condition.canRemove
             ? undefined
             : t("templates.studio.removeConditionBlocked")
@@ -1244,7 +1244,7 @@ export const FieldFace = ({
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
       pendingFieldFaceScrollTop = null;
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
     }
   };
 
@@ -1532,7 +1532,7 @@ export const FieldFace = ({
               disabled={repeat.disabledKey !== null}
               onClick={() => toggleRepeatable(repeat.kind !== "on")}
               size="sm"
-              title={
+              tooltip={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
               variant={repeat.kind === "on" ? "secondary" : "outline"}
@@ -1732,7 +1732,7 @@ const ClauseSlotEditor = ({
       setEditing(false);
       return;
     }
-    notifyUserError(undefined, t("clauses.renameSlotInvalid"));
+    notifyUserProblem(t("clauses.renameSlotInvalid"));
   };
 
   if (!editing) {
@@ -1794,7 +1794,7 @@ const FieldPathEditor = ({
       setEditing(false);
       return;
     }
-    notifyUserError(undefined, t("templates.studio.renameFieldInvalid"));
+    notifyUserProblem(t("templates.studio.renameFieldInvalid"));
   };
 
   if (!editing) {

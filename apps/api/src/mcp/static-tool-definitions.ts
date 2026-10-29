@@ -43,6 +43,7 @@ import {
 } from "@/api/mcp/tool-visibility";
 import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
 import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 
 export { MCP_STATIC_TOOL_NAMES };
 
@@ -386,6 +387,41 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   // would read an upstream outage as the corpus being down.
   search_boe_legislation: "upstream_connector",
 } as const satisfies Record<PublicLawToolName, "corpus" | "upstream_connector">;
+
+type CorpusMcpToolName = {
+  [
+    Name in keyof typeof LAW_MCP_TOOL_DISPOSITION
+  ]: (typeof LAW_MCP_TOOL_DISPOSITION)[Name] extends "corpus" ? Name : never;
+}[keyof typeof LAW_MCP_TOOL_DISPOSITION];
+
+type CorpusReadingAnnotationToolName = Extract<
+  (typeof ALL_MCP_TOOL_DEFINITIONS)[number]["name"],
+  "create_reader_annotation" | "list_reader_annotations"
+>;
+
+/** Corpus tools and the annotation tools that read their public document target. */
+export const MCP_PUBLIC_CORPUS_CLASS = {
+  search: "search",
+  fetch: "browse",
+  search_case_law: "search",
+  resolve_case_law_decision: "browse",
+  resolve_law_citation: "browse",
+  case_law_coverage: "browse",
+  read_case_law_decision: "browse",
+  open_case_law_decision: "browse",
+  read_case_law_decision_blocks: "browse",
+  preview_cited_provision: "browse",
+  read_case_law_citations: "browse",
+  search_legislation: "search",
+  read_statute: "browse",
+  read_statute_provisions: "browse",
+  read_provision_history: "browse",
+  create_reader_annotation: "browse",
+  list_reader_annotations: "browse",
+} as const satisfies Record<
+  CorpusMcpToolName | CorpusReadingAnnotationToolName,
+  PublicCorpusClass
+>;
 
 type MissingLawMcpToolDisposition = Exclude<
   PublicLawToolName,

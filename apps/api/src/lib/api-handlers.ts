@@ -100,6 +100,7 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -1329,7 +1330,8 @@ export const admitFiniteAction = async function* <
   });
 };
 
-type HandlerAdmissionDependencies = {
+type HandlerAdmissionDependencies<TContext> = {
+  authorize?: (ctx: TContext) => Promise<Result<void, HandlerError>>;
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
@@ -1351,6 +1353,7 @@ type ScopedOperationInput<
   config: TConfig;
   handler: SafeHandlerFn<TContext, TResult>;
   admit: typeof withActionAdmission;
+  authorize?: HandlerAdmissionDependencies<TContext>["authorize"];
 };
 
 export const runCheckedScopedHandler = async <
@@ -1371,7 +1374,7 @@ export const runCheckedScopedHandler = async <
   /** The live request's response state; the proof's copy by default. */
   responseSet: ResponseSet = scratch.ctx.set,
 ): Promise<SafeHandlerResult<TResult>> => {
-  const { ctx, config, handler, admit } = cloneOperationInput(
+  const { ctx, config, handler, admit, authorize } = cloneOperationInput(
     proof.input.value,
   );
   const admission = config.actionAdmission;
@@ -1398,6 +1401,15 @@ export const runCheckedScopedHandler = async <
   const request = ctx.request;
   const key = request.headers.get("Idempotency-Key");
   if (key === null) {
+    if (authorize !== undefined) {
+      const authorization = await authorize(ctx);
+      if (authorization.isErr()) {
+        return toSafeStatusResponse(
+          authorization.error.status,
+          safeErrorBody(authorization.error),
+        );
+      }
+    }
     return await run(ctx);
   }
   if (config.idempotency === undefined) {
@@ -1427,6 +1439,9 @@ export const runCheckedScopedHandler = async <
         Result.tryPromise(
           async () =>
             await runWithRequestReceipt({
+              ...(authorize === undefined
+                ? {}
+                : { authorize: async () => await authorize(ctx) }),
               scopedDb: ctx.scopedDb,
               organizationId: ctx.session.activeOrganizationId,
               userId: ctx.user.id,
@@ -1590,10 +1605,11 @@ const createSafeScopedHandler = <
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
   {
+    authorize,
     admit = withActionAdmission,
     checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
-  }: HandlerAdmissionDependencies = {},
+  }: HandlerAdmissionDependencies<TContext> = {},
 ): SafeHandlerCore<TConfig, TContext, TResult> =>
   recordSafeHandler({
     config,
@@ -1668,7 +1684,13 @@ const createSafeScopedHandler = <
         let usageLane = ctx.usageLane;
         const authorization = await authorizeOperation({
           kind: HANDLER_USAGE_ALLOWED,
-          input: { ctx, config, handler, admit },
+          input: {
+            ctx,
+            config,
+            handler,
+            admit,
+            ...(authorize === undefined ? {} : { authorize }),
+          },
           check: async ({
             ctx: checkedContext,
             config: checkedConfig,
@@ -2174,7 +2196,7 @@ export const createSafeRootHandler = <
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies,
+  dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>,
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
   const core = createSafeScopedHandler("member", config, handler, dependencies);
   return { ...core, run: memberRun(config, core.handler) };
@@ -2187,7 +2209,7 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies,
+  dependencies?: HandlerAdmissionDependencies<WorkspaceHandlerContext<TConfig>>,
 ): SafeHandlerDefinition<
   TConfig,
   WorkspaceHandlerContext<TConfig>,
@@ -2622,6 +2644,12 @@ const logAndCaptureSafeError = ({
   statusCode,
   telemetry,
 }: LogAndCaptureSafeErrorProps) => {
+  if (
+    resolveHandlerError(error)?.code === ACTION_ADMISSION_CODES.storeUnavailable
+  ) {
+    observeLimiterAdmissionFailure(error, "admission");
+    return;
+  }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
   const severity =

@@ -240,6 +240,7 @@ export const completeRequestReceipt = async ({
 };
 
 type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
+  authorize?: () => Promise<Result<void, HandlerError>>;
   run: (scopedDb: ScopedDb) => Promise<T>;
   responseStatus: () => number;
 };
@@ -251,10 +252,17 @@ export function runWithRequestReceipt<T>(
   options: ReplayRequestOptions<T>,
 ): Promise<Result<T, HandlerError>>;
 export async function runWithRequestReceipt<T>({
+  authorize,
   run,
   responseStatus,
   ...options
 }: ReplayRequestOptions<T>): Promise<Result<unknown, HandlerError>> {
+  if (authorize !== undefined) {
+    const authorization = await authorize();
+    if (authorization.isErr()) {
+      return authorization;
+    }
+  }
   const claim = await claimRequestReceipt(options);
   switch (claim.type) {
     case "replay":

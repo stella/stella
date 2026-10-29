@@ -11,11 +11,15 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   folioCollabRooms,
+  invoices,
   legalReaderAnswerMessages,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   pdfSigningSessions,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
   syntheticSessionControl,
+  timeEntries,
   workObligations,
 } from "@/api/db/schema";
 import {
@@ -83,6 +87,39 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// A time entry's review lifecycle: a timekeeper submits a draft, an approver
+// approves it or returns it to draft, invoicing bills an approved entry and a
+// write-off retires one. The review moves go through this spec; invoicing,
+// write-off and the matter batch actions are still direct writes in the
+// shrinking ledger.
+const TIME_ENTRY_TRANSITIONS = defineTransitions(
+  timeEntries,
+  {
+    draft: ["submitted", "approved", "written_off"],
+    submitted: ["approved", "draft", "written_off"],
+    approved: ["draft", "billed", "written_off"],
+    billed: ["approved", "written_off"],
+    written_off: ["draft"],
+  },
+  { terminal: [] },
+);
+
+// An invoice's lifecycle. Recorded payments move a finalized or sent invoice
+// to paid and back (`lib/billing/invoice-payments`) through this spec;
+// finalize, send, revert and void are still direct writes of the transition
+// handler in the shrinking ledger.
+const INVOICE_TRANSITIONS = defineTransitions(
+  invoices,
+  {
+    draft: ["finalized"],
+    finalized: ["draft", "sent", "paid", "void"],
+    sent: ["paid", "void"],
+    paid: ["finalized", "sent", "void"],
+    void: [],
+  },
+  { terminal: ["void"] },
+);
 
 // A failed attempt retries until its budget is spent; a ready archive expires.
 const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
@@ -178,6 +215,27 @@ const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   stateColumn: "status",
   edges: { committed: [], cancelled: [] },
   initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
+
+export const ORGANIZATION_ACCESS_STATE_TRANSITIONS = defineScopedTransitions({
+  table: organizationAccessStates,
+  key: "organizationId",
+  scope: [],
+  stateColumn: "state",
+  edges: {
+    [ORGANIZATION_ACCESS_STATE.selfManagedKeys]: [
+      ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    ],
+    [ORGANIZATION_ACCESS_STATE.evaluationPeriod]: [
+      ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    ],
+    [ORGANIZATION_ACCESS_STATE.evaluationEnded]: [],
+  },
+  initial: [
+    ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+    ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+  ],
 });
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
@@ -390,7 +448,7 @@ export const TRANSITIONS = {
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -407,7 +465,7 @@ export const TRANSITIONS = {
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
-  organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
@@ -443,7 +501,7 @@ export const TRANSITIONS = {
   templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templates: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   templateVersions: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  timeEntries: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  timeEntries: TIME_ENTRY_TRANSITIONS,
   timeEntrySuggestions: { unmanaged: UNMANAGED_REASONS.userDecision },
   timeEntryTimerStates: { unmanaged: UNMANAGED_REASONS.projection },
   timeTimers: { unmanaged: UNMANAGED_REASONS.coordinatedTimers },

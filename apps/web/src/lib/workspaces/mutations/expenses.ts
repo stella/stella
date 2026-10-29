@@ -2,9 +2,11 @@ import { useMutation } from "@tanstack/react-query";
 
 import type { ExpenseCategory } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
@@ -48,6 +50,7 @@ export const useCreateExpense = () => {
         fingerprintKey: "useCreateExpense:failure",
         scope: { type: "handler", handlerId: "useCreateExpense:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -91,6 +94,7 @@ export const useUpdateExpense = () => {
         fingerprintKey: "useUpdateExpense:failure",
         scope: { type: "handler", handlerId: "useUpdateExpense:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -118,6 +122,7 @@ export const useDeleteExpense = () => {
         fingerprintKey: "useDeleteExpense:failure",
         scope: { type: "handler", handlerId: "useDeleteExpense:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

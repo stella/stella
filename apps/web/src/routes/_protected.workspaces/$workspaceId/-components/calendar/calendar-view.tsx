@@ -24,10 +24,10 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { appToday } from "@/lib/local-iso-date";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
@@ -256,7 +256,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       endDatePropertyId,
     }),
   });
-  const calendarTasksView = useQueryView(calendarTasksQuery);
+  const calendarTasksView = queryView(calendarTasksQuery);
   const calendarTasks =
     calendarTasksView.type === "items" ? calendarTasksView.items : [];
 

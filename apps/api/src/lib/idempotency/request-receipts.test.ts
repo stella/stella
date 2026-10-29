@@ -1,6 +1,7 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import {
@@ -137,4 +138,23 @@ test("invalid idempotency keys return typed failures before claiming or creating
       expect(result.error).toMatchObject({ status: 400 });
     }
   }
+});
+
+test("request authorization refuses before accessing a stored receipt", async () => {
+  const refusal = new HandlerError({
+    status: 404,
+    message: "Selected matters are unavailable",
+  });
+  const result = await runWithRequestReceipt({
+    scopedDb: async () => panic("A refused request must not read its receipt"),
+    organizationId: mintAuthProviderId<"organization">(),
+    userId: mintAuthProviderId<"user">(),
+    key: "retained-intent",
+    route: "/test/create",
+    fingerprint: "a".repeat(64),
+    authorize: async () => Result.err(refusal),
+    run: async () => panic("A refused request must not create a resource"),
+    responseStatus: () => 201,
+  });
+  expect(result).toEqual(Result.err(refusal));
 });

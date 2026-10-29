@@ -60,7 +60,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
@@ -384,29 +384,29 @@ const FlowEditorForm = ({
   const handleSave = async () => {
     const trimmedName = name.trim();
     if (trimmedName === "") {
-      notifyUserError(undefined, t("flows.nameRequired"));
+      notifyUserProblem(t("flows.nameRequired"));
       return;
     }
     if (steps.length === 0) {
-      notifyUserError(undefined, t("flows.steps.required"));
+      notifyUserProblem(t("flows.steps.required"));
       return;
     }
     for (const step of steps) {
       if (step.name.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.nameRequired"));
+        notifyUserProblem(t("flows.steps.nameRequired"));
         return;
       }
       if (step.kind === "ai" && step.prompt.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.promptRequired"));
+        notifyUserProblem(t("flows.steps.promptRequired"));
         return;
       }
       if (step.kind === "create-document" && step.documentTitle.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.documentTitleRequired"));
+        notifyUserProblem(t("flows.steps.documentTitleRequired"));
         return;
       }
     }
     if (trigger.type === "schedule" && trigger.schedule.workspaceId === "") {
-      notifyUserError(undefined, t("flows.schedule.workspaceRequired"));
+      notifyUserProblem(t("flows.schedule.workspaceRequired"));
       return;
     }
 
@@ -659,7 +659,9 @@ const WorkspaceOptionsNotice = ({
     case "failed":
       return (
         <div className="flex items-center gap-2 p-2 text-xs">
-          <span className="text-muted-foreground">{t("common.error")}</span>
+          <span className="text-muted-foreground">
+            {t("common.loadFailed")}
+          </span>
           <Button onClick={workspaces.retry} size="sm" variant="ghost">
             {t("common.retry")}
           </Button>

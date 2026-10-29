@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
+import { type SQL, TransactionRollbackError } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -8,6 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { Transaction } from "@/api/db/root";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   aggregateExecutionRows,
@@ -15,16 +16,115 @@ import {
 } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,
   lockCaseLawRepublication,
+  lockInvoiceInStatus,
   lockRequestReceiptPrincipalRows,
   withAggregateLock,
   withAutomatedFlowRunCapLock,
+  withInvoiceMatterLocks,
   withSkipLockedBatch,
 } from "./aggregate-lock";
+import namespaceLedger from "./aggregate-lock-namespaces.json" with { type: "json" };
+
+test.each(["present", "missing"] as const)(
+  "invoice matter batches retain only visible sorted row locks (%s)",
+  async (presence) => {
+    const first = createSafeId<"workspace">();
+    const second = createSafeId<"workspace">();
+    const sorted = [first, second].toSorted();
+    const visible = presence === "present" ? sorted : [];
+    const organizationId = mintAuthProviderId<"organization">();
+    const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const dialect = new PgDialect();
+    const tx = asTestRaw<Transaction>({
+      execute: async (statement: SQL) => {
+        const query = dialect.sqlToQuery(statement);
+        statements.push(query);
+        return query.sql.includes('"workspaces"')
+          ? visible
+              .filter((id) => query.params.includes(id))
+              .map((id) => ({ id }))
+          : [];
+      },
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: () => ({ for: async () => [] }) }),
+        }),
+      }),
+    });
+    await withInvoiceMatterLocks(tx, [second, first, second]);
+    expect(statements.at(0)?.sql).toContain("pg_advisory_xact_lock");
+    expect(statements.at(0)?.params).toEqual(sorted);
+    expect(statements.at(1)?.params).toEqual(sorted);
+    expect(statements.at(1)?.sql).toContain("FOR NO KEY UPDATE");
+    expect(statements).toHaveLength(4);
+    // Covered reacquisition keeps the full batch in the same rank history.
+    await withInvoiceMatterLocks(tx, [first, second]);
+    const count = statements.length;
+    const earlierParent = withAggregateLock({
+      tx,
+      aggregate: "organization",
+      id: organizationId,
+      mode: "update",
+    });
+    if (presence === "present") {
+      expect(await rejectionOf(earlierParent)).toMatchObject({
+        message: "Aggregate lock rank inversion",
+      });
+      expect(statements).toHaveLength(count);
+    } else {
+      expect(await earlierParent).toEqual({ status: "missing" });
+      expect(statements).toHaveLength(count + 1);
+    }
+  },
+);
+
+test("an empty invoice matter plan refuses before any lock query", async () => {
+  let executions = 0;
+  const tx = asTestRaw<Transaction>({
+    execute: async () => {
+      executions += 1;
+      return [];
+    },
+  });
+  expect(await rejectionOf(withInvoiceMatterLocks(tx, []))).toMatchObject({
+    message: "Invoice matter locks require at least one matter",
+  });
+  expect(executions).toBe(0);
+});
+
+test("an overflowing invoice matter plan refuses before acquiring any matter lock", async () => {
+  const workspaceId = createSafeId<"workspace">();
+  const lines = Array.from(
+    { length: LIMITS.invoiceLinesPerInvoice + 1 },
+    () => ({ workspaceId: createSafeId<"workspace">() }),
+  );
+  expect(new Set(lines.map((line) => line.workspaceId)).size).toBe(
+    LIMITS.invoiceLinesPerInvoice + 1,
+  );
+  let executions = 0;
+  const tx = asTestRaw<Transaction>({
+    selectDistinct: () => createSelectQueryMock(lines),
+    execute: async () => {
+      executions += 1;
+      return [];
+    },
+  });
+  expect(
+    await lockInvoiceInStatus(tx, {
+      invoiceId: createSafeId<"invoice">(),
+      workspaceId,
+      status: "draft",
+      matterLocks: { type: "acquire" },
+    }),
+  ).toBeUndefined();
+  expect(executions).toBe(0);
+});
 
 test("case-law republication coordination preserves shared and exclusive modes", async () => {
   const dialect = new PgDialect();
@@ -182,11 +282,24 @@ const assertUniqueAdvisoryNamespaces = (namespaces: readonly unknown[]) => {
   ).toBe(namespaces.length);
 };
 
-test("every advisory aggregate declares a distinct first-key namespace", async () => {
+/**
+ * The first key of an advisory aggregate as its SQL renders it, with numeric
+ * parameters written out and identity parameters named, so the deployed
+ * namespace can be compared across revisions.
+ */
+const namespaceSignature = (expression: string, parameters: unknown[]) =>
+  expression.replaceAll(/\$(\d+)/gu, (_, position: string) => {
+    const value = parameters.at(Number(position) - 1);
+    return typeof value === "number"
+      ? `0x${value.toString(16).padStart(8, "0")}`
+      : "<identity>";
+  });
+
+test("every advisory aggregate declares a distinct first-key namespace, recorded in its ledger", async () => {
   const fixture = fences();
   const dialect = new PgDialect();
   const namespaces: string[] = [];
-  const exercised: string[] = [];
+  const signatures = new Map<string, string>();
   for (const options of Object.values(fixture)) {
     if ("mode" in options) {
       continue;
@@ -201,19 +314,25 @@ test("every advisory aggregate declares a distinct first-key namespace", async (
           query.params.at(Number(match.at(1)) - 1),
         );
         namespaces.push(JSON.stringify([expression, parameters]));
+        signatures.set(
+          options.aggregate,
+          namespaceSignature(expression, query.params),
+        );
         return aggregateExecutionRows(statement);
       },
     };
-    exercised.push(options.aggregate);
     await withAggregateLock({ ...options, tx });
   }
-  expect(exercised.toSorted()).toEqual(
+  expect([...signatures.keys()].toSorted()).toEqual(
     Object.entries(AGGREGATE_LOCKS)
       .filter(([, { kind }]) => kind === "advisory")
       .map(([aggregate]) => aggregate)
       .toSorted(),
   );
   assertUniqueAdvisoryNamespaces(namespaces);
+  // scripts/check-aggregate-locks.ts holds this ledger to its base revision:
+  // an existing aggregate keeps its namespace and a new one takes a fresh one.
+  expect(Object.fromEntries(signatures)).toEqual(namespaceLedger);
 });
 
 test("the advisory namespace census rejects a duplicate", () => {
@@ -258,10 +377,21 @@ describe("aggregate acquisition ordering", () => {
         }),
       });
       const tx = asTestRaw<Transaction>({
+        rollback: () => {
+          throw new TransactionRollbackError();
+        },
         execute,
         select,
         transaction: async (run: (child: Transaction) => Promise<unknown>) =>
-          await run(asTestRaw<Transaction>({ execute, select })),
+          await run(
+            asTestRaw<Transaction>({
+              rollback: () => {
+                throw new TransactionRollbackError();
+              },
+              execute,
+              select,
+            }),
+          ),
       });
       await withAggregateLock({ ...fixture.workspace, tx });
       const result = await lockRequestReceiptPrincipalRows({
@@ -302,13 +432,24 @@ describe("aggregate acquisition ordering", () => {
     const fixture = fences();
     const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const tx = asTestRaw<Transaction>({
+      rollback: () => {
+        throw new TransactionRollbackError();
+      },
       execute: async (statement: SQL) => {
         statements.push(new PgDialect().sqlToQuery(statement));
         return aggregateExecutionRows(statement);
       },
       transaction: async (
         run: (transaction: Transaction) => Promise<unknown>,
-      ) => await run(asTestRaw<Transaction>({ execute: tx.execute })),
+      ) =>
+        await run(
+          asTestRaw<Transaction>({
+            rollback: () => {
+              throw new TransactionRollbackError();
+            },
+            execute: tx.execute,
+          }),
+        ),
     });
     expect(
       await withAggregateLock({

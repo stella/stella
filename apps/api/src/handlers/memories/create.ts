@@ -78,7 +78,7 @@ const createMemory = createSafeRootHandler(
       );
     }
 
-    const created = yield* Result.await(
+    const outcome = yield* Result.await(
       safeDb(
         async (tx) =>
           await persistExplicitMemory({
@@ -100,7 +100,10 @@ const createMemory = createSafeRootHandler(
       ),
     );
 
-    return Result.ok(created);
+    if (outcome.type === "authority_unavailable") {
+      return Result.err(memoryWriteRefusalHandlerError(outcome.error));
+    }
+    return Result.ok(outcome);
   },
 );
 

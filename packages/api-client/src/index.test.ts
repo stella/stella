@@ -3,7 +3,11 @@ import { afterAll, describe, expect, expectTypeOf, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createApiClient } from "./index";
-import type { ApiClientOptions, ScopedResponse } from "./index";
+import type {
+  ApiClientOptions,
+  ApiTransportError,
+  ScopedResponse,
+} from "./index";
 
 type Echo = {
   readonly method: string;
@@ -388,10 +392,14 @@ describe("createApiClient", () => {
     }>();
     expectTypeOf<
       Awaited<ReturnType<ReturnType<typeof api.items>["get"]>>["error"]
-    >().toEqualTypeOf<{
-      readonly status: 404;
-      readonly value: { readonly message: string };
-    } | null>();
+    >().toEqualTypeOf<
+      | {
+          readonly status: 404;
+          readonly value: { readonly message: string };
+        }
+      | ApiTransportError
+      | null
+    >();
   });
 });
 
@@ -506,7 +514,7 @@ test("scoped clients resolve the current default fetch at request time", async (
   }
 });
 
-test.each(["request", "fetch", "scoped-response", "response"] as const)(
+test.each(["request", "scoped-response", "response"] as const)(
   "preserves the %s boundary rejection without decoding a response",
   async (boundary) => {
     const failure = new Error(`Failed ${boundary}`);
@@ -519,7 +527,7 @@ test.each(["request", "fetch", "scoped-response", "response"] as const)(
       ...(boundary === "request" ? { onRequest: fail } : {}),
       fetcher: async () => {
         fetchCalls += 1;
-        return boundary === "fetch" ? fail() : response;
+        return response;
       },
       ...(boundary === "scoped-response" ? { onScopedResponse: fail } : {}),
       ...(boundary === "response" ? { onResponse: fail } : {}),
@@ -529,6 +537,29 @@ test.each(["request", "fetch", "scoped-response", "response"] as const)(
     expect(response.bodyUsed).toBe(false);
   },
 );
+
+test.each([
+  [new TypeError("Failed to fetch"), "network"],
+  [new DOMException("Cancelled", "AbortError"), "aborted"],
+  [new DOMException("Timed out", "TimeoutError"), "timeout"],
+] as const)("returns a typed %s transport failure", async (failure, kind) => {
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: async () => {
+      throw failure;
+    },
+  });
+
+  const result = await scopedClient.v1.answers.json.get();
+  expect(result.data).toBeNull();
+  expect(result.error).toEqual({
+    kind,
+    cause: failure,
+    status: 0,
+    value: null,
+  });
+  expect(result.status).toBe(0);
+  expect(result.response.type).toBe("error");
+});
 
 test("scoped and ordinary observers see the same unread response before decoding", async () => {
   const response = jsonResponse();

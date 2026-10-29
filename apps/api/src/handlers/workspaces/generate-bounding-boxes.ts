@@ -5,7 +5,11 @@ import * as v from "valibot";
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  memberAIAccessError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -50,6 +54,10 @@ const generateBoundingBoxes = createSafeHandler(
     promptCachingEnabled,
     request,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const accessError = memberAIAccessError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);

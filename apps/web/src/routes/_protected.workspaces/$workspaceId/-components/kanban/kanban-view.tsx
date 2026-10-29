@@ -59,9 +59,9 @@ import {
   preflightAttachedTemplateUpload,
 } from "@/lib/files/attached-template-upload-preflight";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceEntity, WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import {
   calculationKindsForProperty,
   isCalculableProperty,
@@ -362,7 +362,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       isKanbanGroupingRenderable(grouping) &&
       subgroupByPropertyId !== null,
   });
-  const subgroupView = useQueryView(subgroupQuery);
+  const subgroupView = queryView(subgroupQuery);
   const subgroupQueryData =
     subgroupView.type === "items" ? subgroupView.items : undefined;
   const subgroupEntities = useMemo(
@@ -1223,7 +1223,7 @@ const KanbanGroupColumn = ({
       groupValue: columnValue,
     }),
   );
-  const columnView = useQueryView(query);
+  const columnView = queryView(query);
   const queryData = columnView.type === "items" ? columnView.items : undefined;
   const entities = queryData
     ? queryData.pages.flatMap((page) => page.entities)

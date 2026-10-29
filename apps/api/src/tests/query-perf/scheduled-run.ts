@@ -7,10 +7,12 @@ import {
 } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
+import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
+import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
@@ -112,8 +114,12 @@ export const measureScheduledJobRun = async ({
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
   const task =
-    createSchedulerTaskRegistry(noopTask).get(job.task) ??
-    panic(`No registered task ${job.task} for ${jobId}`);
+    createSchedulerTaskRegistry(
+      noopTask,
+      createCaseLawCoverageRefreshTask({
+        compute: computeCaseLawCoverageAnswer,
+      }),
+    ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const captured: CapturedStatement[] = [];
   const logger: Logger = {
     logQuery: (text, params) => {

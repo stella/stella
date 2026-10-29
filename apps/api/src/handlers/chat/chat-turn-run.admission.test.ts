@@ -159,7 +159,7 @@ describe("chat run admission follows owned settlement", () => {
       let persisted = 0;
       const admission = new AbortController();
       const admissionLoss = new ActionAdmissionError({
-        reason: "unavailable",
+        reason: "lease_lost",
         message: "Admission lost before the stalled provider deadline",
       });
       const ownership = new ChatTurnOwnership();
@@ -461,11 +461,15 @@ describe("chat run admission follows owned settlement", () => {
         admission.abort(
           new ActionAdmissionError({
             message: "Admission lease lost",
-            reason: "unavailable",
+            reason: "lease_lost",
           }),
         );
         if (exit === "throw") {
-          throw new HandlerError({ status: 503, message: "Provider aborted" });
+          throw new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: "Provider aborted",
+          });
         }
       };
       const output = processServerChatStream({
@@ -485,7 +489,7 @@ describe("chat run admission follows owned settlement", () => {
             error: "provider_unavailable",
             refusal: actionAdmissionRefusal(
               new ActionAdmissionError({
-                reason: "unavailable",
+                reason: "lease_lost",
                 message: "Admission lease lost",
               }),
             ),
@@ -591,7 +595,7 @@ describe("chat run admission follows owned settlement", () => {
     admission.abort(
       new ActionAdmissionError({
         message: "Admission lease lost",
-        reason: "unavailable",
+        reason: "lease_lost",
       }),
     );
     expect(run.control.admissionSignal?.aborted).toBe(true);
@@ -800,7 +804,7 @@ describe("chat run admission follows owned settlement", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       expect(run.startContinuationProduction()).toBe(false);
@@ -923,7 +927,7 @@ describe("chat run admission follows owned settlement", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       expect(run.startContinuationProduction()).toBe(false);

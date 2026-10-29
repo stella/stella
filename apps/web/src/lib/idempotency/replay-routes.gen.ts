@@ -67,6 +67,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "PUT", path: "/v1/clause-categories" },
   { method: "PUT", path: "/v1/clauses" },
   { method: "PUT", path: "/v1/clauses/:clauseId/variants" },
+  { method: "PUT", path: "/v1/client-invoices/:clientId" },
   { method: "PUT", path: "/v1/docx-suggestions/:workspaceId/entity/:entityId" },
   { method: "PUT", path: "/v1/entity-views" },
   { method: "PUT", path: "/v1/expenses/:workspaceId" },

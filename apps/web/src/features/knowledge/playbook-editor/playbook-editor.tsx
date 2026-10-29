@@ -101,7 +101,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   duplicatePosition,
@@ -124,8 +124,9 @@ import {
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
@@ -369,7 +370,7 @@ const PlaybookEditorLoader = ({
         ? false
         : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
-  const detailView = useQueryView(detailQuery, {
+  const detailView = queryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
   const seed = resolveDetailSeed({
@@ -745,7 +746,7 @@ const PlaybookEditorForm = ({
     initial.draft.documentTypeKey,
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
-  const documentTypesDataView = useQueryView(documentTypesDataQuery);
+  const documentTypesDataView = queryView(documentTypesDataQuery);
   useQueryViewError(documentTypesDataView, "PlaybookEditorForm:query");
   const documentTypesData =
     documentTypesDataView.type === "items"
@@ -1103,7 +1104,7 @@ const PlaybookEditorForm = ({
         );
       }
       if (refused === "approval" || !autosaves) {
-        notifyUserError(undefined, failure.title, {
+        notifyUserProblem(failure.title, {
           description: failure.description,
         });
       }
@@ -1115,7 +1116,7 @@ const PlaybookEditorForm = ({
         "playbook-editor.refetch-after-conflict",
       );
     }
-    notifyUserError(undefined, failure.title, {
+    notifyUserProblem(failure.title, {
       description: failure.description,
       ...(onReload
         ? {
@@ -1240,15 +1241,12 @@ const PlaybookEditorForm = ({
   const handleSave = async (): Promise<boolean> => {
     if (nameMissing) {
       setAttemptedSave(true);
-      notifyUserError(undefined, t("knowledge.playbooks.nameRequired"));
+      notifyUserProblem(t("knowledge.playbooks.nameRequired"));
       return false;
     }
     if (invalidIds.length > 0) {
       revealInvalidPositions();
-      notifyUserError(
-        undefined,
-        t("knowledge.playbooks.fixErrorsBeforeSaving"),
-      );
+      notifyUserProblem(t("knowledge.playbooks.fixErrorsBeforeSaving"));
       return false;
     }
 
@@ -1351,7 +1349,7 @@ const PlaybookEditorForm = ({
       organizationId,
       playbookId,
       onReadError: (error) => {
-        notifyUserError(undefined, t("common.unexpectedError"), {
+        notifyUserError(error, t("common.unexpectedError"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       },

@@ -63,6 +63,10 @@ import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifa
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  lockChatOwnerStoredContentTransitionOnTx,
+  tryLockAccountChatOwnerStoredContentTransitionsOnTx,
+} from "@/api/lib/chat/thread-stored-content-egress";
+import {
   lockOpenSigningPage,
   lockRequestReceiptPrincipalRows,
 } from "@/api/lib/db/aggregate-lock";
@@ -1095,16 +1099,25 @@ export const selectMemberCleanupWorkspaceIds = async ({
 };
 
 /**
- * Account erasure holds the user's organization memberships first, as it
- * always has, then every matter it changes without waiting: organization
- * removal and grants take a matter before a membership, so a busy matter is a
- * typed retryable refusal rather than an inverted wait. Re-entrant: a caller
- * that already holds the prefix takes nothing new.
+ * Account erasure tries the account's chat egress fences, then holds the
+ * user's organization memberships, then every matter it changes without
+ * waiting: organization removal and grants take a matter before a membership,
+ * so a busy fence or matter is a typed retryable refusal rather than an
+ * inverted wait. Re-entrant: a caller that already holds the prefix takes
+ * nothing new.
  */
 export const tryLockAccountMemberCleanup = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ) => {
+  // Chat egress fences precede every membership row lock; a compaction in
+  // flight for any of the account's organizations is a busy refusal.
+  if (
+    (await tryLockAccountChatOwnerStoredContentTransitionsOnTx(tx, userId)) ===
+    "busy"
+  ) {
+    abortTransaction(removalBusy());
+  }
   await tx
     .select({ id: member.id })
     .from(member)
@@ -1501,6 +1514,10 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ) => {
+  await lockChatOwnerStoredContentTransitionOnTx(tx, {
+    organizationId,
+    userId,
+  });
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,

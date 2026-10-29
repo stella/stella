@@ -36,13 +36,13 @@ import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
   requiredTrimmedStringSchema,
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 import {
   rateEntriesOptions,
   rateTablesOptions,
@@ -456,7 +456,7 @@ const RateEntriesView = ({
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
   const entriesQuery = useQuery(rateEntriesOptions(workspaceId, rateTableId));
-  const entriesView = useQueryView(entriesQuery);
+  const entriesView = queryView(entriesQuery);
   const entries = entriesView.type === "items" ? entriesView.items : undefined;
   const { data: org } = useSuspenseQuery(
     organizationOptions(activeOrganizationId),

@@ -9,6 +9,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { getTranslator } from "@/i18n/translator";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -69,6 +70,7 @@ export const useCreateEntities = () => {
         fingerprintKey: "useCreateEntities:failure",
         scope: { type: "handler", handlerId: "useCreateEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -105,6 +107,7 @@ export const useDeleteEntities = () => {
         fingerprintKey: "useDeleteEntities:failure",
         scope: { type: "handler", handlerId: "useDeleteEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -134,6 +137,7 @@ export const useMoveEntity = () => {
         fingerprintKey: "useMoveEntity:failure",
         scope: { type: "handler", handlerId: "useMoveEntity:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -183,6 +187,7 @@ export const useCreateFolderFromSelection = () => {
           handlerId: "entities.folder-from-selection.create",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -212,7 +217,7 @@ export const useRenameEntity = (
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const reportFailure = (
+  const notifyRenameFailure = (
     error: unknown,
     fingerprintKey: ExceptionFingerprintKey,
   ) => {
@@ -374,7 +379,7 @@ export const useRenameEntity = (
           scope: { type: "handler", handlerId: "useRenameEntity:failure-2" },
         });
       }
-      reportFailure(error, "useRenameEntity:rename");
+      notifyRenameFailure(error, "useRenameEntity:rename");
     },
     onSettled: (_data, error, { completion }, context) => {
       context?.release();
@@ -386,7 +391,7 @@ export const useRenameEntity = (
         completion?.onSuccess?.();
       });
       if (completed.isErr()) {
-        reportFailure(completed.error, "useRenameEntity:completion");
+        notifyRenameFailure(completed.error, "useRenameEntity:completion");
       }
     },
   });

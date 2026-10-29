@@ -19,8 +19,9 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -50,7 +51,7 @@ export const NewEntityViewTask = ({
   const dataQuery = useQuery(
     workspacesNavigationOptions({ organizationId, userId }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "NewEntityViewTask:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const pendingRef = useRef(false);

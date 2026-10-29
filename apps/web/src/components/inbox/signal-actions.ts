@@ -4,6 +4,10 @@ import type { SuggestionKind } from "@stll/api-contract/signals";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  INBOX_SIGNAL_VIEW,
+  inboxSignalTabId,
+} from "@/features/inbox/signal-inspector.logic";
 import { api } from "@/lib/api";
 import {
   createChatDraftState,
@@ -156,5 +160,14 @@ export const openSignalChat = (signal: InboxSignal, prompt: string): void => {
           contextMatterIds: [signal.workspaceId],
         }
       : {}),
+  });
+};
+
+export const openSignalEvidence = ({ id, title }: InboxSignal) => {
+  useInspectorTabsStore.getState().openView({
+    type: INBOX_SIGNAL_VIEW,
+    id: inboxSignalTabId(id),
+    label: title,
+    payload: { signalId: id },
   });
 };

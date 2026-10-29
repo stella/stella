@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, TransactionRollbackError } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -303,27 +303,35 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
     }
+    // Advisory fences report their physical identity and acquisition.
+    if (query.includes("AS key1")) {
+      return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
+    }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
-  // Real savepoints have distinct handles; reusing the parent closes its lock history.
-  const createTransaction = () =>
-    new Proxy(database, {
-      get: (target, property, receiver) => {
-        if (property === "transaction") {
-          return async (
-            run: (savepoint: typeof database) => Promise<unknown>,
-          ) => await run(createTransaction());
-        }
-        if (property === "delete") {
-          return (table: PgTable) =>
-            table === omittedDelete
-              ? { where: async () => [] }
-              : target.delete(table);
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-  await removeOrganizationMemberInTransaction(asTestRaw(createTransaction()), {
+  const transactionHandle = Object.assign(database, {
+    rollback() {
+      throw new TransactionRollbackError();
+    },
+  });
+  const transaction = new Proxy(transactionHandle, {
+    get: (target, property, receiver) => {
+      if (property === "transaction") {
+        // Each savepoint is its own handle, as the driver's are, so the
+        // aggregate lock history of the enclosing transaction stays open.
+        return async (run: (savepoint: typeof database) => Promise<unknown>) =>
+          await run(new Proxy(transaction, {}));
+      }
+      if (property === "delete") {
+        return (table: PgTable) =>
+          table === omittedDelete
+            ? { where: async () => [] }
+            : target.delete(table);
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  await removeOrganizationMemberInTransaction(asTestRaw(transaction), {
     organizationId,
     userId,
     actorUserId: mintAuthProviderId<"user">(),

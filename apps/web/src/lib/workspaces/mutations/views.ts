@@ -2,10 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { ConvertibleViewLayoutType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
@@ -66,6 +68,7 @@ export const useCreateView = (workspaceId: string) => {
         fingerprintKey: "useCreateView:failure",
         scope: { type: "handler", handlerId: "useCreateView:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -136,6 +139,7 @@ export const useUpdateView = (workspaceId: string) => {
         fingerprintKey: "useUpdateView:failure",
         scope: { type: "handler", handlerId: "useUpdateView:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
@@ -183,6 +187,7 @@ export const useConvertView = (workspaceId: string) => {
         fingerprintKey: "useConvertView:failure",
         scope: { type: "handler", handlerId: "useConvertView:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -216,6 +221,7 @@ export const useReorderViews = (workspaceId: string) => {
         fingerprintKey: "useReorderViews:failure",
         scope: { type: "handler", handlerId: "useReorderViews:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: cache.settle,
   });
@@ -252,6 +258,7 @@ export const useDeleteView = (workspaceId: string) => {
         fingerprintKey: "useDeleteView:failure",
         scope: { type: "handler", handlerId: "useDeleteView:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

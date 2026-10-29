@@ -13,9 +13,10 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
@@ -294,7 +295,7 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
     select: (views) =>
       correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
-  const viewIdView = useQueryView(viewIdQuery);
+  const viewIdView = queryView(viewIdQuery);
   useQueryViewError(viewIdView, "BackToCorrespondenceLink:query");
   const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (

@@ -9,6 +9,1046 @@ import { apiRoutes } from "@/api/api-routes";
 
 import { mountedCreateRouteCensus } from "../../scripts/idempotent-create-routes";
 
+const NON_REPLAY_REASONS = {
+  "current-state":
+    "The operation evaluates current resource state rather than replaying a retained response.",
+  read: "The operation computes a current read result and retains no mutation response.",
+  stream:
+    "The operation returns a live stream or participates in a streamed execution.",
+  "external-effect":
+    "The operation owns external effects or durable worker handoff outside a response receipt.",
+  credential:
+    "The operation handles credentials or expiring authorization state that is not retained in receipts.",
+  lifecycle:
+    "The operation owns a multi-step lifecycle whose result is not represented by its create response.",
+} as const;
+
+type RootMutationDisposition =
+  | { type: "replay" }
+  | { type: "non-replay"; reason: keyof typeof NON_REPLAY_REASONS };
+
+const ROOT_MUTATION_DISPOSITIONS = {
+  "DELETE /v1/case/research/columns/:columnId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/tool-grants/:grantId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/clause-categories/:categoryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/clauses/:clauseId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/clauses/:clauseId/variants/:variantId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/contacts/:contactId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/document-types/:documentTypeId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/entity-views/:viewId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/flows/:flowId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/mcp/connections/:connectionId": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "DELETE /v1/mcp/connectors/:slug": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "DELETE /v1/memories/:memoryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/ai-config": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/business-registry-credentials": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":
+    {
+      type: "non-replay",
+      reason: "current-state",
+    },
+  "DELETE /v1/organization-settings/deepl": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/feature-enrolments/:featureId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/playbooks/:playbookId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/reader/annotations/:annotationId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/reader/answers/:answerId": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "DELETE /v1/saved-searches/:savedSearchId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/saved-time-narratives/:id": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/search-history": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/search-history/:entryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/sharepoint/connection": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "DELETE /v1/skills/:skillId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/skills/:skillId/comments/:commentId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/skills/:skillId/proposals/:proposalId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/skills/:skillId/resources": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/style-sets/:styleSetId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "DELETE /v1/template-categories/:categoryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/template-recipes/:recipeId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/templates/:templateId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "DELETE /v1/templates/:templateId/clauses/:linkId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "DELETE /v1/templates/lookup-formats/:formatId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "DELETE /v1/time-timers/:id": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/usage/assignments": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/case/research/columns/:columnId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId/model": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId/title": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/document-types/:documentTypeId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/entity-views/:viewId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/mcp/connections/:connectionId": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "PATCH /v1/mcp/native-tools/:slug": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "PATCH /v1/memories/:memoryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/notifications/:notificationId/read": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/number-series/:numberSeriesId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/reader/annotations/:annotationId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/reader/answers/:answerId": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "PATCH /v1/saved-searches/:savedSearchId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/saved-time-narratives/:id": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/seller-profiles/:sellerProfileId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/skills/:skillId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/skills/:skillId/comments/:commentId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/skills/:skillId/proposals/:proposalId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/skills/:skillId/resources": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/templates/:templateId/clauses/:linkId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PATCH /v1/time-timers/:id": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/vat-rates/:vatRateId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /agent/identity/confirm": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/ai-autocomplete/stream": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/api-keys": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/personal": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/personal/organization/revoke": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/personal/policy": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/personal/revoke": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/personal/rotate": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/revoke": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/api-keys/rotate": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/case/decisions/search/expand": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/case/decisions/search/refine": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/case/research/answers/lookup": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/case/research/answers/run": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/case/research/columns": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/case/research/columns/suggest-prompt": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/catalogue/install-skill": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/improve-prompt": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/table-chart": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/template-thread": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/template-thread/rotate": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/connectors/:toolCallId": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/chat/threads/:threadId/export": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/fork": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/messages/:messageId/revisions": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/messages/:messageId/revisions/:revision/revert":
+    {
+      type: "non-replay",
+      reason: "stream",
+    },
+  "POST /v1/chat/threads/:threadId/messages/:messageId/span-edit": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/chat/threads/:threadId/recap": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/secrets/:toolCallId": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/chat/threads/:threadId/suggested-prompts": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/title/suggest": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/cancel": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/chat/tool-grants": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/clause-categories/:categoryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/clauses/:clauseId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/clauses/:clauseId/variants/:variantId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/clauses/:clauseId/versions/:versionId/restore": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/clauses/:clauseId/versions/:versionId/summarize": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/clauses/ai-rewrite": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/clauses/import": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/contacts/:contactId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/contacts/:contactId/sanctions/monitoring": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/contacts/:contactId/sanctions/reviews": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/contacts/business-registries/checks": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/contacts/extract-from-procuracao": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/contacts/import/inspect": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/contacts/import/preview": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/contacts/import/validate": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/contacts/procuracao-upload": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/desktop-registry/grant": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/dev/clean": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/dev/clear-cache": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/dev/public-law-connection": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/dev/rebuild-search": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/dev/seed": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/dev/seed-firm-knowledge": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/document-reviews/passages": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/document-types": {
+    type: "replay",
+  },
+  "POST /v1/document-types/reorder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/entity-views/query-window": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/entity-views/reorder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/feedback": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/flows": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/legislation/corpus/search": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/mcp/connections": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/mcp/connectors": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/mcp/connectors/:slug/approve-authorization": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/mcp/connectors/:slug/connect": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/mcp/connectors/probe": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/memories": {
+    type: "replay",
+  },
+  "POST /v1/memories/firm": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/notifications/announcements": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/notifications/read-all": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/number-series": {
+    type: "replay",
+  },
+  "POST /v1/number-series/:numberSeriesId/archive": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/number-series/:numberSeriesId/default": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/ai-config": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/ai-config/defaults-preview": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/organization-settings/business-registry-credentials": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/correspondence/allowed-senders": {
+    type: "replay",
+  },
+  "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":
+    {
+      type: "non-replay",
+      reason: "current-state",
+    },
+  "POST /v1/organization-settings/deepl": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/practice-jurisdictions": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/preview": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/organization-settings/sanctions-monitoring": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/playbooks": {
+    type: "replay",
+  },
+  "POST /v1/playbooks/:playbookId/approve": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/playbooks/:playbookId/versions/:version/restore": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/playbooks/from-run": {
+    type: "replay",
+  },
+  "POST /v1/playbooks/from-starter": {
+    type: "replay",
+  },
+  "POST /v1/reader/annotations": {
+    type: "replay",
+  },
+  "POST /v1/reader/answers": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/reader/answers/:answerId/messages": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/reader/answers/:answerId/regenerate": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  "POST /v1/saved-searches": {
+    type: "replay",
+  },
+  "POST /v1/saved-time-narratives": {
+    type: "replay",
+  },
+  "POST /v1/search": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/search-history": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/search-history/import": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/search/facets": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/search/preview": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/search/refine": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/search/summary": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/search/summary/chat": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/seller-profiles": {
+    type: "replay",
+  },
+  "POST /v1/seller-profiles/:sellerProfileId/archive": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/seller-profiles/:sellerProfileId/default": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/sharepoint/connect": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "POST /v1/signals/:signalId/acceptances": {
+    type: "replay",
+  },
+  "POST /v1/signals/:signalId/assignments": {
+    type: "replay",
+  },
+  "POST /v1/signals/:signalId/dismissals": {
+    type: "replay",
+  },
+  "POST /v1/signals/:signalId/snoozes": {
+    type: "replay",
+  },
+  "POST /v1/signals/requests": {
+    type: "replay",
+  },
+  "POST /v1/skills": {
+    type: "replay",
+  },
+  "POST /v1/skills/:skillId/comments": {
+    type: "replay",
+  },
+  "POST /v1/skills/:skillId/proposals": {
+    type: "replay",
+  },
+  "POST /v1/skills/:skillId/proposals/:proposalId/review": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/skills/:skillId/proposals/from-comments": {
+    type: "replay",
+  },
+  "POST /v1/skills/:skillId/resources": {
+    type: "replay",
+  },
+  "POST /v1/skills/:skillId/resources/rename": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/skills/:skillId/resources/rewrite": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/skills/:skillId/resources/upload": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/skills/discover-url": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/skills/from-blueprint": {
+    type: "replay",
+  },
+  "POST /v1/skills/generate-draft": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/skills/import-url": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/skills/import-urls": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/skills/upload": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/style-sets/:styleSetId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/style-sets/:styleSetId/editor": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/style-sets/:styleSetId/source": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/style-sets/editor/preview": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/template-categories/:categoryId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/template-packs/:packId/install": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/template-packs/visibility": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId/clauses/:linkId/sync": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId/clauses/sync": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId/decide-conditions": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/templates/:templateId/document": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId/fill": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId/fill-preview": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/templates/:templateId/prefill": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/:templateId/versions/:versionId/summarize": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/discover": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/templates/fill": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/lookup-formats": {
+    type: "replay",
+  },
+  "POST /v1/templates/lookup-formats/default": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/lookup-formats/my-default": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/lookup-preview": {
+    type: "non-replay",
+    reason: "read",
+  },
+  "POST /v1/templates/prepare": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/templates/suggest-fields": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "POST /v1/time-entries/approval-queue/return": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-entries/approve": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-entries/internal": {
+    type: "replay",
+  },
+  "POST /v1/time-entries/me/submissions": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-timers/:id/confirm": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-timers/:id/pause": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-timers/:id/resume": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-timers/admin/:id/stop": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/time-timers/start": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/usage/assignments": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/usage/hosted/management": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/usage/hosted/setup": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "POST /v1/vat-rates": {
+    type: "replay",
+  },
+  "POST /v1/vat-rates/:vatRateId/archive": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/vat-rates/apply-preset": {
+    type: "replay",
+  },
+  "PUT /v1/case/research/columns/order": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/clause-categories": {
+    type: "replay",
+  },
+  "PUT /v1/clauses": {
+    type: "replay",
+  },
+  "PUT /v1/clauses/:clauseId/variants": {
+    type: "replay",
+  },
+  "PUT /v1/clauses/import": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
+  "PUT /v1/client-invoices/:clientId": {
+    type: "replay",
+  },
+  "PUT /v1/contacts": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/contacts/import": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/entity-views": {
+    type: "replay",
+  },
+  "PUT /v1/flows/:flowId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/organization-settings/anonymization-blacklist": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/organization-settings/feature-enrolments/:featureId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/playbooks/:playbookId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/sharepoint/enablement": {
+    type: "non-replay",
+    reason: "credential",
+  },
+  "PUT /v1/style-sets": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/style-sets/editor": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/template-categories": {
+    type: "replay",
+  },
+  "PUT /v1/template-recipes": {
+    type: "replay",
+  },
+  "PUT /v1/templates": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/templates/:templateId/clauses": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/templates/blank": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/templates/style-set": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/templates/styles": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+  "PUT /v1/time-entries/me/daily-target": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/time-entries/members/:userId/daily-target": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/workspaces": {
+    type: "non-replay",
+    reason: "lifecycle",
+  },
+} as const satisfies Record<string, RootMutationDisposition>;
+
+const CREATE_MUTATION_DISPOSITIONS = {
+  "src/handlers/invoices/payments/create.ts": {
+    type: "non-replay",
+    reason:
+      "Money movement keeps its current payment transaction and is never replayed.",
+  },
+} as const satisfies Record<string, { type: "non-replay"; reason: string }>;
+
+const ROOT_MUTATION_DISPOSITIONS_ENTRIES = new Map<
+  string,
+  RootMutationDisposition
+>(Object.entries(ROOT_MUTATION_DISPOSITIONS));
+
 const apiRoot = path.resolve(import.meta.dir, "../..");
 
 // These lifecycle boundaries cannot retain a scoped JSON replay receipt.
@@ -270,7 +1310,37 @@ test("every create route and capability declares JSON request replay or a reason
         !hasReplayConfig(readFileSync(path.join(apiRoot, file), "utf-8")),
     )
     .toSorted();
-  expect(withoutReplay).toEqual(Object.keys(IDEMPOTENCY_EXCEPTIONS).toSorted());
+  const rootNonReplayFiles = new Set(
+    mounted
+      .filter(
+        ({ method, path: routePath }) =>
+          ROOT_MUTATION_DISPOSITIONS_ENTRIES.get(`${method} ${routePath}`)
+            ?.type === "non-replay",
+      )
+      .map(({ file }) => file),
+  );
+  expect(
+    withoutReplay.filter(
+      (file) =>
+        !rootNonReplayFiles.has(file) &&
+        !Object.hasOwn(CREATE_MUTATION_DISPOSITIONS, file),
+    ),
+  ).toEqual(
+    Object.keys(IDEMPOTENCY_EXCEPTIONS)
+      .filter(
+        (file) =>
+          !rootNonReplayFiles.has(file) &&
+          !Object.hasOwn(CREATE_MUTATION_DISPOSITIONS, file),
+      )
+      .toSorted(),
+  );
+  for (const [file, disposition] of Object.entries(
+    CREATE_MUTATION_DISPOSITIONS,
+  )) {
+    expect(creates.has(file)).toBe(true);
+    expect(withoutReplay).toContain(file);
+    expect(disposition.reason.length).toBeGreaterThan(20);
+  }
   for (const reason of Object.values(IDEMPOTENCY_EXCEPTIONS)) {
     expect(reason.length).toBeGreaterThan(20);
   }
@@ -443,4 +1513,27 @@ test("the exception shrink guard detects new and substituted handlers", () => {
   expect(() => addedExceptions("export {};", [])).toThrow(
     "Base idempotency exception inventory is missing",
   );
+});
+
+test("every mounted root mutation has an explicit replay disposition", () => {
+  const mutations = apiRoutes.filter(
+    ({ method, definition }) =>
+      definition.access === "member" &&
+      method !== "GET" &&
+      method !== "OPTIONS",
+  );
+  expect(mutations.length).toBeGreaterThan(0);
+  expect(
+    mutations
+      .map(({ method, path: routePath }) => `${method} ${routePath}`)
+      .toSorted(),
+  ).toEqual(Object.keys(ROOT_MUTATION_DISPOSITIONS).toSorted());
+  const dispositions = ROOT_MUTATION_DISPOSITIONS_ENTRIES;
+  for (const { method, path: routePath, definition } of mutations) {
+    const disposition = dispositions.get(`${method} ${routePath}`);
+    expect(disposition).toBeDefined();
+    expect(disposition?.type === "replay").toBe(
+      definition.config["idempotency"] !== undefined,
+    );
+  }
 });

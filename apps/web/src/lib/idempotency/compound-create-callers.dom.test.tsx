@@ -26,7 +26,7 @@ const { viewTemplatesOptions } =
 const { organizationSettingsOptions } =
   await import("@/queries/organization-settings");
 const { useComposerSubmit } =
-  await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer");
+  await import("@/components/billing/invoice-composer");
 const { TemplatePickerDialog } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog");
 const { ViewSwitcher } =
