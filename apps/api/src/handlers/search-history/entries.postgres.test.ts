@@ -37,6 +37,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -547,6 +548,73 @@ if (!databaseUrl || !enabled) {
             .from(searchHistoryEntries)
             .where(
               eq(searchHistoryEntries.organizationId, fixture.organizationId),
+            ),
+        ).toHaveLength(1);
+      });
+    });
+
+    test("organization reset counts history barriers and preserves another organization's barriers", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const entry = await recordQuery(fixture, "Saved history");
+        await deleteEntry.handler(
+          createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>({
+            ...identity(fixture),
+            params: { entryId: entry.id },
+          }),
+        );
+        for (const organizationId of [
+          fixture.organizationId,
+          fixture.otherOrganizationId,
+        ]) {
+          const context = identity({ ...fixture, organizationId });
+          await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+              ...context,
+              query: { ...context.query, country: "POL" },
+            }),
+          );
+        }
+        const removed = await fixture.db.transaction(
+          async (tx) =>
+            await sweepReviewOrganization(
+              tx,
+              fixture.organizationId,
+              fixture.userId,
+            ),
+        );
+        expect(removed.get("search_history_country_clears")).toBe(1);
+        expect(removed.get("search_history_tombstones")).toBe(1);
+        expect(
+          await fixture.db
+            .select()
+            .from(searchHistoryCountryClears)
+            .where(
+              eq(
+                searchHistoryCountryClears.organizationId,
+                fixture.organizationId,
+              ),
+            ),
+        ).toHaveLength(0);
+        expect(
+          await fixture.db
+            .select()
+            .from(searchHistoryTombstones)
+            .where(
+              eq(
+                searchHistoryTombstones.organizationId,
+                fixture.organizationId,
+              ),
+            ),
+        ).toHaveLength(0);
+        expect(
+          await fixture.db
+            .select()
+            .from(searchHistoryCountryClears)
+            .where(
+              eq(
+                searchHistoryCountryClears.organizationId,
+                fixture.otherOrganizationId,
+              ),
             ),
         ).toHaveLength(1);
       });

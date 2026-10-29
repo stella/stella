@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -85,7 +85,9 @@ export const REVIEW_RESET_KEPT_TABLES = {
  * without a cascade comes before it (`reset-scope.test.ts` checks the order
  * against the schema). Workspace-only tables go with their matter.
  */
-export const REVIEW_RESET_CLEARED_TABLES = [
+type ReviewResetTableStage = string | readonly [string, ...string[]];
+
+const REVIEW_RESET_CLEAR_STAGES = [
   "agent_skill_comments",
   "agent_skill_proposals",
   "agent_skill_resources",
@@ -161,8 +163,8 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "search_document_preview_passages",
   "search_documents",
   "search_history_entries",
-  "search_history_country_clears",
-  "search_history_tombstones",
+  // Independent deletion barriers share the owner policy and one statement.
+  ["search_history_country_clears", "search_history_tombstones"],
   "search_history_owners",
   "search_projection_repair_queue",
   "seller_profiles",
@@ -192,7 +194,11 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   // Referenced without a cascade by tables above.
   "correspondence_allowed_senders",
   "document_types",
-] as const;
+] as const satisfies readonly ReviewResetTableStage[];
+
+export const REVIEW_RESET_CLEARED_TABLES = Object.freeze(
+  REVIEW_RESET_CLEAR_STAGES.flat(),
+);
 
 /**
  * Matters leave through the authorized matter deletion before the sweep runs
@@ -349,16 +355,27 @@ export const sweepReviewOrganization = async (
           AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0)`)
     ).map(({ name }) => name),
   );
-  const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
+  const swept = await inOrder(REVIEW_RESET_CLEAR_STAGES, async (stage) => {
+    const names = typeof stage === "string" ? [stage] : stage;
+    const applicationCount = names.filter((name) =>
+      applicationTables.has(name),
+    ).length;
+    if (applicationCount !== 0 && applicationCount !== names.length) {
+      return panic("Reset table stages must share one owner policy boundary");
+    }
     const clear = async (deleteTx: Transaction) => {
-      const rows = await removeOrganizationRows(deleteTx, organizationId, [
-        name,
-      ]);
-      removed.set(name, rows.get(name) ?? 0);
+      const rows = await removeOrganizationRows(
+        deleteTx,
+        organizationId,
+        names,
+      );
+      for (const [name, count] of rows) {
+        removed.set(name, count);
+      }
     };
     // Explicit owner cleanup policies cover user and feature-hidden rows.
     // The remaining application policies use the entire organization matter set.
-    if (applicationTables.has(name)) {
+    if (applicationCount > 0) {
       await runScopedWorkInTransaction({
         tx,
         organizationId,

@@ -3,7 +3,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import * as captureModule from "@/api/lib/analytics/capture";
@@ -89,7 +89,6 @@ const createSettingsDb = (
 
 describe("AI config handlers with an undecryptable stored config", () => {
   test("every reader exposes only the shared confidentiality allowlist", async () => {
-    const key = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
     const fixtures = {
       "incomplete-envelope": {
         aiConfigEncrypted: Buffer.from("stored-incomplete"),
@@ -116,13 +115,15 @@ describe("AI config handlers with an undecryptable stored config", () => {
       Object.hasOwn(fixtures, value);
     const organizationId = toSafeId<"organization">("org_test");
 
-    try {
-      for (const reason of Object.keys(fixtures)) {
-        if (!isReason(reason)) {
-          continue;
-        }
-        envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
-          reason === "missing-key" ? undefined : key;
+    for (const reason of Object.keys(fixtures)) {
+      if (!isReason(reason)) {
+        continue;
+      }
+      const restoreKey =
+        reason === "missing-key"
+          ? withoutContentEncryptionKeyForTesting()
+          : undefined;
+      try {
         for (const reader of ["read", "update"] as const) {
           const analytics = installRecordingAnalytics();
           const logs = installRecordingLogger();
@@ -171,9 +172,9 @@ describe("AI config handlers with an undecryptable stored config", () => {
             analytics.restore();
           }
         }
+      } finally {
+        restoreKey?.();
       }
-    } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = key;
     }
   });
 
