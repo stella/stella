@@ -34,12 +34,15 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
-import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
+import type {
+  caseLawDecisions,
+  InvoiceStatus,
+  SearchProjectionKind,
+} from "@/api/db/schema";
 import {
   billingArrangements,
   billingCodes,
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
   caseLawReplayBatches,
   corpusIndexProjectionStates,
   entities,
@@ -3208,24 +3211,27 @@ export const lockUnbillableRateCandidates = async (
     .where(condition)
     .for("update");
 
-const CASE_LAW_PROJECTION_CANONICAL_COLUMNS = {
-  documentId: caseLawDecisions.id,
-  sourceId: caseLawDecisions.sourceId,
-  jurisdiction: caseLawDecisions.country,
-  language: caseLawDecisions.language,
-  documentType: caseLawDecisions.decisionType,
-  contentHash: caseLawDecisions.contentHash,
-  redactedAt: caseLawDecisions.redactedAt,
-  caseNumber: caseLawDecisions.caseNumber,
-  court: caseLawDecisions.court,
-  courtId: caseLawDecisions.courtId,
-  decisionDate: caseLawDecisions.decisionDate,
-  ecli: caseLawDecisions.ecli,
-  metadata: caseLawDecisions.metadata,
-  projectionEpoch: caseLawDecisions.projectionEpoch,
-};
+const caseLawProjectionCanonicalColumns = (
+  decisions: typeof caseLawDecisions,
+) => ({
+  documentId: decisions.id,
+  sourceId: decisions.sourceId,
+  jurisdiction: decisions.country,
+  language: decisions.language,
+  documentType: decisions.decisionType,
+  contentHash: decisions.contentHash,
+  redactedAt: decisions.redactedAt,
+  caseNumber: decisions.caseNumber,
+  court: decisions.court,
+  courtId: decisions.courtId,
+  decisionDate: decisions.decisionDate,
+  ecli: decisions.ecli,
+  metadata: decisions.metadata,
+  projectionEpoch: decisions.projectionEpoch,
+});
 
 type CaseLawProjectionRepairRowsOptions = {
+  decisions: typeof caseLawDecisions;
   sourceId: SafeId<"caseLawSource">;
   decisionIds: readonly SafeId<"caseLawDecision">[];
 };
@@ -3233,18 +3239,18 @@ type CaseLawProjectionRepairRowsOptions = {
 /** Source policy is already locked; acquire canonical rows in id order. */
 export const lockCaseLawProjectionRepairRows = async (
   tx: Transaction,
-  { sourceId, decisionIds }: CaseLawProjectionRepairRowsOptions,
+  { decisions, sourceId, decisionIds }: CaseLawProjectionRepairRowsOptions,
 ) =>
   await tx
-    .select(CASE_LAW_PROJECTION_CANONICAL_COLUMNS)
-    .from(caseLawDecisions)
+    .select(caseLawProjectionCanonicalColumns(decisions))
+    .from(decisions)
     .where(
       and(
-        eq(caseLawDecisions.sourceId, sourceId),
-        inArray(caseLawDecisions.id, [...decisionIds]),
+        eq(decisions.sourceId, sourceId),
+        inArray(decisions.id, [...decisionIds]),
       ),
     )
-    .orderBy(asc(caseLawDecisions.id))
+    .orderBy(asc(decisions.id))
     .limit(decisionIds.length)
     .for("update");
 

@@ -415,6 +415,7 @@ const lockCaseLawProjectionInput = async (
   // inverts that order or exclusively serializes every decision in a source.
   const source = await lockCaseLawProjectionSource(tx, subject);
   const rows = await lockCaseLawProjectionRepairRows(tx, {
+    decisions: caseLawDecisions,
     sourceId: source.sourceId,
     decisionIds: [subject.entityId],
   });
@@ -1286,6 +1287,7 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     return panic("Projection repair source disappeared");
   }
   const rows = await lockCaseLawProjectionRepairRows(tx, {
+    decisions: caseLawDecisions,
     sourceId,
     decisionIds,
   });
