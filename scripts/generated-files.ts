@@ -434,6 +434,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
+    "packages/parameter-store/src/read-parameter.ts",
     "packages/permissions/src/index.ts",
     "packages/redis-config/src/connection.ts",
     "packages/redis-config/src/store-policy.ts",
