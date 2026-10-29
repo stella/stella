@@ -59,6 +59,7 @@ const eventSchema = v.object({
     }),
   ),
   attendees: v.optional(v.array(v.unknown()), []),
+  isCancelled: v.optional(v.boolean(), false),
   isOnlineMeeting: v.optional(v.boolean(), false),
   webLink: v.optional(v.pipe(v.string(), v.maxLength(4096))),
 });
@@ -82,6 +83,7 @@ const toCalendarEvent = (event: v.InferOutput<typeof eventSchema>) => ({
       }
     : null,
   attendeeCount: event.attendees.length,
+  isCancelled: event.isCancelled,
   isOnlineMeeting: event.isOnlineMeeting,
   webLink: event.webLink ?? null,
 });
@@ -305,7 +307,7 @@ export const listCalendarEvents = async (
     url.searchParams.set("endDateTime", range.end);
     url.searchParams.set(
       "$select",
-      "id,subject,showAs,start,end,location,organizer,attendees,isOnlineMeeting,webLink",
+      "id,subject,showAs,start,end,location,organizer,attendees,isCancelled,isOnlineMeeting,webLink",
     );
     url.searchParams.set("$orderby", "start/dateTime");
     const events: ReturnType<typeof toCalendarEvent>[] = [];
@@ -379,11 +381,13 @@ export const calendarFreeBusy = async (
       return Result.ok({
         type: "own_calendar" as const,
         truncated: own.truncated,
-        events: own.events.map(({ start, end, status }) => ({
-          start,
-          end,
-          status,
-        })),
+        events: own.events
+          .filter(({ isCancelled }) => !isCancelled)
+          .map(({ start, end, status }) => ({
+            start,
+            end,
+            status,
+          })),
       });
     }
     const requestedSchedules = new Map<string, string>();

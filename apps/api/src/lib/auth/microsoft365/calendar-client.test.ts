@@ -157,6 +157,49 @@ test("Graph retry hints accept only safe unsigned whole seconds", async () => {
   }
 });
 
+test("own-calendar free/busy excludes cancelled busy events and retains active busy events", async () => {
+  const activeStart = {
+    dateTime: "2026-10-01T12:00:00",
+    timeZone: "UTC",
+  };
+  const activeEnd = {
+    dateTime: "2026-10-01T13:00:00",
+    timeZone: "UTC",
+  };
+  const selections: (string | null)[] = [];
+  const result = await calendarFreeBusy(range, {
+    accessToken,
+    permit,
+    fetchBytes: async ({ url }) => {
+      const requestUrl = new URL(url);
+      selections.push(requestUrl.searchParams.get("$select"));
+      return jsonResponse({
+        value: [
+          { ...event, id: "cancelled", isCancelled: true, showAs: "busy" },
+          {
+            ...event,
+            id: "active",
+            isCancelled: false,
+            showAs: "busy",
+            start: activeStart,
+            end: activeEnd,
+          },
+        ],
+      });
+    },
+  });
+  const value = result.unwrap();
+  if (value.type !== "own_calendar") {
+    panic("Expected own-calendar availability response");
+  }
+  expect(value.events).toEqual([
+    { start: activeStart, end: activeEnd, status: "busy" },
+  ]);
+  expect(value.truncated).toBe(false);
+  expect(selections).toHaveLength(1);
+  expect(selections.at(0)?.split(",")).toContain("isCancelled");
+});
+
 test("free/busy sends bounded attendee schedules and strips subject fields", async () => {
   const result = await calendarFreeBusy(
     { ...range, attendees: ["a@example.test"] },
