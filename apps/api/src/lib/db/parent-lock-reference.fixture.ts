@@ -30,7 +30,7 @@ type LockForWriteOptions = {
   workspaceIds?: readonly SafeId<"workspace">[];
 };
 
-/** Parent-lock SQL and locked lifecycle snapshot contract for delegation equivalence tests. */
+/** Frozen parent-lock SQL contract for delegation equivalence tests. */
 export const referenceParentLocks = async (
   tx: Pick<Transaction, "execute">,
   { organizationIds, workspaceIds = [] }: LockForWriteOptions,
@@ -54,7 +54,7 @@ export const referenceParentLocks = async (
     matters.length === 0
       ? []
       : await tx.execute(sql`
-    SELECT id, ${workspaces.status} AS status FROM ${workspaces}
+    SELECT id FROM ${workspaces}
     WHERE ${workspaces.id} IN (${sql.join(
       matters.map((id) => sql`${id}`),
       sql`, `,
@@ -71,18 +71,6 @@ export const referenceParentLocks = async (
       executedRows(workspaceRows).map((row) =>
         brandPersistedWorkspaceId(v.parse(parentRowSchema, row).id),
       ),
-    ),
-    workspaceStatuses: new Map(
-      executedRows(workspaceRows).map((row) => {
-        const snapshot = v.parse(
-          v.object({
-            id: v.string(),
-            status: v.picklist(workspaces.status.enumValues),
-          }),
-          row,
-        );
-        return [brandPersistedWorkspaceId(snapshot.id), snapshot.status];
-      }),
     ),
   };
 };

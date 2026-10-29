@@ -34,7 +34,7 @@ const createOrderTrackingTx = () => {
       return id;
     });
     lockedOrder.push(...ids);
-    return ids.map((id) => ({ id, status: "active" }));
+    return ids.map((id) => ({ id }));
   });
   return { execute, lockedOrder, tx: { execute } };
 };

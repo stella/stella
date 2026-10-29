@@ -1245,10 +1245,6 @@ export const withAggregateParentBatch = async ({
   workspaceIds = [],
   mode,
 }: AggregateParentBatchOptions) => {
-  const workspaceStatuses = new Map<
-    SafeId<"workspace">,
-    (typeof workspaces.$inferSelect)["status"]
-  >();
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   for (const id of [...organizationIds, ...workspaceIds]) {
@@ -1290,7 +1286,7 @@ export const withAggregateParentBatch = async ({
     history.status = "acquiring";
     const rows = executedRows(
       await tx.execute(sql`
-    SELECT id${aggregate === "workspace" ? sql`, ${workspaces.status} AS status` : sql``} FROM ${table}
+    SELECT id FROM ${table}
     WHERE ${table.id} IN (${sql.join(
       ids.map((id) => sql`${id}`),
       sql`, `,
@@ -1298,19 +1294,7 @@ export const withAggregateParentBatch = async ({
     ORDER BY ${orderedId} COLLATE "C" ${sql.raw(`FOR ${mode.toUpperCase()}`)}
   `),
     );
-    const returnedIds = rows.map((row) => {
-      const { id } = v.parse(parentRowSchema, row);
-      if (aggregate === "workspace") {
-        workspaceStatuses.set(
-          brandPersistedWorkspaceId(id),
-          v.parse(
-            v.object({ status: v.picklist(workspaces.status.enumValues) }),
-            row,
-          ).status,
-        );
-      }
-      return id;
-    });
+    const returnedIds = rows.map((row) => v.parse(parentRowSchema, row).id);
     for (const id of returnedIds) {
       retainLock(
         history,
@@ -1325,9 +1309,39 @@ export const withAggregateParentBatch = async ({
   return {
     organizationIds: new Set(organizations.map(brandPersistedOrganizationId)),
     workspaceIds: new Set(matters.map(brandPersistedWorkspaceId)),
-    workspaceStatuses,
   };
 };
+
+/** Read the matter lifecycle in the same row lock that fences entity creation. */
+export const lockWorkspaceCreationStatus = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const id = brandPersistedWorkspaceId(workspaceId.toLowerCase());
+  assertBatchIdAlphabet(id);
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  const lock = physicalRowLock({
+    aggregate: "workspace",
+    table: getTableName(workspaces),
+    values: [id],
+    mode: "update",
+  });
+  assertLockOrder(history, lock, "block");
+  history.status = "acquiring";
+  const rows = await tx
+    .select({ status: workspaces.status })
+    .from(workspaces)
+    .where(eq(workspaces.id, id))
+    .limit(1)
+    .for("update");
+  if (rows.length > 0) {
+    retainLock(history, lock);
+  }
+  completeAcquisition(history);
+  return rows.at(0)?.status;
+};
+
 type AggregateEntityBatchOptions = {
   tx: Transaction;
   ids: readonly AggregateIdentities["entity"][];

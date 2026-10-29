@@ -1,8 +1,10 @@
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
+import {
+  lockWorkspaceCreationStatus,
+  withAggregateParentBatch,
+} from "@/api/lib/db/aggregate-lock";
 import type { RowLockMode } from "@/api/lib/db/aggregate-lock";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Canonical lock order for entity creation and hierarchy mutations (issue #1139,
@@ -102,17 +104,7 @@ export const lockWorkspacesForEntityCap = async (
 export const lockWorkspaceForEntityCreate = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-) => {
-  const { workspaceStatuses } = await withAggregateParentBatch({
-    tx,
-    organizationIds: [],
-    workspaceIds: [workspaceId],
-    mode: "update",
-  });
-  return workspaceStatuses.get(
-    brandPersistedWorkspaceId(workspaceId.toLowerCase()),
-  );
-};
+) => await lockWorkspaceCreationStatus(tx, workspaceId);
 
 /**
  * Transfers wait on source entity/version/field locks. Existing writers may
