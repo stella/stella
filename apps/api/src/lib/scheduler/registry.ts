@@ -364,14 +364,17 @@ export const createSchedulerTaskRegistry = (
             key: name,
             run: async () => {
               const task = typeof entry === "function" ? entry : entry.task;
-              const outcome =
+              if (
                 name === ERASE_HOSTED_CUSTOMERS_TASK &&
                 options.hostedCustomerErasureDependencies !== undefined
-                  ? await runHostedCustomerErasures(
-                      context,
-                      options.hostedCustomerErasureDependencies,
-                    )
-                  : await task(context);
+              ) {
+                await runHostedCustomerErasures(
+                  context,
+                  options.hostedCustomerErasureDependencies,
+                );
+                return undefined;
+              }
+              const outcome = await task(context);
               if (outcome === undefined) {
                 return undefined;
               }

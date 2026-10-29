@@ -76,7 +76,7 @@ const STATEMENT_KEYWORDS = new Set([
 ]);
 
 /** Replay the registered writing task's statements in order, then roll back. */
-export const measureHostedErasureRun = async (
+const measureHostedErasureRun = async (
   openClient: GatedTestClientScope["openClient"],
 ) => {
   const captured: CapturedStatement[] = [];
@@ -97,15 +97,17 @@ export const measureHostedErasureRun = async (
       hostedCustomerErasureDependencies: {
         credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
         provider: "polar",
-        erase: async ({ externalCustomerRef }) =>
-          externalCustomerRef.endsWith("0")
-            ? Result.err(
-                new HostedUsageProviderApiError({
-                  message: "Fixture refusal",
-                  status: 503,
-                }),
-              )
-            : Result.ok(undefined),
+        erase: ({ externalCustomerRef }) =>
+          Promise.resolve(
+            externalCustomerRef.endsWith("0")
+              ? Result.err(
+                  new HostedUsageProviderApiError({
+                    message: "Fixture refusal",
+                    status: 503,
+                  }),
+                )
+              : Result.ok(undefined),
+          ),
         observe: noopTask,
         now: () => now,
       },
