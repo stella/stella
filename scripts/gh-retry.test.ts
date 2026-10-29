@@ -264,6 +264,7 @@ test("404, absent HTTP status, and exhausted delay budget do not retry", async (
 });
 
 test("a paginated GET retries when its second successful page cannot be decoded", async () => {
+  const firstPage = Buffer.from(JSON.stringify([{ id: 1 }])).toHex();
   const result = await scenario({
     args: [
       "api",
@@ -275,15 +276,16 @@ test("a paginated GET retries when its second successful page cannot be decoded"
       {
         exit: 1,
         http: 200,
+        output: firstPage,
         error:
           "* Request to https://api.github.com/page/2\n< HTTP/2.0 200\nerror decoding JSON: unexpected EOF",
       },
-      success,
     ],
   });
-  expect(result.exit).toBe(0);
-  expect(result.calls).toHaveLength(2);
-  expect(result.sleeps).toHaveLength(1);
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(4);
+  expect(result.stdout).toEqual(Buffer.alloc(0));
+  expect(result.sleeps).toHaveLength(3);
   expect(result.stderr).toContain("HTTP 200, attempt 1/4");
 });
 
@@ -332,6 +334,15 @@ const typedRefusal = {
       ],
     }),
   ).toHex(),
+  error: JSON.stringify({
+    errors: [
+      {
+        type: "UNPROCESSABLE",
+        message: "Pull request is not mergeable",
+        extensions: { code: "STALE_DATA" },
+      },
+    ],
+  }),
 };
 
 test("a typed GraphQL refusal is returned after one request", async () => {
@@ -354,7 +365,9 @@ test.each([
   const output = Buffer.from(JSON.stringify({ errors: [error] }));
   const result = await scenario({
     args: ["api", "graphql", "-f", "query=query { viewer { login } }"],
-    responses: [{ exit: 1, http: 200, output: output.toHex() }],
+    responses: [
+      { exit: 1, http: 200, output: output.toHex(), error: output.toString() },
+    ],
   });
   expect(result.exit).toBe(1);
   expect(result.calls).toHaveLength(1);

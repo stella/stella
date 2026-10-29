@@ -297,23 +297,23 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     transient=true
   elif ((http >= 200 && http <= 299)); then
     if [[ "$response_retryable" == true ]]; then
-      # Successful-status failures are replayed only when the response is
-      # incomplete or reports a transient server condition. Typed GraphQL
-      # errors are definitive refusals and must reach the caller unchanged.
+      # Classify the response that made gh fail, not stdout from earlier pages.
+      # Typed GraphQL errors are definitive refusals and reach the caller;
+      # decoding failures and other incomplete diagnostics remain retryable.
       if awk '
         { body = body $0 "\n" }
         END {
-          compact = body
-          gsub(/[[:space:]]/, "", compact)
-          if (compact == "" || compact !~ /^(\{.*\}|\[.*\])$/) exit 0
           if (body ~ /"errors"[[:space:]]*:/ &&
               (body ~ /"type"[[:space:]]*:/ ||
                body ~ /"extensions"[[:space:]]*:[[:space:]]*\{[^}]*"code"[[:space:]]*:/)) exit 1
+          compact = body
+          gsub(/[[:space:]]/, "", compact)
+          if (compact == "" || compact !~ /^(\{.*\}|\[.*\])$/) exit 0
           lower = tolower(body)
           transient = lower ~ /(internal server error|service unavailable|bad gateway|gateway timeout|timed out|timeout|couldn.t respond to your request in time|something went wrong while executing your query)/
           exit !transient
         }
-      ' "$scratch/output"; then
+      ' "$scratch/trace"; then
         # gh can fail while decoding a successful response, including a later
         # page of a paginated read. Repeating a read cannot duplicate a write.
         transient=true
