@@ -140,6 +140,7 @@
     "./layout-tokens": "./src/inspector/layout-tokens.ts",
     "./kanban": "./src/kanban/index.ts",
     "./theme.css": "./src/styles/theme.css",
+    "./time-entry-row": "./src/components/time-entry-row.tsx",
     "./components/accordion": "./src/components/accordion.tsx",
     "./components/application-rail": "./src/components/application-rail.tsx",
     "./components/alert-dialog": "./src/components/alert-dialog.tsx",

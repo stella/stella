@@ -2119,13 +2119,14 @@ test("short matched activity counts toward its matter draft", async ({
       name: enMessages.activity.reviewToday,
       exact: true,
     }),
-  ).toBeVisible();
+  ).toBeAttached();
   await expect(
     page.getByRole("button", { name: "Create 1 draft", exact: true }),
   ).toBeEnabled();
-  await expect(
-    page.getByText(enMessages.activity.roundedSixMinutes, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("0.1 h", { exact: true })).toHaveAttribute(
+    "title",
+    enMessages.activity.roundedSixMinutes,
+  );
 });
 
 for (const language of ["en", "ar"] as const) {

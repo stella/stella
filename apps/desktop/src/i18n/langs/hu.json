@@ -129,7 +129,6 @@
     "memoryOnly": "Ebben a buildben nem kerül mentésre",
     "missingKeyEraseConfirmation": "A mentett tevékenység és a függőben lévő piszkozatok helyreállítási adatai törlődnek. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
     "narrativeApps": "Munka ezekben: {apps}",
-    "narrativeEvidence": "Munka: {evidence}",
     "newAssignment": "Új hozzárendelés",
     "nextDay": "Következő nap",
     "noExclusions": "Nincs kihagyott alkalmazás.",

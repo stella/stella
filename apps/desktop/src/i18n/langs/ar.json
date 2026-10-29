@@ -129,7 +129,6 @@
     "memoryOnly": "لا يُحفظ في هذا الإصدار",
     "missingKeyEraseConfirmation": "سيتم حذف النشاط المحفوظ وبيانات استعادة المسودات المعلّقة. قد تكون المسودات قد أُنشئت بالفعل. لا يمكن التراجع عن هذا الإجراء.",
     "narrativeApps": "العمل في {apps}",
-    "narrativeEvidence": "العمل على {evidence}",
     "newAssignment": "إسناد جديد",
     "nextDay": "اليوم التالي",
     "noExclusions": "لا توجد تطبيقات مستثناة.",

@@ -129,7 +129,6 @@
     "memoryOnly": "No se guarda en esta compilación",
     "missingKeyEraseConfirmation": "Se eliminarán la actividad guardada y los datos de recuperación de borradores pendientes. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",
     "narrativeApps": "Trabajo en {apps}",
-    "narrativeEvidence": "Trabajo en {evidence}",
     "newAssignment": "Nueva asignación",
     "nextDay": "Día siguiente",
     "noExclusions": "No hay aplicaciones excluidas.",

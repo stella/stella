@@ -129,7 +129,6 @@
     "memoryOnly": "W tej wersji nie jest zapisywane",
     "missingKeyEraseConfirmation": "Zapisana aktywność i dane odzyskiwania oczekujących wersji roboczych zostaną usunięte. Utworzone wersje robocze mogą już istnieć. Tej operacji nie można cofnąć.",
     "narrativeApps": "Praca w: {apps}",
-    "narrativeEvidence": "Praca nad: {evidence}",
     "newAssignment": "Nowe przypisanie",
     "nextDay": "Następny dzień",
     "noExclusions": "Żadne aplikacje nie są pomijane.",

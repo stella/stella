@@ -27,13 +27,14 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { AiActionIcon, LockKeyholeIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
+import { AiActionIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
+import { TimeEntryRow } from "@stll/ui/time-entry-row";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
@@ -149,9 +150,7 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
       group.matter?.name ?? null,
     );
     return evidence.length
-      ? t("narrativeEvidence", {
-          evidence: format.list(evidence, { type: "conjunction" }),
-        })
+      ? format.list(evidence, { type: "conjunction" })
       : t("narrativeApps", {
           apps: format.list(
             group.apps.map(({ name }) => name),
@@ -794,11 +793,7 @@ const ReviewBar = ({
     submission.type === "discarding" ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
-    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-2 border-t px-6 py-3">
-      <p className="text-muted-foreground me-auto flex items-center gap-1.5 text-xs">
-        <LockKeyholeIcon aria-hidden="true" className="size-3" />
-        {t("batchPrivacy")} · <span>{t("roundedSixMinutes")}</span>
-      </p>
+    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-end gap-2 border-t px-6 py-3">
       <CopyButton
         copiedLabel={t("copied")}
         disabled={selected.length === 0}
@@ -866,14 +861,46 @@ type ReviewItemFieldsProps = {
   item: ReviewItem;
   structured: boolean;
   editable: boolean;
+  /** A row with several entries gives each its own switch; one entry's sits at the row's end. */
+  showBillable: boolean;
   onNarrative: (narrative: string) => void;
   onBillable: (billable: boolean) => void;
+};
+
+/** Billable as a switch named by its tooltip; the label would repeat on every row. */
+const BillableSwitch = ({
+  item,
+  editable,
+  onBillable,
+}: {
+  item: ReviewItem;
+  editable: boolean;
+  onBillable: (billable: boolean) => void;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Switch
+            aria-label={t("entryBillable")}
+            aria-describedby={`review-item-${item.key}`}
+            checked={item.billable}
+            disabled={!editable}
+            onCheckedChange={(checked) => onBillable(checked)}
+          />
+        }
+      />
+      <TooltipPopup>{t("entryBillable")}</TooltipPopup>
+    </Tooltip>
+  );
 };
 
 const ReviewItemFields = ({
   item,
   structured,
   editable,
+  showBillable,
   onNarrative,
   onBillable,
 }: ReviewItemFieldsProps) => {
@@ -910,16 +937,13 @@ const ReviewItemFields = ({
             onChange={(event) => onNarrative(event.target.value)}
           />
         </div>
-        <Label className="text-muted-foreground shrink-0 gap-2 text-xs">
-          {t("entryBillable")}
-          <Switch
-            aria-label={t("entryBillable")}
-            aria-describedby={`review-item-${item.key}`}
-            checked={item.billable}
-            disabled={!editable}
-            onCheckedChange={(checked) => onBillable(checked)}
+        {showBillable ? (
+          <BillableSwitch
+            item={item}
+            editable={editable}
+            onBillable={onBillable}
           />
-        </Label>
+        ) : null}
       </div>
     </div>
   );
@@ -966,7 +990,7 @@ const ReviewEntries = ({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-sm font-semibold">
+        <h2 className="sr-only">
           {snapshot.date === snapshot.today ? t("reviewToday") : t("reviewDay")}
         </h2>
       </div>
@@ -1043,113 +1067,120 @@ const ReviewEntries = ({
               </div>
             );
           }
+          const items = absorbed.has(group.id)
+            ? []
+            : reviewItems(
+                [{ group: { ...group, matter }, content: edit.content }],
+                currentGroups,
+              );
+          const single = items.length === 1 ? items[0] : undefined;
+          const setBillable = (itemKey: string) => (billable: boolean) =>
+            dispatch({
+              type: "set-billable",
+              groupId: group.id,
+              initial: edit,
+              itemKey,
+              billable,
+            });
           return (
-            <div
+            <TimeEntryRow
               key={matter.id}
-              className={`flex items-start gap-3 px-4 py-3 ${!edit.selected ? "opacity-55" : ""}`}
-            >
-              <Checkbox
-                className="mt-0.5"
-                aria-label={t("includeMatter", { matter: matter.name })}
-                checked={edit.selected}
-                disabled={!editable}
-                onCheckedChange={(selected) =>
-                  dispatch({
-                    type: "set-selected",
-                    groupId: group.id,
-                    initial: edit,
-                    selected,
-                  })
-                }
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-3">
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium">
-                    <MatterIcon matter={matter} className="size-4 shrink-0" />
-                    <bdi id={`review-matter-${matter.id}`}>{matter.name}</bdi>
-                    {matter.signals.upcomingDeadline ? (
-                      <ReviewStatusBadge tone="neutral">
-                        {t("upcomingDeadline")} ·{" "}
-                        {format.dateTime(
-                          calendarDate(
-                            matter.signals.upcomingDeadline.slice(0, 10),
-                          ),
-                          { dateStyle: "short" },
-                        )}
-                      </ReviewStatusBadge>
-                    ) : null}
-                    {matter.signals.newlyAssignedAt ? (
-                      <ReviewStatusBadge tone="neutral">
-                        {t("newAssignment")}
-                      </ReviewStatusBadge>
-                    ) : null}
-                    {group.confidence === "likely" ? (
-                      <ReviewStatusBadge
-                        tone={CONFIDENCE_TONES[group.confidence]}
-                      >
-                        {t(CONFIDENCE_LABELS[group.confidence])}
-                      </ReviewStatusBadge>
-                    ) : null}
-                  </div>
-                  <span
-                    className="text-sm font-medium tabular-nums"
-                    title={t("roundedSixMinutes")}
-                  >
-                    {t("hours", { hours: hours(group.roundedTenths / 10) })}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  {matter.reference ? (
-                    <p className="text-muted-foreground text-xs">
-                      {matter.reference}
-                    </p>
+              frame="plain"
+              inactive={!edit.selected}
+              leading={
+                <Checkbox
+                  aria-label={t("includeMatter", { matter: matter.name })}
+                  checked={edit.selected}
+                  disabled={!editable}
+                  onCheckedChange={(selected) =>
+                    dispatch({
+                      type: "set-selected",
+                      groupId: group.id,
+                      initial: edit,
+                      selected,
+                    })
+                  }
+                />
+              }
+              icon={<MatterIcon matter={matter} className="size-4 shrink-0" />}
+              title={<bdi id={`review-matter-${matter.id}`}>{matter.name}</bdi>}
+              badges={
+                <>
+                  {matter.signals.upcomingDeadline ? (
+                    <ReviewStatusBadge tone="neutral">
+                      {t("upcomingDeadline")} ·{" "}
+                      {format.dateTime(
+                        calendarDate(
+                          matter.signals.upcomingDeadline.slice(0, 10),
+                        ),
+                        { dateStyle: "short" },
+                      )}
+                    </ReviewStatusBadge>
                   ) : null}
-                  {absorbed.has(group.id) ? (
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      {t("aiMergedIntoAnother")}
-                    </p>
-                  ) : (
-                    <>
-                      {reviewItems(
-                        [
-                          {
-                            group: { ...group, matter },
-                            content: edit.content,
-                          },
-                        ],
-                        currentGroups,
-                      ).map((item) => (
-                        <ReviewItemFields
-                          key={item.key}
-                          item={item}
-                          structured={edit.content.type === "accepted"}
-                          editable={editable}
-                          onNarrative={(narrative) =>
-                            dispatch({
-                              type: "set-narrative",
-                              groupId: group.id,
-                              initial: edit,
-                              itemKey: item.key,
-                              narrative,
-                            })
-                          }
-                          onBillable={(billable) =>
-                            dispatch({
-                              type: "set-billable",
-                              groupId: group.id,
-                              initial: edit,
-                              itemKey: item.key,
-                              billable,
-                            })
-                          }
-                        />
-                      ))}
-                      {draftReview({ ...group, matter })}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+                  {matter.signals.newlyAssignedAt ? (
+                    <ReviewStatusBadge tone="neutral">
+                      {t("newAssignment")}
+                    </ReviewStatusBadge>
+                  ) : null}
+                  {group.confidence === "likely" ? (
+                    <ReviewStatusBadge
+                      tone={CONFIDENCE_TONES[group.confidence]}
+                    >
+                      {t(CONFIDENCE_LABELS[group.confidence])}
+                    </ReviewStatusBadge>
+                  ) : null}
+                </>
+              }
+              meta={
+                <>
+                  {matter.reference ? <span>{matter.reference}</span> : null}
+                  <Evidence group={group} snapshot={snapshot} compact />
+                </>
+              }
+              duration={
+                <span title={t("roundedSixMinutes")}>
+                  {t("hours", { hours: hours(group.roundedTenths / 10) })}
+                </span>
+              }
+              trailing={
+                single ? (
+                  <BillableSwitch
+                    item={single}
+                    editable={editable}
+                    onBillable={setBillable(single.key)}
+                  />
+                ) : null
+              }
+            >
+              {absorbed.has(group.id) ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {t("aiMergedIntoAnother")}
+                </p>
+              ) : (
+                <>
+                  {items.map((item) => (
+                    <ReviewItemFields
+                      key={item.key}
+                      item={item}
+                      structured={edit.content.type === "accepted"}
+                      editable={editable}
+                      showBillable={single === undefined}
+                      onNarrative={(narrative) =>
+                        dispatch({
+                          type: "set-narrative",
+                          groupId: group.id,
+                          initial: edit,
+                          itemKey: item.key,
+                          narrative,
+                        })
+                      }
+                      onBillable={setBillable(item.key)}
+                    />
+                  ))}
+                  {draftReview({ ...group, matter })}
+                </>
+              )}
+            </TimeEntryRow>
           );
         })}
       </div>
@@ -1168,7 +1199,7 @@ const Evidence = ({
   compact?: boolean;
 }) => (
   <div
-    className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs"
+    className={`text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs ${compact ? "" : "mt-1"}`}
     title={
       compact
         ? group.evidence.join(" · ") ||
