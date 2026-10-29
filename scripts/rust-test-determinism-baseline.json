@@ -39,6 +39,11 @@
     "owner": "apps/desktop/src-tauri",
     "reason": "pre-kit census; inject clocks and isolate test state"
   },
+  "apps/desktop/src-tauri/tests/local_file_creation_guard.rs": {
+    "count": 1,
+    "owner": "apps/desktop/src-tauri",
+    "reason": "real cargo clippy compile-fail check that the disallowed file-creation lint fires; the process boundary is the subject of the test"
+  },
   "apps/desktop/src-tauri/tests/tray_api_guard.rs": {
     "count": 2,
     "owner": "apps/desktop/src-tauri",
