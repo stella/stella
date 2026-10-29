@@ -172,11 +172,8 @@ type ReplayOptionsGuard<
       : unknown
   : unknown;
 
-type CheckedRequestOptions<
-  TRoute extends RouteShape,
-  TOptions,
-> = RequestOptions<TRoute> &
-  TOptions &
+type CheckedRequestOptions<TRoute extends RouteShape, TOptions> = TOptions &
+  NoInfer<RequestOptions<TRoute>> &
   ReplayOptionsGuard<TRoute, NoInfer<TOptions>>;
 
 type OptionsArgs<TRoute extends RouteShape, TOptions> =
