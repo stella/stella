@@ -51,6 +51,7 @@ export const HANDOFF_AUTH_ENDPOINT_POLICY = {
   "/mcp-handoff/redeem": "ordinary",
   "/mcp-handoff/sessions": "ordinary",
   "/oauth2/authorize": "refused",
+  "/oauth2/client/rotate-keys": "refused",
   "/oauth2/client/rotate-secret": "refused",
   "/oauth2/consent": "refused",
   "/oauth2/consent-info": "refused",
