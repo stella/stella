@@ -1,7 +1,7 @@
 import { NativeTabs } from "expo-router/native-tabs";
 import { useTranslations } from "use-intl";
 
-import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { BAR_GLYPHS } from "@/bar-glyphs.gen";
 import { useAppColors } from "@/theme";
 
 /**
@@ -11,7 +11,9 @@ import { useAppColors } from "@/theme";
  * prominent tab, which iOS 27 draws apart on its own surface; it holds case
  * law, settings and what is still to come. On an iPad the bar can open
  * into a sidebar, as the system's own apps and GitHub's do.
- * `tab-icons.test.ts` holds them equal.
+ * `tab-icons.test.ts` holds them equal. The glyphs are asset catalog images
+ * (`bar-glyphs.gen.ts`), which the bar loads by name as it is built, so no
+ * tab stands bare while its glyph is drawn.
  */
 const TabLayout = () => {
   const colors = useAppColors();
@@ -26,47 +28,19 @@ const TabLayout = () => {
       unstable_nativeProps={{ ios: { prominentScreenKey: "more" } }}
     >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon
-          src={
-            <NativeTabs.Trigger.VectorIcon
-              family={LucideGlyphs}
-              name="message-square"
-            />
-          }
-        />
+        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS["message-square"]} />
         <NativeTabs.Trigger.Label>{t("chat")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tasks">
-        <NativeTabs.Trigger.Icon
-          src={
-            <NativeTabs.Trigger.VectorIcon
-              family={LucideGlyphs}
-              name="list-todo"
-            />
-          }
-        />
+        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS["list-todo"]} />
         <NativeTabs.Trigger.Label>{t("tasks")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="matters">
-        <NativeTabs.Trigger.Icon
-          src={
-            <NativeTabs.Trigger.VectorIcon
-              family={LucideGlyphs}
-              name="layers"
-            />
-          }
-        />
+        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS.layers} />
         <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more">
-        <NativeTabs.Trigger.Icon
-          src={
-            <NativeTabs.Trigger.VectorIcon
-              family={LucideGlyphs}
-              name="grid-2x2-plus"
-            />
-          }
-        />
+        <NativeTabs.Trigger.Icon xcasset={BAR_GLYPHS["grid-2x2-plus"]} />
         <NativeTabs.Trigger.Label>{t("more")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import codepoints from "lucide-static/font/codepoints.json";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+import { BAR_GLYPHS } from "../../bar-glyphs.gen";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../../../..");
 const read = (file: string) =>
@@ -24,25 +25,28 @@ const glyphOf = (component: string) =>
     .replaceAll(/(?<=[a-z\d])(?=[A-Z])/gu, "-")
     .toLowerCase();
 
-/** The glyph each tab draws, by route. */
+/**
+ * The glyph each tab draws, by route: the lucide name it reads the asset
+ * catalog's image by (`BAR_GLYPHS.layers`, `BAR_GLYPHS["list-todo"]`).
+ */
 const tabGlyphs = (): Map<string, string> => {
   const layout = read("apps/mobile/src/app/(tabs)/_layout.tsx");
   return new Map(
     [
       ...layout.matchAll(
-        /Trigger name="(\w+)"[^>]*>[\s\S]*?VectorIcon[\s\S]*?name="([\w-]+)"/gu,
+        /Trigger name="(\w+)"[^>]*>[\s\S]*?xcasset=\{BAR_GLYPHS(?:\.(\w+)|\["([\w-]+)"\])\}/gu,
       ),
-    ].map(([, route, glyph]) => [route ?? "", glyph ?? ""]),
+    ].map(([, route, dotted, quoted]) => [route ?? "", dotted ?? quoted ?? ""]),
   );
 };
 
-test("every tab draws a glyph the lucide font has", () => {
+test("every tab draws a lucide glyph the asset catalog carries", () => {
   const glyphs = tabGlyphs();
   expect([...glyphs.keys()].toSorted()).toEqual(
     ["index", "matters", "more", "tasks"].toSorted(),
   );
   for (const glyph of glyphs.values()) {
-    expect(Object.keys(codepoints)).toContain(glyph);
+    expect(Object.keys(BAR_GLYPHS)).toContain(glyph);
   }
 });
 
