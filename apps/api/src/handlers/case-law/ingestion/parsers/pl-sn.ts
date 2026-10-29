@@ -1468,8 +1468,8 @@ const setSmall = (line: PdfTextLine, bodySize: number): boolean => {
  *
  * A letterhead line has to show it is one. It sits in a page's top or bottom
  * edge zone, is set in small type, and repeats at the same height on most
- * pages; its digits are left out of the comparison only because a footer
- * carries the page's number. Text in the body's own type is never taken for
+ * pages. Digits remain part of the comparison; only a trailing page number
+ * on a contact line is left out. Text in the body's own type is never taken for
  * letterhead, however often it recurs, so a heading or a sentence that comes
  * back at the same place on several pages stays. A footer whose two lines
  * the text layer read as one on some page (`gdansk@uokik.gov.pl
@@ -1495,13 +1495,17 @@ const withoutRepeatedFurniture = (
   const inEdgeZone = (line: PdfTextLine, height: number): boolean =>
     line.bbox.y < height * EDGE_ZONE_RATIO ||
     line.bbox.y > height * (1 - EDGE_ZONE_RATIO);
-  // A footer's text with its page number left out, so every page's copy reads
-  // the same.
-  const keyOf = (line: PdfTextLine): string =>
-    normalizeSpanText(line.text)
-      .replace(/\d+/gu, "#")
-      .replace(/\s+/gu, " ")
-      .trim();
+  // A contact footer may append this page's number. Other printed numbers
+  // distinguish the text, including amounts and the address's own digits.
+  const keyOf = (line: PdfTextLine, page: number): string => {
+    const text = normalizeSpanText(line.text).replace(/\s+/gu, " ").trim();
+    const contact =
+      text.includes("@") || text.includes("www.") || text.includes("://");
+    const suffix = ` ${String(page + 1)}`;
+    return contact && text.endsWith(suffix)
+      ? text.slice(0, -suffix.length)
+      : text;
+  };
 
   const letterheadCandidate = (line: PdfTextLine, height: number): boolean =>
     inEdgeZone(line, height) &&
@@ -1511,7 +1515,7 @@ const withoutRepeatedFurniture = (
   for (const [page, { height, lines }] of pages.entries()) {
     for (const line of lines) {
       if (letterheadCandidate(line, height)) {
-        const key = keyOf(line);
+        const key = keyOf(line, page);
         const places = placed.get(key);
         if (places === undefined) {
           placed.set(key, [{ page, y: line.bbox.y }]);
@@ -1539,23 +1543,26 @@ const withoutRepeatedFurniture = (
     .filter(([key, places]) => places.some(({ y }) => repeatedAt(key, y)))
     .map(([key]) => key)
     .toSorted((left, right) => right.length - left.length);
-  const isMergedFooter = (key: string): boolean => {
+  const isMergedFooter = (key: string, page: number): boolean => {
     let rest = key;
     let pieces = 0;
     for (const repeated of repeatedKeys) {
       pieces += rest.split(repeated).length - 1;
       rest = rest.replaceAll(repeated, " ");
     }
-    return pieces >= 2 && rest.trim().length === 0;
+    return (
+      pieces >= 2 &&
+      (rest.trim().length === 0 || isPageNumber(rest.trim(), page + 1))
+    );
   };
 
-  const keptPages = pages.map(({ height, lines }) =>
+  const keptPages = pages.map(({ height, lines }, page) =>
     lines.filter((line) => {
       if (!letterheadCandidate(line, height)) {
         return true;
       }
-      const key = keyOf(line);
-      return !(repeatedAt(key, line.bbox.y) || isMergedFooter(key));
+      const key = keyOf(line, page);
+      return !(repeatedAt(key, line.bbox.y) || isMergedFooter(key, page));
     }),
   );
   const linePitch =
