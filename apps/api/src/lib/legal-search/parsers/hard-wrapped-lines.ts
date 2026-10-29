@@ -1,6 +1,13 @@
+// parser-output-unchanged: Existing typescript reflow is unchanged; the new PDF join reader is used only by sk-courts.
 import { panic } from "better-result";
 
-import { classifyLineWrap, LINE_WRAP_TYPE } from "@stll/legal-ast/line-wrap";
+import {
+  classifyLineWrap,
+  LINE_JOIN,
+  LINE_WRAP_TYPE,
+  lineJoinOf,
+  PRENOMINAL_TITLE_END_RE,
+} from "@stll/legal-ast/line-wrap";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 /**
@@ -443,4 +450,64 @@ export const reflowPrintedText = (rawLines: readonly string[]): string[] => {
   }
   paragraphs.push(reading.clean(current.join("")));
   return paragraphs;
+};
+
+const PDF_PARAGRAPH = {
+  indentHeightShare: 0.5,
+  // Ordinary line spacing can approach twice the glyph height.
+  verticalGapHeightShare: 1,
+} as const;
+
+/** PDF geometry is in points; page coordinates restart on each page. */
+export type PdfPrintedLine = {
+  readonly text: string;
+  readonly layout?: {
+    readonly x: number;
+    readonly y: number;
+    readonly height: number;
+    readonly pageIndex: number;
+  };
+};
+
+/**
+ * PDF extraction already identifies printed lines. Geometry can confirm a
+ * continuation without inferring a character margin; paragraph signals always
+ * win. Without geometry, the shared text classifier must confirm the wrap.
+ * Null entries isolate titles and other display lines from running prose.
+ */
+export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
+  const classification = classifyLineWrap(
+    lines.map((line) => line?.text ?? null),
+  );
+  return lines.map((line, index) => {
+    const above = index > 0 ? lines.at(index - 1) : null;
+    if (above === undefined || above === null || line === null) {
+      return LINE_JOIN.BREAK;
+    }
+    if (
+      SENTENCE_END_RE.test(above.text) &&
+      OPENS_SENTENCE_RE.test(line.text) &&
+      !PRENOMINAL_TITLE_END_RE.test(above.text)
+    ) {
+      return LINE_JOIN.BREAK;
+    }
+    const previousLayout = above.layout;
+    const layout = line.layout;
+    if (previousLayout === undefined || layout === undefined) {
+      return lineJoinOf(classification, above.text, line.text);
+    }
+    if (previousLayout.pageIndex === layout.pageIndex) {
+      const height = Math.max(previousLayout.height, layout.height);
+      const indented =
+        layout.x - previousLayout.x > height * PDF_PARAGRAPH.indentHeightShare;
+      const verticalGap = Math.abs(layout.y - previousLayout.y) - height;
+      if (
+        indented ||
+        verticalGap > height * PDF_PARAGRAPH.verticalGapHeightShare
+      ) {
+        return LINE_JOIN.BREAK;
+      }
+    }
+    return LINE_JOIN.SPACE;
+  });
 };

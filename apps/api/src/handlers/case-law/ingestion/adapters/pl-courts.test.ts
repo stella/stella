@@ -24,12 +24,13 @@ import {
   normalizeSaosDumpItem,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -37,6 +38,8 @@ import {
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 

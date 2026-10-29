@@ -34,13 +34,14 @@ import {
   ecjDocumentHtml,
   ecjDocumentRoot,
   ecjPageCarriesChrome,
-  parseEcjDecisionHtml,
+  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
   normalizeOracleText,
   parseFormex,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   manifestationStem,
@@ -52,6 +53,8 @@ import {
   SHELL_STEM,
   SHELL_STEM_SUFFIX,
 } from "./__fixtures__/eu-ecj/corpus";
+
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 /**
  * Every test here gunzips and parses one of the largest fixtures in the repo,

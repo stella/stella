@@ -66,6 +66,7 @@ import {
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
@@ -819,6 +820,7 @@ const continuesOnNextPage = (open: string, next: string): boolean =>
 /** The blocks read so far, the paragraph still open, and where the reading is. */
 type BlockBuilder = {
   readonly blocks: Block[];
+  readonly makeAnchor: ReturnType<typeof createBlockAnchorAllocator>;
   section: Section;
   blockCount: number;
   paragraph: MarkupLine | null;
@@ -849,7 +851,7 @@ const flushParagraph = (builder: BlockBuilder): void => {
   })();
   builder.blocks.push({
     id: nextBlockId(builder),
-    anchorId: `p${builder.blockCount}`,
+    anchorId: builder.makeAnchor(`p${builder.blockCount}`),
     type: "paragraph",
     ...(role === null ? {} : { role }),
     inlines: line.inlines,
@@ -871,7 +873,12 @@ const pushHeading = (
   anchorId = `h${builder.blocks.length + 1}`,
 ): void => {
   builder.blocks.push(
-    headingBlock({ id: nextBlockId(builder), anchorId, level, line }),
+    headingBlock({
+      id: nextBlockId(builder),
+      anchorId: builder.makeAnchor(anchorId),
+      level,
+      line,
+    }),
   );
 };
 
@@ -926,6 +933,20 @@ const readPartMarker = (builder: BlockBuilder, line: MarkupLine): boolean => {
     (line.fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(line.text))
   ) {
     flushParagraph(builder);
+    const previous = builder.blocks.at(-1);
+    if (previous?.type === "heading" && previous.role === "decision-title") {
+      const joined = joinLines(
+        {
+          inlines: previous.inlines,
+          text: previous.plainText,
+          fontSize: line.fontSize,
+        },
+        line,
+      );
+      previous.inlines = joined.inlines;
+      previous.plainText = joined.text;
+      return true;
+    }
     pushHeading(builder, line, 1, "h-title");
     return true;
   }
@@ -986,7 +1007,7 @@ const readClosingMarker = (
     builder.blockCount += 1;
     builder.blocks.push({
       id: nextBlockId(builder),
-      anchorId: `p${builder.blockCount}`,
+      anchorId: builder.makeAnchor(`p${builder.blockCount}`),
       type: "paragraph",
       role: "closing",
       inlines: line.inlines,
@@ -1142,6 +1163,7 @@ const readParagraphLine = (
 const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
   const builder: BlockBuilder = {
     blocks: [],
+    makeAnchor: createBlockAnchorAllocator(),
     section: "preamble",
     blockCount: 0,
     paragraph: null,

@@ -5,13 +5,16 @@ import fc from "fast-check";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseNsDecisionHtml } from "./cz-ns";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 
 const shapes = fc.array(
   fc.constantFrom(

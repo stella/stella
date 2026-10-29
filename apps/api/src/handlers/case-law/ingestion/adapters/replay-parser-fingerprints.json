@@ -112,12 +112,12 @@
     "fingerprint": "1f5726d89fea76c103346ee3c1a3da9373b9e88f62f909d366319c1c02072cca"
   },
   "sk-courts": {
-    "version": 19,
-    "fingerprint": "5c31398f632c1f8a3941e28c7483141b3f1ecf5e3e27f02be9f8b2e38630c1c0"
+    "version": 20,
+    "fingerprint": "3ddd4c3643ba1f0af0c187ef04def3f2fc389833361ae01a45b683d1611bfef7"
   },
   "sk-us": {
-    "version": 16,
-    "fingerprint": "85e21320c19d98050e808ffb39e863c955448e7ce238b101d5a6c1e309e65b64"
+    "version": 17,
+    "fingerprint": "ba6fe5fb66d2820a27c92d6fb8e41f9f8f9e731c381028db76cf8c8d1b879004"
   },
   "uk-fcl": {
     "version": 3,

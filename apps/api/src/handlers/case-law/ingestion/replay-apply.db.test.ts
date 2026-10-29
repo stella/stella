@@ -48,7 +48,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import {
-  assemblePlKioDecision,
+  assemblePlKioDecision as uncheckedAssemblePlKioDecision,
   plKioAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { PL_KIO_DOCUMENT_REJECTION } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
@@ -97,7 +97,10 @@ import {
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 
 // A writing replay, through the same `processDecision` a crawl feeds.
 //

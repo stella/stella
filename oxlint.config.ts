@@ -2002,6 +2002,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/parser-fixture-reader-guard.ts",
     "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
@@ -6152,6 +6153,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-serial-lint-case/no-serial-lint-case": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.test.ts",
+        "apps/api/src/tests/helpers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/parser-fixture-reader-guard.fixture.ts",
+      ],
+      rules: {
+        "parser-fixture-reader-guard/parser-fixture-reader-guard": "error",
       },
     },
     {

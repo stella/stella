@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
-import { parseRisDecisionXml } from "./at-ris";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "./at-ris";
+
+const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 const FIXTURE_URL = new URL(
   "__fixtures__/at-ris-jjt-1925.xml",

@@ -14,6 +14,7 @@ import {
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   getAdapter,
@@ -24,7 +25,7 @@ import { COURTLISTENER_SOURCE_FIELD_INVENTORY } from "./inventory";
 import {
   COURTLISTENER_IMPORT_KEY,
   courtListenerTextRejectionReason,
-  mapCourtListenerRecord,
+  mapCourtListenerRecord as uncheckedMapCourtListenerRecord,
   reparseStoredRaw,
 } from "./map";
 import {
@@ -36,6 +37,8 @@ import {
   recordedClusters,
 } from "./test-records";
 import { OPINION_TYPES } from "./vocabulary";
+
+const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);
 
 const stored = (result: IngestionResult): StoredRawReparseInput => ({
   raw: new TextEncoder().encode(result.sourceRaw),

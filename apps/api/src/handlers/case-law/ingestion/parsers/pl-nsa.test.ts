@@ -15,11 +15,14 @@ import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapter
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
-  parsePlNsaDecision,
+  parsePlNsaDecision as uncheckedParsePlNsaDecision,
   plNsaParagraphs,
   plNsaStatedSuperscripts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);
 
 const FIXTURE = new URL(
   "__fixtures__/pl-nsa-text-rows.json.gz",

@@ -14,31 +14,44 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
-import { parseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+import { parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
-import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import {
-  parseRegionalDecision,
+  parseRegionalDecision as uncheckedParseRegionalDecision,
   type ParseRegionalInput,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import { parseHuBhgyDecision } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { parseHuBhgyDecision as uncheckedParseHuBhgyDecision } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import {
   parsePlTkPage,
-  parsePlTkText,
+  parsePlTkText as uncheckedParsePlTkText,
   readPlTkCasePage,
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
-import { parseUkFclDecision } from "@/api/handlers/case-law/ingestion/parsers/uk-fcl";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseUkFclDecision as uncheckedParseUkFclDecision } from "@/api/handlers/case-law/ingestion/parsers/uk-fcl";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseCzUohsDocumentPdf = guardParser(uncheckedParseCzUohsDocumentPdf);
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
+const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
+const parseHuBhgyDecision = guardParser(uncheckedParseHuBhgyDecision);
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
+const parsePlTkText = guardParser(uncheckedParsePlTkText);
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
+const parseUkFclDecision = guardParser(uncheckedParseUkFclDecision);
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 /** One recorded document as its source's parser reads it today. */
 export type EvidenceDocument = {

@@ -7,8 +7,11 @@ import {
   projectPlainText,
 } from "@stll/legal-ast/document-ast";
 
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -208,7 +211,11 @@ describe("PL. ÚS 10/2014", () => {
       .map((block) => ("inlines" in block ? textOf(block) : ""))
       .join("\n");
     expect(text).not.toContain(String.fromCodePoint(0xad));
-    expect(headings(blocks, 1)).toContain("PL. ÚS 10/2014-78");
+    expect(
+      headings(blocks, 1).some((heading) =>
+        heading.includes("PL. ÚS 10/2014-78"),
+      ),
+    ).toBe(true);
     expect(text).toContain("peer-to-peer (P2P)");
     expect(text).toContain("C-293/12 a C-594/12");
     // Hyphens at a line's end are the court's too: a compound and a docket.

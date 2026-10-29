@@ -17,7 +17,7 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
-  assemblePlKioDecision,
+  assemblePlKioDecision as uncheckedAssemblePlKioDecision,
   encodePlKioCursor,
   normalizeProcurementDocket,
   parsePlKioCursor,
@@ -35,6 +35,7 @@ import {
   fitsDecisionSearchCandidateRow,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -42,6 +43,8 @@ import {
   PL_KIO_HTML_BUDGET,
   PL_KIO_RESPONSE_BYTE_CAP,
 } from "./pl-kio-response-budget";
+
+const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

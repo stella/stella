@@ -74,6 +74,7 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const originalFetch = globalThis.fetch;
 
@@ -218,7 +219,7 @@ describe("every adapter accounts for the fields its source states", () => {
       const observed = new Set<string>();
       for (const buildFixture of fixtures) {
         const evidence = buildFixture();
-        const decision = await evidence.buildDecision();
+        const decision = await guardParser(evidence.buildDecision)();
         const schema = metadataUrlSchemaForAdapter(key);
         // The branded contract covers every registered source with no field debt.
         const normalized = plainTextIngestionResult(decision, schema);

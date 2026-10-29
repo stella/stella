@@ -12,8 +12,14 @@ import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUsDecisionHtml, usDocumentLinesOf } from "./cz-us";
+import {
+  parseUsDecisionHtml as uncheckedParseUsDecisionHtml,
+  usDocumentLinesOf,
+} from "./cz-us";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const SNAPSHOT = new URL(

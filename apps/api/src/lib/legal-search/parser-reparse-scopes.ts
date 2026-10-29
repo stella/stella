@@ -141,19 +141,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
+        "paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving indentation, vertical gaps and sentence boundaries; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "paragraph text, paragraph numbers and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; letter-spaced words and section markers include uneven chunks witnessed by intact words in the decision; none has feature storage of its own",
+        "multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {

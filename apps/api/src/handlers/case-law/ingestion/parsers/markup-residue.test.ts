@@ -5,10 +5,10 @@ import path from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   assemblePlSnParagraphs,
   plSnParagraphsToHtml,
@@ -19,6 +19,12 @@ import {
   markupResidueSweepRules,
 } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 // ── What the rules report ───────────────────────────────────
 

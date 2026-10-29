@@ -1,0 +1,40 @@
+import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
+
+/** Complete AST entry points used by each registered source's fixtures. */
+export const PARSER_FIXTURE_OWNERS = {
+  "cz-ns": ["parseNsDecisionHtml"],
+  "cz-nss": ["parseNssDecisionHtml"],
+  "cz-us": ["parseUsDecisionHtml"],
+  "cz-regional": ["parseRegionalDecision"],
+  "cz-uohs": ["parseCzUohsDocumentPdf", "buildCzUohsDecision"],
+  "sk-courts": ["parseSkDecisionPdf"],
+  "sk-us": ["parseSkUsDocumentXhtml"],
+  "pl-courts": ["parsePlDecisionContent"],
+  "pl-sn": ["parsePlSnDecisionPdf"],
+  "pl-kio": ["assemblePlKioDecision", "parsePlDecisionContent"],
+  "pl-tk": ["parsePlTkText"],
+  "pl-nsa": ["parsePlNsaDecision"],
+  "pl-ncourt": ["assemblePlNcourtDecision", "parsePlDecisionContent"],
+  "at-courts": ["parseRisDecisionXml"],
+  "at-vfgh": ["parseRisDecisionXml"],
+  "at-vwgh": ["parseRisDecisionXml"],
+  "at-bvwg": ["parseRisDecisionXml"],
+  "at-lvwg": ["parseRisDecisionXml"],
+  "at-asylgh": ["parseRisDecisionXml"],
+  "at-ubas": ["parseRisDecisionXml"],
+  "at-uvs": ["parseRisDecisionXml"],
+  "at-verg": ["parseRisDecisionXml"],
+  "at-umse": ["parseRisDecisionXml"],
+  "at-bks": ["parseRisDecisionXml"],
+  "at-findok": ["parseFindokDecisionXml"],
+  "eu-ecj": ["parseEcjDecisionHtml"],
+  "hu-bhgy": ["parseHuBhgyDecision"],
+  "uk-fcl": ["parseUkFclDecision"],
+  "pl-kis": ["parsePlKisDocumentHtml", "parsePlKisDocumentPdf"],
+  "pl-uodo": ["parsePlUodoDecisionXml"],
+  "pl-uokik": ["parsePlUokikDocument"],
+  "us-courtlistener": ["mapCourtListenerRecord"],
+} as const satisfies Record<
+  ProcessedFieldSourceKey,
+  readonly [string, ...string[]]
+>;
