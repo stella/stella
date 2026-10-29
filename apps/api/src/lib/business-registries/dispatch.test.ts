@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { BUSINESS_REGISTRY_SEARCH_CAPABILITIES } from "@stll/api-contract";
 import {
   AresAPIError,
   type AresCompany,
@@ -362,21 +361,6 @@ describe("VIES handler wiring", () => {
       });
     }
   });
-});
-
-describe("registry search capabilities", () => {
-  test.each(BUSINESS_REGISTRY_SLUGS)(
-    "%s declares modes matching its adapter",
-    (slug) => {
-      const declared = BUSINESS_REGISTRY_SEARCH_CAPABILITIES[slug];
-      const handler = BUSINESS_REGISTRY_DISPATCH[slug];
-      expect(declared.identifierKinds.length).toBeGreaterThan(0);
-      expect(declared.nameSearch === "native").toBe(handler.search !== null);
-      expect(declared.nameSearch === "verified-web").toBe(
-        handler.search === null && handler.webCandidateNameSearch !== undefined,
-      );
-    },
-  );
 });
 
 describe("Companies House hit address", () => {

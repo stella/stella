@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import type {
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
   BusinessRegistryLookupDetail,
   BusinessRegistrySlug,
 } from "@stll/api-contract";
@@ -301,11 +302,28 @@ type WebCandidateNameSearch = {
   identifyingWords: string;
 };
 
-export type RegistryHandler = {
+type RegistryNameSearch = (
+  input: string,
+  options: {
+    observer: RegistryRequestObservation;
+    permit: ThirdPartyOutboundPermit;
+    limit?: number;
+    credential?: string;
+  },
+) => Promise<BusinessRegistryHit[]>;
+
+type RegistryNameSearchMembers<Slug extends BusinessRegistrySlug> =
+  (typeof BUSINESS_REGISTRY_SEARCH_CAPABILITIES)[Slug]["nameSearch"] extends "native"
+    ? { search: RegistryNameSearch; webCandidateNameSearch?: never }
+    : (typeof BUSINESS_REGISTRY_SEARCH_CAPABILITIES)[Slug]["nameSearch"] extends "verified-web"
+      ? { search: null; webCandidateNameSearch: WebCandidateNameSearch }
+      : { search: null; webCandidateNameSearch?: never };
+
+type RegistryHandlerBase<Slug extends BusinessRegistrySlug> = {
   /** Changes on credential rotation so cached preview failures cannot survive it. */
   cacheVersion?: string;
   /** Slug as it appears in the catalogue + the REST `?registry=` param. */
-  slug: BusinessRegistrySlug;
+  slug: Slug;
   /**
    * Registry proper name for messages that a person or an agent reads
    * ("ARES", "Companies House"). Not translatable UI copy: these are the
@@ -348,26 +366,6 @@ export type RegistryHandler = {
     input: string,
     options: RegistryLookupOptions,
   ) => Promise<BusinessRegistryHit | null>;
-  /**
-   * Search by name. `null` when the upstream registry has no
-   * name-search endpoint (e.g. KRS). Callers attempting name search
-   * against such a registry get a 400. The optional `limit` is
-   * forwarded to the underlying adapter so the same value
-   * controls both the upstream page size and the returned slice.
-   */
-  search:
-    | ((
-        input: string,
-        options: {
-          observer: RegistryRequestObservation;
-          permit: ThirdPartyOutboundPermit;
-          limit?: number;
-          credential?: string;
-        },
-      ) => Promise<BusinessRegistryHit[]>)
-    | null;
-  /** Fallback for official APIs that accept identifiers but cannot search names. */
-  webCandidateNameSearch?: WebCandidateNameSearch | undefined;
   /** Deployment-level gate for adapters that require server config. */
   isDeployAvailable: (credential?: string) => boolean;
   /**
@@ -389,6 +387,18 @@ export type RegistryHandler = {
    */
   mapError: (error: unknown) => HandlerError | null;
 };
+
+/** Handler shape derived from the contract's per-registry search capability. */
+export type RegistryHandler<Slug extends BusinessRegistrySlug = never> = [
+  Slug,
+] extends [never]
+  ? RegistryHandlerBase<BusinessRegistrySlug> & {
+      search: RegistryNameSearch | null;
+      webCandidateNameSearch?: WebCandidateNameSearch;
+    }
+  : Slug extends BusinessRegistrySlug
+    ? RegistryHandlerBase<Slug> & RegistryNameSearchMembers<Slug>
+    : never;
 
 const isAlwaysDeployAvailable = (): boolean => true;
 
@@ -498,7 +508,7 @@ const mapAresError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const ARES_HANDLER: RegistryHandler = {
+const ARES_HANDLER: RegistryHandler<"ares"> = {
   slug: "ares",
   displayName: "ARES",
   country: "CZ",
@@ -602,7 +612,7 @@ const mapBrregError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const BRREG_HANDLER: RegistryHandler = {
+const BRREG_HANDLER: RegistryHandler<"brreg"> = {
   slug: "brreg",
   displayName: "BRREG",
   country: "NO",
@@ -747,7 +757,7 @@ const requireCompaniesHouseApiKey = (credential?: string): string => {
   return apiKey;
 };
 
-const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
+const COMPANIES_HOUSE_HANDLER: RegistryHandler<"companies-house"> = {
   slug: "companies-house",
   displayName: "Companies House",
   country: "GB",
@@ -915,7 +925,7 @@ const DENUE_HANDLER = {
   },
   isDeployAvailable: isDenueDeployAvailable,
   mapError: mapDenueError,
-} satisfies RegistryHandler;
+} satisfies RegistryHandler<"denue">;
 
 // ---------------------------------------------------------------------------
 // SEC EDGAR (United States)
@@ -1002,7 +1012,7 @@ const requireEdgarUserAgent = (credential?: string): string => {
   return userAgent;
 };
 
-const EDGAR_HANDLER: RegistryHandler = {
+const EDGAR_HANDLER: RegistryHandler<"edgar"> = {
   slug: "edgar",
   displayName: "SEC EDGAR",
   country: "US",
@@ -1107,7 +1117,7 @@ const mapGcisError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const GCIS_HANDLER: RegistryHandler = {
+const GCIS_HANDLER: RegistryHandler<"gcis"> = {
   slug: "gcis",
   displayName: "GCIS",
   country: "TW",
@@ -1228,7 +1238,7 @@ const mapOrsrError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const ORSR_HANDLER: RegistryHandler = {
+const ORSR_HANDLER: RegistryHandler<"orsr"> = {
   slug: "orsr",
   displayName: "ORSR",
   country: "SK",
@@ -1322,7 +1332,7 @@ const mapRpoError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const RPO_HANDLER: RegistryHandler = {
+const RPO_HANDLER: RegistryHandler<"rpo"> = {
   slug: "rpo",
   displayName: "RPO",
   country: "SK",
@@ -1414,7 +1424,7 @@ const mapKrsError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const KRS_HANDLER: RegistryHandler = {
+const KRS_HANDLER: RegistryHandler<"krs"> = {
   slug: "krs",
   displayName: "KRS",
   country: "PL",
@@ -1590,7 +1600,7 @@ const mapViesError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const PRH_HANDLER: RegistryHandler = {
+const PRH_HANDLER: RegistryHandler<"prh"> = {
   slug: "prh",
   displayName: "PRH",
   country: "FI",
@@ -1613,7 +1623,7 @@ const PRH_HANDLER: RegistryHandler = {
   mapError: mapPrhError,
 };
 
-const VIES_HANDLER: RegistryHandler = {
+const VIES_HANDLER: RegistryHandler<"vies"> = {
   slug: "vies",
   displayName: "VIES",
   country: EU_PSEUDO_JURISDICTION,
@@ -1730,44 +1740,44 @@ const mapRechercheEntreprisesError = (error: unknown): HandlerError | null => {
   return null;
 };
 
-const RECHERCHE_ENTREPRISES_HANDLER: RegistryHandler = {
-  slug: "recherche-entreprises",
-  displayName: "RNE",
-  country: "FR",
-  jurisdictionRole: { type: "primary" },
-  nativeToolSlug: "recherche-entreprises",
-  // Shape check only — Luhn validation happens in lookupBy{Siren,Siret}
-  // and surfaces as RechercheEntreprisesValidationError → HTTP 400.
-  // Falling through to search would silently turn a bad-checksum
-  // SIREN/SIRET into an empty name-search result.
-  isCanonicalId: (input) => hasRechercheEntreprisesShape(input),
-  lookup: async (input, options) => {
-    const normalized = normalizeSiren(input);
-    // Dispatch by length: 9 = SIREN, 14 = SIRET. The shape check
-    // above guarantees one of the two; anything else falls through to
-    // name search and never reaches this branch.
-    const company =
-      normalized.length === 14
-        ? await lookupBySiret(normalized, options)
-        : await lookupBySiren(normalized, options);
-    return company ? rechercheEntreprisesCompanyToHit(company) : null;
-  },
-  search: async (input, options) => {
-    const results = await searchRechercheEntreprisesByName(input, options);
-    return results.map(rechercheEntreprisesSearchResultToHit);
-  },
-  isDeployAvailable: isAlwaysDeployAvailable,
-  mapError: mapRechercheEntreprisesError,
-};
+const RECHERCHE_ENTREPRISES_HANDLER: RegistryHandler<"recherche-entreprises"> =
+  {
+    slug: "recherche-entreprises",
+    displayName: "RNE",
+    country: "FR",
+    jurisdictionRole: { type: "primary" },
+    nativeToolSlug: "recherche-entreprises",
+    // Shape check only — Luhn validation happens in lookupBy{Siren,Siret}
+    // and surfaces as RechercheEntreprisesValidationError → HTTP 400.
+    // Falling through to search would silently turn a bad-checksum
+    // SIREN/SIRET into an empty name-search result.
+    isCanonicalId: (input) => hasRechercheEntreprisesShape(input),
+    lookup: async (input, options) => {
+      const normalized = normalizeSiren(input);
+      // Dispatch by length: 9 = SIREN, 14 = SIRET. The shape check
+      // above guarantees one of the two; anything else falls through to
+      // name search and never reaches this branch.
+      const company =
+        normalized.length === 14
+          ? await lookupBySiret(normalized, options)
+          : await lookupBySiren(normalized, options);
+      return company ? rechercheEntreprisesCompanyToHit(company) : null;
+    },
+    search: async (input, options) => {
+      const results = await searchRechercheEntreprisesByName(input, options);
+      return results.map(rechercheEntreprisesSearchResultToHit);
+    },
+    isDeployAvailable: isAlwaysDeployAvailable,
+    mapError: mapRechercheEntreprisesError,
+  };
 
 // ---------------------------------------------------------------------------
 // Registry table + lookups
 // ---------------------------------------------------------------------------
 
-export const BUSINESS_REGISTRY_DISPATCH: Record<
-  BusinessRegistrySlug,
-  RegistryHandler
-> = {
+export const BUSINESS_REGISTRY_DISPATCH: {
+  [Slug in BusinessRegistrySlug]: RegistryHandler<Slug>;
+} = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
   "companies-house": COMPANIES_HOUSE_HANDLER,
