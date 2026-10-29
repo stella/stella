@@ -465,6 +465,7 @@ const preparationSteps = new Set([
   "Generate web compiler sources",
   "Download generated sources",
   "Restore generated sources",
+  "Configure flaky-test quarantine",
 ]);
 const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
 const partitions = partitionIds.map((id) => v.parse(headJobSchema, jobs[id]));
@@ -2346,6 +2347,9 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
   expect(steps.at(installIndex)?.["id"]).toBe("install");
   for (const [index, step] of steps.entries()) {
     if (step.name === "Checkout") {
+      continue;
+    }
+    if (step.name === "Configure flaky-test quarantine") {
       continue;
     }
     if (leg === "ci-checks-rest" && preInstallGuards.has(step.name)) {

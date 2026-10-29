@@ -166,7 +166,12 @@ const run = ({
     writeFileSync(path.join(root, "fail-unquarantined"), "");
   }
   const reports = path.join(root, "reports");
-  const { BUN_OPTIONS: _options, ...inherited } = process.env;
+  const {
+    BUN_OPTIONS: _options,
+    FLAKY_TEST_QUARANTINE_REPORT_DIR: _reportDirectory,
+    FLAKY_TEST_QUARANTINE_REGISTRY: _registry,
+    ...inherited
+  } = process.env;
   const result = Bun.spawnSync({
     // CI loads the preload into a package runner through BUN_OPTIONS; that
     // runner then spawns the actual Bun test process.
@@ -230,7 +235,12 @@ const runReceiverFixture = ({
     }),
   );
   const reports = path.join(root, "reports");
-  const { BUN_OPTIONS: _options, ...inherited } = process.env;
+  const {
+    BUN_OPTIONS: _options,
+    FLAKY_TEST_QUARANTINE_REPORT_DIR: _reportDirectory,
+    FLAKY_TEST_QUARANTINE_REGISTRY: _registry,
+    ...inherited
+  } = process.env;
   const result = Bun.spawnSync({
     cmd: [process.execPath, "test", `./${RECEIVER_FIXTURE}`],
     cwd: root,

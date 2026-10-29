@@ -14,8 +14,31 @@ type Workflow = {
 export const QUARANTINE_ACTION =
   "./.github/actions/flaky-test-quarantine" as const;
 
-const BUN_TEST_COMMAND =
-  /\bbun\b[^\n;&|]*\s(?:run\s+)?test(?::[\w-]+)?\b|\bbun\s+(?:[^\n;&|]*\/)?run-tests\.ts\b/u;
+const includesBunTestCommand = (command: string): boolean =>
+  command.split(/[;&|\n]/u).some((part) => {
+    const words = part.trim().split(/\s+/u);
+    const bunIndex = words.indexOf("bun");
+    if (bunIndex === -1) {
+      return false;
+    }
+    let executableIndex = bunIndex + 1;
+    while (words.at(executableIndex)?.startsWith("-")) {
+      if (words.at(executableIndex) === "--cwd") {
+        executableIndex += 1;
+      }
+      executableIndex += 1;
+    }
+    if (words.at(executableIndex) === "run") {
+      executableIndex += 1;
+    }
+    const executable = words.at(executableIndex);
+    return (
+      executable === "test" ||
+      executable?.startsWith("test:") === true ||
+      executable?.endsWith("/run-tests.ts") === true ||
+      executable === "run-tests.ts"
+    );
+  });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -45,7 +68,7 @@ export const unownedBunTestSteps = (
     for (const [index, { run }] of steps.entries()) {
       if (
         typeof run === "string" &&
-        BUN_TEST_COMMAND.test(run) &&
+        includesBunTestCommand(run) &&
         (owner === -1 || owner >= index)
       ) {
         violations.push(`${workflowPath}: jobs.${jobName}.steps[${index}]`);

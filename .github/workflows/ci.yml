@@ -1624,6 +1624,7 @@ jobs:
       # Parser versions must advance whenever an adapter's parser inputs
       # change. The guard needs no dependency installation.
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: "parser-version-guard: Check parser version guard"
@@ -1825,6 +1826,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run protocol and malformed-stream tests
@@ -2306,6 +2308,7 @@ jobs:
           retention-days: 14
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Typecheck-cost baseline guard
@@ -2667,6 +2670,7 @@ jobs:
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Standalone lockfile guard
@@ -5179,10 +5183,10 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
+    # Longest leg: 17m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
     # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
     # task registry margin.
-    timeout-minutes: 43
+    timeout-minutes: 44
     permissions:
       contents: read
       packages: read
@@ -5262,6 +5266,7 @@ jobs:
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
       - name: Configure flaky-test quarantine
+        timeout-minutes: 1
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check route network baseline

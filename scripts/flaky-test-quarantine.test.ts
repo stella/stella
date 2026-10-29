@@ -23,6 +23,19 @@ const committed = readFileSync(
   path.join(REPOSITORY_ROOT, REGISTRY_FILE),
   "utf-8",
 );
+const actionSource = readFileSync(
+  path.join(
+    REPOSITORY_ROOT,
+    ".github/actions/flaky-test-quarantine/action.yml",
+  ),
+  "utf-8",
+);
+
+test("the shared action authenticates history reads by default", () => {
+  expect(actionSource).toMatch(
+    /inputs:\n {2}token:\n(?: {4}.*\n)*? {4}default: \$\{\{ github\.token \}\}/u,
+  );
+});
 
 const entry = (overrides: Partial<QuarantineEntry> = {}): QuarantineEntry => ({
   id: "apps/web/src/a.test.ts::group > case",
