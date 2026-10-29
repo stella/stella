@@ -19,7 +19,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 test.skipIf(!enabled)(
-  "known pre-contract expansion preserves rows while content indexes support the contract cutover",
+  "fallback contract preserves rows and permits distinct court and content identities",
   async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
@@ -93,18 +93,29 @@ test.skipIf(!enabled)(
             )
           ).length,
         ).toBe(1);
-        const legacyIndex = await client.unsafe(
+        // Recreate the previous deployment state only in this private fixture.
+        await client.unsafe(
+          `CREATE UNIQUE INDEX previous_fallback ON ${table} (source_id,case_number,language) WHERE source_document_id IS NULL`,
+        );
+        const docketIndexes = await client.unsafe(
           "SELECT indexname FROM pg_indexes WHERE schemaname=$1 AND indexdef LIKE '%(source_id, case_number, language)%'",
           [schema],
         );
-        expect(legacyIndex.length).toBe(1);
-        const oldIndexName = legacyIndex.at(0)?.["indexname"];
-        if (typeof oldIndexName !== "string") {
-          return panic("Fixture has no legacy fallback index");
+        for (const { indexname } of docketIndexes) {
+          if (typeof indexname !== "string") {
+            return panic("Fixture index name missing");
+          }
+          // db-await-in-loop: concurrent DDL must run outside transactions, one index at a time.
+          await client.unsafe(
+            `DROP INDEX CONCURRENTLY "${schema}"."${indexname}"`,
+          );
         }
-        // Only this isolated fixture models the later contract cutover. The
-        // expansion itself leaves the old index installed, as proved above.
-        await client.unsafe(`DROP INDEX "${schema}"."${oldIndexName}"`);
+        expect(
+          await client.unsafe(
+            "SELECT indexname FROM pg_indexes WHERE schemaname=$1 AND indexdef LIKE '%(source_id, case_number, language)%'",
+            [schema],
+          ),
+        ).toHaveLength(0);
         const insert = async (
           court: string,
           decisionDate: string,

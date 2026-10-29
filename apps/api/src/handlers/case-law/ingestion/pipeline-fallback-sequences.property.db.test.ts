@@ -233,6 +233,9 @@ test("legacy inline fulltext without persisted proof is adopted before sibling i
       adapterKey: `legacy-${sourceId}`,
       name: "Legacy inline fixture",
     });
+    // Recreate the expansion constraint only inside this isolated contract fixture.
+    await db.execute(sql`CREATE UNIQUE INDEX case_law_decisions_source_case_lang_null_idx
+      ON case_law_decisions (source_id, case_number, language) WHERE source_document_id IS NULL`);
     await db
       .insert(caseLawDecisions)
       .values({ ...input, id: originalId, sourceId, contentHash: null });
@@ -320,10 +323,6 @@ test(
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(asTestRaw(tx)));
     try {
-      // The expansion retains this index until the separate contract release.
-      await db.execute(
-        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-      );
       await assertProperty(
         "fallback sibling transition sequences preserve each decision",
         fc.asyncProperty(

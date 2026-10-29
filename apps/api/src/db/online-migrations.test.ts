@@ -5,6 +5,7 @@ import { defaultConfig } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
   PREVIOUS_FALLBACK_DECISION_INDEX,
 } from "@/api/lib/case-law/fallback-decision-identity-constants";
@@ -749,6 +750,21 @@ describe("online migrations", () => {
     );
     expect(dropOffset).toBeGreaterThan(
       indexOfStatement(harness.statements, FALLBACK_DECISION_IDENTITY_INDEX),
+    );
+  });
+
+  test("retires the docket-only fallback index after both decision replacements validate", async () => {
+    const harness = createHarness();
+    await runOnlineMigrations(harness.pool);
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${PREVIOUS_FALLBACK_DECISION_INDEX}"`,
+    );
+    expect(dropOffset).toBeGreaterThan(
+      indexOfStatement(harness.statements, FALLBACK_DECISION_IDENTITY_INDEX),
+    );
+    expect(dropOffset).toBeGreaterThan(
+      indexOfStatement(harness.statements, FALLBACK_DECISION_CONTENT_INDEX),
     );
   });
 
