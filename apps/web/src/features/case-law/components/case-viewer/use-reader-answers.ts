@@ -13,10 +13,10 @@ import { Temporal } from "@stll/time";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMessageLocale } from "@/i18n/message-locale";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { captureQueryError, getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError } from "@/lib/errors/api";
-import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 import {

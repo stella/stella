@@ -6,11 +6,11 @@ import {
   DOCX_SUGGESTIONS_PENDING_MAX,
 } from "@stll/api-contract";
 
+import { captureQueryError } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { WebApiRoutes } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { captureQueryError } from "@/lib/errors/query-result";
 
 import { entitiesKeys } from "./entities";
 
