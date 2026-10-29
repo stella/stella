@@ -204,14 +204,18 @@ export const raisedTimeoutViolations = (
       raised = numericValue(args.at(0));
     } else if (TEST_CALLS.has(name)) {
       const timeout = args.at(HOOK_CALLS.has(name) ? 1 : 2);
-      const timeoutValue =
-        timeout?.type === "ObjectExpression"
-          ? timeout.properties.find(
-              (property) =>
-                property.type === "Property" &&
-                propertyName(property) === "timeout",
-            )?.value
-          : timeout;
+      let timeoutValue: Node | Argument | undefined = timeout;
+      if (timeout?.type === "ObjectExpression") {
+        const timeoutProperty = timeout.properties.find(
+          (property) =>
+            property.type === "Property" &&
+            propertyName(property) === "timeout",
+        );
+        timeoutValue =
+          timeoutProperty?.type === "Property"
+            ? timeoutProperty.value
+            : undefined;
+      }
       if (timeoutValue !== undefined) {
         const literal = numericValue(timeoutValue);
         if (literal === undefined || literal === 0) {
