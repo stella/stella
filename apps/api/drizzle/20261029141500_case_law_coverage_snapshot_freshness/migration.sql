@@ -1,6 +1,8 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
+-- A versioned reader beside the original: releases still rolling out read
+-- stella_case_law_coverage_summary() unchanged, this one serves the envelope.
 -- The stored answer is served with whether it was computed under the current
 -- redistribution policy, so the reader can state that a refresh is pending.
 -- A source withheld since the snapshot refuses the answer only when the
@@ -9,7 +11,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- from the search index and cannot be subtracted from the stored answer
 -- exactly, so such an answer is refused rather than approximated.
 -- stella-migration-safety: reviewed security-definer - fixed search path and qualified relations, PUBLIC execute revoked; returns only the singleton summary, refused while it counts a source that is no longer redistributable
-CREATE OR REPLACE FUNCTION public.stella_case_law_coverage_summary() RETURNS jsonb
+CREATE FUNCTION public.stella_case_law_coverage_summary_v2() RETURNS jsonb
   LANGUAGE sql STABLE SECURITY DEFINER
   SET search_path = pg_catalog, public
   AS $function$
@@ -46,5 +48,5 @@ CREATE OR REPLACE FUNCTION public.stella_case_law_coverage_summary() RETURNS jso
           )
       )
   $function$;--> statement-breakpoint
-REVOKE ALL ON FUNCTION public.stella_case_law_coverage_summary() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_case_law_coverage_summary() TO stella_public_law_reader;
+REVOKE ALL ON FUNCTION public.stella_case_law_coverage_summary_v2() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_case_law_coverage_summary_v2() TO stella_public_law_reader;

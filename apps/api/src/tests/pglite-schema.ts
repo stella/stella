@@ -977,7 +977,6 @@ export const installPgliteCaseLawCoverageSummary = async (
     const source = executableSql(statement);
     return (
       source.startsWith("CREATE FUNCTION") ||
-      source.startsWith("CREATE OR REPLACE FUNCTION") ||
       source.startsWith("REVOKE ALL ON FUNCTION") ||
       source.startsWith("GRANT EXECUTE ON FUNCTION") ||
       source.startsWith('ALTER TABLE "case_law_coverage_summaries" FORCE')

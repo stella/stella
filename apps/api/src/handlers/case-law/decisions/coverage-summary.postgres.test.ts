@@ -83,18 +83,25 @@ const withSummaryRole = async ({
 describe.skipIf(!runPostgresTests)(
   "coverage summary on migrated PostgreSQL",
   () => {
-    test("the public reader receives exactly the stored summary through the function", async () => {
+    test("the public reader receives exactly the stored summary through both functions", async () => {
       await withSummaryRole({
         role: stellaPublicLawReader.name,
         read: async (tx) => {
           const rows = await tx.execute(
-            sql`SELECT public.stella_case_law_coverage_summary() AS summary`,
+            sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
           );
           expect(rows).toHaveLength(1);
           expect(rows.at(0)?.["summary"]).toEqual({
             answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
             policyCurrent: true,
           });
+          // The reader of releases before the versioned function, unchanged.
+          const previous = await tx.execute(
+            sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+          );
+          expect(previous.at(0)?.["answer"]).toEqual(
+            CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+          );
         },
       });
     });
@@ -104,7 +111,7 @@ describe.skipIf(!runPostgresTests)(
       const readSummary = async (tx: Transaction) =>
         (
           await tx.execute(
-            sql`SELECT public.stella_case_law_coverage_summary() AS summary`,
+            sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
           )
         ).at(0)?.["summary"];
       const generatedAt = new Date(

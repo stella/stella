@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import {
   caseLawCoverageSummaries,
@@ -8,12 +9,15 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
+import { coverageSnapshotSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
@@ -107,7 +111,9 @@ test("coverage reads only the stored answer as the corpus grows, including on a 
       // The allowed relation is the budget: any corpus read fails even if
       // it uses a fixed statement count or a warm process-local cache.
       expect(statements).toHaveLength(1);
-      expect(statements.at(0)).toContain("stella_case_law_coverage_summary()");
+      expect(statements.at(0)).toContain(
+        "stella_case_law_coverage_summary_v2()",
+      );
       expect(statements.at(0)).not.toMatch(
         /case_law_(?:decisions|sources|search_documents)/u,
       );
@@ -207,6 +213,75 @@ test("coverage serves the last permitted answer as refresh pending until a refre
       .where(eq(caseLawSources.id, countedSourceId));
     expect(await readCaseLawCoverageHandler(readDb, SERVED_AT)).toEqual({
       message: "Coverage is unavailable",
+    });
+  } finally {
+    await client.close();
+  }
+}, 120_000);
+
+/**
+ * The reader of releases before the versioned function: the original function
+ * parsed directly as the stored answer. It must keep answering during a
+ * rolling deploy exactly as it did.
+ */
+const readPreviousCoverage = async (
+  readDb: CaseLawPublicReadDb,
+): Promise<unknown> =>
+  await readDb(async (tx) => {
+    const row = executedRows(
+      await tx.execute(
+        sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+      ),
+    ).at(0);
+    const answer = isRecord(row) ? row["answer"] : null;
+    if (answer === null) {
+      return { message: "Coverage is unavailable" };
+    }
+    const parsed = v.safeParse(coverageSnapshotSchema, answer);
+    return parsed.success
+      ? parsed.output
+      : { message: "Coverage is unavailable" };
+  });
+
+// timeout: embedded PostgreSQL builds the complete migration schema for this test.
+test("the previous release's reader keeps its answers beside the versioned one", async () => {
+  const { client, db, readDb } = await createReaderDb();
+  const countedSourceId = createSafeId<"caseLawSource">();
+  try {
+    await db
+      .insert(caseLawSources)
+      .values(caseLawSourceRow({ id: countedSourceId }));
+    expect(await readPreviousCoverage(readDb)).toEqual({
+      message: "Coverage is unavailable",
+    });
+    await db.insert(caseLawCoverageSummaries).values({
+      key: "current",
+      sourcePolicy: "[]",
+      answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+      generatedAt: GENERATED_AT,
+    });
+    expect(await readPreviousCoverage(readDb)).toEqual(
+      CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+    );
+    expect(await readCaseLawCoverageHandler(readDb, SERVED_AT)).toEqual(
+      CASE_LAW_COVERAGE_FIXTURE,
+    );
+
+    // The original refuses on any policy difference; the versioned reader
+    // serves the same answer as pending a refresh.
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.SK_US,
+        descriptor: WITHHELD_DESCRIPTOR,
+        createdAt: afterSeconds(30),
+      }),
+    );
+    expect(await readPreviousCoverage(readDb)).toEqual({
+      message: "Coverage is unavailable",
+    });
+    expect(await readCaseLawCoverageHandler(readDb, SERVED_AT)).toEqual({
+      ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+      freshness: { status: "refresh_pending", ageSeconds: 60 },
     });
   } finally {
     await client.close();

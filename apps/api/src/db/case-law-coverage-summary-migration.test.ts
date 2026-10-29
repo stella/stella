@@ -39,6 +39,7 @@ const migratedDatabase = async () => {
   await db.exec(`
     ALTER TABLE case_law_coverage_summaries OWNER TO coverage_test_owner;
     ALTER FUNCTION public.stella_case_law_coverage_summary() OWNER TO coverage_test_owner;
+    ALTER FUNCTION public.stella_case_law_coverage_summary_v2() OWNER TO coverage_test_owner;
   `);
   return db;
 };
@@ -60,18 +61,27 @@ const storeSummary = async (
   await db.exec("RESET ROLE");
 };
 
-const readSummary = async (db: MigratedDatabase) => {
+const asReader = async <Row>(db: MigratedDatabase, query: string) => {
   await db.exec("RESET ROLE; SET ROLE stella_public_law_reader");
   try {
-    return (
-      await db.query<{ summary: unknown }>(
-        "SELECT public.stella_case_law_coverage_summary() AS summary",
-      )
-    ).rows;
+    return (await db.query<Row>(query)).rows;
   } finally {
     await db.exec("RESET ROLE");
   }
 };
+
+const readSummary = async (db: MigratedDatabase) =>
+  await asReader<{ summary: unknown }>(
+    db,
+    "SELECT public.stella_case_law_coverage_summary_v2() AS summary",
+  );
+
+/** The reader query of releases before the versioned function. */
+const readPreviousSummary = async (db: MigratedDatabase) =>
+  await asReader<{ answer: unknown }>(
+    db,
+    "SELECT public.stella_case_law_coverage_summary() AS answer",
+  );
 
 test("the summary reader serves only through the function, never the table", async () => {
   await using db = await migratedDatabase();
@@ -92,11 +102,36 @@ test("the summary reader serves only through the function, never the table", asy
     ),
   ).toMatchObject({ message: expect.stringContaining("permission denied") });
   await db.exec("RESET ROLE; SET ROLE stella");
-  expect(
-    await rejectionOf(
-      db.query("SELECT public.stella_case_law_coverage_summary()"),
-    ),
-  ).toMatchObject({ message: expect.stringContaining("permission denied") });
+  for (const reader of [
+    "stella_case_law_coverage_summary",
+    "stella_case_law_coverage_summary_v2",
+  ]) {
+    expect(
+      await rejectionOf(db.query(`SELECT public.${reader}()`)),
+    ).toMatchObject({ message: expect.stringContaining("permission denied") });
+  }
+});
+
+// Releases still rolling out call the original function and parse its result
+// as the bare answer; the versioned reader beside it must not change that.
+test("the original summary function answers exactly as before", async () => {
+  await using db = await migratedDatabase();
+  expect(await readPreviousSummary(db)).toEqual([{ answer: null }]);
+  await storeSummary(db, { policy: [] });
+  expect(await readPreviousSummary(db)).toEqual([{ answer: ANSWER }]);
+
+  // Any policy difference refuses it, the safe ones included.
+  await db.exec(`
+    INSERT INTO case_law_sources VALUES
+      ('${LATER_SOURCE}', 'later-feed', '${WITHHELD}', '2026-10-28T00:00:00Z');
+  `);
+  expect(await readPreviousSummary(db)).toEqual([{ answer: null }]);
+  await storeSummary(db, { policy: [LATER_SOURCE] });
+  expect(await readPreviousSummary(db)).toEqual([{ answer: ANSWER }]);
+  await db.exec(
+    `UPDATE case_law_sources SET descriptor = '${WITHHELD}' WHERE id = '${COUNTED_SOURCE}'`,
+  );
+  expect(await readPreviousSummary(db)).toEqual([{ answer: null }]);
 });
 
 test("a source withheld after the snapshot was computed leaves the snapshot served", async () => {

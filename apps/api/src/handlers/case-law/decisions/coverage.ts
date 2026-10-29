@@ -744,9 +744,11 @@ const COVERAGE_UNAVAILABLE = {
 } as const satisfies CaseLawCoverageUnavailable;
 
 /**
- * The stored answer as the summary function serves it: refused (null) while
- * it counts a source that is no longer redistributable, otherwise returned
- * with whether it was computed under the redistribution policy now in force.
+ * The stored answer as the versioned summary function serves it: refused
+ * (null) while it counts a source that is no longer redistributable,
+ * otherwise returned with whether it was computed under the redistribution
+ * policy now in force. The original function stays for releases still
+ * rolling out, which parse its result as the bare answer.
  */
 const storedCoverageSchema = v.object({
   answer: coverageSnapshotSchema,
@@ -777,7 +779,7 @@ export const readCaseLawCoverageSummaryQuery = definePublicLawSharedQuery(
   async (tx: CaseLawPublicReadTransaction): Promise<StoredCaseLawCoverage> => {
     const row = executedRows(
       await tx.execute(
-        sql`SELECT public.stella_case_law_coverage_summary() AS summary`,
+        sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
       ),
     ).at(0);
     if (!isRecord(row) || row["summary"] === null) {

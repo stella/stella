@@ -1,5 +1,4 @@
-/** How often the scheduler recomputes the stored case-law coverage answer. */
-export const CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS = 5 * 60_000;
+import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 
 /**
  * How old a stored answer may be and still read as current: one or two late
