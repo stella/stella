@@ -125,6 +125,7 @@
     "test:property": "turbo run test:property",
     "verify": "bash scripts/verify.sh",
     "autofix": "bash scripts/autofix-local.sh",
+    "resolve-derived": "bun --no-install --no-env-file scripts/generated-conflicts.ts resolve-derived",
     "db:push": "bun --filter @stll/api db:push",
     "clean": "turbo run clean && git clean -xdf node_modules",
     "sync:well-known": "cp -r .well-known apps/web/public/",

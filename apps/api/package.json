@@ -78,6 +78,7 @@
     "db:verify-decision-identifiers": "bun run --env-file=.env src/scripts/backfill-decision-identifiers.ts --verify",
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
+    "file-derivative-worker": "bun src/scripts/file-derivative-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
     "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
     "generate:case-law-decision-view-grants": "bun scripts/generate-case-law-decision-view-grants.ts",
