@@ -118,13 +118,16 @@ test.describe("PDF save and sign on the document route", () => {
       )
       .toBe(200);
     await page.goto(
-      `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document?entity=${uploaded.entityId}&field=${uploaded.fileId}`,
+      `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document?entity=${uploaded.entityId}&field=${uploaded.fieldId}`,
       { waitUntil: "domcontentloaded" },
     );
+    await expect(page.locator("[data-text-layer]").first()).toBeVisible({
+      timeout: 45_000,
+    });
     await expect(page.getByRole("button", { name: SIGN_LABEL })).toBeVisible({
       timeout: 45_000,
     });
-    return { originalFieldId: uploaded.fileId };
+    return { originalFieldId: uploaded.fieldId };
   };
 
   const openOrganizer = async (page: Page) => {
