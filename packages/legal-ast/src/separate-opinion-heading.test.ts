@@ -29,9 +29,6 @@ const HEADING_CASES = [
   ["Súhlasné stanovisko sudkyne", " sudkyne"],
   ["Súhlasné stanoviská sudkýň", " sudkýň"],
   ["Odlišné stanovisko k nálezu pléna", " k nálezu pléna"],
-  ["Paralelné stanovisko ku rozhodnutiu", " ku rozhodnutiu"],
-  ["Konkurujúce stanovisko vo veci", " vo veci"],
-  ["Súhlasné stanovisko podľa § 32", " podľa § 32"],
   ["Odlišné stanovisko JUDr. Jana Nováka", " JUDr. Jana Nováka"],
   ["Odlišné stanovisko JUDr Jana Nováka", " JUDr Jana Nováka"],
   ["ODLISNE stanovisko sudcu Jána Nováka", " sudcu Jána Nováka"],
@@ -160,3 +157,44 @@ test.each([
 ])("an opinion paragraph is not an author continuation: %s", (line) => {
   expect(separateOpinionAuthorLine(line)).toBe(false);
 });
+
+const CONCURRING_TITLES = [
+  "Souhlasné stanovisko",
+  "Súhlasné stanovisko",
+  "Paralelní stanovisko",
+  "Paralelné stanovisko",
+  "Konkurující stanovisko",
+  "Konkurujúce stanovisko",
+] as const;
+
+for (const title of CONCURRING_TITLES) {
+  test.each([
+    " podle § 149 odst. 1 správního řádu",
+    " podľa § 149 ods. 1 správneho poriadku",
+    " k rozhodnutí",
+    " ku rozhodnutiu",
+    " vo veci",
+    " k § 149",
+    " k č. 149",
+  ])(
+    `concurring title %s requires an author beyond its legal context: ${title}`,
+    (tail) => {
+      expect(
+        separateOpinionHeadingTail(`${title}${tail}`, 300),
+      ).toBeUndefined();
+    },
+  );
+  test.each([
+    "",
+    ":",
+    ".",
+    " soudce Jana Nováka",
+    " sudkyne Evy Novákovej",
+    " k nálezu soudce Jana Nováka",
+  ])(
+    `concurring title accepts punctuation or an author: ${title}%s`,
+    (tail) => {
+      expect(separateOpinionHeadingTail(`${title}${tail}`, 300)).toBe(tail);
+    },
+  );
+}

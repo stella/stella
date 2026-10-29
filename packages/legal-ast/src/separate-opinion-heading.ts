@@ -136,17 +136,12 @@ const foldedAlternation = (forms: readonly string[]): string =>
     ),
   ].join("|");
 
-const titlePattern = foldedAlternation(
-  languages.flatMap(({ titles }) => {
-    const forms: string[] = [];
-    for (const kind of OPINION_HEADING_KINDS) {
-      for (const words of titles[kind]) {
-        forms.push(words.join(" "));
-      }
-    }
-    return forms;
-  }),
-);
+const titlePatternOf = (kind: OpinionHeadingKind): string =>
+  foldedAlternation(
+    languages.flatMap(({ titles }) =>
+      titles[kind].map((words) => words.join(" ")),
+    ),
+  );
 const authorPattern = foldedAlternation([
   ...languages.flatMap(({ authors }) => authors),
   ...OPINION_HEADING_VOCABULARY.academicTitles.flatMap((title) => [
@@ -169,7 +164,11 @@ const referenceContextPattern = foldedAlternation(
   contextForms.filter((form) => !endsWithWord(form)),
 );
 
-const TITLE_RE = new RegExp(`^(?:${titlePattern})$`, "iu");
+const TITLE_RE = {
+  dissent: new RegExp(`^(?:${titlePatternOf("dissent")})$`, "iu"),
+  concurring: new RegExp(`^(?:${titlePatternOf("concurring")})$`, "iu"),
+} satisfies Record<OpinionHeadingKind, RegExp>;
+const EMPTY_TAIL_RE = /^\s*[.:]?$/u;
 const TAIL_RE = new RegExp(
   `^(?:\\s*[.:]?$|\\s+(?:(?:${authorPattern}|${wordContextPattern})(?=$|[\\s,.:])|${referenceContextPattern}))`,
   "iu",
@@ -219,8 +218,23 @@ export const separateOpinionHeadingTail = (
     first === undefined ||
     second === undefined ||
     tail === undefined ||
-    !TITLE_RE.test(stripDiacritics(`${first} ${second}`)) ||
     !TAIL_RE.test(stripDiacritics(tail))
+  ) {
+    return undefined;
+  }
+  const title = stripDiacritics(`${first} ${second}`);
+  const kind = OPINION_HEADING_KINDS.find((candidate) =>
+    TITLE_RE[candidate].test(title),
+  );
+  if (kind === undefined) {
+    return undefined;
+  }
+  // Consent from an administrative authority uses the same concurring title.
+  // A legal context alone therefore cannot establish a separate opinion.
+  if (
+    kind === "concurring" &&
+    !EMPTY_TAIL_RE.test(tail) &&
+    !separateOpinionHeadingNamesAuthor(tail)
   ) {
     return undefined;
   }

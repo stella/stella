@@ -879,3 +879,32 @@ test("recognized CS/SK opinion headings start independent numbering regardless o
     ),
   );
 });
+
+test.each([
+  "Souhlasné stanovisko podle § 149 odst. 1 správního řádu",
+  "Súhlasné stanovisko podľa § 149 ods. 1 správneho poriadku",
+])(
+  "administrative consent heading keeps the court's numbering scope: %s",
+  (title) => {
+    const before = [1, 2, 3, 4].map((number, index) =>
+      printedParagraph(index, `${String(number)}. `),
+    );
+    const heading: Block = {
+      type: "heading",
+      id: "administrative-consent",
+      anchorId: "administrative-consent",
+      level: 2,
+      plainText: title,
+      inlines: [{ type: "text", text: title }],
+    };
+    const after = [5, 6, 7].map((number, index) =>
+      printedParagraph(index + 5, `${String(number)}. `),
+    );
+    const result = extractCourtParagraphNumbers([...before, heading, ...after]);
+    expect(labelsOf(result.blocks)).toEqual([1, 2, 3, 4, undefined, 5, 6, 7]);
+    expect(result).toMatchObject({
+      type: "numbered",
+      scopes: [{ type: "fresh-start", blockIndex: 0 }],
+    });
+  },
+);
