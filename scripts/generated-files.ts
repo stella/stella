@@ -867,10 +867,11 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       ".github/workflows/ci.yml",
       "scripts/generate-main-heavy-infrastructure-steps.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
     ],
     write: ["bun", "scripts/generate-main-heavy-infrastructure-steps.ts"],
     check: null,
-    checkedBy: "generated-output guard",
+    checkedBy: "Generated files manifest guard",
     autofix: true,
     after: [],
   },

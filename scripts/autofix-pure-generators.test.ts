@@ -37,6 +37,9 @@ const PURE_AUTOFIX = {
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
   "bun-toolchain": "scripts/generate-bun-toolchain.ts",
+  // Parses the committed CI workflow and formats a deterministic JSON map.
+  "main-heavy-infrastructure-steps":
+    "scripts/generate-main-heavy-infrastructure-steps.ts",
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",

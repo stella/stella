@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { format } from "prettier";
+
+import { formattedLikeRepository } from "../packages/scripts/src/generated-artifact-format";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 const LOCAL_INFRASTRUCTURE_ACTIONS = new Set([
   "ci-install",
@@ -90,16 +93,19 @@ export const generateMainHeavyInfrastructureSteps = async (source: string) => {
       ] as const;
     }),
   );
-  return format(JSON.stringify(definitions), { parser: "json" });
+  return await formattedLikeRepository(
+    JSON.stringify(definitions),
+    "json",
+    ROOT,
+  );
 };
 
 if (import.meta.main) {
-  const root = path.resolve(import.meta.dirname, "..");
   const workflow = await Bun.file(
-    path.join(root, ".github/workflows/ci.yml"),
+    path.join(ROOT, ".github/workflows/ci.yml"),
   ).text();
   writeFileSync(
-    path.join(root, "scripts/main-heavy-infrastructure-steps.json"),
+    path.join(ROOT, "scripts/main-heavy-infrastructure-steps.json"),
     await generateMainHeavyInfrastructureSteps(workflow),
   );
 }
