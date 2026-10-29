@@ -1,13 +1,6 @@
 {
   "entries": [
     {
-      "id": ".oxlint-plugins/__tests__/public-case-law-db-boundary.test.ts::public-law relation scan > public and mixed reads import runtime schema tables by name",
-      "owner": "stella",
-      "reason": "The unchanged case timed out at 5 seconds in run 40967042529 while the isolated case completes in 324 ms. Its shared oxlint process scheduling makes the fixed timeout depend on other lint cases.",
-      "created": "2026-10-30",
-      "expires": "2026-11-06"
-    },
-    {
       "id": "apps/api/src/handlers/case-law/decisions/court-vocabulary-plan.postgres.test.ts::published court walks (postgres) > vocabulary and browse seek published index ranges at both corpus sizes",
       "owner": "stella",
       "reason": "The unchanged plan test passed in run 40647999241 and reported one heap fetch in run 40652291069. VACUUM visibility-map state depends on concurrent transaction snapshots; the exact-zero assertion needs an isolated visibility fixture.",
@@ -27,13 +20,6 @@
       "reason": "The midnight-tail case reads shared current-day fixture activity, so unrelated chat rows change its expected engagement minutes. Keep reporting failures while the fixture date is isolated.",
       "created": "2026-10-28",
       "expires": "2026-11-04"
-    },
-    {
-      "id": "apps/api/src/lib/case-law/sitemap-removal-refresh.postgres.test.ts::monthly sitemap removal fence (postgres) > a concurrent removal cannot be republished by a monthly count",
-      "owner": "stella",
-      "reason": "Run 40967042529 retained a whole-country change after the fixture invoked refresh twice. Each refresh has a wall-clock run budget and may return pending, so a fixed invocation count does not guarantee that fixture changes are drained.",
-      "created": "2026-10-30",
-      "expires": "2026-11-06"
     }
   ]
 }
