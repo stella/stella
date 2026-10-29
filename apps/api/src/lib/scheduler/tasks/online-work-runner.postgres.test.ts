@@ -224,7 +224,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
               [pid],
             );
             expect(terminated.at(0)?.terminated).toBe(true);
-            await firstConnection.terminate?.();
+            await firstConnection.terminate();
 
             const second = await claimOn(secondConnection);
             try {

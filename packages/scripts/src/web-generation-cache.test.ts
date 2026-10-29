@@ -396,6 +396,12 @@ test("web sources generate once across compiler tasks and restore until source i
       path.join(directory, "packages/scripts/src"),
       "dir",
     );
+    for (const file of [
+      "packages/mcp-apps/src/manifest.ts",
+      "packages/mcp-apps/src/resource-uri.ts",
+    ]) {
+      write(file, readFileSync(path.join(root, file), "utf-8"));
+    }
     write(
       "packages/cli/package.json",
       JSON.stringify({
