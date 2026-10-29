@@ -338,11 +338,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 4,
+    version: 5,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
+        "Re-read font-run segmentation after the shared PDF style mapping changed; Czech output remains plain text and footnote links, with no independent feature storage.",
     },
   },
 } as const satisfies ParserVersionScopes<
