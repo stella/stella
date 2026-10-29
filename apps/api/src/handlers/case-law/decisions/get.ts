@@ -59,6 +59,7 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  storedCorpusValidationFailure,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusTombstoneReaderForTx,
@@ -639,10 +640,10 @@ type CorpusReadOutcome<TPayload> = {
 };
 
 /**
- * Contain an object-storage refusal, and only that. Anything else is a
+ * Contain an unavailable or invalid stored payload. Anything else is a
  * defect in the read and still fails it.
  */
-const containPayloadUnavailable = async <TPayload>(
+export const containPayloadUnavailable = async <TPayload>(
   read: () => Promise<TPayload | null>,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<CorpusReadOutcome<TPayload>> => {
@@ -657,10 +658,12 @@ const containPayloadUnavailable = async <TPayload>(
     outcome.error instanceof UnhandledException
       ? outcome.error.cause
       : outcome.error;
-  // Not the containable refusal. `readCorpusPayloadOrFallback` raises only
-  // `CorpusPayloadUnavailableError`, so anything else is the defect this
-  // helper's contract already names: it fails the read, carrying the original
-  // as its cause.
+  // An invalid stored payload uses the same visible read-failed state as an
+  // unavailable object; neither means the source published no text. Corpus
+  // storage reported it with its issue paths, so it is not reported here.
+  if (storedCorpusValidationFailure(raised) !== null) {
+    return { payload: null, unavailable: true };
+  }
   if (!CorpusPayloadUnavailableError.is(raised)) {
     return panic(
       "Corpus read failed for a reason this read cannot contain",

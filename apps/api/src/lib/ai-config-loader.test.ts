@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   decryptAIConfig,
@@ -8,12 +9,22 @@ import {
   unreadableOrgAIConfig,
 } from "@/api/lib/ai-config-crypto";
 import {
+  loadOrgAIConfig,
+  loadOrgAISettings,
+  loadOrgSettingsForAuth,
+} from "@/api/lib/ai-config-loader";
+import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
+import * as captureModule from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
-import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { assertSettingsFailureConfidential } from "@/api/tests/helpers/settings-failure-confidentiality";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
   decryptAIConfigMock.mockClear();
@@ -42,8 +53,118 @@ beforeEach(() => {
 });
 
 const organizationId = toSafeId<"organization">("org_loader_test");
+const userId = toSafeId<"user">("user_loader_test");
+
+type SettingsRow = {
+  aiConfigEncrypted: Buffer | null;
+  aiConfigIv: Buffer | null;
+  promptCachingEnabled: boolean;
+  managedAIResidency: "eu";
+};
+
+const settingsReader = (row: SettingsRow) => {
+  const db = {
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: async () => [row] }),
+      }),
+    }),
+    transaction: async <T>(run: (tx: unknown) => Promise<T>) => await run(db),
+  };
+  return asTestRaw<Parameters<typeof loadOrgAIConfig>[0]>(db);
+};
 
 describe("loadOrgAIConfig", () => {
+  test("every runtime loader exposes only the shared confidentiality allowlist", async () => {
+    const key = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
+    const fixtures = {
+      "incomplete-envelope": {
+        aiConfigEncrypted: Buffer.from("stored-incomplete"),
+        aiConfigIv: null,
+      },
+      "missing-key": {
+        aiConfigEncrypted: Buffer.from("stored-missing-key"),
+        aiConfigIv: Buffer.alloc(12, 21),
+      },
+      "decryption-failed": {
+        aiConfigEncrypted: Buffer.from("stored-decryption"),
+        aiConfigIv: Buffer.alloc(12, 22),
+      },
+      "invalid-json": {
+        aiConfigEncrypted: Buffer.from('{"secret":'),
+        aiConfigIv: Buffer.alloc(12),
+      },
+      "invalid-schema": {
+        aiConfigEncrypted: Buffer.from(
+          JSON.stringify({ providers: [{ apiKey: "stored-secret" }] }),
+        ),
+        aiConfigIv: Buffer.alloc(12),
+      },
+    } as const satisfies Record<
+      OrgAIConfigReadFailure,
+      { aiConfigEncrypted: Buffer; aiConfigIv: Buffer | null }
+    >;
+    const loaders = {
+      loadOrgAIConfig,
+      loadOrgAISettings,
+      loadOrgSettingsForAuth,
+    } as const;
+    const isReason = (value: string): value is keyof typeof fixtures =>
+      Object.hasOwn(fixtures, value);
+
+    try {
+      for (const reason of Object.keys(fixtures)) {
+        if (!isReason(reason)) {
+          continue;
+        }
+        envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
+          reason === "missing-key" ? undefined : key;
+        for (const [name, load] of Object.entries(loaders)) {
+          const analytics = installRecordingAnalytics();
+          const logs = installRecordingLogger();
+          const capture = spyOn(captureModule, "captureError");
+          const devErrors = spyOn(console, "error").mockImplementation(
+            () => undefined,
+          );
+          try {
+            const row = {
+              ...fixtures[reason],
+              promptCachingEnabled: false,
+              managedAIResidency: "eu" as const,
+            };
+            const result = await load(settingsReader(row), {
+              organizationId,
+              userId,
+            });
+            let returned: unknown = result;
+            if (name !== "loadOrgSettingsForAuth" && "error" in result) {
+              returned = result.error;
+            }
+            assertSettingsFailureConfidential({
+              reason,
+              organizationId,
+              outputs: {
+                analyticsEvents: analytics.events,
+                captureEntries: capture.mock.calls,
+                developmentEntries: devErrors.mock.calls,
+                groupIdentifies: analytics.groupIdentifies,
+                logRecords: logs.records,
+                returned,
+              },
+            });
+          } finally {
+            devErrors.mockRestore();
+            capture.mockRestore();
+            logs.restore();
+            analytics.restore();
+          }
+        }
+      }
+    } finally {
+      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = key;
+    }
+  });
+
   test("returns ok/null for nullish encrypted settings", async () => {
     const result = await decryptOrgAIConfigRow({
       decrypt: decryptAIConfigMock,

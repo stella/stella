@@ -242,6 +242,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "fulltext",
   // Ingestion reconciliation scheduling is not public document metadata.
   "textlessDetailRecheckedAt",
+  // Extraction diagnostics accompany document content in the detail reader.
+  "extractionWarnings",
   // Text sections belong to the detail reader.
   "sections",
   // Structured document content belongs to the detail reader.
