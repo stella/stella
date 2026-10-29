@@ -1,0 +1,7 @@
+# Correlating connector authorization window outcomes
+
+Generated from `scripts/ownership/mcp-oauth-channel.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                | Owner                                                                                      | Enforcement                            | Summary                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp-oauth-channel` — Correlating connector authorization window outcomes | `apps/web/src/lib/mcp-oauth-channel.ts`, `apps/web/src/lib/mcp-oauth-channel.dom.test.tsx` | literal pattern `^(stll\.)?mcp-oauth$` | The channel owner creates a nonce per window, consumes each correlated outcome once, and notifies request callbacks before connection observers. Only the owner and its protocol tests name the raw channel or wire discriminator. |

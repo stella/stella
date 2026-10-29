@@ -18,17 +18,12 @@ import { Loader } from "@stll/ui/loader";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { mcpConnectorConnection } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import {
-  openMcpOAuthWindow,
-  subscribeToMcpOAuthOutcome,
-} from "@/lib/mcp-oauth-channel";
+import { useMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
@@ -341,6 +336,13 @@ export const ConnectConnectorCard = ({
     });
   };
 
+  const openOAuthWindow = useMcpOAuthWindow(() => {
+    if (phase.type !== "waiting" || !isPending || hasAnswered.current) {
+      return;
+    }
+    detached(confirmConnected(), "connect-connector-card.sign-in-outcome");
+  });
+
   const startConnect = async () => {
     if (connectorSlug === undefined || !isPending || isBusy) {
       return;
@@ -363,7 +365,7 @@ export const ConnectConnectorCard = ({
       case "oauth2": {
         // A blocked popup falls back to navigating this tab; the turn keeps
         // waiting, so the card is answerable again after the sign-in.
-        const opened = openMcpOAuthWindow(started.value.authorizeUrl);
+        const opened = openOAuthWindow(started.value.authorizeUrl);
         setPhase(
           opened === "invalid"
             ? { type: "failed", reason: "start" }
@@ -376,20 +378,6 @@ export const ConnectConnectorCard = ({
         panic("Unhandled connector connect response");
     }
   };
-
-  // Sign-in completes in another window, which broadcasts its outcome. Any
-  // outcome is checked with the server, which knows whether it connected.
-  const onSignInOutcome = useLatestCallback(() => {
-    detached(confirmConnected(), "connect-connector-card.sign-in-outcome");
-  });
-  const isWaitingForSignIn = phase.type === "waiting";
-  useExternalSyncEffect(
-    () =>
-      isWaitingForSignIn
-        ? subscribeToMcpOAuthOutcome(onSignInOutcome)
-        : undefined,
-    [isWaitingForSignIn, onSignInOutcome],
-  );
 
   return (
     <section

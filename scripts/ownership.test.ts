@@ -784,3 +784,31 @@ describe("desktop proof replay ownership", () => {
     ).toEqual([1, 2, 3]);
   }, 60_000);
 });
+
+describe("MCP OAuth channel literal ownership", () => {
+  test("allows channel literals in the owner and rejects them in unrelated web files", async () => {
+    const door = OWNERSHIP.find(({ id }) => id === "mcp-oauth-channel");
+    if (!door || door.enforcement.kind !== "literal-pattern") {
+      throw new TypeError("MCP OAuth channel requires literal confinement");
+    }
+    expect(door.owner).toContain("apps/web/src/lib/mcp-oauth-channel.ts");
+    const source = [
+      'const channel = new BroadcastChannel("mcp-oauth");',
+      'const messageType = "stll.mcp-oauth";',
+    ].join("\n");
+    const ruleOptionsForRoot = () => ({ entries: [door] });
+
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/web/src/lib/mcp-oauth-channel.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/web/src/lib/unrelated-channel.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([1, 2]);
+  });
+});

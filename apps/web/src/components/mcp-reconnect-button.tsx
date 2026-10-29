@@ -1,5 +1,3 @@
-import { useRef } from "react";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -17,8 +15,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
 import {
   type McpOAuthOutcome,
-  openMcpOAuthWindow,
   subscribeToMcpOAuthOutcome,
+  useMcpOAuthWindow,
 } from "@/lib/mcp-oauth-channel";
 
 type McpReconnectButtonProps = {
@@ -58,7 +56,6 @@ export const McpReconnectButton = ({
   useMcpConnectionOAuthRefresh(
     oauthRefresh === "self" && authType === "oauth2",
   );
-  const awaitingOAuth = useRef(false);
   const handleError = (error: unknown) => {
     notifyUserError(error, t("knowledge.mcp.errorTitle"), {
       description: userErrorFromThrown(
@@ -67,29 +64,17 @@ export const McpReconnectButton = ({
       ),
     });
   };
-  const onOutcome = useLatestCallback((outcome: McpOAuthOutcome) => {
-    if (!awaitingOAuth.current) {
-      return;
-    }
-    awaitingOAuth.current = false;
+  const openOAuthWindow = useMcpOAuthWindow((outcome) => {
     if (outcome.status === "error") {
       handleError(undefined);
     }
   });
-  useExternalSyncEffect(() => {
-    if (authType !== "oauth2") {
-      return undefined;
-    }
-    return subscribeToMcpOAuthOutcome(onOutcome);
-  }, [authType, onOutcome]);
   const reconnect = useMutation({
     mutationFn: async () => await mcpConnectorConnection.start(slug),
     onSuccess: (data) => {
       switch (data.type) {
         case "oauth2":
-          awaitingOAuth.current = true;
-          if (openMcpOAuthWindow(data.authorizeUrl) === "invalid") {
-            awaitingOAuth.current = false;
+          if (openOAuthWindow(data.authorizeUrl) === "invalid") {
             handleError(undefined);
           }
           return;
