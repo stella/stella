@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 23,
+    version: 24,
     scope: {
       type: "all",
       reason:
-        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.",
+        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.; re-read legacy Adobe glyph names from stored PDFs",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
@@ -314,11 +314,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 10,
+    version: 11,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate document AST identities across the complete parser output.; re-read legacy Adobe glyph names from stored PDFs",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
