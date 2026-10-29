@@ -438,3 +438,38 @@ test("clone database names fit the identifier limit and stay distinct", () => {
     workerDatabaseName({ template: "template_db", runId: "1_a", worker: 1 }),
   ).toStartWith("template_db_test_w1_");
 });
+
+test("an exclusive suite after ordinary ones starts on a fresh clone of the template", async () => {
+  const fixture = adminFixture();
+  const status = await runPostgresWorkers({
+    files: ["ordinary.test.ts", "ddl.test.ts"],
+    durations: { "ordinary.test.ts": 2, "ddl.test.ts": 1 },
+    exclusivePaths: new Set(["ddl.test.ts"]),
+    workers: 1,
+    databaseUrl: "postgres://owner:secret@localhost:5432/template_db",
+    admin: fixture.admin,
+    registerSignal: () => () => {},
+    runWorker: ({ files }) => {
+      fixture.calls.push(`RUN ${files.join(",")}`);
+      return {
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        signalCode: null,
+        kill: () => {},
+      };
+    },
+    log: () => {},
+  });
+  expect(status).toBe(0);
+  const ordinary = fixture.calls.indexOf("RUN ordinary.test.ts");
+  const exclusive = fixture.calls.indexOf("RUN ddl.test.ts");
+  expect(ordinary).toBeGreaterThan(-1);
+  expect(exclusive).toBeGreaterThan(ordinary);
+  const between = fixture.calls.slice(ordinary + 1, exclusive);
+  expect(between.map((call) => call.split(" ").slice(0, 2).join(" "))).toEqual([
+    "SELECT pg_terminate_backend(pid)",
+    "DROP DATABASE",
+    "CREATE DATABASE",
+  ]);
+  expect(between.at(-1)).toContain('TEMPLATE "template_db"');
+});
