@@ -7,6 +7,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
@@ -50,13 +51,13 @@ type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const removableId = createSafeId<"caseLawDecision">();
-/** One month past the split threshold, so the refresh lists it by bucket. */
-const BULK_MONTH_DECISIONS = SITEMAP_SHARD_SPLIT_THRESHOLD + 100;
+/** Larger than the old 5,000-URL cap; served as one natural month. */
+const BULK_MONTH_DECISIONS = 6000;
 const NEWEST_UPDATE = new Date("2024-07-02T09:30:00.000Z");
 /** Undated decisions beyond the first, so the undated walk spans pages too. */
 const EXTRA_UNDATED_DECISIONS = 30;
 /** Small enough that both walks, dated and undated, take several pages. */
-const SMALL_PAGE_SIZE = 7;
+const SMALL_PAGE_SIZE = 23;
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
@@ -149,16 +150,23 @@ beforeAll(async () => {
       language: "xx",
     }),
   ]);
-  await db.insert(caseLawDecisions).values(
-    Array.from({ length: BULK_MONTH_DECISIONS }, (_, index) =>
+  const bulkDecisions = Array.from(
+    { length: BULK_MONTH_DECISIONS },
+    (_, index) =>
       decision({
         caseNumber: `${index + 1} Cdo ${index + 1}/2024`,
         decisionDate: `2024-06-${String((index % 28) + 1).padStart(2, "0")}`,
+        languageGroupKey: `mono-${index}`,
         updatedAt:
           index === 0 ? NEWEST_UPDATE : new Date("2024-07-01T00:00:00.000Z"),
       }),
-    ),
   );
+  for (const rows of chunkItems(bulkDecisions, 1000)) {
+    // db-await-in-loop: bounded fixture batches stay under the wire parameter limit
+    await db.insert(caseLawDecisions).values(rows);
+  }
+  // Real corpus tables have planner statistics and settled visibility maps.
+  await client.query("VACUUM ANALYZE case_law_decisions");
 }, DB_TEST_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -205,32 +213,29 @@ test(
 test(
   "a refresh lists each published, redistributable month of a public country once",
   async () => {
-    // Three unsplit months, and the split month in its 64 buckets (with this
-    // many decisions, every bucket holds some).
+    // The larger month stays whole rather than making 64 tiny sitemaps.
     expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
-      shards: 3 + 64,
+      shards: 4,
     });
 
     const shards = await listedShards();
     const unsplit = shards.filter((shard) => shard.bucket === "all");
     expect(
       unsplit.map(({ country, year, month }) => `${country}/${year}/${month}`),
-    ).toEqual(["cze/undated/00", "cze/2021/01", "cze/2020/03"]);
+    ).toEqual(["cze/undated/00", "cze/2024/06", "cze/2021/01", "cze/2020/03"]);
     expect(unsplit.every((shard) => shard.lastmod !== null)).toBe(true);
   },
   DB_TEST_TIMEOUT_MS,
 );
 
 test(
-  "a month past the split threshold is listed by bucket, and its buckets hold every decision",
+  "a consolidated month serves every decision once with its own modification date",
   async () => {
     const buckets = (await listedShards()).filter(
       (shard) => shard.year === "2024" && shard.month === "06",
     );
-    expect(buckets.length).toBeGreaterThan(1);
-    expect(buckets.every((shard) => /^[0-9]{2}$/u.test(shard.bucket))).toBe(
-      true,
-    );
+    expect(buckets).toHaveLength(1);
+    expect(buckets.at(0)?.bucket).toBe("all");
     expect(buckets.map((shard) => shard.lastmod)).toContain(
       NEWEST_UPDATE.toISOString().slice(0, 10),
     );
@@ -246,9 +251,26 @@ test(
       }
       for (const item of page.items) {
         served.add(item.id);
+        expect(item.updatedAt).toEqual(
+          item.caseNumber === "1 Cdo 1/2024"
+            ? NEWEST_UPDATE
+            : new Date("2024-07-01T00:00:00.000Z"),
+        );
       }
     }
     expect(served.size).toBe(BULK_MONTH_DECISIONS);
+
+    // A crawler may still hold the preceding index in its cache. Its old
+    // hash-bucket URLs must retain the same partition during consolidation.
+    const legacy = await listSitemapShardDecisionsHandler(
+      { bucket: "00", country: "cze", month: "06", year: "2024" },
+      caseLawDb,
+    );
+    if (!("items" in legacy)) {
+      panic("Expected the cached legacy bucket to remain readable.");
+    }
+    expect(legacy.items.length).toBeGreaterThan(0);
+    expect(legacy.items.every(({ id }) => served.has(id))).toBe(true);
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -517,6 +539,9 @@ for (const phase of ["dated", "undated"] as const) {
 
       expect(plan).toMatch(
         /Index Only Scan using case_law_decisions_sitemap_shard_published_idx on case_law_decisions/u,
+      );
+      expect(plan).toMatch(
+        /Index Scan using case_law_decisions_lang_group_idx/u,
       );
       // The resume point and the country are where the index read starts,
       // not a filter over everything before it, and the limit stops it: the
@@ -831,6 +856,115 @@ test(
       remaining: countries,
     });
     expect(await snapshot()).toEqual(before);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("snapshot packing keeps N and 10N months whole and splits only beyond its growth margin", async () => {
+  const stagedMonths = [
+    2500,
+    SITEMAP_SHARD_SPLIT_THRESHOLD,
+    SITEMAP_SHARD_SPLIT_THRESHOLD + 1,
+  ].flatMap((total, index) =>
+    Array.from({ length: 64 }, (_, bucket) => ({
+      year: "2025",
+      month: String(index + 1).padStart(2, "0"),
+      bucket: String(bucket).padStart(2, "0"),
+      total: Math.floor(total / 64) + (bucket < total % 64 ? 1 : 0),
+      weightedTotal: Math.floor(total / 64) + (bucket < total % 64 ? 1 : 0),
+      lastModifiedMs: NEWEST_UPDATE.getTime() - bucket * 1000,
+    })),
+  );
+  const legacyMonth = {
+    year: "2025",
+    month: "04",
+    bucket: "00",
+    total: 3000,
+    lastModifiedMs: NEWEST_UPDATE.getTime(),
+  };
+  await db
+    .insert(caseLawSitemapShardCounts)
+    .values(
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES.map((country) => ({
+        country,
+        months: sql`${JSON.stringify(country === "CZE" ? [...stagedMonths, legacyMonth] : [])}::text::jsonb`,
+        pages: 1,
+        countedAt: new Date(),
+      })),
+    )
+    .onConflictDoUpdate({
+      target: caseLawSitemapShardCounts.country,
+      set: {
+        months: sql`excluded.months`,
+        pages: sql`excluded.pages`,
+        countedAt: sql`excluded.counted_at`,
+      },
+    });
+
+  const outcome = await swappedRefresh(refreshDb);
+  expect(outcome.shards).toBe(67);
+  const shards = await snapshot();
+  expect(
+    shards
+      .filter(({ bucket }) => bucket === "all")
+      .map(({ month, total, lastModifiedAt }) => ({
+        month,
+        total,
+        lastModifiedAt,
+      })),
+  ).toEqual([
+    { month: "01", total: 2500, lastModifiedAt: NEWEST_UPDATE },
+    {
+      month: "02",
+      total: SITEMAP_SHARD_SPLIT_THRESHOLD,
+      lastModifiedAt: NEWEST_UPDATE,
+    },
+  ]);
+  const split = shards.filter(({ month }) => month === "03");
+  expect(split).toHaveLength(64);
+  expect(split.reduce((sum, { total }) => sum + total, 0)).toBe(
+    SITEMAP_SHARD_SPLIT_THRESHOLD + 1,
+  );
+  expect(shards.every(({ total }) => total > 0)).toBe(true);
+  expect(shards.filter(({ month }) => month === "04")).toMatchObject([
+    { bucket: "00", total: legacyMonth.total },
+  ]);
+});
+
+// timeout: inserts 6,000 translations and refreshes their snapshot in PGlite.
+test(
+  "language-group months retain the smaller byte budget before alternate reads",
+  async () => {
+    const alternates = Array.from(
+      { length: BULK_MONTH_DECISIONS },
+      (_, index) =>
+        decision({
+          caseNumber: `${index + 1} Cdo ${index + 1}/2024`,
+          decisionDate: `2024-06-${String((index % 28) + 1).padStart(2, "0")}`,
+          languageGroupKey: `mono-${index}`,
+          language: "en",
+        }),
+    );
+    for (const rows of chunkItems(alternates, 1000)) {
+      // db-await-in-loop: bounded fixture batches stay under the wire parameter limit
+      await db.insert(caseLawDecisions).values(rows);
+    }
+    const oversized = await listSitemapShardDecisionsHandler(
+      { country: "cze", year: "2024", month: "06", bucket: "all" },
+      caseLawDb,
+    );
+    expect(oversized).toMatchObject({
+      code: 500,
+      response: {
+        message: "Case-law sitemap shard exceeds sitemap URL capacity.",
+      },
+    });
+    await swappedRefresh(refreshDb);
+    const monthShards = (await listedShards()).filter(
+      ({ year, month }) => year === "2024" && month === "06",
+    );
+    expect(monthShards).toHaveLength(64);
+    expect(monthShards.every(({ bucket }) => bucket !== "all")).toBe(true);
   },
   DB_TEST_TIMEOUT_MS,
 );

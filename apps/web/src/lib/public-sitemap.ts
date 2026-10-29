@@ -46,9 +46,9 @@ export const createSitemapUpstreamBusyError = ({
 };
 
 const createSitemapBusyResponse = (error: SitemapUpstreamBusyError): Response =>
-  new Response("Too Many Requests", {
+  new Response("Service Unavailable", {
     headers: { "Retry-After": error.retryAfter },
-    status: 429,
+    status: 503,
   });
 
 /**

@@ -51,6 +51,8 @@ export type RateLimitOptions = {
   context: RateLimitContext;
   duration: number;
   errorResponse?: RateLimitErrorResponse;
+  /** Shared capacity exhaustion is service unavailability, not a caller quota. */
+  refusalStatus?: 429 | 503;
   generator: RateLimitGenerator;
   max: number | ((request: Request) => MaybePromise<number>);
   additionalBudgets?: (

@@ -72,6 +72,15 @@ export const PUBLIC_CRAWL_ROUTES = [
   },
 ] as const satisfies readonly PublicCrawlRoute[];
 
+/** Static ownership proofs are served from public/, outside the route tree. */
+export const PUBLIC_CRAWL_ASSETS = [
+  {
+    path: "/71e354a4429c5f0276819d8258136a50.txt",
+    scope: "exact",
+    permission: "law",
+  },
+] as const satisfies readonly Omit<PublicCrawlRoute, "route" | "format">[];
+
 export type PublicCrawlOptions = {
   publicKnowledgeCrawlAllowed: boolean;
   publicLawCrawlAllowed: boolean;
@@ -112,7 +121,7 @@ export const createPublicCrawlRules = ({
     knowledge: publicKnowledgeCrawlAllowed,
   } satisfies Record<PublicCrawlRoute["permission"], boolean>;
   const rules: PublicCrawlRule[] = [];
-  for (const entry of PUBLIC_CRAWL_ROUTES) {
+  for (const entry of [...PUBLIC_CRAWL_ROUTES, ...PUBLIC_CRAWL_ASSETS]) {
     if (!permissions[entry.permission]) {
       continue;
     }

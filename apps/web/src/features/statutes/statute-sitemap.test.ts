@@ -122,7 +122,7 @@ describe("public statute sitemap", () => {
     expect(works.isErr()).toBe(true);
   });
 
-  test("a budget refusal answers 429 with the upstream Retry-After", async () => {
+  test("an upstream budget refusal answers 503 with the upstream Retry-After", async () => {
     const fetchImpl = async () =>
       new Response("busy", { headers: { "Retry-After": "7" }, status: 429 });
 
@@ -134,7 +134,7 @@ describe("public statute sitemap", () => {
       works.isErr() ? works.error : null,
     );
 
-    expect(response.status).toBe(429);
+    expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("7");
   });
 

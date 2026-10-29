@@ -20,6 +20,7 @@ import {
 } from "@/api/public-corpus-policy";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   createPublicCorpusAddressRateLimitOptions,
@@ -34,6 +35,8 @@ import {
   type createRedisRateLimit,
   RedisRateLimitContext,
 } from "./redis-context";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const request = (path: string, method = "GET") =>
   new Request(`http://localhost${STELLA_API_VERSION_PREFIX}${path}`, {
@@ -143,6 +146,61 @@ const createApp = (binding: typeof createRedisRateLimit): TestServer =>
     createPublicCorpusRateLimitComposition({ createRedisBinding: binding }),
   );
 
+test("verified crawlers bypass public browse quotas while impersonators remain limited", async () => {
+  testState.setConfig("RATE_LIMIT_API_API_MAX", 2);
+  const bindings = createBindings();
+  const checked: string[] = [];
+  const unverifiedBindings = createBindings();
+  try {
+    await using server = serveVersioned(
+      { "/law/statutes": { GET: answering("browse") } },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: bindings.binding,
+        verifyCrawlerAddress: async (address) => {
+          checked.push(address);
+          return address === "127.0.0.1" || address === "::1";
+        },
+      }),
+    );
+    for (let index = 0; index < 10; index += 1) {
+      expect(
+        (
+          await server.fetch(
+            new Request(request("/law/statutes"), {
+              headers: {
+                "user-agent": "Googlebot",
+                "x-forwarded-for": "192.0.2.9",
+              },
+            }),
+          )
+        ).status,
+      ).toBe(200);
+    }
+    expect(checked).toHaveLength(10);
+    expect(checked.every((address) => address !== "192.0.2.9")).toBe(true);
+    expect(bindings.increments.get("api")).toBeUndefined();
+
+    await using unverified = serveVersioned(
+      { "/law/statutes": { GET: answering("browse") } },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: unverifiedBindings.binding,
+        verifyCrawlerAddress: async () => false,
+      }),
+    );
+    for (const expectedStatus of [200, 200, 429]) {
+      const response = await unverified.fetch(
+        new Request(request("/law/statutes"), {
+          headers: { "user-agent": "Googlebot" },
+        }),
+      );
+      expect(response.status).toBe(expectedStatus);
+    }
+  } finally {
+    bindings.kill();
+    unverifiedBindings.kill();
+  }
+});
+
 type AdmissionCountOptions = {
   lines: string[];
   routeClass: string;
@@ -236,7 +294,7 @@ describe("public corpus fleet request budgets", () => {
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
         { path: "/law/statutes/facets", limit: 60 },
-        { path: "/law/sitemap/shards", limit: 10 },
+        { path: "/law/sitemap/shards", limit: 100 },
       ]) {
         const response = await bindings.send({
           server,
@@ -325,7 +383,7 @@ describe("public corpus fleet request budgets", () => {
             incoming: request(path, method),
             address: `198.51.100.${index + 1}`,
           });
-          expect(response.status).toBe(429);
+          expect(response.status).toBe(503);
         }
         expect(started).toBe(capacity);
         expect(bindings.increments.get(scope)).toBe(capacity);
@@ -454,7 +512,7 @@ describe("public corpus fleet request budgets", () => {
             incoming: request(route.path, route.method),
             address: `192.0.2.${index + 1}`,
           });
-          expect(response.status).toBe(index < 3 ? 200 : 429);
+          expect(response.status).toBe(index < 3 ? 200 : 503);
           if (index === 3) {
             expect(Number(response.headers.get("Retry-After"))).toBeGreaterThan(
               0,
@@ -559,7 +617,7 @@ describe("public corpus fleet request budgets", () => {
     const bindings = createBindings();
     const previousSitemap = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
     const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
-    env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
+    env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 1200;
     env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 100;
     await using server = createApp(bindings.binding);
     const lines: string[] = [];
@@ -569,7 +627,7 @@ describe("public corpus fleet request budgets", () => {
     try {
       for (const { path, max, routeClass } of [
         { path: "/law/statutes/facets", max: 50, routeClass: "aggregate" },
-        { path: "/law/sitemap/shards", max: 10, routeClass: "sitemap" },
+        { path: "/law/sitemap/shards", max: 600, routeClass: "sitemap" },
       ]) {
         for (let index = 0; index < max; index += 1) {
           expect(
@@ -686,7 +744,7 @@ describe("public corpus fleet request budgets", () => {
         const response = await server.fetch(
           request("/case/decisions/search", "POST"),
         );
-        expect(response.status).toBe(429);
+        expect(response.status).toBe(503);
         expect(lines).toHaveLength(1);
         for (const line of lines) {
           expect(JSON.parse(line)).toMatchObject({

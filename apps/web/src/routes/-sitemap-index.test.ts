@@ -23,10 +23,12 @@ describe("root sitemap read failures", () => {
   });
 
   test.each([
-    { caseLawStatus: 429, statuteStatus: 200, expectedStatus: 429 },
+    { caseLawStatus: 429, statuteStatus: 200, expectedStatus: 503 },
     { caseLawStatus: 502, statuteStatus: 200, expectedStatus: 503 },
-    { caseLawStatus: 200, statuteStatus: 429, expectedStatus: 429 },
+    { caseLawStatus: 503, statuteStatus: 200, expectedStatus: 503 },
+    { caseLawStatus: 200, statuteStatus: 429, expectedStatus: 503 },
     { caseLawStatus: 200, statuteStatus: 502, expectedStatus: 503 },
+    { caseLawStatus: 200, statuteStatus: 503, expectedStatus: 503 },
   ])(
     "upstream response pair %j refuses the entire index",
     async ({ caseLawStatus, statuteStatus, expectedStatus }) => {
@@ -54,11 +56,13 @@ describe("root sitemap read failures", () => {
       expect(requests).toContain("/v1/law/sitemap/shards");
       expect(response.status).toBe(expectedStatus);
       expect(response.headers.get("Retry-After")).toBe(
-        expectedStatus === 429 ? "17" : null,
+        [caseLawStatus, statuteStatus].some(
+          (status) => status === 429 || status === 503,
+        )
+          ? "17"
+          : null,
       );
-      expect(await response.text()).toBe(
-        expectedStatus === 429 ? "Too Many Requests" : "Service Unavailable",
-      );
+      expect(await response.text()).toBe("Service Unavailable");
     },
   );
 });

@@ -16,6 +16,7 @@ import {
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
 import {
   isPublicLawPathIndexable,
+  PUBLIC_CRAWL_ASSETS,
   publicToolCrawlPaths,
 } from "@/public-crawl-policy";
 
@@ -381,7 +382,7 @@ describe("public law sitemap", () => {
     });
 
     const response = createSitemapReadFailureResponse(error);
-    expect(response.status).toBe(429);
+    expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe(expected);
     expect(response.headers.get("Retry-After")).toMatch(/^[1-9][0-9]*$/u);
   });
@@ -397,7 +398,7 @@ describe("public law sitemap", () => {
     );
 
     expect(SitemapUpstreamBusyError.is(error)).toBe(true);
-    expect(createSitemapReadFailureResponse(error).status).toBe(429);
+    expect(createSitemapReadFailureResponse(error).status).toBe(503);
     expect(
       createSitemapReadFailureResponse(error).headers.get("Retry-After"),
     ).toBe("60");
@@ -514,6 +515,9 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/07.xml</loc>",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
+    expect(xml).toMatch(
+      /<sitemap>\s*<loc>http:\/\/localhost:3000\/sitemaps\/law\.xml<\/loc>\s*<\/sitemap>/u,
+    );
     expect(xml).not.toContain("cursor=");
     expect(xml).not.toContain("/xaa/");
     expect(xml).not.toContain("workspace");
@@ -840,6 +844,7 @@ describe("public law sitemap", () => {
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
+      ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
     ]);
     // A jurisdiction whose pages are not public stays behind Disallow: /.
     expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(

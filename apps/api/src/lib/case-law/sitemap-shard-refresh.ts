@@ -25,7 +25,9 @@ import {
   decisionMonthSqlFor,
   decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
+  SITEMAP_MULTILINGUAL_URL_WEIGHT,
   sitemapDocumentRepresentativeFor,
+  sitemapHasLanguageAlternatesFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawRemovalSnapshots,
@@ -36,7 +38,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
- * A month is split into buckets once it holds more than this many decisions.
+ * A month is split once it exceeds this weighted URL budget. Language groups
+ * reserve room for hreflang links; decisions without a group use one slot.
  * The snapshot is as old as the last refresh while the shard read counts live
  * rows and refuses more than the URL limit, so splitting at half the limit
  * leaves a month room to grow between refreshes without its shard overflowing.
@@ -211,6 +214,7 @@ export const sitemapRefreshPageSql = ({
     counts.month,
     counts.bucket,
     counts.total,
+    counts.weighted_total,
     counts.last_modified_ms
   FROM last_entry
   LEFT JOIN LATERAL (
@@ -219,6 +223,8 @@ export const sitemapRefreshPageSql = ({
       page.month,
       page.bucket,
       count(*)::int AS total,
+      sum(CASE WHEN ${sitemapHasLanguageAlternatesFor(caseLawDecisions)}
+        THEN ${SITEMAP_MULTILINGUAL_URL_WEIGHT} ELSE 1 END)::int AS weighted_total,
       (extract(epoch FROM max(page.updated_at)) * 1000)::float8 AS last_modified_ms
     FROM page
     INNER JOIN ${caseLawDecisions} ON ${caseLawDecisions.id} = page.id
@@ -238,10 +244,15 @@ const pageRowSchema = v.object({
   last_modified_ms: v.nullable(v.number()),
   month: v.nullable(v.string()),
   total: v.nullable(v.number()),
+  weighted_total: v.nullable(v.number()),
   year: v.nullable(v.string()),
 });
 
-type BucketCount = { lastModifiedMs: number; total: number };
+type BucketCount = {
+  lastModifiedMs: number;
+  total: number;
+  weightedTotal: number;
+};
 type MonthCounts = Map<string, BucketCount>;
 /** `year|month` to its buckets' counts, for one country. */
 type CountryMonths = Map<string, MonthCounts>;
@@ -268,6 +279,7 @@ const accumulatePage = (
       row.month === null ||
       row.bucket === null ||
       row.total === null ||
+      row.weighted_total === null ||
       row.last_modified_ms === null
     ) {
       continue;
@@ -282,6 +294,7 @@ const accumulatePage = (
         row.last_modified_ms,
       ),
       total: (counted?.total ?? 0) + row.total,
+      weightedTotal: (counted?.weightedTotal ?? 0) + row.weighted_total,
     });
   }
   return cursor;
@@ -361,6 +374,10 @@ const stagedMonthSchema = v.strictObject({
   month: v.string(),
   bucket: v.string(),
   total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+  // Deployed refreshes can leave staged counts for six hours. Missing weights
+  // are conservative until those counts are replaced or expire. Remove the
+  // optional field once old refresh workers are gone and this window elapsed.
+  weightedTotal: v.optional(v.pipe(v.number(), v.safeInteger(), v.minValue(1))),
   lastModifiedMs: v.number(),
 });
 const stagedMonthsSchema = v.array(stagedMonthSchema);
@@ -372,13 +389,16 @@ const toStagedMonths = (months: CountryMonths): StagedMonth[] =>
     if (year === undefined || month === undefined) {
       return panic(`Malformed sitemap month key ${monthKey}`);
     }
-    return [...buckets].map(([bucket, { total, lastModifiedMs }]) => ({
-      year,
-      month,
-      bucket,
-      total,
-      lastModifiedMs,
-    }));
+    return [...buckets].map(
+      ([bucket, { total, weightedTotal, lastModifiedMs }]) => ({
+        year,
+        month,
+        bucket,
+        total,
+        weightedTotal,
+        lastModifiedMs,
+      }),
+    );
   });
 
 /**
@@ -475,12 +495,15 @@ const shardRows = (countries: readonly StagedCountry[]): ShardRow[] =>
     return [...byMonth.values()].flatMap((buckets) => {
       const first = buckets.at(0) ?? panic("A staged month has no buckets");
       let monthTotal = 0;
+      let monthWeightedTotal = 0;
       let monthLastModifiedMs = 0;
-      for (const { total, lastModifiedMs } of buckets) {
+      for (const { total, weightedTotal, lastModifiedMs } of buckets) {
         monthTotal += total;
+        monthWeightedTotal +=
+          weightedTotal ?? total * SITEMAP_MULTILINGUAL_URL_WEIGHT;
         monthLastModifiedMs = Math.max(monthLastModifiedMs, lastModifiedMs);
       }
-      if (monthTotal > SITEMAP_SHARD_SPLIT_THRESHOLD) {
+      if (monthWeightedTotal > SITEMAP_SHARD_SPLIT_THRESHOLD) {
         return buckets.map(({ bucket, total, lastModifiedMs }) => ({
           bucket,
           country,
