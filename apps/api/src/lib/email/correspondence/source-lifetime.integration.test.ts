@@ -744,7 +744,10 @@ test("a hidden duplicate source does not let a replacement refresh its correspon
     })
     .from(correspondence)
     .where(eq(correspondence.id, old.id));
-  expect(oldRecord).toHaveLength(1);
+  const retainedRecord = oldRecord.at(0);
+  if (retainedRecord === undefined) {
+    throw new Error("Expected the retained correspondence record");
+  }
   const oldFilers = await testDb
     .select(retainedFilerFields)
     .from(correspondenceFilers)
@@ -809,7 +812,7 @@ test("a hidden duplicate source does not let a replacement refresh its correspon
       })
       .from(correspondence)
       .where(eq(correspondence.id, old.id)),
-  ).toEqual([{ ...oldRecord.at(0), sourceEntityId: hiddenSource }]);
+  ).toEqual([{ ...retainedRecord, sourceEntityId: hiddenSource }]);
   expect(
     await testDb
       .select(retainedFilerFields)
