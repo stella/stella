@@ -125,6 +125,7 @@ const citationResponse = {
 
 const searchRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
+let searchResponseGate: Promise<void> | null = null;
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
@@ -132,8 +133,16 @@ globalThis.fetch = Object.assign(
     if (url.pathname.endsWith("/case/decisions/search")) {
       return Response.json(citationResponse);
     }
+    if (url.pathname.endsWith("/law/statutes")) {
+      return Response.json({
+        items: [],
+        limit: 25,
+        nextCursor: null,
+      } satisfies PublicLawData<typeof api.law.statutes.get>);
+    }
     if (url.pathname.endsWith("/search")) {
       searchRequestBodies.push(await request.json());
+      await searchResponseGate;
       return Response.json({
         hits: searchHits,
         nextCursor: null,
@@ -187,6 +196,7 @@ afterEach(() => {
   clients.length = 0;
   searchRequestBodies.length = 0;
   searchHits = [hit];
+  searchResponseGate = null;
   assignUserStorage(undefined);
   useDevStore.setState({ publicLawPreview: false });
 });
@@ -304,6 +314,14 @@ test("a resolved citation is the first keyboard result above matter hits", async
     return citationRouter;
   });
   const input = await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  expect(searchRequestBodies).toContainEqual(
+    expect.objectContaining({ query: '"22 As 40/2025 - 49"' }),
+  );
+  expect(
+    testing.screen
+      .getByRole("button", { name: messages.common.caseLaw })
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
   const options = testing.screen.getAllByRole("option");
   expect(options.at(0)?.textContent).toContain("22 As 40/2025");
   expect(
@@ -335,6 +353,81 @@ test("a resolved citation is the first keyboard result above matter hits", async
   });
   expect(testing.screen.getByTestId("dialog-state").textContent).toBe("closed");
 });
+
+test("citation expansion can be collapsed and ordinary keywords keep their search behavior", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  await mount();
+  await typeQuery("22 As 40/2025", "22 As 40/2025");
+  const caseLaw = testing.screen.getByRole("button", {
+    name: messages.common.caseLaw,
+  });
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
+  await testing.act(async () => {
+    testing.fireEvent.click(caseLaw);
+  });
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("false");
+
+  await typeQuery(hit.title, "engagement");
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("false");
+  expect(searchRequestBodies.at(-1)).toMatchObject({ query: "engagement" });
+  await testing.act(async () => {
+    testing.fireEvent.click(caseLaw);
+  });
+  await typeQuery(hit.title, "agreement");
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
+
+  await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
+});
+
+test("a citation never displays stale loose keyword hits while its phrase search loads", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  await mount();
+  await typeQuery();
+  const gate = Promise.withResolvers<undefined>();
+  searchResponseGate = gate.promise;
+  await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  expect(
+    testing.screen
+      .getAllByRole("option")
+      .some((option) => option.textContent?.includes(hit.title)),
+  ).toBe(false);
+  await testing.act(async () => {
+    gate.resolve(undefined);
+  });
+  await testing.waitFor(() => {
+    expect(
+      testing.screen
+        .getAllByRole("option")
+        .some((option) => option.textContent?.includes(hit.title)),
+    ).toBe(true);
+  });
+});
+
+test.each([
+  "22 As 40/2025",
+  "22 As 40/2025 - 49",
+  "ECLI:CZ:NS:2019:25.CDO.1234.2019.1",
+  "89/2012 Sb.",
+])(
+  "citation %s uses a whole phrase for matters and the raw query for Case Law",
+  async (citation) => {
+    useDevStore.setState({ publicLawPreview: true });
+    await mount();
+    await typeQuery(hit.title, citation);
+    expect(searchRequestBodies).toContainEqual(
+      expect.objectContaining({ query: `"${citation}"` }),
+    );
+    expect(searchRequestBodies).toContainEqual(
+      expect.objectContaining({ query: citation, types: ["case-law"] }),
+    );
+    expect(
+      testing.screen
+        .getByRole("button", { name: messages.common.caseLaw })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+  },
+);
 
 test("Case law scope searches only case law and drops matter recents and actions", async () => {
   useDevStore.setState({ publicLawPreview: true });
