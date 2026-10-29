@@ -47,7 +47,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
-    restored === undefined || restored.session() === undefined
+    restored?.session() === undefined
       ? { status: "signed-out", ended: false }
       : { status: "signed-in", source: restored },
   );
