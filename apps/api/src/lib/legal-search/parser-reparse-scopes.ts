@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "paragraph text and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; none has feature storage of its own",
+        "letter-spaced words and section markers are recomputed from stored markup, including uneven chunks witnessed by intact words in the decision; paragraph text has no feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -181,11 +181,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
