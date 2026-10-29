@@ -225,6 +225,7 @@ const canonicalSearchHit = {
   headline: null,
   citationAuthority: 0,
   citationCount: 0,
+  textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
 } satisfies PublicLawData<

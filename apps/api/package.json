@@ -152,6 +152,7 @@
     "@stll/mcp-kit": "workspace:^",
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
+    "@stll/parameter-store": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/redis-config": "workspace:*",
