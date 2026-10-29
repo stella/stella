@@ -13,6 +13,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
@@ -91,6 +92,11 @@ export type WorkflowDataOutput = Record<
   string,
   { answer: Answer; justification: AIJustificationOutput }
 >;
+
+export type WorkflowDataGeneration = {
+  output: WorkflowDataOutput;
+  refusedPropertyIds: ReadonlySet<SafeId<"property">>;
+};
 
 /** Everything but the tier, which only the chunk's admission can state. */
 type WorkflowAIAnalyticsProps = Omit<
@@ -185,6 +191,7 @@ type SystemOnePhaseOptions = {
 
 type SystemOnePhaseResult = {
   output: WorkflowDataOutput;
+  refusedPropertyIds: SafeId<"property">[];
   /** What the generative model still owes, in batch order. */
   generative: AIBatchProperty[];
 };
@@ -209,6 +216,7 @@ const askSystemOne = async ({
 > => {
   const fallbackAll: SystemOnePhaseResult = {
     output: {},
+    refusedPropertyIds: [],
     generative: properties,
   };
   const { systemOne, generative } = splitPropertiesForSystemOne(properties);
@@ -225,7 +233,12 @@ const askSystemOne = async ({
       }),
   });
   if (Result.isError(prepared)) {
-    captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    captureError(
+      prepared.error,
+      handlerErrorContext("workflow.askSystemOne.prepared_error", {
+        source: SYSTEM_ONE_ERROR_SOURCE,
+      }),
+    );
     return Result.ok(fallbackAll);
   }
   const { sources, locators } = prepared.value;
@@ -270,7 +283,7 @@ const askSystemOne = async ({
   if (Result.isError(resolved)) {
     return Result.err(resolved.error);
   }
-  const { output } = resolved.value;
+  const { output, refusedPropertyIds } = resolved.value;
 
   if (onPartialAnswer) {
     for (const property of systemOne) {
@@ -286,6 +299,7 @@ const askSystemOne = async ({
 
   return Result.ok({
     output,
+    refusedPropertyIds,
     generative: properties.filter(
       (property) =>
         generative.includes(property) || plan.unplanned.includes(property.id),
@@ -313,7 +327,7 @@ export const generateWorkflowData = async ({
   decisionModel,
   resolveTextModel,
 }: GenerateWorkflowDataProps): Promise<
-  Result<WorkflowDataOutput, WorkflowIntegrationError>
+  Result<WorkflowDataGeneration, WorkflowIntegrationError>
 > => {
   const cachingDecision = resolveCaching({
     promptCachingEnabled,
@@ -335,7 +349,7 @@ export const generateWorkflowData = async ({
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(file.content).toString("base64"),
+          value: Buffer.from(file.content).toBase64(),
           mimeType: file.mimeType,
         },
       });
@@ -439,12 +453,18 @@ export const generateWorkflowData = async ({
   if (Result.isError(typedPhase)) {
     return Result.err(typedPhase.error);
   }
-  const { output: systemOneOutput, generative: generativeProperties } =
-    typedPhase.value;
+  const {
+    output: systemOneOutput,
+    refusedPropertyIds,
+    generative: generativeProperties,
+  } = typedPhase.value;
   // Only a batch System One answered in full ends here; an empty batch takes
   // the generative path it has always taken.
   if (properties.length > 0 && generativeProperties.length === 0) {
-    return Result.ok(systemOneOutput);
+    return Result.ok({
+      output: systemOneOutput,
+      refusedPropertyIds: new Set(refusedPropertyIds),
+    });
   }
 
   // Resolved up front because the schema budget is a property of the provider,
@@ -623,5 +643,9 @@ export const generateWorkflowData = async ({
 
   // Chunk answers accumulate onto the System One answers; the two sets of
   // property ids are disjoint, so neither overwrites the other.
-  return await runFromChunk(0, systemOneOutput);
+  const generated = await runFromChunk(0, systemOneOutput);
+  return generated.map((output) => ({
+    output,
+    refusedPropertyIds: new Set(refusedPropertyIds),
+  }));
 };

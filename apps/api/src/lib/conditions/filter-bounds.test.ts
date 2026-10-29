@@ -10,8 +10,6 @@
  * endpoint cannot land unbounded.
  */
 
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -65,12 +63,12 @@ const PROPERTY_ID = "00000000-0000-4000-8000-000000000301";
  *  as a `filters` array for list-shaped bodies, as one group's children for
  *  single-condition slots. Either way the bound is `VIEW_FILTERS_MAX`. */
 type Probe = {
-  schema: TSchema;
+  schema: v.GenericSchema;
   place: (nodes: ConditionNode[]) => unknown;
 };
 
 const filters = (
-  schema: TSchema,
+  schema: v.GenericSchema,
   rest: Record<string, unknown> = {},
 ): Probe => ({
   schema,
@@ -223,11 +221,9 @@ describe("condition consumer census", () => {
   for (const [module, probes] of Object.entries(PROBES)) {
     for (const [index, { schema, place }] of probes.entries()) {
       test(`${module}#${index} accepts ${VIEW_FILTERS_MAX} predicates and rejects one more`, () => {
-        expect(Value.Check(schema, place([]))).toBe(true);
-        expect(Value.Check(schema, place(leaves(VIEW_FILTERS_MAX)))).toBe(true);
-        expect(Value.Check(schema, place(leaves(VIEW_FILTERS_MAX + 1)))).toBe(
-          false,
-        );
+        expect(v.is(schema, place([]))).toBe(true);
+        expect(v.is(schema, place(leaves(VIEW_FILTERS_MAX)))).toBe(true);
+        expect(v.is(schema, place(leaves(VIEW_FILTERS_MAX + 1)))).toBe(false);
       });
     }
   }
@@ -235,28 +231,24 @@ describe("condition consumer census", () => {
 
 describe("condition group fan-out", () => {
   test("a group accepts the bound and rejects one more child", () => {
-    expect(Value.Check(tConditionNode, group(leaves(VIEW_FILTERS_MAX)))).toBe(
-      true,
+    expect(v.is(tConditionNode, group(leaves(VIEW_FILTERS_MAX)))).toBe(true);
+    expect(v.is(tConditionNode, group(leaves(VIEW_FILTERS_MAX + 1)))).toBe(
+      false,
     );
-    expect(
-      Value.Check(tConditionNode, group(leaves(VIEW_FILTERS_MAX + 1))),
-    ).toBe(false);
   });
 
   test("a nested group is bounded the same way", () => {
+    expect(v.is(tConditionNode, group([group(leaves(VIEW_FILTERS_MAX))]))).toBe(
+      true,
+    );
     expect(
-      Value.Check(tConditionNode, group([group(leaves(VIEW_FILTERS_MAX))])),
-    ).toBe(true);
-    expect(
-      Value.Check(tConditionNode, group([group(leaves(VIEW_FILTERS_MAX + 1))])),
+      v.is(tConditionNode, group([group(leaves(VIEW_FILTERS_MAX + 1))])),
     ).toBe(false);
   });
 
   test("the root condition is bounded", () => {
-    expect(Value.Check(tCondition, group(leaves(VIEW_FILTERS_MAX)))).toBe(true);
-    expect(Value.Check(tCondition, group(leaves(VIEW_FILTERS_MAX + 1)))).toBe(
-      false,
-    );
+    expect(v.is(tCondition, group(leaves(VIEW_FILTERS_MAX)))).toBe(true);
+    expect(v.is(tCondition, group(leaves(VIEW_FILTERS_MAX + 1)))).toBe(false);
   });
 });
 

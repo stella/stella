@@ -15,22 +15,27 @@ const workflow = v.parse(
       v.string(),
       v.looseObject({
         if: v.optional(v.string()),
-        steps: v.array(
-          v.looseObject({
-            id: v.optional(v.string()),
-            name: v.optional(v.string()),
-            uses: v.optional(v.string()),
-            if: v.optional(v.string()),
-            run: v.optional(v.string()),
-            with: v.optional(v.record(v.string(), v.unknown())),
-          }),
+        needs: v.optional(v.union([v.string(), v.array(v.string())])),
+        permissions: v.optional(v.record(v.string(), v.string())),
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              id: v.optional(v.string()),
+              name: v.optional(v.string()),
+              uses: v.optional(v.string()),
+              if: v.optional(v.string()),
+              run: v.optional(v.string()),
+              with: v.optional(v.record(v.string(), v.unknown())),
+            }),
+          ),
+          [],
         ),
       }),
     ),
   }),
   Bun.YAML.parse(
     readFileSync(
-      new URL("../.github/workflows/dependency-review.yml", import.meta.url),
+      new URL("../.github/workflows/ci.yml", import.meta.url),
       "utf-8",
     ),
   ),
@@ -161,7 +166,7 @@ const selector = ({
                 data: {
                   type: "file",
                   encoding: "base64",
-                  content: Buffer.from(content).toString("base64"),
+                  content: Buffer.from(content).toBase64(),
                 },
               };
             },
@@ -174,12 +179,12 @@ const selector = ({
         },
         summary,
       },
-      // A merge group reads the base its resolver step chose (the target
-      // branch), never the previous queue entry from the payload.
+      // Every event reads the comparison base ci-plan resolved (a merge
+      // group's target branch), never the previous queue entry from the payload.
       process: {
         env: {
           RUNNER_TEMP: "/runner/temp",
-          ...(event === "merge_group" ? { TARGET_BASE_SHA: base } : {}),
+          TARGET_BASE_SHA: base,
         },
       },
       require: (name: string) => {
@@ -227,16 +232,18 @@ const selector = ({
 
 describe("required dependency review workflow boundary", () => {
   test("keeps one required job present for PR and merge-group events without paths or draft filtering", () => {
-    expect(workflow.name).toBe("Dependency Review");
-    expect(workflow.on).toEqual({
-      pull_request: {
-        types: ["opened", "synchronize", "reopened", "ready_for_review"],
-      },
-      merge_group: { types: ["checks_requested"] },
-    });
-    expect(Object.keys(workflow.jobs)).toEqual(["dependency-review"]);
-    expect(job.if).toBeUndefined();
+    expect(workflow.name).toBe("CI Checks");
+    expect(workflow.on["pull_request"]).toBeDefined();
+    expect(workflow.on["merge_group"]).toEqual({ types: ["checks_requested"] });
+    expect(job.if).toBe(
+      "!cancelled() && needs.ci-plan.result == 'success' && inputs.heavy_only != true && inputs.pr_depth_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.dependency_changes_required == 'true'",
+    );
+    expect(job.needs).toBe("ci-plan");
     expect(job["name"] ?? "dependency-review").toBe("dependency-review");
+    expect(job.permissions).toEqual({
+      contents: "read",
+      "pull-requests": "read",
+    });
     expect(selectorStep.if).toBeUndefined();
   });
 
@@ -264,26 +271,15 @@ describe("required dependency review workflow boundary", () => {
     expect(checkout.if).toBe(reviewCondition);
     expect(review.if).toBe(reviewCondition);
     expect(checkout.with?.["persist-credentials"]).toBe(false);
-    // A merge group reviews against the target branch, resolved through the
-    // API in this job: no checked-out code runs next to the PR token.
-    const resolver = job.steps.find((step) => step.id === "target-base");
-    if (!resolver) {
-      throw new TypeError("Missing comparison base resolver");
-    }
-    expect(resolver.uses?.startsWith("actions/github-script@")).toBe(true);
-    expect(resolver.if).toBe("github.event_name == 'merge_group'");
-    expect(job.steps.indexOf(resolver)).toBeLessThan(
-      job.steps.indexOf(selectorStep),
-    );
+    // A merge group reviews against the target branch that ci-plan resolved,
+    // not the previous queue entry; no checked-out code runs in this job.
     expect(JSON.stringify(selectorStep["env"])).toContain(
-      "steps.target-base.outputs.base_sha",
+      "needs.ci-plan.outputs.target_base_sha",
     );
-    expect(String(resolver.with?.["script"])).toContain(
-      "compareCommitsWithBasehead",
-    );
-    expect(String(resolver.with?.["script"])).toContain("core.setFailed");
+    expect(selectorSource).not.toContain("base_sha");
+    expect(selectorSource).not.toContain("base.sha");
     expect(review.with?.["base-ref"]).toBe(
-      `\${{ github.event_name == 'merge_group' && steps.target-base.outputs.base_sha || '' }}`,
+      `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
     );
     expect(review.with?.["head-ref"]).toBe(
       `\${{ github.event.merge_group.head_sha || '' }}`,
@@ -762,4 +758,23 @@ describe("real Bun action comparison output", () => {
     expect(result.output).toBe("existing=preserved\n");
     expect(result.summary).toBe("Existing summary\n");
   });
+});
+
+test("dependency jobs run only for events that carry comparison refs", () => {
+  const ciJobs = v.parse(
+    v.object({
+      jobs: v.record(v.string(), v.looseObject({ if: v.optional(v.string()) })),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(import.meta.dir, "../.github/workflows/ci.yml"),
+        "utf-8",
+      ),
+    ),
+  );
+  for (const jobName of ["dependency-review", "dependency-audit"]) {
+    const condition = ciJobs.jobs[jobName]?.if ?? "";
+    expect(condition, jobName).toContain("github.event_name == 'pull_request'");
+    expect(condition, jobName).toContain("github.event_name == 'merge_group'");
+  }
 });

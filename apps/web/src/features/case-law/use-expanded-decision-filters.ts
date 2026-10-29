@@ -10,7 +10,8 @@ import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The search filters with the legal-vocabulary alternatives the reader's
@@ -32,8 +33,8 @@ export const useExpandedDecisionFilters = (
   const analytics = useAnalytics();
   const signedIn = authStatus.status === "authenticated";
   const roleQuery = useQuery({ ...roleOptions, enabled: signedIn });
-  const roleView = useQueryView(roleQuery);
-  useQueryViewError(roleView);
+  const roleView = queryView(roleQuery);
+  useQueryViewError(roleView, "useExpandedDecisionFilters:query");
   const role = roleView.type === "items" ? roleView.items : undefined;
   const maySpendAI =
     roleQuery.status === "success" &&
@@ -49,7 +50,14 @@ export const useExpandedDecisionFilters = (
         ? authStatus.user.activeOrganizationId
         : "",
       country: typed.country,
-      onFailure: (failure) => analytics.captureError(failure),
+      onFailure: (failure) =>
+        analytics.captureError(failure, {
+          fingerprintKey: "useExpandedDecisionFilters.onFailure:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useExpandedDecisionFilters.onFailure:failure",
+          },
+        }),
       query,
     }),
     enabled:
@@ -59,8 +67,8 @@ export const useExpandedDecisionFilters = (
       query.length > 0 &&
       typed.strict === undefined,
   });
-  const expansionView = useQueryView(expansionQuery);
-  useQueryViewError(expansionView);
+  const expansionView = queryView(expansionQuery);
+  useQueryViewError(expansionView, "useExpandedDecisionFilters:query-2");
   const expansion =
     expansionView.type === "items" ? expansionView.items : undefined;
   if (expansion === undefined || expansion.alternatives.length === 0) {

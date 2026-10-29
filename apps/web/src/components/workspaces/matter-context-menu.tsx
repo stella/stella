@@ -14,19 +14,7 @@ import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogFormState,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
 import {
   ArchiveRestoreIcon,
   ClipboardCopyIcon,
@@ -48,11 +36,7 @@ import {
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
-import {
-  AddableMemberSelect,
-  useAddableMembers,
-} from "@/components/workspaces/addable-member-select";
-import { useSingleFlight } from "@/hooks/use-single-flight";
+import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -63,9 +47,7 @@ import {
   useUnarchiveWorkspace,
   useUpdateWorkspace,
 } from "@/lib/workspaces/mutations";
-import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
-import { workspaceMembersKeys } from "@/lib/workspaces/queries/workspace-members";
 
 // ── Shared menu items ────────────────────────────────────────
 
@@ -236,7 +218,13 @@ export const useMatterActions = (
     const url = `${window.location.origin}/workspaces/${target.id}`;
     const copied = await copyToClipboard(url);
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "useMatterActions.handleCopyLink:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useMatterActions.handleCopyLink:failure",
+        },
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
@@ -251,7 +239,6 @@ export const useMatterActions = (
     const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     await deleteWorkspace.mutateAsync(
@@ -481,117 +468,5 @@ export const MatterContextMenu = ({
       {menu}
       {dialogs}
     </div>
-  );
-};
-
-// ── Add Member Dialog ────────────────────────────────────────
-
-type AddMemberDialogProps = {
-  workspaceId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
-
-const AddMemberDialog = ({
-  workspaceId,
-  open,
-  onOpenChange,
-}: AddMemberDialogProps) => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const addMember = useAddWorkspaceMember();
-  const submitOnce = useSingleFlight();
-  const memberQuery = useAddableMembers(workspaceId);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  const selectedMember =
-    memberQuery.view.type === "items"
-      ? memberQuery.view.items.find((item) => item.value === selectedUserId)
-      : undefined;
-
-  const addSelectedMember = (settled: () => void) => {
-    if (!selectedMember) {
-      settled();
-      return;
-    }
-
-    addMember.mutate(
-      { workspaceId, userId: selectedMember.value },
-      {
-        onSettled: settled,
-        onSuccess: () => {
-          stellaToast.add({
-            title: t("success.memberAdded"),
-            type: "success",
-          });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: workspaceMembersKeys.all(workspaceId),
-            }),
-            "matter-context-menu.invalidate",
-          );
-          detached(
-            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "matter-context-menu.invalidate",
-          );
-          onOpenChange(false);
-          setSelectedUserId(null);
-        },
-        onError: (error) => {
-          notifyUserError(error, t("errors.actionFailed"));
-        },
-      },
-    );
-  };
-  const handleSubmit = () => {
-    detached(
-      submitOnce.runSettled(addSelectedMember),
-      "matter-context-menu.add-member",
-    );
-  };
-
-  return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) {
-          setSelectedUserId(null);
-        }
-      }}
-      open={open}
-    >
-      <DialogPopup>
-        <DialogFormState
-          dirty={selectedUserId !== null}
-          onDiscard={() => {
-            setSelectedUserId(null);
-          }}
-        />
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.members.addMember")}</DialogTitle>
-          <DialogDescription>
-            {t("workspaces.members.addMemberDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel className="flex flex-col gap-4">
-          <AddableMemberSelect
-            query={memberQuery}
-            onValueChange={setSelectedUserId}
-            value={selectedUserId}
-          />
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={selectedMember === undefined || addMember.isPending}
-            onClick={handleSubmit}
-          >
-            {t("workspaces.members.addMember")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
   );
 };

@@ -82,9 +82,17 @@ describe("extractProvisionText", () => {
     );
   });
 
+  test("files a subdivision under the longest heading it continues", () => {
+    // `sec-1-1` continues `sec-1`, and `sec-1-a-1` continues `sec-1-a`
+    // rather than `sec-1`: the document says which heading owns it, whatever
+    // separators the heading's own anchor carries.
+    expect(extractProvisionText(blocks, "sec-1-1")).toBe("First rule.");
+    expect(extractProvisionText(blocks, "sec-1-a-1")).toBe("Nested rule.");
+  });
+
   test("reads an anchor whose provision cannot be located as absent", () => {
-    // `sec` is not a heading in this fixture, so nothing files `sec-1-1`.
-    expect(extractProvisionText(blocks, "sec-1-1")).toBeNull();
+    // No heading in this fixture is continued by `sec-9-1`, so nothing files it.
+    expect(extractProvisionText(blocks, "sec-9-1")).toBeNull();
   });
 });
 

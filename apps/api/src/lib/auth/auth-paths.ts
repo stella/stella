@@ -1,6 +1,10 @@
 import { env } from "@/api/env";
 
-const AUTH_API_PATH = "/api/auth" as const;
+/** Where Better Auth serves its own endpoints (its default `basePath`). */
+export const AUTH_API_PATH = "/api/auth" as const;
+
+/** Every Better Auth endpoint, as one route the API hands to Better Auth. */
+export const AUTH_API_ROUTE = `${AUTH_API_PATH}/*` as const;
 
 export const OAUTH_UI_LOGIN_PATH = "/oauth-ui/auth" as const;
 export const OAUTH_UI_ORGANIZATION_PATH =

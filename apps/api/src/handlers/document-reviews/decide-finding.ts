@@ -16,19 +16,28 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { documentReviewFindings } from "@/api/db/schema";
+import {
+  documentReviewFindingDecisions,
+  documentReviewFindings,
+} from "@/api/db/schema";
 import { decideReviewFindingBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  findingDecisionRows,
+  findingHasDecisionHistory,
+} from "@/api/lib/document-review/finding-decision-history";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISION,
 } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+import { findingDecisionEvent } from "./finding-decision-event";
 
 const config = {
   contract: "patch",
@@ -44,7 +53,9 @@ const config = {
   // permission gate fronting the review surface is a workspace read.
   access: "write",
   mcp: { type: "internal", reason: "document_processing" },
-  params: workspaceParams({ findingId: tSafeId("documentReviewFinding") }),
+  params: workspaceParams({
+    findingId: resourceIdSchema("documentReviewFinding"),
+  }),
   body: decideReviewFindingBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
@@ -102,7 +113,6 @@ const decideDocumentReviewFinding = createSafeHandler(
     const recordsApplication =
       applicationStatus === DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED;
     const reopening = decision === DOCUMENT_REVIEW_DECISION.OPEN;
-    const now = new Date();
     // `null` means "the request said nothing about flags", which is different
     // from `[]`, which means "clear them".
     const requestedFlags =
@@ -158,6 +168,9 @@ const decideDocumentReviewFinding = createSafeHandler(
           return { type: "unchanged", finding } as const;
         }
 
+        // Read after the row lock, so decision moments follow the order in
+        // which the finding actually changed.
+        const now = new Date();
         // A decision restated is not a decision retaken: the moment and the
         // decider stay as the row recorded them. Taking one stamps both;
         // reopening withdraws both, which the column pair's CHECK requires.
@@ -191,6 +204,23 @@ const decideDocumentReviewFinding = createSafeHandler(
               eq(documentReviewFindings.workspaceId, workspaceId),
             ),
           );
+
+        const eventDecision = findingDecisionEvent(finding.decision, decision);
+        if (eventDecision !== undefined) {
+          const change = {
+            workspaceId,
+            findingId: params.findingId,
+            previous: finding,
+            decision: eventDecision,
+            actorId: user.id,
+            at: now,
+            hasHistory: await findingHasDecisionHistory(tx, params.findingId),
+          };
+          await tx
+            .insert(documentReviewFindingDecisions)
+            .values(findingDecisionRows(change))
+            .onConflictDoNothing({ target: documentReviewFindingDecisions.id });
+        }
 
         const changes: FieldDiffs = {};
         if (decisionChanged) {

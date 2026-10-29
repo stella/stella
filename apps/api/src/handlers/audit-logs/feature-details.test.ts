@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -17,11 +18,11 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/audit-logs.list";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -113,7 +114,7 @@ const contextFor = ({
     query: {},
     recordAuditEvent: auditRecorderDouble(),
     request: new Request("https://example.test/v1/audit-logs"),
-    route: "/v1/audit-logs",
+    route: "/v1/audit-logs" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: PRINCIPAL.organizationId },
     set: { headers: {} },
@@ -218,7 +219,7 @@ describe("audit details follow feature enrolment", () => {
       });
       const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
         args: {},
-        context: asTestRaw<McpRequestContext>({
+        context: asTestRaw<AuthorizedMcpRequestContext>({
           ...PRINCIPAL,
           memberRole: "owner",
           safeDb: fixture.safeDb,

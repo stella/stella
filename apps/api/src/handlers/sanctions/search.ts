@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { isCountryCode } from "@stll/country-codes";
 import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
 import type { PublicSanctionsScreening } from "@/api/handlers/sanctions/search-response";
+import { status } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
@@ -32,33 +32,26 @@ import type {
 } from "@/api/lib/lists/sanctions/screening-service";
 import { logger } from "@/api/lib/observability/logger";
 
-const bodySchema = t.Object(
-  {
-    subject: t.Union([
-      t.Object(
-        {
-          type: t.Literal("organization"),
-          name: t.String({ minLength: 1, maxLength: 512 }),
-          companyId: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-        },
-        { additionalProperties: false },
+const bodySchema = v.strictObject({
+  subject: v.union([
+    v.strictObject({
+      type: v.literal("organization"),
+      name: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+      companyId: v.optional(
+        v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
       ),
-      t.Object(
-        {
-          type: t.Literal("person"),
-          firstName: t.String({ minLength: 1, maxLength: 100 }),
-          lastName: t.String({ minLength: 1, maxLength: 100 }),
-          dateOfBirth: t.Optional(dateOfBirthSchema),
-          nationalityCodes: t.Optional(nationalityCodesSchema),
-        },
-        { additionalProperties: false },
-      ),
-    ]),
-  },
-  { additionalProperties: false },
-);
+    }),
+    v.strictObject({
+      type: v.literal("person"),
+      firstName: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+      lastName: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+      dateOfBirth: v.optional(dateOfBirthSchema),
+      nationalityCodes: v.optional(nationalityCodesSchema),
+    }),
+  ]),
+});
 
-type PublicSanctionsBody = Static<typeof bodySchema>;
+type PublicSanctionsBody = v.InferOutput<typeof bodySchema>;
 
 const invalidSubject = (message: string) =>
   Result.err(

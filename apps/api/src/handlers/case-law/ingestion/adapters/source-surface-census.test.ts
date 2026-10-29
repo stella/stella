@@ -77,6 +77,7 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
@@ -168,6 +169,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.AT_FINDOK]: [{ kind: "built", fixture: atFindokFixture }],
   [ADAPTER_KEYS.EU_ECJ]: [{ kind: "built", fixture: euEcjFixture }],
   [ADAPTER_KEYS.HU_BHGY]: [{ kind: "built", fixture: huBhgyFixture }],
+  [ADAPTER_KEYS.UK_FCL]: [{ kind: "built", fixture: ukFclFixture }],
   [ADAPTER_KEYS.PL_KIO]: [{ kind: "built", fixture: plKioFixture }],
   [ADAPTER_KEYS.PL_KIS]: [{ kind: "built", fixture: plKisFixture }],
   [ADAPTER_KEYS.PL_UODO]: [{ kind: "built", fixture: plUodoFixture }],

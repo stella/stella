@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 
 import {
@@ -12,7 +14,7 @@ import {
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
@@ -23,6 +25,7 @@ import {
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { workTask } from "@/api/lib/tasks/work-task";
 import {
   resolveWorkAsOf,
   workObligationAtRisk,
@@ -41,20 +44,27 @@ const MY_WORK_QUEUE = {
   COMPLETED: "completed",
 } as const;
 
-const myWorkQuery = t.Object({
-  queue: t.Optional(
-    t.Union([
-      t.Literal(MY_WORK_QUEUE.TO_ACKNOWLEDGE),
-      t.Literal(MY_WORK_QUEUE.UPCOMING),
-      t.Literal(MY_WORK_QUEUE.AT_RISK),
-      t.Literal(MY_WORK_QUEUE.COMPLETED),
+const myWorkQuery = v.object({
+  queue: v.optional(
+    v.union([
+      v.literal(MY_WORK_QUEUE.TO_ACKNOWLEDGE),
+      v.literal(MY_WORK_QUEUE.UPCOMING),
+      v.literal(MY_WORK_QUEUE.AT_RISK),
+      v.literal(MY_WORK_QUEUE.COMPLETED),
     ]),
   ),
-  asOf: t.Optional(t.String({ format: "date" })),
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: WORK_QUEUE_PAGE_SIZE_MAX }),
+  asOf: v.optional(apiDateSchema),
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(WORK_QUEUE_PAGE_SIZE_MAX),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const config = {
@@ -194,7 +204,7 @@ const myWork = createSafeRootHandler(
                 and(
                   eq(entities.id, workObligations.entityId),
                   eq(entities.workspaceId, workObligations.workspaceId),
-                  eq(entities.kind, "task"),
+                  workTask(entities),
                   workObligationEligibleEntity,
                 ),
               )

@@ -1,8 +1,8 @@
 import type { Block } from "@stll/legal-ast/document-ast";
 import { resolveDocumentAnchor } from "@stll/legal-ast/document-ast";
 import {
+  enclosingHeadingAnchor,
   provisionBlocks,
-  provisionHeadingAnchor,
   provisionPreviewBlocks,
 } from "@stll/legal-ast/provision-preview";
 
@@ -57,7 +57,11 @@ export const extractProvisionText = (
   // grammar is not a reliable way to tell the two apart, but the document is.
   const owned =
     provisionBlocks(blocks, anchorId) ??
-    subdivisionBlocks(blocks, provisionHeadingAnchor(anchorId), anchorId);
+    subdivisionBlocks(
+      blocks,
+      enclosingHeadingAnchor(blocks, anchorId) ?? anchorId,
+      anchorId,
+    );
   if (owned === null) {
     return null;
   }

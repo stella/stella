@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { FormattingProvider } from "@/i18n/formatting-context";
 import en from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -28,7 +29,9 @@ const DECISION: ChatThreadDecision = {
 const render = (decision: ChatThreadDecision) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={en} timeZone="UTC">
-      <ChatThreadDecisionLabel decision={decision} />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ChatThreadDecisionLabel decision={decision} />
+      </FormattingProvider>
     </IntlProvider>,
   );
 

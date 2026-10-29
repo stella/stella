@@ -15,9 +15,6 @@
   "apps/api/src/handlers/chat/recorded-conversations.lifecycle.integration.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/handlers/chat/tool-call-end-arguments.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/handlers/dev/routes.contract.test.ts": [
     "no-classified-reachability"
   ],
@@ -30,15 +27,9 @@
   "apps/api/src/lib/chat/ai-data-policy.contract.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/lib/elysia-optional-union-coercion.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/lib/mcp-upstream/connections.test.ts": [
     "local-export-collision:createMcpClientForConnection",
     "local-export-collision:proxyMcpToolCall"
-  ],
-  "apps/api/src/lib/provider-document-adapters.test.ts": [
-    "no-classified-reachability"
   ],
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.db.test.ts": [
     "no-classified-reachability"

@@ -8,7 +8,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -44,6 +44,8 @@ const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { AIAvailabilityProvider } = await import("@/components/require-ai-key");
 const { roleOptions } = await import("@/lib/auth-queries");
+const { aiAvailabilityOptions } =
+  await import("@/lib/organization/ai-config-queries");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
@@ -273,7 +275,7 @@ const draftPrompt = (text: string) => {
     .insertInlineContent(getChatThreadKey(threadRef), [{ type: "text", text }]);
 };
 
-/** The thread page as its route mounts it, ready to send. */
+/** The mounted thread page after its availability read settles. */
 const openThreadPage = async (
   client: InstanceType<typeof query.QueryClient>,
 ) => {
@@ -316,6 +318,19 @@ const openThreadPage = async (
       </query.QueryClientProvider>
     </AnalyticsContext>,
   );
+  await ui.findByRole("textbox");
+  await testing.waitFor(() =>
+    expect(
+      client.getQueryState(
+        aiAvailabilityOptions({ organizationId: user.activeOrganizationId })
+          .queryKey,
+      )?.status,
+    ).toBe("success"),
+  );
+  return ui;
+};
+
+const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.waitFor(() =>
     expect(
       ui
@@ -323,10 +338,6 @@ const openThreadPage = async (
         .hasAttribute("disabled"),
     ).toBe(false),
   );
-  return ui;
-};
-
-const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.act(async () => {
     testing.fireEvent.click(
       ui.getByRole("button", { name: messages.chat.sendPrompt }),
@@ -406,9 +417,7 @@ test("an evicted builder's chat lives and goes with the thread entry the page re
   expect(unexpected).toEqual([]);
 });
 
-// A send the page declines (no AI available, so it opens the configure-key
-// dialog instead) must leave the typed message in the composer for the retry.
-test("a send declined for missing AI keeps the typed draft in the composer", async () => {
+test("unavailable AI blocks sending and preserves the draft until availability recovers", async () => {
   serveSavedBuilder({ aiAvailable: false });
   const client = createClient();
   const prompt = "Summarise the indemnity clause";
@@ -418,25 +427,36 @@ test("a send declined for missing AI keeps the typed draft in the composer", asy
   const textbox = ui.getByRole("textbox");
   expect(textbox.textContent).toBe(prompt);
 
+  const sendButton = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  expect(sendButton.hasAttribute("disabled")).toBe(true);
+  expect(textbox.getAttribute("contenteditable")).toBe("true");
   await testing.act(async () => {
-    testing.fireEvent.click(
-      ui.getByRole("button", { name: messages.chat.sendPrompt }),
-    );
-    await sleep(50);
+    testing.fireEvent.click(sendButton);
+    testing.fireEvent.keyDown(textbox, { key: "Enter" });
   });
-
-  // The page declined the send and asked for a key instead.
-  await testing.waitFor(() => expect(ui.queryByRole("dialog")).not.toBeNull());
+  expect(ui.queryByRole("dialog")).toBeNull();
   expect(sends).toEqual([]);
-  // Only the dialog's own settings read is new; this test does not serve it.
-  expect(
-    unexpected.filter(
-      (pathname) => !pathname.endsWith("/organization-settings/ai-config"),
-    ),
-  ).toEqual([]);
+  expect(unexpected).toEqual([]);
   expect(textbox.textContent).toBe(prompt);
   expect(
     useChatDraftStore.getState().getDraft(getChatThreadKey(threadRef))?.doc
       .content,
   ).toEqual([{ type: "paragraph", content: [{ type: "text", text: prompt }] }]);
+
+  serveSavedBuilder();
+  await testing.act(async () => {
+    await client.invalidateQueries({
+      queryKey: aiAvailabilityOptions({
+        organizationId: user.activeOrganizationId,
+      }).queryKey,
+      exact: true,
+    });
+  });
+  expect(ui.getByRole("textbox")).toBe(textbox);
+  expect(textbox.textContent).toBe(prompt);
+  await send(ui, 1);
+  expect(sends.at(0)).toMatchObject({
+    messages: [{ content: `<p>${prompt}</p>`, role: "user" }],
+  });
+  expect(unexpected).toEqual([]);
 });

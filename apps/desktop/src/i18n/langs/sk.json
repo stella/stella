@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Znova ukladať nové výstrižky z aplikácie <bdi>{source}</bdi>",
     "pause": "Pozastaviť ukladanie",
     "plainText": "Obyčajný text",
+    "plainTextPreview": "Ukážka obyčajného textu",
     "retention": "Uchovávať históriu",
     "retentionWeek": "Jeden týždeň",
     "retentionMonth": "Jeden mesiac",
@@ -617,5 +618,46 @@
       "fullDiskAccess": "Úplný prístup k disku",
       "administrator": "Oprávnenia správcu"
     }
+  },
+  "agentSubscriptions": {
+    "title": "Predplatné AI",
+    "chatGpt": "ChatGPT",
+    "description": "Používajte svoj plán ChatGPT na požiadavky na AI v stelle. Využitie sa započítava do plánu ChatGPT, oddelene od predplatného stelly.",
+    "continueWithChatGpt": "Pokračovať s ChatGPT",
+    "continueAs": "Pokračovať ako {email}",
+    "useDifferentAccount": "Použiť iný účet",
+    "signingIn": "Dokončite prihlásenie v prehliadači.",
+    "cancel": "Zrušiť",
+    "pasteDescription": "Ak prehliadač po prihlásení zobrazí chybovú stránku, skopírujte jej adresu a vložte ju sem.",
+    "pasteSubmit": "Dokončiť prihlásenie",
+    "connected": "ChatGPT pripojený",
+    "connectedAs": "ChatGPT pripojený · {email}",
+    "manageUsage": "Spravovať využitie",
+    "disconnect": "Odpojiť",
+    "needsReconnect": "Pripojenie k ChatGPT vypršalo. Prihláste sa znova, aby ste mohli plán ďalej používať.",
+    "notice": {
+      "actionFailed": "Nepodarilo sa to. Skúste to znova.",
+      "pasteRejected": "Táto adresa nepatrí k aktuálnemu prihláseniu. Skopírujte celú adresu z karty prehliadača, ktorá sa otvorila.",
+      "revocationUnconfirmed": "Odpojené v tomto počítači, ale ChatGPT to nepotvrdil. Stellu môžete odstrániť aj v nastaveniach ChatGPT."
+    },
+    "failure": {
+      "declined": "Prihlásenie bolo v prehliadači odmietnuté.",
+      "planUsageNotGranted": "Stella nedostala povolenie používať váš plán ChatGPT. Prihláste sa znova a povoľte to.",
+      "differentAccount": "Prihlásili ste sa iným účtom ChatGPT. Uložené pripojenie zostalo bez zmeny.",
+      "stateMismatch": "Prihlásenie sa nepodarilo overiť. Skúste to znova.",
+      "timedOut": "Prihlásenie trvalo príliš dlho. Skúste to znova.",
+      "browserUnavailable": "Prehliadač sa nepodarilo otvoriť. Skúste to znova.",
+      "callbackUnavailable": "Prihlásenie sa v tomto počítači nepodarilo pripraviť. Skúste to znova.",
+      "registrationIncomplete": "ChatGPT nedokončil pripojenie stelly. Skúste to znova.",
+      "codeExpired": "Platnosť prihlásenia vypršala skôr, ako sa dokončilo. Skúste to znova.",
+      "verification": "Odpoveď ChatGPT sa nepodarilo overiť. Skúste to znova.",
+      "clientRejected": "ChatGPT toto pripojenie už neprijíma. Pripojte sa znova iným účtom.",
+      "unreachable": "Prihlásenie do ChatGPT nie je dostupné. Skontrolujte pripojenie na internet a skúste to znova.",
+      "storage": "Pripojenie sa v tomto počítači nepodarilo načítať ani uložiť."
+    },
+    "callbackConnectedTitle": "ChatGPT je pripojený",
+    "callbackConnectedBody": "Túto kartu môžete zavrieť a vrátiť sa do stelly.",
+    "callbackNotConnectedTitle": "ChatGPT sa nepripojil",
+    "callbackNotConnectedBody": "Vráťte sa do stelly, zistite, čo sa stalo, a skúste to znova."
   }
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { createDeleteMcpConnectionHandler } from "@/api/handlers/mcp-connectors/delete-connection";
 import type { DeleteMcpConnectionDependencies } from "@/api/handlers/mcp-connectors/delete-connection";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -90,7 +91,7 @@ const setup = ({
       `https://api.example.test/v1/mcp/connections/${connectionId}`,
       { method: "DELETE" },
     ),
-    route: "/v1/mcp/connections/:connectionId",
+    route: "/v1/mcp/connections/:connectionId" satisfies ApiRoutePath,
   });
   return { context, events, handler, revocations, revokedFrom };
 };

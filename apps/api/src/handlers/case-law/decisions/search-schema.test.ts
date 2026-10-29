@@ -1,8 +1,4 @@
-import { TypeCompiler } from "@sinclair/typebox/compiler";
-import { Value } from "@sinclair/typebox/value";
-import { describe, expect, expectTypeOf, spyOn, test } from "bun:test";
-import { getSchemaValidator } from "elysia";
-import type { Static, UnwrapSchema } from "elysia";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
@@ -30,6 +26,9 @@ import {
   searchDecisionsBodySchema,
   searchDecisionsSuccessResponseSchema,
 } from "@/api/handlers/case-law/decisions/search-schema";
+import { isHttpFailure } from "@/api/http/errors";
+import { encodeResponseOutput } from "@/api/http/input";
+import type { ReadonlyWire } from "@/api/lib/api-handlers";
 import type { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import type { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
@@ -42,9 +41,10 @@ type SearchDecisionsSuccess = Extract<
   { hits: readonly unknown[] }
 >;
 
+// Read-only on both sides: the payload's arrays are read-only data.
 type HandlerResponseFitsSchema =
-  SearchDecisionsSuccess extends UnwrapSchema<
-    typeof searchDecisionsSuccessResponseSchema
+  ReadonlyWire<SearchDecisionsSuccess> extends ReadonlyWire<
+    v.InferInput<typeof searchDecisionsSuccessResponseSchema>
   >
     ? true
     : false;
@@ -97,6 +97,19 @@ const validResponse = {
   warnings: [],
 };
 
+/** Whether the HTTP layer sends this answer, through the route's response encoder. */
+const httpSends = async (response: unknown): Promise<boolean> => {
+  try {
+    await encodeResponseOutput(searchDecisionsSuccessResponseSchema, response);
+    return true;
+  } catch (error) {
+    if (isHttpFailure(error)) {
+      return false;
+    }
+    throw error;
+  }
+};
+
 const bucket = (value: string) => ({ value, label: null, count: 3 });
 
 const firstPageFacets = {
@@ -121,9 +134,9 @@ describe("case-law search request schema", () => {
   test("source filters accept full UUIDs in either hex case and reject malformed URL ids", () => {
     const uuid = "0194d94a-1122-7000-8000-123456789abc";
     for (const sourceId of [uuid, uuid.toUpperCase()]) {
-      expect(
-        Value.Check(searchDecisionsBodySchema, { ...validBody, sourceId }),
-      ).toBe(true);
+      expect(v.is(searchDecisionsBodySchema, { ...validBody, sourceId })).toBe(
+        true,
+      );
     }
     for (const sourceId of [
       "source-id",
@@ -137,22 +150,24 @@ describe("case-law search request schema", () => {
       null,
       [uuid],
     ]) {
-      expect(
-        Value.Check(searchDecisionsBodySchema, { ...validBody, sourceId }),
-      ).toBe(false);
+      expect(v.is(searchDecisionsBodySchema, { ...validBody, sourceId })).toBe(
+        false,
+      );
     }
   });
 
-  test("names every declared sort, spelled out so Eden keeps the union", () => {
-    expectTypeOf<Static<typeof searchSortSchema>>().toEqualTypeOf<SearchSort>();
+  test("names every declared sort, spelled out as a closed union", () => {
+    expectTypeOf<
+      v.InferOutput<typeof searchSortSchema>
+    >().toEqualTypeOf<SearchSort>();
   });
 
   test("accepts every declared sort and no sort at all", () => {
-    expect(Value.Check(searchDecisionsBodySchema, validBody)).toBe(true);
+    expect(v.is(searchDecisionsBodySchema, validBody)).toBe(true);
     for (const sort of SEARCH_SORTS) {
-      expect(
-        Value.Check(searchDecisionsBodySchema, { ...validBody, sort }),
-      ).toBe(true);
+      expect(v.is(searchDecisionsBodySchema, { ...validBody, sort })).toBe(
+        true,
+      );
     }
   });
 
@@ -161,24 +176,24 @@ describe("case-law search request schema", () => {
   test.each(["oldest", "", "RELEVANCE", 1])(
     "rejects the undeclared sort %p",
     (sort) => {
-      expect(
-        Value.Check(searchDecisionsBodySchema, { ...validBody, sort }),
-      ).toBe(false);
+      expect(v.is(searchDecisionsBodySchema, { ...validBody, sort })).toBe(
+        false,
+      );
     },
   );
 
-  test("names every declared excerpt, spelled out so Eden keeps the union", () => {
+  test("names every declared excerpt, spelled out as a closed union", () => {
     expectTypeOf<
-      Static<typeof searchExcerptSchema>
+      v.InferOutput<typeof searchExcerptSchema>
     >().toEqualTypeOf<SearchExcerpt>();
   });
 
   test("accepts every declared excerpt and no excerpt at all", () => {
-    expect(Value.Check(searchDecisionsBodySchema, validBody)).toBe(true);
+    expect(v.is(searchDecisionsBodySchema, validBody)).toBe(true);
     for (const excerpt of SEARCH_EXCERPTS) {
-      expect(
-        Value.Check(searchDecisionsBodySchema, { ...validBody, excerpt }),
-      ).toBe(true);
+      expect(v.is(searchDecisionsBodySchema, { ...validBody, excerpt })).toBe(
+        true,
+      );
     }
   });
 
@@ -187,9 +202,9 @@ describe("case-law search request schema", () => {
   test.each(["huge", "", "SHORT", 400, null])(
     "rejects the undeclared excerpt %p",
     (excerpt) => {
-      expect(
-        Value.Check(searchDecisionsBodySchema, { ...validBody, excerpt }),
-      ).toBe(false);
+      expect(v.is(searchDecisionsBodySchema, { ...validBody, excerpt })).toBe(
+        false,
+      );
     },
   );
 });
@@ -208,7 +223,7 @@ describe("case-law search response schema", () => {
     });
     for (const countType of Object.values(FACET_COUNT_TYPE)) {
       expect(
-        Value.Check(
+        v.is(
           searchDecisionsSuccessResponseSchema,
           responseWithCountType(countType),
         ),
@@ -216,7 +231,7 @@ describe("case-law search response schema", () => {
     }
     for (const countType of [undefined, null, "unknown", 1]) {
       expect(
-        Value.Check(
+        v.is(
           searchDecisionsSuccessResponseSchema,
           responseWithCountType(countType),
         ),
@@ -229,15 +244,15 @@ describe("case-law search response schema", () => {
   });
 
   test("accepts the complete response", () => {
-    expect(
-      Value.Check(searchDecisionsSuccessResponseSchema, validResponse),
-    ).toBe(true);
+    expect(v.is(searchDecisionsSuccessResponseSchema, validResponse)).toBe(
+      true,
+    );
   });
 
   test("accepts every declared warning code", () => {
     for (const code of CASE_LAW_SEARCH_WARNING_CODES) {
       expect(
-        Value.Check(searchDecisionsSuccessResponseSchema, {
+        v.is(searchDecisionsSuccessResponseSchema, {
           ...validResponse,
           warnings: [{ code, message: "Something", hint: "Do something" }],
         }),
@@ -251,7 +266,7 @@ describe("case-law search response schema", () => {
     "rejects the undeclared warning code %p",
     (code) => {
       expect(
-        Value.Check(searchDecisionsSuccessResponseSchema, {
+        v.is(searchDecisionsSuccessResponseSchema, {
           ...validResponse,
           warnings: [{ code, message: "Something", hint: "Do something" }],
         }),
@@ -259,8 +274,7 @@ describe("case-law search response schema", () => {
     },
   );
 
-  test("HTTP court/year validation matches the canonical aggregate schema", () => {
-    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
+  test("HTTP court/year validation matches the canonical aggregate schema", async () => {
     const matrixBucket = {
       court: "Nejvyšší soud",
       courtName: "Nejvyšší soud",
@@ -301,37 +315,31 @@ describe("case-law search response schema", () => {
         facets: { ...firstPageFacets, courtYear },
       };
       const valid = v.safeParse(caseLawCourtYearSchema, courtYear).success;
-      expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
-        valid,
-      );
-      expect(compiled.Check(response)).toBe(valid);
+      expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(valid);
+      expect(await httpSends(response)).toBe(valid);
     }
   });
 
-  test("the response schema builds its exact serializer", () => {
-    const warnings = spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const validator = getSchemaValidator(
-        searchDecisionsSuccessResponseSchema,
-        {
-          normalize: "exactMirror",
-        },
-      );
-      expect(warnings.mock.calls).toEqual([]);
-      const response = { ...validResponse, facets: firstPageFacets };
-      expect(validator.Check(response)).toBe(true);
-      const mirrored = validator.Clean?.(response);
-      expect(Value.Check(searchDecisionsSuccessResponseSchema, mirrored)).toBe(
-        true,
-      );
-      expect(mirrored?.facets?.courtYear).toBeNull();
-    } finally {
-      warnings.mockRestore();
-    }
+  // An undeclared field, top-level or among the facets, never reaches the
+  // wire: the encoder sends the schema's output, which drops it.
+  test("the response encoder sends exactly the declared fields", async () => {
+    const mirrored = await encodeResponseOutput(
+      searchDecisionsSuccessResponseSchema,
+      {
+        ...validResponse,
+        unexpected: true,
+        facets: { ...firstPageFacets, country: [bucket("CZE")] },
+      },
+    );
+    expect(v.is(searchDecisionsSuccessResponseSchema, mirrored)).toBe(true);
+    expect(mirrored.facets?.courtYear).toBeNull();
+    expect(Object.hasOwn(mirrored, "unexpected")).toBe(false);
+    expect(
+      mirrored.facets !== null && Object.hasOwn(mirrored.facets, "country"),
+    ).toBe(false);
   });
 
-  test("HTTP court/year validation agrees with the canonical contract for generated values", () => {
-    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
+  test("HTTP court/year validation agrees with the canonical contract for generated values", async () => {
     const count = fc.oneof(
       fc.integer({ min: 0, max: 10_000 }),
       fc.constant(-1),
@@ -359,18 +367,18 @@ describe("case-law search response schema", () => {
       ),
       truncated: fc.boolean(),
     });
-    assertProperty(
+    await assertProperty(
       "HTTP court/year validation agrees with the canonical contract for generated values",
-      fc.property(fc.oneof(matrix, fc.jsonValue()), (courtYear) => {
+      fc.asyncProperty(fc.oneof(matrix, fc.jsonValue()), async (courtYear) => {
         const response = {
           ...validResponse,
           facets: { ...firstPageFacets, courtYear },
         };
         const valid = v.safeParse(caseLawCourtYearSchema, courtYear).success;
-        expect(
-          Value.Check(searchDecisionsSuccessResponseSchema, response),
-        ).toBe(valid);
-        expect(compiled.Check(response)).toBe(valid);
+        expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(
+          valid,
+        );
+        expect(await httpSends(response)).toBe(valid);
       }),
     );
   });
@@ -379,13 +387,13 @@ describe("case-law search response schema", () => {
   // counts describe the result set and do not change as a reader pages.
   test("accepts a first page's facets and a cursor page's absence of them", () => {
     expect(
-      Value.Check(searchDecisionsSuccessResponseSchema, {
+      v.is(searchDecisionsSuccessResponseSchema, {
         ...validResponse,
         facets: firstPageFacets,
       }),
     ).toBe(true);
     expect(
-      Value.Check(searchDecisionsSuccessResponseSchema, {
+      v.is(searchDecisionsSuccessResponseSchema, {
         ...validResponse,
         facets: null,
         nextCursor: "cursor",
@@ -398,7 +406,7 @@ describe("case-law search response schema", () => {
   test("the type facet carries canonical kinds and refuses a stated spelling", () => {
     for (const kind of DECISION_TYPE_KINDS) {
       expect(
-        Value.Check(searchDecisionsSuccessResponseSchema, {
+        v.is(searchDecisionsSuccessResponseSchema, {
           ...validResponse,
           facets: { ...firstPageFacets, decisionType: [bucket(kind)] },
         }),
@@ -410,7 +418,7 @@ describe("case-law search response schema", () => {
       "ministery_of_justice_decision",
     ]) {
       expect(
-        Value.Check(searchDecisionsSuccessResponseSchema, {
+        v.is(searchDecisionsSuccessResponseSchema, {
           ...validResponse,
           facets: { ...firstPageFacets, decisionType: [bucket(stated)] },
         }),
@@ -421,7 +429,7 @@ describe("case-law search response schema", () => {
   test("accepts every declared court tier", () => {
     for (const tierLabel of COURT_TIER_LABELS) {
       expect(
-        Value.Check(searchDecisionsSuccessResponseSchema, {
+        v.is(searchDecisionsSuccessResponseSchema, {
           ...validResponse,
           facets: {
             ...firstPageFacets,
@@ -434,7 +442,6 @@ describe("case-law search response schema", () => {
 
   test.each([
     { ...validResponse, total: null },
-    { ...validResponse, unexpected: true },
     // A tier the response does not declare is a heading nothing renders.
     {
       ...validResponse,
@@ -459,14 +466,7 @@ describe("case-law search response schema", () => {
         language: [{ value: "cs", label: null, count: 3.5 }],
       },
     },
-    // The facets the contract declares are the facets it declares.
-    {
-      ...validResponse,
-      facets: { ...firstPageFacets, country: [bucket("CZE")] },
-    },
   ])("rejects a response outside the declared contract", (response) => {
-    expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
-      false,
-    );
+    expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(false);
   });
 });

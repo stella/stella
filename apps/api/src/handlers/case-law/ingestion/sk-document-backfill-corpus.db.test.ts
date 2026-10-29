@@ -230,6 +230,39 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
 
+    test("deferred storage keeps text when its AST has duplicate anchors", async () => {
+      const id = await insertDecision({
+        caseNumber: `reader-schema-${suffix}`,
+      });
+      const decision = await claimFor(id);
+      const block = parsedAst.blocks.at(0);
+      if (block === undefined) {
+        expect.unreachable("Fixture has a heading");
+      }
+      const invalidAst = {
+        ...parsedAst,
+        blocks: [block, { ...block, id: "b2" }],
+      };
+      await storeBackfilledDocument({
+        decision,
+        document: { ...parsedDocument, documentAst: invalidAst },
+        scopedDb,
+        mode: "off",
+        transfer: null,
+      });
+      const row = (
+        await db
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            documentAst: caseLawDecisions.documentAst,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id))
+      ).at(0);
+      expect(row?.fulltext).toBe(parsedDocument.fulltext);
+      expect(row?.documentAst).toEqual({});
+    });
+
     test("moves the row's keys and hash onto the real document", async () => {
       const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
       const caseNumber = `corpus-${suffix}`;

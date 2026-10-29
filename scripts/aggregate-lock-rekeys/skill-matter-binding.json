@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/handlers/skills/update.ts",
+    "from": "362b7954c5875a3730ec3e485c127c17f540ff820cc646e548ed27b9fefd1476",
+    "to": "270bd1490b6feb89cea19cc72d7088996750ec56eee035496196bbeb9ee45912",
+    "reason": "The existing skill row lock also selects the binding fields for management authorization; lock acquisition, tenant predicate, and transaction boundary are unchanged."
+  }
+]

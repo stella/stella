@@ -43,6 +43,9 @@ env:
 jobs:
   resolve:
     name: Resolve trusted release
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -50,7 +53,9 @@ jobs:
     outputs:
       release_ref: ${{ steps.release.outputs.ref }}
       release_sha: ${{ steps.release.outputs.sha }}
-      version: ${{ steps.release.outputs.version }}
+      version: ${{ steps.source.outputs.version }}
+      rc_ref: ${{ steps.source.outputs.rc_ref }}
+      channel: ${{ steps.release.outputs.channel }}
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,13 +64,35 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+            scripts/check-release-main-health.sh
+            scripts/check-release-open-incidents.sh
+            scripts/check-release-receipt-coverage.sh
+            scripts/check-release-queue-history.ts
+            scripts/verify-release-tree-proof.sh
+            scripts/check-release-candidate.sh
+            scripts/verify-release-candidate-tree.mjs
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve release verification tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"* "$RUNNER_TEMP/"
+
+      - name: Preserve release candidate verifier across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-candidate.sh" "$RUNNER_TEMP/check-release-candidate.sh"
+          echo "RELEASE_CANDIDATE_CHECKER=$RUNNER_TEMP/check-release-candidate.sh" >> "$GITHUB_ENV"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/verify-release-candidate-tree.mjs" "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
+          echo "RELEASE_CANDIDATE_TREE_VERIFIER=$RUNNER_TEMP/verify-release-candidate-tree.mjs" >> "$GITHUB_ENV"
 
       - name: Resolve release tag
         id: release
@@ -105,7 +132,9 @@ jobs:
           {
             echo "ref=$release_ref"
             echo "sha=$release_sha"
-            echo "version=${release_ref#v}"
+            version="${release_ref#v}"
+            echo "version=${version%%-rc.*}"
+            if [[ "$release_ref" == *-rc.* ]]; then echo "channel=rc"; else echo "channel=final"; fi
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout resolved commit
@@ -116,21 +145,30 @@ jobs:
           persist-credentials: false
 
       - name: Verify release source
+        id: source
+        timeout-minutes: 4
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.release.outputs.ref }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
-          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
-            echo "::error::Release tag $RELEASE_REF is not reachable from protected main"
-            exit 1
-          fi
-
+          set -euo pipefail
           file_version="$(tr -d '[:space:]' < VERSION)"
-          if [[ "$file_version" != "$VERSION" ]]; then
-            echo "::error::VERSION ($file_version) does not match $RELEASE_REF"
-            exit 1
+          echo "version=$file_version" >> "$GITHUB_OUTPUT"
+          [[ "${RELEASE_REF%%-rc.*}" == "v$file_version" ]]
+          if [[ "$RELEASE_REF" == *-rc.* ]]; then
+            pulls="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls?state=open&base=main&per_page=100")"
+            jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" --arg title "chore: release v$file_version" \
+              'any(.[][]; .head.sha == $sha and .head.repo.full_name == $repo and .title == $title)' <<< "$pulls" >/dev/null
+            release_base="$(git merge-base "$RELEASE_SHA" origin/main)"
+            node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
+            echo "rc_ref=$RELEASE_REF" >> "$GITHUB_OUTPUT"
+          else
+            rc_tags="$(git tag --points-at "$RELEASE_SHA" --list "v${file_version}-rc.*" --sort=-v:refname)"
+            rc_ref="$(grep -E -m 1 "^v${file_version//./\.}-rc\.[0-9]+$" <<<"$rc_tags" || true)"
+            [[ -n "$rc_ref" ]] || { echo '::error::No RC tag on the final SHA'; exit 1; }
+            bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" "$RELEASE_SHA"
+            echo "rc_ref=$rc_ref" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Write trusted release receipt
@@ -157,6 +195,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     needs: [resolve, build]
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
       contents: read
       packages: read
@@ -256,6 +297,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
       contents: read
       packages: write
@@ -374,8 +418,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
-      contents: read
+      contents: write # a rerun reads this release's draft receipt
       packages: write
       id-token: write
       attestations: write
@@ -495,7 +542,6 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Checkout workflow tooling
-        if: steps.existing.outputs.reused != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -503,7 +549,6 @@ jobs:
           persist-credentials: false
 
       - name: Checkout release source
-        if: steps.existing.outputs.reused != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.release_sha }}
@@ -606,13 +651,297 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  prepare-production-web-image:
+    name: Build and prove production web image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
+    permissions:
+      contents: write # a rerun reads this release's draft receipt
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      digest: ${{ steps.result.outputs.digest }}
+      target-environment: ${{ steps.target.outputs.environment }}
+
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Resolve web build target
+        id: target
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: |
+          target_environment=production
+          echo "environment=${target_environment}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reuse an existing release receipt
+        timeout-minutes: 5
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          PREDICATE_TYPE: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          set -euo pipefail
+          mkdir -p existing-release
+          receipt_digest=""
+          if bash "$GH_RETRY_SCRIPT" release download "$RELEASE_REF" \
+            --pattern release-manifest.json \
+            --dir existing-release; then
+            receipt_digest="$(jq -r '.productionWebImage.digest // empty' existing-release/release-manifest.json)"
+            target_environment="$(jq -r '.productionWebImage.targetEnvironment // empty' existing-release/release-manifest.json)"
+            if [[ -n "$receipt_digest" && "$target_environment" != "$TARGET_ENV" ]]; then
+              echo "::error::Existing web image receipt targets a different environment."
+              exit 1
+            fi
+          fi
+
+          if ! tagged_digest="$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_REF}-production" --format '{{.Manifest.Digest}}' 2>/dev/null)"; then
+            if [[ -n "$receipt_digest" ]]; then
+              echo "::error::Existing web image receipt has no matching registry tag."
+              exit 1
+            fi
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ ! "$tagged_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::Existing web image tag has an invalid digest."
+            exit 1
+          fi
+          if [[ -n "$receipt_digest" && "$tagged_digest" != "$receipt_digest" ]]; then
+            echo "::error::Existing web image tag does not match its release receipt."
+            exit 1
+          fi
+
+          # Pin the certificate identity (SAN) to this workflow at a ref that
+          # legitimately produces release attestations: the release tag itself
+          # (tag push) or main (workflow_dispatch runs from the default
+          # branch). A same-path workflow on any other ref must not pass.
+          identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RELEASE_REF//./\\.}|refs/heads/main)\$"
+          verification="$(gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --cert-identity-regex "$identity_pattern" \
+            --predicate-type "$PREDICATE_TYPE" \
+            --deny-self-hosted-runners \
+            --format json)"
+          jq -e \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg target_environment "$TARGET_ENV" \
+            'any(.[].verificationResult.statement.predicate;
+              .releaseRef == $release_ref
+              and .releaseSha == $release_sha
+              and .targetEnvironment == $target_environment)' \
+            <<<"$verification" >/dev/null
+          {
+            echo "digest=${tagged_digest}"
+            echo "reused=true"
+          } >> "$GITHUB_OUTPUT"
+
+      # Keep current workflow tooling separate from the selected release source.
+      # The action code comes from the workflow revision; the browser build
+      # contract remains bound to the release source and fails closed when absent.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
+      - name: Checkout workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-source
+          persist-credentials: false
+
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          path: .release-source
+          persist-credentials: false
+
+      - name: Build and publish web image publicly
+        if: steps.existing.outputs.reused != 'true'
+        id: publish
+        timeout-minutes: 45
+        uses: ./.workflow-source/.github/actions/build-web-image
+        with:
+          release-ref: ${{ needs.resolve.outputs.release_ref }}
+          release-sha: ${{ needs.resolve.outputs.release_sha }}
+          target-environment: ${{ steps.target.outputs.environment }}
+          posthog-key: ${{ secrets.VITE_POSTHOG_KEY }}
+          posthog-cli-api-key: ${{ secrets.POSTHOG_CLI_API_KEY }}
+          posthog-project-id: ${{ vars.POSTHOG_PROJECT_ID }}
+          source-path: .release-source
+          tooling-path: .workflow-source
+
+      - name: Write web image publication predicate
+        if: steps.existing.outputs.reused != 'true'
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          jq -n \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg target_environment "$TARGET_ENV" \
+            '{releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
+            > web-image-publication.json
+
+      # Registry refusals of an attestation upload can be transient. The image
+      # is already published by this point, so only a refusal that outlives
+      # the retries below fails the job; the backoff is deliberately longer
+      # than ./.github/actions/provenance's single short retry.
+      - name: Attest web image publication
+        id: attest-web
+        if: steps.existing.outputs.reused != 'true'
+        continue-on-error: true
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Wait before first retry
+        if: steps.attest-web.outcome == 'failure'
+        run: sleep 30
+
+      - name: Attest web image publication (retry)
+        id: attest-web-retry
+        if: steps.attest-web.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Wait before final retry
+        if: steps.attest-web-retry.outcome == 'failure'
+        run: sleep 90
+
+      # No continue-on-error: a third refusal fails the release, because a
+      # published image without an attestation is not a releasable artifact.
+      - name: Attest web image publication (final retry)
+        if: steps.attest-web-retry.outcome == 'failure'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Resolve web image digest
+        id: result
+        env:
+          EXISTING_DIGEST: ${{ steps.existing.outputs.digest }}
+          PUBLISHED_DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          digest="${EXISTING_DIGEST:-$PUBLISHED_DIGEST}"
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::Web image digest was not resolved."
+            exit 1
+          fi
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
+  prove-production-web-image:
+    name: Prove both web image configurations and production assets
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    needs: [resolve, prepare-web-image, prepare-production-web-image]
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout trusted tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Checkout source contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          path: .release-source
+          persist-credentials: false
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prove production web image without serving traffic
+        timeout-minutes: 3
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}@${{ needs.prepare-production-web-image.outputs.digest }}
+          STAGING_IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}@${{ needs.prepare-web-image.outputs.digest }}
+        run: bash scripts/prove-production-web-image.sh "$IMAGE" .release-source "$STAGING_IMAGE"
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
   manifest:
     name: Assemble multi-arch manifest and GitHub release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [resolve, build, prepare-web-image, smoke]
+    needs:
+      [
+        resolve,
+        build,
+        prepare-web-image,
+        prepare-production-web-image,
+        prove-production-web-image,
+        smoke,
+      ]
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     outputs:
       api-image-digest: ${{ steps.manifest.outputs.digest }}
+      web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}
+      production-web-image-digest: ${{ needs.prepare-production-web-image.outputs.digest }}
     permissions:
       contents: write
       packages: write
@@ -699,7 +1028,7 @@ jobs:
             image_env="$(docker image inspect "${IMAGE}@${tagged_digest}" --format '{{json .Config.Env}}')"
             jq -e \
               --arg commit "$SHA" \
-              --arg version "${RELEASE_REF#v}" \
+              --arg version "${{ needs.resolve.outputs.version }}" \
               'index("STELLA_COMMIT_SHA=" + $commit) != null
                 and index("STELLA_VERSION=" + $version) != null' \
               <<<"$image_env" >/dev/null
@@ -769,6 +1098,7 @@ jobs:
           publish_tag "$API_IMAGE" "$RELEASE_REF" "$API_IMAGE_DIGEST"
           publish_tag "$API_IMAGE" "sha-${SHA:0:7}" "$API_IMAGE_DIGEST"
           publish_tag "$WEB_IMAGE" "$RELEASE_REF" "$WEB_IMAGE_DIGEST"
+          publish_tag "$WEB_IMAGE" "${RELEASE_REF}-production" "${{ needs.prepare-production-web-image.outputs.digest }}"
 
       - name: Log out of GitHub Container Registry
         if: always()
@@ -780,7 +1110,8 @@ jobs:
           IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
           WEB_IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
-          WEB_TARGET_ENVIRONMENT: ${{ needs.prepare-web-image.outputs.target-environment }}
+          WEB_TARGET_ENVIRONMENT: staging
+          PRODUCTION_WEB_IMAGE_DIGEST: ${{ needs.prepare-production-web-image.outputs.digest }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           bash .workflow-source/scripts/create-release-manifest.sh \
@@ -809,13 +1140,16 @@ jobs:
             exit 0
           fi
 
-          previous_stable="$(
+          # Newest by creation, not version: the version line restarted once.
+          merged_tags="$(
             git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
               --merged "$RELEASE_REF" \
-              --sort=-v:refname \
-              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-              | grep -v -x "$RELEASE_REF" \
-              | head -n 1
+              --sort=-creatordate
+          )"
+          previous_stable="$(
+            awk -v release_ref="$RELEASE_REF" \
+              '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && $0 != release_ref { print; exit }' \
+              <<<"$merged_tags"
           )"
 
           if [[ -z "$previous_stable" ]]; then
@@ -863,7 +1197,6 @@ jobs:
       # Stable store packages share this existing standard Linux job. Upload
       # directly to the release; no intermediate Actions artifact is retained.
       - name: Setup Bun for the Chrome extension
-        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
@@ -871,7 +1204,6 @@ jobs:
 
       - name: Build and verify the production Chrome extension ZIP
         id: extension-zip
-        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
         timeout-minutes: 20
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
@@ -889,6 +1221,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          VERSION: ${{ needs.resolve.outputs.version }}
           EXTENSION_PACKAGED: ${{ steps.extension-zip.outputs.packaged }}
         run: |
           # A draft: absent from /releases, the public API and
@@ -915,8 +1248,84 @@ jobs:
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
           if [[ "$EXTENSION_PACKAGED" == "true" ]]; then
-            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "apps/extension/.output/stella-extension-chrome-${RELEASE_REF#v}.zip" --clobber
+            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "apps/extension/.output/stella-extension-chrome-${VERSION}.zip" --clobber
           fi
+
+  alias-manifest:
+    name: Alias the proven RC artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: resolve
+    if: ${{ success() && needs.resolve.outputs.channel == 'final' }}
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      api-image-digest: ${{ steps.alias.outputs.api }}
+      production-web-image-digest: ${{ steps.alias.outputs.web }}
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - name: Checkout trusted tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Alias RC digests and release assets
+        id: alias
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          RC_REF: ${{ needs.resolve.outputs.rc_ref }}
+        run: |
+          set -euo pipefail
+          mkdir rc
+          bash "$GH_RETRY_SCRIPT" release download "$RC_REF" --dir rc
+          bash scripts/alias-release-manifest.sh rc/release-manifest.json "$RELEASE_REF" "$RELEASE_SHA" > release-manifest.json
+          api="$(jq -r '.image.digest' release-manifest.json)"
+          web="$(jq -r '.productionWebImage.digest' release-manifest.json)"
+          for kind in image productionWebImage; do
+            image="$(jq -r --arg kind "$kind" '.[$kind].name' release-manifest.json)"
+            digest="$(jq -r --arg kind "$kind" '.[$kind].digest' release-manifest.json)"
+            existing="$(docker buildx imagetools inspect "$image:$RELEASE_REF" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+            if [[ -n "$existing" && "$existing" != "$digest" ]]; then echo '::error::Stable image tag differs from RC'; exit 1; fi
+            if [[ -z "$existing" ]]; then docker buildx imagetools create --tag "$image:$RELEASE_REF" "$image@$digest"; fi
+          done
+          if ! bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" >/dev/null; then
+            bash "$GH_RETRY_SCRIPT" release view "$RC_REF" --json body --jq .body > NOTES.md
+            bash "$GH_RETRY_SCRIPT" release create "$RELEASE_REF" --draft --verify-tag --title "$RELEASE_REF" --notes-file NOTES.md
+          fi
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
+          for asset in rc/*.zip; do
+            [[ -f "$asset" ]] || continue
+            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$asset" --clobber
+          done
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   release-health-gate:
     # The previous production release must have passed its post-release
@@ -925,8 +1334,8 @@ jobs:
     name: Gate on the previous release's health
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: [resolve, manifest, prepare-web-image, smoke]
-    if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+    needs: [resolve, alias-manifest]
+    if: ${{ success() && !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: read
     steps:
@@ -974,7 +1383,7 @@ jobs:
             --acknowledged "$ACKNOWLEDGED" \
             --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  promote:
+  promote-production:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
     # artifact and is handled by `promote-staging` below.
@@ -983,11 +1392,10 @@ jobs:
     # terminal state. Match GitHub's full hosted-job window so this caller
     # cannot time out first and lose observation of an active promotion.
     timeout-minutes: 360
-    needs: [resolve, manifest, prepare-web-image, smoke, release-health-gate]
-    if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+    needs: [resolve, alias-manifest, release-health-gate]
+    if: ${{ success() && !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
-      contents: write # publish the draft release
-      packages: write # advance the mutable image aliases
+      contents: read # the dispatch uses the release App token
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
@@ -998,7 +1406,10 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/check-api-deployment.ts
+            scripts/api-health.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -1011,20 +1422,29 @@ jobs:
       # job can be dispatched manually against any existing tag, including one
       # cut before the action existed: checking out that release first would
       # leave `uses: ./...` unresolvable and fail before dispatching.
+      - name: Preserve release verification tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
+
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Promote to production
+        # Waits for the infra promote, online migrations included: only the
+        # verification steps after it need the rest of the job's window.
+        timeout-minutes: 350
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/stella-infra
           release-ref: ${{ needs.resolve.outputs.release_ref }}
+          expected-sha: ${{ needs.resolve.outputs.release_sha }}
           target-environment: production
-          web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}
+          web-image-digest: ${{ needs.alias-manifest.outputs.production-web-image-digest }}
 
       # Swap the workspace to the release being promoted: the verification
       # script must come from that revision, not from the workflow's.
@@ -1041,22 +1461,51 @@ jobs:
           no-cache: true
 
       - name: Verify production serves the release commit
+        timeout-minutes: 10
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_EXPECTED_ENVIRONMENT: production
           API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
-        run: bun scripts/check-api-deployment.ts
+        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
 
       # Same commit gate as the staging web smoke: the web origin's
       # version marker must stably report the released commit. Read-only
       # GET probes against the production frontend.
       - name: Verify production web serves the release commit
+        timeout-minutes: 10
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
           API_DEPLOYMENT_PROBE_PATH: version.json
           API_DEPLOYMENT_URL: https://my.stll.app
-        run: bun scripts/check-api-deployment.ts
+        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
 
+  publish-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [resolve, alias-manifest, promote-production]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.alias-manifest.result == 'success' && needs.promote-production.result == 'success' }}
+    permissions:
+      contents: write # publish the draft release
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - name: Checkout trusted tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
       # Everything below is the publication: it runs only once production
       # verifiably serves the release, so nothing users can reach moves on a
       # failed promotion. Each step is idempotent for a rerun.
@@ -1080,6 +1529,22 @@ jobs:
           fi
           bash "$GH_RETRY_SCRIPT" release edit "$RELEASE_REF" --draft=false --latest=false
 
+  publish-latest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [resolve, alias-manifest, promote-production]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.alias-manifest.result == 'success' && needs.promote-production.result == 'success' }}
+    permissions:
+      contents: read
+      packages: write # advance the latest image aliases
+    steps:
+      - name: Checkout trusted tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Locate API retry tooling
+        run: echo "GH_RETRY_SCRIPT=$GITHUB_WORKSPACE/scripts/gh-retry.sh" >> "$GITHUB_ENV"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -1093,9 +1558,9 @@ jobs:
       - name: Advance stable image tags
         env:
           API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          API_IMAGE_DIGEST: ${{ needs.manifest.outputs.api-image-digest }}
+          API_IMAGE_DIGEST: ${{ needs.alias-manifest.outputs.api-image-digest }}
           WEB_IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
-          WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
+          WEB_IMAGE_DIGEST: ${{ needs.alias-manifest.outputs.production-web-image-digest }}
         run: |
           set -euo pipefail
           for digest in "$API_IMAGE_DIGEST" "$WEB_IMAGE_DIGEST"; do
@@ -1104,12 +1569,14 @@ jobs:
               exit 1
             fi
           done
-          docker buildx imagetools create \
-            --tag "${API_IMAGE}:latest" \
-            "${API_IMAGE}@${API_IMAGE_DIGEST}"
-          docker buildx imagetools create \
-            --tag "${WEB_IMAGE}:latest" \
-            "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
+          for kind in API WEB; do
+            image_key="${kind}_IMAGE"
+            digest_key="${kind}_IMAGE_DIGEST"
+            image="${!image_key}"
+            digest="${!digest_key}"
+            existing="$(docker buildx imagetools inspect "$image:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+            if [[ "$existing" != "$digest" ]]; then docker buildx imagetools create --tag "$image:latest" "$image@$digest"; fi
+          done
 
       - name: Log out of GitHub Container Registry
         if: always()
@@ -1120,7 +1587,7 @@ jobs:
     name: Start the post-release health window
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: [resolve, promote]
+    needs: [resolve, promote-production]
     permissions:
       actions: write # dispatch release-health.yml
     steps:
@@ -1139,67 +1606,96 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
+          runs="$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/release-health.yml/runs?event=workflow_dispatch&per_page=100")"
+          if jq -e --arg title "Release health $RELEASE_REF" 'any(.[].workflow_runs[]; .display_title == $title)' <<< "$runs" >/dev/null; then exit 0; fi
           bash scripts/gh-retry.sh api --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/release-health.yml/dispatches" \
             -f ref=main \
             -f "inputs[release_ref]=${RELEASE_REF}"
 
   promote-staging:
-    # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.
-    # Same dispatch pattern as `promote` above; the infra workflow
-    # reads target_environment to resolve the staging-scoped vars
-    # and apply role.
+    name: Dispatch RC proofs
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    needs: [resolve, manifest, prepare-web-image, smoke]
-    if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}
+    timeout-minutes: 10
+    needs: [resolve, manifest]
+    if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
-      contents: write # publish the draft prerelease
+      contents: write
     environment: release-app
     steps:
-      - name: Checkout GitHub API tooling
+      - name: Checkout trusted tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
-          path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
-          sparse-checkout-cone-mode: false
-
-      - name: Preserve GitHub API tooling across source checkouts
-        run: |
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
-
-      # The workflow's own revision, not the release's: this job can be
-      # dispatched manually against a tag cut before the composite action
-      # existed, and only the workflow revision is guaranteed to contain it.
-      # Nothing here reads the release source, so it is never checked out.
-      - name: Checkout workflow source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Mint proof dispatch token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          persist-credentials: false
-
-      - name: Promote to staging
-        uses: ./.github/actions/promote-dispatch
-        with:
-          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
-          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
-          infra-repo: ${{ github.repository_owner }}/stella-infra
-          release-ref: ${{ needs.resolve.outputs.release_ref }}
-          target-environment: staging
-          web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}
-
-      - name: Publish GitHub prerelease
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: write
+      - name: Dispatch staging and heavy on the candidate SHA
+        timeout-minutes: 5
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SHA: ${{ needs.resolve.outputs.release_sha }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
-          # Same rerun rule as the production publish: only a draft changes.
-          is_draft="$(bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
-          if [[ "$is_draft" != "true" ]]; then
-            echo "Release $RELEASE_REF is already published; leaving it unchanged."
-            exit 0
-          fi
-          bash "$GH_RETRY_SCRIPT" release edit "$RELEASE_REF" --draft=false --prerelease
+          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA" -f "inputs[release_candidate]=true" -f "inputs[release_ref]=$RELEASE_REF"
+          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/main-heavy.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA" -f "inputs[release_candidate]=true"
+          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/main-pr-depth.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA"
+
+  release-complete:
+    name: Reconcile final release receipts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs:
+      [
+        resolve,
+        alias-manifest,
+        promote-production,
+        publish-release,
+        publish-latest,
+        dispatch-release-health,
+      ]
+    if: ${{ always() && needs.resolve.outputs.channel == 'final' }}
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    steps:
+      - name: Checkout trusted tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Reconcile production publication
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          API_DIGEST: ${{ needs.alias-manifest.outputs.api-image-digest }}
+          WEB_DIGEST: ${{ needs.alias-manifest.outputs.production-web-image-digest }}
+          PROMOTED: ${{ needs.promote-production.result }}
+        run: |
+          set -euo pipefail
+          release=false
+          latest=false
+          health=false
+          production=false
+          if [[ "$(bash scripts/gh-retry.sh release view "$RELEASE_REF" --json isDraft --jq '.isDraft == false' || true)" == true ]]; then release=true; fi
+          api="$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+          web="$(docker buildx imagetools inspect "${REGISTRY}/${WEB_IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+          if [[ -n "$API_DIGEST" && -n "$WEB_DIGEST" && "$api" == "$API_DIGEST" && "$web" == "$WEB_DIGEST" ]]; then latest=true; fi
+          runs="$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/release-health.yml/runs?event=workflow_dispatch&per_page=100")"
+          if jq -e --arg title "Release health $RELEASE_REF" 'any(.[].workflow_runs[]; .display_title == $title)' <<< "$runs" >/dev/null; then health=true; fi
+          if [[ "$PROMOTED" == success ]]; then production=true; fi
+          jq -n --argjson release "$release" --argjson latest "$latest" --argjson health "$health" --argjson production "$production" \
+            '{release: $release, ":latest": $latest, "health-run": $health, production: $production}' > receipts.json
+          bash scripts/release-complete.sh receipts.json

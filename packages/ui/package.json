@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.51.0",
+  "version": "0.54.1",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -213,6 +213,7 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
     "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
@@ -233,8 +234,10 @@
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
+    "@stll/playwright-tools": "workspace:*",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-virtual": "^3.14.21",
@@ -247,6 +250,7 @@
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
     "tsdown": "catalog:",
+    "tsrs": "catalog:",
     "vite": "catalog:"
   },
   "peerDependencies": {

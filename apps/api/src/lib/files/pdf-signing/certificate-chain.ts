@@ -340,7 +340,7 @@ export const completeCertificateChain = async ({
     .filter((entry) => entry !== null);
 
   const chain: Uint8Array[] = [];
-  const seen = new Set([Buffer.from(certificate).toString("hex")]);
+  const seen = new Set([Buffer.from(certificate).toHex()]);
   let current = leaf;
   while (chain.length < MAX_CHAIN_LENGTH) {
     if (isSelfIssued(current) && (await issued(current, current))) {
@@ -353,7 +353,7 @@ export const completeCertificateChain = async ({
       break;
     }
     const issuerDer = derOf(issuer);
-    const issuerKey = Buffer.from(issuerDer).toString("hex");
+    const issuerKey = Buffer.from(issuerDer).toHex();
     // An issuer already in the chain is a loop a misconfigured AIA pointer
     // produced; stop rather than walk it.
     if (seen.has(issuerKey)) {

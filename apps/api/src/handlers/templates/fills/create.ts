@@ -1,7 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import {
+  memberAIAccessError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -11,7 +14,11 @@ import {
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
-import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  jsonObjectSchema,
+  resourceIdSchema,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -50,21 +57,14 @@ import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
-  templateId: tSafeId("template"),
+  templateId: resourceIdSchema("template"),
 });
 
-const fillToWorkspaceBodySchema = t.Object({
-  /** Field-path → value map, same contract as the fill route. */
-  values: tJsonObject,
-  /** Per-fill clause edits keyed by slot patch key (`@clause:Name`), same
-   *  contract as the fill route; the override body is inserted for a matching
-   *  slot instead of the linked clause's resolved body. */
-  clauseOverrides: t.Optional(t.Record(t.String(), clauseBodySchema)),
-  /** Display name for the created document; defaults to the template's
-   *  file name. The `.docx` extension is appended when missing. */
-  name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
-  /** Target folder inside the workspace; root when absent. */
-  parentId: t.Optional(tSafeId("entity")),
+const fillToWorkspaceBodySchema = v.object({
+  values: jsonObjectSchema,
+  clauseOverrides: v.optional(v.record(v.string(), clauseBodySchema)),
+  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
+  parentId: v.optional(resourceIdSchema("entity")),
 });
 
 /** The created document's file name: the caller's sanitized name (extension
@@ -170,43 +170,6 @@ const fillTemplateToWorkspace = createSafeHandler(
       actionKind: "templates.fill",
     });
 
-    // Built only when the manifest declares an AI field: the fill service
-    // defers this, so a deterministic fill opens no metered trace.
-    const aiCollaborators = ({ signal, admission }: AdmittedModelAction) => {
-      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-        dataClass: "customer",
-        usageMetering: {
-          actionType: "chat",
-          organizationId,
-          safeDb,
-          serviceTier: "standard",
-          userId: user.id,
-          workspaceId,
-        },
-        feature: "templates.fill",
-        modelTask: "short-text",
-        orgAIConfig,
-        modelTier: admission.modelTier,
-        properties: { organization_id: organizationId },
-        traceId: Bun.randomUUIDv7(),
-      });
-      const shared = {
-        admission,
-        operationSignal: signal,
-        orgAIConfig,
-        managedAIResidency,
-        organizationId,
-        skillContext: { organizationId, safeDb, userId: user.id },
-        aiAnalytics,
-        tenantWorkspaceIds: [workspaceId],
-      };
-      return {
-        generateAiValue: buildAiFieldGenerator(shared),
-        decideAiCondition: buildAiConditionDecider(shared),
-        adaptAiValue: buildAiOccurrenceAdapter(shared),
-      };
-    };
-
     // The fill service runs this only when the manifest declares AI fields,
     // before any model call, so a deterministic fill never spends AI quota
     // and stays open to every member. A member the organization does not
@@ -234,8 +197,49 @@ const fillTemplateToWorkspace = createSafeHandler(
           }
         : undefined;
     const accessError = memberAIAccessError(orgAIConfigStatus);
-    const aiFill: AiFillAdmission<HandlerError> = async (fill) =>
-      await runAdmittedAiFill({
+    const aiFill: AiFillAdmission<HandlerError> = async (fill) => {
+      if (managedAIResidency === null) {
+        return {
+          type: "refused",
+          rejection: storedAIConfigUnreadableError(undefined),
+        };
+      }
+      // Constructed only for AI fields; deterministic fills need no provider.
+      const aiCollaborators = ({ signal, admission }: AdmittedModelAction) => {
+        const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+          dataClass: "customer",
+          usageMetering: {
+            actionType: "chat",
+            organizationId,
+            safeDb,
+            serviceTier: "standard",
+            userId: user.id,
+            workspaceId,
+          },
+          feature: "templates.fill",
+          modelTask: "short-text",
+          orgAIConfig,
+          modelTier: admission.modelTier,
+          properties: { organization_id: organizationId },
+          traceId: Bun.randomUUIDv7(),
+        });
+        const shared = {
+          admission,
+          operationSignal: signal,
+          orgAIConfig,
+          managedAIResidency,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId: user.id },
+          aiAnalytics,
+          tenantWorkspaceIds: [workspaceId],
+        };
+        return {
+          generateAiValue: buildAiFieldGenerator(shared),
+          decideAiCondition: buildAiConditionDecider(shared),
+          adaptAiValue: buildAiOccurrenceAdapter(shared),
+        };
+      };
+      return await runAdmittedAiFill({
         admitModelAction,
         preflight: async () => {
           if (accessError !== null) {
@@ -246,6 +250,7 @@ const fillTemplateToWorkspace = createSafeHandler(
         collaborators: aiCollaborators,
         fill,
       });
+    };
 
     // A missing template is a 404, and a stored file the scan refuses (or a
     // scanner outage) answers as it would for an upload: 422 or 503.

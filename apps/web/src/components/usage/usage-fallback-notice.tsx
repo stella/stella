@@ -3,8 +3,9 @@ import { useTranslations } from "use-intl";
 
 import { env } from "@/env";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { queryView } from "@/lib/query-view.logic";
 import { usageLaneOptions } from "@/lib/usage-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Inline notice shown when the user's included daily AI budget is spent
@@ -26,8 +27,8 @@ export const UsageFallbackNotice = () => {
     // interval instead of coupling into the chat runtime.
     refetchInterval: 60_000,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "UsageFallbackNotice:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const budgets = data?.budgets;

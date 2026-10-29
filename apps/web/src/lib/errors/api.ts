@@ -51,7 +51,15 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  transportKind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 }> {}
+
+export const isCancellation = (error: unknown): boolean =>
+  (APIError.is(error) && error.transportKind === "aborted") ||
+  (typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError");
 
 const MAX_API_RETRY_COUNT = 3;
 const CLIENT_ERROR_STATUS = 400;
@@ -74,6 +82,11 @@ export const shouldRetryAPIRequest = (
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
   }
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    return (
+      failureCount < MAX_API_RETRY_COUNT && error.transportKind !== "aborted"
+    );
+  }
   // Any other typed error is a deliberate outcome (a disabled surface, a
   // refused operation), never a transient one: asking again cannot change it.
   if (!APIError.is(error) && isTaggedError(error)) {
@@ -90,28 +103,54 @@ export const shouldRetryAPIRequest = (
 export type ToAPIErrorProps = {
   status: number;
   value: unknown;
+  kind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 };
 
-export type EdenResponse<T> =
-  | { data: T; error: null }
-  | { data: null; error: { status: number; value: unknown } };
+export type ApiResponse<T> =
+  { data: T; error: null } | { data: null; error: ToAPIErrorProps };
 
 /**
- * Unwraps an Eden treaty response: throws a localized {@link APIError} when the
+ * Unwraps an API client response: throws a localized {@link APIError} when the
  * response carries an error, otherwise returns `response.data`.
  *
  * `T` is inferred from the response's success branch, so nullable payloads (e.g.
  * public-law endpoints whose `data` is `X | null`) keep their nullability at the
  * call site. Do not pass an explicit type argument; let inference flow.
  */
-export function unwrapEden<T>(response: EdenResponse<T>): T {
+export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   if (response.error) {
     throw toAPIError(response.error);
   }
   return response.data;
 }
 
-export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+export const toAPIError = (error: ToAPIErrorProps): APIError => {
+  if (error.kind !== undefined) {
+    const t = getTranslator();
+    let message: string;
+    switch (error.kind) {
+      case "network":
+        message = t("common.networkError");
+        break;
+      case "timeout":
+        message = t("transportErrors.timeout");
+        break;
+      case "aborted":
+        message = "Request aborted";
+        break;
+      default:
+        error.kind satisfies never;
+        panic("Unknown API transport kind", error.kind);
+    }
+    return new APIError({
+      status: error.status,
+      transportKind: error.kind,
+      cause: error.cause,
+      message,
+    });
+  }
+  const { status, value } = error;
   const normalized = normalizeApiError({
     status,
     value: parseApiErrorValue(value),

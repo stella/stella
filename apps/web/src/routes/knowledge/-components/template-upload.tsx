@@ -12,9 +12,9 @@ import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, isDocxFile } from "@/lib/consts";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -63,10 +63,10 @@ export const TemplateUpload = ({
   const prepareMutation = useMutation({
     mutationFn: async (file: File) => {
       const response = await api.templates.prepare.post({ file });
-      // /prepare returns the marked-up docx as base64 JSON (binary responses
-      // get corrupted by Eden); decode it back to bytes, then discover.
+      // /prepare returns the marked-up docx as base64 JSON; decode it back to
+      // bytes, then discover.
       const bytes = Uint8Array.from(
-        atob(unwrapEden(response).docxBase64),
+        atob(unwrapApiResponse(response).docxBase64),
         (ch) => ch.codePointAt(0) ?? 0,
       );
       const prepared = new File([bytes], file.name, { type: DOCX_MIME });
@@ -95,7 +95,7 @@ export const TemplateUpload = ({
   const mutateDiscover = discoverMutation.mutate;
   const discover = (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     mutateDiscover(file);
@@ -104,7 +104,7 @@ export const TemplateUpload = ({
   const mutatePrepare = prepareMutation.mutate;
   const prepare = (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     mutatePrepare(file);

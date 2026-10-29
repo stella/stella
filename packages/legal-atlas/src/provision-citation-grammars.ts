@@ -16,6 +16,8 @@
  */
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "@stll/api-contract/statute-gazette";
 import type {
@@ -35,12 +37,47 @@ import {
   parseEuWorkIdentifier,
 } from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";
+import type {
+  JurisdictionProfile,
+  SectionUnit,
+  WorkIdentifier,
+} from "./provision-citation-profile";
+import { provisionCitationProfileFor } from "./provision-citation-profiles";
+import { SK_PROFILE } from "./sk-provision-citation-profile";
+import {
+  formatUsCodeReference,
+  locateUsCodeCitations,
+  normalizeUsCodeReference,
+  parseUsCodeAnchor,
+  parseUsCodeReference,
+  parseUsCodeWorkIdentifier,
+  US_CODE_ANCHOR_SEPARATOR,
+  usCodeAnchor,
+  usCodeReference,
+  usCodeWorkEli,
+  usCodeWorkIdentifier,
+} from "./us-code-citations";
+import type { UsCodeWork } from "./us-code-citations";
+
+/** The one work a printed citation names (`42 U.S.C. § 1983`), or null. */
+const onlyCitedWork = (raw: string): UsCodeWork | null => {
+  const text = raw.trim();
+  const [only, ...others] = locateUsCodeCitations(text);
+  return only === undefined ||
+    others.length > 0 ||
+    only.start !== 0 ||
+    only.end !== text.length
+    ? null
+    : only.work;
+};
 
 export type StatuteAbbreviationEntry = {
   canonicalAbbreviation: string;
   eli: string;
   /** RegExp source accepting exactly this jurisdiction's printed variants. */
   patternSource: string;
+  /** Profile aliases retain their case-sensitive spelling. */
+  caseSensitive?: boolean;
 };
 
 export type StatuteAbbreviation = Pick<
@@ -68,7 +105,12 @@ export type LocatedGazetteCitation = {
   start: number;
 };
 
-type GazetteWork = { number: string; year: string };
+type GazetteWork = {
+  number: string;
+  year: string;
+  /** A grammar that reads several collections captures their printed spelling. */
+  collection?: string | undefined;
+};
 
 /** The subdivisions a citation path can name, outermost first. */
 export type ProvisionLevelKey = "section" | "subsection" | "letter" | "point";
@@ -135,6 +177,16 @@ export type SupportedProvisionCitationGrammar<
   ) => ProvisionReference | null;
   /** Where this grammar's references can be opened. */
   target: "hosted" | "publisher";
+  /**
+   * How a reference reads back to a lawyer. `catalog`: the section sign or
+   * article word, then each subdivision named in the reader's language
+   * (`§ 46 para. 1 lit. a)`). `printed`: the jurisdiction prints its
+   * citations in one form whatever the reader's language (`§ 1983(a)(1)`),
+   * and the grammar renders it.
+   */
+  citationForm:
+    | { type: "catalog" }
+    | { type: "printed"; format: (reference: ProvisionReference) => string };
   status: "supported";
 };
 
@@ -212,6 +264,11 @@ const referenceOf = (
           return null;
         }
         reference.section = Number.parseInt(number, 10);
+        // A statute numbers its sections from 1; the shared schema admits 0
+        // only for the codes that use it.
+        if (reference.section < 1) {
+          return null;
+        }
         const suffix = parts?.["suffix"];
         reference.sectionSuffix =
           suffix === undefined || suffix.length === 0 ? null : suffix;
@@ -319,7 +376,10 @@ export const createProvisionCitationGrammar = <
         );
   const matchers = abbreviations.map((entry) => ({
     entry,
-    matcher: new RegExp(`^(?:${entry.patternSource})$`, "iu"),
+    matcher: new RegExp(
+      `^(?:${entry.patternSource})$`,
+      entry.caseSensitive === true ? "u" : "iu",
+    ),
   }));
   const gazettePattern = new RegExp(gazette.source, "giu");
 
@@ -473,7 +533,7 @@ export const createProvisionCitationGrammar = <
   const gazetteInput = new RegExp(`^(?:${gazette.source})$`, "iu");
   return {
     normalizeReference: (reference) => {
-      if (reference.unit !== unit) {
+      if (reference.unit !== unit || reference.section < 1) {
         return null;
       }
       const values: (string | null)[] = [];
@@ -538,7 +598,11 @@ export const createProvisionCitationGrammar = <
         if (number === undefined || year === undefined) {
           return null;
         }
-        const work = { number, year };
+        const work = {
+          number,
+          year,
+          collection: match?.groups?.["collection"],
+        };
         return { identifier: gazette.identifier(work), eli: gazette.eli(work) };
       },
     },
@@ -586,7 +650,11 @@ export const createProvisionCitationGrammar = <
           continue;
         }
         citations.push({
-          eli: gazette.eli({ number, year }),
+          eli: gazette.eli({
+            number,
+            year,
+            collection: match.groups?.["collection"],
+          }),
           end: match.index + match[0].length,
           jurisdiction,
           start: match.index,
@@ -596,7 +664,86 @@ export const createProvisionCitationGrammar = <
     },
     status: "supported",
     target: "hosted",
+    citationForm: { type: "catalog" },
   };
+};
+
+/**
+ * Pattern for a printed spelling whose spaces admit any whitespace run, or
+ * none after a period ("Z. z." also reads "Z.z." and "Z.&nbsp;z."). Split
+ * before escaping: `RegExp.escape` encodes spaces as `\x20`.
+ */
+const spacedSpellingSource = (spelling: string): string => {
+  const words = spelling.split(/\s+/u);
+  return words
+    .map((word, index) => {
+      let gap = "";
+      if (index > 0) {
+        gap =
+          words.at(index - 1)?.endsWith(".") === true
+            ? String.raw`\s*`
+            : String.raw`\s+`;
+      }
+      return `${gap}${RegExp.escape(word)}`;
+    })
+    .join("");
+};
+
+/** A date-free reader links only aliases that never name another act. */
+const profileAbbreviations = (
+  profile: JurisdictionProfile,
+  eliForWork: (work: WorkIdentifier) => string,
+) => {
+  const bySpelling = new Map<
+    string,
+    { spelling: string; works: Map<string, string>; units: Set<SectionUnit> }
+  >();
+  for (const entry of profile.aliases) {
+    for (const spelling of entry.spellings) {
+      const key = spelling.toLowerCase().replace(/\.\s+/gu, ".");
+      let group = bySpelling.get(key);
+      if (group === undefined) {
+        group = { spelling, works: new Map(), units: new Set() };
+        bySpelling.set(key, group);
+      }
+      group.units.add(entry.unit ?? "section");
+      group.works.set(
+        formatWorkIdentifier(entry.identifier),
+        eliForWork(entry.identifier),
+      );
+    }
+  }
+  return [...bySpelling.values()].flatMap(({ spelling, works, units }) => {
+    if (units.size !== 1 || !units.has("section")) {
+      return [];
+    }
+    const eli = works.size === 1 ? works.values().next().value : undefined;
+    if (eli === undefined) {
+      return [];
+    }
+    return [
+      {
+        canonicalAbbreviation: spelling,
+        eli,
+        patternSource: `${spacedSpellingSource(spelling)}(?![\\p{L}\\p{N}])`,
+        caseSensitive: true,
+      },
+    ];
+  });
+};
+
+const slovakWorkEli = ({ number, year }: GazetteWork) =>
+  `https://www.slov-lex.sk/eli/sk/zz/${year}/${String(parseIntegerToken(number, { sign: "unsigned" }).unwrap("Gazette numbers contain only bounded decimal digits"))}`;
+
+const slovakCollection = (printed: string | undefined) => {
+  const key = printed?.replace(/\s+/gu, "").toLowerCase();
+  return (
+    SK_PROFILE.collections.find(({ spellings }) =>
+      spellings.some(
+        (spelling) => spelling.replace(/\s+/gu, "").toLowerCase() === key,
+      ),
+    )?.canonical ?? panic("Slovak gazette match has no declared collection")
+  );
 };
 
 const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
@@ -670,6 +817,7 @@ export const PROVISION_CITATION_GRAMMARS = {
     jurisdiction: "EU",
     status: "supported",
     target: "publisher",
+    citationForm: { type: "catalog" },
     unit: "article",
     anchor: euProvisionAnchor,
     anchorSeparator: EU_PROVISION_ANCHOR_SEPARATOR,
@@ -698,8 +846,111 @@ export const PROVISION_CITATION_GRAMMARS = {
   GBR: unsupported("GBR"),
   HUN: unsupported("HUN"),
   POL: unsupported("POL"),
-  SVK: unsupported("SVK"),
-  USA: unsupported("USA"),
+  SVK: createProvisionCitationGrammar({
+    abbreviations: profileAbbreviations(SK_PROFILE, ({ number, year }) =>
+      slovakWorkEli({ number: String(number), year: String(year) }),
+    ),
+    anchorSeparator: SK_PROFILE.anchor.join,
+    connectors: [
+      ",",
+      ...SK_PROFILE.enumerationConnectors.map(
+        (word) => `${RegExp.escape(word)}(?=\\s)`,
+      ),
+      String.raw`v\s+spojení\s+s(?=\s)`,
+    ],
+    gazette: {
+      eli: slovakWorkEli,
+      identifier: ({ number, year, collection }) =>
+        formatWorkIdentifier({
+          number: parseIntegerToken(number, { sign: "unsigned" }).unwrap(
+            "Gazette numbers contain only bounded decimal digits",
+          ),
+          year: parseIntegerToken(year, { sign: "unsigned" }).unwrap(
+            "Gazette years contain four decimal digits",
+          ),
+          collection: slovakCollection(collection),
+        }),
+      source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?<collection>${SK_PROFILE.collections
+        .flatMap(({ spellings }) => spellings)
+        .toSorted((left, right) => right.length - left.length)
+        .map(spacedSpellingSource)
+        .join("|")})(?![\p{L}\p{N}/]|\.+[\p{L}\p{N}/])`,
+    },
+    jurisdiction: SK_PROFILE.jurisdiction,
+    levels: [
+      {
+        key: "section",
+        marker: `(?:${RegExp.escape(SK_PROFILE.citationTerms.section)}){1,2}`,
+        value: String.raw`\d{1,4}[a-zA-Z]?`,
+        anchorMarker: SK_PROFILE.anchor.render.section(""),
+      },
+      {
+        key: "subsection",
+        marker: RegExp.escape(SK_PROFILE.citationTerms.subsection),
+        value: String.raw`\d+[a-zA-Z]?`,
+        anchorMarker: SK_PROFILE.anchor.render.subsection(""),
+      },
+      {
+        key: "letter",
+        marker: `(?:${RegExp.escape(SK_PROFILE.citationTerms.letter)}|${RegExp.escape(normalizeUnicode(SK_PROFILE.citationTerms.letter, "NFD"))})`,
+        value: String.raw`(?<value>[a-zA-Z])\)?`,
+        anchorMarker: SK_PROFILE.anchor.render.letter(""),
+      },
+      {
+        key: "point",
+        marker: `${RegExp.escape(SK_PROFILE.citationTerms.point)}(?![\\p{L}])`,
+        value: String.raw`\d+`,
+        anchorMarker: SK_PROFILE.anchor.render.point(""),
+      },
+    ],
+    unit: "section",
+  }),
+  USA: {
+    jurisdiction: "USA",
+    status: "supported",
+    target: "hosted",
+    citationForm: { type: "printed", format: formatUsCodeReference },
+    unit: "section",
+    anchor: usCodeAnchor,
+    anchorSeparator: US_CODE_ANCHOR_SEPARATOR,
+    parseAnchor: parseUsCodeAnchor,
+    normalizeReference: normalizeUsCodeReference,
+    parseReference: parseUsCodeReference,
+    // A US citation names its section and its work in one span, so the
+    // work-level reading would only repeat the provision: the provision
+    // carries the work's ELI.
+    locateGazetteCitations: () => [],
+    gazette: {
+      parse: (raw: string) => {
+        const work = parseUsCodeWorkIdentifier(raw) ?? onlyCitedWork(raw);
+        return work === null
+          ? null
+          : {
+              identifier: usCodeWorkIdentifier(work),
+              eli: usCodeWorkEli(work),
+            };
+      },
+    },
+    locateAbbreviatedProvisions: (text: string) =>
+      locateUsCodeCitations(text).flatMap((citation) => {
+        const reference = usCodeReference(citation);
+        return reference === null
+          ? []
+          : [
+              {
+                abbreviation: {
+                  canonicalAbbreviation: usCodeWorkIdentifier(citation.work),
+                  eli: usCodeWorkEli(citation.work),
+                },
+                anchor: usCodeAnchor(reference),
+                end: citation.end,
+                jurisdiction: "USA" as const,
+                reference,
+                start: citation.start,
+              },
+            ];
+      }),
+  },
 } as const satisfies {
   readonly [
     TJurisdiction in CaseLawJurisdiction
@@ -723,3 +974,38 @@ export const locateGazetteCitations = (
   text: string,
 ): LocatedGazetteCitation[] =>
   SUPPORTED_GRAMMARS.flatMap((grammar) => grammar.locateGazetteCitations(text));
+
+/**
+ * The separator a jurisdiction's provision anchors are cut on: its
+ * grammar's where it has one, its citation profile's where only the profile
+ * mints anchors (Slovakia's `paragraf-5.odsek-1` joins on `.`), and null for
+ * a jurisdiction that mints none, whose anchors are read whole.
+ */
+export const provisionAnchorSeparatorFor = (
+  jurisdiction: string,
+): string | null => {
+  if (isCaseLawJurisdiction(jurisdiction)) {
+    const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+    if (grammar.status === "supported") {
+      return grammar.anchorSeparator;
+    }
+  }
+  return provisionCitationProfileFor(jurisdiction)?.anchor.join ?? null;
+};
+
+/**
+ * How a jurisdiction's provision references read back to a lawyer: the
+ * catalog's localized subdivision words unless its grammar prints its own
+ * form.
+ */
+export const provisionCitationFormFor = (
+  jurisdiction: string,
+): SupportedProvisionCitationGrammar["citationForm"] => {
+  if (isCaseLawJurisdiction(jurisdiction)) {
+    const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+    if (grammar.status === "supported") {
+      return grammar.citationForm;
+    }
+  }
+  return { type: "catalog" };
+};

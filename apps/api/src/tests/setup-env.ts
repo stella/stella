@@ -1,4 +1,3 @@
-import "../register-schema-formats";
 import { envApiServerSchema } from "../env-schema";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
@@ -39,6 +38,7 @@ configureTestDatabaseEnvironment();
 // route guards) exercise local development capabilities, which require an
 // explicit runtime opt-in. `bun test` already sets NODE_ENV=test. A test of
 // strict behaviour switches the mode through `setRuntimeModeForTesting`.
+process.env["DEPLOY_ENVIRONMENT"] ??= "development";
 process.env.NODE_ENV ??= "development";
 process.env["STELLA_LOCAL_DEV"] ??= "1";
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";

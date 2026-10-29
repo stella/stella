@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -8,8 +9,6 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
-import Elysia from "elysia";
-import type { Context } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
@@ -92,6 +91,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
@@ -107,6 +107,8 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
+import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
 import readContactById from "@/api/handlers/contacts/get";
 import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
@@ -167,11 +169,18 @@ import listVatRates from "@/api/handlers/vat-rates/list";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
+import { createHttpApp } from "@/api/http/app";
+import { createResponseSet } from "@/api/http/context";
+import type { ResponseSet } from "@/api/http/context";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   createFeatureAccessSnapshot,
@@ -184,6 +193,7 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
@@ -191,6 +201,8 @@ import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
@@ -208,6 +220,10 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  streamChatStub.mockClear();
+});
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;
@@ -228,7 +244,11 @@ type TestHandlerContext = {
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
-  set: Context["set"];
+  set: ResponseSet;
+  server: null;
+  path: string;
+  headers: Record<string, string>;
+  status: typeof status;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   workspaceId: SafeId<"workspace">;
@@ -336,6 +356,9 @@ const sellerProfileB = toSafeId<"sellerProfile">(
 );
 const invoiceLineB = toSafeId<"invoiceLine">(
   "22222222-2222-4222-8222-222222222259",
+);
+const clientInvoiceEntryB = toSafeId<"timeEntry">(
+  "22222222-2222-4222-8222-222222222296",
 );
 const manualInvoiceLineBody = {
   source: {
@@ -1000,6 +1023,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -1018,6 +1043,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -1228,6 +1255,66 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBeNull();
       expect(result).toMatchObject({ id: expect.any(String) });
     },
+  },
+  {
+    name: "client invoice prefill",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(prefillClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(prefillClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        clientId: testIds.contactB,
+        matters: [expect.objectContaining({ workspaceId: testIds.wsB1 })],
+      }),
+  },
+  {
+    name: "client invoice create",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        id: expect.any(String),
+        workspaceId: testIds.wsB1,
+        entryCount: 1,
+        totalAmount: 200,
+      }),
   },
   {
     name: "invoice read by id",
@@ -1692,21 +1779,37 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
-    // `pinned: false` matches the fixture, so the positive run reaches the
-    // locked row without writing.
+    // Both probes need a live firm administrator for the in-transaction
+    // authority check. `pinned: false` reaches the locked row without writing.
     name: "memory update",
-    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
-      await runHandler(updateMemory, workspaceA, {
-        featureAccessSnapshot: memoryAccess(workspaceA),
+    runAAgainstB: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsA1],
+        organizationId: testIds.orgA,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsA1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("owner"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
-    runBPositive: async ({ ids: testIds, workspaceB }) =>
-      await runHandler(updateMemory, workspaceB, {
-        featureAccessSnapshot: memoryAccess(workspaceB),
+      });
+    },
+    runBPositive: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsB1],
+        organizationId: testIds.orgB,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsB1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("admin"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
+      });
+    },
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
@@ -2156,6 +2259,23 @@ const isolationCases: IsolationCase[] = [
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(submitChatSecret, sameUserWorkspaceB, {
         body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
         params: { threadId: chatThreadB, toolCallId: "missing-request" },
         query: {},
       }),
@@ -2770,6 +2890,21 @@ testState.beforeAll(async () => {
     mode: "hourly",
     currency: "USD",
   });
+  await testDb.insert(timeEntries).values({
+    id: clientInvoiceEntryB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    userId: ids.userB1,
+    dateWorked: "2026-10-14",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(200),
+    currency: "USD",
+    narrative: "Client invoice isolation work",
+    billable: true,
+    status: "approved",
+  });
   await testDb.insert(invoices).values({
     id: creditOriginalB,
     organizationId: ids.orgB,
@@ -3313,7 +3448,11 @@ const createWorkspaceContext = ({
     route: "/security/cross-tenant-handler",
     safeDb,
     scopedDb,
-    set: { headers: {} },
+    set: createResponseSet(),
+    server: null,
+    path: `/workspaces/${workspaceId}`,
+    headers: {},
+    status,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -3333,7 +3472,7 @@ const runHandler = async <TContext>(
 
   try {
     return await handler(
-      asTestRaw<TContext>({
+      asTestRaw<TContext & SafeHandlerLogContext>({
         ...context,
         ...requestShape,
       }),
@@ -3612,7 +3751,7 @@ testState.beforeAll(() => {
   });
 });
 
-const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+const desktopServer = (): TestServer => {
   const authorize = desktopCredentials.authorizeDesktopAccount;
   const registry = createDesktopRegistryRequestEndpoint({
     config: authorize,
@@ -3627,44 +3766,53 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
   const candidates = createDesktopMatterCandidatesEndpoint(authorize);
   const matters = createDesktopMattersEndpoint(authorize);
   const batch = createDesktopTimeEntryBatchEndpoint(authorize);
-  const status = createDesktopTimeEntryBatchStatusEndpoint(authorize);
+  const batchStatus = createDesktopTimeEntryBatchStatusEndpoint(authorize);
   const single = createDesktopTimeEntryEndpoint(authorize);
-  const app = new Elysia()
-    .put("/registry", registry.handler, { body: registry.config.body })
-    .get("/features", feature.handler, { response: feature.config.response })
-    .get("/candidates", candidates.handler, {
-      response: candidates.config.response,
-    })
-    .get("/matters", matters.handler, {
-      query: matters.config.query,
-      response: matters.config.response,
-    })
-    .put("/batch", batch.handler, {
-      body: batch.config.body,
-      response: batch.config.response,
-    })
-    .put("/status", status.handler, {
-      body: status.config.body,
-      response: status.config.response,
-    })
-    .put("/single/:workspaceId", single.handler, {
-      params: single.config.params,
-      body: single.config.body,
-      response: single.config.response,
-    });
-  const credential =
-    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
-  return await app.handle(await credential.signRequest(request));
+  // The real routes on the real HTTP core: each definition decodes its own
+  // input and answers through its own response schemas.
+  return serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        "/registry": { PUT: registry },
+        "/features": { GET: feature },
+        "/candidates": { GET: candidates },
+        "/matters": { GET: matters },
+        "/batch": { PUT: batch },
+        "/status": { PUT: batchStatus },
+        "/single/:workspaceId": { PUT: single },
+      }),
+    }),
+  );
 };
 
+// One server answers both tenants; the credential decides who is calling.
+let desktopRoutes: TestServer | undefined;
+
+afterAll(async () => {
+  await desktopRoutes?.stop();
+});
+
+const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+  desktopRoutes ??= desktopServer();
+  const credential =
+    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
+  return await desktopRoutes.fetch(await credential.signRequest(request));
+};
+
+/** A request as the desktop app sends it: its HTTP client names itself on
+ *  every call, and the registry route admits no other agent. */
 const desktopRequest = (path: string, body?: unknown) =>
   new Request(
     `http://localhost${path}`,
     body === undefined
-      ? {}
+      ? { headers: { "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT } }
       : {
           method: "PUT",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+          },
           body: JSON.stringify(body),
         },
   );

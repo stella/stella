@@ -1,12 +1,15 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
-import type { InvoiceTotals } from "@stll/invoicing";
+import { type InvoiceTotals, quantityText } from "@stll/invoicing";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceLines } from "@/api/db/schema";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import {
   type InvoiceLineDraft,
   lockDraftInvoiceForLines,
@@ -19,34 +22,31 @@ import {
   tLineUnit,
   tVatRateBps,
   tVatTreatment,
-} from "@/api/handlers/invoices/invoice-lines";
-import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+} from "@/api/lib/billing/invoice-lines";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const updateLineBodySchema = t.Object({
-  description: t.Optional(tLineDescription),
-  quantity: t.Optional(tInvoiceLineQuantity),
-  unit: t.Optional(t.Nullable(tLineUnit)),
-  unitPriceMinor: t.Optional(tMinorUnitAmount(0)),
-  vatRateBps: t.Optional(tVatRateBps),
-  vatTreatment: t.Optional(tVatTreatment),
-  exemptionReason: t.Optional(tExemptionReason),
+const updateLineBodySchema = v.object({
+  description: v.optional(tLineDescription),
+  quantity: v.optional(tInvoiceLineQuantity),
+  unit: v.optional(v.nullable(tLineUnit)),
+  unitPriceMinor: v.optional(minorUnitAmountSchema(0)),
+  vatRateBps: v.optional(tVatRateBps),
+  vatTreatment: v.optional(tVatTreatment),
+  resetToRecorded: v.optional(v.literal(true)),
+  exemptionReason: v.optional(tExemptionReason),
 });
 
 const lineParamsSchema = workspaceParams({
-  invoiceId: tSafeId("invoice"),
-  lineId: tSafeId("invoiceLine"),
+  invoiceId: resourceIdSchema("invoice"),
+  lineId: resourceIdSchema("invoiceLine"),
 });
 
 type UpdatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
@@ -61,16 +61,30 @@ const UPDATED_FIELDS = [
   "exemptionReason",
 ] as const;
 
+type LineAmountPatch = Pick<
+  v.InferOutput<typeof updateLineBodySchema>,
+  "quantity" | "unitPriceMinor"
+>;
+type StoredLineAmount = Pick<InvoiceLineDraft, "quantity" | "unitPrice">;
+
+const changesLineAmount = (changed: LineAmountPatch, line: StoredLineAmount) =>
+  (changed.quantity !== undefined &&
+    quantityText(changed.quantity) !== quantityText(line.quantity)) ||
+  (changed.unitPriceMinor !== undefined &&
+    changed.unitPriceMinor !== line.unitPrice);
+
 const updateInvoiceLine = createSafeHandler(
   {
     contract: "patch",
     description:
       "Change one line of a draft invoice and recompute its totals. Any line " +
-      "takes a new description, VAT rate, or VAT treatment; quantity, unit, " +
-      "and unit price change only on a manual line, because a time entry or " +
-      "expense line takes its amount from the entry. A flat-fee line keeps its " +
+      "accepts description, quantity, unit price, and VAT overrides without " +
+      "changing the source time entry or expense. Set resetToRecorded to true " +
+      "alone to restore the recorded description, quantity, unit and price. " +
+      "Recorded values remain available for reporting. A flat-fee line keeps its " +
       "snapshotted quantity, unit, and price; its description and VAT may change. Omitted fields stay " +
-      "unchanged. Only draft invoices can be edited.",
+      "unchanged. Only drafts that have never been issued can be edited; " +
+      "issued invoices require a credit note, even after reverting to draft.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -93,7 +107,15 @@ const updateInvoiceLine = createSafeHandler(
   }) {
     const changed = pickDefined(body, UPDATED_FIELDS);
     const changedFields = Object.keys(changed);
-    if (changedFields.length === 0) {
+    if (body.resetToRecorded && changedFields.length > 0) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Reset cannot be combined with line changes",
+        }),
+      );
+    }
+    if (changedFields.length === 0 && !body.resetToRecorded) {
       return Result.err(
         new HandlerError({ status: 400, message: "No line fields to change" }),
       );
@@ -113,6 +135,7 @@ const updateInvoiceLine = createSafeHandler(
             tx,
             {
               invoiceId: params.invoiceId,
+              matterLocks: { type: "acquire" },
               organizationId: session.activeOrganizationId,
               workspaceId,
             },
@@ -140,19 +163,31 @@ const updateInvoiceLine = createSafeHandler(
             return refuse(404, "Invoice line not found");
           }
 
-          const changesAmount =
-            changed.quantity !== undefined ||
-            changed.unit !== undefined ||
-            changed.unitPriceMinor !== undefined;
-          if (changesAmount && invoice.billingMode === "flat_fee") {
+          const changesAmount = changesLineAmount(changed, line);
+          if (
+            invoice.billingMode === "flat_fee" &&
+            (changesAmount ||
+              (changed.unit !== undefined && changed.unit !== line.unit))
+          ) {
             return Result.err(flatFeeInvoiceRefusal());
           }
-          if (changesAmount && line.source !== INVOICE_LINE_SOURCE.MANUAL) {
-            return refuse(
-              400,
-              "Quantity, unit, and unit price come from the entry; change them on a manual line only",
-            );
-          }
+          const recorded = {
+            recordedDescription: line.recordedDescription ?? line.description,
+            recordedQuantity: line.recordedQuantity ?? line.quantity,
+            recordedUnit:
+              line.recordedDescription === null ? line.unit : line.recordedUnit,
+            recordedUnitPrice: line.recordedUnitPrice ?? line.unitPrice,
+            recordedNetAmount:
+              line.recordedNetAmount ?? cents(Math.abs(line.netAmount)),
+          };
+          const values = body.resetToRecorded
+            ? {
+                description: recorded.recordedDescription,
+                quantity: recorded.recordedQuantity,
+                unit: recorded.recordedUnit,
+                unitPriceMinor: recorded.recordedUnitPrice,
+              }
+            : changed;
 
           const vat = {
             vatRateBps: changed.vatRateBps ?? line.vatRateBps,
@@ -163,9 +198,9 @@ const updateInvoiceLine = createSafeHandler(
                 : changed.exemptionReason,
           };
           let draft: InvoiceLineDraft = {
-            description: changed.description ?? line.description,
+            description: values.description ?? line.description,
             quantity: line.quantity,
-            unit: line.unit,
+            unit: values.unit === undefined ? line.unit : values.unit,
             unitPrice: line.unitPrice,
             netAmount: cents(Math.abs(line.netAmount)),
             ...vat,
@@ -174,21 +209,30 @@ const updateInvoiceLine = createSafeHandler(
             timeEntryId: line.timeEntryId,
             expenseId: line.expenseId,
           };
-          if (line.source === INVOICE_LINE_SOURCE.MANUAL) {
+          if (changesAmount || body.resetToRecorded) {
             const manual = manualLineDraft({
               description: draft.description,
-              quantity: changed.quantity ?? line.quantity,
-              unit: changed.unit === undefined ? line.unit : changed.unit,
+              quantity: values.quantity ?? line.quantity,
+              unit: values.unit === undefined ? line.unit : values.unit,
               unitPrice:
-                changed.unitPriceMinor === undefined
+                values.unitPriceMinor === undefined
                   ? line.unitPrice
-                  : cents(changed.unitPriceMinor),
+                  : cents(values.unitPriceMinor),
               ...vat,
             });
             if (manual.isErr()) {
               return Result.err(manual.error);
             }
-            draft = { ...manual.value, billingPurpose: line.billingPurpose };
+            draft = {
+              ...manual.value,
+              source: line.source,
+              timeEntryId: line.timeEntryId,
+              expenseId: line.expenseId,
+              billingPurpose: line.billingPurpose,
+              ...(body.resetToRecorded
+                ? { netAmount: cents(Math.abs(recorded.recordedNetAmount)) }
+                : {}),
+            };
           }
           const priced = priceLines([draft], invoice.documentType);
           if (priced.isErr()) {
@@ -200,6 +244,7 @@ const updateInvoiceLine = createSafeHandler(
           await tx
             .update(invoiceLines)
             .set({
+              ...recorded,
               description: pricedLine.description,
               quantity: pricedLine.quantity,
               unit: pricedLine.unit,
@@ -238,7 +283,12 @@ const updateInvoiceLine = createSafeHandler(
             changes: {
               lineNetAmount: { old: line.netAmount, new: pricedLine.netAmount },
             },
-            metadata: { lineId: line.id, changedFields },
+            metadata: {
+              lineId: line.id,
+              changedFields: body.resetToRecorded
+                ? ["resetToRecorded"]
+                : changedFields,
+            },
           });
 
           return Result.ok({ id: line.id, totals: totals.value });

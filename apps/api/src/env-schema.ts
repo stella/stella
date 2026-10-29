@@ -1,6 +1,7 @@
 import path from "node:path";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -8,16 +9,21 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
-import { featureFlagSchema } from "@/api/env-base-schema";
+import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
 import {
+  type EmailEventsInput,
+  resolveEmailEvents,
+} from "@/api/lib/email/deliverability-config";
+import {
   type InboundMailReceivingInput,
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -95,6 +101,7 @@ const originVerifyValue = v.pipe(
 );
 
 export const envApiServerSchema = {
+  DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
@@ -135,6 +142,10 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
   OPENROUTER_WIF_POLICY_ID: v.optional(
     v.pipe(v.string(), v.trim(), v.minLength(1)),
   ),
@@ -250,7 +261,7 @@ export const envApiServerSchema = {
             v.regex(/^[A-Za-z0-9_-]+$/u),
           ),
           sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
-          notAfter: v.pipe(v.string(), v.isoTimestamp()),
+          notAfter: apiDateTimeSchema,
         }),
       ),
       v.minLength(1),
@@ -311,6 +322,18 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u)),
   ),
   INBOUND_MAIL_KEY_PREFIX: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  EMAIL_EVENTS_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
+  EMAIL_EVENTS_TOPIC_ARN: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^arn:aws[a-z-]*:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/u),
+    ),
+  ),
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
   SES_REGION: v.optional(v.string()),
   SES_ACCESS_KEY_ID: v.optional(v.string()),
   SES_SECRET_ACCESS_KEY: v.optional(v.string()),
@@ -394,9 +417,7 @@ export const envApiServerSchema = {
    * email delivery is skipped for this account (the code is shared
    * out-of-band).
    */
-  DEMO_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  DEMO_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
@@ -407,9 +428,7 @@ export const envApiServerSchema = {
    * inside its own organization. Set both or neither. Every other address is
    * refused password sign-in with the ordinary invalid-credentials answer.
    */
-  APP_REVIEW_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  APP_REVIEW_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   APP_REVIEW_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),
@@ -673,6 +692,17 @@ export const envApiServerSchema = {
   ),
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  // Concurrent public-law MCP reads admitted per authenticated caller.
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+    "4",
   ),
   // Operators must set the lease above the admission store's failover window.
   // Renewal errors retry inside that window; losing admission is not a user stop.
@@ -940,54 +970,60 @@ export const envApiServerSchema = {
   ),
 };
 
-type EnvApiInvariantInput = InboundMailReceivingInput & {
-  APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
-  APP_REVIEW_ORGANIZATION_ID?: string | undefined;
-  AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
-  FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
-  MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
-  MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
-  OPENROUTER_API_KEY?: string | undefined;
-  OPENROUTER_WIF_POLICY_ID?: string | undefined;
-  OPENROUTER_WIF_AUDIENCE?: string | undefined;
-  OPENROUTER_WIF_STS_REGION?: string | undefined;
-  BETTER_AUTH_URL: string;
-  DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
-  E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
-  EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
-  FEATURE_ACTION_ADMISSION?: boolean | undefined;
-  FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
-  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
-  FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
-  FEATURE_FREE_TIER?: boolean | undefined;
-  FEATURE_USAGE?: boolean | undefined;
-  USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
-  PAYMENT_RETRY_WINDOW_MS?: number | undefined;
-  FRONTEND_URL: string;
-  GOTENBERG_URL: string;
-  MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
-  MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
-  MICROSOFT_AUTH_TENANT_ID?: string | undefined;
-  ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
-  PUBLIC_URL?: string | undefined;
-  REPORT_SPECS_DIR?: string | undefined;
-  REPORT_SPECS_S3_PREFIX?: string | undefined;
-  SES_REGION?: string | undefined;
-  SMTP_HOST?: string | undefined;
-  SMTP_PORT?: number | undefined;
-  TRANSACTIONAL_EMAIL_FROM?: string | undefined;
-  USE_MOCK_AI: boolean | "force";
-  nodeEnv: NodeEnvLabel;
-  runtimeMode: RuntimeMode;
-};
+type EnvApiInvariantInput = InboundMailReceivingInput &
+  EmailEventsInput & {
+    APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
+    APP_REVIEW_ORGANIZATION_ID?: string | undefined;
+    AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
+    FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
+    OPENROUTER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID?: string | undefined;
+    OPENROUTER_WIF_POLICY_ID?: string | undefined;
+    OPENROUTER_WIF_AUDIENCE?: string | undefined;
+    OPENROUTER_WIF_STS_REGION?: string | undefined;
+    BETTER_AUTH_URL: string;
+    DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
+    E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
+    EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+    FEATURE_ACTION_ADMISSION?: boolean | undefined;
+    FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+    FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
+    FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+    FEATURE_FREE_TIER?: boolean | undefined;
+    FEATURE_USAGE?: boolean | undefined;
+    USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
+    PAYMENT_RETRY_WINDOW_MS?: number | undefined;
+    FRONTEND_URL: string;
+    GOTENBERG_URL: string;
+    MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
+    MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
+    MICROSOFT_AUTH_TENANT_ID?: string | undefined;
+    ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
+    PUBLIC_URL?: string | undefined;
+    REPORT_SPECS_DIR?: string | undefined;
+    REPORT_SPECS_S3_PREFIX?: string | undefined;
+    SES_REGION?: string | undefined;
+    SMTP_HOST?: string | undefined;
+    SMTP_PORT?: number | undefined;
+    TRANSACTIONAL_EMAIL_FROM?: string | undefined;
+    USE_MOCK_AI: boolean | "force";
+    nodeEnv: NodeEnvLabel;
+    runtimeMode: RuntimeMode;
+  };
 
 type ManagedProviderCheckInvariantInput = Pick<
   EnvApiInvariantInput,
   | "AI_PROVIDER"
   | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "FEATURE_FREE_TIER"
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_FAST_TIER_API_KEY"
+  | "OPENROUTER_FAST_TIER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_AUDIENCE"
   | "OPENROUTER_WIF_STS_REGION"
@@ -996,26 +1032,69 @@ type ManagedProviderCheckInvariantInput = Pick<
 const managedProviderCheckInvariantViolation = ({
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
+  FEATURE_FREE_TIER,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
-  const configuredWifFields = [
-    OPENROUTER_WIF_POLICY_ID,
+  const configuredSharedWifFields = [
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
   ].filter((value) => value !== undefined).length;
-  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
-    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  if (configuredSharedWifFields === 1) {
+    return "OPENROUTER_WIF_AUDIENCE and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    configuredSharedWifFields === 2 &&
+    OPENROUTER_WIF_POLICY_ID === undefined &&
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID === undefined
+  ) {
+    return "An OpenRouter WIF policy ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    (OPENROUTER_WIF_POLICY_ID !== undefined ||
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined) &&
+    configuredSharedWifFields !== 2
+  ) {
+    return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  const standardCredential =
+    !!OPENROUTER_API_KEY?.trim() ||
+    (OPENROUTER_WIF_POLICY_ID !== undefined && configuredSharedWifFields === 2);
+  const fastCredential =
+    !!OPENROUTER_FAST_TIER_API_KEY?.trim() ||
+    (OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined &&
+      configuredSharedWifFields === 2);
+  // Instance availability is answered once for the deployment, while each
+  // request dispatches on its own tier's credential. Requiring the standard
+  // credential beside the fast one (and the fast one under the free floor
+  // below) keeps the two answers equal for every organization's tier.
+  if (fastCredential && !standardCredential) {
+    return "OPENROUTER_FAST_TIER_API_KEY or OPENROUTER_FAST_TIER_WIF_POLICY_ID requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration for the standard tier.";
+  }
+  // The free floor runs on the fast tier's own credential and never on the
+  // standard one, so a managed free tier without it would refuse every
+  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
+  // deployment may still resolve to OpenRouter from its standard credential.
+  const openRouterMayServe =
+    AI_PROVIDER === "openrouter" ||
+    (AI_PROVIDER === undefined && standardCredential);
+  if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
+    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+    if (
+      !OPENROUTER_API_KEY?.trim() &&
+      !(OPENROUTER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+    ) {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
     }
     if (
@@ -1079,6 +1158,7 @@ const reviewAccountInvariantViolation = ({
 const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
     InboundMailReceivingInput &
+    EmailEventsInput &
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
@@ -1096,7 +1176,11 @@ const delegatedInvariantViolation = (
     return freeTierViolation;
   }
   const inboundMail = resolveInboundMailReceiving(input);
-  return inboundMail.isErr() ? inboundMail.error.message : null;
+  if (inboundMail.isErr()) {
+    return inboundMail.error.message;
+  }
+  const emailEvents = resolveEmailEvents(input);
+  return emailEvents.isErr() ? emailEvents.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
@@ -1107,6 +1191,8 @@ export const envApiInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
@@ -1143,6 +1229,9 @@ export const envApiInvariantViolation = ({
   INBOUND_MAIL_TOPIC_ARN,
   INBOUND_MAIL_BUCKET,
   INBOUND_MAIL_KEY_PREFIX,
+  EMAIL_EVENTS_QUEUE_URL,
+  EMAIL_EVENTS_TOPIC_ARN,
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -1160,9 +1249,12 @@ export const envApiInvariantViolation = ({
     APP_REVIEW_ORGANIZATION_ID,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
+    FEATURE_FREE_TIER,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_FAST_TIER_API_KEY,
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID,
     OPENROUTER_WIF_POLICY_ID,
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
@@ -1171,7 +1263,9 @@ export const envApiInvariantViolation = ({
     INBOUND_MAIL_TOPIC_ARN,
     INBOUND_MAIL_BUCKET,
     INBOUND_MAIL_KEY_PREFIX,
-    FEATURE_FREE_TIER,
+    EMAIL_EVENTS_QUEUE_URL,
+    EMAIL_EVENTS_TOPIC_ARN,
+    EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,

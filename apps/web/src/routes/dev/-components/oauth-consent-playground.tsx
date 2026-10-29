@@ -19,48 +19,39 @@ import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 
 const CLIENTS = {
-  claude: {
-    client_name: "Claude",
-    redirectHosts: ["claude.ai"],
-    clientIdHost: null,
-    unverified: false,
-    verifiedBrand: "claude",
+  Claude: {
+    client: { type: "verified", brand: "claude" },
+    redirectTargets: ["claude.ai"],
+    clientIdHost: "claude.ai",
   },
-  chatgpt: {
-    client_name: "ChatGPT",
-    redirectHosts: ["chatgpt.com"],
+  ChatGPT: {
+    client: { type: "verified", brand: "chatgpt" },
+    redirectTargets: ["chatgpt.com"],
     clientIdHost: null,
-    unverified: false,
-    verifiedBrand: "chatgpt",
   },
-  unverified: {
-    client_name: "Example connector",
-    redirectHosts: ["connector.example"],
+  "Example connector": {
+    client: { type: "unverified", name: "Example connector" },
+    redirectTargets: ["connector.example"],
     clientIdHost: null,
-    unverified: true,
-    verifiedBrand: null,
   },
 } as const satisfies Record<string, OAuthConsentInfo>;
 
 export const OAuthConsentPlayground = () => {
   const t = useTranslations("consent");
-  const [info, setInfo] = useState<OAuthConsentInfo>(CLIENTS.claude);
-  const identity = resolveConsentClientIdentity(
-    info,
-    info.client_name ?? t("defaultClientName"),
-  );
+  const [info, setInfo] = useState<OAuthConsentInfo>(CLIENTS.Claude);
+  const identity = resolveConsentClientIdentity(info, t("defaultClientName"));
   return (
     <section className="w-full" data-playground-section="oauth-consent">
       <div className="flex gap-2 p-2">
-        {Object.values(CLIENTS).map((value) => (
+        {Object.entries(CLIENTS).map(([label, value]) => (
           <Button
-            key={value.client_name}
+            key={label}
             variant="ghost"
             onClick={() => {
               setInfo(value);
             }}
           >
-            {value.client_name}
+            {label}
           </Button>
         ))}
       </div>

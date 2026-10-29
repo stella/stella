@@ -20,12 +20,13 @@
 //   bun scripts/codemod-icons.ts           rewrite in place
 //   bun scripts/codemod-icons.ts --check   exit 1 when a rewrite is pending
 
-import { panic } from "better-result";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ICON_MODULE = "packages/ui/src/icons.ts";
@@ -66,39 +67,41 @@ const checkOnly = process.argv.includes("--check");
 const failures: string[] = [];
 const changed: string[] = [];
 
-const listSourceFiles = (): string[] => {
-  const result = Bun.spawnSync({
-    cmd: [
-      "git",
-      "ls-files",
-      "-z",
-      "--cached",
-      "--others",
-      "--exclude-standard",
-      "--",
-      "apps",
-      "packages",
-    ],
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    panic("listing the repository's files failed");
-  }
-  return [
-    ...new Set(
-      result.stdout
-        .toString()
-        .split("\0")
-        .filter(
-          (file) =>
-            SOURCE_FILE.test(file) &&
-            file !== ICON_MODULE &&
-            existsSync(path.join(REPO_ROOT, file)),
-        ),
-    ),
-  ];
-};
+// Directories that hold dependencies or build output, never sources. The
+// check runs offline, so it walks the tree instead of asking git.
+const EXCLUDED_DIRECTORIES = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  "playwright-report",
+  "test-results",
+  ".turbo",
+  ".output",
+  ".cache",
+  ".astro",
+  ".tanstack",
+  ".wrangler",
+  "target",
+]);
+
+const listSourceFiles = (): string[] =>
+  [
+    ...new Bun.Glob("{apps,packages}/**/*.{ts,mts,cts,tsx}").scanSync({
+      cwd: REPO_ROOT,
+      onlyFiles: true,
+      dot: true,
+      followSymlinks: false,
+    }),
+  ]
+    .filter(
+      (file) =>
+        SOURCE_FILE.test(file) &&
+        file !== ICON_MODULE &&
+        file.split("/").every((part) => !EXCLUDED_DIRECTORIES.has(part)),
+    )
+    .toSorted();
 
 const iconSpecifierFor = (file: string): string => {
   if (!file.startsWith(UI_SOURCE_ROOT)) {
@@ -481,5 +484,6 @@ const main = (): void => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
   main();
 }

@@ -48,15 +48,17 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -66,6 +68,36 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
+
+beforeEach(() => {
+  describeStoredTemplateMock.mockReset();
+  executeRegistryLookupMock.mockReset();
+  getLawTextBlockMock.mockReset();
+  listStatuteVersionsHandlerMock.mockReset();
+  readCaseLawCoverageHandlerMock.mockReset();
+  readGatedDecisionCitationDigestMock.mockReset();
+  readGatedDecisionCitationsMock.mockReset();
+  readGatedDecisionWithDocumentMock.mockReset();
+  readLegislationProvisionVersionsMock.mockReset();
+  readOverviewHandlerMock.mockReset();
+  readProvisionHistoryHandlerMock.mockReset();
+  readPublicLegislationHandlerMock.mockReset();
+  readVersionBlocksMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+  readWorkspaceMembersHandlerMock.mockReset();
+  resolveStatuteExpressionMock.mockReset();
+  resolveStatuteWorkVersionMock.mockReset();
+  searchConsolidatedLegislationMock.mockReset();
+  searchDecisionsHandlerMock.mockReset();
+  searchLegislationHandlerMock.mockReset();
+  searchProviderSearchMock.mockReset();
+});
 
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
@@ -204,58 +236,60 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
-const buildContext = (tx: unknown): McpRequestContext => {
+const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
-  return buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: ORGANIZATION_ID,
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
-      pinnedIds: [],
-    }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-    testDependencies: {
-      // Billing reads are enrolment-gated; this caller is enrolled so every
-      // projectable read runs.
-      featureAccessSnapshot: enrolledTimeBillingSnapshot({
-        organizationId: ORGANIZATION_ID,
-        userId: "user_1",
+  return authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: ORGANIZATION_ID,
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
+        pinnedIds: [],
       }),
-      readWorkspaceHandler: readWorkspaceHandlerMock,
-      readOverviewHandler: readOverviewHandlerMock,
-      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-      describeStoredTemplate: describeStoredTemplateMock,
-      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      searchDecisionsHandler: searchDecisionsHandlerMock,
-      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
-      readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
-      readGatedDecisionCitations: readGatedDecisionCitationsMock,
-      readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
-      searchLegislationHandler: searchLegislationHandlerMock,
-      resolveStatuteExpression: resolveStatuteExpressionMock,
-      resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
-      readPublicLegislationHandler: readPublicLegislationHandlerMock,
-      listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
-      readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
-      readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
-      readVersionBlocks: readVersionBlocksMock,
-      // The corpus gate has its own tests; here a document is reachable.
-      resolveAnnotationTarget: async () =>
-        await Promise.resolve({
-          status: "available" as const,
-          readBlocks: async () => await Promise.resolve([]),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+      testDependencies: {
+        // Billing reads are enrolment-gated; this caller is enrolled so every
+        // projectable read runs.
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          organizationId: ORGANIZATION_ID,
+          userId: "user_1",
         }),
-      searchConsolidatedLegislation: searchConsolidatedLegislationMock,
-      getLawTextBlock: getLawTextBlockMock,
-      executeRegistryLookup: executeRegistryLookupMock,
-    },
-  });
+        readWorkspaceHandler: readWorkspaceHandlerMock,
+        readOverviewHandler: readOverviewHandlerMock,
+        readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+        readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+        describeStoredTemplate: describeStoredTemplateMock,
+        getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
+        searchDecisionsHandler: searchDecisionsHandlerMock,
+        readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
+        readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
+        readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
+        searchLegislationHandler: searchLegislationHandlerMock,
+        resolveStatuteExpression: resolveStatuteExpressionMock,
+        resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
+        readPublicLegislationHandler: readPublicLegislationHandlerMock,
+        listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+        readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+        readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+        readVersionBlocks: readVersionBlocksMock,
+        // The corpus gate has its own tests; here a document is reachable.
+        resolveAnnotationTarget: async () =>
+          await Promise.resolve({
+            status: "available" as const,
+            readBlocks: async () => await Promise.resolve([]),
+          }),
+        searchConsolidatedLegislation: searchConsolidatedLegislationMock,
+        getLawTextBlock: getLawTextBlockMock,
+        executeRegistryLookup: executeRegistryLookupMock,
+      },
+    }),
+  );
 };
 
 /**
@@ -267,7 +301,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
 const contextFor = (
   toolName: ProjectableReadToolName,
   tx: unknown,
-): McpRequestContext =>
+): AuthorizedMcpRequestContext =>
   CHAT_READ_SCRIPT_POLICY[toolName] === "script"
     ? buildContext(tx)
     : {
@@ -1344,6 +1378,8 @@ const CONTRACT_CORPUS = {
           [
             {
               id: uid(45),
+              clientId: null,
+              matterShare: 1000,
               invoiceNumber: "INV-1",
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1368,6 +1404,7 @@ const CONTRACT_CORPUS = {
           invoices: {
             findFirst: async () => ({
               id: uid(46),
+              clientId: null,
               workspaceId: WS,
               invoiceNumber: "INV-2",
               documentType: "invoice",
@@ -1397,6 +1434,7 @@ const CONTRACT_CORPUS = {
               timeEntries: [
                 {
                   id: uid(47),
+                  workspaceId: WS,
                   workItemId: uid(48),
                   workItemReference: { type: "available", id: uid(48) },
                   dateWorked: "2026-02-01",
@@ -1414,6 +1452,7 @@ const CONTRACT_CORPUS = {
               expenses: [
                 {
                   id: uid(49),
+                  workspaceId: WS,
                   matterId: uid(50),
                   matterReference: { type: "available", id: uid(50) },
                   dateIncurred: "2026-02-01",
@@ -1430,6 +1469,13 @@ const CONTRACT_CORPUS = {
               lines: [
                 {
                   id: uid(105),
+                  workspaceId: WS,
+                  workspace: { id: WS, name: "Matter", color: null },
+                  recordedDescription: null,
+                  recordedQuantity: null,
+                  recordedUnit: null,
+                  recordedUnitPrice: null,
+                  recordedNetAmount: null,
                   position: 0,
                   description: "Drafted the NDA",
                   quantity: "1.0000",
@@ -1454,12 +1500,20 @@ const CONTRACT_CORPUS = {
       }),
       expectRefPaths: [
         "invoice.workspaceId",
+        "invoice.timeEntries[].workspaceId",
         "invoice.timeEntries[].entityId",
         "invoice.timeEntries[].entityReference.id",
+        "invoice.timeEntries[].entityReference.workspaceId",
         "invoice.timeEntries[].entity.id",
+        "invoice.timeEntries[].entity.workspaceId",
+        "invoice.expenses[].workspaceId",
         "invoice.expenses[].entityId",
         "invoice.expenses[].entityReference.id",
+        "invoice.expenses[].entityReference.workspaceId",
         "invoice.expenses[].entity.id",
+        "invoice.expenses[].entity.workspaceId",
+        "invoice.lines[].workspaceId",
+        "invoice.lines[].workspace.id",
       ],
     },
   ],
@@ -1672,6 +1726,11 @@ const CONTRACT_CORPUS = {
             },
           ],
           citationsNextCursor: null,
+          caseFile: {
+            items: [],
+            nextCursor: null,
+            limit: LIMITS.caseLawCaseFilePageSize,
+          },
           country: "CZ",
           court: "Nejvyšší soud",
           courtId: null,
@@ -2499,6 +2558,11 @@ describe("decision text in chat projection", () => {
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,
+      caseFile: {
+        items: [],
+        nextCursor: null,
+        limit: LIMITS.caseLawCaseFilePageSize,
+      },
       country: "CZ",
       court: "Nejvyšší soud",
       courtId: null,

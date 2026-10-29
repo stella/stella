@@ -34,7 +34,7 @@ import {
   READ_STATUTE_PROVISIONS_PROJECTION,
 } from "../lib/chat/legislation-result-projections";
 import { MCP_APP_CONSUMED_FIELDS } from "./app-consumed-fields";
-import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
+import { MCP_APP_OUTPUT_CONTRACTS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
 import { inspectAppHtmlSources, inspectAppSources } from "./app-source-guard";
@@ -174,7 +174,7 @@ describe("MCP app registry and contracts", () => {
       "read_case_law_citations",
       "open_case_law_decision",
     ]);
-    expect(MCP_APP_OUTPUT_SCHEMAS).toHaveProperty("read_case_law_citations");
+    expect(MCP_APP_OUTPUT_CONTRACTS).toHaveProperty("read_case_law_citations");
   });
   test("the guard refuses a model-visible write call in a presentation app", () => {
     const apps = MCP_APPS.map((app) =>
@@ -333,7 +333,7 @@ describe("MCP app registry and contracts", () => {
       path.join(appRoot, "shared/generated/schemas.json"),
     ).json();
     const expected = Object.fromEntries(
-      Object.keys(MCP_APP_OUTPUT_SCHEMAS).map((name) => [
+      Object.keys(MCP_APP_OUTPUT_CONTRACTS).map((name) => [
         name,
         getStaticMcpToolOutputContract(name)?.outputSchema,
       ]),
@@ -438,10 +438,13 @@ describe("MCP app registry and contracts", () => {
       throw new Error("Missing search fixture");
     }
     for (const headnote of [first.headnote, null]) {
-      const parsed = v.parse(MCP_APP_OUTPUT_SCHEMAS.search_case_law, {
-        ...APP_SEARCH_FIXTURE,
-        results: [{ ...first, headnote }],
-      });
+      const parsed = v.parse(
+        MCP_APP_OUTPUT_CONTRACTS.search_case_law.outputSchemaSource,
+        {
+          ...APP_SEARCH_FIXTURE,
+          results: [{ ...first, headnote }],
+        },
+      );
       if (!("results" in parsed)) {
         throw new Error("Expected projected search results");
       }

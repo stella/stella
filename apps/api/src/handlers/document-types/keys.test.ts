@@ -15,7 +15,7 @@ describe("slugifyDocumentTypeKey", () => {
       "data-processing-agreement-dpa",
     );
     expect(slugifyDocumentTypeKey("Příloha: Újúma & náhrada / 2026? #1")).toBe(
-      "p-loha-j-ma-n-hrada-2026-1",
+      "priloha-ujuma-nahrada-2026-1",
     );
   });
 

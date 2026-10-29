@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Neue Ausschnitte aus <bdi>{source}</bdi> wieder speichern",
     "pause": "Erfassung pausieren",
     "plainText": "Nur Text",
+    "plainTextPreview": "Vorschau ohne Formatierung",
     "retention": "Verlauf aufbewahren",
     "retentionWeek": "Eine Woche",
     "retentionMonth": "Einen Monat",
@@ -617,5 +618,46 @@
       "fullDiskAccess": "Festplattenvollzugriff",
       "administrator": "Administratorrechte"
     }
+  },
+  "agentSubscriptions": {
+    "title": "KI-Abonnements",
+    "chatGpt": "ChatGPT",
+    "description": "Nutzen Sie Ihren ChatGPT-Tarif für KI-Anfragen in stella. Die Nutzung wird auf Ihren ChatGPT-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
+    "continueWithChatGpt": "Weiter mit ChatGPT",
+    "continueAs": "Weiter als {email}",
+    "useDifferentAccount": "Anderes Konto verwenden",
+    "signingIn": "Schließen Sie die Anmeldung in Ihrem Browser ab.",
+    "cancel": "Abbrechen",
+    "pasteDescription": "Wenn der Browser nach der Anmeldung eine Fehlerseite anzeigt, kopieren Sie deren Adresse und fügen Sie sie hier ein.",
+    "pasteSubmit": "Anmeldung abschließen",
+    "connected": "ChatGPT verbunden",
+    "connectedAs": "ChatGPT verbunden · {email}",
+    "manageUsage": "Nutzung verwalten",
+    "disconnect": "Trennen",
+    "needsReconnect": "Ihre ChatGPT-Verbindung ist abgelaufen. Melden Sie sich erneut an, um Ihren Tarif weiter zu nutzen.",
+    "notice": {
+      "actionFailed": "Das hat nicht geklappt. Versuchen Sie es erneut.",
+      "pasteRejected": "Diese Adresse gehört nicht zur aktuellen Anmeldung. Kopieren Sie die vollständige Adresse aus dem Browser-Tab, der sich geöffnet hat.",
+      "revocationUnconfirmed": "Auf diesem Computer getrennt, aber ChatGPT hat es nicht bestätigt. Sie können stella auch in Ihren ChatGPT-Einstellungen entfernen."
+    },
+    "failure": {
+      "declined": "Die Anmeldung wurde im Browser abgelehnt.",
+      "planUsageNotGranted": "stella durfte Ihren ChatGPT-Tarif nicht nutzen. Melden Sie sich erneut an und erlauben Sie es.",
+      "differentAccount": "Sie haben sich mit einem anderen ChatGPT-Konto angemeldet. Ihre gespeicherte Verbindung bleibt unverändert.",
+      "stateMismatch": "Die Anmeldung konnte nicht überprüft werden. Versuchen Sie es erneut.",
+      "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
+      "browserUnavailable": "Ihr Browser konnte nicht geöffnet werden. Versuchen Sie es erneut.",
+      "callbackUnavailable": "Die Anmeldung konnte auf diesem Computer nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "registrationIncomplete": "ChatGPT hat die Verbindung mit stella nicht abgeschlossen. Versuchen Sie es erneut.",
+      "codeExpired": "Die Anmeldung ist abgelaufen, bevor sie abgeschlossen war. Versuchen Sie es erneut.",
+      "verification": "Die Antwort von ChatGPT konnte nicht überprüft werden. Versuchen Sie es erneut.",
+      "clientRejected": "ChatGPT akzeptiert diese Verbindung nicht mehr. Verbinden Sie sie erneut mit einem anderen Konto.",
+      "unreachable": "Die ChatGPT-Anmeldung ist nicht erreichbar. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+      "storage": "Die Verbindung konnte auf diesem Computer nicht gelesen oder gespeichert werden."
+    },
+    "callbackConnectedTitle": "ChatGPT ist verbunden",
+    "callbackConnectedBody": "Sie können diesen Tab schließen und zu stella zurückkehren.",
+    "callbackNotConnectedTitle": "ChatGPT wurde nicht verbunden",
+    "callbackNotConnectedBody": "Kehren Sie zu stella zurück, um zu sehen, was passiert ist, und versuchen Sie es erneut."
   }
 }

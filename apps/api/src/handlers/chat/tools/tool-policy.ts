@@ -7,6 +7,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 export { CHAT_TOOL_POLICY_KIND };
 export type { ChatToolPolicyKind };
@@ -38,10 +39,10 @@ const CHAT_TOOL_POLICIES = {
   },
   /**
    * Official public endpoints are authoritative government/public-body
-   * registries designed to receive the lookup key the user supplied
-   * (for example an ICO or company name sent to ARES). These tools may
-   * send that lookup input directly: they must not include workspace
-   * document text or other privileged context in their schema.
+   * registries designed to receive lookup keys (for example an ICO or company
+   * name sent to ARES). The model can derive those arguments from untrusted
+   * context, so every outbound call requires approval even though the
+   * destination is authoritative.
    */
   [CHAT_TOOL_POLICY_KIND.publicOfficial]: {
     kind: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -92,7 +93,10 @@ const missingChatToolPolicy = (toolDefinition: ChatTool): never => {
       new TelemetryError({
         message: "Chat tool policy lookup missed; refusing to execute tool",
       }),
-      { source: "chat-tool-policy", toolName: toolDefinition.name },
+      handlerErrorContext("tools.missingChatToolPolicy", {
+        source: "chat-tool-policy",
+        toolName: toolDefinition.name,
+      }),
     );
   }
 

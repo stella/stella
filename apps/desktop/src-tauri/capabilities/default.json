@@ -18,17 +18,6 @@
     "allow-reveal-support-root",
     "allow-set-autostart",
     "allow-onboarding-restart",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled",
-    "notification:default",
-    "notification:allow-notify",
-    "notification:allow-is-permission-granted",
-    "opener:default",
-    "clipboard-manager:allow-write-text",
-    "deep-link:default",
-    "updater:default",
-    "process:default",
     "allow-account-get-state",
     "allow-account-disconnect",
     "allow-get-desktop-telemetry-enabled",
@@ -40,6 +29,12 @@
     "allow-shortcut-set",
     "allow-permissions-get-snapshot",
     "allow-permissions-request",
-    "allow-permissions-open-settings"
+    "allow-permissions-open-settings",
+    "allow-chatgpt-auth-get-status",
+    "allow-chatgpt-auth-start",
+    "allow-chatgpt-auth-cancel",
+    "allow-chatgpt-auth-complete",
+    "allow-chatgpt-auth-disconnect",
+    "allow-chatgpt-auth-open-usage"
   ]
 }

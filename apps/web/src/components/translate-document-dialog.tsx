@@ -54,15 +54,15 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLastTranslationTarget } from "@/hooks/use-last-translation-target";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   CapabilityAction,
   useActionCapabilities,
@@ -109,7 +109,7 @@ export const TranslateDocumentDialog = (
     disabled = false,
   } = props;
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -247,7 +247,10 @@ export const TranslateDocumentDialog = (
       return;
     }
 
-    analytics.captureError(result.error);
+    analytics.captureError(result.error, {
+      fingerprintKey: "TranslateDocumentDialog:failure",
+      scope: { type: "handler", handlerId: "TranslateDocumentDialog:failure" },
+    });
     notifyUserError(result.error, t("translate.error.title"), {
       description: userErrorFromThrown(result.error, t("errors.actionFailed")),
     });
@@ -260,7 +263,13 @@ export const TranslateDocumentDialog = (
       availabilityErrorRef.current !== availabilityError
     ) {
       availabilityErrorRef.current = availabilityError;
-      analytics.captureError(availabilityError);
+      analytics.captureError(availabilityError, {
+        fingerprintKey: "TranslateDocumentDialog:availabilityError",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:availabilityError",
+        },
+      });
       notifyUserError(availabilityError, t("translate.error.title"), {
         description: userErrorFromThrown(
           availabilityError,
@@ -273,7 +282,13 @@ export const TranslateDocumentDialog = (
       preparationErrorRef.current !== preparationQuery.error
     ) {
       preparationErrorRef.current = preparationQuery.error;
-      analytics.captureError(preparationQuery.error);
+      analytics.captureError(preparationQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-2",
+        },
+      });
     }
     const run = runQuery.data?.run;
     if (
@@ -282,7 +297,13 @@ export const TranslateDocumentDialog = (
       pollingErrorRunRef.current !== runId
     ) {
       pollingErrorRunRef.current = runId;
-      analytics.captureError(runQuery.error);
+      analytics.captureError(runQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-3",
+        },
+      });
       notifyUserError(runQuery.error, t("translate.error.title"), {
         description: userErrorFromThrown(
           runQuery.error,
@@ -327,7 +348,7 @@ export const TranslateDocumentDialog = (
     }
     if (run.status === "failed" || run.status === "cancelled") {
       terminalNotifiedRunRef.current = runId;
-      notifyUserError(undefined, t("translate.error.title"), {
+      notifyUserProblem(t("translate.error.title"), {
         description: t(documentTranslationRunFailureKey(run.errorCode)),
       });
     }
@@ -359,7 +380,7 @@ export const TranslateDocumentDialog = (
       const data = await (async () => {
         switch (choice) {
           case "translated:deepl":
-            return unwrapEden(
+            return unwrapApiResponse(
               await client.post({
                 ...common,
                 output: "translated",
@@ -371,7 +392,7 @@ export const TranslateDocumentDialog = (
             const entityVersionId =
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
-            return unwrapEden(
+            return unwrapApiResponse(
               await client.post({
                 ...common,
                 output: choice === "translated:ai" ? "translated" : "bilingual",
@@ -409,7 +430,13 @@ export const TranslateDocumentDialog = (
       setDialogOpen(true);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-4",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-4",
+        },
+      });
       notifyUserError(error, t("translate.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });
