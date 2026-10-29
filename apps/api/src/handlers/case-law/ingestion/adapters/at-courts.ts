@@ -1037,16 +1037,6 @@ const buildListingOnly = ({
   const data = readDecisionMetadata(source, item);
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
-  if (parsed.textFidelity !== undefined) {
-    logger.error(AST_CONTENT_LOST, {
-      parser: source.key,
-      caseNumber: data.caseNumber,
-      codes: "TEXT_FIDELITY_MISMATCH",
-      missingChars: parsed.textFidelity.missingChars,
-      extraChars: parsed.textFidelity.extraChars,
-    });
-  }
-
   const raw = storedRaw({ item, documentXml: rawDetail });
   return plainTextIngestionResult(
     {
@@ -1260,6 +1250,16 @@ export const assembleAtRisDecision = (
       adapterKey: source.key,
       caseNumber: data.caseNumber,
       elements: parsed.unknownElements.join(","),
+    });
+  }
+
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: source.key,
+      caseNumber: data.caseNumber,
+      codes: "TEXT_FIDELITY_MISMATCH",
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
     });
   }
 
