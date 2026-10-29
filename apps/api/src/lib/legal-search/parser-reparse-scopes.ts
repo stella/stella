@@ -109,35 +109,35 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Recompute procedural review links from retained publisher metadata and opening/holding evidence.",
+        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own. Procedural review links are also recomputed from retained publisher metadata and opening/holding evidence",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 22,
+    version: 23,
     scope: {
       type: "all",
       reason:
-        "Recompute procedural review links from retained publisher metadata and opening/holding evidence.",
+        "page furniture, page-break cuts, letter-spaced words, layout tables, list numbers, subsection headings, separate opinions and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own. Procedural review links are also recomputed from retained publisher metadata and opening/holding evidence",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 31,
+    version: 32,
     scope: {
       type: "all",
       reason:
-        "Recompute procedural review links from retained publisher metadata and opening/holding evidence.",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own. Procedural review links are also recomputed from retained publisher metadata and opening/holding evidence",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 15,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "letter-spaced words and section markers are recomputed from stored markup, including uneven chunks witnessed by intact words in the decision; paragraph text has no feature storage of its own",
+        "paragraph text, paragraph numbers and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; letter-spaced words and section markers include uneven chunks witnessed by intact words in the decision; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -338,11 +338,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
     },
   },
 } as const satisfies ParserVersionScopes<
