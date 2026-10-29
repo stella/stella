@@ -773,6 +773,57 @@ describe("a docket at other courts", () => {
       ["Krajský soud v Ostravě – pobočka v Olomouci", "2025-05-28"],
     ]);
   });
+  test.each([
+    "Okresní soud v Kolíně 65 A 3/2025",
+    "rozsudek Okresního soudu v Kolíně 65 A 3/2025-12",
+    "OS Kolín 65 A 3/2025",
+  ])(
+    "a named court the corpus does not know never resolves another court's holder: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: async () => panic("An unknown court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toMatchObject({
+        status: "not_found",
+        reason: "court_unrecognized",
+        otherCourtCandidates: [
+          { court: "Krajský soud v Českých Budějovicích" },
+        ],
+      });
+    },
+  );
+  test("words that name no court leave the docket unconstrained", async () => {
+    const [budejovice] = regionalHolders();
+    if (budejovice === undefined) {
+      panic("Missing regional fixture");
+    }
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "rozsudek 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([budejovice]),
+        read: readableDecision,
+      },
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { court: "Krajský soud v Českých Budějovicích" },
+    });
+  });
   test("no court leaves a shared docket ambiguous", async () => {
     const result = await resolveDecision({
       admission,

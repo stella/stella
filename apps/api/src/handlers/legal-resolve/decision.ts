@@ -32,6 +32,7 @@ import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  mentionsCourt,
   readCourtFilter,
   storedCourtIdentities,
 } from "@/api/mcp/case-law-court-filter";
@@ -158,6 +159,33 @@ const candidateLabel = (row: DecisionIdentityRow): string =>
  * same docket always lists the same holders in the same places whatever order
  * the lookup returned them in.
  */
+type NamedCourt =
+  | { type: "none" }
+  | { type: "court"; courts: readonly [string, ...string[]] }
+  | { type: "unrecognized" };
+
+/**
+ * The court a citation names around its docket. A court the vocabulary
+ * cannot read still constrains the citation: no holder of the docket is
+ * known to be that court, so none may be resolved in its place. Words that
+ * name no court at all leave the docket unconstrained.
+ */
+const readNamedCourt = (
+  embeddedIn: string | undefined,
+  identities: Parameters<typeof readCourtFilter>[0]["identities"],
+): NamedCourt => {
+  if (embeddedIn === undefined) {
+    return { type: "none" };
+  }
+  const reading = readCourtFilter({ court: embeddedIn, identities });
+  if (reading.type === "court") {
+    return { type: "court", courts: reading.courts };
+  }
+  return mentionsCourt(embeddedIn)
+    ? { type: "unrecognized" }
+    : { type: "none" };
+};
+
 const compareDecisionDate = (
   left: string | null,
   right: string | null,
@@ -297,17 +325,18 @@ export const resolveDecision = async ({
       ...rows.map(({ court }) => court),
     ]),
   ]);
-  const courtReading =
-    intent.kind === "docket" && intent.embeddedIn !== undefined
-      ? readCourtFilter({ court: intent.embeddedIn, identities })
-      : undefined;
+  const namedCourt = readNamedCourt(
+    intent.kind === "docket" ? intent.embeddedIn : undefined,
+    identities,
+  );
   const namedCourts =
-    courtReading?.type === "court" ? courtReading.courts : undefined;
+    namedCourt.type === "court" ? namedCourt.courts : undefined;
+  const unrecognizedCourt = namedCourt.type === "unrecognized";
   // A sheet lookup intentionally does not load every member of a file.
   // Discover other courts through the indexed bare-family lookup while
   // retaining the exact read for selecting the requested decision.
   const docketRows =
-    namedCourts !== undefined &&
+    (namedCourts !== undefined || unrecognizedCourt) &&
     intent.kind === "docket" &&
     intent.selector.kind !== "none"
       ? await lookup({
@@ -327,20 +356,30 @@ export const resolveDecision = async ({
     [...new Map([...rows, ...docketRows].map((row) => [row.id, row])).values()],
     { reporters },
   );
+  const toOtherCourtCandidates = (holders: readonly DecisionIdentityRow[]) =>
+    holders
+      .toSorted(byCourtThenDate(family[0]?.language ?? "en"))
+      .slice(0, LIMITS.caseLawLookupCandidatesMax)
+      .map((row) => ({
+        ...candidate(row),
+        court: row.court,
+        decisionDate: row.decisionDate,
+        decisionType: row.decisionType,
+        subjectSummary: row.subjectSummary ?? null,
+      }));
+  if (unrecognizedCourt && family.length > 0) {
+    return {
+      status: "not_found",
+      reason: "court_unrecognized",
+      otherCourtCandidates: toOtherCourtCandidates(family),
+    };
+  }
   const otherCourtCandidates =
     namedCourts === undefined
       ? []
-      : family
-          .filter(({ court }) => !namedCourts.includes(court))
-          .toSorted(byCourtThenDate(family[0]?.language ?? "en"))
-          .slice(0, LIMITS.caseLawLookupCandidatesMax)
-          .map((row) => ({
-            ...candidate(row),
-            court: row.court,
-            decisionDate: row.decisionDate,
-            decisionType: row.decisionType,
-            subjectSummary: row.subjectSummary ?? null,
-          }));
+      : toOtherCourtCandidates(
+          family.filter(({ court }) => !namedCourts.includes(court)),
+        );
   const scopedRows =
     namedCourts === undefined
       ? rows

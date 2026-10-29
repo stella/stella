@@ -158,7 +158,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one docket or ECLI; use search_case_law for descriptions. A CZ/SK court name or alias in identifier constrains the docket. otherCourtCandidates are DIFFERENT decisions at other courts, never the requested one: present them as such and let the user choose. Held only elsewhere: not_found/not_at_this_court. Resolved returns language, languageAlternates, decisionId and bounded text; continue with read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists parts to supply. Country_unavailable: no exact-identity surface. Add missing stella:read via OAuth consent before recovery calls.",
+      "Resolve one docket or ECLI; use search_case_law for descriptions. A CZ/SK court in identifier constrains the docket. otherCourtCandidates are DIFFERENT decisions at other courts, never the requested one: present them as such and let the user choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. Resolved returns language, languageAlternates, decisionId, text; continue via read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists missing parts. Country_unavailable: no identity surface. Missing stella:read: add via OAuth consent.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {

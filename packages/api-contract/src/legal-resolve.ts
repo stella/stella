@@ -90,6 +90,7 @@ export const legalResolveResponseSchema = v.variant("status", [
       "unknown_section",
       "no_exact_identity",
       "not_at_this_court",
+      "court_unrecognized",
     ]),
     otherCourtCandidates: otherCourtCandidatesSchema,
   }),

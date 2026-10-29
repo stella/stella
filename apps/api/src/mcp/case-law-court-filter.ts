@@ -136,6 +136,33 @@ const courtVocabulary = (
     ],
   }));
 
+/**
+ * The Czech and Slovak court short codes a citation writes in place of a
+ * court's name (`KS Praha`, `OS Kolín`). `ÚS` is left out: it is also the
+ * register of every Constitutional Court docket, and that court is always
+ * recognised by name.
+ */
+const courtShortCodes: ReadonlySet<string> = new Set(
+  [
+    ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.CZ),
+    ...Object.values<RegisteredCourt>(ECLI_COURT_REGISTRY.SK),
+  ]
+    .map(({ shortCode }) => shortCode)
+    .filter((shortCode) => shortCode !== "ÚS"),
+);
+
+/** `soud` / `súd` in any inflection: Czech and Slovak for "court". */
+const COURT_NOUN = /(?:^|[^\p{L}])(?:soud|súd)\p{L}*/iu;
+
+/**
+ * Whether text names a court at all, recognised or not. A court that the
+ * vocabulary cannot read still has to constrain a citation: without this,
+ * an unknown court reads like no court and the docket resolves anywhere.
+ */
+export const mentionsCourt = (text: string): boolean =>
+  COURT_NOUN.test(text) ||
+  text.split(/[^\p{L}]+/u).some((word) => courtShortCodes.has(word));
+
 /** An apex court's abbreviation, and its English names where it has any. */
 const apexCourtAliases = (abbreviation: string): readonly string[] =>
   Object.hasOwn(APEX_COURT_ENGLISH_NAMES, abbreviation)
