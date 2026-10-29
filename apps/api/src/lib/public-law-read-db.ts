@@ -853,7 +853,10 @@ const publicLawReadFailure = (
  * statement timeout when the budget shortened it, or the transaction deadline,
  * which only the budget sets. The server ending the session for that deadline
  * between two statements reaches the client as a closed connection with no
- * SQLSTATE, so a closed connection counts only once the budget is spent.
+ * SQLSTATE. Both a cancelled statement and a closed connection count only
+ * once the budget is spent: either can also result from an explicit cancel
+ * while time remains. Clamped timers round up to whole milliseconds so a
+ * real timeout cannot precede the budget's deadline.
  */
 const endedByRequestClampedGuard = (
   error: unknown,
@@ -861,7 +864,7 @@ const endedByRequestClampedGuard = (
 ): boolean => {
   switch (getPgErrorCode(error)) {
     case PG_ERROR.QUERY_CANCELED:
-      return statementTimeoutClamped;
+      return statementTimeoutClamped && remainingRequestBudgetMs() === 0;
     case PG_ERROR.TRANSACTION_TIMEOUT:
       return transactionDeadline;
     case undefined:
