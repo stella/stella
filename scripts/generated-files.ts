@@ -861,6 +861,20 @@ const TRANSITIVE_GENERATOR_INPUTS = {
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "main-heavy-infrastructure-steps",
+    outputKind: "committed",
+    outputs: ["scripts/main-heavy-infrastructure-steps.json"],
+    inputs: [
+      ".github/workflows/ci.yml",
+      "scripts/generate-main-heavy-infrastructure-steps.ts",
+    ],
+    write: ["bun", "scripts/generate-main-heavy-infrastructure-steps.ts"],
+    check: null,
+    checkedBy: "generated-output guard",
+    autofix: true,
+    after: [],
+  },
+  {
     id: "tailwind-class-cache",
     outputKind: "committed",
     outputs: [".tailwind-cache/**"],

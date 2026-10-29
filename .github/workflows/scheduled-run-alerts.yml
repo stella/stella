@@ -94,7 +94,9 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/main-heavy-alert-kind.mjs
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -132,21 +134,20 @@ jobs:
 
       - name: Classify main-heavy infrastructure failures
         id: classification
+        continue-on-error: true
         if: >-
           github.event_name == 'workflow_run'
           && github.event.workflow_run.path == '.github/workflows/main-heavy.yml'
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          description=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
+          kind=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
             "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/statuses?per_page=100" |
-            jq -r '[.[][] | select(.context == "main/heavy")][0].description // ""')
-          if [[ "$description" =~ CODE\ 0,\ INFRA\ [1-9][0-9]* ]]; then
-            echo "kind=Infrastructure failure" >> "$GITHUB_OUTPUT"
-          else
-            echo "kind=Failed workflow" >> "$GITHUB_OUTPUT"
-          fi
+            node .gh-retry/scripts/main-heavy-alert-kind.mjs "$RUN_URL" "$RUN_ID")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
       - name: Send failure alert
         timeout-minutes: 2

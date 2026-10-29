@@ -277,7 +277,7 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/main-heavy-classification.mjs
-            .github/workflows/ci.yml
+            scripts/main-heavy-infrastructure-steps.json
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -295,7 +295,6 @@ jobs:
           script: |
             const { pathToFileURL } = require('node:url');
             const { resolve } = require('node:path');
-            const { readFileSync } = require('node:fs');
             const { collectMainHeavyFailures } = await import(pathToFileURL(
               resolve('.gh-retry/scripts/main-heavy-classification.mjs')).href);
             const results = JSON.parse(process.env.RESULTS);
@@ -307,7 +306,6 @@ jobs:
             try {
               failures = await collectMainHeavyFailures({ github, context,
                 sha: process.env.SHA,
-                workflow: readFileSync('.gh-retry/.github/workflows/ci.yml', 'utf8'),
                 results, warn: message => core.warning(message) });
             } catch {
               core.warning('Job evidence is unavailable; failures remain CODE.');

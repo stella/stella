@@ -1,0 +1,1084 @@
+{
+  "ci-plan": {
+    "displayName": { "prefix": "", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check changed file scope",
+      "Check completed suite depth",
+      "Check if PR is trusted",
+      "Check tracked repository hygiene",
+      "Checkout",
+      "Checkout patch-id inputs",
+      "Compute stable patch id",
+      "Derive PR jobs",
+      "Derive deferred queue checks",
+      "Derive heavy jobs",
+      "Derive pilot fast prerequisites",
+      "Fetch GitHub API tooling",
+      "Gate API test planners on installed dependencies",
+      "Install planner dependencies",
+      "Log out of GitHub Container Registry",
+      "Login to GitHub Container Registry for image resolution",
+      "Plan API test files and shards",
+      "Plan Postgres test shards",
+      "Plan changed PR e2e shards",
+      "Plan query performance scope",
+      "Plan release marketing screenshots",
+      "Preserve GitHub API tooling across source checkouts",
+      "Preserve network retry tooling across source checkouts",
+      "Preserve the comparison-base resolver across source checkouts",
+      "Preserve this run's CI workflow for planning",
+      "Refine Legal Atlas API source scope",
+      "Require planner dependencies for job derivation",
+      "Resolve API test durations",
+      "Resolve PR coverage pilot",
+      "Resolve Postgres test durations",
+      "Resolve available CI images",
+      "Resolve comparison base",
+      "Resolve suite depth",
+      "Resolve which suites run",
+      "Restore API test durations",
+      "Restore Postgres test durations",
+      "Select affected API test files",
+      "Select affected Postgres test files",
+      "Select changed PR e2e shards",
+      "Select root check inputs",
+      "Setup Bun for dependency scope",
+      "Setup Bun for planning",
+      "Summarize Postgres test selection",
+      "Upload failed Bun install logs",
+      "Upload planned API test durations",
+      "Upload planned Postgres test durations"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout patch-id inputs",
+      "Fetch GitHub API tooling",
+      "Install planner dependencies",
+      "Post Checkout",
+      "Post Checkout patch-id inputs",
+      "Post Fetch GitHub API tooling",
+      "Post Install planner dependencies",
+      "Post Setup Bun for dependency scope",
+      "Post Setup Bun for planning",
+      "Setup Bun for dependency scope",
+      "Setup Bun for planning"
+    ]
+  },
+  "generated-sources": {
+    "displayName": { "prefix": "generated-sources", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Identify generated source inputs",
+      "Install generated source dependencies",
+      "Prepare local check environment",
+      "Produce generated sources",
+      "Restore generated sources",
+      "Reuse restored generated sources",
+      "Save generated sources",
+      "Setup Bun",
+      "Upload generated sources"
+    ],
+    "steps": [
+      "Checkout",
+      "Install generated source dependencies",
+      "Post Checkout",
+      "Post Install generated source dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "pr-heavy-gate": {
+    "displayName": { "prefix": "pr-heavy-gate", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check workflow job classifications",
+      "Checkout",
+      "Checkout workflow classification tooling",
+      "Install dependencies",
+      "Setup Bun",
+      "Upload failed Bun install logs",
+      "ci-checks-docs: Check changed Markdown consumers",
+      "dated-waiver-expiry: Check dated waiver expiry on the current tree",
+      "dated-waiver-expiry: List files the change touches",
+      "dated-waiver-expiry: List tracked files for dated waiver guard",
+      "parser-version-guard: Check parser version guard"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow classification tooling",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Checkout workflow classification tooling",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "docker-checks": {
+    "displayName": {
+      "prefix": "Sandbox Docker and image dependency checks",
+      "suffix": ""
+    },
+    "declaredStepNames": [
+      "Assert provider left no sandbox containers",
+      "Build pinned sandbox image",
+      "Cancel merge group after failure in this job",
+      "Check image dependency trees and production runner",
+      "Checkout",
+      "Checkout workflow tooling",
+      "Cleanup Docker resources",
+      "Create internal sandbox network",
+      "Exercise Docker provider isolation and cleanup",
+      "Install dependencies",
+      "Log in to the CI image mirror",
+      "Log out of GitHub Container Registry",
+      "Pull sandbox base images",
+      "Run protocol and malformed-stream tests",
+      "Setup Bun",
+      "Start the only reachable network canary",
+      "Upload failed Bun install logs"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow tooling",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Checkout workflow tooling",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-checks-generated": {
+    "displayName": { "prefix": "ci-checks-generated", "suffix": "" },
+    "declaredStepNames": [
+      "CLI sharded registry and derived runtime guard",
+      "Cancel merge group after failure in this job",
+      "Capability catalog drift guard",
+      "Checkout",
+      "Download generated sources",
+      "Fetch and scan engine published export map guard",
+      "Generated API type review diff",
+      "Generated route tree review diff",
+      "Install dependencies",
+      "Load merge base measurement",
+      "MCP app derived outputs guard",
+      "MCP kit published export map guard",
+      "Prepare environment",
+      "Rebuild every npm package to verify identical tarball bytes",
+      "Restore generated sources",
+      "Route tree drift guard",
+      "Setup Bun",
+      "Turbo remote cache",
+      "Typecheck-cost baseline guard",
+      "Upload generated API type review diff",
+      "Upload generated route tree review diff",
+      "Visual sandbox document tests",
+      "Web API types determinism guard",
+      "Workspace package export map guard",
+      "npm release jobs match the package dependency graph"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-checks-policy": {
+    "displayName": { "prefix": "ci-checks-policy", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Compute affected flag",
+      "Download generated sources",
+      "Install dependencies",
+      "Prepare environment",
+      "Publish static check receipts",
+      "Record static check receipts",
+      "Resolve static check receipts",
+      "Restore generated sources",
+      "Run policy checks",
+      "Select measured ratchet base from the target branch",
+      "Setup Bun",
+      "Turbo remote cache"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-checks-rest": {
+    "displayName": { "prefix": "ci-checks-rest", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Changeset packages match changed files",
+      "Changeset present for published package changes",
+      "Check AI prompt sync",
+      "Check AI verification guards",
+      "Check local base selection",
+      "Check local skill overrides",
+      "Checkout",
+      "Download generated sources",
+      "Install dependencies",
+      "Load release policy",
+      "Lockfile release-age guard",
+      "Prepare environment",
+      "Prepare route network manifest",
+      "Publish static check receipts",
+      "Published package lists match the release policy",
+      "Record static check receipts",
+      "Resolve static check receipts",
+      "Restore generated sources",
+      "Restore route network baseline",
+      "Route network manifest coverage",
+      "Run repository checks",
+      "Setup Bun",
+      "Standalone lockfile guard",
+      "Standalone negated shell statement guard",
+      "Tauri counterpart autofix tests",
+      "Tauri package alignment",
+      "Turbo remote cache",
+      "Validate AI skills"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-tests": {
+    "displayName": { "prefix": "ci-tests", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Compute affected flag",
+      "Download planned API test durations",
+      "Install dependencies",
+      "Prepare environment",
+      "Repeat changed tests",
+      "Report quarantined tests",
+      "Runner resources",
+      "Setup Bun",
+      "Test .claude/mcp",
+      "Test API or rest",
+      "Test web",
+      "Turbo remote cache",
+      "Upload API test timings",
+      "Upload failed API or rest test output",
+      "Upload failed web test output",
+      "Upload quarantined test outcomes",
+      "Upload test diagnostics",
+      "Verify planned API test durations"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "api-test-durations": {
+    "displayName": { "prefix": "api-test-durations", "suffix": "" },
+    "declaredStepNames": [
+      "Aggregate API test durations",
+      "Aggregate Postgres test durations",
+      "Checkout",
+      "Download API test timings",
+      "Download Postgres test timings",
+      "Install API script dependencies",
+      "Restore previous API test durations",
+      "Restore previous Postgres test durations",
+      "Save API test durations",
+      "Save Postgres test durations",
+      "Setup Bun",
+      "Upload install log on failure"
+    ],
+    "steps": [
+      "Checkout",
+      "Install API script dependencies",
+      "Post Checkout",
+      "Post Install API script dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-browser": {
+    "displayName": { "prefix": "ci-browser", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check UI browser test scope",
+      "Check desktop browser test scope",
+      "Check extension browser test scope",
+      "Checkout",
+      "Install UI browser test runtime",
+      "Install dependencies",
+      "Prepare environment",
+      "Restore Bun install cache",
+      "Setup Bun",
+      "Test UI browser interactions",
+      "Test UI playground visuals",
+      "Test desktop browser interactions",
+      "Test extension browser boundary",
+      "Turbo remote cache",
+      "Upload browser test timings",
+      "Upload desktop browser failures"
+    ],
+    "steps": [
+      "Checkout",
+      "Install UI browser test runtime",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install UI browser test runtime",
+      "Post Install dependencies",
+      "Post Restore Bun install cache",
+      "Restore Bun install cache"
+    ]
+  },
+  "code-quality-api": {
+    "displayName": { "prefix": "code-quality-api", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Code quality",
+      "Download generated sources",
+      "Install dependencies",
+      "Prepare environment",
+      "Restore generated sources",
+      "Result consumption",
+      "Setup Bun",
+      "Turbo remote cache"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "code-quality-api-cancel": {
+    "displayName": { "prefix": "code-quality-api-cancel", "suffix": "" },
+    "declaredStepNames": ["Cancel pull request run after code quality failure"],
+    "steps": []
+  },
+  "code-quality-web-rest": {
+    "displayName": { "prefix": "code-quality-web-rest", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Download generated sources",
+      "Install dependencies",
+      "Install the docs MCP server",
+      "Prepare environment",
+      "Restore generated sources",
+      "Run independent code-quality checks",
+      "Setup Bun",
+      "Turbo remote cache",
+      "Typecheck coverage"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "code-quality-web-rest-cancel": {
+    "displayName": { "prefix": "code-quality-web-rest-cancel", "suffix": "" },
+    "declaredStepNames": ["Cancel pull request run after code quality failure"],
+    "steps": []
+  },
+  "query-perf": {
+    "displayName": { "prefix": "query-perf", "suffix": "" },
+    "declaredStepNames": [],
+    "steps": []
+  },
+  "postgres-service-suites": {
+    "displayName": { "prefix": "postgres-service-suites", "suffix": "" },
+    "declaredStepNames": [
+      "Apply migrations to service Postgres",
+      "Apply the local dev seed",
+      "Cancel merge group after failure in this job",
+      "Check full Postgres failures for selector misses",
+      "Checkout",
+      "Configure dev seed Postgres parity",
+      "Configure ephemeral Postgres fixture maintenance",
+      "Configure test Postgres parity",
+      "Download planned Postgres test durations",
+      "Install dependencies",
+      "Prepare the dev seed database",
+      "Run Postgres-gated API suites",
+      "Setup Bun",
+      "Upload Postgres test timings",
+      "Upload failed Bun install logs",
+      "Verify planned Postgres test durations"
+    ],
+    "steps": ["Checkout", "Post Checkout", "Post Setup Bun", "Setup Bun"]
+  },
+  "service-suites": {
+    "displayName": { "prefix": "service-suites", "suffix": "" },
+    "declaredStepNames": [
+      "Apply migrations to service Postgres",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Configure test Postgres parity",
+      "Corpus engine diagnostics and cleanup",
+      "Install dependencies",
+      "Log out of GitHub Container Registry",
+      "Login to GHCR for corpus engine",
+      "Run Valkey-gated API suites",
+      "Run corpus engine suites",
+      "Run cross-replica collaboration suite",
+      "Select statute recall base from the target branch",
+      "Setup Bun",
+      "Start corpus engine"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "database-migrations-check": {
+    "displayName": { "prefix": "database-migrations-check", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check migration coverage",
+      "Checkout",
+      "Install dependencies",
+      "Setup Bun",
+      "Test migration safety rules and historical findings"
+    ],
+    "steps": ["Checkout", "Post Checkout"]
+  },
+  "database-migrations-apply-fresh": {
+    "displayName": {
+      "prefix": "database-migrations-apply-fresh",
+      "suffix": ""
+    },
+    "declaredStepNames": [
+      "Apply all migrations to fresh Postgres",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install dependencies",
+      "Prepare API runtime sources",
+      "Rehearse interrupted Better Auth constraints migration",
+      "Reject inconsistent migration history",
+      "Setup Bun",
+      "Test Postgres owner replacement and helper replay",
+      "Verify API boots with migration check enabled",
+      "Verify __drizzle_migrations recorded all migrations",
+      "Verify schema parity with schema.ts"
+    ],
+    "steps": ["Checkout", "Post Checkout"]
+  },
+  "migration-upgrade-rehearsal": {
+    "displayName": { "prefix": "migration-upgrade-rehearsal", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Checkout workflow tooling",
+      "Configure test Postgres parity",
+      "Drop the registry credential",
+      "Install dependencies",
+      "Login to GitHub Container Registry",
+      "Pull the promoted release's API image",
+      "Rehearse the upgrade from the promoted release at scale",
+      "Resolve the promoted release",
+      "Setup Bun"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow tooling",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Checkout workflow tooling",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "release-typecheck": {
+    "displayName": { "prefix": "release-typecheck", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Full release typecheck",
+      "Install dependencies",
+      "Setup Bun"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "fix-tests-on-base": {
+    "displayName": { "prefix": "fix-tests-on-base", "suffix": "" },
+    "declaredStepNames": [
+      "Changed tests fail on the base source",
+      "Checkout",
+      "Fetch GitHub API tooling",
+      "Install dependencies",
+      "Prepare environment",
+      "Preserve GitHub API tooling across source checkouts",
+      "Setup Bun"
+    ],
+    "steps": [
+      "Checkout",
+      "Fetch GitHub API tooling",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Fetch GitHub API tooling",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "web-build": {
+    "displayName": { "prefix": "web-build", "suffix": "" },
+    "declaredStepNames": [
+      "Build web",
+      "Bundle duplicate content guard",
+      "Bundle size report",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install dependencies",
+      "Prepare environment",
+      "Prod-deps web boot smoke",
+      "Setup Bun",
+      "Upload failed Bun install logs",
+      "Upload production E2E web build"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "web-image-smoke": {
+    "displayName": { "prefix": "web-image-smoke", "suffix": "" },
+    "declaredStepNames": [
+      "Boot runner container",
+      "Build runner image",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Checkout workflow tooling",
+      "Cleanup runner container",
+      "Log in to the CI image mirror",
+      "Log out of GitHub Container Registry",
+      "Pull web base images",
+      "Setup Bun"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow tooling",
+      "Post Checkout",
+      "Post Checkout workflow tooling"
+    ]
+  },
+  "mobile-build": {
+    "displayName": { "prefix": "mobile-build", "suffix": "" },
+    "declaredStepNames": [
+      "Bundle Android, iOS, and web",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install dependencies",
+      "Setup Bun",
+      "Validate Expo dependency graph"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "landing-build": {
+    "displayName": { "prefix": "landing-build", "suffix": "" },
+    "declaredStepNames": [
+      "Build landing",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install dependencies",
+      "Setup Bun"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "heavy-web-build": {
+    "displayName": { "prefix": "heavy-web-build", "suffix": "" },
+    "declaredStepNames": [
+      "Build web",
+      "Checkout",
+      "Install dependencies",
+      "Prepare environment",
+      "Setup Bun",
+      "Upload production E2E web build"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "route-smoke": {
+    "displayName": { "prefix": "route-smoke", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check route network baseline",
+      "Checkout",
+      "Explain network baseline failure",
+      "Install dependencies",
+      "Login to GitHub Container Registry for browser images",
+      "Prepare merge-base network budget",
+      "Setup Bun",
+      "Setup production browser stack",
+      "Upload browser test timings",
+      "Upload route smoke report",
+      "Upload server logs"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "e2e-production-shard": {
+    "displayName": { "prefix": "e2e-production-shard", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check route network baseline",
+      "Checkout",
+      "Install dependencies",
+      "Login to GitHub Container Registry for browser images",
+      "Prepare merge-base network budget",
+      "Read production E2E shard count",
+      "Resolve e2e shard budget",
+      "Run API browser checks",
+      "Run Playwright shard",
+      "Run route-smoke Playwright shard",
+      "Setup Bun",
+      "Setup production browser stack",
+      "Upload Playwright blob report",
+      "Upload browser test timings",
+      "Upload network baseline blob report",
+      "Upload route-smoke Playwright blob report",
+      "Upload server logs"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "stack-redaction-browsers": {
+    "displayName": { "prefix": "stack-redaction-browsers", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install dependencies",
+      "Login to GitHub Container Registry for browser images",
+      "Setup Bun",
+      "Test browser stack redaction",
+      "Upload browser test timings",
+      "Verify Firefox and WebKit in the pinned image"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Post Verify Firefox and WebKit in the pinned image",
+      "Setup Bun",
+      "Verify Firefox and WebKit in the pinned image"
+    ]
+  },
+  "e2e-vite-canary": {
+    "displayName": { "prefix": "e2e-vite-canary", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Guard against mid-test Vite re-optimize",
+      "Install Playwright browsers",
+      "Install dependencies",
+      "Login to GitHub Container Registry for browser images",
+      "Prepare environment",
+      "Prepare generated sources",
+      "Run Vite dependency canary",
+      "Run lockless collaboration browser suite",
+      "Setup Bun",
+      "Show API errors after a Vite canary failure",
+      "Start docker stack and API server",
+      "Start web dev server",
+      "Stop web dev server",
+      "Test anonymized PDF export",
+      "Upload Playwright blob report",
+      "Upload browser test timings",
+      "Upload collaboration failure artifacts",
+      "Upload server logs",
+      "Wait for collaboration server",
+      "Wait for web dev server"
+    ],
+    "steps": [
+      "Checkout",
+      "Install Playwright browsers",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install Playwright browsers",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "e2e-landing": {
+    "displayName": { "prefix": "e2e-landing", "suffix": "" },
+    "declaredStepNames": [
+      "Build landing",
+      "Cancel merge group after failure in this job",
+      "Check landing islands",
+      "Checkout",
+      "Install Playwright browsers",
+      "Install dependencies",
+      "Login to GitHub Container Registry for browser images",
+      "Setup Bun",
+      "Start landing preview server",
+      "Stop landing preview server",
+      "Upload browser test timings",
+      "Upload failure diagnostics",
+      "Wait for landing"
+    ],
+    "steps": [
+      "Checkout",
+      "Install Playwright browsers",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install Playwright browsers",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "marketing-screenshots": {
+    "displayName": { "prefix": "marketing-screenshots", "suffix": "" },
+    "declaredStepNames": [],
+    "steps": []
+  },
+  "marketing-screenshots-cancel": {
+    "displayName": { "prefix": "marketing-screenshots-cancel", "suffix": "" },
+    "declaredStepNames": ["Cancel merge group after failure in this job"],
+    "steps": []
+  },
+  "e2e-report": {
+    "displayName": { "prefix": "e2e-report", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Download Playwright blob reports",
+      "Install dependencies",
+      "Merge Playwright reports",
+      "Setup Bun",
+      "Upload merged Playwright report"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "api-image-smoke": {
+    "displayName": { "prefix": "API release image (", "suffix": ")" },
+    "declaredStepNames": [
+      "Annotate image failure",
+      "Build final API release image",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Checkout workflow tooling",
+      "Install smoke dependencies",
+      "Log in to the CI image mirror",
+      "Log out of GitHub Container Registry",
+      "Pull API base images",
+      "Pull API smoke service images",
+      "Rehearse migrations and boot packaged entrypoints",
+      "Setup Bun",
+      "Upload failed Bun install logs"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow tooling",
+      "Post Checkout",
+      "Post Checkout workflow tooling"
+    ]
+  },
+  "legal-atlas-image": {
+    "displayName": { "prefix": "legal-atlas-image", "suffix": "" },
+    "declaredStepNames": [
+      "Build legal-atlas-runner image",
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Checkout workflow tooling",
+      "Log in to the CI image mirror",
+      "Log out of GitHub Container Registry",
+      "Resolve legal-atlas-runner base images",
+      "Set up Docker Buildx",
+      "Setup Bun"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow tooling",
+      "Post Checkout",
+      "Post Checkout workflow tooling"
+    ]
+  },
+  "desktop-windows-dry-run": {
+    "displayName": { "prefix": "desktop-windows-dry-run", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Exercise Windows desktop release build",
+      "Fetch Rust dependencies",
+      "Install dependencies",
+      "Look up successful queue dry-run receipt",
+      "Resolve Windows build toolchain",
+      "Setup Bun with install cache",
+      "Setup Rust",
+      "Stamp dry-run metadata",
+      "Upload failed Bun install logs",
+      "Upload successful queue dry-run receipt"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun with install cache",
+      "Setup Bun with install cache"
+    ]
+  },
+  "windows-scripts": {
+    "displayName": { "prefix": "windows-scripts", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install scripts workspace dependencies",
+      "Setup Bun",
+      "Test dev runner and process tree cleanup",
+      "Upload failed Bun install logs"
+    ],
+    "steps": [
+      "Checkout",
+      "Install scripts workspace dependencies",
+      "Post Checkout",
+      "Post Install scripts workspace dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "scan-engine-wasm-drift": {
+    "displayName": { "prefix": "scan-engine-wasm-drift", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check generated WebAssembly from a fresh Cargo cache",
+      "Checkout",
+      "Fetch Rust dependencies and wasm-bindgen",
+      "Install dependencies",
+      "Record fresh WebAssembly checksums",
+      "Restore Rust build cache",
+      "Save Rust build cache",
+      "Setup Bun",
+      "Setup Rust",
+      "Upload failed Bun install logs",
+      "Upload fresh WebAssembly on mismatch"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "desktop-rust-tests": {
+    "displayName": { "prefix": "Desktop Rust Tests (", "suffix": ")" },
+    "declaredStepNames": [
+      "Build test binaries",
+      "Cancel merge group after failure in this job",
+      "Check",
+      "Checkout",
+      "Docs",
+      "Fetch Rust dependencies",
+      "Fetch license audit inputs",
+      "Install cargo-deny",
+      "Install desktop transport smoke dependencies",
+      "Install signing test certificates",
+      "License audit",
+      "Remove signing test certificates",
+      "Setup Bun for the desktop transport smoke",
+      "Setup Rust",
+      "Smoke native desktop transport against the local API contract",
+      "Test",
+      "Test signer against the certificate store"
+    ],
+    "steps": [
+      "Checkout",
+      "Install desktop transport smoke dependencies",
+      "Post Checkout",
+      "Post Install desktop transport smoke dependencies",
+      "Post Setup Bun for the desktop transport smoke",
+      "Setup Bun for the desktop transport smoke"
+    ]
+  },
+  "desktop-rust-lint": {
+    "displayName": { "prefix": "Desktop Rust Lint (", "suffix": ")" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Clippy",
+      "Fetch Rust dependencies",
+      "Setup Rust"
+    ],
+    "steps": ["Checkout", "Post Checkout"]
+  },
+  "dependency-audit": {
+    "displayName": { "prefix": "bun audit (high/critical)", "suffix": "" },
+    "declaredStepNames": [
+      "Audit changed dependency resolutions",
+      "Check lockfile deduplication",
+      "Check trusted lifecycle dependencies",
+      "Checkout",
+      "Install dependencies",
+      "Setup Bun"
+    ],
+    "steps": ["Checkout", "Post Checkout"]
+  },
+  "dependency-review": {
+    "displayName": { "prefix": "dependency-review", "suffix": "" },
+    "declaredStepNames": [
+      "Checkout",
+      "Compare workflow action dependencies",
+      "Dependency Review",
+      "Derive dependency changes",
+      "Setup workflow YAML parser"
+    ],
+    "steps": [
+      "Checkout",
+      "Post Checkout",
+      "Post Setup workflow YAML parser",
+      "Setup workflow YAML parser"
+    ]
+  },
+  "dependency-malware": {
+    "displayName": { "prefix": "dependency-malware", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Checkout",
+      "Install OSV-Scanner",
+      "Install Safe Chain",
+      "Scan dependency malware",
+      "Setup Bun",
+      "Verify malware scanner fixtures"
+    ],
+    "steps": [
+      "Checkout",
+      "Install Safe Chain",
+      "Post Checkout",
+      "Post Install Safe Chain",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-quick-checks": {
+    "displayName": { "prefix": "ci-quick-checks", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check workflow job classifications",
+      "Checkout",
+      "Checkout workflow classification tooling",
+      "Install dependencies",
+      "Setup Bun",
+      "Upload failed Bun install logs",
+      "ci-checks-docs: Check changed Markdown consumers",
+      "dated-waiver-expiry: Check dated waiver expiry on the current tree",
+      "dated-waiver-expiry: List files the change touches",
+      "dated-waiver-expiry: List tracked files for dated waiver guard",
+      "parser-version-guard: Check parser version guard"
+    ],
+    "steps": [
+      "Checkout",
+      "Checkout workflow classification tooling",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Checkout workflow classification tooling",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
+  "ci-result": {
+    "displayName": { "prefix": "ci-result", "suffix": "" },
+    "declaredStepNames": [
+      "${{ needs.ci-plan.outputs.heavy_proof == 'true' && format('Publish armed suite depth {0}', steps.outcome.outputs.evidence_sha256) || 'Publish completed suite depth' }}",
+      "Cancel merge group after failure in this job",
+      "Digest failed steps",
+      "Evaluate CI outcome",
+      "Fetch GitHub API tooling",
+      "Preserve GitHub API tooling across source checkouts",
+      "Record completed suite depth",
+      "Record the certified comparison base",
+      "Setup Bun for the failure digest",
+      "Upload failure digest",
+      "Upload required-jobs record",
+      "Write CI outcome inputs",
+      "Write required-jobs record"
+    ],
+    "steps": ["Fetch GitHub API tooling", "Post Fetch GitHub API tooling"]
+  }
+}

@@ -10,19 +10,35 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { generateMainHeavyInfrastructureSteps } from "./generate-main-heavy-infrastructure-steps";
+import { mainHeavyAlertKind } from "./main-heavy-alert-kind.mjs";
 import { classifyMainHeavyFailures } from "./main-heavy-classification.mjs";
 import { scopeFilters } from "./test-scope";
 import { shardFilters } from "./test-shards";
 
 const classificationWorkflow = `jobs:
   fixture:
+    name: API release image (\${{ matrix.platform }})
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - &checkout
+        name: Checkout
         uses: actions/checkout@0000000000000000000000000000000000000000
+      - name: Install
+        uses: $/.github/actions/ci-install
       - name: Test
         run: bun test
+  anchored:
+    steps:
+      - *checkout
+  runner-name:
+    steps:
+      - name: Set up job
+        run: bun test
 `;
+const classificationDefinitions = JSON.parse(
+  await generateMainHeavyInfrastructureSteps(classificationWorkflow),
+);
 
 test.each([
   {
@@ -33,12 +49,13 @@ test.each([
       { name: "Test", conclusion: "skipped" },
     ],
     expected: "INFRA",
+    name: "suites / API release image (linux/arm64)",
   },
   {
     title: "a run step named Checkout stays code",
     steps: [{ name: "Checkout", conclusion: "failure" }],
     expected: "CODE",
-    workflow: `jobs:\n  fixture:\n    steps:\n      - name: Checkout\n        run: bun test\n`,
+    name: "suites / runner-name",
   },
   {
     title: "a later code failure overrides checkout infrastructure",
@@ -47,24 +64,79 @@ test.each([
       { name: "Test", conclusion: "failure" },
     ],
     expected: "CODE",
+    name: "suites / API release image (linux/arm64)",
   },
   {
     title: "a runner setup failure is infrastructure",
     steps: [{ name: "Set up job", conclusion: "failure" }],
     expected: "INFRA",
+    name: "suites / API release image (linux/arm64)",
   },
-])("$title", ({ expected, steps, workflow = classificationWorkflow }) => {
+  {
+    title: "an anchored checkout step is infrastructure",
+    steps: [{ name: "Checkout", conclusion: "failure" }],
+    expected: "INFRA",
+    name: "suites / anchored",
+  },
+  {
+    title: "a local action with a path prefix is infrastructure",
+    steps: [{ name: "Install", conclusion: "failure" }],
+    expected: "INFRA",
+    name: "suites / API release image (linux/arm64)",
+  },
+  {
+    title: "a user step named Set up job stays code",
+    steps: [{ name: "Set up job", conclusion: "failure" }],
+    expected: "CODE",
+    name: "suites / runner-name",
+  },
+])("$title", ({ expected, name, steps }) => {
   const failures = classifyMainHeavyFailures({
-    jobs: [
-      { name: "suites / fixture", conclusion: "failure", steps: [...steps] },
-    ],
+    jobs: [{ name, conclusion: "failure", steps: [...steps] }],
     queueJobs: [],
-    workflow,
+    definitions: classificationDefinitions,
   });
   expect(failures.map(({ type }) => type)).toEqual([expected]);
 });
 
 const root = path.resolve(import.meta.dirname, "..");
+
+test("the committed infrastructure steps equal a fresh generation", async () => {
+  const source = readFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  expect(
+    readFileSync(
+      path.join(root, "scripts/main-heavy-infrastructure-steps.json"),
+      "utf-8",
+    ),
+  ).toBe(await generateMainHeavyInfrastructureSteps(source));
+});
+
+test("the alert classification matches the triggering run status", () => {
+  const statuses = [
+    {
+      context: "main/heavy",
+      target_url: "https://github.com/stella/stella/actions/runs/222",
+      description: "Main heavy suites: failure (CODE 0, INFRA 2)",
+    },
+    {
+      context: "main/heavy",
+      target_url: "https://github.com/stella/stella/actions/runs/111",
+      description: "Main heavy suites: failure (CODE 1, INFRA 0)",
+    },
+  ];
+  const classify = (runId: string) =>
+    mainHeavyAlertKind(
+      [statuses],
+      `https://github.com/stella/stella/actions/runs/${runId}`,
+      runId,
+    );
+  expect(classify("111")).toBe("Failed workflow");
+  expect(classify("222")).toBe("Infrastructure failure");
+  expect(classify("333")).toBe("Failed workflow");
+});
 const workflow = v.parse(
   v.object({
     jobs: v.object({
