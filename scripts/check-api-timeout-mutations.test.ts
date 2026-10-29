@@ -188,6 +188,7 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
   for (const file of [
     "apps/api/src/db/shared-pool-timeouts.ts",
     "apps/api/src/db/long-running-connection.ts",
+    "apps/api/src/db/dedicated-connection-timeouts.ts",
     "apps/api/src/db/migration-runner.ts",
     "apps/api/src/db/online-migrations.ts",
     "apps/api/src/db/online-index-gate.ts",
@@ -285,4 +286,21 @@ test("the full tree scan includes the dedicated owner", () => {
     line: 1,
     setting: "shared-pool import @/api/db/root",
   });
+});
+
+test("env-free dedicated budget owner remains checked for shared-pool access", () => {
+  const file = "apps/api/src/db/dedicated-connection-timeouts.ts";
+  const source = `import { rootDb } from "@/api/db/root";
+    await rootDb.execute("SET LOCAL statement_timeout = '1s'");`;
+  const findings = checkApiTimeoutMutations({
+    files: [file],
+    read: () => source,
+  });
+  expect(findings).toEqual(findApiTimeoutMutations(file, source));
+  expect(
+    findings.some(({ setting }) => setting.startsWith("shared-pool import")),
+  ).toBe(true);
+  expect(
+    findings.some(({ setting }) => setting.startsWith("shared-pool binding")),
+  ).toBe(true);
 });

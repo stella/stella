@@ -298,9 +298,66 @@ if (!databaseUrl || !runPostgresTests) {
           await tx.execute(
             sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
           );
+          await tx.execute(
+            sql.raw(
+              "SELECT decision_id, status, withdrawn_at FROM case_law_withdrawal_status LIMIT 0",
+            ),
+          );
+          const privileges = await tx.execute<{ field: string }>(sql`
+            SELECT a.attname AS field FROM pg_attribute a
+            WHERE a.attrelid = 'case_law_withdrawal_status'::regclass
+              AND a.attnum > 0 AND NOT a.attisdropped
+              AND has_column_privilege(current_user, a.attrelid, a.attnum, 'SELECT')
+            ORDER BY a.attname
+          `);
+          expect(privileges.map(({ field }) => field)).toEqual([
+            "decision_id",
+            "status",
+            "withdrawn_at",
+          ]);
+          const permissions = await tx.execute<{ writable: boolean }>(sql`
+            SELECT has_table_privilege(current_user, 'case_law_withdrawal_status', 'INSERT,UPDATE,DELETE') AS writable
+          `);
+          expect(permissions.at(0)?.writable).toBe(false);
         },
         applyPendingContractSteps,
       );
+    });
+
+    test("withdrawal status needs no base-table or tombstone grants", async () => {
+      const onlyWithdrawalStatus = async (tx: Transaction) => {
+        await applyPendingContractSteps(tx);
+        await tx.execute(
+          sql`REVOKE SELECT (location) ON case_law_corpus_tombstones FROM stella_public_law_reader`,
+        );
+      };
+      await asReader(
+        databaseUrl,
+        async (tx) => {
+          await tx.execute(
+            sql`SELECT decision_id, status, withdrawn_at FROM case_law_withdrawal_status LIMIT 0`,
+          );
+        },
+        onlyWithdrawalStatus,
+      );
+      for (const relation of [
+        "case_law_decisions",
+        "case_law_corpus_tombstones",
+      ]) {
+        const failure = await rejectionOf(
+          asReader(
+            databaseUrl,
+            async (tx) => {
+              await tx.execute(
+                sql`SELECT * FROM ${sql.identifier(relation)} LIMIT 0`,
+              );
+            },
+            onlyWithdrawalStatus,
+          ),
+        );
+        expect(errorAndCauseMessages(failure)).toContain("permission denied");
+        expect(errorAndCauseMessages(failure)).toContain(relation);
+      }
     });
 
     test("the request role resolves a published decision through its subject view", async () => {
