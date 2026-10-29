@@ -299,7 +299,7 @@
     "moreOptions": "További lehetőségek",
     "moreItemActions": "További műveletek a(z) {number}. elemhez",
     "noResults": "Nincs egyező kivágás",
-    "noResultsDescription": "Szeretné inkább a nyilvántartásokban keresni ezt: „{query}”?",
+    "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "noGroup": "Nincs csoport",
     "newGroupOption": "Új csoport…",
     "copyItem": "{number}. elem másolása",

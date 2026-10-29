@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Resolves and verifies the requested release source and emits a trusted receipt for release jobs.",
+  "reviewedDigest": "e8765de2c940323b90f3d2f55ef7ea2d16ca5533fffe09a1033c84553dc50183"
+}

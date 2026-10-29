@@ -11,6 +11,23 @@ export const isCurrentCaseFileDocument = (
   (document.languageGroupKey !== null &&
     document.languageGroupKey === decision.languageGroupKey);
 
+/**
+ * Whether the case file has anything to navigate to: a document other than the
+ * open decision (and its translations) on this page, or a further page. A case
+ * file holding only the open decision lists nothing the reader is not already
+ * reading, so it is not shown.
+ */
+export const hasOtherCaseFileDocuments = (
+  caseFile: Pick<PublicCaseLawDecision["caseFile"], "nextCursor"> & {
+    items: readonly Pick<CaseFileDocument, "id" | "languageGroupKey">[];
+  },
+  decision: Pick<PublicCaseLawDecision, "id" | "languageGroupKey">,
+): boolean =>
+  caseFile.nextCursor !== null ||
+  caseFile.items.some(
+    (document) => !isCurrentCaseFileDocument(document, decision),
+  );
+
 type CaseFileRouteLocation = {
   pathname: string;
   /** The raw query string, with or without its leading `?`. */

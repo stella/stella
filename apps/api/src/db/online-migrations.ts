@@ -7,7 +7,11 @@ import {
   INVOICE_SENT_AT_BACKFILL,
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
-import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import {
+  CASE_LAW_COVERAGE_COURT_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_INDEX,
+} from "@/api/lib/case-law/coverage-index";
 import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { FALLBACK_DECISION_INDEXES } from "@/api/lib/case-law/fallback-decision-identity-index";
 import {
@@ -26,11 +30,19 @@ import {
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
+  ACCOUNT_AUDIT_CONSTRAINT,
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+} from "./account-audit-constraint-validation";
+import {
   AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   AGENT_SKILL_BINDING_CONSTRAINTS,
 } from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
+} from "./billing-activity-hour-cap-constraint-validation";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -316,6 +328,8 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName,
   })),
   CASE_LAW_COVERAGE_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_COURT_INDEX,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
@@ -326,20 +340,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "case_law_citations",
   },
   // A provision's subtree of citing rows as one byte-ordered anchor range.
+  // The trailing date, decision and span let the cited-by page group a
+  // subtree per decision, with its earliest mention's offset, from the index
+  // alone.
   {
-    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C")`,
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_citing_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C", "decision_date", "decision_id", "span_start")`,
     definitionBody:
-      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C")',
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id, span_start)',
     isUnique: false,
-    name: "case_law_provision_citations_work_subtree_idx",
+    name: "case_law_provision_citations_work_citing_idx",
     tableName: "case_law_provision_citations",
   },
   {
-    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C") WHERE "work_eli" IS NOT NULL`,
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_citing_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C", "decision_date", "decision_id", "span_start") WHERE "work_eli" IS NOT NULL`,
     definitionBody:
-      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C") WHERE (work_eli IS NOT NULL)',
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C", decision_date, decision_id, span_start) WHERE (work_eli IS NOT NULL)',
     isUnique: false,
-    name: "case_law_provision_citations_eli_subtree_idx",
+    name: "case_law_provision_citations_eli_citing_idx",
     tableName: "case_law_provision_citations",
   },
   // Bounded cross-publisher ruling lookup before a decision insert.
@@ -894,11 +911,20 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // walks cannot seek under the database collation.
   {
     legacyName: "case_law_provision_citations_work_anchor_idx",
-    replacementNames: ["case_law_provision_citations_work_subtree_idx"],
+    replacementNames: ["case_law_provision_citations_work_citing_idx"],
   },
   {
     legacyName: "case_law_provision_citations_eli_anchor_idx",
-    replacementNames: ["case_law_provision_citations_eli_subtree_idx"],
+    replacementNames: ["case_law_provision_citations_eli_citing_idx"],
+  },
+  // The subtree ranges, now carrying the cited-by page's grouping keys.
+  {
+    legacyName: "case_law_provision_citations_work_subtree_idx",
+    replacementNames: ["case_law_provision_citations_work_citing_idx"],
+  },
+  {
+    legacyName: "case_law_provision_citations_eli_subtree_idx",
+    replacementNames: ["case_law_provision_citations_eli_citing_idx"],
   },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
@@ -936,6 +962,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
   CLIENT_INVOICE_BACKFILL,
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
@@ -951,6 +978,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   READER_ANSWER_CONSTRAINT_VALIDATION,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
@@ -974,6 +1002,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    ACCOUNT_AUDIT_CONSTRAINT,
     ...CLIENT_INVOICE_CONSTRAINTS,
     ...MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -987,6 +1016,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...READER_ANNOTATION_CONSTRAINTS,
     ...READER_ANSWER_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,

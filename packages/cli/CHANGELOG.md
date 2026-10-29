@@ -1,5 +1,27 @@
 # @stll/cli
 
+## 6.1.3
+
+### Patch Changes
+
+- [#7373](https://github.com/stella/stella/pull/7373) [`a29ecf8`](https://github.com/stella/stella/commit/a29ecf87046217f6dfe2d2778271fffeb5c53be1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose other-court docket candidates and court mismatch results in case-law resolution.
+
+## 6.1.2
+
+### Patch Changes
+
+- [#7222](https://github.com/stella/stella/pull/7222) [`30ac91c`](https://github.com/stella/stella/commit/30ac91c66e02b341932af6b2eb33d3ab34c472fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe contact birth dates with one precision-aware rule in the generated MCP contract: a birth date cannot lie in the future or before 1900.
+
+- [#7355](https://github.com/stella/stella/pull/7355) [`23c50da`](https://github.com/stella/stella/commit/23c50da1f61fb0b8f5d2b1bfe030fa136d007c5e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support rates per activity code and hour caps on billing arrangements.
+
+- [#7178](https://github.com/stella/stella/pull/7178) [`d86d490`](https://github.com/stella/stella/commit/d86d490c06a74395109041a7ab39581f55e3201a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `capability invoices payments-create`, `payments-list` and `payments-void` record, list and void payments on a finalized or sent invoice; recording payments that reach the total marks it paid, which replaces the `mark_paid` transition.
+
+- [#7210](https://github.com/stella/stella/pull/7210) [`797fa1c`](https://github.com/stella/stella/commit/797fa1ccd5ed168dff70835a9cdaac2668464613) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose distinct limiter store, admission configuration, organization state and lease refusal codes in the generated MCP contract and CLI exit mapping.
+
+- [#7349](https://github.com/stella/stella/pull/7349) [`8dc5ea6`](https://github.com/stella/stella/commit/8dc5ea6da463971430943471c2ad596294a05dc7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `capability matters vocabulary-get` to read a bounded vocabulary sample for a matter.
+
+- [#7296](https://github.com/stella/stella/pull/7296) [`a3b49ee`](https://github.com/stella/stella/commit/a3b49eebfc32c56bd8607a92dfbcb4722d96571c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List item source and generation candidate locators accept character offsets, a PDF page digest and boxes, and refuse unknown fields.
+
 ## 6.1.1
 
 ### Patch Changes

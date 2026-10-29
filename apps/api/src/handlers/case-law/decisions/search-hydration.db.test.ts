@@ -1836,7 +1836,7 @@ test("the provision filter reads links through an index, never by scanning them"
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_subtree)_idx/u,
+        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_citing)_idx/u,
       );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }
@@ -1856,8 +1856,8 @@ test("every decision citing a provision is read from the provision's own anchor 
         }).getSQL()}`,
       ),
     );
-    expect(plan).toContain(
-      "Index Scan using case_law_provision_citations_work_subtree_idx",
+    expect(plan).toMatch(
+      /Index (?:Only )?Scan using case_law_provision_citations_work_citing_idx/u,
     );
     // The anchor bounds are the seek, not a filter over the act's links.
     // One plan row per object: `[^}]` keeps the match inside the row.
@@ -2278,6 +2278,102 @@ test.each(["off", "bm25-ratio"] as const)(
       expect(common.passageClauseById.get(czechId)).toContain("passage-1");
     } finally {
       restoreFetch();
+    }
+  },
+);
+
+test.each([
+  {
+    name: "publisher summary alone",
+    payload: {
+      fulltext: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "empty document",
+    payload: {
+      fulltext: "",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    },
+    expected: "metadata_only",
+  },
+  {
+    name: "stored text",
+    payload: {
+      fulltext: "sampleword decision text",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    },
+    expected: "available",
+  },
+  {
+    name: "completed object-storage document",
+    payload: {
+      fulltext: null,
+      textS3Key: "text-key",
+      normalizedS3Key: "normalized-key",
+      astS3Key: "ast-key",
+    },
+    expected: "available",
+  },
+] as const)(
+  "search reports text availability for $name on both providers",
+  async ({ payload, expected }) => {
+    const db = drizzle({ client });
+    await db
+      .update(caseLawDecisions)
+      .set({
+        ...payload,
+        metadata: { legalSentence: "sampleword publisher summary" },
+      })
+      .where(eq(caseLawDecisions.id, czechId));
+    const byId = await readCaseLawPageDecisionRows({
+      body: SEARCH_BODY,
+      caseLawDb,
+      generation: GENERATION,
+      ids: [czechId],
+    });
+    const page = decisionHitsPage({
+      alternatesByGroupKey: { alternatesFor: () => [] },
+      anchorIdById: new Map(),
+      byId,
+      courtWeights,
+      facets: null,
+      headnotePresentation: undefined,
+      nextCursor: null,
+      pageRanked: [
+        { id: czechId, score: 1, lexicalScore: 1, citationAuthority: 0 },
+      ],
+      passageCountById: new Map(),
+      snippetById: new Map(),
+      snippetRevisionById: new Map(),
+      total: SEARCH_TOTAL_NOT_COUNTED,
+      match: "all_terms",
+    });
+    expect(page.hits.map((hit) => hit.textAvailability)).toEqual([expected]);
+    expect(page.hits.at(0)?.headnote.type).toBe("present");
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const postgres = await searchPostgresDecisions(
+        { country: "CZE", query: "sampleword" },
+        caseLawDb,
+      );
+      if (!("hits" in postgres)) {
+        panic("Expected a successful Postgres search");
+      }
+      expect(
+        postgres.hits.find((hit) => hit.decisionId === czechId)
+          ?.textAvailability,
+      ).toBe(expected);
+    } finally {
+      resetPublicCaseLawConfigForTesting();
     }
   },
 );

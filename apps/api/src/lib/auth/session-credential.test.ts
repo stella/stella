@@ -3,7 +3,6 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   carriesSessionCredential,
   skippableSessionCookieOf,
@@ -21,7 +20,6 @@ const createTestAuth = ({ cookieCache }: { cookieCache: boolean }) =>
     }),
     emailAndPassword: { enabled: true },
     session: { cookieCache: { enabled: cookieCache, maxAge: 60 } },
-    plugins: [createSessionBearer()],
   });
 
 const signUp = async (auth: ReturnType<typeof createTestAuth>) => {
@@ -65,9 +63,7 @@ describe("session credential skip", () => {
       cacheCookieOnly: { cookie: cacheOnly },
       nearMissName: { cookie: `x${sessionCookie.slice(1)}=forged` },
       sessionCookie: { cookie: signedIn },
-      bearer: {
-        authorization: `Bearer ${decodeURIComponent(sessionToken)}`,
-      },
+      bearer: { authorization: `Bearer ${decodeURIComponent(sessionToken)}` },
       invalidBearer: { authorization: "Bearer invalid" },
     };
 
@@ -81,7 +77,7 @@ describe("session credential skip", () => {
         expect(resolved.response, name).toBeNull();
         expect(resolved.headers.getSetCookie(), name).toEqual([]);
       }
-      if (name === "sessionCookie" || name === "bearer") {
+      if (name === "sessionCookie") {
         expect(resolved.response, name).not.toBeNull();
       }
     }
@@ -91,9 +87,6 @@ describe("session credential skip", () => {
         new Headers(requests["sessionCookie"]),
         sessionCookie,
       ),
-    ).toBe(true);
-    expect(
-      carriesSessionCredential(new Headers(requests["bearer"]), sessionCookie),
     ).toBe(true);
   });
 
