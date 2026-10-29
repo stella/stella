@@ -949,6 +949,41 @@ const parseStem = async (stem: string): Promise<Block[]> => {
 const blockWithText = (blocks: readonly Block[], text: string) =>
   blocks.find((block) => block.plainText === text);
 
+test("Cellar's raised spans retain their index boundary", async () => {
+  const blocks = await parseStem("62018CC0311.fi");
+  expect(
+    blocks.some((block) =>
+      block.plainText.includes("Tietojen tuojan velvollisuudet (^1)"),
+    ),
+  ).toBe(true);
+});
+
+test.each(["super", "coj-super"])(
+  "Cellar's %s class preserves a provision index",
+  (superscriptClass) => {
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html: `<html><body><div class="coj-normal"><p class="coj-normal">Article 505<span class="${superscriptClass}">9</span>.</p></div></body></html>`,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Article 505^9.",
+    ]);
+    expect(documentAst.blocks.at(0)).toMatchObject({
+      inlines: [
+        { type: "text", text: "Article 505" },
+        { type: "superscript", children: [{ type: "text", text: "9" }] },
+        { type: "text", text: "." },
+      ],
+    });
+  },
+);
+
 const headingTitlesOf = (blocks: readonly Block[], anchorId: string) =>
   (headingPathsByAnchor(blocks).get(anchorId) ?? []).map(({ title }) => title);
 

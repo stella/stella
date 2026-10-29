@@ -1,3 +1,15 @@
+// parser-output-unchanged: [cz-ns] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-nss] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-regional] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [sk-courts] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [sk-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [at-findok] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [hu-bhgy] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [uk-fcl] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [pl-kis] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [pl-uokik] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [us-courtlistener] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
 // parser-output-unchanged: Citation tuples state their existing one-item minimum for schema publication; accepted values are identical.
 // parser-output-unchanged: Legislation citations are a new inline variant that no decision parser writes; existing citations validate as before.
 import * as v from "valibot";
@@ -323,7 +335,11 @@ export const isInlineArray = (val: unknown): val is Inline[] =>
 export const isInline = (val: unknown): val is Inline =>
   v.is(inlineSchema, val);
 
-export const flattenInlineText = (inlines: readonly Inline[]): string => {
+/** The rendered axis keeps offsets; search text marks numeric superscripts. */
+export const flattenInlineText = (
+  inlines: readonly Inline[],
+  projection: "search" | "rendered" = "search",
+): string => {
   const parts: string[] = [];
 
   for (const inline of inlines) {
@@ -342,7 +358,14 @@ export const flattenInlineText = (inlines: readonly Inline[]): string => {
       continue;
     }
 
-    parts.push(flattenInlineText(inline.children));
+    const text = flattenInlineText(inline.children, projection);
+    // A numeric index names a different provision from the concatenated
+    // number. Caret notation survives compatibility normalization in search.
+    parts.push(
+      inline.type === "superscript" && projection === "search"
+        ? text.replace(/^(\s*)(\d+)(\s*)$/u, "$1^$2$3")
+        : text,
+    );
   }
 
   return parts.join("");

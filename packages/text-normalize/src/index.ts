@@ -1,3 +1,4 @@
+// parser-output-unchanged: exports query-only numeric index normalization; parser calls retain their existing normalization functions.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 export {
   applyArabicFolds,
@@ -30,3 +31,5 @@ export {
   UNICODE_NORMALIZATION_FORMS,
 } from "./unicode.js";
 export type { UnicodeMarkClass, UnicodeNormalizationForm } from "./unicode.js";
+
+export { normalizeNumericIndices } from "./numeric-indices.js";

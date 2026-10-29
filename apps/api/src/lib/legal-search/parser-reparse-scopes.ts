@@ -157,35 +157,35 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
-    scope: {
-      type: "all",
-      reason:
-        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIO]: {
     version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
     },
   },
-  [ADAPTER_KEYS.PL_TK]: {
-    version: 9,
+  [ADAPTER_KEYS.PL_KIO]: {
+    version: 11,
     scope: {
       type: "all",
       reason:
-        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
+    },
+  },
+  [ADAPTER_KEYS.PL_TK]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 15,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -290,11 +290,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+        "Re-read Cellar super and coj-super spans as superscript inlines and recompute canonical paragraph text with caret-delimited numeric indices.",
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
@@ -322,11 +322,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
@@ -338,11 +338,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 4,
+    version: 5,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
     },
   },
 } as const satisfies ParserVersionScopes<

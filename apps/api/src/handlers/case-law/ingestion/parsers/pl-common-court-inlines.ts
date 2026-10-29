@@ -1,3 +1,6 @@
+// parser-output-unchanged: [cz-nss] canonical line text is unchanged because this reader constructs no numeric superscript inlines.
+// parser-output-unchanged: [pl-kis] canonical line text is unchanged because this reader constructs no numeric superscript inlines.
+// parser-output-unchanged: [pl-uokik] canonical line text is unchanged because this reader constructs no numeric superscript inlines.
 // parser-output-unchanged: read only under the opt-in common-court markup, which the SAOS and portal adapters pass with their version bumps.
 /**
  * The text of a Polish common court's document, as its editor meant it.
@@ -18,15 +21,15 @@
  * - A no-break space already parts the words it stands between; a space
  *   beside it adds nothing.
  * - An article index is a superscript bound to the number before it
- *   ("art. 353¹"), so it holds no space and a space at its end is set after
- *   it.
+ *   ("art. 353¹"), so whitespace moves outside the inline. The canonical
+ *   plain-text projection marks its numeric index with a caret.
  */
 
 import { panic } from "better-result";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { appendTextInline } from "./shared-inlines";
 
@@ -141,7 +144,8 @@ const lineTexts = (inlines: readonly Inline[]): string[] => {
   const walk = (run: readonly Inline[]): void => {
     for (const inline of run) {
       if (inline.type === "text") {
-        lines[lines.length - 1] += inline.text;
+        // Line-wrap decisions follow the rendered layout, before search projection.
+        lines[lines.length - 1] += plainTextOf([inline]);
       } else if (inline.type === "line-break") {
         lines.push("");
       } else if (hasInlineChildren(inline)) {

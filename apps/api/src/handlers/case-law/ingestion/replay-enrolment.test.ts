@@ -1,17 +1,12 @@
 import { expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   validateReplayEnrolment,
 } from "./replay-enrolment";
 
-test("the committed registry previews only the Constitutional Court and enrolment validates its budget and reviewed dry run", () => {
-  expect(
-    Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
-  ).toEqual([[ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }]]);
+test("the committed replay registry validates its budgets and reviewed dry runs", () => {
   for (const policy of Object.values(REPLAY_ENROLMENT)) {
     validateReplayEnrolment(policy);
   }

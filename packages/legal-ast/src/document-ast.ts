@@ -1,3 +1,15 @@
+// parser-output-unchanged: [cz-ns] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-nss] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [cz-regional] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [sk-courts] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [sk-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [at-findok] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [hu-bhgy] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [uk-fcl] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [pl-kis] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [pl-uokik] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
+// parser-output-unchanged: [us-courtlistener] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
 // parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
 import { panic } from "better-result";
 /**
@@ -24,6 +36,7 @@ import {
 } from "./document-kind.js";
 import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
 import {
+  flattenInlineText,
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
@@ -407,25 +420,8 @@ export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
  * character for character. Nothing here may normalize, trim or collapse:
  * one character of drift moves every anchor after it.
  */
-export const plainTextOf = (inlines: readonly Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      out += node.text;
-    } else if (node.type === "line-break") {
-      out += "\n";
-    } else if (node.type === "page-anchor") {
-      // Zero characters: a page break is typography, and it may fall
-      // mid-word — the word must stay whole on this axis.
-    } else {
-      // A citation's `cite` is zero characters here for the same reason:
-      // the printed reference is the children, `cite` is metadata beside
-      // them.
-      out += plainTextOf(node.children);
-    }
-  }
-  return out;
-};
+export const plainTextOf = (inlines: readonly Inline[]): string =>
+  flattenInlineText(inlines, "rendered");
 
 /**
  * Trailing spaces and tabs before a line break, which carry no meaning
@@ -437,7 +433,8 @@ const NO_BREAK_SPACE = /\u00a0/gu;
 
 /**
  * `inlines` reduced to the text that feeds search and AI reads: the raw
- * flattening with no-break spaces normalized, spaces before a line break
+ * projection with numeric superscript indices delimited, no-break spaces
+ * normalized, spaces before a line break
  * dropped, the ends trimmed, and letter-spaced runs collapsed so a
  * court's "R O Z S U D E K" is findable as "ROZSUDEK".
  *
@@ -451,7 +448,7 @@ const NO_BREAK_SPACE = /\u00a0/gu;
  */
 export const projectPlainText = (inlines: readonly Inline[]): string =>
   collapseSpacedLetters(
-    plainTextOf(inlines)
+    flattenInlineText(inlines)
       .replace(NO_BREAK_SPACE, " ")
       .replace(SPACE_BEFORE_NEWLINE, "\n")
       .trim(),

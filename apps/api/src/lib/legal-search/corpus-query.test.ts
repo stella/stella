@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { flattenInlineText } from "@stll/legal-ast/inline";
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -1241,4 +1242,82 @@ test("provision spans read the registry's profile for exactly the jurisdictions 
       expect(partitionFor(queryVariant, jurisdiction)).toBeNull();
     }
   }
+});
+
+test("numeric provision indices use the same search terms in every printed form", () => {
+  for (const index of ["505⁹", "505^9", "505(9)"]) {
+    expect(corpusFreeTextClause(`art. ${index} k.p.c.`)).toBe(
+      '("art" AND "505" AND "9" AND "k" AND "p" AND "c")',
+    );
+    expect(corpusFreeTextClause(`"art. ${index}"`)).toBe('("art 505 9")');
+  }
+  for (const index of ["398¹²³", "398^123", "398(123)"]) {
+    expect(tokenizeCorpusFreeText(`art. ${index} § 1`)).toEqual([
+      { type: "term", value: "art" },
+      { type: "term", value: "398" },
+      { type: "term", value: "123" },
+      { type: "term", value: "1" },
+    ]);
+  }
+  expect(corpusFreeTextClause("art. 5059 k.p.c.")).toBe(
+    '("art" AND "5059" AND "k" AND "p" AND "c")',
+  );
+});
+
+const INDEX_DIGIT = fc.constantFrom(
+  { plain: "0", superscript: "⁰" },
+  { plain: "1", superscript: "¹" },
+  { plain: "2", superscript: "²" },
+  { plain: "3", superscript: "³" },
+  { plain: "4", superscript: "⁴" },
+  { plain: "5", superscript: "⁵" },
+  { plain: "6", superscript: "⁶" },
+  { plain: "7", superscript: "⁷" },
+  { plain: "8", superscript: "⁸" },
+  { plain: "9", superscript: "⁹" },
+);
+
+test("corpus-query/numeric-superscript-index-roundtrip", () => {
+  assertProperty(
+    "corpus-query/numeric-superscript-index-roundtrip",
+    fc.property(
+      fc.nat({ max: Number.MAX_SAFE_INTEGER }).map(String),
+      fc.array(INDEX_DIGIT, { minLength: 1, maxLength: 16 }),
+      fc.constantFrom("", " ", "\t", "\n"),
+      (number, digits, trailingWhitespace) => {
+        const index = digits.map(({ plain }) => plain).join("");
+        const superscript = digits.map((digit) => digit.superscript).join("");
+        const projected = flattenInlineText([
+          { type: "text", text: number },
+          {
+            type: "superscript",
+            children: [
+              {
+                type: "bold",
+                children: [
+                  { type: "text", text: `${index}${trailingWhitespace}` },
+                ],
+              },
+            ],
+          },
+        ]);
+        const concatenated = flattenInlineText([
+          { type: "text", text: `${number}${index}` },
+        ]);
+        expect(projected).not.toBe(concatenated);
+        const expected = [
+          { type: "term", value: number },
+          { type: "term", value: index },
+        ];
+        for (const printed of [
+          projected,
+          `${number}${superscript}`,
+          `${number}(${index})`,
+        ]) {
+          expect(tokenizeCorpusFreeText(printed)).toEqual(expected);
+        }
+        expect(tokenizeCorpusFreeText(concatenated)).not.toEqual(expected);
+      },
+    ),
+  );
 });

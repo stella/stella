@@ -479,6 +479,8 @@ const classDepth = (
  */
 const ECJ_INLINE_OPTIONS = {
   sanitizeHref: sanitizeUrl,
+  superscripts: true,
+  superscriptClasses: ["super", `${CLASS_PREFIX}super`],
   emphasisClasses: {
     bold: [CLASS.bold, `${CLASS_PREFIX}${CLASS.bold}`],
     italic: [CLASS.italic, `${CLASS_PREFIX}${CLASS.italic}`],

@@ -113,6 +113,24 @@ describe("text axis", () => {
     ).toBe("32not");
   });
 
+  test("numeric superscripts keep their boundary in searchable text", () => {
+    expect(
+      flattenInlineText([
+        { type: "text", text: "art. 505" },
+        {
+          type: "superscript",
+          children: [{ type: "bold", children: [{ type: "text", text: "9" }] }],
+        },
+        { type: "text", text: " k.p.c." },
+      ]),
+    ).toBe("art. 505^9 k.p.c.");
+    expect(
+      flattenInlineText([
+        { type: "superscript", children: [{ type: "text", text: "note" }] },
+      ]),
+    ).toBe("note");
+  });
+
   test("a page anchor still contributes nothing", () => {
     expect(plainTextOf([SAMPLES["page-anchor"]])).toBe("");
   });

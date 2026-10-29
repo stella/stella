@@ -116,7 +116,7 @@ describe("an article index keeps the line it ends", () => {
         : [],
     );
 
-    expect(cells).toEqual(["art. 3851\n2. oddala apelację.", "x"]);
+    expect(cells).toEqual(["art. 385^1\n2. oddala apelację.", "x"]);
   });
 
   test.each([
@@ -126,7 +126,7 @@ describe("an article index keeps the line it ends", () => {
       '<p style="white-space: pre-wrap">art. 385<sup>1\n</sup>k.c.</p>',
     ],
   ])("a break kept by %s after an index stays a break", (_, html) => {
-    expect(paragraphs(html)).toEqual(["art. 3851\nk.c."]);
+    expect(paragraphs(html)).toEqual(["art. 385^1\nk.c."]);
   });
 });
 
@@ -167,7 +167,7 @@ describe("text straight in a frame is read as a paragraph", () => {
       block.type === "paragraph" ? [block] : [],
     );
 
-    expect(texts.map((block) => block.plainText)).toEqual(["art. 3531 k.c."]);
+    expect(texts.map((block) => block.plainText)).toEqual(["art. 353^1 k.c."]);
     expect(texts.every((block) => hasSuperscript(block.inlines))).toBe(true);
   });
 
