@@ -698,9 +698,9 @@ const InvoiceDetail = ({
         </>
       )}
 
-      {invoiceStatus !== "draft" && (
+      {canUpdateInvoice && invoiceStatus !== "draft" && (
         <InvoiceSendsSection
-          canSend={canUpdateInvoice && invoiceStatus !== "void"}
+          canSend={invoiceStatus !== "void"}
           invoiceId={invoiceId}
           onSendAgain={(recipients) =>
             setSendDialog({ type: "open", recipients })

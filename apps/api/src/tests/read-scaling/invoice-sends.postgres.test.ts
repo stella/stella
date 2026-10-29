@@ -1,15 +1,19 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   invoiceSendScalingScenarios,
   seedInvoiceSendScaling,
 } from "./invoice-sends";
 import { readScalingViolations, writeScalingViolations } from "./measurement";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const measureAt = async (db: GatedTestDb, size: number) => {
   const fixture = await seedInvoiceSendScaling(db, size);
@@ -28,6 +32,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "invoice send scaling",
   () => {
     test("send handlers keep their database work and response size fixed at 10 and 200 invoices", async () => {
+      testState.setConfig("FEATURE_INVOICE_LINKS", true);
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {

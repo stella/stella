@@ -219,11 +219,15 @@ export const invoiceSendScalingScenarios = [
             route: "/v1/invoices/:workspaceId/:invoiceId/sends",
           }),
         );
-        if (
-          response instanceof HttpStatusResponse ||
-          response.deliveryStatus !== "delivered"
-        ) {
-          return panic("Send creation scaling requires a delivered response");
+        if (response instanceof HttpStatusResponse) {
+          return panic(
+            `Send creation scaling requires a delivered response; received HTTP ${response.code}`,
+          );
+        }
+        if (response.deliveryStatus !== "delivered") {
+          return panic(
+            `Send creation scaling requires a delivered response; received ${response.deliveryStatus}`,
+          );
         }
         return {
           statements: counter.count,
