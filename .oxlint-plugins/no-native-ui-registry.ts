@@ -341,6 +341,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
+  text: noNative(
+    "text in one of the design system's roles; a <span> or <p> is ordinary " +
+      "markup on the web",
+  ),
   "text-mark": owned(
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
     "raw <mark> and hand-styled marks are reported there",

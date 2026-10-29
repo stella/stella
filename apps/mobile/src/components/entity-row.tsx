@@ -3,9 +3,9 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
+import { Text } from "@stll/ui/text";
 
 import { EntityKindIcon } from "@/components/entity-kind-icon";
-import { Text } from "@/components/ui/text";
 import { isKnownEntityKind } from "@/state/matter-entities";
 import type { MatterEntity } from "@/state/matter-entities";
 import { useUiColors } from "@/theme";

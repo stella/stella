@@ -5,10 +5,12 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
+
 import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
@@ -125,7 +127,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
-        <TextInput
+        <Input
           accessibilityLabel={t("name")}
           autoFocus
           onChangeText={setName}

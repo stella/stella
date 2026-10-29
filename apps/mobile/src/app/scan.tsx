@@ -6,11 +6,12 @@ import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
@@ -142,7 +143,7 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
         keyboardShouldPersistTaps="handled"
       >
         <View className="gap-1">
-          <TextInput
+          <Input
             accessibilityLabel={t("name")}
             onChangeText={setName}
             placeholder={t("name")}

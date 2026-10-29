@@ -43,7 +43,10 @@
     "./bidi-text": "./src/components/bidi-text.tsx",
     "./brand-icons": "./src/components/brand-icons.tsx",
     "./breadcrumb": "./src/components/breadcrumb.tsx",
-    "./button": "./src/components/button.tsx",
+    "./button": {
+      "react-native": "./src/components/button.native.tsx",
+      "default": "./src/components/button.tsx"
+    },
     "./checkbox": "./src/components/checkbox.tsx",
     "./color-picker": "./src/components/color-picker.tsx",
     "./combobox": "./src/components/combobox.tsx",
@@ -71,7 +74,10 @@
     "./frame": "./src/components/frame.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
-    "./input": "./src/components/input.tsx",
+    "./input": {
+      "react-native": "./src/components/input.native.tsx",
+      "default": "./src/components/input.tsx"
+    },
     "./inline-rename": "./src/components/inline-rename.tsx",
     "./inline-reorder": "./src/lib/inline-reorder.ts",
     "./inline-drop-indicator": "./src/components/inline-drop-indicator.tsx",
@@ -81,7 +87,10 @@
     "./list": "./src/components/list.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
-    "./matter-icon": "./src/components/matter-icon.tsx",
+    "./matter-icon": {
+      "react-native": "./src/components/matter-icon.native.tsx",
+      "default": "./src/components/matter-icon.tsx"
+    },
     "./matter-colors": "./src/lib/matter-colors.ts",
     "./menu": "./src/components/menu.tsx",
     "./menu-section": "./src/components/menu-section.tsx",
@@ -115,20 +124,42 @@
     "./segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./select": "./src/components/select.tsx",
     "./split-button": "./src/components/split-button.tsx",
-    "./switch": "./src/components/switch.tsx",
-    "./separator": "./src/components/separator.tsx",
-    "./sheet": "./src/components/sheet.tsx",
+    "./switch": {
+      "react-native": "./src/components/switch.native.tsx",
+      "default": "./src/components/switch.tsx"
+    },
+    "./separator": {
+      "react-native": "./src/components/separator.native.tsx",
+      "default": "./src/components/separator.tsx"
+    },
+    "./sheet": {
+      "react-native": "./src/components/sheet.native.tsx",
+      "default": "./src/components/sheet.tsx"
+    },
     "./sidebar": "./src/components/sidebar.tsx",
-    "./loader": "./src/components/loader.tsx",
+    "./loader": {
+      "react-native": "./src/components/loader.native.tsx",
+      "default": "./src/components/loader.tsx"
+    },
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
     "./stella-mark": "./src/components/stella-mark.tsx",
-    "./stella-wordmark": "./src/components/stella-wordmark.tsx",
+    "./stella-wordmark": {
+      "react-native": "./src/components/stella-wordmark.native.tsx",
+      "default": "./src/components/stella-wordmark.tsx"
+    },
     "./table": "./src/components/table.tsx",
     "./table-chart": "./src/components/table-chart.tsx",
     "./tabs": "./src/components/tabs.tsx",
-    "./textarea": "./src/components/textarea.tsx",
+    "./textarea": {
+      "react-native": "./src/components/textarea.native.tsx",
+      "default": "./src/components/textarea.tsx"
+    },
+    "./text": {
+      "react-native": "./src/components/text.native.tsx",
+      "default": "./src/components/text.tsx"
+    },
     "./toast": "./src/components/toast.tsx",
     "./tooltip": "./src/components/tooltip.tsx",
     "./truncated-text": "./src/components/truncated-text.tsx",
@@ -154,7 +185,10 @@
     "./components/ai-label": "./src/components/ai-label.tsx",
     "./components/brand-icons": "./src/components/brand-icons.tsx",
     "./components/breadcrumb": "./src/components/breadcrumb.tsx",
-    "./components/button": "./src/components/button.tsx",
+    "./components/button": {
+      "react-native": "./src/components/button.native.tsx",
+      "default": "./src/components/button.tsx"
+    },
     "./components/checkbox": "./src/components/checkbox.tsx",
     "./components/color-picker": "./src/components/color-picker.tsx",
     "./components/combobox": "./src/components/combobox.tsx",
@@ -168,7 +202,10 @@
     "./components/form": "./src/components/form.tsx",
     "./components/frame": "./src/components/frame.tsx",
     "./components/hex-color-picker": "./src/components/hex-color-picker.tsx",
-    "./components/input": "./src/components/input.tsx",
+    "./components/input": {
+      "react-native": "./src/components/input.native.tsx",
+      "default": "./src/components/input.tsx"
+    },
     "./components/input-group": "./src/components/input-group.tsx",
     "./components/input-otp": "./src/components/input-otp.tsx",
     "./components/label": "./src/components/label.tsx",
@@ -187,15 +224,27 @@
     "./components/file-input": "./src/components/file-input.tsx",
     "./components/segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./components/select": "./src/components/select.tsx",
-    "./components/separator": "./src/components/separator.tsx",
-    "./components/sheet": "./src/components/sheet.tsx",
+    "./components/separator": {
+      "react-native": "./src/components/separator.native.tsx",
+      "default": "./src/components/separator.tsx"
+    },
+    "./components/sheet": {
+      "react-native": "./src/components/sheet.native.tsx",
+      "default": "./src/components/sheet.tsx"
+    },
     "./components/sidebar": "./src/components/sidebar.tsx",
     "./components/skeleton": "./src/components/skeleton.tsx",
     "./components/stella-mark": "./src/components/stella-mark.tsx",
-    "./components/stella-wordmark": "./src/components/stella-wordmark.tsx",
+    "./components/stella-wordmark": {
+      "react-native": "./src/components/stella-wordmark.native.tsx",
+      "default": "./src/components/stella-wordmark.tsx"
+    },
     "./components/table": "./src/components/table.tsx",
     "./components/tabs": "./src/components/tabs.tsx",
-    "./components/textarea": "./src/components/textarea.tsx",
+    "./components/textarea": {
+      "react-native": "./src/components/textarea.native.tsx",
+      "default": "./src/components/textarea.tsx"
+    },
     "./components/toast": "./src/components/toast.tsx",
     "./components/tooltip": "./src/components/tooltip.tsx",
     "./hooks/use-contained-handler": "./src/hooks/use-contained-handler.ts",
@@ -250,11 +299,15 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
+    "lucide-react-native": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
+    "react-native": "0.88.0",
+    "react-native-svg": "15.16.0",
     "tailwindcss": "catalog:",
     "tsdown": "catalog:",
     "tsrs": "catalog:",
+    "uniwind": "1.13.0",
     "vite": "catalog:"
   },
   "peerDependencies": {
@@ -265,9 +318,13 @@
     "@tanstack/react-virtual": "^3.14.13",
     "@types/react": ">=19",
     "@types/react-dom": ">=19",
+    "lucide-react-native": ">=1.41.0",
     "react": ">=19",
     "react-dom": ">=19",
-    "tailwindcss": "^4.3.0"
+    "react-native": ">=0.88.0",
+    "react-native-svg": ">=15.16.0",
+    "tailwindcss": "^4.3.0",
+    "uniwind": ">=1.13.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -277,6 +334,18 @@
       "optional": true
     },
     "@types/react-dom": {
+      "optional": true
+    },
+    "lucide-react-native": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
+    },
+    "uniwind": {
       "optional": true
     }
   }

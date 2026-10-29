@@ -2,7 +2,8 @@ import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter } from "use-intl";
 
-import { Text } from "@/components/ui/text";
+import { Text } from "@stll/ui/text";
+
 import type { DecisionSummary } from "@/state/case-law";
 
 /**

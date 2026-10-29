@@ -13,11 +13,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
+import { Text } from "@stll/ui/text";
+
 import { TERMS_URL } from "@/components/auth-backdrop";
 import { AuthBackdrop } from "@/components/auth-backdrop-view";
-import { Button } from "@/components/ui/button";
-import { StellaWordmark } from "@/components/ui/stella-wordmark";
-import { Text, TextInput } from "@/components/ui/text";
 import { useSession } from "@/connection/session-provider";
 import type { SignInError } from "@/connection/sign-in";
 import { DEFAULT_SERVER_URL } from "@/env";
@@ -75,7 +77,7 @@ const SignInScreen = () => {
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-3">
-            <StellaWordmark height={24} />
+            <StellaWordmarkLatin height={24} />
             <View className="border-border rounded-sm border px-1.5 py-0.5">
               <Text variant="badge">{t("beta")}</Text>
             </View>
@@ -106,11 +108,12 @@ const SignInScreen = () => {
           )}
           <Button
             disabled={pending || serverUrl.trim() === ""}
-            label={t("submit")}
             loading={pending}
             onPress={submit}
             size="lg"
-          />
+          >
+            {t("submit")}
+          </Button>
           <Text variant="caption">
             {t.rich("terms", {
               terms: (chunks: ReactNode) => (
@@ -143,24 +146,25 @@ const SignInScreen = () => {
           <View className="flex-row items-center justify-between">
             <Text variant="headline">{t("options")}</Text>
             <Button
-              label={t("done")}
               onPress={() => {
                 setOptionsOpen(false);
               }}
               size="sm"
               variant="ghost"
-            />
+            >
+              {t("done")}
+            </Button>
           </View>
           <View className="gap-2">
             <Text variant="label">{t("serverTitle")}</Text>
             <Text variant="caption">{t("serverDescription")}</Text>
           </View>
-          <TextInput
+          <Input
             accessibilityLabel={t("serverLabel")}
             autoCapitalize="none"
             autoComplete="url"
             autoCorrect={false}
-            editable={!pending}
+            disabled={pending}
             inputMode="url"
             onChangeText={setServerUrl}
             onSubmitEditing={submit}
@@ -171,12 +175,13 @@ const SignInScreen = () => {
           />
           {serverUrl === DEFAULT_SERVER_URL ? null : (
             <Button
-              label={t("useStella")}
               onPress={() => {
                 setServerUrl(DEFAULT_SERVER_URL);
               }}
               variant="outline"
-            />
+            >
+              {t("useStella")}
+            </Button>
           )}
         </KeyboardAvoidingView>
       </Modal>
