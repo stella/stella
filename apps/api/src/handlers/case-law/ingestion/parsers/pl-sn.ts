@@ -1369,8 +1369,12 @@ export const extractPlSnLines = async (
       ? lines.toSpliced(first, 1)
       : lines;
   });
-  return readSetPages(spacedPages, pages, paragraphStart, SUPREME_COURT_READING)
-    .body;
+  return readSetPages({
+    textPages: spacedPages,
+    pages,
+    paragraphStart,
+    reading: SUPREME_COURT_READING,
+  }).body;
 };
 
 export type PlPdfSeparatedContent = {
@@ -1864,12 +1868,19 @@ const SAME_NOTE_TYPE_PT = 0.5;
  *   body, so a note printed at a page's foot never interrupts a paragraph
  *   that runs on to the next page.
  */
-const readSetPages = (
-  textPages: readonly PdfTextPage[],
-  pages: readonly (readonly PdfTextLine[])[],
-  paragraphStart: PlPdfParagraphStart,
-  reading: SetPageReading,
-): PlPdfSeparatedContent => {
+type ReadSetPagesOptions = {
+  textPages: readonly Pick<PdfTextPage, "lines">[];
+  pages: readonly (readonly PdfTextLine[])[];
+  paragraphStart: PlPdfParagraphStart;
+  reading: SetPageReading;
+};
+
+const readSetPages = ({
+  textPages,
+  pages,
+  paragraphStart,
+  reading,
+}: ReadSetPagesOptions): PlPdfSeparatedContent => {
   const bodySize = bodyFontSizeOf(textPages.flatMap(({ lines }) => lines));
   const notes: PlSnLine[] = [];
   let read: NotesRead = { label: 0 };
@@ -1962,15 +1973,15 @@ export const extractPlPdfLetterheadContent = async (
 ): Promise<PlPdfSeparatedContent> => {
   const pdf = await PDF.load(pdfBytes);
   const textPages = pdf.getPages().map((page) => page.extractText());
-  return readSetPages(
+  return readSetPages({
     textPages,
-    withoutRepeatedFurniture(
+    pages: withoutRepeatedFurniture(
       textPages,
       bodyFontSizeOf(textPages.flatMap(({ lines }) => lines)),
     ),
     paragraphStart,
-    LETTERHEAD_READING,
-  );
+    reading: LETTERHEAD_READING,
+  });
 };
 
 /** Structured form for adapters that emit linked footnote blocks. */
