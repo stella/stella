@@ -547,6 +547,14 @@
     },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
+    "arrangement": {
+      "alertThreshold": "Brīdinājuma slieksnis (%)",
+      "amountCap": "Atlīdzības limits",
+      "flatFee": "Fiksēta atlīdzība",
+      "invalidCap": "Ievadiet pozitīvus limitus un brīdinājuma slieksni no 0,01 % līdz 100 %.",
+      "minuteCap": "Laika limits (minūtes)",
+      "title": "Vienošanās par atlīdzību"
+    },
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
@@ -1589,6 +1597,12 @@
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",
+      "dismiss": "Paslēpt paziņojumu par savienojumu",
+      "stoppedWorking": "Jūsu savienojums ar <name>{server}</name> vairs nedarbojas.",
+      "waitingApproval": "Jūsu savienojums ar <name>{server}</name> gaida apstiprinājumu."
+    },
     "mention": {
       "category": {
         "entities": "Šajā lietā",
@@ -5075,6 +5089,16 @@
       "preferredNamePlaceholder": "Jūsu vārds",
       "profileDescription": "Pārvaldiet savas personīgās preferences",
       "sendOtpCode": "Nosūtīt apstiprinājuma kodu",
+      "signInMethods": {
+        "confirmDescription": "Lai atsaistītu šo pierakstīšanās veidu, ievadiet jaunu kodu, kas nosūtīts uz jūsu e-pastu.",
+        "confirmTitle": "Atsaistīt {provider}?",
+        "description": "Saistiet kontus, kuros izmantota viena un tā pati verificētā e-pasta adrese.",
+        "emailCode": "E-pasta kods",
+        "emailCodeDescription": "Jūs vienmēr varat pierakstīties, izmantojot uz jūsu e-pastu nosūtītu kodu.",
+        "lastMethod": "Pirms šī konta atvienošanas pievienojiet citu kontu.",
+        "title": "Pierakstīšanās veidi",
+        "unavailable": "Lai atsaistītu pierakstīšanās veidus, jābūt konfigurētai e-pasta piegādei."
+      },
       "timezone": "Laika josla",
       "timezoneDescription": "Tiek izmantota laika zīmogiem paziņojumos un e-pastos",
       "timezoneSaved": "Laika josla atjaunināta",

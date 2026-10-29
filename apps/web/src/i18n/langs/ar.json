@@ -547,6 +547,14 @@
     },
     "approve": "اعتماد",
     "approveSelected": "اعتماد المحدد",
+    "arrangement": {
+      "alertThreshold": "حد التنبيه (%)",
+      "amountCap": "الحد الأقصى للأتعاب",
+      "flatFee": "أتعاب ثابتة",
+      "invalidCap": "أدخل حدودًا موجبة وحد تنبيه بين 0.01% و100%.",
+      "minuteCap": "الحد الزمني (بالدقائق)",
+      "title": "اتفاق الأتعاب"
+    },
     "batchActions": "إجراءات جماعية",
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",
@@ -1589,6 +1597,12 @@
     "loadEarlierMessagesError": "تعذّر تحميل الرسائل السابقة",
     "loadingEarlierMessages": "جارٍ تحميل الرسائل السابقة…",
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",
+      "dismiss": "إخفاء إشعار الاتصال",
+      "stoppedWorking": "توقف اتصالك بـ <name>{server}</name> عن العمل.",
+      "waitingApproval": "اتصالك بـ <name>{server}</name> بانتظار الموافقة."
+    },
     "mention": {
       "category": {
         "entities": "في هذا الملف القانوني",
@@ -5075,6 +5089,16 @@
       "preferredNamePlaceholder": "اسمك",
       "profileDescription": "إدارة تفضيلاتك الشخصية",
       "sendOtpCode": "إرسال رمز التحقق",
+      "signInMethods": {
+        "confirmDescription": "أدخل رمزًا جديدًا أُرسل إلى بريدك الإلكتروني لإلغاء ربط طريقة تسجيل الدخول هذه.",
+        "confirmTitle": "إلغاء ربط {provider}؟",
+        "description": "اربط الحسابات التي تستخدم عنوان البريد الإلكتروني نفسه بعد التحقق منه.",
+        "emailCode": "رمز البريد الإلكتروني",
+        "emailCodeDescription": "يمكنك دائمًا تسجيل الدخول باستخدام رمز يُرسل إلى بريدك الإلكتروني.",
+        "lastMethod": "اربط حسابًا آخر قبل فصل هذا الحساب.",
+        "title": "طرق تسجيل الدخول",
+        "unavailable": "يجب إعداد خدمة إرسال البريد الإلكتروني لإلغاء ربط طرق تسجيل الدخول."
+      },
       "timezone": "المنطقة الزمنية",
       "timezoneDescription": "تُستخدَم للطوابع الزمنية في الإشعارات ورسائل البريد الإلكتروني",
       "timezoneSaved": "تم تحديث المنطقة الزمنية",

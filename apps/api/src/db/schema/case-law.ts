@@ -91,6 +91,7 @@ import {
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+  decisionDateNotBeforeFilingYearSql,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
@@ -558,6 +559,31 @@ const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
     )
     .where(publishedCaseLawDecisionFor(t));
 
+const publishedCoverageIndexes = (
+  t: PublishedCourtDateColumns & { sourceId: PgColumn; caseNumber: PgColumn },
+) => [
+  // A source without facet rows still needs exact court counts; cover its
+  // published population so that fallback never needs a full-corpus scan.
+  p
+    .index("case_law_decisions_source_court_coverage_idx")
+    .on(t.sourceId, t.court)
+    .where(publishedCaseLawDecisionFor(t)),
+  // Filing-year filtering must be in the index: an entire source may have
+  // invalid dates, so filtering each endpoint candidate walks its full heap.
+  p
+    .index("case_law_decisions_source_filing_date_coverage_idx")
+    .on(t.sourceId, t.decisionDate, t.id)
+    .where(
+      sql`${publishedCaseLawDecisionFor(t)} AND ${decisionDateNotBeforeFilingYearSql(
+        {
+          date: t.decisionDate,
+          country: t.country,
+          caseNumber: t.caseNumber,
+        },
+      )}`,
+    ),
+];
+
 /**
  * The browse walk with one language chosen. Without it a language is a filter
  * on the country's walk, which skips every newer version in another language
@@ -960,6 +986,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_decision_date_coverage_idx")
       .on(t.sourceId, t.decisionDate, t.id)
       .where(publishedCaseLawDecisionFor(t)),
+    ...publishedCoverageIndexes(t),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
@@ -2439,13 +2466,30 @@ export const caseLawProvisionCitations = p.pgTable(
     // One provision with every subdivision under it, for either work key.
     // The anchor compares byte-wise so a subtree is one contiguous range
     // (`provisionAnchorSubtreeSql`); under the database collation `par_510`
-    // sorts between `par_51` and `par_51-odst_1`.
+    // sorts between `par_51` and `par_51-odst_1`. The trailing date,
+    // decision and span make the range index-only for the cited-by page,
+    // which groups a subtree per decision, with the offset of its earliest
+    // mention, before it reads any decision.
     p
-      .index("case_law_provision_citations_work_subtree_idx")
-      .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+      .index("case_law_provision_citations_work_citing_idx")
+      .on(
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+        t.spanStart,
+      ),
     p
-      .index("case_law_provision_citations_eli_subtree_idx")
-      .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)
+      .index("case_law_provision_citations_eli_citing_idx")
+      .on(
+        t.jurisdiction,
+        t.workEli,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+        t.spanStart,
+      )
       .where(isNotNull(t.workEli)),
     p.check(
       "provision_citations_work_number_shape",

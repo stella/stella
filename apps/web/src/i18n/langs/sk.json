@@ -547,6 +547,14 @@
     },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
+    "arrangement": {
+      "alertThreshold": "Prah upozornenia (%)",
+      "amountCap": "Limit odmeny",
+      "flatFee": "Paušálna odmena",
+      "invalidCap": "Zadajte kladné limity a prah upozornenia od 0,01 % do 100 %.",
+      "minuteCap": "Časový limit (minúty)",
+      "title": "Dohoda o odmene"
+    },
     "batchActions": "Hromadné akcie",
     "billable": "Fakturovateľné",
     "billedAmount": "Fakturovaná čiastka",
@@ -1589,6 +1597,12 @@
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} other {+# ďalších}}",
+      "dismiss": "Skryť upozornenie na pripojenie",
+      "stoppedWorking": "Vaše pripojenie k službe <name>{server}</name> prestalo fungovať.",
+      "waitingApproval": "Vaše pripojenie k službe <name>{server}</name> čaká na schválenie."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spise",
@@ -5075,6 +5089,16 @@
       "preferredNamePlaceholder": "Vaše meno",
       "profileDescription": "Spravujte svoje osobné nastavenia",
       "sendOtpCode": "Odoslať overovací kód",
+      "signInMethods": {
+        "confirmDescription": "Zadajte nový kód zaslaný na e-mail, aby ste tento spôsob prihlásenia odpojili.",
+        "confirmTitle": "Odpojiť {provider}?",
+        "description": "Prepojte účty, ktoré používajú rovnakú overenú e-mailovú adresu.",
+        "emailCode": "Kód z e-mailu",
+        "emailCodeDescription": "Vždy sa môžete prihlásiť pomocou kódu zaslaného na e-mail.",
+        "lastMethod": "Pred odpojením tohto účtu prepojte iný účet.",
+        "title": "Spôsoby prihlásenia",
+        "unavailable": "Aby bolo možné odpojiť spôsoby prihlásenia, musí byť nakonfigurované doručovanie e-mailov."
+      },
       "timezone": "Časové pásmo",
       "timezoneDescription": "Použité pre časové údaje v notifikáciách a e-mailoch",
       "timezoneSaved": "Časové pásmo aktualizované",
