@@ -129,6 +129,7 @@ export const receiveHostedUsageWebhook = async (
       classifyFailure(
         new HandlerError({
           status: 503,
+          code: "hosted_usage_not_configured",
           message: "Hosted usage management is not configured",
         }),
         "hosted_usage_not_configured",

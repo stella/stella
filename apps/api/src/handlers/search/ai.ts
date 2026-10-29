@@ -84,7 +84,7 @@ const SEARCH_SUMMARY_CHAT_FAILED = failureSink({
 /** A model answer the search route cannot use, after it parsed. */
 const unusableModelAnswer = (message: string) =>
   classifyFailure(
-    new HandlerError({ status: 502, message }),
+    new HandlerError({ status: 502, code: "model_output_invalid", message }),
     "model_output_invalid",
   );
 
