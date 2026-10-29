@@ -69,7 +69,6 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
-import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
 import {
   publishedCaseLawDecisionFor,
@@ -872,16 +871,12 @@ export const caseLawDecisions = p.pgTable(
       }),
     ),
     // Publisher ids identify documents; fallback keys include court and decision
-    // evidence. The obsolete docket-only index is removed by the contract migration.
+    // evidence; weak cohort members are distinguished by published content.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
-    p
-      .uniqueIndex(PREVIOUS_FALLBACK_DECISION_INDEX)
-      .on(t.sourceId, t.caseNumber, t.language)
-      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)

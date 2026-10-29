@@ -898,6 +898,12 @@ type OnlineIndexReplacement = {
 
 export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   {
+    legacyName: PREVIOUS_FALLBACK_DECISION_INDEX,
+    replacementNames: FALLBACK_DECISION_INDEXES.filter(
+      ({ isUnique }) => isUnique,
+    ).map(({ name }) => name),
+  },
+  {
     legacyName: "case_law_decisions_country_date_idx",
     replacementNames: ["case_law_decisions_country_date_published_idx"],
   },
