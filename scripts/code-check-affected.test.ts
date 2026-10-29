@@ -41,6 +41,7 @@ import {
   planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
+  pluginFixtureModules,
   prioritizeWebLint,
   resultBoundaryLintCommand,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -83,6 +84,7 @@ const plan = (
     repositoryPaths: presentChangedPaths,
     affectedWorkspacePaths,
     workspacePaths: WORKSPACES,
+    pluginModulePaths: new Set(),
   });
 
 describe("changed-file result boundary lint", () => {
@@ -740,6 +742,81 @@ describe("changed lint path selection", () => {
   });
 });
 
+// The fixture check loads every module the lint configs and plugins load
+// under Node. A module an app owns is no lint cache input, so only the import
+// graph can tell the planner that editing it can break the check.
+describe("plugin fixture selection", () => {
+  const selectsPluginFixtures = (
+    file: string,
+    pluginModulePaths: ReadonlySet<string>,
+  ): boolean => {
+    const owner = /^(?:apps|packages)\/[^/]+/u.exec(file)?.[0];
+    const workspaces = owner === undefined ? [] : [owner];
+    const planned = planCheck({
+      changedPaths: [file],
+      presentChangedPaths: [file],
+      repositoryPaths: [file],
+      affectedWorkspacePaths: workspaces,
+      workspacePaths: new Set(workspaces),
+      pluginModulePaths,
+    });
+    if (planned.type !== "scoped") {
+      throw new Error(`Expected a scoped code-check plan for ${file}`);
+    }
+    return planned.rootChecks.includes("plugin-fixtures");
+  };
+
+  test("a change to any module the lint configs and plugins load selects the fixture check", () => {
+    const modules = pluginFixtureModules(path.resolve(import.meta.dir, ".."));
+    expect(
+      [...modules].filter((file) => file.startsWith("apps/")).length,
+    ).toBeGreaterThan(0);
+    expect(
+      [...modules].filter((file) => !selectsPluginFixtures(file, modules)),
+    ).toEqual([]);
+  });
+
+  test("a module the plugins reach through a path alias selects the fixture check", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "plugin-fixture-graph-"));
+    try {
+      const write = (file: string, text: string) => {
+        mkdirSync(path.dirname(path.join(directory, file)), {
+          recursive: true,
+        });
+        writeFileSync(path.join(directory, file), text);
+      };
+      write("oxlint.config.ts", "export default {};\n");
+      write("oxlint.result-boundary.config.ts", "export default {};\n");
+      write(
+        ".oxlint-plugins/rule.ts",
+        'import { owned } from "../apps/api/src/lib/owned.ts";\nexport default owned;\n',
+      );
+      write(
+        "apps/api/tsconfig.json",
+        JSON.stringify({
+          compilerOptions: { paths: { "@/api/*": ["./src/*"] } },
+        }),
+      );
+      write(
+        "apps/api/src/lib/owned.ts",
+        'import { aliased } from "@/api/lib/aliased";\nexport const owned = aliased;\n',
+      );
+      write("apps/api/src/lib/aliased.ts", "export const aliased = 1;\n");
+      write("apps/api/src/lib/unrelated.ts", "export const unrelated = 1;\n");
+
+      const modules = pluginFixtureModules(directory);
+      expect(
+        selectsPluginFixtures("apps/api/src/lib/aliased.ts", modules),
+      ).toBe(true);
+      expect(
+        selectsPluginFixtures("apps/api/src/lib/unrelated.ts", modules),
+      ).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("Turbo cache input contract", () => {
   test("each plugin check invalidates on its own implementation", () => {
     expect(PLUGIN_REGISTRY_INPUTS).toContain(
@@ -1037,6 +1114,7 @@ process.exit(childExitStatus(result));
       repositoryPaths: tracked,
       affectedWorkspacePaths: [],
       workspacePaths: workspaces,
+      pluginModulePaths: new Set(),
     });
     if (affected.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");
@@ -1055,6 +1133,7 @@ process.exit(childExitStatus(result));
       repositoryPaths: trackedFiles(),
       affectedWorkspacePaths: [],
       workspacePaths: WORKSPACES,
+      pluginModulePaths: new Set(),
     });
     if (planned.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");
@@ -2040,6 +2119,7 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
     "ledger-membership.ts",
     "lint-paths.ts",
     "oxlint-config-scopes.ts",
+    "oxlint-module-closure.ts",
     "ratchet.ts",
     "result-boundary-globs.ts",
     "root-script-lint.ts",

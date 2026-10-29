@@ -30,6 +30,7 @@ import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
+import { lintModuleClosure } from "./oxlint-module-closure";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
@@ -176,6 +177,14 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
+// The inputs above cover the lint configs' own modules through the
+// configuration cache inputs, which leave out a module an app owns so that
+// editing it does not invalidate every workspace lint. The fixture check still
+// loads that module under Node, which resolves neither a tsconfig path alias
+// nor an extensionless import, so the planner selects the check for every
+// module the configs and plugins load, read from the checkout's import graph.
+export const pluginFixtureModules = (root: string): ReadonlySet<string> =>
+  new Set(lintModuleClosure(root).modules);
 export const PLUGIN_REGISTRY_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
@@ -248,6 +257,12 @@ type PlanCheckOptions = {
   repositoryPaths: readonly string[];
   affectedWorkspacePaths: readonly string[];
   workspacePaths: ReadonlySet<string>;
+  /**
+   * Every repository file the lint configs and their plugins load,
+   * transitively: the plugin fixture check loads them all under Node, so a
+   * change to any of them can break it. See `pluginFixtureModules`.
+   */
+  pluginModulePaths: ReadonlySet<string>;
 };
 
 const workspaceForPath = (file: string): string | null => {
@@ -301,7 +316,10 @@ const isTypeScriptPath = (file: string): boolean =>
   file.endsWith(".mts") ||
   file.endsWith(".cts");
 
-const rootChecksForPath = (file: string): readonly RootCheck[] => {
+const rootChecksForPath = (
+  file: string,
+  pluginModulePaths: ReadonlySet<string>,
+): readonly RootCheck[] => {
   const rootChecks: RootCheck[] = [];
   if (
     file.endsWith(".css") ||
@@ -315,7 +333,10 @@ const rootChecksForPath = (file: string): readonly RootCheck[] => {
   if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
     rootChecks.push(ROOT_CHECKS.pluginRegistry);
   }
-  if (PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))) {
+  if (
+    pluginModulePaths.has(file) ||
+    PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))
+  ) {
     rootChecks.push(ROOT_CHECKS.pluginFixtures);
   }
   if (invalidatesRootScriptLint(file)) {
@@ -330,6 +351,7 @@ export const planCheck = ({
   repositoryPaths,
   affectedWorkspacePaths,
   workspacePaths,
+  pluginModulePaths,
 }: PlanCheckOptions): CheckPlan => {
   const targets = [...new Set(affectedWorkspacePaths)].toSorted();
   if (targets.some((target) => !workspacePaths.has(target))) {
@@ -370,7 +392,7 @@ export const planCheck = ({
     ROOT_CHECKS.repoTypecheck,
   ]);
   for (const changedPath of changedPaths) {
-    for (const rootCheck of rootChecksForPath(changedPath)) {
+    for (const rootCheck of rootChecksForPath(changedPath, pluginModulePaths)) {
       rootCheckSet.add(rootCheck);
     }
   }
@@ -1258,6 +1280,10 @@ export const planResultBoundaryLint = ({
   return resultBoundaryLintCommand(candidates, measureDebt(base));
 };
 
+/** Only the unpartitioned check and the rest leg run the root checks. */
+const runsRootChecks = (leg: CodeCheckLeg | undefined): boolean =>
+  leg === undefined || leg === "rest";
+
 type ScopedCommandsOptions = {
   leg: CodeCheckLeg;
   workspaces: ReadonlySet<string>;
@@ -1268,7 +1294,7 @@ export const scopedCommands = (
   partition?: ScopedCommandsOptions,
 ): string[][] => {
   if (partition !== undefined) {
-    const ownsRoot = partition.leg === "rest";
+    const ownsRoot = runsRootChecks(partition.leg);
     const commands = scopedCommands({
       type: "scoped",
       lint: plan.lint,
@@ -1366,6 +1392,9 @@ export const planFullCheck = ({
     repositoryPaths: files,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
+    // Every file counts as changed, so the declared inputs already select
+    // every root check; the check below fails if one is left out.
+    pluginModulePaths: new Set(),
   });
   if (plan.type === "fallback") {
     panic(`full code-check planned a fallback for ${plan.changedPath}`);
@@ -1394,6 +1423,7 @@ type ScopeCheck = {
 
 const planScope = async (
   scope: CheckScope,
+  leg: CodeCheckLeg | undefined,
 ): Promise<Result<ScopeCheck, CommandFailedError>> => {
   switch (scope.type) {
     case "all": {
@@ -1438,6 +1468,10 @@ const planScope = async (
                   ),
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
+                  // A leg that drops the root checks skips reading the graph.
+                  pluginModulePaths: runsRootChecks(leg)
+                    ? pluginFixtureModules(REPO_ROOT)
+                    : new Set(),
                 }),
           changedPaths: changed.value.paths,
           presentChangedPaths,
@@ -1466,7 +1500,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const scoped = await planScope(options.scope);
+  const scoped = await planScope(options.scope, options.leg);
   if (scoped.isErr()) {
     return scoped;
   }

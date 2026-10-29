@@ -539,6 +539,7 @@ test.each([
       repositoryPaths: presentChangedPaths,
       affectedWorkspacePaths: [],
       workspacePaths: new Set(),
+      pluginModulePaths: new Set(),
     });
     expect(planned.type).toBe("scoped");
     if (planned.type !== "scoped") {
