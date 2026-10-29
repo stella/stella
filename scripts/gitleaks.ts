@@ -32,7 +32,7 @@ const hasPinnedVersion = (binary: string) => {
   );
 };
 
-const downloadArchive = async (url: string) => {
+const downloadArchive = (url: string) => {
   const response = Bun.spawnSync(
     [
       "curl",
@@ -61,11 +61,11 @@ const downloadArchive = async (url: string) => {
 };
 
 type ResolveGitleaksOptions = {
-  platform?: string;
-  arch?: string;
+  platform?: string | undefined;
+  arch?: string | undefined;
   cacheHome?: string;
   pathBinary?: string | null;
-  download?: typeof downloadArchive;
+  download?: (url: string) => Uint8Array | Promise<Uint8Array>;
   // Tests supply a local fixture archive and its digest; the hook always uses repo pins.
   checksums?: Readonly<Record<keyof typeof GITLEAKS_SHA256, string>>;
 };
@@ -88,9 +88,6 @@ export const resolveGitleaks = async ({
         throw new GitleaksProvisionError({
           message: `unsupported gitleaks platform ${platform}/${arch}`,
         });
-      }
-      if (pathBinary !== null && hasPinnedVersion(pathBinary)) {
-        return pathBinary;
       }
       const digest = checksums[`${platform}-${arch}`];
       const cache = path.join(
@@ -131,6 +128,14 @@ export const resolveGitleaks = async ({
             message: `cannot extract gitleaks from ${name}`,
           });
         }
+        // A PATH version string cannot attest the executable. Compare bytes
+        // with the member extracted only after the release archive was verified.
+        const installed =
+          pathBinary !== null &&
+          existsSync(pathBinary) &&
+          sha256Hex(readFileSync(pathBinary)) === sha256Hex(extracted.stdout)
+            ? pathBinary
+            : undefined;
         const binary = path.join(scratch, "gitleaks");
         writeFileSync(binary, extracted.stdout, { mode: 0o700 });
         if (!hasPinnedVersion(binary)) {
@@ -142,7 +147,7 @@ export const resolveGitleaks = async ({
         renameSync(verifiedArchive, archive);
         const cachedBinary = path.join(cache, "gitleaks");
         renameSync(binary, cachedBinary);
-        return cachedBinary;
+        return installed ?? cachedBinary;
       } finally {
         rmSync(scratch, { recursive: true, force: true });
       }

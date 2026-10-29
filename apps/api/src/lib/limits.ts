@@ -363,6 +363,8 @@ export const LIMITS = {
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.
   invoiceLinesPerInvoice: 1000,
+  // An invoice read returns every payment, voided ones included.
+  invoicePaymentsPerInvoice: 200,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */
@@ -571,6 +573,8 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /** Documents in a case file, after language-version deduplication. */
+  caseLawCaseFilePageSize: 50,
   /**
    * Judges one decision may name. A bench and its dissenters are a handful of
    * people; a decision listing more of them is a parser defect, and the read

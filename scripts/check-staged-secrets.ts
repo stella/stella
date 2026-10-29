@@ -131,7 +131,9 @@ const stagedLines = (commit: string, file: string): LineRange[] => {
   return ranges;
 };
 
-const runStagedScan = (report: string): Finding[] => {
+type StagedScanOptions = { report: string; scanner: string };
+
+const runStagedScan = ({ report, scanner }: StagedScanOptions): Finding[] => {
   const result = Bun.spawnSync(
     [
       scanner,
@@ -164,11 +166,14 @@ const runStagedScan = (report: string): Finding[] => {
   return findings.output;
 };
 
-const scanMerge = (heads: string[]): number => {
+const scanMerge = (heads: string[], scanner: string): number => {
   const reports = mkdtempSync(path.join(tmpdir(), "staged-secrets-"));
   let findings: Finding[];
   try {
-    findings = runStagedScan(path.join(reports, "report.json"));
+    findings = runStagedScan({
+      report: path.join(reports, "report.json"),
+      scanner,
+    });
   } finally {
     rmSync(reports, { force: true, recursive: true });
   }
@@ -204,19 +209,24 @@ const scanMerge = (heads: string[]): number => {
   return 1;
 };
 
-const resolved = await resolveGitleaks();
-if (resolved.isErr()) {
-  fail(resolved.error.message);
-}
-const scanner = resolved.value;
-
-const heads = mergeHeads();
-if (heads === undefined) {
+export const checkStagedSecrets = (scanner: string): number => {
+  const heads = mergeHeads();
+  if (heads !== undefined) {
+    return scanMerge(heads, scanner);
+  }
   const scan = Bun.spawnSync([scanner, ...STAGED_SCAN, "."], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
   });
-  process.exit(childExitStatus(scan));
+  return childExitStatus(scan);
+};
+
+if (import.meta.main) {
+  const resolved = await resolveGitleaks();
+  if (resolved.isOk()) {
+    process.exit(checkStagedSecrets(resolved.value));
+  } else {
+    fail(resolved.error.message);
+  }
 }
-process.exit(scanMerge(heads));

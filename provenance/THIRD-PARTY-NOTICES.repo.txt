@@ -23,12 +23,13 @@ Project: root
 - @aws-sdk/client-sqs 3.1147.0 — Apache-2.0
 - @aws-sdk/client-sts 3.1147.0 — Apache-2.0
 - @aws-sdk/s3-request-presigner 3.1147.0 — Apache-2.0
-- @base-ui/react 1.8.0 — MIT
+- @base-ui/react 1.9.0 — MIT
 - @better-auth/api-key 1.7.6 — MIT
 - @better-auth/cimd 1.7.6 — MIT
 - @better-auth/core 1.7.6 — MIT
 - @better-auth/oauth-provider 1.7.6 — MIT
 - @embedpdf/pdfium 2.15.1 — MIT
+- @expo/fingerprint 0.21.6 — MIT
 - @firecrawl/anydoc 0.2.4 — MIT
 - @floating-ui/react-dom 2.1.9 — MIT
 - @formatjs/icu-messageformat-parser 3.5.20 — MIT
@@ -48,11 +49,6 @@ Project: root
 - @neftaly/editcontext-polyfill 0.1.1 — MIT
 - @nodable/entities 3.1.0 — MIT
 - @openrouter/sdk 0.13.67 — Apache-2.0
-- @opentelemetry/api 1.9.1 — Apache-2.0
-- @opentelemetry/api-logs 0.223.0 — Apache-2.0
-- @opentelemetry/exporter-logs-otlp-http 0.223.0 — Apache-2.0
-- @opentelemetry/resources 2.12.0 — Apache-2.0
-- @opentelemetry/sdk-logs 0.223.0 — Apache-2.0
 - @playwright/test 1.63.0 — Apache-2.0
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.1.0 — MIT
@@ -93,7 +89,7 @@ Project: root
 - @tanstack/react-table-devtools 9.3.1 — MIT
 - @tanstack/react-virtual 3.14.21 — MIT
 - @tanstack/router-generator 1.167.45 — MIT
-- @tauri-apps/api 2.12.3 — Apache-2.0 OR MIT
+- @tauri-apps/api 2.12.4 — Apache-2.0 OR MIT
 - @testing-library/react 16.3.3 — MIT
 - @tiptap/core 3.31.4 — MIT
 - @tiptap/extension-bold 3.31.4 — MIT
@@ -131,10 +127,14 @@ Project: root
 - driver.js 1.9.0 — MIT
 - drizzle-orm 1.0.0-rc.4 — Apache-2.0
 - entities 8.1.0 — BSD-2-Clause
-- expo-router 57.0.25 — MIT
-- expo-status-bar 57.0.1 — MIT
+- expo 58.0.17 — MIT
+- expo-constants 58.0.13 — MIT
+- expo-crypto 58.0.7 — MIT
+- expo-router 58.0.25 — MIT
+- expo-secure-store 58.0.2 — MIT
+- expo-status-bar 58.0.4 — MIT
+- expo-web-browser 58.0.6 — MIT
 - fast-check 4.10.2 — MIT
-- fast-xml-parser 5.11.2 — MIT
 - franc 6.2.0 — MIT
 - happy-dom 21.0.4 — MIT
 - hyparquet 1.31.2 — MIT
@@ -145,8 +145,9 @@ Project: root
 - jose 6.2.12 — MIT
 - jszip 3.10.2 — (MIT OR GPL-3.0-or-later)
 - katex 0.16.47 — MIT
+- lightningcss 1.33.0 — MPL-2.0
 - linkify-it 6.1.0 — MIT
-- lucide-react 1.41.0 — ISC
+- lucide-react 1.59.0 — ISC
 - lzma1 0.4.0 — Apache-2.0
 - mailauth 7.1.1 — MIT
 - mdast-util-from-markdown 2.1.0 — MIT
@@ -168,13 +169,12 @@ Project: root
 - postal-mime 4.0.11 — MIT-0
 - postcss 8.5.29 — MIT
 - posthog-js 1.438.2 — (Apache-2.0 AND MIT)
-- posthog-node 5.55.0 — MIT
 - prism-react-renderer 2.4.1 — MIT
 - quickjs-emscripten-core 0.32.0 — MIT
 - re2-wasm 1.0.2 — Apache-2.0
 - react 19.3.0 — MIT
 - react-dom 19.3.0 — MIT
-- react-native 0.86.3 — MIT
+- react-native 0.88.0 — MIT
 - react-native-safe-area-context 5.10.1 — MIT
 - saxes 6.0.0 — ISC
 - scslre 0.3.0 — MIT
@@ -272,7 +272,7 @@ Project: desktop-tauri
 - cipher 0.4.4 — Apache-2.0 OR MIT
 - cipher 0.5.2 — Apache-2.0 OR MIT
 - clipboard-rs 0.3.5 — MIT
-- clipboard-win 5.4.1 — BSL-1.0
+- clipboard-win 5.4.3 — BSL-1.0
 - cmake 0.1.58 — Apache-2.0 OR MIT
 - cmov 0.5.4 — Apache-2.0 OR MIT
 - color_quant 1.1.0 — MIT
@@ -420,7 +420,7 @@ Project: desktop-tauri
 - iana-time-zone 0.1.65 — Apache-2.0 OR MIT
 - iana-time-zone-haiku 0.1.2 — Apache-2.0 OR MIT
 - icns 0.5.0 — MIT
-- ico 0.5.0 — MIT
+- ico 0.6.0 — MIT
 - icu_collections 2.2.0 — Unicode-3.0
 - icu_locale_core 2.2.0 — Unicode-3.0
 - icu_normalizer 2.2.0 — Unicode-3.0
@@ -563,8 +563,7 @@ Project: desktop-tauri
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
 - piper 0.2.5 — Apache-2.0 OR MIT
 - pkg-config 0.3.33 — Apache-2.0 OR MIT
-- plist 1.10.2 — MIT
-- png 0.17.16 — Apache-2.0 OR MIT
+- plist 1.10.3 — MIT
 - png 0.18.1 — Apache-2.0 OR MIT
 - polling 3.11.0 — Apache-2.0 OR MIT
 - polyval 0.7.3 — Apache-2.0 OR MIT
@@ -684,10 +683,10 @@ Project: desktop-tauri
 - tao-macros 0.1.4 — Apache-2.0 OR MIT
 - tar 0.4.46 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.12.4 — Apache-2.0 OR MIT
-- tauri-build 2.7.3 — Apache-2.0 OR MIT
-- tauri-codegen 2.7.3 — Apache-2.0 OR MIT
-- tauri-macros 2.7.3 — Apache-2.0 OR MIT
+- tauri 2.12.5 — Apache-2.0 OR MIT
+- tauri-build 2.7.4 — Apache-2.0 OR MIT
+- tauri-codegen 2.7.4 — Apache-2.0 OR MIT
+- tauri-macros 2.7.4 — Apache-2.0 OR MIT
 - tauri-plugin 2.7.1 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.7.0 — Apache-2.0 OR MIT
 - tauri-plugin-clipboard-manager 2.5.0 — Apache-2.0 OR MIT
@@ -720,7 +719,7 @@ Project: desktop-tauri
 - tinystr 0.8.3 — Unicode-3.0
 - tinyvec 1.12.0 — Apache-2.0 OR MIT OR Zlib
 - tinyvec_macros 0.1.1 — Apache-2.0 OR MIT OR Zlib
-- tokio 1.53.3 — MIT
+- tokio 1.54.1 — MIT
 - tokio-macros 2.7.2 — MIT
 - tokio-rustls 0.26.4 — Apache-2.0 OR MIT
 - tokio-util 0.7.19 — MIT

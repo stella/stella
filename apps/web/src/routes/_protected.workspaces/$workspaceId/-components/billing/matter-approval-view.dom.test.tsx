@@ -226,24 +226,23 @@ globalThis.fetch = Object.assign(
     ) {
       const body: unknown = await request.json();
       server.returnCalls.push(body);
-      const { id } = v.parse(v.object({ id: v.string() }), body);
+      const { ids } = v.parse(
+        v.object({ ids: v.array(v.string()), comment: v.string() }),
+        body,
+      );
       await holdIfAsked();
-      const reason = server.refusals.get(id);
-      if (reason) {
-        return Response.json(
-          {
-            code: reason,
-            message: "Time entry cannot be returned",
-            hint: "Check the assigned approver, entry status, running timer, and locked period.",
-          },
-          { status: 409 },
-        );
-      }
-      const current = server.entries.get(id);
-      if (current) {
-        server.entries.set(id, { ...current, status: "draft" });
-      }
-      return Response.json({ id, status: "draft" });
+      const results = ids.map((id) => {
+        const reason = server.refusals.get(id);
+        if (reason) {
+          return { id, status: "refused", reason };
+        }
+        const current = server.entries.get(id);
+        if (current) {
+          server.entries.set(id, { ...current, status: "draft" });
+        }
+        return { id, status: "returned" };
+      });
+      return Response.json({ results });
     }
     if (
       request.method === "PATCH" &&
@@ -595,7 +594,7 @@ describe("returning approved time to its timekeeper", () => {
     await clickIn(row, messages.billing.revertToDraft);
 
     await testing.waitFor(() =>
-      expect(server.returnCalls).toEqual([{ id: "entry-a", comment }]),
+      expect(server.returnCalls).toEqual([{ ids: ["entry-a"], comment }]),
     );
     // Back with its timekeeper as a draft, so it leaves the review lists
     // until it is submitted again.
@@ -623,11 +622,13 @@ describe("returning approved time to its timekeeper", () => {
     await clickIn(locked, messages.billing.revertToDraft);
 
     const alert = await testing.screen.findByRole("alert");
-    expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
+    expect(alert.textContent).toBe(
+      messages.billing.approval.returnRefusals.timePeriodLocked,
+    );
     expect(rowOf("Narrative entry-locked").contains(alert)).toBe(true);
     expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
     expect(server.returnCalls).toEqual([
-      { id: "entry-locked", comment: "Wrong matter" },
+      { ids: ["entry-locked"], comment: "Wrong matter" },
     ]);
     // Still approved, and nothing billable changed.
     expect(
@@ -663,13 +664,15 @@ describe("returning approved time to its timekeeper", () => {
     // Both requests are in flight before either answers.
     await testing.waitFor(() => expect(server.held).toHaveLength(2));
     expect(server.returnCalls).toEqual([
-      { id: "entry-locked", comment: "Wrong matter" },
-      { id: "entry-open", comment: "Wrong date" },
+      { ids: ["entry-locked"], comment: "Wrong matter" },
+      { ids: ["entry-open"], comment: "Wrong date" },
     ]);
 
     await releaseHeld(0);
     const alert = await testing.screen.findByRole("alert");
-    expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
+    expect(alert.textContent).toBe(
+      messages.billing.approval.returnRefusals.timePeriodLocked,
+    );
     await releaseHeld(1);
     // The returned entry goes back to its timekeeper and leaves the list.
     await testing.waitFor(() =>
@@ -680,6 +683,58 @@ describe("returning approved time to its timekeeper", () => {
 
     expect(rowOf("Narrative entry-locked").contains(alert)).toBe(true);
     expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
+  });
+});
+
+describe("returning checked time together", () => {
+  test("checked submitted entries go back with one reason in one request", async () => {
+    resetServer([entry("entry-a"), entry("entry-b"), entry("entry-c")]);
+    await mount("owner", approvalPage);
+    await testing.screen.findByText("Narrative entry-a");
+    await testing.waitFor(() => expect(server.prefillReads).toBe(1));
+
+    for (const narrative of ["Narrative entry-a", "Narrative entry-c"]) {
+      await testing.act(async () => {
+        testing.fireEvent.click(
+          testing.within(rowOf(narrative)).getByRole("checkbox", {
+            name: messages.billing.approval.selectEntry,
+          }),
+        );
+      });
+    }
+    const returnSelected = testing.screen.getByRole("button", {
+      name: "Return 2 selected entries",
+    });
+    expect(returnSelected).toHaveProperty("disabled", true);
+    const bulkReason = testing.screen
+      .getAllByRole("textbox", {
+        name: messages.billing.approval.returnComment,
+      })
+      .find((field) => field.closest("li") === null);
+    if (!bulkReason) {
+      throw new Error("expected the selection's reason field");
+    }
+    await testing.act(async () => {
+      testing.fireEvent.change(bulkReason, {
+        target: { value: "Name the hearing" },
+      });
+    });
+    await testing.act(async () => {
+      testing.fireEvent.click(returnSelected);
+    });
+
+    await testing.waitFor(() =>
+      expect(server.returnCalls).toEqual([
+        { ids: ["entry-a", "entry-c"], comment: "Name the hearing" },
+      ]),
+    );
+    await testing.waitFor(() =>
+      expect(testing.screen.queryByText("Narrative entry-a")).toBeNull(),
+    );
+    expect(testing.screen.queryByText("Narrative entry-c")).toBeNull();
+    expect(testing.screen.getByText("Narrative entry-b")).toBeTruthy();
+    expect(server.approveCalls).toEqual([]);
+    await testing.waitFor(() => expect(server.prefillReads).toBe(2));
   });
 });
 

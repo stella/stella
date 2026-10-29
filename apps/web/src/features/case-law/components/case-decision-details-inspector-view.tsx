@@ -19,6 +19,7 @@ import { DecisionMainViewAction } from "@/features/case-law/components/decision-
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { REQUIREMENT } from "@/lib/platform/requirements.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -50,7 +51,13 @@ export const CaseDecisionDetailsInspectorView = ({
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
       <InspectorTabHeader
-        actions={<DecisionMainViewAction payload={tab.payload} />}
+        actions={[
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            render: () => <DecisionMainViewAction payload={tab.payload} />,
+          },
+        ]}
         label={tab.label}
         onClose={onClose}
       />

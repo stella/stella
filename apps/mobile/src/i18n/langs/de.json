@@ -9,6 +9,9 @@
     "description": "Behalten Sie laufende Arbeit im Blick und machen Sie auf jedem Gerät weiter.",
     "emptyTitle": "Noch keine Konversationen",
     "emptyDescription": "Neue Konversationen und aktuelle Verläufe erscheinen hier.",
+    "noMatchesTitle": "Keine passenden Chats",
+    "noMatchesDescription": "Kein Chattitel und keine Akte enthält „{search}“.",
+    "search": "Chats durchsuchen",
     "loadFailed": "Ihre Unterhaltungen konnten nicht geladen werden.",
     "retry": "Erneut versuchen",
     "untitled": "Unbenannte Unterhaltung",
@@ -23,7 +26,16 @@
       "yesterday": "Gestern",
       "week": "Letzte 7 Tage",
       "earlier": "Früher"
-    }
+    },
+    "newChat": "Neue Unterhaltung",
+    "composerPlaceholder": "stella fragen",
+    "send": "Senden",
+    "stop": "Stoppen",
+    "sendFailed": "Ihre Nachricht konnte nicht gesendet werden. Versuchen Sie es erneut.",
+    "answerWorking": "Wird bearbeitet…",
+    "answerStopped": "Gestoppt.",
+    "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
+    "answerFailed": "Die Antwort konnte nicht abgeschlossen werden."
   },
   "tasks": {
     "description": "Sehen Sie, was Aufmerksamkeit braucht, ohne den ganzen Arbeitsbereich zu öffnen.",

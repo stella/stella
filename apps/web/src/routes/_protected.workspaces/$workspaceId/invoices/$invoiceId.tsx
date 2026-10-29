@@ -12,16 +12,6 @@ import * as v from "valibot";
 
 import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -69,8 +59,17 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { ConfirmAction } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/confirm-action";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
 import { InvoiceLineEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-line-editor";
+import {
+  InvoicePaymentsSection,
+  RecordPaymentDialog,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments";
+import {
+  invoiceTakesPayments,
+  isPartiallyPaid,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -222,6 +221,7 @@ const InvoiceDetail = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const canUpdateInvoice = usePermissions({ invoice: ["update"] });
 
   const { data: invoice } = useSuspenseQuery(
@@ -243,8 +243,7 @@ const InvoiceDetail = ({
     );
   };
 
-  type TransitionAction =
-    "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+  type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
   const transitionMutation = useMutation({
     mutationFn: async (action: TransitionAction) => {
@@ -345,8 +344,22 @@ const InvoiceDetail = ({
             <h2 className="text-lg font-semibold">
               {invoice.invoiceNumber ?? t("billing.invoices.statuses.draft")}
             </h2>
-            <InvoiceStatusBadge status={invoiceStatus} />
+            <InvoiceStatusBadge
+              partiallyPaid={isPartiallyPaid(invoice)}
+              status={invoiceStatus}
+            />
           </div>
+          {(invoiceTakesPayments(invoiceStatus) ||
+            invoiceStatus === "paid") && (
+            <p className="text-muted-foreground text-sm tabular-nums">
+              {t("billing.invoices.payments.outstandingAmount", {
+                amount: formatCurrencyAmount(
+                  invoice.outstandingAmount,
+                  invoice.currency,
+                ),
+              })}
+            </p>
+          )}
           {invoice.reference && (
             <p className="text-muted-foreground text-sm">{invoice.reference}</p>
           )}
@@ -401,6 +414,26 @@ const InvoiceDetail = ({
           />
         )}
       </div>
+
+      {(invoiceTakesPayments(invoiceStatus) ||
+        invoiceStatus === "paid" ||
+        invoice.payments.length > 0) && (
+        <InvoicePaymentsSection
+          canUpdate={canUpdateInvoice}
+          invoice={invoice}
+          invoiceId={invoiceId}
+          onRecord={() => setRecordPaymentOpen(true)}
+          workspaceId={workspaceId}
+        />
+      )}
+      <RecordPaymentDialog
+        currency={invoice.currency}
+        invoiceId={invoiceId}
+        onOpenChange={setRecordPaymentOpen}
+        open={recordPaymentOpen}
+        outstandingAmount={invoice.outstandingAmount}
+        workspaceId={workspaceId}
+      />
 
       {/* Notes */}
       {invoice.notes && (
@@ -692,7 +725,7 @@ const InvoiceActions = ({
 }: {
   invoiceStatus: InvoiceStatus;
   onTransition: (
-    action: "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft",
+    action: "finalize" | "send" | "void" | "revert_to_draft",
   ) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -771,32 +804,8 @@ const InvoiceActions = ({
           )}
         </>
       );
+    // Payments are recorded in the payments section; paid follows from them.
     case "sent":
-      return (
-        <>
-          {canUpdateInvoice && (
-            <Button
-              onClick={() => onTransition("mark_paid")}
-              size="sm"
-              variant="outline"
-            >
-              <CheckIcon className="size-3.5" />
-              {t("markPaid")}
-            </Button>
-          )}
-          {canUpdateInvoice && (
-            <ConfirmAction
-              description={t("confirmVoid")}
-              onConfirm={() => onTransition("void")}
-            >
-              <Button size="sm" variant="destructive">
-                <XCircleIcon className="size-3.5" />
-                {t("void")}
-              </Button>
-            </ConfirmAction>
-          )}
-        </>
-      );
     case "paid":
       return canUpdateInvoice ? (
         <ConfirmAction
@@ -814,40 +823,6 @@ const InvoiceActions = ({
     default:
       return null;
   }
-};
-
-const ConfirmAction = ({
-  children,
-  description,
-  onConfirm,
-}: {
-  children: React.ReactElement;
-  description: string;
-  onConfirm: () => void;
-}) => {
-  const t = useTranslations("common");
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger nativeButton render={children} />
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t("confirmAction")}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="ghost" />}>
-            {t("cancel")}
-          </AlertDialogClose>
-          <AlertDialogClose
-            render={<Button onClick={onConfirm} variant="destructive" />}
-          >
-            {t("confirm")}
-          </AlertDialogClose>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
-  );
 };
 
 const editInvoiceSchema = v.strictObject({

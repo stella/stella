@@ -29,6 +29,26 @@ type ToolbarMount = {
 };
 const mountCache = new Map<string, ToolbarMount[]>();
 const trees = new Map<string, ParsedSource>();
+/** Named imports (type-only included) as local name -> exported name. */
+const namedImportsFrom = (
+  tree: ParsedSource,
+  matches: (specifier: string) => boolean,
+): Map<string, string> => {
+  const names = new Map<string, string>();
+  for (const statement of tree.module.staticImports) {
+    if (!matches(statement.moduleRequest.value)) {
+      continue;
+    }
+    for (const entry of statement.entries) {
+      // Named bindings carry their exported name; default and namespace
+      // bindings carry none.
+      if (entry.importName.name !== null) {
+        names.set(entry.localName.value, entry.importName.name);
+      }
+    }
+  }
+  return names;
+};
 const mountsOf = (target: string): ToolbarMount[] => {
   const cached = mountCache.get(target);
   if (cached !== undefined) {
@@ -41,59 +61,45 @@ const mountsOf = (target: string): ToolbarMount[] => {
     }
     const tree = trees.get(file) ?? parseSource(file, text);
     trees.set(file, tree);
-    const importedNames = new Set<string>();
-    for (const statement of tree.program.body) {
-      if (
-        statement.type !== "ImportDeclaration" ||
-        resolveImport(file, statement.source.value) !== target
-      ) {
-        continue;
-      }
-      for (const entry of statement.specifiers) {
-        if (entry.type === "ImportSpecifier") {
-          importedNames.add(entry.local.name);
-        }
-      }
-    }
+    const importedNames = namedImportsFrom(
+      tree,
+      (specifier) => resolveImport(file, specifier) === target,
+    );
     walk(tree.program, (node, ancestors) => {
       if (
-        node.type === "JSXOpeningElement" &&
-        node.name.type === "JSXIdentifier" &&
-        importedNames.has(node.name.name)
+        node.type !== "JSXOpeningElement" ||
+        node.name.type !== "JSXIdentifier" ||
+        !importedNames.has(node.name.name)
       ) {
-        let component = "";
-        for (const owner of ancestors.toReversed()) {
-          // The mounting function owns the toolbar regardless of its exports.
-          if (
-            owner.type === "VariableDeclarator" &&
-            owner.id.type === "Identifier" &&
-            owner.init &&
-            (owner.init.type === "ArrowFunctionExpression" ||
-              owner.init.type === "FunctionExpression")
-          ) {
-            component = owner.id.name;
-            break;
-          }
-          if (owner.type === "FunctionDeclaration") {
-            component = owner.id?.name ?? "";
-            break;
-          }
-        }
-        mounts.push({
-          file,
-          component,
-          props: node.attributes.flatMap((attribute) =>
-            attribute.type === "JSXAttribute"
-              ? [
-                  tree.sourceText.slice(
-                    attribute.name.start,
-                    attribute.name.end,
-                  ),
-                ]
-              : [],
-          ),
-        });
+        return;
       }
+      let component = "";
+      for (const owner of ancestors.toReversed()) {
+        // Local content components can sit behind an exported boundary.
+        // The mounting function owns the toolbar regardless of its exports.
+        if (
+          owner.type === "VariableDeclarator" &&
+          owner.id.type === "Identifier" &&
+          (owner.init?.type === "ArrowFunctionExpression" ||
+            owner.init?.type === "FunctionExpression")
+        ) {
+          component = owner.id.name;
+          break;
+        }
+        if (owner.type === "FunctionDeclaration") {
+          component = owner.id?.name ?? "";
+          break;
+        }
+      }
+      mounts.push({
+        file,
+        component,
+        props: node.attributes.flatMap((attribute) =>
+          attribute.type === "JSXAttribute"
+            ? [tree.sourceText.slice(attribute.name.start, attribute.name.end)]
+            : [],
+        ),
+      });
     });
   }
   mountCache.set(target, mounts);
@@ -129,21 +135,13 @@ test("every discovered selection toolbar mount supplies its own clipping boundar
     const tree = trees.get(wrapper.file);
     expect(tree).toBeDefined();
     const canonicalNames = new Set<string>();
-    for (const statement of tree?.program.body ?? []) {
-      if (
-        statement.type !== "ImportDeclaration" ||
-        statement.source.value !== "@/components/selection-toolbar.logic"
-      ) {
-        continue;
-      }
-      for (const entry of statement.specifiers) {
-        if (
-          entry.type === "ImportSpecifier" &&
-          (entry.imported.type === "Identifier"
-            ? entry.imported.name
-            : entry.imported.value) === "selectionToolbarAnchor"
-        ) {
-          canonicalNames.add(entry.local.name);
+    if (tree !== undefined) {
+      for (const [local, exported] of namedImportsFrom(
+        tree,
+        (specifier) => specifier === "@/components/selection-toolbar.logic",
+      )) {
+        if (exported === "selectionToolbarAnchor") {
+          canonicalNames.add(local);
         }
       }
     }

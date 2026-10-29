@@ -29,7 +29,9 @@ const run = (cwd: string, args: string[]) => {
     stderr: "pipe",
   });
   if (result.exitCode !== 0) {
-    throw new Error(`${args[0]} failed: ${result.stderr}`);
+    throw new Error(
+      `${String(args.at(0))} failed: ${result.stderr.toString()}`,
+    );
   }
   return result;
 };
@@ -89,7 +91,7 @@ test.each(Object.keys(GITLEAKS_SHA256))(
       throw result.error;
     }
     expect(calls).toEqual([
-      `https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_${platform}_${arch}.tar.gz`,
+      `https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_${String(platform)}_${String(arch)}.tar.gz`,
     ]);
     // A modified cached executable is replaced from the verified archive, never run.
     writeFileSync(
@@ -129,20 +131,42 @@ test("a mismatched PATH version provisions the pinned scanner", async () => {
   expect(result.value).not.toBe(old);
 });
 
-test("a pinned PATH scanner needs neither cache nor network", async () => {
-  const { dir, options } = fixture();
+test("a PATH scanner is accepted only after verifying the release archive", async () => {
+  const { dir, bytes, options } = fixture();
   const binary = path.join(dir, "gitleaks");
   const result = await resolveGitleaks({
     ...options,
     pathBinary: binary,
-    download: noNetwork,
+    download: async () => bytes,
   });
   expect(result.isOk()).toBe(true);
   if (result.isErr()) {
     throw result.error;
   }
   expect(result.value).toBe(binary);
-  expect(existsSync(path.join(dir, "stella"))).toBe(false);
+  expect(existsSync(path.join(dir, "stella"))).toBe(true);
+});
+
+test("a matching PATH version cannot substitute for the pinned executable", async () => {
+  const { dir, bytes, options } = fixture();
+  const binary = path.join(dir, "unverified");
+  const marker = path.join(dir, "unverified-ran");
+  writeFileSync(
+    binary,
+    `#!/bin/sh\ntouch "${marker}"\necho ${GITLEAKS_VERSION}\n`,
+    { mode: 0o700 },
+  );
+  const result = await resolveGitleaks({
+    ...options,
+    pathBinary: binary,
+    download: async () => bytes,
+  });
+  expect(result.isOk()).toBe(true);
+  expect(existsSync(marker)).toBe(false);
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(result.value).not.toBe(binary);
 });
 
 test("a checksum mismatch refuses before extraction or execution", async () => {
@@ -242,7 +266,7 @@ test.skipIf(realScanner === null)(
     }
     run(dir, ["git", "init", "-q"]);
     // Assemble a synthetic token shape; no credential is stored in this source.
-    const secret = `ghp_${"aB3dE6gH9jK2mN5pQ8sT1vW4yZ7cF0iL3oR6"}`;
+    const secret = ["ghp_", "aB3dE6gH9jK2mN5pQ8sT1vW4yZ7cF0iL3oR6"].join("");
     writeFileSync(path.join(dir, "secret.txt"), `token = "${secret}"\n`);
     run(dir, ["git", "add", "secret.txt"]);
     const scan = Bun.spawnSync(

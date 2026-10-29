@@ -1,3 +1,4 @@
+// parser-output-unchanged: Removal retry ID branding does not change parsed decision identities.
 // parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";
 
@@ -32,6 +33,7 @@ export type SafeIdType =
   | "caseLawPolarityRule"
   | "caseLawProvisionCitation"
   | "caseLawReconciliationItem"
+  | "caseLawRemovalReconciliationItem"
   | "caseLawResearchAnswerClaim"
   | "caseLawResearchColumn"
   | "caseLawSource"
@@ -85,6 +87,7 @@ export type SafeIdType =
   | "documentProcessingRun"
   | "documentReferenceCounter"
   | "documentReviewFinding"
+  | "documentReviewFindingDecision"
   | "documentReviewParty"
   | "documentReviewReferencePassage"
   | "documentReviewRun"
@@ -114,6 +117,7 @@ export type SafeIdType =
   | "infoSoudTrackedCase"
   | "invoice"
   | "invoiceLine"
+  | "invoicePayment"
   | "justification"
   | "legislationDocument"
   | "legislationIndexJob"

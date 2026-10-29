@@ -123,6 +123,11 @@ const PROVISION_PENDING_SINCE_MIGRATION_PATH = nodePath.join(
   "20261010110000_case_law_provision_pending_since",
   "migration.sql",
 );
+const PROVISION_REDACTION_RETIREMENT_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261027160600_case_law_redaction_retirement",
+  "migration.sql",
+);
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260731190000_case_law_observation_legacy_fence",
@@ -885,6 +890,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
     PROVISION_PENDING_SINCE_MIGRATION_PATH,
+    PROVISION_REDACTION_RETIREMENT_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>
@@ -1197,6 +1203,26 @@ export const installPgliteOrganizationMemberCapacity = async (
 };
 
 /** Install migration-owned timer signals and grants omitted by schema push. */
+/** Install the chat stored-content egress fences on threads and memberships. */
+export const installPgliteChatStoredContentEgress = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261028061100_chat_stored_content_egress",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteTimeEntryTimerSignals = async (
   db: PgliteSchemaDb,
 ) => {
@@ -1422,5 +1448,23 @@ export const installPgliteInvoiceObjects = async (
         statement.replace(/^CREATE FUNCTION/u, "CREATE OR REPLACE FUNCTION"),
       ),
     );
+  }
+};
+
+/** Install filing-year semantics from the committed function migration. */
+export const installPgliteDecisionDocketFilingYear = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261027160700_decision_docket_filing_year",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith("CREATE FUNCTION"),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
   }
 };

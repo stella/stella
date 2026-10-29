@@ -42,6 +42,10 @@ import {
 } from "@/components/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import {
+  PdfSignPlacementBar,
+  PdfSignPlacementLayer,
+} from "@/components/inspector/pdf-sign-placement-viewer";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
@@ -233,12 +237,16 @@ const PeekPdfViewerContent = ({
           workspaceId={workspaceId}
         />
         {pdfPageOverlay?.(pageId)}
+        {interactionMode === "preview-only" ? null : (
+          <PdfSignPlacementLayer pageId={pageId} />
+        )}
       </>
     ),
     [
       activePropertyId,
       entityId,
       fieldId,
+      interactionMode,
       onPeekNavigate,
       pdfPageOverlay,
       viewId,
@@ -313,6 +321,7 @@ const PeekPdfViewerContent = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       workspaceId={workspaceId}
     >
+      <PdfSignPlacementBar fieldId={fieldId} key={fieldId} />
       <PdfSelectionActions
         chat={PDF_SELECTION_CHAT.fileChat}
         entityId={entityId}
