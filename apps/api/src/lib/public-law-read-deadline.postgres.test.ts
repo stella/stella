@@ -107,7 +107,7 @@ if (!databaseUrl || !runPostgres) {
         { label: "read_statute", budgetMs: BUDGET_MS },
         async () =>
           await runWithPublicReadStatementTimeout(
-            100,
+            { budgetMs: 100 },
             async () =>
               await Result.tryPromise({
                 try: async () =>
