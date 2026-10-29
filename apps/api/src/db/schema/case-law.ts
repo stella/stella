@@ -25,12 +25,6 @@ import {
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
 
-import {
-  CASE_LAW_DECISIONS_SLUG_UIDX,
-  CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
-  CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
-  CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
-} from "@/api/db/online-unique-indexes";
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
@@ -843,15 +837,15 @@ export const caseLawDecisions = p.pgTable(
     // the case number still serves, because such a source holds one court
     // and its numbering is unique within it.
     p
-      .uniqueIndex(CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX)
+      .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     p
-      .uniqueIndex(CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX)
+      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
       .on(t.sourceId, t.caseNumber, t.language)
       .where(isNull(t.sourceDocumentId)),
     p
-      .uniqueIndex(CASE_LAW_DECISIONS_SLUG_UIDX)
+      .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)
       .where(isNotNull(t.slug)),
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
@@ -3631,7 +3625,7 @@ export const caseLawIngestionFailures = p.pgTable(
     p.index("case_law_ingestion_failures_error_type_idx").on(t.errorType),
     p.index("case_law_ingestion_failures_created_idx").on(t.createdAt),
     p
-      .uniqueIndex(CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX)
+      .uniqueIndex("case_law_ingestion_failures_source_record_uidx")
       .on(t.sourceId, t.recordIdentity)
       .where(isNotNull(t.recordIdentity)),
     ...globalCaseLawPolicies(),

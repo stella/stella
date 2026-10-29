@@ -6,10 +6,6 @@ import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-re
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
-  CHAT_MESSAGES_ID_THREAD_UIDX,
-  CHAT_TURNS_ORG_RUN_ID_UIDX,
-} from "@/api/db/online-unique-indexes";
-import {
   CHAT_TURN_CANCELLATION_REASONS,
   CHAT_TURN_FAILURE_CODES,
   CHAT_TURN_INTERACTION_TYPES,
@@ -378,7 +374,7 @@ export const chatMessages = p.pgTable(
       .on(table.userId, table.workspaceId, table.createdAt),
     // Prepared online for a later additive composite FK that will make the
     // message/turn same-thread link declarative without locking chat history.
-    p.uniqueIndex(CHAT_MESSAGES_ID_THREAD_UIDX).on(table.id, table.threadId),
+    p.uniqueIndex("chat_messages_id_thread_uidx").on(table.id, table.threadId),
     p.check("chat_messages_revision_nonnegative", sql`${table.revision} >= 0`),
     p.check(
       "chat_messages_content_v3_check",
@@ -723,7 +719,7 @@ export const chatTurns = p.pgTable(
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),
     p
-      .uniqueIndex(CHAT_TURNS_ORG_RUN_ID_UIDX)
+      .uniqueIndex("chat_turns_org_run_id_uidx")
       .on(table.organizationId, table.runId)
       .where(sql`${table.runId} IS NOT NULL`),
     p

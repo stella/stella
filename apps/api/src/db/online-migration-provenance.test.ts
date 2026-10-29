@@ -9,9 +9,12 @@ import {
   ONLINE_MIGRATION_REPAIRS,
 } from "./online-migrations";
 import {
+  EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  EXECUTABLE_ONLINE_UNIQUE_INDEXES,
   ONLINE_UNIQUE_INDEX_NAMES,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
 } from "./online-unique-indexes";
+import type { OnlineUniqueIndexName } from "./online-unique-indexes";
 
 test("every online step identifies its existing migration or code owner", () => {
   const folders = new Set(
@@ -49,6 +52,14 @@ test("every online step identifies its existing migration or code owner", () => 
 });
 
 test("every unique online index has exactly one exported dependency name", () => {
+  expectTypeOf<string>().not.toExtend<OnlineUniqueIndexName>();
+  const executable = EXECUTABLE_ONLINE_UNIQUE_INDEXES.map(
+    ({ name }) => name,
+  ).toSorted();
+  expect(executable).toEqual(
+    Object.values(EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES).toSorted(),
+  );
+  expect(new Set(executable).size).toBe(executable.length);
   const registered = ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS.map(
     ({ name }) => name,
   ).toSorted();

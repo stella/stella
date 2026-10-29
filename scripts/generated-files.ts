@@ -1071,6 +1071,37 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "online-unique-index-names",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/online-unique-indexes.ts"],
+    blocks: [
+      {
+        path: "apps/api/src/db/online-unique-indexes.ts",
+        begin: "// BEGIN GENERATED ONLINE UNIQUE INDEX NAMES",
+        end: "// END GENERATED ONLINE UNIQUE INDEX NAMES",
+      },
+    ],
+    inputs: [
+      "apps/api/scripts/generate-online-unique-index-names.ts",
+      "apps/api/src/db/online-unique-indexes.ts",
+      "apps/api/src/lib/db/migration-history.ts",
+      "apps/api/src/lib/db/migration-alias-inventory.json",
+      "packages/sha256/src/bun.ts",
+      "packages/portable-path/src/index.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-online-unique-index-names.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-online-unique-index-names.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],

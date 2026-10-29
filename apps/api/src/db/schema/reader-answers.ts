@@ -13,8 +13,6 @@ import {
   type ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
 
-import { LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX } from "@/api/db/online-unique-indexes";
-
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
   authoredNotePolicies,
@@ -166,7 +164,7 @@ export const legalReaderAnswerMessages = p.pgTable(
       })
       .onDelete("cascade"),
     p
-      .uniqueIndex(LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX)
+      .uniqueIndex("legal_reader_answer_messages_answer_sequence_idx")
       .on(t.answerId, t.sequence),
     p.check(
       "legal_reader_answer_messages_sequence_positive",

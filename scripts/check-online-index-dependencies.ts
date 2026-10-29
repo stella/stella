@@ -39,15 +39,152 @@ const canonical = (columns: readonly string[]) =>
     .toSorted()
     .join(",");
 
-const isIndexDeclaration = (node: ts.Node) => {
-  const parent = node.parent;
-  if (!ts.isCallExpression(parent)) {
-    return false;
+const indexDeclarationResolver = (ast: ts.SourceFile) => {
+  let checker: ts.TypeChecker | undefined;
+  const symbolAt = (node: ts.Node) => {
+    if (checker === undefined) {
+      const options = { noLib: true, noResolve: true, noEmit: true };
+      const host = ts.createCompilerHost(options);
+      host.getSourceFile = (file) => (file === ast.fileName ? ast : undefined);
+      host.readFile = (file) => (file === ast.fileName ? ast.text : undefined);
+      host.fileExists = (file) => file === ast.fileName;
+      checker = ts
+        .createProgram([ast.fileName], options, host)
+        .getTypeChecker();
+    }
+    return checker.getSymbolAtLocation(node);
+  };
+  const namespaces = new Set<ts.Symbol>();
+  const builders = new Set<ts.Symbol>();
+  const isBuilder = (name: string) =>
+    name === "uniqueIndex" || name === "unique";
+  for (const statement of ast.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause === undefined ||
+      statement.importClause.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    const pgCore = specifier === "drizzle-orm/pg-core";
+    const resolved = specifier.startsWith(".")
+      ? path.resolve(path.dirname(ast.fileName), specifier)
+      : specifier;
+    const common =
+      specifier === "@/api/db/schema/common" ||
+      resolved.replace(/\.ts$/u, "") ===
+        path.resolve(ROOT, "apps/api/src/db/schema/common");
+    if (!pgCore && !common) {
+      continue;
+    }
+    const bindings = statement.importClause.namedBindings;
+    if (bindings === undefined) {
+      continue;
+    }
+    if (ts.isNamespaceImport(bindings)) {
+      const symbol = symbolAt(bindings.name);
+      if (pgCore && symbol !== undefined) {
+        namespaces.add(symbol);
+      }
+      continue;
+    }
+    for (const binding of bindings.elements) {
+      const name = binding.propertyName?.text ?? binding.name.text;
+      const symbol = symbolAt(binding.name);
+      if (binding.isTypeOnly || symbol === undefined) {
+        continue;
+      }
+      if (pgCore && isBuilder(name)) {
+        builders.add(symbol);
+      }
+      if (common && name === "p") {
+        namespaces.add(symbol);
+      }
+    }
   }
-  return (
-    ts.isIdentifier(parent.expression) &&
-    parent.expression.text === "uniqueIndex"
-  );
+  const isIndexDeclaration = (node: ts.Node) => {
+    if (namespaces.size === 0 && builders.size === 0) {
+      return false;
+    }
+    const parent = node.parent;
+    if (!ts.isCallExpression(parent) || parent.arguments.at(0) !== node) {
+      return false;
+    }
+    const callee = parent.expression;
+    if (ts.isIdentifier(callee)) {
+      const symbol = symbolAt(callee);
+      return symbol !== undefined && builders.has(symbol);
+    }
+    if (
+      !ts.isPropertyAccessExpression(callee) ||
+      !isBuilder(callee.name.text) ||
+      !ts.isIdentifier(callee.expression)
+    ) {
+      return false;
+    }
+    const symbol = symbolAt(callee.expression);
+    return symbol !== undefined && namespaces.has(symbol);
+  };
+  return { isIndexDeclaration, symbolAt };
+};
+
+type DeclaredIndexBindingsOptions = {
+  ast: ts.SourceFile;
+  byName: ReadonlyMap<string, UniqueIndex>;
+} & ReturnType<typeof indexDeclarationResolver>;
+
+const declaredIndexBindings = ({
+  ast,
+  byName,
+  symbolAt,
+  isIndexDeclaration,
+}: DeclaredIndexBindingsOptions) => {
+  const declarationBindings = new Map<
+    ts.Symbol,
+    { declaration: ts.VariableDeclaration; index: UniqueIndex }
+  >();
+  // A schema can name its builder through an exported module-level constant.
+  // The initializer declares the name; later runtime references still consume it.
+  for (const statement of ast.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      statement.declarationList.getFirstToken(ast)?.kind !==
+        ts.SyntaxKind.ConstKeyword
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.initializer === undefined ||
+        !ts.isStringLiteralLike(declaration.initializer)
+      ) {
+        continue;
+      }
+      const index = byName.get(declaration.initializer.text);
+      if (index === undefined) {
+        continue;
+      }
+      const symbol = symbolAt(declaration.name);
+      if (symbol !== undefined) {
+        declarationBindings.set(symbol, { declaration, index });
+      }
+    }
+  }
+  const builderBindings = new Set<ts.Symbol>();
+  const findBuilderBindings = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && isIndexDeclaration(node)) {
+      const symbol = symbolAt(node);
+      if (symbol !== undefined && declarationBindings.has(symbol)) {
+        builderBindings.add(symbol);
+      }
+    }
+    ts.forEachChild(node, findBuilderBindings);
+  };
+  findBuilderBindings(ast);
+  return { declarationBindings, builderBindings };
 };
 
 export const checkOnlineIndexDependencySource = ({
@@ -64,10 +201,22 @@ export const checkOnlineIndexDependencySource = ({
   ) {
     return [];
   }
-  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const ast = ts.createSourceFile(
+    path.resolve(ROOT, file),
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const { isIndexDeclaration, symbolAt } = indexDeclarationResolver(ast);
   const findings: OnlineIndexDependency[] = [];
   const aliases = new Map<string, string>();
   const byName = new Map(indexes.map((index) => [index.name, index]));
+  const { declarationBindings, builderBindings } = declaredIndexBindings({
+    ast,
+    byName,
+    symbolAt,
+    isIndexDeclaration,
+  });
   const exportedNames = new Map(
     Object.entries(ONLINE_UNIQUE_INDEX_NAMES).map(([key, value]) => [
       key,
@@ -129,23 +278,57 @@ export const checkOnlineIndexDependencySource = ({
       }
     }
   };
+  const isBuilderNameInitializer = (node: ts.Node) => {
+    if (
+      !ts.isVariableDeclaration(node.parent) ||
+      node.parent.initializer !== node ||
+      !ts.isIdentifier(node.parent.name)
+    ) {
+      return false;
+    }
+    const symbol = symbolAt(node.parent.name);
+    return symbol !== undefined && builderBindings.has(symbol);
+  };
+  const checkIdentifier = (node: ts.Identifier): void => {
+    if (ts.isImportSpecifier(node.parent)) {
+      return;
+    }
+    const symbol = declarationBindings.size === 0 ? undefined : symbolAt(node);
+    const binding =
+      symbol === undefined ? undefined : declarationBindings.get(symbol);
+    if (
+      binding !== undefined &&
+      symbol !== undefined &&
+      builderBindings.has(symbol) &&
+      binding.declaration.name !== node &&
+      !isIndexDeclaration(node)
+    ) {
+      add(
+        node,
+        binding.index,
+        "raw index name; use the exported index constant",
+      );
+    }
+    const name = exportedNames.get(aliases.get(node.text) ?? node.text);
+    const index = name === undefined ? undefined : byName.get(name);
+    if (index?.introducedBy === newestMigration) {
+      add(node, index, `depends on newest migration ${newestMigration}`);
+    }
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isImportSpecifier(node)) {
       aliases.set(node.name.text, node.propertyName?.text ?? node.name.text);
     }
     if (ts.isStringLiteralLike(node)) {
       const index = byName.get(node.text);
-      if (index !== undefined && !isIndexDeclaration(node)) {
+      const initializer = isBuilderNameInitializer(node);
+      if (index !== undefined && !isIndexDeclaration(node) && !initializer) {
         add(node, index, "raw index name; use the exported index constant");
       }
     }
     checkSqlNode(node);
-    if (ts.isIdentifier(node) && !ts.isImportSpecifier(node.parent)) {
-      const name = exportedNames.get(aliases.get(node.text) ?? node.text);
-      const index = name === undefined ? undefined : byName.get(name);
-      if (index?.introducedBy === newestMigration) {
-        add(node, index, `depends on newest migration ${newestMigration}`);
-      }
+    if (ts.isIdentifier(node)) {
+      checkIdentifier(node);
     }
     if (
       ts.isCallExpression(node) &&

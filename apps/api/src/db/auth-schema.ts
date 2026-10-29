@@ -25,8 +25,6 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
 
-import { ACCOUNT_CREDENTIAL_SINGLETON_UIDX } from "./online-unique-indexes";
-
 export const user = pgTable(
   "user",
   {
@@ -206,7 +204,7 @@ export const account = pgTable(
       table.providerId,
       table.accountId,
     ),
-    uniqueIndex(ACCOUNT_CREDENTIAL_SINGLETON_UIDX)
+    uniqueIndex("account_credential_singleton_uidx")
       .on(table.providerId)
       .where(sql`${table.providerId} = 'credential'`),
     ...denyStellaAccessPolicies(),

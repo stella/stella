@@ -14,8 +14,6 @@ import {
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
 
-import { CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX } from "@/api/db/online-unique-indexes";
-
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
@@ -154,7 +152,7 @@ export const correspondence = p.pgTable.withRLS(
       .uniqueIndex("correspondence_ws_dedup_uidx")
       .on(table.workspaceId, table.dedupKey),
     p
-      .uniqueIndex(CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX)
+      .uniqueIndex("correspondence_ws_source_entity_uidx")
       .on(table.workspaceId, table.sourceEntityId),
     p
       .index("correspondence_ws_received_idx")

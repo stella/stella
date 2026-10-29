@@ -23,11 +23,6 @@ import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
-  INVOICES_ID_WORKSPACE_UNIQUE,
-  TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX,
-  TIME_TIMERS_LEGACY_ENTRY_UIDX,
-} from "@/api/db/online-unique-indexes";
-import {
   completeInvoiceVisibilityPolicy,
   invoiceLineOwnerReadPolicy,
   invoicePaymentNoDeletePolicy,
@@ -67,7 +62,7 @@ import { contacts, workspaces } from "./contacts";
 import { entities } from "./entities";
 
 export const ACTIVE_TIMER_INDEX_NAME =
-  TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX;
+  "time_entries_one_active_timer_per_user_idx";
 
 const DAILY_TARGET_ADMIN_ROLES = ORGANIZATION_MANAGEMENT_ROLES.map((role) =>
   sql.raw(`'${role}'`),
@@ -449,7 +444,7 @@ export const timeTimers = p.pgTable(
     p.index("time_timers_workspace_idx").on(table.workspaceId),
     p.index("time_timers_legacy_entry_idx").on(table.legacyTimeEntryId),
     p
-      .uniqueIndex(TIME_TIMERS_LEGACY_ENTRY_UIDX)
+      .uniqueIndex("time_timers_legacy_entry_uidx")
       .on(table.legacyTimeEntryId)
       .where(sql`${table.legacyTimeEntryId} IS NOT NULL`),
     p.check(
@@ -1120,7 +1115,7 @@ export const invoices = p.pgTable(
         name: "invoices_workspace_id_workspaces_id_fkey",
       })
       .onDelete("no action"),
-    p.unique(INVOICES_ID_WORKSPACE_UNIQUE).on(table.id, table.workspaceId),
+    p.unique("invoices_id_workspace_unique").on(table.id, table.workspaceId),
     p.foreignKey({
       columns: [table.originalInvoiceId, table.workspaceId],
       foreignColumns: [table.id, table.workspaceId],

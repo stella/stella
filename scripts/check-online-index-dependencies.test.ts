@@ -125,13 +125,78 @@ test("keeps the full nested expression target", () => {
   );
 });
 
-test("schema index declarations do not consume index readiness", () => {
+test.each([
+  'uniqueIndex("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+  'p.uniqueIndex("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+  'p.unique("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+  'namespace.uniqueIndex("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+  'schemaPg.unique("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+  'defineUnique("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+  'export const ACTIVE_INDEX = "chat_turns_org_run_id_uidx"; p.uniqueIndex(ACTIVE_INDEX).on(chatTurns.organizationId, chatTurns.runId)',
+])("schema index declarations do not consume index readiness: %s", (source) => {
   expect(
-    check(
-      'uniqueIndex("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
-    ),
+    checkOnlineIndexDependencySource({
+      file: "apps/api/src/db/schema/example.ts",
+      source: `import { uniqueIndex, unique as defineUnique } from "drizzle-orm/pg-core"; import * as namespace from "drizzle-orm/pg-core"; import { p } from "./common"; import { p as schemaPg } from "@/api/db/schema/common";\n${source}`,
+      indexes: [index],
+      newestMigration: index.introducedBy,
+    }),
   ).toEqual([]);
   expect(
     check('error.constraint_name === "chat_turns_org_run_id_uidx"').at(0)?.name,
   ).toBe(index.name);
+});
+
+test.each([
+  'p.uniqueIndex("chat_turns_org_run_id_uidx"); error.constraint_name === "chat_turns_org_run_id_uidx"',
+])("schema modules retain runtime dependency enforcement: %s", (source) => {
+  const findings = checkOnlineIndexDependencySource({
+    file: "apps/api/src/db/schema/example.ts",
+    source: `import { p } from "./common";\n${source}`,
+    indexes: [index],
+    newestMigration: index.introducedBy,
+  });
+  expect(findings.map(({ name }) => name)).toEqual([index.name]);
+  expect(findings.some(({ reason }) => reason.startsWith("raw "))).toBe(true);
+});
+
+test.each([
+  "error.constraint_name === ACTIVE_INDEX",
+  "query.onConflictDoNothing({ target: [chatTurns.organizationId, chatTurns.runId] })",
+])("a declaration binding does not hide its runtime use: %s", (runtime) => {
+  const findings = checkOnlineIndexDependencySource({
+    file: "apps/api/src/db/schema/example.ts",
+    source: `import { p } from "./common";\nexport const ACTIVE_INDEX = "chat_turns_org_run_id_uidx";\np.uniqueIndex(ACTIVE_INDEX);\n${runtime}`,
+    indexes: [index],
+    newestMigration: index.introducedBy,
+  });
+  expect(findings.map(({ line }) => line)).toEqual([4]);
+  expect(findings.at(0)?.reason).toMatch(/^raw /u);
+});
+
+test.each([
+  'other.uniqueIndex("chat_turns_org_run_id_uidx")',
+  'other.unique("chat_turns_org_run_id_uidx")',
+  'uniqueIndex("chat_turns_org_run_id_uidx")',
+  'import { p } from "./common"; const run = (p) => p.uniqueIndex("chat_turns_org_run_id_uidx")',
+  'import { uniqueIndex } from "drizzle-orm/pg-core"; const run = (uniqueIndex) => uniqueIndex("chat_turns_org_run_id_uidx")',
+  'import * as pg from "drizzle-orm/pg-core"; const run = (pg) => pg.unique("chat_turns_org_run_id_uidx")',
+  'import { p } from "./other"; p.uniqueIndex("chat_turns_org_run_id_uidx")',
+])("unbound or shadowed builders remain runtime dependencies: %s", (source) => {
+  expect(check(source).at(0)?.reason).toBe(
+    "raw index name; use the exported index constant",
+  );
+});
+
+test("a shadowed declaration binding does not authorize a runtime name initializer", () => {
+  const findings = checkOnlineIndexDependencySource({
+    file: "apps/api/src/db/schema/example.ts",
+    source: `import { p } from "./common";
+export const ACTIVE_INDEX = "chat_turns_org_run_id_uidx";
+const build = (ACTIVE_INDEX) => p.uniqueIndex(ACTIVE_INDEX);
+error.constraint_name === ACTIVE_INDEX;`,
+    indexes: [index],
+    newestMigration: index.introducedBy,
+  });
+  expect(findings.map(({ line }) => line)).toEqual([2]);
 });

@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 
-import { WORKSPACE_VIEWS_CORRESPONDENCE_UIDX } from "@/api/db/online-unique-indexes";
 import type { FileKey } from "@/api/lib/file-key";
 
 import { chatThreads } from "./chat";
@@ -67,7 +66,7 @@ export const userFiles = p.pgTable(
 
 /** Unique index holding a matter to one correspondence view. */
 export const WORKSPACE_VIEWS_CORRESPONDENCE_INDEX =
-  WORKSPACE_VIEWS_CORRESPONDENCE_UIDX;
+  "workspace_views_correspondence_uidx";
 
 export const workspaceViews = p.pgTable(
   "workspace_views",

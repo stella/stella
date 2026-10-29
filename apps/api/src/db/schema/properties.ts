@@ -1,7 +1,3 @@
-import {
-  PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
-  PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ,
-} from "@/api/db/online-unique-indexes";
 import { PLAYBOOK_VERSION_SOURCES } from "@/api/lib/workflow/playbook-positions";
 import type { PlaybookVersionSource } from "@/api/lib/workflow/playbook-positions";
 
@@ -78,7 +74,7 @@ export const properties = p.pgTable(
     // At most one document-type classifier per workspace: makes a second
     // classifier (which would make routing ambiguous) structurally impossible.
     p
-      .uniqueIndex(PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ)
+      .uniqueIndex("properties_ws_document_type_classifier_unq")
       .on(table.workspaceId)
       .where(sql`${table.role} = 'document-type-classifier'`),
     ...wsPolicies({ columns: table }),
@@ -200,7 +196,7 @@ export const playbookDefinitions = p.pgTable(
       .index("playbook_definitions_org_created_at_idx")
       .on(table.organizationId, table.createdAt),
     p
-      .uniqueIndex(PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX)
+      .uniqueIndex("playbook_definitions_org_starter_id_uidx")
       .on(table.organizationId, table.starterId)
       .where(isNotNull(table.starterId)),
     p
