@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
 import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
-import { ownsContextMenuTarget } from "@stll/ui/use-contained-handler";
+
+import { ownsContextMenuTarget } from "@/components/context-menu-target";
 
 type AnchorRect = {
   getBoundingClientRect: () => DOMRect;

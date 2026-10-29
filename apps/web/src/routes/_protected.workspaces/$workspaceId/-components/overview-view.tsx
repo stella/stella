@@ -116,6 +116,7 @@ type VirtualAnchor = {
 type UpcomingMenuState = {
   open: boolean;
   anchor: VirtualAnchor | null;
+  opener: HTMLElement | null;
   task: UpcomingTaskContext | null;
 };
 
@@ -174,6 +175,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
     open: false,
     anchor: null,
+    opener: null,
     task: null,
   });
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
@@ -284,6 +286,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         anchor: {
           getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
         },
+        opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
         task,
       });
     },
@@ -580,6 +583,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 getBoundingClientRect: () =>
                   new DOMRect(e.clientX, e.clientY, 0, 0),
               },
+              opener:
+                e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
               task: null,
             });
           })}
@@ -670,13 +675,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               setUpcomingMenu((previous) =>
                 open
                   ? { ...previous, open }
-                  : { open: false, anchor: null, task: null },
+                  : { open: false, anchor: null, opener: null, task: null },
               );
             }}
             open={upcomingMenu.open}
           >
             <MenuAnchor />
-            <MenuPopup anchor={upcomingMenu.anchor ?? undefined}>
+            <MenuPopup
+              anchor={upcomingMenu.anchor ?? undefined}
+              finalFocus={() => upcomingMenu.opener}
+            >
               {upcomingMenu.task === null ? (
                 <MenuItem
                   disabled={createTaskOnce.pending}

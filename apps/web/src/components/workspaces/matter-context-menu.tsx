@@ -35,8 +35,8 @@ import {
   MenuSeparator,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
-import { ownsContextMenuTarget } from "@stll/ui/use-contained-handler";
 
+import { ownsContextMenuTarget } from "@/components/context-menu-target";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -364,6 +364,7 @@ export const useMatterContextMenu = (
   const updateWorkspace = useUpdateWorkspace();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpener, setMenuOpener] = useState<HTMLElement | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -415,7 +416,11 @@ export const useMatterContextMenu = (
       open={menuOpen}
     >
       <MenuAnchor />
-      <MenuPopup anchor={menuAnchor ?? undefined} className="z-50">
+      <MenuPopup
+        anchor={menuAnchor ?? undefined}
+        className="z-50"
+        finalFocus={() => menuOpener}
+      >
         <MatterMenuHeader
           clientName={target.client?.displayName ?? null}
           color={target.color}
@@ -441,6 +446,16 @@ export const useMatterContextMenu = (
       e.stopPropagation();
       const x = e.clientX;
       const y = e.clientY;
+      const eventTarget = e.target instanceof Element ? e.target : null;
+      const control = eventTarget?.closest("button,a[href],[tabindex]");
+      const opener =
+        control instanceof HTMLElement && e.currentTarget.contains(control)
+          ? control
+          : null;
+      setMenuOpener(
+        opener ??
+          (e.currentTarget instanceof HTMLElement ? e.currentTarget : null),
+      );
       setMenuAnchor({ getBoundingClientRect: () => new DOMRect(x, y, 0, 0) });
       setMenuOpen(true);
     },

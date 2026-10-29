@@ -1,5 +1,5 @@
 import { MenuAnchor, MenuTrigger } from "@stll/ui/menu";
-import { ownsContextMenuTarget as ownsTarget } from "@stll/ui/use-contained-handler";
+import { ownsContextMenuTarget as ownsTarget } from "@/components/context-menu-target";
 
 const t = (key: string) => key;
 const labels = { add: "Add", addSort: "Sort" };

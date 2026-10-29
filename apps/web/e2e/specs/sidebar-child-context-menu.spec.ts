@@ -82,3 +82,60 @@ for (const kind of ["document", "task"] as const) {
     }
   });
 }
+
+test("context menus return focus to sidebar rows and matter cards", async ({
+  baseURL,
+  page,
+  request,
+}, testInfo) => {
+  const workspace = await createTestWorkspace(request, "menu-focus");
+  const childName = "Focus return document";
+  const workspaceName = `menu-focus-${workspace.id.slice(0, 8)}`;
+  try {
+    await apiPut(request, `/entities/${workspace.id}`, {
+      kind: "document",
+      name: childName,
+    });
+    await page.context().addCookies((await request.storageState()).cookies);
+    await seedSidebarState({
+      baseURL,
+      context: page.context(),
+      state: "expanded",
+    });
+    await page.goto(`/workspaces/${workspace.id}/${workspace.viewId}`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    const disclosure = sidebar.locator(
+      `button[aria-controls="matter-activity-${workspace.id}"]`,
+    );
+    await expect(disclosure).toBeVisible();
+    if ((await disclosure.getAttribute("aria-expanded")) === "false") {
+      await disclosure.click();
+    }
+    const sidebarOpener = sidebar.getByRole("button", {
+      exact: true,
+      name: childName,
+    });
+    await sidebarOpener.click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sidebarOpener).toBeFocused();
+
+    await page.goto("/workspaces", { waitUntil: "domcontentloaded" });
+    const cardOpener = page.getByRole("link", {
+      exact: true,
+      name: workspaceName,
+    });
+    await expect(cardOpener).toBeVisible();
+    await cardOpener.click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(cardOpener).toBeFocused();
+  } finally {
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
+  }
+});

@@ -598,7 +598,7 @@ const MattersPageContextMenu = ({
         open={open}
       >
         <MenuAnchor />
-        <MenuPopup anchor={anchor ?? undefined}>
+        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => opener}>
           <MenuItem
             onClick={() => openCreateMatter(opener === null ? {} : { opener })}
           >

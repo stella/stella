@@ -76,6 +76,7 @@ export const CalendarDayCell = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -85,6 +86,9 @@ export const CalendarDayCell = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -219,7 +223,10 @@ export const CalendarDayCell = ({
           open={ctxOpen}
         >
           <MenuAnchor />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}

@@ -46,7 +46,7 @@ export const SidebarEntityRow = ({
   const canDelete = usePermissions({ entity: ["delete"] });
   const rename = useInlineRename({
     initial: name,
-    onCommit: (nextName, setError) => {
+    onCommit: (nextName, { setError }) => {
       renameEntity.mutate(
         { entityId, name: nextName, workspaceId },
         { onError: () => setError(t("errors.actionFailed")) },

@@ -103,7 +103,10 @@ const checksContextMenuTarget = (context: Context, handler: unknown) => {
       isImportedFrom({
         context,
         node: node.callee,
-        modules: ["@stll/ui/use-contained-handler"],
+        modules: [
+          "@/components/context-menu-target",
+          "apps/web/src/components/context-menu-target",
+        ],
         names: TARGET_OWNERSHIP_CHECKS,
       })
     ) {
@@ -136,6 +139,9 @@ export default eslintCompatPlugin({
             return filenameForContext(context).endsWith(".tsx");
           },
           JSXOpeningElement(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             if (attributeOf(node, "data-context-menu-target") === undefined) {
               return;
             }
@@ -190,6 +196,9 @@ export default eslintCompatPlugin({
             }
           },
           JSXOpeningElement(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             const name = jsxName(node.name);
             const isNamespaceTrigger =
               node.name.type === "JSXMemberExpression" &&
@@ -219,6 +228,9 @@ export default eslintCompatPlugin({
             return filenameForContext(context).endsWith(".tsx");
           },
           JSXOpeningElement(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             const label = attributeOf(node, "aria-label");
             const filename = filenameForContext(context);
             const ownsIconControls =

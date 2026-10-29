@@ -54,10 +54,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
-import {
-  containedEventHandler,
-  ownsContextMenuTarget,
-} from "@stll/ui/use-contained-handler";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -74,6 +71,7 @@ import {
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { ownsContextMenuTarget } from "@/components/context-menu-target";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
@@ -1363,6 +1361,20 @@ const MatterItem = ({
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );
 
+  const handleMatterContextMenu = (e: React.MouseEvent) => {
+    if (!ownsContextMenuTarget(e)) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const x = e.clientX;
+    const y = e.clientY;
+    setCtxAnchor({
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    });
+    setMenuOpen(true);
+  };
+
   if (rename.state.mode === "edit") {
     return (
       <SidebarMenuItem>
@@ -1396,19 +1408,7 @@ const MatterItem = ({
           isEntityDropTarget &&
             "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
         )}
-        onContextMenu={containedEventHandler((e) => {
-          if (!ownsContextMenuTarget(e)) {
-            return;
-          }
-          e.preventDefault();
-          e.stopPropagation();
-          const x = e.clientX;
-          const y = e.clientY;
-          setCtxAnchor({
-            getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-          });
-          setMenuOpen(true);
-        })}
+        onContextMenu={containedEventHandler(handleMatterContextMenu)}
         ref={dropRef}
       >
         {hasExpandableContent ? (

@@ -67,9 +67,17 @@ test.each(iconLabelCases)("$title", async ({ source, lines }) => {
 
 const contextTargetCases = [
   {
+    title: "accepts the web context-menu ownership owner",
+    source: [
+      'import { ownsContextMenuTarget } from "@/components/context-menu-target";',
+      'const a = <li data-context-menu-target="matter" onContextMenu={(event) => { if (!ownsContextMenuTarget(event)) return; openMatterMenu(); }} />;',
+    ].join("\n"),
+    lines: [],
+  },
+  {
     title: "rejects marked handlers without a nearest-target check",
     source: [
-      'import { containedEventHandler } from "@stll/ui/use-contained-handler";',
+      'import { containedEventHandler } from "@/components/context-menu-target";',
       'const a = <li data-context-menu-target="matter" onContextMenu={containedEventHandler((event) => { event.preventDefault(); openMatterMenu(); })} />;',
       'const b = <li data-context-menu-target="matter" onContextMenu={openMatterMenu} />;',
     ].join("\n"),
@@ -78,7 +86,7 @@ const contextTargetCases = [
   {
     title: "accepts aliased predicates and stable local handlers",
     source: [
-      'import { containedEventHandler, ownsContextMenuTarget as ownsTarget } from "@stll/ui/use-contained-handler";',
+      'import { containedEventHandler, ownsContextMenuTarget as ownsTarget } from "@/components/context-menu-target";',
       'const a = <li data-context-menu-target="matter" onContextMenu={containedEventHandler((event) => { if (!ownsTarget(event)) return; openMatterMenu(); })} />;',
       "const handler = (event) => { if (!ownsTarget(event)) return; openMatterMenu(); };",
       'const b = <li data-context-menu-target="matter" onContextMenu={containedEventHandler(handler)} />;',
@@ -90,7 +98,7 @@ const contextTargetCases = [
   {
     title: "accepts namespace imports and a local helper that owns resolution",
     source: [
-      'import * as containment from "@stll/ui/use-contained-handler";',
+      'import * as containment from "@/components/context-menu-target";',
       "const ownedHandler = (action) => (event) => { if (!containment.ownsContextMenuTarget(event)) return; action(); };",
       'const a = <li data-context-menu-target="matter" onContextMenu={ownedHandler(openMatterMenu)} />;',
     ].join("\n"),
@@ -99,7 +107,7 @@ const contextTargetCases = [
   {
     title: "rejects unrelated predicates and shadowed import names",
     source: [
-      'import { ownsContextMenuTarget as importedPredicate } from "@stll/ui/use-contained-handler";',
+      'import { ownsContextMenuTarget as importedPredicate } from "@/components/context-menu-target";',
       "const ownsContextMenuTarget = () => true;",
       'const a = <li data-context-menu-target="matter" onContextMenu={(event) => { if (!ownsContextMenuTarget(event)) return; openMatterMenu(); }} />;',
       'const Component = (importedPredicate) => <li data-context-menu-target="matter" onContextMenu={(event) => { if (!importedPredicate(event)) return; openMatterMenu(); }} />;',

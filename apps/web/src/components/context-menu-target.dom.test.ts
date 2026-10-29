@@ -1,10 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { ownsContextMenuTarget } from "./use-contained-handler";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import { ownsContextMenuTarget } from "./context-menu-target";
 
 GlobalRegistrator.register();
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
 
 describe("context actions belong to the nearest marked row", () => {
   for (const depth of [1, 2, 5, 10]) {
