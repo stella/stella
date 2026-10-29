@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const email = process.env["APP_REVIEW_ACCOUNT_EMAIL"];
 const organizationId = process.env["APP_REVIEW_ORGANIZATION_ID"];
 
@@ -47,13 +49,13 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     if (stored.allowedScopes === null) {
       return panic("Configured OAuth resource has no allowed scopes");
     }
-    return { ...stored, allowedScopes: stored.allowedScopes.toSorted() };
+    return { ...stored, allowedScopes: stored.allowedScopes.toSorted(compareCodeUnit) };
   });
   expect(storedResources).toHaveLength(configuredResources.length);
   for (const resource of configuredResources) {
     expect(normalizedResources).toContainEqual({
       ...resource,
-      allowedScopes: resource.allowedScopes.toSorted(),
+      allowedScopes: resource.allowedScopes.toSorted(compareCodeUnit),
       disabled: false,
     });
   }

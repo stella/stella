@@ -2,13 +2,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   drainDeliverabilityEvents,
+  MAX_RECIPIENTS_PER_EVENT,
   readDeliverabilityTransition,
+  RECIPIENT_WRITES_PER_RUN,
 } from "@/api/lib/email/deliverability";
 import type { AccountEmailUndeliverableReason } from "@/api/lib/email/deliverability-contract";
 import {
   type NormalizedEmail,
   normalizeEmail,
 } from "@/api/lib/email/normalized-email";
+import { MAX_MESSAGES_PER_BATCH } from "@/api/lib/email/sns-queue-drain";
 import {
   logger,
   type LogRecord,
@@ -137,13 +140,24 @@ describe("deliverability event drain", () => {
         topicArn,
         signal: new AbortController().signal,
         logger,
-        markUndeliverable: async (email, reason) => {
-          if (email === "retry@example.test" && failWrites > 0) {
+        markUndeliverable: async (emails, reason) => {
+          if (
+            emails.includes(normalizeEmail("retry@example.test")) &&
+            failWrites > 0
+          ) {
             failWrites -= 1;
             throw new Error("database unavailable");
           }
-          marked.push([email, reason]);
-          return email !== "nobody@example.test";
+          marked.push(
+            ...emails.map(
+              (email): [NormalizedEmail, AccountEmailUndeliverableReason] => [
+                email,
+                reason,
+              ],
+            ),
+          );
+          return emails.filter((email) => email !== "nobody@example.test")
+            .length;
         },
       });
 
@@ -190,5 +204,125 @@ describe("deliverability event drain", () => {
 
     // Logs carry delivery ids and reasons, never an address.
     expect(JSON.stringify(records)).not.toContain("example.test");
+  });
+
+  const addresses = (event: string, count: number) =>
+    Array.from(
+      { length: count },
+      (_, index) => `Recipient-${index}.${event}@example.test`,
+    );
+
+  const countingDrain = (queue: ReturnType<typeof createFakeSqsQueue>) => {
+    const marked: NormalizedEmail[] = [];
+    const writes: number[] = [];
+    const drain = async () =>
+      await drainDeliverabilityEvents({
+        client: queue.client,
+        queueUrl,
+        topicArn,
+        signal: new AbortController().signal,
+        logger,
+        markUndeliverable: async (emails) => {
+          writes.push(emails.length);
+          marked.push(...emails);
+          return emails.length;
+        },
+      });
+    return { drain, marked, writes };
+  };
+
+  test("stops leasing once a run's recipient writes are spent, one write per event", async () => {
+    const perEvent = RECIPIENT_WRITES_PER_RUN / (4 * MAX_MESSAGES_PER_BATCH);
+    const queue = createFakeSqsQueue();
+    const { drain, marked, writes } = countingDrain(queue);
+    for (let index = 0; index < 45; index += 1) {
+      queue.enqueue(
+        snsBody(
+          bounce("Permanent", "General", addresses(`e${index}`, perEvent)),
+        ),
+      );
+    }
+    const first = await drain();
+    expect(first.isOk() && first.value).toMatchObject({
+      batches: 4,
+      marked: RECIPIENT_WRITES_PER_RUN,
+      stoppedBecause: "limitReached",
+    });
+    expect(queue.releasedMessageIds).toEqual([]);
+    expect(queue.remaining()).toHaveLength(5);
+    expect(writes).toEqual(Array.from({ length: 40 }, () => perEvent));
+
+    const second = await drain();
+    expect(second.isOk() && second.value).toMatchObject({
+      marked: 5 * perEvent,
+      stoppedBecause: "drained",
+    });
+    expect(new Set(marked).size).toBe(45 * perEvent);
+  });
+
+  test("a run at the recipient cap overshoots its budget by less than one batch", async () => {
+    const queue = createFakeSqsQueue();
+    const { drain, marked } = countingDrain(queue);
+    const events = 2 * MAX_MESSAGES_PER_BATCH;
+    for (let index = 0; index < events; index += 1) {
+      queue.enqueue(
+        snsBody(
+          bounce(
+            "Permanent",
+            "General",
+            addresses(`cap${index}`, MAX_RECIPIENTS_PER_EVENT),
+          ),
+        ),
+      );
+    }
+    const drained = await drain();
+    expect(drained.isOk() && drained.value).toMatchObject({
+      stoppedBecause: "limitReached",
+    });
+    expect(marked.length).toBeLessThan(
+      RECIPIENT_WRITES_PER_RUN +
+        MAX_MESSAGES_PER_BATCH * MAX_RECIPIENTS_PER_EVENT,
+    );
+    expect(queue.remaining().length).toBeGreaterThan(0);
+  });
+
+  test("an event naming more recipients than the provider sends is kept for redrive", async () => {
+    const queue = createFakeSqsQueue();
+    const { drain, marked } = countingDrain(queue);
+    const oversized = queue.enqueue(
+      snsBody(
+        bounce(
+          "Permanent",
+          "General",
+          addresses("oversized", MAX_RECIPIENTS_PER_EVENT + 1),
+        ),
+      ),
+    );
+    const drained = await drain();
+    expect(drained.isOk() && drained.value).toMatchObject({
+      poison: 1,
+      marked: 0,
+    });
+    expect(marked).toEqual([]);
+    expect(queue.remaining().map(({ id }) => id)).toEqual([oversized]);
+  });
+
+  test("an event naming an address twice writes it once", async () => {
+    const queue = createFakeSqsQueue();
+    const { drain, marked } = countingDrain(queue);
+    queue.enqueue(
+      snsBody(
+        bounce("Permanent", "General", [
+          "Twice@Example.test",
+          "twice@example.test",
+        ]),
+      ),
+    );
+    const drained = await drain();
+    expect(drained.isOk() && drained.value).toMatchObject({
+      marked: 1,
+      unknownAddress: 0,
+    });
+    expect(marked).toEqual([normalizeEmail("twice@example.test")]);
   });
 });

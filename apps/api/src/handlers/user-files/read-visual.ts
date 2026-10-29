@@ -117,6 +117,7 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
         return Result.err(
           new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "The generated view could not be read",
           }),
         );

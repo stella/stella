@@ -116,7 +116,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
           : undefined;
       const stem = single
         ? `invoice-${single.number}`
-        : `invoices-${records[0]?.matter.reference ?? workspaceId}`;
+        : `invoices-${loaded.matter?.reference ?? workspaceId}`;
       const fileName = sanitizeFilenamePreservingExtension(
         `${stem}-${body.format.replaceAll("_", "-")}.${file.extension}`,
       );
@@ -131,6 +131,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
           catch: (cause) =>
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "The invoice export could not be stored.",
               cause,
             }),

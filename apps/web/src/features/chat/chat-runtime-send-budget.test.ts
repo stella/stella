@@ -19,11 +19,11 @@ import { toSafeId } from "@/lib/safe-id";
 // fetch it again first, nor upload it with every send.
 //
 // Calibration, measured on a 10-message thread and on a 500-message thread
-// with 200 tool calls: the send body is 4,499 bytes for either (the posted
-// message, twice as the envelope mirrors it, and the page's client tool
-// definitions). Before the envelope dropped the mirrored history it was 5,074
-// and 91,945 bytes. The budget adds about 14% for envelope fields the page
-// adds with context (an active file, matters, a skill), never for history.
+// with 200 tool calls: the send body is 813 bytes for either. Uploading the
+// browser executor's schema made it 6,527 bytes; the API already owns that
+// schema. The envelope mirrors the posted message alone. The established
+// 5 KiB budget reserves room for context (an active file, matters, a skill),
+// never for history or redundant client tool definitions.
 
 const SEND_BUDGET = {
   /** Requests the page makes to send one message. */
@@ -467,7 +467,8 @@ const expectEachSendPosts = (
     expect(correlation.matches, report).toBe(true);
     expect(correlation.anchors, report).toEqual([correlation.posted]);
   }
-  for (const [index, { bytes }] of page.posted.entries()) {
+  for (const [index, { body, bytes }] of page.posted.entries()) {
+    expect(body["tools"], report).toEqual([]);
     expect(bytes, report).toBeLessThanOrEqual(
       correlations[index]?.posted.startsWith("assistant ") === true
         ? SEND_BUDGET.continuationBodyBytes

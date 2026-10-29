@@ -242,6 +242,28 @@ const ownWhiteSpace = (element: Element): WhiteSpace | undefined =>
     ? WHITE_SPACE.PRESERVE
     : undefined);
 
+/**
+ * `pre-line` text: each line's whitespace collapsed to single spaces, none
+ * beside a line break. Walked line by line, so it stays linear on long runs
+ * of spaces.
+ */
+const keptLinesOf = (text: string): string =>
+  text
+    .split("\n")
+    .map((raw, index, lines) => {
+      const line = raw.replaceAll(/[ \t\f]+/gu, " ");
+      let start = 0;
+      let end = line.length;
+      if (index > 0 && line.startsWith(" ")) {
+        start = 1;
+      }
+      if (index < lines.length - 1 && line.endsWith(" ")) {
+        end -= 1;
+      }
+      return line.slice(start, Math.max(start, end));
+    })
+    .join("\n");
+
 type WhiteSpaceFrame =
   | { type: "node"; node: AnyNode; whiteSpace: WhiteSpace }
   | { type: "block-end" };
@@ -289,10 +311,7 @@ export const renderHtmlWhiteSpace = (root: AnyNode): void => {
         endLine(false);
       }
       if (whiteSpace === WHITE_SPACE.PRESERVE_BREAKS) {
-        text = text
-          .replaceAll(/[ \t\f]+/gu, " ")
-          .replaceAll(" \n", "\n")
-          .replaceAll("\n ", "\n");
+        text = keptLinesOf(text);
       }
     }
     if (whiteSpace !== WHITE_SPACE.PRESERVE && afterSpace) {

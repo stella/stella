@@ -155,7 +155,9 @@ test("decision shell links court and decision year before the current docket and
   );
   expect(yearUrl.pathname).toBe("/law/cases");
   expect(yearUrl.searchParams.get("court")).toBe(decision.court);
-  expect(yearUrl.searchParams.get("year")).toBe("2026");
+  expect(yearUrl.searchParams.get("from")).toBe("2026-01-01");
+  expect(yearUrl.searchParams.get("to")).toBe("2026-12-31");
+  expect(yearUrl.searchParams.has("year")).toBe(false);
   expect(container.querySelector('[aria-current="page"]')?.textContent).toBe(
     decision.caseNumber,
   );

@@ -618,5 +618,46 @@
       "fullDiskAccess": "Full Disk Access",
       "administrator": "Administrator rights"
     }
+  },
+  "agentSubscriptions": {
+    "title": "AI subscriptions",
+    "chatGpt": "ChatGPT",
+    "description": "Use your ChatGPT plan for AI requests in stella. Usage counts toward your ChatGPT plan, separately from your stella subscription.",
+    "continueWithChatGpt": "Continue with ChatGPT",
+    "continueAs": "Continue as {email}",
+    "useDifferentAccount": "Use a different account",
+    "signingIn": "Finish signing in in your browser.",
+    "cancel": "Cancel",
+    "pasteDescription": "If the browser shows an error page after you sign in, copy its address and paste it here.",
+    "pasteSubmit": "Finish sign-in",
+    "connected": "ChatGPT connected",
+    "connectedAs": "ChatGPT connected · {email}",
+    "manageUsage": "Manage usage",
+    "disconnect": "Disconnect",
+    "needsReconnect": "Your ChatGPT connection has expired. Sign in again to keep using your plan.",
+    "notice": {
+      "actionFailed": "That did not work. Try again.",
+      "pasteRejected": "This address is not from the current sign-in. Copy the full address from the browser tab that opened.",
+      "revocationUnconfirmed": "Disconnected on this computer, but ChatGPT did not confirm it. You can also remove stella in your ChatGPT settings."
+    },
+    "failure": {
+      "declined": "Sign-in was declined in the browser.",
+      "planUsageNotGranted": "stella was not allowed to use your ChatGPT plan. Sign in again and allow it.",
+      "differentAccount": "You signed in with a different ChatGPT account. Your saved connection is unchanged.",
+      "stateMismatch": "The sign-in could not be verified. Try again.",
+      "timedOut": "The sign-in took too long. Try again.",
+      "browserUnavailable": "Your browser could not be opened. Try again.",
+      "callbackUnavailable": "The sign-in could not be prepared on this computer. Try again.",
+      "registrationIncomplete": "ChatGPT did not finish connecting stella. Try again.",
+      "codeExpired": "The sign-in expired before it finished. Try again.",
+      "verification": "The response from ChatGPT could not be verified. Try again.",
+      "clientRejected": "ChatGPT no longer accepts this connection. Connect it again with a different account.",
+      "unreachable": "ChatGPT sign-in could not be reached. Check your internet connection and try again.",
+      "storage": "The connection could not be read or saved on this computer."
+    },
+    "callbackConnectedTitle": "ChatGPT is connected",
+    "callbackConnectedBody": "You can close this tab and go back to stella.",
+    "callbackNotConnectedTitle": "ChatGPT was not connected",
+    "callbackNotConnectedBody": "Go back to stella to see what happened and try again."
   }
 }

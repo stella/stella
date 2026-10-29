@@ -73,7 +73,7 @@ const dependencies = (acquire: 0 | 1 = 1) => {
     send: async (_command: string, args: string[]) => {
       if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
         acquisitions += 1;
-        return acquire;
+        return acquire === 0 ? [0, 1000] : acquire;
       }
       if (args.at(0)?.includes("ZREM")) {
         releases += 1;
@@ -500,6 +500,7 @@ describe("finite HTTP action admission", () => {
             send: async () => {
               throw new HandlerError({
                 status: 503,
+                code: "internal_error",
                 message: "Coordination offline",
               });
             },

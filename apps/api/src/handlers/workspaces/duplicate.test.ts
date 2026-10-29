@@ -46,6 +46,15 @@ import {
 
 import { createDuplicateWorkspace } from "./duplicate";
 
+beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+});
+
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>

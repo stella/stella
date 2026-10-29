@@ -17,6 +17,11 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+  loadOrgAIConfigMock.mockClear();
+});
+
 /**
  * Registry-driven canary corpus over the MCP anonymized surface (plan 049,
  * Phase 0). This is the structural guard for the bug class both shipped
@@ -1507,6 +1512,8 @@ describe("MCP anonymization canary corpus", () => {
           chainableRows([
             {
               id: "inv_1",
+              clientId: null,
+              matterShare: 1000,
               invoiceNumber: null,
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1552,6 +1559,9 @@ describe("MCP anonymization canary corpus", () => {
       const exEntityNameSeed = mkSeed(tool, 8);
       const lineDescriptionSeed = mkSeed(tool, 9);
       const lineUnitSeed = mkSeed(tool, 10);
+      const recordedDescriptionSeed = mkSeed(tool, 19);
+      const recordedUnitSeed = mkSeed(tool, 20);
+      const matterNameSeed = mkSeed(tool, 21);
       const buyerSeeds = {
         buyerName: mkSeed(tool, 11),
         buyerRegistrationId: mkSeed(tool, 12),
@@ -1567,6 +1577,7 @@ describe("MCP anonymization canary corpus", () => {
           invoices: {
             findFirst: async () => ({
               id: "00000000-0000-4000-8000-000000020002",
+              clientId: null,
               workspaceId: "00000000-0000-4000-8000-0000000a0001",
               invoiceNumber: null,
               documentType: "invoice",
@@ -1589,6 +1600,7 @@ describe("MCP anonymization canary corpus", () => {
               timeEntries: [
                 {
                   id: "te_1",
+                  workspaceId: "00000000-0000-4000-8000-0000000a0001",
                   workItemId: "00000000-0000-4000-8000-0000000e0001",
                   dateWorked: "2026-01-01",
                   billedMinutes: 60,
@@ -1606,6 +1618,7 @@ describe("MCP anonymization canary corpus", () => {
               expenses: [
                 {
                   id: "ex_1",
+                  workspaceId: "00000000-0000-4000-8000-0000000a0001",
                   matterId: "entity_2",
                   dateIncurred: "2026-01-01",
                   amount: 100,
@@ -1621,6 +1634,17 @@ describe("MCP anonymization canary corpus", () => {
               lines: [
                 {
                   id: "line_1",
+                  workspaceId: "00000000-0000-4000-8000-0000000a0001",
+                  workspace: {
+                    id: "00000000-0000-4000-8000-0000000a0001",
+                    name: matterNameSeed,
+                    color: null,
+                  },
+                  recordedDescription: recordedDescriptionSeed,
+                  recordedQuantity: "1",
+                  recordedUnit: recordedUnitSeed,
+                  recordedUnitPrice: 100,
+                  recordedNetAmount: 100,
                   position: 0,
                   description: lineDescriptionSeed,
                   quantity: "1.0000",
@@ -1664,6 +1688,9 @@ describe("MCP anonymization canary corpus", () => {
         exEntityNameSeed,
         lineDescriptionSeed,
         lineUnitSeed,
+        recordedDescriptionSeed,
+        recordedUnitSeed,
+        matterNameSeed,
         ...Object.values(buyerSeeds),
       ];
       expectNoSeedLeak(result, seeds);

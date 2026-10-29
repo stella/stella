@@ -5,6 +5,8 @@ import {
   readOrganizationResearchColumns,
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -58,6 +60,10 @@ const runResearchAnswersHandler = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     // AI availability is a property of the deployment; decided before any
     // cell is marked pending, so a missing key never leaves cells stuck. The
     // usage pre-flight answers a different question (may this organization
