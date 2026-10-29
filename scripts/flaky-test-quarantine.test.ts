@@ -205,4 +205,37 @@ describe("workflow quarantine ownership", () => {
     fixture.jobs.postgres.steps.splice(1, 0, { uses: QUARANTINE_ACTION });
     expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([]);
   });
+
+  test.each([
+    "bun --filter @stll/api test",
+    "bun --filter=@stll/api test:e2e:browser",
+    "bun --cwd apps/api test",
+    "bun --cwd=apps/api test:postgres",
+  ])("recognises a test command after value-taking Bun options: %s", (run) => {
+    const fixture = { jobs: { check: { steps: [{ run }] } } };
+
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([
+      "fixture.yml: jobs.check.steps[0]",
+    ]);
+  });
+});
+
+describe("Playwright image quarantine forwarding", () => {
+  test("forwards the preload and mounts reports for the post step", () => {
+    const source = readFileSync(
+      path.join(
+        REPOSITORY_ROOT,
+        ".github/actions/setup-playwright/run-in-image.sh",
+      ),
+      "utf-8",
+    );
+
+    expect(source).toContain(
+      "for key in BUN_OPTIONS FLAKY_TEST_QUARANTINE_REPORT_DIR",
+    );
+    expect(source).toContain(
+      'args+=(--volume "$FLAKY_TEST_QUARANTINE_REPORT_DIR:$FLAKY_TEST_QUARANTINE_REPORT_DIR:rw")',
+    );
+    expect(source).toContain('--volume "$workspace:$workspace"');
+  });
 });

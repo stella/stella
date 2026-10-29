@@ -65,8 +65,7 @@ export const reportFlakyTestQuarantine = (): void => {
   if (result.error) {
     console.warn(`Unable to report quarantined tests: ${result.error.message}`);
   } else if (result.status !== 0) {
-    console.warn(
-      `Unable to report quarantined tests: bun exited ${result.status}.`,
-    );
+    const status = result.status === null ? "unknown" : String(result.status);
+    console.warn(`Unable to report quarantined tests: bun exited ${status}.`);
   }
 };

@@ -23,7 +23,8 @@ const includesBunTestCommand = (command: string): boolean =>
     }
     let executableIndex = bunIndex + 1;
     while (words.at(executableIndex)?.startsWith("-")) {
-      if (words.at(executableIndex) === "--cwd") {
+      const option = words.at(executableIndex);
+      if (option === "--cwd" || option === "--filter") {
         executableIndex += 1;
       }
       executableIndex += 1;

@@ -1608,6 +1608,7 @@ jobs:
     steps:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -1804,6 +1805,7 @@ jobs:
     steps:
       - &checkout_input_sha
         name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -2670,6 +2672,9 @@ jobs:
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
 
       - name: Configure flaky-test quarantine
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
