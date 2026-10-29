@@ -34,7 +34,6 @@ const { IntlProvider } = await import("use-intl");
 const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { createPostHogAnalytics } = await import("@/lib/analytics/posthog");
-const { toSafeId } = await import("@/lib/safe-id");
 const { useCreateContact } = await import("./mutations");
 
 const createAnalytics = () => {
@@ -68,7 +67,6 @@ const createContact = async (
   await act(async () => {
     const error = await rejectionOf(
       hook.result.current.mutateAsync({
-        id: toSafeId<"contact">("contact-test"),
         type: "person",
         displayName: "Test contact",
       }),

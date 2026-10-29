@@ -410,6 +410,24 @@ const REQUEST_RECEIPT_RETENTION_MS = DAY_IN_MS;
 const RETENTION_STATEMENT_BUDGET_MS = 5000;
 const RETENTION_LOCK_BUDGET_MS = 1000;
 
+type ReceiptRowLocation = Pick<typeof receipts.$inferSelect, "id"> & {
+  tupleId: string;
+};
+
+// Physical locations bound heap work; logical IDs also reject a reused tuple
+// between global discovery and the scoped locking read.
+const receiptRowLocationPredicate = (rows: readonly ReceiptRowLocation[]) =>
+  and(
+    inArray(
+      receipts.id,
+      rows.map(({ id }) => id),
+    ),
+    sql`${receipts}.ctid = ANY(ARRAY[${sql.join(
+      rows.map(({ tupleId }) => sql`${tupleId}::tid`),
+      sql`, `,
+    )}]::tid[])`,
+  );
+
 type SweepExpiredRequestReceiptsOptions = {
   db: SchedulerDb;
   now: Date;
@@ -470,6 +488,7 @@ export const sweepExpiredRequestReceipts = async ({
         tx
           .select({
             id: receipts.id,
+            tupleId: sql<string>`${receipts}.ctid::text`,
             organizationId: receipts.organizationId,
             userId: receipts.userId,
             claimedAt: receipts.claimedAt,
@@ -519,16 +538,16 @@ export const sweepExpiredRequestReceipts = async ({
     limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
     select: (tx) =>
       tx
-        .select({ id: receipts.id })
+        .select({
+          id: receipts.id,
+          tupleId: sql<string>`${receipts}.ctid::text`,
+        })
         .from(receipts)
         .where(
           and(
             eq(receipts.organizationId, first.organizationId),
             eq(receipts.userId, first.userId),
-            inArray(
-              receipts.id,
-              group.map(({ id }) => id),
-            ),
+            receiptRowLocationPredicate(group),
             expired,
           ),
         ),
@@ -551,10 +570,7 @@ export const sweepExpiredRequestReceipts = async ({
           and(
             eq(receipts.organizationId, first.organizationId),
             eq(receipts.userId, first.userId),
-            inArray(
-              receipts.id,
-              unlocked.map(({ id }) => id),
-            ),
+            receiptRowLocationPredicate(unlocked),
             expired,
           ),
         )

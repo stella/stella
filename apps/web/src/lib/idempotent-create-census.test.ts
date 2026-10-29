@@ -6,6 +6,8 @@ import ts from "typescript6";
 import { compareCodeUnit } from "@stll/collation";
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
+import { capabilityRequest } from "@/lib/capabilities/capability-request";
+import type { CapabilityRequest } from "@/lib/capabilities/capability-request";
 import { REPLAY_CAPABLE_ROUTES } from "@/lib/idempotency/replay-routes.gen";
 
 import {
@@ -178,6 +180,36 @@ const clientRoots = () => {
   return roots;
 };
 
+type ReplayHeaderLineage = "owned" | "absent" | "untrusted";
+type HeaderProjection = {
+  keys: Map<string, ReplayHeaderLineage>;
+  provenance: "known" | "untrusted";
+};
+type RequestHeaderLineage = {
+  headers?: ReplayHeaderLineage;
+  fetch?: ReplayHeaderLineage;
+};
+const capabilityLineage = {
+  headers: new Headers(capabilityRequest("client-invoices.create").headers).has(
+    "Idempotency-Key",
+  )
+    ? "untrusted"
+    : "absent",
+} as const satisfies Record<keyof CapabilityRequest, ReplayHeaderLineage>;
+const propertyName = (name: ts.PropertyName): string | undefined => {
+  if (
+    ts.isIdentifier(name) ||
+    ts.isStringLiteralLike(name) ||
+    ts.isNumericLiteral(name)
+  ) {
+    return name.text;
+  }
+  return ts.isComputedPropertyName(name) &&
+    ts.isStringLiteralLike(name.expression)
+    ? name.expression.text
+    : undefined;
+};
+
 type CreateMutationViolationsOptions = {
   file: string;
   text: string;
@@ -238,6 +270,7 @@ const createMutationViolations = ({
     "submit" | "mutation" | "intent" | "category"
   >();
   const requestTypes = new Set<string>();
+  const capabilityInvokers = new Set<string>();
   const derivedRequests = new Set<string>();
   const typeAliases = new Map<string, ts.TypeNode>();
   type ModuleOwnerOptions = { module: string; owner: string };
@@ -273,6 +306,13 @@ const createMutationViolations = ({
     const module = statement.moduleSpecifier.text;
     for (const binding of bindings.elements) {
       const name = (binding.propertyName ?? binding.name).text;
+      if (
+        isModule({ module, owner: "lib/capabilities/capability-request" }) &&
+        name === "invokeCapability"
+      ) {
+        capabilityInvokers.add(binding.name.text);
+      }
+
       if (
         isModule({
           module,
@@ -498,62 +538,193 @@ const createMutationViolations = ({
     }
     return false;
   };
-  const requestOptions = (
+  const capabilityIdentifier = (name: string, node: ts.Node): boolean => {
+    for (const ancestor of ancestorsOf(node)) {
+      if (scopedDeclarations.get(ancestor)?.has(name)) {
+        return false;
+      }
+      if (
+        !ts.isArrowFunction(ancestor) &&
+        !ts.isFunctionExpression(ancestor) &&
+        !ts.isFunctionDeclaration(ancestor)
+      ) {
+        continue;
+      }
+      const parameter = ancestor.parameters.find(
+        (entry) => ts.isIdentifier(entry.name) && entry.name.text === name,
+      );
+      if (parameter === undefined) {
+        continue;
+      }
+      const call = ancestor.parent;
+      return (
+        ancestor.parameters.at(0) === parameter &&
+        ts.isCallExpression(call) &&
+        call.arguments.at(1) === ancestor &&
+        ts.isIdentifier(call.expression) &&
+        capabilityInvokers.has(call.expression.text)
+      );
+    }
+    return false;
+  };
+  const headerValueLineage = (
+    node: ts.Expression,
+    at: ts.Node,
+  ): ReplayHeaderLineage => {
+    if (
+      !ts.isElementAccessExpression(node) ||
+      !ts.isStringLiteralLike(node.argumentExpression) ||
+      node.argumentExpression.text !== "Idempotency-Key" ||
+      !ts.isPropertyAccessExpression(node.expression) ||
+      node.expression.name.text !== "headers"
+    ) {
+      return "untrusted";
+    }
+    const projection = projectHeaders(node.expression, at);
+    return projection.provenance === "known" &&
+      projection.keys.get("Idempotency-Key") === "owned"
+      ? "owned"
+      : "untrusted";
+  };
+  const projectHeaders = (
+    node: ts.Expression,
+    at: ts.Node,
+  ): HeaderProjection => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === "headers" &&
+      ts.isIdentifier(node.expression)
+    ) {
+      if (requestIdentifier(node.expression.text, at)) {
+        return {
+          keys: new Map([["Idempotency-Key", "owned"]]),
+          provenance: "known",
+        };
+      }
+      if (
+        capabilityIdentifier(node.expression.text, at) &&
+        capabilityLineage.headers === "absent"
+      ) {
+        return { keys: new Map(), provenance: "known" };
+      }
+    }
+    if (!ts.isObjectLiteralExpression(node)) {
+      return { keys: new Map(), provenance: "untrusted" };
+    }
+    // Headers ignore case; object spreads preserve exact key insertion order,
+    // including when a duplicate property updates an earlier key in place.
+    const keys = new Map<string, ReplayHeaderLineage>();
+    let unknownSpread = false;
+    for (const entry of node.properties) {
+      if (ts.isSpreadAssignment(entry)) {
+        const spread = projectHeaders(entry.expression, at);
+        if (spread.provenance === "untrusted") {
+          unknownSpread = true;
+        }
+        for (const [name, value] of spread.keys) {
+          keys.set(name, value);
+        }
+        continue;
+      }
+      const name = propertyName(entry.name);
+      if (name === undefined) {
+        unknownSpread = true;
+      } else if (name.toLowerCase() === "idempotency-key") {
+        keys.set(
+          name,
+          ts.isPropertyAssignment(entry)
+            ? headerValueLineage(entry.initializer, at)
+            : "untrusted",
+        );
+      }
+    }
+    return { keys, provenance: unknownSpread ? "untrusted" : "known" };
+  };
+  const headersLineage = (
+    node: ts.Expression,
+    at: ts.Node,
+  ): ReplayHeaderLineage => {
+    const projection = projectHeaders(node, at);
+    return projection.provenance === "untrusted"
+      ? "untrusted"
+      : ([...projection.keys.values()].at(-1) ?? "absent");
+  };
+  const optionsLineage = (
     node: ts.Expression | undefined,
     at: ts.Node,
-  ): boolean => {
-    if (!node) {
-      return false;
+  ): RequestHeaderLineage => {
+    if (node === undefined) {
+      return {};
     }
-    if (ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node)) {
-      return requestOptions(node.expression, at);
+    if (
+      ts.isAwaitExpression(node) ||
+      ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isSatisfiesExpression(node)
+    ) {
+      return optionsLineage(node.expression, at);
     }
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
       derivedRequests.has(node.expression.text)
     ) {
-      return requestOptions(node.arguments.at(0), at);
+      return optionsLineage(node.arguments.at(0), at);
     }
     if (ts.isIdentifier(node)) {
-      return requestIdentifier(node.text, at);
+      if (requestIdentifier(node.text, at)) {
+        return { headers: "owned" };
+      }
+      if (capabilityIdentifier(node.text, at)) {
+        return capabilityLineage;
+      }
+      return { headers: "untrusted", fetch: "untrusted" };
     }
     if (!ts.isObjectLiteralExpression(node)) {
-      return false;
+      return { headers: "untrusted", fetch: "untrusted" };
     }
+    const lineage: RequestHeaderLineage = {};
     for (const entry of node.properties) {
-      if (
-        ts.isPropertyAssignment(entry) &&
-        ts.isIdentifier(entry.name) &&
-        entry.name.text === "fetch" &&
-        requestOptions(entry.initializer, at)
-      ) {
-        return true;
-      }
-      if (
-        ts.isSpreadAssignment(entry) &&
-        ts.isIdentifier(entry.expression) &&
-        requestIdentifier(entry.expression.text, at)
-      ) {
-        return true;
-      }
-      if (
-        !ts.isPropertyAssignment(entry) ||
-        !ts.isIdentifier(entry.name) ||
-        entry.name.text !== "headers"
-      ) {
+      if (ts.isSpreadAssignment(entry)) {
+        const spread = optionsLineage(entry.expression, at);
+        if (spread.headers !== undefined) {
+          lineage.headers = spread.headers;
+        }
+        if (spread.fetch !== undefined) {
+          lineage.fetch = spread.fetch;
+        }
         continue;
       }
-      const headers = entry.initializer;
-      if (
-        ts.isPropertyAccessExpression(headers) &&
-        headers.name.text === "headers" &&
-        requestOptions(headers.expression, at)
-      ) {
-        return true;
+      const name = propertyName(entry.name);
+      if (name === undefined) {
+        lineage.headers = "untrusted";
+        lineage.fetch = "untrusted";
+        continue;
+      }
+      if (name === "headers") {
+        lineage.headers = ts.isPropertyAssignment(entry)
+          ? headersLineage(entry.initializer, at)
+          : "untrusted";
+      }
+      if (name === "fetch") {
+        lineage.fetch = ts.isPropertyAssignment(entry)
+          ? (optionsLineage(entry.initializer, at).headers ?? "absent")
+          : "untrusted";
       }
     }
-    return false;
+    return lineage;
+  };
+  const requestOptions = (
+    node: ts.Expression | undefined,
+    at: ts.Node,
+  ): boolean => {
+    const lineage = optionsLineage(node, at);
+    // The native API client applies outer headers after fetch.headers.
+    return (
+      (lineage.headers === undefined || lineage.headers === "absent"
+        ? lineage.fetch
+        : lineage.headers) === "owned"
+    );
   };
   const violations: string[] = [];
   let createCalls = 0;
@@ -783,10 +954,13 @@ test("create census rejects bogus request names, static keys and unowned method 
 test("create census recognizes owned fetch headers beside capability options", () => {
   const source = `
     import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
+    import { invokeCapability } from "@/lib/capabilities/capability-request";
+    invokeCapability("things.create", (capability) => {
     const create = (body: unknown, intent: IdempotentRequest) =>
       api.things.put(body, { ...capability, fetch: { headers: intent.headers } });
     const unowned = () =>
       api.things.put(body, { ...capability, fetch: { headers: request.headers } });
+    });
   `;
   const result = createMutationViolations({
     file: "fixture.ts",
@@ -795,7 +969,58 @@ test("create census recognizes owned fetch headers beside capability options", (
   });
   expect(result.createCalls).toBe(2);
   expect(result.violations).toHaveLength(1);
-  expect(result.violations.at(0)).toContain("fixture.ts:6:");
+  expect(result.violations.at(0)).toContain("fixture.ts:8:");
+});
+
+test.each([
+  '{ ...capability, headers: { "Idempotency-Key": replayRequest.headers["Idempotency-Key"], ...capability.headers } }',
+  "{ ...capability, headers: { ...capability.headers, ...replayRequest.headers } }",
+  "{ ...capability, headers: { ...replayRequest.headers, ...capability.headers } }",
+])(
+  "create census follows composed submit and capability headers: %s",
+  (options) => {
+    const text = `
+    import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+    import { invokeCapability } from "@/lib/capabilities/capability-request";
+    const submit = useIdempotentSubmit();
+    submit.run({ body, operation: "things.create", send: (body, replayRequest) =>
+      invokeCapability("things.create", (capability) => api.things.put(body, ${options})) });
+  `;
+    expect(
+      createMutationViolations({
+        file: "fixture.ts",
+        text,
+        creates: new Set(["put:things"]),
+      }),
+    ).toEqual({ createCalls: 1, violations: [] });
+  },
+);
+
+test.each([
+  '{ ...replayRequest, headers: { "Idempotency-Key": "fixed" } }',
+  "{ headers: replayRequest.headers, ...unowned }",
+  '{ headers: { ...replayRequest.headers, "Idempotency-Key": "fixed" } }',
+  "{ headers: { ...replayRequest.headers, ...unowned.headers } }",
+  '{ headers: { "Idempotency-Key": unowned.headers["Idempotency-Key"], ...capability.headers } }',
+  '{ headers: { ...replayRequest.headers, "idempotency-key": "fixed" } }',
+  '{ fetch: { headers: replayRequest.headers }, headers: { "Idempotency-Key": "fixed" } }',
+  '{ headers: { "idempotency-key": replayRequest.headers["Idempotency-Key"], "IDEMPOTENCY-KEY": "fixed", ...{ "idempotency-key": replayRequest.headers["Idempotency-Key"] } } }',
+])("create census rejects overridden or unowned replay keys: %s", (options) => {
+  const text = `
+    import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+    import { invokeCapability } from "@/lib/capabilities/capability-request";
+    const submit = useIdempotentSubmit();
+    submit.run({ body, operation: "things.create", send: (body, replayRequest) =>
+      invokeCapability("things.create", (capability) => api.things.put(body, ${options})) });
+  `;
+  const result = createMutationViolations({
+    file: "fixture.ts",
+    text,
+    creates: new Set(["put:things"]),
+  });
+  expect(result.createCalls).toBe(1);
+  expect(result.violations).toHaveLength(1);
+  expect(result.violations.at(0)).toContain("needs submit-intent headers");
 });
 
 test("create census recognizes the plain submit-intent owner and aliased client imports", () => {
