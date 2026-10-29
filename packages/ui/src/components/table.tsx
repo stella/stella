@@ -3,13 +3,32 @@ import type * as React from "react";
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 
-const Table = ({ className, ...props }: React.ComponentProps<"table">) => (
+/**
+ * How tightly a table sets its cells.
+ *
+ * `default` is a data table: padded cells on one line, rows that light up
+ * under the pointer. `compact` is a small reading table inside a card or a
+ * review (a term set against a standard, a presence matrix): cells sit at
+ * text leading with no side padding, headings keep a trailing gap so a
+ * right-aligned heading never touches the next column, values wrap, and rows
+ * do not highlight because nothing in them is a row-wide target. A row
+ * header (`<TableHead scope="row">`) in a compact body reads as the row's
+ * first cell rather than as a column heading.
+ */
+type TableDensity = "default" | "compact";
+
+const Table = ({
+  className,
+  density = "default",
+  ...props
+}: React.ComponentProps<"table"> & { density?: TableDensity }) => (
   <div className="relative w-full overflow-x-auto" data-slot="table-container">
     <table
       className={cn(
         "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
         className,
       )}
+      data-density={density}
       data-slot="table"
       {...props}
     />
@@ -58,7 +77,7 @@ const TableFooter = ({
 const TableRow = ({ className, ...props }: React.ComponentProps<"tr">) => (
   <tr
     className={cn(
-      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
+      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[density=compact]:hover:bg-transparent in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
       className,
     )}
     data-slot="table-row"
@@ -70,6 +89,8 @@ const TableHead = ({ className, ...props }: React.ComponentProps<"th">) => (
   <th
     className={cn(
       "text-muted-foreground h-10 px-2.5 text-start align-middle leading-none font-medium whitespace-nowrap has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
+      "in-data-[density=compact]:h-auto in-data-[density=compact]:px-0 in-data-[density=compact]:py-1 in-data-[density=compact]:pe-3 in-data-[density=compact]:text-xs",
+      "in-data-[density=compact]:[tbody_&]:py-1.5 in-data-[density=compact]:[tbody_&]:text-sm in-data-[density=compact]:[tbody_&]:leading-6 in-data-[density=compact]:[tbody_&]:font-normal in-data-[density=compact]:[tbody_&]:whitespace-normal in-data-[density=compact]:[tbody_&]:text-inherit",
       className,
     )}
     data-slot="table-head"
@@ -81,6 +102,7 @@ const TableCell = ({ className, ...props }: React.ComponentProps<"td">) => (
   <td
     className={cn(
       "p-2.5 align-middle leading-none whitespace-nowrap in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)] has-[[role=checkbox]]:pe-0",
+      "in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
       className,
     )}
     data-slot="table-cell"
@@ -171,4 +193,4 @@ export {
   TableCaption,
   SortableHead,
 };
-export type { SortDirection };
+export type { SortDirection, TableDensity };
