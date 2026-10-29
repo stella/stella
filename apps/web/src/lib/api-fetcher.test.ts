@@ -1,11 +1,31 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
+import { createApiClient } from "@stll/api-client";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { webApiClientOptions } from "@/lib/api";
 
 const originalFetch = globalThis.fetch;
+
+type TestRoutes = {
+  v1: {
+    result: {
+      get: {
+        body: unknown;
+        params: unknown;
+        query: unknown;
+        headers: unknown;
+        response: { 200: { ready: boolean } };
+      };
+    };
+  };
+};
+
+const testClient = () =>
+  createApiClient<TestRoutes>("https://example.test", {
+    fetcher: webApiClientOptions.fetcher,
+  }).v1;
 
 const abortReason = (signal: AbortSignal): Error =>
   signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
@@ -46,8 +66,8 @@ describe("web API fetcher timeout policy", () => {
   test("keeps the caller abort effective", async () => {
     installHungFetch();
     const controller = new AbortController();
-    const pending = webApiClientOptions.fetcher("https://example.test", {
-      signal: controller.signal,
+    const pending = testClient().result.get({
+      fetch: { signal: controller.signal },
     });
     const reason = new Error("caller stopped request");
     controller.abort(reason);
@@ -65,5 +85,62 @@ describe("web API fetcher timeout policy", () => {
     jest.advanceTimersByTime(5);
 
     expect(await rejectionOf(pending)).toMatchObject({ name: "TimeoutError" });
+  });
+
+  test("bounds JSON body consumption after headers arrive", async () => {
+    jest.useFakeTimers();
+    const headersArrived = Promise.withResolvers<undefined>();
+    const bodyRead = Promise.withResolvers<undefined>();
+    globalThis.fetch = Object.assign(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        headersArrived.resolve(undefined);
+        const signal = init?.signal;
+        let sentPartialBody = false;
+        return new Response(
+          new ReadableStream(
+            {
+              start(stream) {
+                signal?.addEventListener(
+                  "abort",
+                  () => stream.error(abortReason(signal)),
+                  { once: true },
+                );
+              },
+              pull(stream) {
+                if (sentPartialBody) {
+                  return;
+                }
+                sentPartialBody = true;
+                stream.enqueue(new TextEncoder().encode('{"ready":'));
+                bodyRead.resolve(undefined);
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+          { headers: { "content-type": "application/json" } },
+        );
+      },
+      originalFetch,
+    );
+
+    const pending = testClient().result.get({ fetch: { timeoutMs: 5 } });
+    await headersArrived.promise;
+    await bodyRead.promise;
+    jest.advanceTimersByTime(5);
+
+    expect(await rejectionOf(pending)).toMatchObject({ name: "TimeoutError" });
+  });
+
+  test("parses a completed JSON response", async () => {
+    globalThis.fetch = Object.assign(
+      async () =>
+        Response.json({ ready: true }, { headers: { "x-result": "ready" } }),
+      originalFetch,
+    );
+
+    const result = await testClient().result.get();
+
+    expect(result.data).toEqual({ ready: true });
+    expect(result.headers.get("x-result")).toBe("ready");
   });
 });

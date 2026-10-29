@@ -57,10 +57,7 @@ export const webApiClientOptions = {
     await fetchWithTimeout(url, {
       ...init,
       signal: signal ?? undefined,
-      timeout: {
-        type: "headers",
-        ms: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
-      },
+      timeoutMs: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
     }),
   async onRequest() {
     await waitForSimulatedApiDelay();
