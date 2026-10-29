@@ -56,51 +56,41 @@ describe.skipIf(!enabled)("withdrawn replay timing (postgres)", () => {
   const answer = "Decision summary";
 
   beforeAll(async () => {
-    await db
-      .insert(user)
-      .values({
-        id: userId,
-        name: "Replay timing",
-        email: `${userId}@example.test`,
-      });
-    await db
-      .insert(organization)
-      .values({
-        id: organizationId,
-        name: "Replay timing",
-        slug: organizationId,
-        createdAt: new Date(),
-      });
-    await db
-      .insert(member)
-      .values({
-        id: mintAuthProviderIdValue(),
-        organizationId,
-        userId,
-        role: "owner",
-        createdAt: new Date(),
-      });
-    await db
-      .insert(caseLawSources)
-      .values({
-        id: sourceId,
-        adapterKey: sourceId,
-        name: "Replay timing",
-        enabled: false,
-      });
-    await db
-      .insert(caseLawDecisions)
-      .values({
-        id: decisionId,
-        sourceId,
-        sourceDocumentId: decisionId,
-        caseNumber: "Fixture",
-        country: "POL",
-        court: "Fixture",
-        language: "pl",
-        fulltext: answer,
-        contentHash: "fixture",
-      });
+    await db.insert(user).values({
+      id: userId,
+      name: "Replay timing",
+      email: `${userId}@example.test`,
+    });
+    await db.insert(organization).values({
+      id: organizationId,
+      name: "Replay timing",
+      slug: organizationId,
+      createdAt: new Date(),
+    });
+    await db.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
+    });
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: sourceId,
+      name: "Replay timing",
+      enabled: false,
+    });
+    await db.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      sourceDocumentId: decisionId,
+      caseNumber: "Fixture",
+      country: "POL",
+      court: "Fixture",
+      language: "pl",
+      fulltext: answer,
+      contentHash: "fixture",
+    });
   });
   cleanUp(async () => {
     await db
@@ -126,40 +116,34 @@ describe.skipIf(!enabled)("withdrawn replay timing (postgres)", () => {
       };
       const runId = Bun.randomUUIDv7();
       await scopedDb(async (tx) => {
-        await tx
-          .insert(chatThreads)
-          .values({
-            id: threadId,
-            organizationId,
-            userId,
-            title: own,
-            titleSource: "user",
-            subjectDecisionId: decisionId,
-          });
-        await tx
-          .insert(chatMessages)
-          .values({
-            id: incomingId,
-            threadId,
-            userId,
-            role: "user",
-            content: toPersistedChatMessageContentV3({
-              data: [{ type: "text", content: own }],
-            }),
-          });
-        await tx
-          .insert(chatTurns)
-          .values({
-            id: execution.id,
-            executionId: execution.executionId,
-            organizationId,
-            userId,
-            threadId,
-            userMessageId: incomingId,
-            runId,
-            status: "running",
-            leaseExpiresAt: new Date(Date.now() + 60_000),
-          });
+        await tx.insert(chatThreads).values({
+          id: threadId,
+          organizationId,
+          userId,
+          title: own,
+          titleSource: "user",
+          subjectDecisionId: decisionId,
+        });
+        await tx.insert(chatMessages).values({
+          id: incomingId,
+          threadId,
+          userId,
+          role: "user",
+          content: toPersistedChatMessageContentV3({
+            data: [{ type: "text", content: own }],
+          }),
+        });
+        await tx.insert(chatTurns).values({
+          id: execution.id,
+          executionId: execution.executionId,
+          organizationId,
+          userId,
+          threadId,
+          userMessageId: incomingId,
+          runId,
+          status: "running",
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        });
       });
       const options = { organizationId, runId, execution, db: scopedDb };
       const writer = createChatRunLog(options);
