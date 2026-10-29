@@ -88,9 +88,11 @@ const AVATAR_RULE = "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive";
 
 export const NO_NATIVE_UI_REGISTRY = {
   ".": notComponent("the package barrel; each module has its own row"),
-  accordion: native("Accordion from @stll/ui/accordion", {
-    elements: ["details", "summary"],
-  }),
+  accordion: native(
+    "Collapsible from @stll/ui/collapsible for one disclosure, or Accordion " +
+      "from @stll/ui/accordion for a set of sections",
+    { elements: ["details", "summary"] },
+  ),
   "ai-label": noNative("a badge marking AI-generated content"),
   "alert-dialog": native("AlertDialog from @stll/ui/alert-dialog", {
     roles: ["alertdialog"],
@@ -124,6 +126,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "color-picker": native("ColorPicker from @stll/ui/color-picker", {
     inputTypes: ["color"],
   }),
+  collapsible: owned(
+    nativeRuleId("accordion"),
+    "one disclosure; native details and summary are the accordion rule's",
+  ),
   combobox: native("Combobox from @stll/ui/combobox", {
     elements: ["datalist"],
     roles: ["combobox"],
