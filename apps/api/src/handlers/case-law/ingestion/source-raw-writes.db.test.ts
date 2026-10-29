@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -22,12 +22,17 @@ import {
   relations,
 } from "@/api/db/schema";
 import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { CitationScopesRejectedError } from "@/api/handlers/case-law/ingestion/citation-scopes";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import {
+  processDecision,
+  processStoredDecision,
+} from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -220,4 +225,149 @@ test("a changed envelope over the same file adds no version of the file", async 
   expect(back?.key).toBe(before?.key);
   expect(puts().map(({ ifNoneMatch }) => ifNoneMatch)).toEqual(["*", "*"]);
   expect(Math.max(...fake.versions.values())).toBe(1);
+});
+
+const partialDocumentObservation = () =>
+  plainTextIngestionResult({
+    caseNumber: "I. ÚS 1/2026",
+    sourceDocumentId: "document-1",
+    court: "Ústavný súd Slovenskej republiky",
+    country: "SVK",
+    language: "sk",
+    isListingOnly: true,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: "partial-document-observation",
+    documentAst: EMPTY_AST,
+    sourceRaw: encodeSourceRawEnvelope({
+      listing: '{"id":1}',
+      detail: '{"id":1,"document":true}',
+    }),
+    sourceRawObjects: {
+      "document-file": {
+        bytes: new TextEncoder().encode("%PDF-1.7 unreadable fetched document"),
+        contentType: "application/pdf",
+      },
+    },
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+
+const decisionForSource = async (sourceId: SafeId<"caseLawSource">) => {
+  const decision = (
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId))
+  ).at(0);
+  if (decision === undefined) {
+    panic("the enriched decision must exist");
+  }
+  return decision;
+};
+
+test("archives a partial observation's fetched document while retaining the enriched row", async () => {
+  const sourceId = await createSource();
+  await observe({ sourceId, listing: "{}", order: 1n });
+  const before = await decisionForSource(sourceId);
+  expect(before.fulltext?.length ?? 0).toBeGreaterThan(0);
+  expect(before.sourceRawS3Key).not.toBeNull();
+  fake.requests.length = 0;
+  const input = partialDocumentObservation();
+  const outcome = await processDecision({
+    input,
+    sourceId,
+    scopedDb,
+    observationOrder: 2n,
+    observedAt: new Date("2026-10-29T00:00:00.000Z"),
+  });
+  expect(outcome.status).toBe("complete");
+  expect(puts()).toHaveLength(2);
+  const payload = puts().find(({ key }) => key.includes("/payloads/"));
+  expect(payload).toBeDefined();
+  if (payload === undefined) {
+    panic("the partial envelope must be stored");
+  }
+  expect(payload.key).not.toBe(before.sourceRawS3Key);
+  const envelope = new TextDecoder().decode(
+    fake.objects.get(`${payload.bucket}/${payload.key}`)?.bytes,
+  );
+  expect(decodeSourceRawEnvelope(envelope)).toEqual(
+    decodeSourceRawEnvelope(input.sourceRaw ?? ""),
+  );
+  const ref = decodeSourceRawEnvelopeObjects(envelope)["document-file"];
+  expect(ref).toBeDefined();
+  if (ref === undefined) {
+    panic("the partial envelope must name its fetched document");
+  }
+  expect(ref.location).toContain(`/documents/${before.id}/`);
+  expect(fake.objects.get(`${payload.bucket}/${ref.location}`)?.bytes).toEqual(
+    input.sourceRawObjects?.["document-file"]?.bytes,
+  );
+  const after = await decisionForSource(sourceId);
+  expect(after).toMatchObject({
+    sourceRawS3Key: before.sourceRawS3Key,
+    sourceRawContentType: before.sourceRawContentType,
+    sourceHash: before.sourceHash,
+    fulltext: before.fulltext,
+    documentAst: before.documentAst,
+    metadata: before.metadata,
+    contentHash: before.contentHash,
+    updatedAt: before.updatedAt,
+    sourceObservationOrder: 2n,
+    sourceObservationHash: input.rawHash,
+  });
+});
+
+test.each(["document", "envelope"] as const)(
+  "a failed partial %s archive holds the observation watermark",
+  async (failedPart) => {
+    const sourceId = await createSource();
+    await observe({ sourceId, listing: "{}", order: 1n });
+    const before = await decisionForSource(sourceId);
+    fake.requests.length = 0;
+    fake.failNext({
+      method: "PUT",
+      code: "AccessDenied",
+      status: 403,
+      ...(failedPart === "envelope" ? { keyIncludes: "/payloads/" } : {}),
+    });
+    const outcome = await processDecision({
+      input: partialDocumentObservation(),
+      sourceId,
+      scopedDb,
+      observationOrder: 2n,
+      observedAt: new Date("2026-10-29T00:00:00.000Z"),
+    });
+    expect(outcome).toEqual({
+      status: "retryable",
+      inserted: false,
+      reason: "source-raw-write",
+    });
+    expect(puts()).toHaveLength(failedPart === "document" ? 1 : 2);
+    expect(await decisionForSource(sourceId)).toEqual(before);
+  },
+);
+
+test("stored-input partial replay never archives raw objects", async () => {
+  const sourceId = await createSource();
+  await observe({ sourceId, listing: "{}", order: 1n });
+  const before = await decisionForSource(sourceId);
+  if (before.sourceRawS3Key === null) {
+    panic("the enriched decision must retain its raw pointer");
+  }
+  fake.requests.length = 0;
+  const outcome = await processStoredDecision({
+    input: partialDocumentObservation(),
+    sourceId,
+    scopedDb,
+    observationOrder: 2n,
+    observedAt: new Date("2026-10-29T00:00:00.000Z"),
+    decisionId: before.id,
+    sourceRawS3Key: before.sourceRawS3Key,
+  });
+  expect(outcome.status).toBe("complete");
+  expect(puts()).toEqual([]);
+  expect((await decisionForSource(sourceId)).sourceRawS3Key).toBe(
+    before.sourceRawS3Key,
+  );
 });

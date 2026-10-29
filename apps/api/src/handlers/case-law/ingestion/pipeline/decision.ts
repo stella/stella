@@ -17,6 +17,7 @@ import {
 import { planDecisionWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import {
   acquireSourceRawArtifact,
+  archivePreservedObservationRaw,
   recordAbandonedRawWrite,
   withSourceRawRetry,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
@@ -187,14 +188,6 @@ const runDecisionAttempt = async ({
       }),
   );
   const { existing, decisionId, composition } = identity;
-  const abandonRawWrite = async () =>
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
 
   if (existing?.redactedAt) {
     return {
@@ -216,6 +209,24 @@ const runDecisionAttempt = async ({
     return RECONCILE_CONTENTION;
   }
 
+  const rawOptions = {
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+    result,
+    existing,
+    sourceId,
+    decisionId,
+    rawWrites,
+    preservesExistingDetail: shape.preservesExistingDetail,
+    inputProvenance,
+    scopedDb,
+  };
+  const abandonRawWrite = async () => await recordAbandonedRawWrite(rawOptions);
+  const archiveOutcome = await archivePreservedObservationRaw(rawOptions);
+  if (archiveOutcome !== null) {
+    return archiveOutcome;
+  }
+
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
     scopedDb,
     existing,
@@ -231,16 +242,7 @@ const runDecisionAttempt = async ({
     return existingPolicyOutcome;
   }
   signal?.throwIfAborted();
-  const sourceRawArtifact = await acquireSourceRawArtifact({
-    ...(signal === undefined ? {} : { signal }),
-    ...(s3Policy === undefined ? {} : { s3Policy }),
-    result,
-    existing,
-    preservesExistingDetail: shape.preservesExistingDetail,
-    sourceId,
-    decisionId,
-    rawWrites,
-  });
+  const sourceRawArtifact = await acquireSourceRawArtifact(rawOptions);
   if (sourceRawArtifact.type === "retry") {
     await abandonRawWrite();
     return sourceRawArtifact.outcome;
