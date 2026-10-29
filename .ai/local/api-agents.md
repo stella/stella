@@ -1,9 +1,77 @@
-## Handler Scope
+## Backend (HTTP core)
 
-- Use `createSafeSessionHandler` for session-scoped endpoints,
-  `createSafeTokenHandler` for endpoints that authorize their own token, and
-  `createSafePublicHandler` for intentionally public endpoints. Public handlers
-  must not receive authenticated workspace or root context.
+The API serves `Bun.serve` routes through the in-house HTTP core in
+`apps/api/src/http/`; schemas are Valibot (any Standard Schema at the type level).
+
+- Route files build tables with `routes()` from `@/api/http/route`, as in
+  `routes({ "/:id": { GET: endpoint } }, { prefix, middleware })`, and compose
+  groups with `mount()`. Never spread a group into an array: it keeps the entries
+  but drops their route types. Paths and prefixes must be literal strings.
+- Keep route files thin: paths, methods, mount middleware (such as rate limits) and
+  the endpoint definitions. Handler logic and reusable helpers live in their own
+  modules.
+- An endpoint module default-exports one definition built by a safe-handler
+  factory from `/apps/api/src/lib/api-handlers.ts`. Its `config` owns `body`,
+  `params`, `query`, `headers`, `response` and `permissions`; the factory decodes
+  and validates them before the handler runs.
+- Workspace-scoped handlers use `createSafeHandler`; root-scoped handlers use
+  `createSafeRootHandler`; session-scoped `createSafeSessionHandler`; endpoints
+  that authorize their own token `createSafeTokenHandler`; intentionally public
+  ones `createSafePublicHandler`. Public handlers must not receive authenticated
+  workspace or root context. Handlers are `async function*` wrapped in
+  `Result.gen()`: use `yield* Result.await(safeDb(...))` for DB operations and
+  `Result.err(new HandlerError(...))` for error returns. Do not export raw
+  handlers that accept plain `WorkspaceContext`; use the branded authorized
+  context the factories provide.
+- `defineEndpoint` from `/apps/api/src/lib/endpoints.ts` is only for plumbing
+  (health probes, discovery documents, auth redirects, event streams, signed
+  webhooks); business operations use the factories.
+- Permission requirements live in the handler file next to the schema and business
+  logic. Every workspace-scoped mutation handler declares permissions in `config`.
+- **Ownership IDs come from server-validated sources.** `workspaceId` from the
+  `:workspaceId` segment the HTTP core authorizes, `organizationId` from
+  `ctx.session.activeOrganizationId`. The `no-body-ownership-ids` lint rule catches
+  body/query violations. Before writing a new handler, read an existing handler
+  with the same scope.
+- Return the answer value for a 200. Use `status(code, body)` from
+  `@/api/http/status` for any other status, so the web client types each status.
+- The web client's types are computed from the route definitions
+  (`RoutesOf<typeof apiRoutes>` in `src/web-contract.ts`, printed into apps/web's
+  `@/generated/api-routes.gen`). Do not export schema or response types for the
+  client by hand, and do not export types that have no consumer.
+- Path segments and query values arrive as strings: read numbers, booleans and
+  lists with `numberFromString`, `booleanFromString` and `arrayFromQuery` from
+  `@stll/api-contract/http-input`.
+- Use Valibot for route contracts and runtime validation; Zod only when a
+  dependency explicitly requires it.
+- For Valibot objects at untrusted boundaries, prefer `v.strictObject()` over
+  `v.object()` unless stripping unknown keys is intentionally desired
+- Prefer deriving related Valibot schemas with `v.pick()`, `v.omit()`, and
+  `v.partial()` instead of rewriting sibling schemas by hand
+- For cross-field form rules, prefer `v.partialCheck()` plus `v.forward()` so the
+  issue lands on the relevant field
+- Put normalization inside the Valibot schema (`v.trim()`, `v.toLowerCase()`, etc.),
+  then use `v.InferInput` for raw form values and `v.InferOutput` after
+  parsing/normalization
+- Prefer declarative/built-in validators over manual checks (e.g.,
+  `fileSchema({ maxBytes })`, `v.isoDate()`, `v.email()`).
+- Do not add fallback values for what the boundary already guarantees (a field
+  its schema validated). Trust internal code; only add defensive fallbacks at true
+  system boundaries (external APIs, user-controlled input).
+- File uploads use presigned URLs: client requests a URL from the API, uploads directly
+  to S3, then creates the DB record. A route that does take a multipart file declares
+  it with `fileSchema({ maxBytes })` from `/apps/api/src/lib/custom-schema.ts`.
+- Prefer Bun-native APIs over Web Crypto or manual implementations (e.g.,
+  `Bun.CryptoHasher`, `Bun.file`, `Bun.S3Client`). This is a Bun runtime; do not write
+  browser-compatible code on the backend.
+- Do not use `?.` or `?? []` to silently handle relations that are structural invariants
+  of the data model (e.g. `entity.currentVersion` always exists after creation). Use
+  `panic()` instead.
+- Timeouts on all external calls:
+
+  ```typescript
+  fetch(url, { signal: AbortSignal.timeout(10_000) });
+  ```
 
 ## Database Domain Values
 

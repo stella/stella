@@ -23,6 +23,7 @@ import {
   getMarketingAgentThreadId,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import { TIME_TRACKING_ENTRIES_SELECTOR } from "./capture-readiness";
 import { CAPTURE_DPR } from "./captures";
 import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
@@ -579,11 +580,8 @@ const captureLocale = async ({
         await expect(page.getByRole("grid")).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-time-entries") {
-        // The total row renders only once the day's entries have loaded.
         await expect(
-          page
-            .getByText(uiText(locale, "billing.total"), { exact: true })
-            .first(),
+          page.locator(TIME_TRACKING_ENTRIES_SELECTOR).first(),
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-invoice-entries") {

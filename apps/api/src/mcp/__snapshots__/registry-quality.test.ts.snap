@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -204,6 +204,23 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -341,7 +358,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -360,7 +377,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -3319,7 +3336,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Delete matter can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Delete matter is confined to the private workspace or a bounded computation."
     },
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter with its documents, tasks, fields and chat history; irreversible. Refused (409) when it has time, expenses or invoices: archive it instead.",
     "annotations": {
       "title": "Delete matter",
       "destructiveHint": true,
@@ -3502,8 +3519,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": [
@@ -3523,8 +3539,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3550,8 +3565,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3841,8 +3855,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": [
@@ -3862,8 +3875,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -3889,8 +3901,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -5465,6 +5476,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -5667,7 +5679,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve billing rate is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "annotations": {
       "title": "Resolve billing rate",
       "destructiveHint": false,
@@ -5687,6 +5699,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -5712,7 +5729,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "List invoices is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -6834,7 +6851,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6848,6 +6865,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -6985,7 +7019,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -7004,7 +7038,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -9963,7 +9997,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Delete matter can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Delete matter is confined to the private workspace or a bounded computation."
     },
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter with its documents, tasks, fields and chat history; irreversible. Refused (409) when it has time, expenses or invoices: archive it instead.",
     "annotations": {
       "title": "Delete matter",
       "destructiveHint": true,
@@ -10146,8 +10180,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": [
@@ -10167,8 +10200,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -10194,8 +10226,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -10485,8 +10516,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": [
@@ -10506,8 +10536,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -10533,8 +10562,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -12109,6 +12137,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -12311,7 +12340,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve billing rate is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "annotations": {
       "title": "Resolve billing rate",
       "destructiveHint": false,
@@ -12331,6 +12360,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -12356,7 +12390,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "List invoices is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -14254,7 +14288,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -14268,6 +14302,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -14405,7 +14456,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -14424,7 +14475,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -15928,6 +15979,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -15964,7 +16016,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve billing rate is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "annotations": {
       "title": "Resolve billing rate",
       "destructiveHint": false,
@@ -15984,6 +16036,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -16009,7 +16066,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "List invoices is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -16274,7 +16331,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16288,6 +16345,23 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -16425,7 +16499,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -16444,7 +16518,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,

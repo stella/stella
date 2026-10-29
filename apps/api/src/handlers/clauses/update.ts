@@ -27,6 +27,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 import type { ClauseMetadata } from "./metadata";
@@ -350,7 +351,13 @@ export const updateClauseHandler = async function* ({
       body.body ?? existing.body,
     );
     if (Result.isError(searchVectorResult)) {
-      captureError(searchVectorResult.error, { clauseId });
+      captureError(
+        searchVectorResult.error,
+        handlerErrorContext(
+          "clauses.updateClauseHandler.searchVectorResult_error",
+          { clauseId },
+        ),
+      );
     }
   }
 

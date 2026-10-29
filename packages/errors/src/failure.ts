@@ -1,4 +1,16 @@
-// parser-output-unchanged: total failure grading changes telemetry observation policy; no parser reads this vocabulary.
+// parser-output-unchanged: [uk-fcl] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [us-courtlistener] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [cz-ns] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [cz-uohs] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-courts] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-sn] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-kio] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-tk] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-ncourt] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [eu-ecj] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-kis] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-uokik] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -18,6 +30,11 @@ export const FAILURE_GRADES = [
 export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
+  public_read_timeout: "transient",
+  limiter_store_unavailable: "transient",
+  organization_state_unreadable: "transient",
+  admission_lease_lost: "transient",
+  admission_configuration_incomplete: "defect",
   upstream_unavailable: "transient",
   work_capacity_unavailable: "transient",
   work_deadline_exceeded: "transient",
@@ -75,6 +92,8 @@ export const FAILURE_REASON_GRADE = {
   optional_file_absent: "anticipated",
   // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
+  // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
+  document_ocr_unconfigured: "anticipated",
   // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
   sanctions_matcher_deadline: "anticipated",
   sanctions_matcher_saturated: "anticipated",
@@ -246,9 +265,14 @@ const resolveDeclaration = (
  * A reader that has already walked the prototype chain passes it, so a Proxy
  * whose `getPrototypeOf` answers differently on each call is read once.
  */
+type ReadFailureBrandOptions = {
+  prototypes?: readonly object[];
+  read?: (value: object, key: string) => unknown;
+};
+
 export const readFailureBrand = (
   value: unknown,
-  prototypes?: readonly object[],
+  { prototypes, read }: ReadFailureBrandOptions = {},
 ): FailureBrand | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
@@ -261,7 +285,17 @@ export const readFailureBrand = (
     const declaration = classDeclarations.get(prototype);
     if (declaration !== undefined) {
       return {
-        reason: resolveDeclaration(declaration, value),
+        reason: resolveDeclaration(
+          declaration,
+          read === undefined
+            ? value
+            : new Proxy(value, {
+                get: (target, key): unknown =>
+                  typeof key === "string"
+                    ? read(target, key)
+                    : Reflect.get(target, key),
+              }),
+        ),
         source: "class",
       };
     }

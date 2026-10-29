@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
@@ -52,7 +53,11 @@ export const tailwindFailureMessages = (
     ),
   ].toSorted();
 
-/** Lints every Tailwind entry point and returns why its rules did not run. */
+/**
+ * Lints every Tailwind entry point and returns why its rules did not run. The
+ * pass runs only the Tailwind rules (oxlint.tailwind.config.ts), which ask the
+ * design system for the same classes as the repository lint.
+ */
 const tailwindFailures = async (env: Record<string, string | undefined>) => {
   const child = Bun.spawn(
     [
@@ -60,7 +65,7 @@ const tailwindFailures = async (env: Record<string, string | undefined>) => {
       "--bun",
       "oxlint",
       "-c",
-      "oxlint.config.ts",
+      "oxlint.tailwind.config.ts",
       "--format",
       "json",
       ...lintTargets,
@@ -158,38 +163,31 @@ const answersOf = (text: string | undefined) => {
 };
 
 /**
- * Why the committed cache cannot serve the sources: a snapshot that is missing
- * or different, or a linted class whose answer is missing or different. An
- * answer the sources no longer use is harmless, because lint only reads.
+ * Why the committed cache cannot serve lint, decided without compiling. The
+ * plugin names each snapshot by the hash of what compiles it (the stylesheet
+ * and its imports, including workspace stylesheets imported by package name
+ * such as `@stll/ui/theme.css`, the installed packages' versions, the Tailwind
+ * engine and the plugin's precompute script), so a committed file of that name
+ * is current.
+ * A class without an answer fails every read-only lint that meets it.
  */
-export const cacheProblems = (
-  committed: CacheFiles,
-  generated: CacheFiles,
-): string[] => {
-  const problems: string[] = [];
-  for (const [name, text] of generated) {
-    const kept = committed.get(name);
-    if (!isDeclarationShard(name)) {
-      if (kept !== text) {
-        problems.push(
-          `- ${name}: design-system snapshot ${kept === undefined ? "missing" : "differs"}`,
+export const snapshotProblems = (committed: ReadonlySet<string>) =>
+  [
+    ...new Set(
+      tailwindEntryPoints.flatMap(({ stylesheet }) => {
+        const name = path.basename(
+          cacheArtifactPaths(path.join(repositoryRoot, stylesheet)).json,
         );
-      }
-      continue;
-    }
-    const have = answersOf(kept);
-    const classes = [...answersOf(text)]
-      .filter(([token, answer]) => have.get(token) !== answer)
-      .map(([token]) =>
-        have.has(token) ? `${token} (answer changed)` : `${token} (missing)`,
-      )
-      .toSorted();
-    if (classes.length > 0) {
-      problems.push(`- ${name}: ${classes.join(", ")}`);
-    }
-  }
-  return problems.toSorted();
-};
+        return committed.has(name)
+          ? []
+          : [`- ${stylesheet}: design-system snapshot ${name} missing`];
+      }),
+    ),
+  ].toSorted();
+
+/** The cache check: digests only, so it never starts lint or a worker. */
+export const checkCache = async () =>
+  snapshotProblems(new Set(await readdir(committedCache)));
 
 /**
  * The committed cache after a generation. Fresh answers win; an answer the
@@ -234,23 +232,16 @@ export const mergeCache = (
   return merged;
 };
 
-const withGenerated = async <T>(
-  consume: (generated: CacheFiles) => Promise<T>,
-) => {
+const write = async () => {
   const temporaryRoot = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-cache-"),
   );
   try {
     await generate(temporaryRoot);
-    return await consume(await readCache(temporaryRoot));
-  } finally {
-    await rm(temporaryRoot, { recursive: true, force: true });
-  }
-};
-
-const write = async () => {
-  await withGenerated(async (generated) => {
-    const merged = mergeCache(await readCache(committedCache), generated);
+    const merged = mergeCache(
+      await readCache(committedCache),
+      await readCache(temporaryRoot),
+    );
     await mkdir(committedCache, { recursive: true });
     for (const name of await readdir(committedCache)) {
       if (!merged.has(name)) {
@@ -263,19 +254,19 @@ const write = async () => {
     for (const [name, text] of merged) {
       await Bun.write(path.join(committedCache, name), text);
     }
-  });
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 };
 
 const check = async () => {
-  await withGenerated(async (generated) => {
-    const problems = cacheProblems(await readCache(committedCache), generated);
-    if (problems.length > 0) {
-      process.stderr.write(
-        `Tailwind cache misses answers the sources need:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
-      );
-      process.exitCode = 1;
-    }
-  });
+  const problems = await checkCache();
+  if (problems.length > 0) {
+    process.stderr.write(
+      `Tailwind cache is stale:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
+    );
+    process.exitCode = 1;
+  }
 };
 
 if (import.meta.main) {

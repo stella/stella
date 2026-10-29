@@ -21,10 +21,11 @@ import { Label } from "@stll/ui/label";
 import { browserApiRootUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
@@ -66,10 +67,10 @@ function AgentClaimPage() {
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const organizationsView = useQueryView(
+  const organizationsView = queryView(
     useQuery(organizationListOptions(userId)),
   );
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "AgentClaimPage:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
 
@@ -106,14 +107,14 @@ function AgentClaimPage() {
 
     setStatus("idle");
     if (result.value.status === "not_found") {
-      notifyUserError(undefined, t("agentClaim.errorNotFound"));
+      notifyUserProblem(t("agentClaim.errorNotFound"));
       return;
     }
     if (result.value.status === "expired") {
-      notifyUserError(undefined, t("agentClaim.errorExpired"));
+      notifyUserProblem(t("agentClaim.errorExpired"));
       return;
     }
-    notifyUserError(undefined, t("agentClaim.errorInvalid"));
+    notifyUserProblem(t("agentClaim.errorInvalid"));
   };
 
   if (status === "claimed") {

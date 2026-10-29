@@ -1,6 +1,5 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { cn } from "@stll/ui/utils";
 
@@ -12,7 +11,7 @@ type InlineEditProps = {
   /** Extra content after the input (e.g. file extension). */
   suffix?: React.ReactNode;
   /**
-   * Action button(s) between the input and Done (e.g. a suggest wand).
+   * Action button(s) after the input (e.g. a suggest wand).
    * Buttons placed here must call `preventDefault()` in `onMouseDown` and
    * trigger on `onClick`: the input commits on blur, so an unprevented
    * press's focus steal would close the editor before the action's result
@@ -30,6 +29,10 @@ type InlineEditProps = {
   inputClassName?: string | undefined;
 };
 
+/**
+ * `InlineRenameInput` plus a suffix and action slot. It adds no commit button:
+ * Enter and blur commit and Escape cancels, as on every other inline rename.
+ */
 export const InlineEdit = ({
   value,
   onChange,
@@ -75,19 +78,6 @@ export const InlineEdit = ({
       />
       {suffix}
       {action}
-      <Button
-        className="h-lh shrink-0 gap-0.5 px-2"
-        onClick={onCommit}
-        onMouseDown={(e) => {
-          e.preventDefault();
-        }}
-        size="xs"
-        type="button"
-        variant="default"
-      >
-        {t("common.done")}
-        <kbd className="text-3xs opacity-70">{t("common.enterKey")}</kbd>
-      </Button>
     </span>
   );
 };

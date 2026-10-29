@@ -22,10 +22,15 @@ import {
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  type contacts,
+  INVOICE_BILLING_PURPOSE,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
@@ -48,6 +53,7 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
@@ -59,6 +65,10 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
+import {
+  invoiceDetailRowFixture,
+  invoiceListRowFixture,
+} from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -67,6 +77,36 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
+
+beforeEach(() => {
+  describeStoredTemplateMock.mockReset();
+  executeRegistryLookupMock.mockReset();
+  getLawTextBlockMock.mockReset();
+  listStatuteVersionsHandlerMock.mockReset();
+  readCaseLawCoverageHandlerMock.mockReset();
+  readGatedDecisionCitationDigestMock.mockReset();
+  readGatedDecisionCitationsMock.mockReset();
+  readGatedDecisionWithDocumentMock.mockReset();
+  readLegislationProvisionVersionsMock.mockReset();
+  readOverviewHandlerMock.mockReset();
+  readProvisionHistoryHandlerMock.mockReset();
+  readPublicLegislationHandlerMock.mockReset();
+  readVersionBlocksMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+  readWorkspaceMembersHandlerMock.mockReset();
+  resolveStatuteExpressionMock.mockReset();
+  resolveStatuteWorkVersionMock.mockReset();
+  searchConsolidatedLegislationMock.mockReset();
+  searchDecisionsHandlerMock.mockReset();
+  searchLegislationHandlerMock.mockReset();
+  searchProviderSearchMock.mockReset();
+});
 
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
@@ -1345,8 +1385,10 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         select: selectQueue([
           [
-            {
+            invoiceListRowFixture({
               id: uid(45),
+              clientId: null,
+              matterShare: 1000,
               invoiceNumber: "INV-1",
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1356,12 +1398,14 @@ const CONTRACT_CORPUS = {
               dueDate: "2026-02-01",
               currency: "EUR",
               totalAmount: 1000,
+              paidAmount: 400,
               createdAtCursor: new Date("2026-01-01"),
-            },
+            }),
           ],
         ]),
       }),
       expectRefPaths: [],
+      expectPayloadContains: ['"paidAmount":400', '"outstandingAmount":600'],
     },
     {
       mode: "detail",
@@ -1369,100 +1413,151 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         query: {
           invoices: {
-            findFirst: async () => ({
-              id: uid(46),
-              workspaceId: WS,
-              invoiceNumber: "INV-2",
-              documentType: "invoice",
-              originalInvoiceId: null,
-              reference: "Acme February",
-              status: "draft",
-              invoiceDate: "2026-02-01",
-              taxableSupplyDate: "2026-02-01",
-              dueDate: "2026-03-01",
-              currency: "EUR",
-              totalAmount: 2000,
-              netAmount: 100,
-              vatAmount: 21,
-              notes: "Net 30",
-              sellerProfileId: uid(106),
-              buyerName: "Acme s.r.o.",
-              buyerRegistrationId: "12345678",
-              buyerVatId: "CZ12345678",
-              buyerAddressLine1: "Hlavni 1",
-              buyerAddressLine2: null,
-              buyerCity: "Praha",
-              buyerPostalCode: "110 00",
-              buyerCountry: "CZ",
-              paidAt: null,
-              createdAt: new Date("2026-02-01"),
-              updatedAt: new Date("2026-02-01"),
-              timeEntries: [
-                {
-                  id: uid(47),
-                  workItemId: uid(48),
-                  workItemReference: { type: "available", id: uid(48) },
-                  dateWorked: "2026-02-01",
-                  billedMinutes: 60,
-                  rateAtEntry: 100,
-                  currency: "EUR",
-                  narrative: "Drafted the NDA",
-                  narrativeLanguage: null,
-                  invoiceNarrative: null,
-                  noCharge: false,
-                  status: "invoiced",
-                  workItem: { id: uid(48), name: "NDA draft" },
-                },
-              ],
-              expenses: [
-                {
-                  id: uid(49),
-                  matterId: uid(50),
-                  matterReference: { type: "available", id: uid(50) },
-                  dateIncurred: "2026-02-01",
-                  amount: 100,
-                  currency: "EUR",
-                  category: "travel",
-                  description: "Court filing fee",
-                  invoiceDescription: null,
-                  billable: true,
-                  markup: 0,
-                  matter: { id: uid(50), name: "Filing bundle" },
-                },
-              ],
-              lines: [
-                {
-                  id: uid(105),
-                  position: 0,
-                  description: "Drafted the NDA",
-                  quantity: "1.0000",
-                  unit: "h",
-                  unitPrice: 100,
-                  vatRateBps: 2100,
-                  vatTreatment: "domestic_vat",
-                  exemptionReason: null,
-                  netAmount: 100,
-                  vatAmount: 21,
-                  grossAmount: 121,
-                  source: "time_entry",
-                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
-                  timeEntryId: uid(47),
-                  expenseId: null,
-                  releasedAt: null,
-                },
-              ],
-            }),
+            findFirst: async () =>
+              invoiceDetailRowFixture({
+                id: toSafeId<"invoice">(uid(46)),
+                clientId: null,
+                workspaceId: toSafeId<"workspace">(WS),
+                invoiceNumber: "INV-2",
+                documentType: "invoice",
+                originalInvoiceId: null,
+                reference: "Acme February",
+                status: "draft",
+                invoiceDate: "2026-02-01",
+                taxableSupplyDate: "2026-02-01",
+                dueDate: "2026-03-01",
+                currency: "EUR",
+                totalAmount: cents(2000),
+                netAmount: cents(100),
+                vatAmount: cents(21),
+                notes: "Net 30",
+                sellerProfileId: toSafeId<"sellerProfile">(uid(106)),
+                buyerName: "Acme s.r.o.",
+                buyerRegistrationId: "12345678",
+                buyerVatId: "CZ12345678",
+                buyerAddressLine1: "Hlavni 1",
+                buyerAddressLine2: null,
+                buyerCity: "Praha",
+                buyerPostalCode: "110 00",
+                buyerCountry: "CZ",
+                paidAt: null,
+                createdAt: new Date("2026-02-01"),
+                updatedAt: new Date("2026-02-01"),
+                payments: [
+                  {
+                    id: toSafeId<"invoicePayment">(uid(107)),
+                    invoiceId: toSafeId<"invoice">(uid(46)),
+                    amount: cents(500),
+                    paidOn: "2026-02-01",
+                    method: "bank_transfer",
+                    reference: null,
+                    note: null,
+                    recordedBy: toSafeId<"user">(uid(108)),
+                    createdAt: new Date("2026-02-01"),
+                    voidedAt: null,
+                    voidedBy: null,
+                  },
+                ],
+                timeEntries: [
+                  {
+                    id: toSafeId<"timeEntry">(uid(47)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    workItemId: toSafeId<"entity">(uid(48)),
+                    workItemReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(uid(48)),
+                    },
+                    dateWorked: "2026-02-01",
+                    billedMinutes: 60,
+                    rateAtEntry: cents(100),
+                    currency: "EUR",
+                    narrative: "Drafted the NDA",
+                    invoiceNarrative: null,
+                    noCharge: false,
+                    status: BILLING_STATUS.BILLED,
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(uid(48)),
+                      name: "NDA draft",
+                    },
+                  },
+                ],
+                expenses: [
+                  {
+                    id: toSafeId<"expense">(uid(49)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    matterId: toSafeId<"entity">(uid(50)),
+                    matterReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(uid(50)),
+                    },
+                    dateIncurred: "2026-02-01",
+                    amount: cents(100),
+                    currency: "EUR",
+                    category: "travel",
+                    description: "Court filing fee",
+                    invoiceDescription: null,
+                    billable: true,
+                    markup: 0,
+                    matter: {
+                      id: toSafeId<"entity">(uid(50)),
+                      name: "Filing bundle",
+                    },
+                  },
+                ],
+                lines: [
+                  {
+                    id: toSafeId<"invoiceLine">(uid(105)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    workspace: {
+                      id: toSafeId<"workspace">(WS),
+                      name: "Matter",
+                      color: null,
+                    },
+                    recordedDescription: null,
+                    recordedQuantity: null,
+                    recordedUnit: null,
+                    recordedUnitPrice: null,
+                    recordedNetAmount: null,
+                    position: 0,
+                    description: "Drafted the NDA",
+                    quantity: "1.0000",
+                    unit: "h",
+                    unitPrice: cents(100),
+                    vatRateBps: 2100,
+                    vatTreatment: "domestic_vat",
+                    exemptionReason: null,
+                    netAmount: cents(100),
+                    vatAmount: cents(21),
+                    grossAmount: cents(121),
+                    source: "time_entry",
+                    billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
+                    timeEntryId: toSafeId<"timeEntry">(uid(47)),
+                    expenseId: null,
+                    releasedAt: null,
+                  },
+                ],
+              }),
           },
         },
       }),
+      expectPayloadContains: ['"paidAmount":500', '"outstandingAmount":1500'],
       expectRefPaths: [
         "invoice.workspaceId",
+        "invoice.timeEntries[].workspaceId",
         "invoice.timeEntries[].entityId",
         "invoice.timeEntries[].entityReference.id",
+        "invoice.timeEntries[].entityReference.workspaceId",
         "invoice.timeEntries[].entity.id",
+        "invoice.timeEntries[].entity.workspaceId",
+        "invoice.expenses[].workspaceId",
         "invoice.expenses[].entityId",
         "invoice.expenses[].entityReference.id",
+        "invoice.expenses[].entityReference.workspaceId",
         "invoice.expenses[].entity.id",
+        "invoice.expenses[].entity.workspaceId",
+        "invoice.lines[].workspaceId",
+        "invoice.lines[].workspace.id",
       ],
     },
   ],
@@ -1675,6 +1770,11 @@ const CONTRACT_CORPUS = {
             },
           ],
           citationsNextCursor: null,
+          caseFile: {
+            items: [],
+            nextCursor: null,
+            limit: LIMITS.caseLawCaseFilePageSize,
+          },
           country: "CZ",
           court: "Nejvyšší soud",
           courtId: null,
@@ -2502,6 +2602,11 @@ describe("decision text in chat projection", () => {
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,
+      caseFile: {
+        items: [],
+        nextCursor: null,
+        limit: LIMITS.caseLawCaseFilePageSize,
+      },
       country: "CZ",
       court: "Nejvyšší soud",
       courtId: null,

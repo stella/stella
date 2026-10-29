@@ -2,81 +2,106 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
+import {
+  type Expression,
+  type Node,
+  type ObjectExpression,
+  parseSource,
+  type Program,
+  staticPropertyName,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const TEST_USER_SEED_PATH = "apps/api/scripts/seed-test-user.ts";
 const E2E_SPECS_GLOB = new Bun.Glob("apps/web/e2e/specs/**/*.spec.ts");
 
-const readSourceFile = (relativePath: string): ts.SourceFile =>
-  ts.createSourceFile(
+type SeedSourceFile = {
+  program: Program;
+  fileName: string;
+};
+
+const readSourceFile = (relativePath: string): SeedSourceFile => ({
+  program: parseSource(
     relativePath,
     readFileSync(path.join(REPO_ROOT, relativePath), "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  ).program,
+  fileName: relativePath,
+});
 
 const propertyValue = (
-  node: ts.ObjectLiteralExpression,
+  node: ObjectExpression,
   property: string,
-): ts.Expression | undefined =>
-  node.properties.find(
-    (candidate): candidate is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(candidate) &&
-      ts.isIdentifier(candidate.name) &&
-      candidate.name.text === property,
-  )?.initializer;
+): Expression | undefined => {
+  for (const candidate of node.properties) {
+    if (
+      candidate.type === "Property" &&
+      !candidate.computed &&
+      !candidate.method &&
+      candidate.kind === "init" &&
+      !candidate.shorthand &&
+      candidate.key.type === "Identifier" &&
+      candidate.key.name === property
+    ) {
+      return candidate.value;
+    }
+  }
+  return undefined;
+};
 
 const collectStringProperties = (
-  node: ts.Node,
+  node: Node,
   property: string,
   values: Set<string>,
 ): void => {
-  if (
-    ts.isPropertyAssignment(node) &&
-    ts.isIdentifier(node.name) &&
-    node.name.text === property &&
-    ts.isStringLiteral(node.initializer)
-  ) {
-    values.add(node.initializer.text);
-  }
-  ts.forEachChild(node, (child) =>
-    collectStringProperties(child, property, values),
-  );
+  walk(node, (child) => {
+    if (
+      child.type === "Property" &&
+      !child.computed &&
+      !child.method &&
+      child.kind === "init" &&
+      !child.shorthand &&
+      child.key.type === "Identifier" &&
+      child.key.name === property &&
+      child.value.type === "Literal" &&
+      typeof child.value.value === "string"
+    ) {
+      values.add(child.value.value);
+    }
+  });
 };
 
 const findVariableInitializer = (
-  file: ts.SourceFile,
+  file: SeedSourceFile,
   name: string,
-): ts.Expression | undefined => {
-  const initializers: ts.Expression[] = [];
-  const visit = (node: ts.Node): void => {
+): Expression | undefined => {
+  const initializers: Expression[] = [];
+  walk(file.program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === name &&
-      node.initializer
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.id.name === name &&
+      node.init
     ) {
-      initializers.push(node.initializer);
+      initializers.push(node.init);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return initializers.length === 1 ? initializers[0] : undefined;
 };
 
 type SeedSourceExpression = {
-  expression: ts.Expression;
-  file: ts.SourceFile;
+  expression: Expression;
+  file: SeedSourceFile;
   visited: ReadonlySet<string>;
 };
 type ResolveSeedSourceOptions = {
-  expression: ts.Expression | undefined;
-  file: ts.SourceFile;
+  expression: Expression | undefined;
+  file: SeedSourceFile;
   visited?: ReadonlySet<string>;
-  files: Map<string, ts.SourceFile>;
+  files: Map<string, SeedSourceFile>;
 };
 
 const resolveSeedSource = ({
@@ -89,9 +114,9 @@ const resolveSeedSource = ({
     return [];
   }
   if (
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression) ||
-    ts.isParenthesizedExpression(expression)
+    expression.type === "TSAsExpression" ||
+    expression.type === "TSSatisfiesExpression" ||
+    expression.type === "ParenthesizedExpression"
   ) {
     return resolveSeedSource({
       expression: expression.expression,
@@ -100,8 +125,8 @@ const resolveSeedSource = ({
       files,
     });
   }
-  if (ts.isIdentifier(expression)) {
-    const name = expression.text;
+  if (expression.type === "Identifier") {
+    const name = expression.name;
     const identity = `${file.fileName}:${name}`;
     if (visited.has(identity)) {
       return [];
@@ -116,24 +141,18 @@ const resolveSeedSource = ({
         files,
       });
     }
-    for (const statement of file.statements) {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
+    for (const statement of file.program.body) {
+      if (statement.type !== "ImportDeclaration") {
         continue;
       }
-      const bindings = statement.importClause?.namedBindings;
-      if (!bindings || !ts.isNamedImports(bindings)) {
-        continue;
-      }
-      const binding = bindings.elements.find(
-        (element) => element.name.text === name,
+      const binding = statement.specifiers.find(
+        (specifier) =>
+          specifier.type === "ImportSpecifier" && specifier.local.name === name,
       );
-      if (!binding) {
+      if (!binding || binding.type !== "ImportSpecifier") {
         continue;
       }
-      const specifier = statement.moduleSpecifier.text;
+      const specifier = statement.source.value;
       if (!specifier.startsWith(".") && !specifier.startsWith("@stll/")) {
         return [];
       }
@@ -153,7 +172,9 @@ const resolveSeedSource = ({
       return resolveSeedSource({
         expression: findVariableInitializer(
           imported,
-          binding.propertyName?.text ?? binding.name.text,
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value,
         ),
         file: imported,
         visited: nextVisited,
@@ -162,38 +183,40 @@ const resolveSeedSource = ({
     }
     return [];
   }
-  if (
-    ts.isPropertyAccessExpression(expression) ||
-    ts.isElementAccessExpression(expression)
-  ) {
+  if (expression.type === "MemberExpression") {
     let property: string | undefined;
-    if (ts.isPropertyAccessExpression(expression)) {
-      property = expression.name.text;
-    } else if (ts.isStringLiteral(expression.argumentExpression)) {
-      property = expression.argumentExpression.text;
+    if (!expression.computed && expression.property.type === "Identifier") {
+      property = expression.property.name;
+    } else if (
+      expression.property.type === "Literal" &&
+      typeof expression.property.value === "string"
+    ) {
+      property = expression.property.value;
     }
     return resolveSeedSource({
-      expression: expression.expression,
+      expression: expression.object,
       file,
       visited,
       files,
     }).flatMap((source) => {
-      if (!ts.isObjectLiteralExpression(source.expression)) {
+      if (source.expression.type !== "ObjectExpression") {
         return [];
       }
       return source.expression.properties.flatMap((candidate) => {
-        if (!ts.isPropertyAssignment(candidate)) {
+        if (
+          candidate.type !== "Property" ||
+          candidate.method ||
+          candidate.kind !== "init" ||
+          candidate.shorthand
+        ) {
           return [];
         }
-        const key =
-          ts.isIdentifier(candidate.name) || ts.isStringLiteral(candidate.name)
-            ? candidate.name.text
-            : undefined;
+        const key = staticPropertyName(candidate);
         if (property !== undefined && key !== property) {
           return [];
         }
         return resolveSeedSource({
-          expression: candidate.initializer,
+          expression: candidate.value,
           file: source.file,
           visited: source.visited,
           files,
@@ -217,23 +240,32 @@ const collectSeedStrings = ({
     visited,
     files,
   })) {
-    if (ts.isStringLiteral(source.expression)) {
-      values.add(source.expression.text);
+    if (
+      source.expression.type === "Literal" &&
+      typeof source.expression.value === "string"
+    ) {
+      values.add(source.expression.value);
       continue;
     }
-    const children: ts.Expression[] = [];
-    if (ts.isArrayLiteralExpression(source.expression)) {
+    const children: Expression[] = [];
+    if (source.expression.type === "ArrayExpression") {
       for (const element of source.expression.elements) {
-        children.push(
-          ts.isSpreadElement(element) ? element.expression : element,
-        );
+        if (element) {
+          children.push(
+            element.type === "SpreadElement" ? element.argument : element,
+          );
+        }
       }
-    } else if (ts.isObjectLiteralExpression(source.expression)) {
+    } else if (source.expression.type === "ObjectExpression") {
       for (const property of source.expression.properties) {
-        if (ts.isPropertyAssignment(property)) {
-          children.push(property.initializer);
-        } else if (ts.isSpreadAssignment(property)) {
-          children.push(property.expression);
+        if (property.type === "SpreadElement") {
+          children.push(property.argument);
+        } else if (
+          !property.method &&
+          property.kind === "init" &&
+          !property.shorthand
+        ) {
+          children.push(property.value);
         }
       }
     }
@@ -252,29 +284,32 @@ const collectSeedStrings = ({
 };
 
 const resolveStringValues = (
-  expression: ts.Expression | undefined,
-  file: ts.SourceFile,
+  expression: Node | undefined,
+  file: SeedSourceFile,
   visited = new Set<string>(),
 ): Set<string> => {
   const values = new Set<string>();
   if (!expression) {
     return values;
   }
-  if (ts.isStringLiteral(expression)) {
-    values.add(expression.text);
+  if (expression.type === "Literal" && typeof expression.value === "string") {
+    values.add(expression.value);
     return values;
   }
-  if (ts.isIdentifier(expression) && !visited.has(expression.text)) {
-    const nextVisited = new Set(visited).add(expression.text);
+  if (expression.type === "Identifier" && !visited.has(expression.name)) {
+    const nextVisited = new Set(visited).add(expression.name);
     return resolveStringValues(
-      findVariableInitializer(file, expression.text),
+      findVariableInitializer(file, expression.name),
       file,
       nextVisited,
     );
   }
-  if (ts.isArrayLiteralExpression(expression)) {
+  if (expression.type === "ArrayExpression") {
     for (const element of expression.elements) {
-      const value = ts.isSpreadElement(element) ? element.expression : element;
+      const value =
+        element?.type === "SpreadElement"
+          ? element.argument
+          : (element ?? undefined);
       for (const name of resolveStringValues(value, file, visited)) {
         values.add(name);
       }
@@ -284,17 +319,17 @@ const resolveStringValues = (
 };
 
 const resolveObject = (
-  expression: ts.Expression | undefined,
-  file: ts.SourceFile,
-): ts.ObjectLiteralExpression | undefined => {
+  expression: Node | undefined,
+  file: SeedSourceFile,
+): ObjectExpression | undefined => {
   if (!expression) {
     return undefined;
   }
-  if (ts.isObjectLiteralExpression(expression)) {
+  if (expression.type === "ObjectExpression") {
     return expression;
   }
-  if (ts.isIdentifier(expression)) {
-    return resolveObject(findVariableInitializer(file, expression.text), file);
+  if (expression.type === "Identifier") {
+    return resolveObject(findVariableInitializer(file, expression.name), file);
   }
   return undefined;
 };
@@ -304,7 +339,7 @@ const readSeededNames = (): Set<string> => {
   const devDocumentNames = new Set<string>();
   const testUserNames = new Set<string>();
 
-  const files = new Map<string, ts.SourceFile>();
+  const files = new Map<string, SeedSourceFile>();
   const localeFile = readSourceFile("apps/api/scripts/seed-content/locales.ts");
   const locales = findVariableInitializer(localeFile, "SEED_CONTENT_BY_LOCALE");
   const packs = resolveSeedSource({
@@ -313,19 +348,24 @@ const readSeededNames = (): Set<string> => {
     files,
   });
   for (const packMap of packs) {
-    if (!ts.isObjectLiteralExpression(packMap.expression)) {
+    if (packMap.expression.type !== "ObjectExpression") {
       continue;
     }
     for (const locale of packMap.expression.properties) {
-      if (!ts.isPropertyAssignment(locale)) {
+      if (
+        locale.type !== "Property" ||
+        locale.method ||
+        locale.kind !== "init" ||
+        locale.shorthand
+      ) {
         continue;
       }
       for (const pack of resolveSeedSource({
-        expression: locale.initializer,
+        expression: locale.value,
         file: packMap.file,
         files,
       })) {
-        if (!ts.isObjectLiteralExpression(pack.expression)) {
+        if (pack.expression.type !== "ObjectExpression") {
           continue;
         }
         for (const name of collectSeedStrings({
@@ -340,7 +380,7 @@ const readSeededNames = (): Set<string> => {
           file: pack.file,
           files,
         })) {
-          if (!ts.isObjectLiteralExpression(templates.expression)) {
+          if (templates.expression.type !== "ObjectExpression") {
             continue;
           }
           const names = propertyValue(templates.expression, "templates");
@@ -359,8 +399,8 @@ const readSeededNames = (): Set<string> => {
   expect(devDocumentNames.size).toBeGreaterThan(0);
 
   const testUserFile = readSourceFile(TEST_USER_SEED_PATH);
-  collectStringProperties(testUserFile, "name", testUserNames);
-  collectStringProperties(testUserFile, "fileName", testUserNames);
+  collectStringProperties(testUserFile.program, "name", testUserNames);
+  collectStringProperties(testUserFile.program, "fileName", testUserNames);
 
   const names = new Set([...templateNames, ...devDocumentNames]);
   for (const testUserName of testUserNames) {
@@ -370,27 +410,25 @@ const readSeededNames = (): Set<string> => {
 };
 
 const collectUploadedNames = (source: string): Set<string> => {
-  const file = ts.createSourceFile(
-    "e2e.spec.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const file = {
+    program: parseSource("e2e.spec.ts", source).program,
+    fileName: "e2e.spec.ts",
+  };
   const names = new Set<string>();
-  const readString = (expression: ts.Expression | undefined): void => {
+  const readString = (expression: Expression | undefined): void => {
     for (const name of resolveStringValues(expression, file)) {
       names.add(name);
     }
   };
-  const visit = (node: ts.Node): void => {
+  walk(file.program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      (node.expression.text === "apiUploadTemplate" ||
-        node.expression.text === "apiUploadDocx")
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      (node.callee.name === "apiUploadTemplate" ||
+        node.callee.name === "apiUploadDocx")
     ) {
       const upload = resolveObject(
-        node.expression.text === "apiUploadTemplate"
+        node.callee.name === "apiUploadTemplate"
           ? node.arguments[1]
           : node.arguments[3],
         file,
@@ -403,9 +441,7 @@ const collectUploadedNames = (source: string): Set<string> => {
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return names;
 };
 
@@ -413,27 +449,35 @@ const findSeedNameReferences = (
   source: string,
   seedNames: ReadonlySet<string>,
 ): string[] => {
-  const file = ts.createSourceFile(
-    "e2e.spec.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const file = {
+    program: parseSource("e2e.spec.ts", source).program,
+    fileName: "e2e.spec.ts",
+  };
   const matches: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isStringLiteralLike(node) || ts.isRegularExpressionLiteral(node)) {
-      const text = ts.isRegularExpressionLiteral(node)
-        ? node.text.replaceAll(/\\(.)/gu, "$1")
-        : node.text;
+  walk(file.program, (node) => {
+    let text: string | undefined;
+    if (node.type === "Literal" && typeof node.value === "string") {
+      text = node.value;
+    } else if (node.type === "Literal" && "regex" in node) {
+      // The literal as written, `/pattern/flags`, without escapes.
+      text = `/${node.regex.pattern}/${node.regex.flags}`.replaceAll(
+        /\\(.)/gu,
+        "$1",
+      );
+    } else if (
+      node.type === "TemplateLiteral" &&
+      node.expressions.length === 0
+    ) {
+      text = node.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    if (text !== undefined) {
       for (const name of seedNames) {
         if (text.includes(name)) {
           matches.push(name);
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return [...new Set(matches)].toSorted();
 };
 

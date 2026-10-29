@@ -13,8 +13,9 @@ import {
   templateDetailOptions,
   templatesOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type TemplatePatch = Parameters<ReturnType<typeof api.templates>["post"]>[0];
 
@@ -37,8 +38,8 @@ const useTemplates = (
   const categoriesDataQuery = useQuery(
     templateCategoriesOptions(organizationId),
   );
-  const categoriesDataView = useQueryView(categoriesDataQuery);
-  useQueryViewError(categoriesDataView);
+  const categoriesDataView = queryView(categoriesDataQuery);
+  useQueryViewError(categoriesDataView, "useTemplates:query");
   const categoriesData =
     categoriesDataView.type === "items" ? categoriesDataView.items : undefined;
 

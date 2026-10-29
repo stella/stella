@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
@@ -104,6 +105,7 @@ type CreateContactVars = {
 
 export const useCreateContact = () => {
   const analytics = useAnalytics();
+  const t = useTranslations();
 
   return useMutation({
     mutationFn: async (vars: CreateContactVars) => {
@@ -112,7 +114,11 @@ export const useCreateContact = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateContact:failure",
+        scope: { type: "handler", handlerId: "useCreateContact:failure" },
+      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -192,7 +198,10 @@ export const useUpdateContact = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateContact:failure",
+        scope: { type: "handler", handlerId: "useUpdateContact:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -214,7 +223,11 @@ export const useDeleteContact = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteContact:failure",
+        scope: { type: "handler", handlerId: "useDeleteContact:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

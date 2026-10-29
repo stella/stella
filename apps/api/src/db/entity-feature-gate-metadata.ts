@@ -905,3 +905,16 @@ ${branches.join("\n")}
 END
 $function$;`;
 };
+
+/** Render the runtime registry from the schema-derived, parent-first census. */
+export const entityFeatureGateGraphSql = (
+  descriptors: readonly EntityFeatureGateDescriptor[],
+): string =>
+  `CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = pg_catalog AS $graph$ SELECT $metadata$${JSON.stringify(
+    Object.fromEntries(
+      descriptors.map((descriptor, order) => [
+        descriptor.tableName,
+        { ...descriptor, order },
+      ]),
+    ),
+  )}$metadata$::jsonb $graph$;`;

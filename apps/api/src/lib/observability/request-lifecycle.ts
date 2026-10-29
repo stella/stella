@@ -4,6 +4,7 @@
  * `requestCompletion` writes each request's one log record and duration
  * metric from its final answer.
  */
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { RequestContext } from "@/api/http/context";
@@ -32,12 +33,14 @@ import {
   observeUnobserved5xx,
   SHADOW_SINKS,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import {
   claimRequestRecord,
   getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { requestClassAtCompletion } from "@/api/lib/observability/route-latency-class";
@@ -105,6 +108,27 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const captured = statusCode >= 500;
   const routeName = getRouteName(ctx.route);
   const failedSeverity = captured ? "ERROR" : "WARN";
+  const scope = {
+    type: "request",
+    method: ctx.request.method,
+    routeTemplate: routeName,
+  } as const;
+  recordRequestExceptionScope(ctx.request, scope);
+  if (answer.code === LIMITER_STORE_UNAVAILABLE.code) {
+    observeLimiterAdmissionFailure(error, "limiter");
+    if (claimRequestRecord()) {
+      emitRequestDurationMetric({
+        durationMs: elapsedMs(),
+        requestClass: requestClassAtCompletion({
+          method: ctx.request.method,
+          route: routeName,
+        }),
+        statusCode,
+        route: routeName,
+      });
+    }
+    return toResponse(status(statusCode, httpFailureBody(answer)), ctx.set);
+  }
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
@@ -161,6 +185,8 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
 
   if (captured) {
     captureObservedError(error, {
+      scope,
+      fingerprintKey: "observability.answerRequestError",
       request: ctx.request,
       context: {
         route: routeName,
@@ -255,17 +281,19 @@ export const requestCompletion: Middleware = async (ctx, inner) => {
     const statusCode = response.status;
     const failure =
       statusCode >= 400 ? completionFailure(statusCode, ctx.route) : undefined;
-    logger.request({
-      ...buildRequestLogDetails({
-        durationMs,
-        request: ctx.request,
-        route: ctx.route,
-        statusCode,
-      }),
-      ...(failure === undefined ? {} : { failure }),
-      message: "request.completed",
-      severity: severityFor(statusCode),
-    });
+    if (failure?.reason !== "limiter_store_unavailable") {
+      logger.request({
+        ...buildRequestLogDetails({
+          durationMs,
+          request: ctx.request,
+          route: ctx.route,
+          statusCode,
+        }),
+        ...(failure === undefined ? {} : { failure }),
+        message: "request.completed",
+        severity: severityFor(statusCode),
+      });
+    }
     emitRequestDurationMetric({
       durationMs,
       requestClass: requestClassAtCompletion({

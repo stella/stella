@@ -13,6 +13,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -20,6 +21,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   hashActiveUploadFile,
   withActiveUpload,
@@ -244,7 +246,9 @@ const prepareSingleFileEntityUpload = async ({
   );
   if (presign.error) {
     const error = toAPIError(presign.error);
-    attachResponseForRetry(error, presign.response);
+    if ("response" in presign) {
+      attachResponseForRetry(error, presign.response);
+    }
     throw error;
   }
 
@@ -328,7 +332,9 @@ const finalizeFileEntity = async ({
     .finalize.post(undefined, { fetch: { signal } });
   if (finalize.error) {
     const error = toAPIError(finalize.error);
-    attachResponseForRetry(error, finalize.response);
+    if ("response" in finalize) {
+      attachResponseForRetry(error, finalize.response);
+    }
     throw error;
   }
 
@@ -472,7 +478,6 @@ const runUploadBatch = async ({
       description: showProgress
         ? labels.progress(0, initialTotal)
         : labels.uploadingDescription,
-      timeout: 0,
       actionProps: {
         children: labels.cancel,
         onClick: () => queue.cancel(),
@@ -537,7 +542,6 @@ const runUploadBatch = async ({
           title: labels.partial(failedCount, total),
           description:
             successCount > 0 ? labels.progress(successCount, total) : undefined,
-          timeout: undefined,
           actionProps: undefined,
         });
       } else if (failedCount === 0) {
@@ -545,7 +549,6 @@ const runUploadBatch = async ({
           type: "success",
           title: labels.uploadedSuccessfully,
           description: undefined,
-          timeout: undefined,
           actionProps: undefined,
         });
       } else if (successCount > 0) {
@@ -749,7 +752,14 @@ export const useCreateFileEntities = (workspaceId: string) => {
             parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
             preparedUploads: preparedTree.preparedUploadByFile,
             labels,
-            onError: (error) => analytics.captureError(error),
+            onError: (error) =>
+              analytics.captureError(error, {
+                fingerprintKey: "useCreateFileEntities.mutationFn:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "useCreateFileEntities.mutationFn:failure",
+                },
+              }),
           });
         });
         startWorkflowForUploadedFiles(uploaded);
@@ -762,12 +772,23 @@ export const useCreateFileEntities = (workspaceId: string) => {
         propertyId: await ensureFileProperty(),
         parentId,
         labels,
-        onError: (error) => analytics.captureError(error),
+        onError: (error) =>
+          analytics.captureError(error, {
+            fingerprintKey: "useCreateFileEntities.mutationFn:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "useCreateFileEntities.mutationFn:failure-2",
+            },
+          }),
       });
       startWorkflowForUploadedFiles(uploaded);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateFileEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateFileEntities:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: () => {
       detached(
@@ -798,7 +819,16 @@ export const useCreateFileEntities = (workspaceId: string) => {
       queryClient,
       files: uploadInputFiles(input),
       organizationId: activeOrganizationId,
-      onError: (error) => analytics.captureError(error),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey:
+            "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+          scope: {
+            type: "handler",
+            handlerId:
+              "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+          },
+        }),
     });
 
     if (referenced.length === 0) {

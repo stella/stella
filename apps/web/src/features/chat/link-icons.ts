@@ -32,6 +32,10 @@ function iconOptions(target: IconTarget) {
     gcTime: 60 * 1000,
     queryFn: async ({ signal, client }): Promise<LinkIcon> => {
       const temporary = nextTemporaryOutcome(client);
+      const routeTemplate =
+        target.type === "hostname"
+          ? "/v1/chat/link-icons/:hostname"
+          : "/v1/chat/link-icons/exact";
       const unavailable = (cause: unknown) => {
         getAnalytics().captureError(
           new ClientOperationError({
@@ -39,6 +43,10 @@ function iconOptions(target: IconTarget) {
             message: "Link icon unavailable",
             cause,
           }),
+          {
+            fingerprintKey: "linkIconOptions:request",
+            scope: { type: "request", method: "GET", routeTemplate },
+          },
         );
         return temporary;
       };
@@ -90,6 +98,14 @@ function iconOptions(target: IconTarget) {
             action: "readLinkIcon",
             message: "Unexpected link icon response",
           }),
+          {
+            fingerprintKey: "linkIconOptions:response",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate,
+            },
+          },
         );
         return temporary;
       }

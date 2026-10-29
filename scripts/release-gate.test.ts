@@ -71,6 +71,7 @@ const GATES = [
   "dependency-audit",
   "changelog",
   "npm-publish-lag",
+  "npm-publish-readiness",
   "cli-coupling",
 ];
 
@@ -85,6 +86,7 @@ test("three failing gates give three verdict lines in one run", () => {
     "npm-publish-lag":
       "echo '::error::@stll/cli 0.9.58 is not on npm' >&2; exit 1",
     "cli-coupling": "true",
+    "npm-publish-readiness": "true",
   };
   for (const [name, script] of Object.entries(outcomes)) {
     gate(directory, "run", name, "bash", "-c", script);
@@ -96,7 +98,7 @@ test("three failing gates give three verdict lines in one run", () => {
     "::error::RELEASE_GATE_FAILED dependency-audit: 2 high or critical advisories",
     "::error::RELEASE_GATE_FAILED npm-publish-lag: @stll/cli 0.9.58 is not on npm",
   ]);
-  expect(verdict.stdout).toContain("3 of 5 release gates failed.");
+  expect(verdict.stdout).toContain("3 of 6 release gates failed.");
 });
 
 test("a gate that never ran fails the verdict", () => {
@@ -222,7 +224,14 @@ test("the tag job reports every gate in one verdict before any tag work", () => 
 const skippedOnDryRun = (condition: string | undefined) => {
   const source = (condition ?? "true").replace(/^\$\{\{(.*)\}\}$/su, "$1");
   return [false, true].map((dryRun) =>
-    evaluate(source, { values: { "inputs.dry_run": dryRun } }),
+    evaluate(source, {
+      values: {
+        "inputs.dry_run": dryRun,
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/main",
+        "inputs.mode": "rc",
+      },
+    }),
   );
 };
 
@@ -238,7 +247,12 @@ test("a dry run evaluates every gate and never mints a token or pushes the tag",
   expect(skippedOnDryRun(push?.if)).toEqual([true, false]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name !== "tag") {
-      expect(skippedOnDryRun(job.if), name).toEqual([true, false]);
+      const [normalRun, dryRun] = skippedOnDryRun(job.if);
+      expect(
+        typeof normalRun,
+        `${name}: resolved RC dispatch eligibility`,
+      ).toBe("boolean");
+      expect(dryRun, `${name}: no job after an RC dry run`).toBe(false);
     }
   }
   for (const step of tagSteps.filter(({ run }) =>

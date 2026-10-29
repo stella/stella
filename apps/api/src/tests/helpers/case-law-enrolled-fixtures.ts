@@ -133,6 +133,8 @@ import {
   buildSkUsDecision,
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
+import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -1613,7 +1615,10 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * closes it, through the same derivation, so the guards read the envelope a
  * stored row holds rather than one this helper invented.
  */
-export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
+export const skUsFixture = (
+  documentUrl?: URL,
+  identity?: ParserParityIdentity,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);
@@ -1623,10 +1628,17 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
       }
       const listing = {
         ...SK_US_LISTING_ROW,
-        documentId: "695d557a-08eb-41d2-8cea-2b895f9860e7",
-        mkRSAPNumberOfFile: "III. ÚS 265/2026",
-        mkDateOfDecision: "04/23/2026 00:00:00",
-        mkECLI: null,
+        documentId:
+          identity?.documentId ?? "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        mkRSAPNumberOfFile: identity?.caseNumber ?? "III. ÚS 265/2026",
+        mkDateOfDecision:
+          identity === undefined
+            ? "04/23/2026 00:00:00"
+            : identity.decisionDate.replace(
+                /^(\d{4})-(\d{2})-(\d{2})$/u,
+                "$2/$3/$1 00:00:00",
+              ),
+        mkECLI: identity?.ecli ?? null,
         mkFormOfDecision: "Uznesenie",
       };
       const reparse = skUsAdapter.reparseStoredRaw;
@@ -1645,8 +1657,8 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         sourceDocumentId: listing.documentId,
         language: "sk",
         court: "Ústavný súd SR",
-        ecli: null,
-        decisionDate: "2026-04-23",
+        ecli: listing.mkECLI,
+        decisionDate: identity?.decisionDate ?? "2026-04-23",
         decisionType: listing.mkFormOfDecision,
         sourceUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
         documentUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
@@ -1657,7 +1669,7 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({
-      content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+      content: Buffer.from(SK_US_DOCUMENT_XHTML).toBase64(),
     });
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {
@@ -2806,6 +2818,32 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+export const ukFclFixture = (
+  documentUrl = new URL(
+    "../../handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
+    import.meta.url,
+  ),
+): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const feed = await Bun.file(
+      new URL(
+        "../../handlers/case-law/ingestion/adapters/__fixtures__/uk-fcl.atom.xml",
+        import.meta.url,
+      ),
+    ).text();
+    const document = await Bun.file(documentUrl).text();
+    globalThis.fetch = asFetchMock(async () => new Response(document));
+    const built = await fetchUkFclDecision({
+      feed,
+      sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
+    });
+    if (built.isErr()) {
+      return await Promise.reject(built.error);
+    }
+    return built.value;
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -2836,6 +2874,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,

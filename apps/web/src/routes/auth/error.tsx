@@ -28,7 +28,10 @@ export const Route = createFileRoute("/auth/error")({
       return NO_SOCIAL_LINK_HINT;
     }
     return await loadSocialLinkHint((error) =>
-      getAnalytics().captureError(error),
+      getAnalytics().captureError(error, {
+        fingerprintKey: "auth.error.loader:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/auth/error" },
+      }),
     );
   },
   component: AuthError,

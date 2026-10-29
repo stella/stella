@@ -19,7 +19,7 @@ import { isDocxFile } from "@/lib/consts";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
   ImportCandidate,
@@ -148,14 +148,11 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
 
   const extractFile = async (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(
-        undefined,
-        t("contacts.extractProcuracao.invalidFileType"),
-      );
+      notifyUserProblem(t("contacts.extractProcuracao.invalidFileType"));
       return;
     }
     if (file.size > EXTRACTION_SOURCE_MAX_BYTES) {
-      notifyUserError(undefined, t("contacts.extractProcuracao.fileTooLarge"));
+      notifyUserProblem(t("contacts.extractProcuracao.fileTooLarge"));
       return;
     }
 
@@ -202,7 +199,13 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
     setIsExtracting(false);
 
     if (Result.isError(extraction)) {
-      getAnalytics().captureError(extraction.error);
+      getAnalytics().captureError(extraction.error, {
+        fingerprintKey: "useProcuracaoExtraction.extractFile:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useProcuracaoExtraction.extractFile:failure",
+        },
+      });
       notifyUserError(
         extraction.error,
         t("contacts.extractProcuracao.parseErrorGeneric"),
@@ -265,6 +268,10 @@ export const ProcuracaoDropZone = ({
 }: ProcuracaoDropZoneProps) => {
   const t = useTranslations();
   const { ref, isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "ProcuracaoDropZone.useExternalFileDrop",
+    },
     onDrop: (files) => {
       const file = files.at(0);
       if (file) {
@@ -346,13 +353,12 @@ export const ProcuracaoReview = ({ extraction }: ProcuracaoReviewProps) => {
           valid: review.validCount,
         })}
       </p>
-      {review.rows.map((row, index) => (
+      {review.rows.map((row) => (
         <ImportCandidateCard
           fields={PROCURACAO_REVIEW_FIELDS}
           key={row.id}
           onChange={(candidate) => review.updateRow(row.id, candidate)}
           onRemove={() => review.removeRow(row.id)}
-          ordinal={index + 1}
           row={row}
         />
       ))}

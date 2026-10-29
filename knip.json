@@ -8,18 +8,16 @@
     ".": {
       // Include compiler-only ambient types from the tooling/test projects.
       "typescript": { "config": ["tsconfig*.json", "package.json"] },
-      "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
+      "entry": [
+        "scripts/*.ts",
+        "oxlint.design.config.ts",
+        "oxlint.tailwind.config.ts"
+      ],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
         "tsrs",
-        "@tanstack/eslint-plugin-query",
-        "@tanstack/eslint-plugin-router",
-        "eslint",
-        "oxlint-tsgolint",
-        "oxlint",
         "squawk-cli"
-      ],
-      "ignoreBinaries": ["scripts/dev.sh"]
+      ]
     },
     "apps/desktop": {
       "typescript": { "config": ["tsconfig*.json"] }
@@ -27,24 +25,34 @@
     "apps/mobile": {
       "typescript": { "config": ["tsconfig*.json"] },
       // Metro requires Babel; the doctor script constructs its executable path.
-      "ignoreDependencies": ["@babel/core", "expo-doctor"]
+      // app.config.ts turns expo-updates on for preview and production
+      // builds; knip evaluates the development one, where it is off. The
+      // test-mobile skill drives simulators through agent-device's CLI. The
+      // DM Sans faces are embedded by expo-font's config plugin from their
+      // paths in app.config.ts, which import nothing.
+      "ignoreDependencies": [
+        "@babel/core",
+        "@expo-google-fonts/dm-sans",
+        "agent-device",
+        "expo-doctor",
+        "expo-updates"
+      ]
     },
     "packages/ai-catalog": {
       // Compile-time provider capability assertions consume the adapter types.
       "entry": ["src/**/*.type-test.ts"]
     },
     "packages/agent-input": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/analytics-config": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },
     "apps/api": {
       "entry": [
-        "src/server.ts!",
         // Generated entrypoints and shards remain visible after hydration.
         "src/mcp/generated/**/*.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
@@ -75,17 +83,13 @@
         "src/tests/load/*.ts",
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
-        "drizzle.config.ts",
         "src/**/*.test.ts",
         "scripts/**/*.test.ts"
       ]
     },
     "apps/web": {
       "entry": [
-        "src/client.tsx",
-        "src/server.ts!",
         "src/runtime.ts!",
-        "vite.config.ts",
         // Derived and gitignored: the TanStack Router plugin skips gitignored
         // files, but configured entries are globbed without .gitignore.
         "src/routeTree.gen.ts!",
@@ -99,20 +103,10 @@
         "e2e/**/*.ts"
       ],
       "ignore": ["public/prepaint-init.js", "src/routeTree.gen.ts"],
-      // tailwindcss: imported by the app's Tailwind entry and consumed by
-      // @tailwindcss/vite at build time, never at runtime, so the production
-      // gate must not read the CSS import as a runtime dependency (the same
-      // shape as apps/landing's @tailwindcss/postcss). lucide-react: source
-      // imports it through @stll/ui/icons; the app keeps the dependency so
-      // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
         // The gitignored API contract imports schema interfaces by name to
         // preserve ClientTool generic identity; CI checks that generated output.
-        "@standard-schema/spec",
-        // Dynamically imported from the inline bootstrap in index.html.
-        "react-grab",
-        "lucide-react",
-        "tailwindcss"
+        "@standard-schema/spec"
       ]
     },
     // WXT discovers the service worker, content script and popup from
@@ -128,68 +122,35 @@
     "apps/landing": {
       "entry": [
         "src/**/*.astro",
-        "src/content.config.ts",
         "src/pages/**/*.ts",
         "astro.config.*",
         "e2e/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        // Tailwind scans workspace-ui through the CSS @source directive.
-        "@tailwindcss/postcss",
-        "@stll/workspace-ui",
-        // Folio requires host-owned peers loaded by its editor implementation.
-        "prosemirror-commands",
-        "prosemirror-dropcursor",
-        "prosemirror-gapcursor",
-        "prosemirror-inputrules",
-        "prosemirror-keymap",
-        "prosemirror-transform",
-        "y-prosemirror",
-        "y-protocols"
-      ]
-    },
-    "apps/playground": {
-      // Folio requires host-owned peers loaded by its editor implementation.
-      "ignoreDependencies": [
-        "prosemirror-commands",
-        "prosemirror-dropcursor",
-        "prosemirror-gapcursor",
-        "prosemirror-inputrules",
-        "prosemirror-keymap",
-        "prosemirror-transform",
-        "y-prosemirror",
-        "y-protocols"
       ]
     },
     "apps/legal-atlas-runner": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"],
+      "entry": ["src/**/*.test.ts"],
       "ignoreDependencies": ["@stll/api"]
     },
     "packages/clipboard": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/collation": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/concurrency": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/db-load-gate": {
-      "entry": [
-        "src/health.ts",
-        "src/indicators.ts",
-        "src/heavy-work-slot.ts",
-        "src/**/*.test.ts"
-      ]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },
     "packages/legal-atlas": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/legal-ast": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/mcp-apps": {
       "entry": [
@@ -199,45 +160,36 @@
       ]
     },
     "packages/mcp-kit": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/mojibake": {
-      "entry": [
-        "src/charsets.ts",
-        "src/declared-charset.ts",
-        "src/detect.ts",
-        "src/**/*.test.ts",
-        "scripts/*.ts"
-      ]
+      "entry": ["src/**/*.test.ts", "scripts/*.ts"]
     },
-    "packages/permissions": {
-      "entry": ["src/index.ts"]
+    "packages/parameter-store": {
+      "entry": ["src/read-parameter.ts", "src/**/*.test.ts"]
     },
     "packages/portable-path": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/playwright-tools": {
       "entry": ["src/marketing-config.ts"]
     },
     "packages/redis-config": {
-      "entry": ["src/connection.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/runtime-mode": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/sanctions": {
-      "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/scan-engine": {
-      "entry": ["src/scan-engine.ts", "src/**/*.test.ts"],
+      "entry": ["src/**/*.test.ts"],
       "ignore": ["generated/**"]
     },
     "packages/scripts": {
       // The Postgres lifecycle owner is invoked by scripts/configure-test-postgres.sh.
       "entry": [
-        "src/i18n-check.ts",
-        "src/i18n-typegen.ts",
-        "src/dev-postgres.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
       ]
@@ -250,36 +202,30 @@
       "entry": ["scripts/*.ts", "src/**/*.test.ts"]
     },
     "packages/stable-stringify": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/template-conditions": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]
     },
-    "packages/transactional": {
-      "entry": ["emails/*.tsx"],
-      "ignoreDependencies": ["react-dom", "@react-email/preview-server"]
-    },
+    "packages/transactional": { "entry": ["emails/*.tsx"] },
     "packages/ui": {
       // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.
       "ignoreDependencies": ["tailwindcss"],
       "entry": [
-        "src/index.ts",
         "src/components/*.tsx",
         "src/hooks/*.ts",
         "src/inspector/*.{ts,tsx}",
-        "src/lib/*.ts",
-        "src/styles/theme.css",
-        "tsdown.config.ts"
+        "src/lib/*.ts"
       ]
     },
     "packages/user-agent": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/uuid-codec": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "apps/visual-preview": {
       "entry": ["src/handler.ts", "src/**/*.test.ts", "browser/**/*.test.ts"]
@@ -287,19 +233,17 @@
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],
   "ignoreIssues": {
-    "packages/infosoud/src/constants.ts": ["duplicates"]
+    "packages/infosoud/src/constants.ts": ["duplicates"],
+    // The web's whole icon module, regenerated for the app from
+    // packages/ui/src/icons.ts; the app draws only some of its glyphs.
+    "apps/mobile/src/icons.gen.ts": ["exports", "types"]
   },
   "exclude": ["exports", "types"],
-  "ignoreBinaries": ["docker", "tsc", "bun", "tail", "fmt"],
   "ignoreDependencies": [
-    "@stll/typescript-config",
     // Declared ahead of the text-search engine migration so its PRs share one
     // dependency set. Each migration PR imports these in its workspace; the
     // last one removes these entries (knip then flags any unused declaration).
     "@stll/aho-corasick",
-    "@stll/aho-corasick-wasm",
-    "@stll/fuzzy-search",
-    "@stll/regex-set",
-    "@stll/regex-set-wasm"
+    "@stll/regex-set"
   ]
 }

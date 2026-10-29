@@ -5,7 +5,6 @@ import * as v from "valibot";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -16,6 +15,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -48,6 +48,7 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -406,7 +407,13 @@ const checkpointFolioCollabRoomHandler = async function* (
       }),
     );
     if (Result.isError(cleanup)) {
-      captureError(cleanup.error, { roomId, storageKey: checkpointKey });
+      captureError(
+        cleanup.error,
+        handlerErrorContext("entities.discardCheckpoint.cleanup_error", {
+          roomId,
+          storageKey: checkpointKey,
+        }),
+      );
     }
     const settlement = await settleObjectCleanupIntentsAfterWriter({
       intentIds: [cleanupIntentId],
@@ -417,10 +424,13 @@ const checkpointFolioCollabRoomHandler = async function* (
       safeDb,
     });
     if (Result.isError(settlement)) {
-      captureError(settlement.error, {
-        roomId,
-        storageKey: checkpointKey,
-      });
+      captureError(
+        settlement.error,
+        handlerErrorContext("entities.discardCheckpoint.settlement_error", {
+          roomId,
+          storageKey: checkpointKey,
+        }),
+      );
     }
   };
   const written = await writeFolioCollabCheckpointObject({

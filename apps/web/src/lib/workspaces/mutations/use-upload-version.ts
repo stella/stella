@@ -7,7 +7,10 @@ import { stellaToast } from "@stll/ui/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { ClientOperationError } from "@/lib/errors/client";
+import {
+  ClientOperationError,
+  USER_SAFE_CLIENT_OPERATIONS,
+} from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
@@ -48,7 +51,7 @@ export const useUploadVersion = () => {
       ) {
         return Result.err(
           new ClientOperationError({
-            action: "upload-version",
+            action: USER_SAFE_CLIENT_OPERATIONS.uploadVersion,
             message: t(
               "workspaces.files.versionOrNewFile.extensionMismatchError",
             ),
@@ -97,7 +100,10 @@ export const useUploadVersion = () => {
         ) {
           return;
         }
-        analytics.captureError(result.error);
+        analytics.captureError(result.error, {
+          fingerprintKey: "useUploadVersion:failure",
+          scope: { type: "handler", handlerId: "useUploadVersion:failure" },
+        });
         notifyUserError(
           result.error,
           t("workspaces.files.versionUploadFailed"),

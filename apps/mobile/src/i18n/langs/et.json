@@ -1,0 +1,230 @@
+{
+  "tabs": {
+    "chat": "Vestlus",
+    "close": "Sulge",
+    "law": "Kohtupraktika",
+    "matters": "Toimikud",
+    "more": "Veel",
+    "settings": "Seaded",
+    "tasks": "Ülesanded"
+  },
+  "chat": {
+    "emptyTitle": "Vestlusi pole veel",
+    "emptyDescription": "Uued vestlused ja hiljutised lõimed ilmuvad siia.",
+    "noMatchesTitle": "Sobivaid vestlusi pole",
+    "noMatchesDescription": "Ükski vestluse pealkiri ega toimik ei sisalda teksti „{search}”.",
+    "search": "Otsi vestlusi",
+    "loadFailed": "Teie vestlusi ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "untitled": "Pealkirjata vestlus",
+    "loadMoreFailed": "Laadi veel",
+    "loadOlderFailed": "Laadi varasemad sõnumid",
+    "toolUsed": "Kasutatud: {tool}",
+    "threadTitle": "Vestlus",
+    "threadLoadFailed": "Seda vestlust ei õnnestunud laadida.",
+    "threadEmptyDescription": "Selles vestluses pole veel sõnumeid.",
+    "sections": {
+      "today": "Täna",
+      "yesterday": "Eile",
+      "week": "Viimased 7 päeva",
+      "earlier": "Varem"
+    },
+    "newChat": "Uus vestlus",
+    "composerPlaceholder": "Küsi stellalt",
+    "send": "Saada",
+    "stop": "Peata",
+    "sendFailed": "Sõnumit ei õnnestunud saata. Proovige uuesti.",
+    "answerWorking": "Töötan…",
+    "answerStopped": "Peatatud.",
+    "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
+    "answerFailed": "Vastust ei õnnestunud lõpetada.",
+    "composerMenu": "Ava manuste ja tööriistade menüü",
+    "pickTitle": "Vali vestlus",
+    "pickDescription": "Vali loendist lõim või alusta uut nupuga +."
+  },
+  "tasks": {
+    "emptyTitle": "Avatud ülesandeid pole",
+    "emptyDescription": "Siin kuvatakse teile määratud avatud ülesanded.",
+    "loadFailed": "Teie ülesandeid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "newTask": "Uus ülesanne",
+    "add": "Lisa",
+    "name": "Ülesande nimi",
+    "dueTitle": "Tähtaeg",
+    "matterTitle": "Asi",
+    "findMatter": "Leia asi",
+    "addFailed": "Ülesannet ei õnnestunud lisada. Proovige uuesti.",
+    "mattersFailed": "Teie asju ei õnnestunud laadida.",
+    "dueOn": "tähtaeg {day}",
+    "dueChoice": {
+      "none": "Kuupäevata",
+      "today": "Täna",
+      "tomorrow": "Homme",
+      "nextWeek": "Nädala pärast"
+    },
+    "due": {
+      "overdue": "Tähtaeg möödas",
+      "today": "Täna",
+      "tomorrow": "Homme",
+      "week": "Sel nädalal",
+      "later": "Hiljem",
+      "none": "Tähtajata"
+    },
+    "markDone": "Märgi tehtuks",
+    "reopen": "Ava uuesti",
+    "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti.",
+    "pickTitle": "Vali ülesanne",
+    "pickDescription": "Vali loendist ülesanne, et seda siin näha.",
+    "openMatter": "Ava asi"
+  },
+  "matters": {
+    "emptyTitle": "Toimikuid veel pole",
+    "emptyDescription": "Teie hiljutised toimikud ilmuvad siia.",
+    "loadFailed": "Teie toimikuid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "groupBy": "Rühmita",
+    "noGrouping": "Ära rühmita",
+    "groupClient": "Klient",
+    "personal": "Isiklik",
+    "newMatter": "Uus asi",
+    "create": "Loo",
+    "name": "Asja nimi",
+    "personalHint": "See luuakse isikliku asjana, mida näete ainult teie. Kliendi ja liikmed saate lisada veebis.",
+    "createFailed": "Asja ei õnnestunud luua. Proovige uuesti.",
+    "pickTitle": "Vali asi",
+    "pickDescription": "Vali loendist asi, et näha selle dokumente ja ülesandeid."
+  },
+  "matter": {
+    "documents": "Dokumendid",
+    "tasks": "Ülesanded",
+    "emptyTitle": "Siin pole veel midagi",
+    "emptyDescription": "Selle asja dokumendid ja ülesanded kuvatakse siin.",
+    "loadFailed": "Asja ei õnnestunud laadida.",
+    "loadMoreFailed": "Rohkem kirjeid ei õnnestunud laadida.",
+    "loadMore": "Laadi veel",
+    "retry": "Proovi uuesti",
+    "untitled": "Pealkirjata",
+    "updated": "Muudetud {time}",
+    "kind": {
+      "folder": "Kaust",
+      "document": "Dokument",
+      "task": "Ülesanne"
+    },
+    "status": {
+      "open": "Avatud",
+      "in_progress": "Töös",
+      "in_review": "Ülevaatusel",
+      "done": "Tehtud",
+      "cancelled": "Tühistatud"
+    },
+    "add": "Lisa",
+    "scanDocument": "Skanni dokument",
+    "newTask": "Uus ülesanne"
+  },
+  "entity": {
+    "type": "Tüüp",
+    "reference": "Viitenumber",
+    "currentVersion": "Praegune versioon",
+    "loadFailed": "Kirjet ei õnnestunud laadida."
+  },
+  "signIn": {
+    "beta": "Beeta",
+    "headline": "Selgus igas asjas.",
+    "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
+    "submit": "Logi sisse",
+    "terms": "Jätkates nõustud meie <terms>kasutustingimustega</terms>.",
+    "options": "Sisselogimise valikud",
+    "serverTitle": "Server",
+    "serverDescription": "Rakendus logib sisse stellasse. Sisestage muu server ainult siis, kui teie organisatsioonil on oma.",
+    "useStella": "Kasuta stellat",
+    "done": "Valmis",
+    "serverLabel": "Serveri aadress",
+    "serverPlaceholder": "stella.example.com",
+    "sessionEnded": "Teie seanss lõppes. Logige uuesti sisse.",
+    "errors": {
+      "address": "Sisestage https-aadress, näiteks stella.example.com.",
+      "unreachable": "Sellel aadressil ei vastanud ükski stella server.",
+      "denied": "Sisselogimist ei kinnitatud.",
+      "failed": "Sisselogimine jäi pooleli. Proovige uuesti."
+    }
+  },
+  "settings": {
+    "accountTitle": "Konto",
+    "server": "Server",
+    "signOut": "Logi välja"
+  },
+  "header": {
+    "search": "Otsing"
+  },
+  "law": {
+    "title": "Kohtupraktika",
+    "newest": "Uusimad lahendid",
+    "noResults": "Miski ei vasta sõnadele, mida see otsing nõudis.",
+    "noResultsHint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
+    "unavailable": "Otsing pole ajutiselt saadaval",
+    "retry": "Proovi uuesti",
+    "headnote": "Lühikokkuvõte",
+    "textUnavailable": "Selle lahendi teksti ei ole saadaval",
+    "openSource": "Ava algallikas",
+    "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
+    "share": "Jaga"
+  },
+  "more": {
+    "soon": "Tulemas peagi",
+    "timers": "Taimerid",
+    "voiceInput": "Häälsisestus"
+  },
+  "writes": {
+    "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",
+    "signInAgain": "Logi uuesti sisse"
+  },
+  "timers": {
+    "title": "Taimerid",
+    "start": "Käivita",
+    "startTimer": "Käivita taimer",
+    "newTimer": "Uus taimer",
+    "description": "Mille kallal töötate?",
+    "matterTitle": "Asi",
+    "noMatter": "Asjata",
+    "noDescription": "Kirjelduseta",
+    "running": "Käib",
+    "paused": "Peatatud",
+    "pause": "Peata",
+    "resume": "Jätka",
+    "save": "Salvesta",
+    "discard": "Loobu",
+    "emptyTitle": "Taimereid pole",
+    "emptyDescription": "Käivitage taimer nupuga + ja salvestage see lõpus ajakandena.",
+    "loadFailed": "Teie taimereid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
+    "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
+    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
+  },
+  "scan": {
+    "title": "Skanni dokument",
+    "upload": "Laadi üles",
+    "name": "Dokumendi nimi",
+    "defaultName": "Skann {day}",
+    "pages": "{count, plural, one {# lehekülg} other {# lehekülge}}",
+    "matterTitle": "Asi",
+    "uploadFailed": "Skanni ei õnnestunud üles laadida. Proovige uuesti.",
+    "failedTitle": "Skannimine ebaõnnestus",
+    "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti."
+  },
+  "shortcuts": {
+    "search": "Otsi",
+    "palette": "Käsupalett",
+    "next": "Järgmine tulemus",
+    "previous": "Eelmine tulemus",
+    "toggleList": "Näita või peida loend"
+  },
+  "palette": {
+    "placeholder": "Otsi asju ja vestlusi või käivita käsk",
+    "noResults": "Päringule „{query}” ei vasta midagi"
+  },
+  "pane": {
+    "showList": "Näita loendit",
+    "hideList": "Peida loend"
+  }
+}

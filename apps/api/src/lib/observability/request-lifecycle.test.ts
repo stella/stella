@@ -28,6 +28,8 @@ import {
 import { DrizzleQueryError } from "drizzle-orm";
 import * as v from "valibot";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+
 import { createHttpApp } from "@/api/http/app";
 import type { HttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
@@ -71,6 +73,8 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { ActionSizeError } from "@/api/lib/rate-limit/action-size-limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { tenantActionAdmission } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   installRecordingAnalytics,
@@ -403,6 +407,124 @@ describe("the request lifecycle", () => {
     logs.restore();
     resetMetricLineSinkForTesting();
     resetFailureObservationsForTesting();
+  });
+
+  test.each(["limiter", "handler"] as const)(
+    "a %s store failure emits one transient record and preserves request duration",
+    async (surface) => {
+      const context = new RedisRateLimitContext({
+        failurePolicy: "fail_closed",
+        createRedis: () => ({
+          send: async () => {
+            throw Object.assign(new Error("Unavailable"), {
+              code: "ECONNREFUSED",
+            });
+          },
+        }),
+      });
+      const storeFailure = new HandlerError({
+        status: LIMITER_STORE_UNAVAILABLE.status,
+        code: LIMITER_STORE_UNAVAILABLE.code,
+        message: LIMITER_STORE_UNAVAILABLE.message,
+      });
+      const failedHandler = createSafePublicHandler(config, async function* () {
+        return Result.err(storeFailure);
+      });
+      const app = serve(
+        createHttpApp({
+          middleware: [
+            ...LIFECYCLE,
+            ...(surface === "limiter"
+              ? [
+                  rateLimit({
+                    context,
+                    duration: 1000,
+                    max: 1,
+                    generator: () => "limiter-observation",
+                  }),
+                ]
+              : []),
+          ],
+          routes: routes({
+            "/v1/signals/": {
+              GET:
+                surface === "handler"
+                  ? failedHandler
+                  : defineEndpoint.public({}, () => "ok"),
+            },
+          }),
+        }),
+      );
+      try {
+        const response = await app.fetch("http://localhost/v1/signals/");
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({
+          code: LIMITER_STORE_UNAVAILABLE.code,
+        });
+        expect(logs.records).toHaveLength(1);
+        expect(logs.records.at(0)).toMatchObject({
+          message: "limiter_admission.unavailable",
+          severityText: "WARN",
+          attributes: {
+            "failure.grade": "transient",
+            "failure.reason": "limiter_store_unavailable",
+          },
+        });
+        expect(analytics.exceptions()).toHaveLength(0);
+        expect(
+          metricRecords(metricLines, "RequestTransientFailures"),
+        ).toHaveLength(1);
+        expect(metricRecords(metricLines, "RequestDuration")).toHaveLength(1);
+      } finally {
+        context.kill();
+      }
+    },
+  );
+
+  test("framework errors retain declared route scope across moved source lines", async () => {
+    let sourceLine = 10;
+    const fail = () => {
+      const error = new Error("Framework handler failed");
+      error.stack = `Error: Framework handler failed\n    at sharedOperation (/app/operation.ts:${sourceLine}:9)`;
+      throw error;
+    };
+    const app = serve(
+      createHttpApp({
+        middleware: LIFECYCLE,
+        routes: routes({
+          "/first/:id": { GET: defineEndpoint.public({}, fail) },
+          "/second/:id": { GET: defineEndpoint.public({}, fail) },
+        }),
+      }),
+    );
+    for (const path of ["/first/private-first", "/second/private-second"]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(500);
+    }
+    const original = analytics.exceptions();
+    expect(original).toHaveLength(2);
+    const first = original.at(0)?.properties["$exception_fingerprint"];
+    expect(first).toContain("/first/:id");
+    expect(original.at(1)?.properties["$exception_fingerprint"]).toContain(
+      "/second/:id",
+    );
+    expect(first).not.toBe(
+      original.at(1)?.properties["$exception_fingerprint"],
+    );
+    sourceLine += 50;
+    resetCaptureWindows();
+    await app.fetch(new Request("https://example.test/first/private-third"));
+    const shifted = analytics.exceptions();
+    expect(shifted).toHaveLength(3);
+    expect(shifted.at(2)?.properties["$exception_fingerprint"]).toBe(first);
+    expect(shifted.at(2)?.properties["error.frame"]).not.toBe(
+      shifted.at(0)?.properties["error.frame"],
+    );
+    expect(JSON.stringify(shifted)).not.toContain("private-first");
+    expect(JSON.stringify(shifted)).not.toContain("private-second");
+    expect(JSON.stringify(shifted)).not.toContain("private-third");
   });
 
   test("nested server-side auth calls cannot replace the outer HTTP route", async () => {

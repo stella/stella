@@ -20,6 +20,7 @@ import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -176,7 +177,12 @@ export const initAccountDeletionCleanupWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, { requestId: job?.data.requestId ?? "" });
+    captureError(
+      error,
+      handlerErrorContext("lib.initAccountDeletionCleanupWorker", {
+        requestId: job?.data.requestId ?? "",
+      }),
+    );
     logger.error("account_deletion_cleanup.failed", {
       "error.type": errorTag(error),
       requestId: job?.data.requestId ?? "",
@@ -201,7 +207,7 @@ export const initAccountDeletionCleanupWorker = ({
             count: String(count),
           });
         } catch (error) {
-          captureError(error);
+          captureError(error, handlerErrorContext("accountDeletion.reconcile"));
           logger.error(
             "account_deletion_cleanup.reconcile_failed",
             errorSystemFields(error),

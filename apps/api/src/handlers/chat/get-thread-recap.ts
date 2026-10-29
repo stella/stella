@@ -16,6 +16,7 @@ import {
   RECAP_PROMPT_VERSION,
 } from "@/api/handlers/chat/thread-recap";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
@@ -27,6 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 type CacheThreadRecapOptions = {
@@ -90,6 +92,10 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
     session,
     user,
   } = ctx;
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.ok<ThreadRecapResult>({ recap: null });
+  }
+
   // The recap is a non-critical nicety: when AI is unavailable we
   // return no recap rather than blocking the thread view.
   if (
@@ -232,7 +238,12 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
       }),
   );
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, { threadId });
+    captureError(
+      persistResult.error,
+      handlerErrorContext("chat.getThreadRecap.persistResult_error", {
+        threadId,
+      }),
+    );
   }
 
   return Result.ok<ThreadRecapResult>({ recap });

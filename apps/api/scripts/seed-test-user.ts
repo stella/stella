@@ -18,7 +18,7 @@ import { panic } from "better-result";
  * The script is idempotent: running it again refreshes the
  * session expiry without duplicating data.
  */
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -505,6 +505,10 @@ async function seed() {
     );
     console.log("Created test session");
   }
+  // The stored dev token is reused across runs, so the session never rotates.
+  await db.execute(
+    sql`UPDATE ${session} SET "token" = ${SESSION_TOKEN}, "refresh_mode" = 'fixed' WHERE "id" = ${SESSION_ID}`,
+  );
 
   // --- Playwright storage-state ---
   // better-auth uses signed cookies: the cookie value is

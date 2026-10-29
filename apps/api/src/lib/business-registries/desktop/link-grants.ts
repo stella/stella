@@ -19,7 +19,6 @@ import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 
 /** The one-time grant a desktop redeems to link an account. */
@@ -85,6 +84,7 @@ export const authorizeDesktopLinkGrant = async (
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop account is unavailable",
         cause,
       }),
@@ -108,11 +108,5 @@ export const authorizeDesktopLinkGrant = async (
       }),
     );
   }
-  return Result.ok({
-    ...identity,
-    scopedDb: createRootScopedDb({
-      ...identity,
-      workspaceIds: [],
-    }),
-  });
+  return Result.ok(identity);
 };

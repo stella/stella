@@ -1,5 +1,7 @@
 import { createApiClient } from "@stll/api-client";
 import type { ApiClientOptions } from "@stll/api-client";
+import type { ConnectConnectorDecision } from "@stll/api-contract/chat-connector";
+import { INTERNAL_UI_TRANSPORT_ROUTES } from "@stll/api-contract/internal-ui-transport";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
 import { getTranslator } from "@/i18n/translator";
@@ -12,10 +14,12 @@ import {
 import { browserApiBaseUrl } from "@/lib/api-url";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { observeActionAdmissionResponse } from "@/lib/errors/action-admission-response";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   notifyUserError,
   reportUserVisibleError,
 } from "@/lib/errors/user-toast";
+import type { SafeId } from "@/lib/safe-id";
 
 export type WebApiRoutes = WebRoutes["v1"];
 
@@ -50,7 +54,7 @@ export const webApiClientOptions = {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
-  async onResponse(response: Response) {
+  async onScopedResponse({ response, scope }) {
     await reportUnhandledMeResponse(response, reportUserVisibleError);
     await observeActionAdmissionResponse(response, {
       // Only a refusal is announced here; the caller's own handler owns every
@@ -59,7 +63,10 @@ export const webApiClientOptions = {
         actionAdmissionOutcome(error) !== undefined &&
         notifyUserError(error, getTranslator()("errors.actionFailed")),
       captureError: (error) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "onResponse:failure",
+          scope,
+        });
       },
     });
   },
@@ -73,3 +80,31 @@ export const apiClient = createApiClient<WebRoutes>(
 
 /** The versioned API every product call goes through. */
 export const api = apiClient.v1;
+
+/** Browser dispatches to mounted internal routes; the API authorizes each request. */
+export const mcpConnectorConnection = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.mcpConnectorConnect,
+  start: async (slug: string) =>
+    unwrapApiResponse(await api.mcp.connectors({ slug }).connect.post({})),
+} as const;
+
+type SubmitChatConnectorReceiptOptions = {
+  threadId: SafeId<"chatThread">;
+  toolCallId: string;
+  decision: ConnectConnectorDecision;
+};
+
+export const chatConnectorReceipt = {
+  route: INTERNAL_UI_TRANSPORT_ROUTES.chatConnectorReceipt,
+  submit: async ({
+    threadId,
+    toolCallId,
+    decision,
+  }: SubmitChatConnectorReceiptOptions) =>
+    unwrapApiResponse(
+      await api.chat
+        .threads({ threadId })
+        .connectors({ toolCallId })
+        .post({ decision }),
+    ),
+} as const;

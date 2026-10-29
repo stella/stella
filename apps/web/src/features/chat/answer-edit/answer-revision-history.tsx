@@ -18,8 +18,9 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import { answerRevisionHistoryOptions } from "./answer-edit-queries";
 
@@ -85,8 +86,8 @@ export const AnswerRevisionHistoryContent = ({
     }),
     enabled,
   });
-  const view = useQueryView(query);
-  useQueryViewError(view);
+  const view = queryView(query);
+  useQueryViewError(view, "AnswerRevisionHistory:query");
   const writeBlocked = !(
     writeState.status === "idle" ||
     (writeState.status === "awaiting-revision" &&
@@ -113,7 +114,13 @@ export const AnswerRevisionHistoryContent = ({
       await refreshAfterRestore(saved.value.revision);
       return;
     }
-    getAnalytics().captureError(saved.error);
+    getAnalytics().captureError(saved.error, {
+      fingerprintKey: "AnswerRevisionHistory.restore:failure",
+      scope: {
+        type: "handler",
+        handlerId: "AnswerRevisionHistory.restore:failure",
+      },
+    });
     if (APIError.is(saved.error) && saved.error.status === 409) {
       setWriteState({ status: "stale" });
       const refresh = await Result.tryPromise({
@@ -121,7 +128,13 @@ export const AnswerRevisionHistoryContent = ({
         catch: (error) => error,
       });
       if (Result.isError(refresh)) {
-        getAnalytics().captureError(refresh.error);
+        getAnalytics().captureError(refresh.error, {
+          fingerprintKey: "AnswerRevisionHistory.refreshStale:failure",
+          scope: {
+            type: "handler",
+            handlerId: "AnswerRevisionHistory.refreshStale:failure",
+          },
+        });
       }
       return;
     }
@@ -140,7 +153,13 @@ export const AnswerRevisionHistoryContent = ({
       history.isError ? Result.err(history.error) : Result.ok(history),
     );
     if (Result.isError(refreshed)) {
-      getAnalytics().captureError(refreshed.error);
+      getAnalytics().captureError(refreshed.error, {
+        fingerprintKey: "AnswerRevisionHistory.refreshAfterRestore:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnswerRevisionHistory.refreshAfterRestore:failure",
+        },
+      });
       setWriteState({ status: "refresh-error", revision: restoredRevision });
       return;
     }

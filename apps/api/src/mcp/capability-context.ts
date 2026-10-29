@@ -83,12 +83,9 @@ const mcpMemberCaller = async (
     organizationId: context.organizationId,
     userId: context.userId,
   };
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+  const orgSettings = await (context.testDependencies?.loadOrgSettingsForAuth?.(
+    reader,
+  ) ??
     operationDatabaseScope.scopedDb(
       async (tx) => await loadOrgSettingsForAuth(tx, reader),
     ));
@@ -121,10 +118,7 @@ const mcpMemberCaller = async (
     // The credential's attenuation travels with the role, so every check the
     // handler makes spends only what this credential was granted.
     memberRole: mcpMemberAuthority(context),
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
+    ...orgSettings,
     recordAuditEvent: context.recordAuditEvent,
     createAuditRecorder: recorderFactory(context, request, null),
   };
