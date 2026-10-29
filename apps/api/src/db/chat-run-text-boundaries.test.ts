@@ -22,7 +22,7 @@ test("retained text boundaries converge across batches and new inserts keep them
   await database.exec(
     await Bun.file(
       new URL(
-        "../../drizzle/20261028182200_chat_run_text_boundaries/migration.sql",
+        "../../drizzle/20261029140700_chat_run_text_boundaries/migration.sql",
         import.meta.url,
       ),
     ).text(),

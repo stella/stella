@@ -3102,7 +3102,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         const batchId = Bun.randomUUIDv7();
         const migration = await Bun.file(
           new URL(
-            "../../../drizzle/20261028182100_chat_run_reference_state/migration.sql",
+            "../../../drizzle/20261029140600_chat_run_reference_state/migration.sql",
             import.meta.url,
           ),
         ).text();
