@@ -46,8 +46,16 @@
         "tokens": 32670
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 32439
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33274
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33477
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33232
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -100,8 +108,16 @@
         "tokens": 33160
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 32928
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33765
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33967
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33722
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -150,8 +166,16 @@
         "tokens": 33078
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 32677
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33523
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33732
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33487
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -200,8 +224,16 @@
         "tokens": 33567
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 33165
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34012
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34220
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33975
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -246,8 +278,16 @@
         "tokens": 32188
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 31804
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 32639
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 32841
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 32597
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -288,8 +328,16 @@
         "tokens": 32666
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 32281
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33117
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33320
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33075
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -338,8 +386,16 @@
         "tokens": 34330
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 33912
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34800
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35026
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34781
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -388,8 +444,16 @@
         "tokens": 34857
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 34438
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35327
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35552
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35307
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -438,8 +502,16 @@
         "tokens": 33933
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 33510
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34387
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34608
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34363
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -488,8 +560,16 @@
         "tokens": 34449
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 34025
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34903
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35123
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34878
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -538,8 +618,16 @@
         "tokens": 34013
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 33756
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34609
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -588,8 +676,16 @@
         "tokens": 34525
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 34267
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35120
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -638,8 +734,16 @@
         "tokens": 34013
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 33756
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34609
       },
       {
         "reason": "Agent access descriptions and current registry",
@@ -688,8 +792,16 @@
         "tokens": 34525
       },
       {
-        "reason": "Reflect resolved agent access policy",
-        "tokens": 34267
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35120
       },
       {
         "reason": "Agent access descriptions and current registry",
