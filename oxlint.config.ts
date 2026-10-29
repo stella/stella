@@ -2925,6 +2925,12 @@ const config = defineConfig({
                 utilities: ["transition-[height]"],
               },
               {
+                path: "packages/ui/src/components/collapsible.tsx",
+                reason:
+                  "Collapsible panel is a disclosure: it opens from zero to the height it owns, with the accordion's timing.",
+                utilities: ["transition-[height]"],
+              },
+              {
                 path: "packages/ui/src/components/outline-rail.tsx",
                 reason:
                   "Outline rail marker animates the width and height it owns as the active section changes.",
