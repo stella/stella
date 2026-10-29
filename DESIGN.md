@@ -204,6 +204,8 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 
 - **default:** primary foreground on primary background
 - **destructive:** destructive colours
+- **destructive-outline:** the outline box with destructive text and a
+  destructive tint on hover
 - **outline:** border + transparent background
 - **secondary:** secondary surface
 - **ghost:** transparent, accent on hover
@@ -221,7 +223,8 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
   sets the outline its focus ring follows.
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
-type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
+type), `lg` (h-10), `xl` (h-11), `chip` (a 28px pill beside the
+composer's round controls), `icon` and `icon-*` (square),
 `icon-2xs` (a 16px glyph action in a dense row; the touch target
 still grows to 44px under a coarse pointer), `row` (a menu-list row),
 `inline` (an action inside a line of text: no height, padding or type
@@ -275,6 +278,91 @@ When a screen needs a look the components lack, add it once here and in
 | Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds          |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
+
+**Every name in use.** Each closed set of names an exported component
+accepts (variants, sizes, tones, layers, sides, ...), one line per prop:
+the components, the prop, then its names. It is read from `packages/ui`
+into `scripts/ui-api-snapshot.json`, and
+`.oxlint-plugins/__tests__/ui-api-snapshot.test.ts` fails when this list,
+that snapshot and the source disagree. A new name is a design decision:
+check the concepts above and the names below for one that already says
+it, and add it here in the same change that adds it to `packages/ui`.
+
+- `AccordionContent`, `AccordionPanel`, `AccordionTrigger` `size`: `compact`, `default`, `sm`
+- `AccordionTrigger` `variant`: `default`, `muted`
+- `AlertDialogBackdrop`, `AlertDialogContent`, `AlertDialogOverlay`, `AlertDialogPopup`, `AlertDialogViewport`, `DatePickerPopover`, `DateRangeFilter`, `DialogBackdrop`, `DialogContent`, `DialogOverlay`, `DialogPopup`, `DialogViewport`, `PopoverContent`, `PopoverPopup` `layer`: `chrome`, `chrome-raised`, `default`, `popup`, `search`, `search-child`
+- `AlertDialogFooter`, `DialogFooter`, `SheetFooter` `variant`: `bare`, `default`
+- `BidiText` `as`: `bdi`, `div`, `p`, `span`
+- `BidiText` `direction`: `auto`, `ltr`, `rtl`
+- `Button` `focusRing`: `inside`, `outside`
+- `Button` `shape`: `box`, `round`
+- `Button` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `xl`, `xs`
+- `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `ColorPicker` `align`: `center`, `end`, `start`
+- `ColorPicker` `side`: `bottom`, `left`, `right`, `top`
+- `ColorPickerContent` `presentation`: `inline`, `popover`
+- `CommandItem` `size`: `default`, `row`
+- `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`
+- `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
+- `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`
+- `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
+- `DetailsGrid` `orientation`: `horizontal`, `vertical`
+- `DetailsGrid` `variant`: `list`, `sheet`
+- `DetailsItem` `span`: `wide`
+- `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
+- `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
+- `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
+- `Form` `density`: `compact`, `default`, `snug`
+- `Form` `layout`: `inline`, `stack`
+- `InlineDropIndicator` `position`: `after`, `before`
+- `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
+- `InputGroupTextarea`, `Textarea` `fieldSizing`: `content`, `fixed`
+- `Label` `variant`: `choice`, `choice-card`, `default`, `muted`
+- `LandingItemText` `iconTone`: `matter`, `muted`
+- `LandingRowIcon` `tone`: `matter`, `muted`
+- `ListItemDescription` `variant`: `code`, `text`
+- `ListItemMedia` `variant`: `icon`, `initial`
+- `ListItemStatus` `tone`: `destructive`, `neutral`, `success`, `warning`
+- `Loader` `animation`: `none`, `spin`
+- `Loader` `size`: `lg`, `md`, `sm`
+- `Loader` `variant`: `decorative`, `status`
+- `MatterIcon` `variant`: `all`, `none`
+- `OutlineRail` `presentation`: `panel`, `popover`, `rail`
+- `PanelTrigger`, `Sidebar` `side`: `left`, `right`
+- `PopoverContent`, `PopoverPopup` `padding`: `default`, `md`, `none`, `sm`, `xs`
+- `PreviewPane` `overflow`: `clip`, `scroll`
+- `PreviewPane` `size`: `default`, `thumbnail`
+- `Prose` `size`: `default`, `lede`, `sm`
+- `Prose` `tone`: `default`, `muted`
+- `ReviewDecisionActions`, `ReviewStatusBadge` `size`: `sm`, `xs`
+- `ReviewDecisionActions` `state`: `accepted`, `applying`, `dismissed`, `pending`, `rejected`
+- `ReviewOutOfDateNotice` `tone`: `muted`, `warning`
+- `ReviewSeverityDot` `level`: `critical`, `high`, `low`, `medium`, `none`
+- `ReviewStatusBadge`, `ReviewStatusDot` `tone`: `destructive`, `highlight`, `neutral`, `success`, `warning`
+- `ReviewStatusBadge` `variant`: `outline`, `solid`, `strong`
+- `ScrollArea` `axis`: `both`, `vertical`
+- `SelectTrigger` `align`: `center`, `start`
+- `SheetContent`, `SheetPopup` `side`: `block-end`, `block-start`, `inline-end`, `inline-start`
+- `SheetContent`, `SheetPopup` `variant`: `default`, `inset`
+- `Sidebar` `collapsible`: `icon`, `none`, `offcanvas`
+- `Sidebar` `variant`: `floating`, `inset`, `sidebar`
+- `SidebarMenuButton` `size`: `default`, `lg`, `rail`, `sm`
+- `SidebarMenuButton` `variant`: `default`, `outline`
+- `SidebarMenuSubButton`, `SplitButton` `size`: `md`, `sm`
+- `SortableHead` `sortDirection`: `asc`, `desc`
+- `SplitButton` `surface`: `menu`, `popover`
+- `StatusMark` `status`: `done`, `failed`, `pending`, `running`
+- `Step` `status`: `completed`, `current`, `upcoming`
+- `Steps` `variant`: `compact`, `default`, `progress`
+- `TableChart` `kind`: `bar`, `line`, `pie`, `scatter`
+- `TableChart` `xMode`: `category`, `numeric`
+- `TabsList` `variant`: `default`, `underline`
+- `TextMark` `state`: `active`, `matched`, `rest`
+- `TextMark` `tone`: `destructive`, `muted`, `option-green`, `option-purple`, `option-red`, `option-sky`, `option-violet`, `option-yellow`, `success`, `warning`
+- `TextMark` `variant`: `dotted`, `fill`, `strike`, `underline`, `wavy`
+- `TextMark` `weight`: `inherit`, `medium`
+- `ToastProvider` `position`: `bottom-center`, `bottom-left`, `bottom-right`, `top-center`, `top-left`, `top-right`
+- `ToolbarIconAction` `density`: `header`, `toolbar`
 
 ### Menu Rows & Sections
 
