@@ -68,6 +68,7 @@ jobs:
             scripts/gh-retry.sh
             scripts/retry.sh
             scripts/check-release-main-health.sh
+            scripts/release-proof-chain.sh
             scripts/check-release-open-incidents.sh
             scripts/check-release-receipt-coverage.sh
             scripts/check-release-queue-history.ts

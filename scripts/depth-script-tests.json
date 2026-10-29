@@ -23,6 +23,7 @@
   "scripts/legal-atlas-image-scope.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/oxlint-safe-fixers.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/precommit-lint.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
+  "scripts/release-proof-chain.test.ts": "Builds Git histories and verifies release proof chains through real subprocesses.",
   "scripts/selfhost-contract.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/source-fingerprint-baseline.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/staging-named-waiver.test.ts": "Runs the staging status writer in separate shells across the outcome matrix.",
