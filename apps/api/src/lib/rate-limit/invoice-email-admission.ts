@@ -13,12 +13,16 @@ import type {
   BudgetName,
 } from "@/api/lib/rate-limit/budget-observability";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import {
+  createRedisRateLimitRequestKey,
+  RedisRateLimitContext,
+} from "@/api/lib/rate-limit/redis-context";
 
 export const INVOICE_EMAIL_BUDGET = {
   durationMs: DAY_IN_MS,
   userEmails: 50,
-  platformEmails: 1000,
+  platformEmails: 20_000,
+  organizationEmails: 200,
   youngOrganizationEmails: 10,
   youngOrganizationAgeMs: 14 * DAY_IN_MS,
 } as const;
@@ -38,16 +42,40 @@ type EmailBudget = {
   keyKind: BudgetKeyKind;
 };
 
-/**
- * Each recipient reserves one atomic counter slot. Refused batches and failed
- * deliveries keep their reservations so retries cannot reclaim the quota.
- */
+export type InvoiceEmailReservation = {
+  /** Return every recipient slot when no transport has started. */
+  release: () => Promise<void>;
+  /** Retain charges once transport has started, even when delivery fails. */
+  commit: () => Promise<void>;
+};
+
+const counterUnavailable = (cause: unknown) =>
+  classifyFailure(
+    new HandlerError({
+      status: 503,
+      code: LIMITER_STORE_UNAVAILABLE.code,
+      message: "Invoice email delivery is temporarily unavailable.",
+      cause,
+    }),
+    "upstream_unavailable",
+  );
+
+/** Each slot has its own refund identity, including an ambiguous store reply. */
 export const createInvoiceEmailAdmission =
-  (context: Pick<RateLimitContext, "increment">) =>
+  (context: Pick<RateLimitContext, "increment" | "decrement" | "complete">) =>
   async (
     options: InvoiceEmailAdmissionOptions,
-  ): Promise<Result<void, HandlerError>> => {
+  ): Promise<Result<InvoiceEmailReservation, HandlerError>> => {
+    const young =
+      options.now.getTime() - options.organizationCreatedAt.getTime() <
+      INVOICE_EMAIL_BUDGET.youngOrganizationAgeMs;
     const budgets: EmailBudget[] = [
+      {
+        key: `invoice-email:organization:${sha256Hex(options.organizationId)}`,
+        max: INVOICE_EMAIL_BUDGET.organizationEmails,
+        name: "api.invoice_email.organization",
+        keyKind: "account",
+      },
       {
         key: `invoice-email:user:${sha256Hex(options.userId)}`,
         max: INVOICE_EMAIL_BUDGET.userEmails,
@@ -61,10 +89,7 @@ export const createInvoiceEmailAdmission =
         keyKind: "account",
       },
     ];
-    if (
-      options.now.getTime() - options.organizationCreatedAt.getTime() <
-      INVOICE_EMAIL_BUDGET.youngOrganizationAgeMs
-    ) {
+    if (young) {
       budgets.unshift({
         key: `invoice-email:young-organization:${sha256Hex(options.organizationId)}`,
         max: INVOICE_EMAIL_BUDGET.youngOrganizationEmails,
@@ -72,42 +97,59 @@ export const createInvoiceEmailAdmission =
         keyKind: "account",
       });
     }
-    // Rejected attempts consume earlier windows; later windows are untouched.
-    // The broad platform quota is charged only after both narrower caps admit.
-    for (const budget of budgets) {
-      const reserved = await Result.tryPromise({
-        try: async () =>
-          await Promise.all(
-            Array.from(
-              { length: options.recipientCount },
-              async () =>
-                await context.increment(
-                  budget.key,
-                  INVOICE_EMAIL_BUDGET.durationMs,
-                ),
-            ),
-          ),
-        catch: (cause) =>
-          classifyFailure(
-            new HandlerError({
-              status: 503,
-              code: LIMITER_STORE_UNAVAILABLE.code,
-              message: "Invoice email delivery is temporarily unavailable.",
-              cause,
-            }),
-            "upstream_unavailable",
-          ),
-      });
-      if (reserved.isErr()) {
-        return Result.err(reserved.error);
+    const attemptedKeys: string[] = [];
+    const execution: { phase: "reserved" | "settled" } = { phase: "reserved" };
+    const settle = async (outcome: "release" | "commit") => {
+      if (execution.phase === "settled") {
+        return;
       }
-      if (reserved.value.some(({ count }) => count > budget.max)) {
+      execution.phase = "settled";
+      await Promise.all(
+        attemptedKeys.map(async (key) => {
+          try {
+            if (outcome === "release") {
+              await context.decrement(key);
+            }
+          } finally {
+            await context.complete(key);
+          }
+        }),
+      );
+    };
+    const refuse = async (error: HandlerError) => {
+      const refunded = await Result.tryPromise({
+        try: async () => await settle("release"),
+        catch: counterUnavailable,
+      });
+      return Result.err(refunded.isErr() ? refunded.error : error);
+    };
+    for (const budget of budgets) {
+      const slots = await Promise.all(
+        Array.from({ length: options.recipientCount }, async () => {
+          const key = createRedisRateLimitRequestKey({
+            counterKey: budget.key,
+            requestId: Bun.randomUUIDv7(),
+          });
+          attemptedKeys.push(key);
+          return await Result.tryPromise({
+            try: async () =>
+              await context.increment(key, INVOICE_EMAIL_BUDGET.durationMs),
+            catch: counterUnavailable,
+          });
+        }),
+      );
+      for (const slot of slots) {
+        if (slot.isErr()) {
+          return await refuse(slot.error);
+        }
+      }
+      if (slots.some((slot) => slot.isOk() && slot.value.count > budget.max)) {
         recordBudgetRejection({
           name: budget.name,
           keyKind: budget.keyKind,
           windowMs: INVOICE_EMAIL_BUDGET.durationMs,
         });
-        return Result.err(
+        return await refuse(
           new HandlerError({
             status: 429,
             code: "invoice_email_limit",
@@ -117,7 +159,10 @@ export const createInvoiceEmailAdmission =
         );
       }
     }
-    return Result.ok(undefined);
+    return Result.ok({
+      release: async () => await settle("release"),
+      commit: async () => await settle("commit"),
+    });
   };
 
 let admission: ReturnType<typeof createInvoiceEmailAdmission> | undefined;

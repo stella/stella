@@ -190,16 +190,18 @@ true satisfies Exclude<
 export const parseInvoiceLinkLinesRow = (row: unknown) =>
   v.parse(linesFunctionRowSchema, row);
 
-const timeFunctionRowSchema = v.pick(timeEntriesRowSchema, [
-  "id",
-  "workspaceId",
-  "dateWorked",
-  "billedMinutes",
-  "rateAtEntry",
-  "invoiceNarrative",
-  "noCharge",
-  "invoiceAttachment",
-]);
+const timeFunctionRowSchema = v.object({
+  ...v.pick(timeEntriesRowSchema, [
+    "id",
+    "workspaceId",
+    "dateWorked",
+    "billedMinutes",
+    "rateAtEntry",
+    "noCharge",
+    "invoiceAttachment",
+  ]).entries,
+  documentDescription: v.string(),
+});
 export const parseInvoiceLinkTimeRow = (row: unknown) =>
   v.parse(timeFunctionRowSchema, row);
 

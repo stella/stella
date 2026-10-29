@@ -36,9 +36,8 @@ ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_organization_id_organi
 ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE;--> statement-breakpoint
 -- The history outlives the people in it: a deleted account leaves a null.
 ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_sent_by_user_id_user_id_fk" FOREIGN KEY ("sent_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL;--> statement-breakpoint
-ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_revoked_by_user_id_user_id_fk" FOREIGN KEY ("revoked_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "invoice_sends_token_hash_uidx" ON "invoice_sends" ("token_hash");--> statement-breakpoint
-CREATE INDEX "invoice_sends_invoice_created_idx" ON "invoice_sends" ("invoice_id","created_at");--> statement-breakpoint
+CREATE INDEX "invoice_sends_invoice_created_idx" ON "invoice_sends" ("invoice_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "invoice_sends_org_created_idx" ON "invoice_sends" ("organization_id","created_at");--> statement-breakpoint
 CREATE INDEX "invoice_sends_sent_by_idx" ON "invoice_sends" ("sent_by_user_id") WHERE "invoice_sends"."sent_by_user_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "invoice_sends_revoked_by_idx" ON "invoice_sends" ("revoked_by_user_id") WHERE "invoice_sends"."revoked_by_user_id" IS NOT NULL;--> statement-breakpoint
@@ -155,10 +154,15 @@ GRANT EXECUTE ON FUNCTION "invoice_link_lines"(text) TO stella;
 --> statement-breakpoint
 -- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; the live token hash authorizes only this invoice's document projection
 CREATE FUNCTION "invoice_link_time"(p_token_hash text)
-RETURNS TABLE ("id" uuid, "workspace_id" uuid, "date_worked" date, "billed_minutes" integer, "rate_at_entry" bigint, "invoice_narrative" text, "no_charge" boolean, "invoice_attachment" text)
+RETURNS TABLE ("id" uuid, "workspace_id" uuid, "date_worked" date, "billed_minutes" integer, "rate_at_entry" bigint, "document_description" text, "no_charge" boolean, "invoice_attachment" text)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $$ SELECT r."id", r."workspace_id", r."date_worked", r."billed_minutes", r."rate_at_entry", r."invoice_narrative", r."no_charge", r."invoice_attachment" FROM public.time_entries r JOIN public.invoice_link_scope(p_token_hash) s ON r.invoice_id = s.invoice_id AND r.organization_id = s.organization_id $$;
+AS $$ SELECT r."id", r."workspace_id", r."date_worked", r."billed_minutes", r."rate_at_entry",
+  COALESCE(
+    CASE WHEN btrim(r."invoice_narrative", U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF') <> '' THEN r."invoice_narrative" END,
+    CASE WHEN btrim(r."narrative", U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF') <> '' THEN r."narrative" END,
+    '-') AS "document_description",
+  r."no_charge", r."invoice_attachment" FROM public.time_entries r JOIN public.invoice_link_scope(p_token_hash) s ON r.invoice_id = s.invoice_id AND r.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_time"(text) FROM PUBLIC;
 --> statement-breakpoint
@@ -281,8 +285,19 @@ BEGIN
       OR OLD.expires_at IS DISTINCT FROM NEW.expires_at THEN
       RAISE EXCEPTION 'Invoice send identity and expiry are immutable' USING ERRCODE = '42501';
     END IF;
-    IF OLD.revoked_at IS NOT NULL AND OLD.revoked_at IS DISTINCT FROM NEW.revoked_at THEN
+    IF OLD.delivery_status IS DISTINCT FROM NEW.delivery_status
+      AND NOT (OLD.delivery_status = 'pending' AND NEW.delivery_status IN ('delivered', 'partial', 'failed')) THEN
+      RAISE EXCEPTION 'Invoice send delivery is terminal' USING ERRCODE = '42501';
+    END IF;
+    IF OLD.revoked_at IS NOT NULL AND (
+      OLD.revoked_at IS DISTINCT FROM NEW.revoked_at
+      OR OLD.revoked_by_user_id IS DISTINCT FROM NEW.revoked_by_user_id) THEN
       RAISE EXCEPTION 'Invoice send revocation is immutable' USING ERRCODE = '42501';
+    END IF;
+  ELSE
+    IF NEW.delivery_status <> 'pending' OR NEW.revoked_at IS NOT NULL
+      OR NEW.expires_at > now() + interval '60 days' THEN
+      RAISE EXCEPTION 'Invoice send must begin pending with a bounded live link' USING ERRCODE = '42501';
     END IF;
   END IF;
   IF ((TG_OP = 'INSERT' AND NEW.first_viewed_at IS NOT NULL)

@@ -1362,9 +1362,8 @@ export const invoiceSends = p.pgTable(
       .notNull()
       .default("pending"),
     revokedAt: timestamptz("revoked_at"),
-    revokedByUserId: p
-      .text("revoked_by_user_id")
-      .references(() => user.id, { onDelete: "set null" }),
+    // Immutable revocation attribution survives account and membership removal.
+    revokedByUserId: p.text("revoked_by_user_id"),
     firstViewedAt: timestamptz("first_viewed_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
@@ -1374,7 +1373,7 @@ export const invoiceSends = p.pgTable(
       p.uniqueIndex("invoice_sends_token_hash_uidx").on(table.tokenHash),
       p
         .index("invoice_sends_invoice_created_idx")
-        .on(table.invoiceId, table.createdAt),
+        .on(table.invoiceId, table.createdAt, table.id),
       p
         .index("invoice_sends_org_created_idx")
         .on(table.organizationId, table.createdAt),

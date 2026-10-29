@@ -237,15 +237,11 @@ const refuseUnsendable = async (
       });
 };
 
-/**
- * Records the send before any email leaves: refuses a draft or void invoice
- * and a send past the limits, locks the invoice, and inserts the send with
- * its link's hash. Returns what the emails print.
- */
-export const prepareInvoiceSend = async (
+/** Validation is repeated under the same locks after the external quota reservation. */
+const validateInvoiceSend = async (
   tx: Transaction,
   options: PrepareSendOptions,
-): Promise<Result<PreparedSend, HandlerError>> => {
+) => {
   const capacity = await withAggregateLock({
     tx,
     aggregate: "invoiceSendCapacity",
@@ -292,7 +288,22 @@ export const prepareInvoiceSend = async (
   if (sender.isErr()) {
     return Result.err(sender.error);
   }
-  const { firmName, replyTo } = sender.value;
+  return Result.ok({
+    invoice: { ...locked, invoiceNumber: locked.invoiceNumber },
+    ...sender.value,
+  });
+};
+
+/** Record the send under the validation locks before any transport starts. */
+export const prepareInvoiceSend = async (
+  tx: Transaction,
+  options: PrepareSendOptions,
+): Promise<Result<PreparedSend, HandlerError>> => {
+  const validated = await validateInvoiceSend(tx, options);
+  if (validated.isErr()) {
+    return Result.err(validated.error);
+  }
+  const { invoice: locked, firmName, replyTo } = validated.value;
   const expiresAt = invoiceLinkExpiresAt(options.now);
   const sendId = createSafeId<"invoiceSend">();
   await tx.insert(invoiceSends).values({
@@ -569,8 +580,29 @@ export const createSendInvoice = ({
           ),
         );
       }
-      // Shared counter I/O finishes before acquiring any database aggregate lock.
+      const token = createInvoiceLinkToken();
+      const message =
+        body.message === undefined || body.message === "" ? null : body.message;
+      const prepareOptions = {
+        invoiceId: params.invoiceId,
+        workspaceId,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        recipients: body.recipients,
+        message,
+        tokenHash: hashInvoiceLinkToken(token),
+        now,
+        recordAuditEvent,
+      };
+      // All business checks precede shared quota I/O. Locks end before Redis;
+      // preparation rechecks them so a concurrent edit or send cannot slip through.
       yield* Result.await(
+        resultTx(
+          safeDb,
+          async (tx) => await validateInvoiceSend(tx, prepareOptions),
+        ),
+      );
+      const reservation = yield* Result.await(
         admitEmail({
           organizationId: session.activeOrganizationId,
           userId: user.id,
@@ -579,71 +611,64 @@ export const createSendInvoice = ({
           now,
         }),
       );
-      const token = createInvoiceLinkToken();
-      const message =
-        body.message === undefined || body.message === "" ? null : body.message;
-      const prepared = yield* Result.await(
-        resultTx(
-          safeDb,
-          async (tx) =>
-            await prepareInvoiceSend(tx, {
-              invoiceId: params.invoiceId,
-              workspaceId,
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              recipients: body.recipients,
-              message,
-              tokenHash: hashInvoiceLinkToken(token),
-              now,
-              recordAuditEvent,
-            }),
-        ),
-      );
-      const failed = await deliverAll(
-        deliver,
-        emailFor(prepared, invoiceLinkUrl(token), message),
-        body.recipients,
-      );
-      const deliveryStatus = deliveryStatusOf(failed, body.recipients);
-      const recorded = yield* Result.await(
-        resultTx(
-          safeDb,
-          async (tx) =>
-            await recordDelivery(tx, {
-              actorUserId: user.id,
-              organizationId: session.activeOrganizationId,
-              prepared,
-              failed,
-              deliveryStatus,
-              invoiceId: params.invoiceId,
-              workspaceId,
-              now: new Date(),
-              recordAuditEvent,
-            }),
-        ),
-      );
-      if (deliveryStatus === "failed") {
-        return Result.err(
-          classifyFailure(
-            new HandlerError({
-              status: 502,
-              code: "invoice_email_failed",
-              message: "The email could not be delivered to any recipient",
-              hint: "Check the addresses and send again; the link was not activated.",
-              retryable: true,
-            }),
-            "upstream_unavailable",
+      const execution: { phase: "waiting" | "started" } = { phase: "waiting" };
+      try {
+        const prepared = yield* Result.await(
+          resultTx(
+            safeDb,
+            async (tx) => await prepareInvoiceSend(tx, prepareOptions),
           ),
         );
+        const email = emailFor(prepared, invoiceLinkUrl(token), message);
+        execution.phase = "started";
+        const failed = await deliverAll(deliver, email, body.recipients);
+        const deliveryStatus = deliveryStatusOf(failed, body.recipients);
+        const recorded = yield* Result.await(
+          resultTx(
+            safeDb,
+            async (tx) =>
+              await recordDelivery(tx, {
+                actorUserId: user.id,
+                organizationId: session.activeOrganizationId,
+                prepared,
+                failed,
+                deliveryStatus,
+                invoiceId: params.invoiceId,
+                workspaceId,
+                now: new Date(),
+                recordAuditEvent,
+              }),
+          ),
+        );
+        if (deliveryStatus === "failed") {
+          return Result.err(
+            classifyFailure(
+              new HandlerError({
+                status: 502,
+                code: "invoice_email_failed",
+                message: "The email could not be delivered to any recipient",
+                hint: "Check the addresses and send again; the link was not activated.",
+                retryable: true,
+              }),
+              "upstream_unavailable",
+            ),
+          );
+        }
+        return Result.ok({
+          id: prepared.sendId,
+          deliveryStatus,
+          failedRecipients: failed,
+          replyTo: prepared.replyTo,
+          expiresAt: prepared.expiresAt.toISOString(),
+          invoiceStatus: recorded.status,
+        });
+      } finally {
+        if (execution.phase === "waiting") {
+          await reservation.release();
+        } else {
+          await reservation.commit();
+        }
       }
-      return Result.ok({
-        id: prepared.sendId,
-        deliveryStatus,
-        failedRecipients: failed,
-        replyTo: prepared.replyTo,
-        expiresAt: prepared.expiresAt.toISOString(),
-        invoiceStatus: recorded.status,
-      });
     },
   );
 

@@ -65,7 +65,7 @@ export const invoiceSendsOptions = (workspaceId: string, invoiceId: string) =>
     queryFn: async ({ signal }) => {
       const response = await api
         .invoices({ workspaceId })({ invoiceId })
-        .sends.get({ fetch: { signal } });
+        .sends.get({ query: {}, fetch: { signal } });
 
       return unwrapApiResponse(response);
     },
@@ -74,6 +74,32 @@ export const invoiceSendsOptions = (workspaceId: string, invoiceId: string) =>
 export type InvoiceSends = Awaited<
   ReturnType<NonNullable<ReturnType<typeof invoiceSendsOptions>["queryFn"]>>
 >;
+
+export const invoiceSendsInfiniteOptions = (
+  workspaceId: string,
+  invoiceId: string,
+) =>
+  infiniteQueryOptions({
+    queryKey: [
+      ...invoicesKeys.byId(workspaceId, invoiceId),
+      "sends",
+      "infinite",
+    ],
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .sends.get({
+          query: pageParam === undefined ? {} : { cursor: pageParam },
+          fetch: { signal },
+        });
+
+      return unwrapApiResponse(response);
+    },
+    initialPageParam: getInitialInvoicesPageParam(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    select: (data) => data.pages.flatMap((page) => page.items),
+  });
 
 /**
  * What a new invoice in the matter starts from: unbilled entries and

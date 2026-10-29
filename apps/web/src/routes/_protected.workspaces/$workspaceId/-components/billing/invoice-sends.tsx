@@ -1,5 +1,10 @@
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -38,6 +43,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
 import {
+  invoiceSendsInfiniteOptions,
   invoiceSendsOptions,
   invoicesKeys,
 } from "@/lib/workspaces/queries/invoices";
@@ -48,7 +54,7 @@ import {
   sendInvoiceFormSchema,
 } from "./invoice-sends.logic";
 
-type InvoiceSend = InvoiceSends["sends"][number];
+type InvoiceSend = InvoiceSends["items"][number];
 type LinkStatus = InvoiceSend["linkStatus"];
 
 const LINK_STATUS_STYLES = {
@@ -284,10 +290,11 @@ export const InvoiceSendsSection = ({
   onSendAgain,
 }: InvoiceSendsSectionProps) => {
   const t = useTranslations("billing.invoices.sending");
-  const view = queryView(
-    useQuery(invoiceSendsOptions(workspaceId, invoiceId)),
-    { isEmpty: (data) => data.sends.length === 0 },
+  const rootT = useTranslations();
+  const sends = useInfiniteQuery(
+    invoiceSendsInfiniteOptions(workspaceId, invoiceId),
   );
+  const view = queryView(sends);
   useQueryViewError(view, "InvoiceSendsSection:query");
 
   return (
@@ -303,6 +310,21 @@ export const InvoiceSendsSection = ({
         view={view}
         workspaceId={workspaceId}
       />
+      {sends.hasNextPage && (
+        <div className="border-t px-4 py-2">
+          <Button
+            loading={sends.isFetchingNextPage}
+            onClick={() => {
+              detached(sends.fetchNextPage(), "invoice-sends.fetch-next-page");
+            }}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {rootT("common.loadMore")}
+          </Button>
+        </div>
+      )}
     </section>
   );
 };
@@ -311,7 +333,7 @@ const InvoiceSendsBody = ({
   view,
   ...row
 }: InvoiceSendsSectionProps & {
-  view: QueryView<InvoiceSends, Error>;
+  view: QueryView<InvoiceSend[], Error>;
 }) => {
   const t = useTranslations("billing.invoices.sending");
   switch (view.type) {
@@ -333,7 +355,7 @@ const InvoiceSendsBody = ({
     case "items":
       return (
         <ul className="divide-y">
-          {view.items.sends.map((send) => (
+          {view.items.map((send) => (
             <InvoiceSendRow key={send.id} send={send} {...row} />
           ))}
         </ul>

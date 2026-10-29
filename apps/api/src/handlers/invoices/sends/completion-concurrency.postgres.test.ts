@@ -121,7 +121,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             );
           };
           const sendInvoice = createSendInvoice({
-            admitEmail: async () => Result.ok(undefined),
+            admitEmail: async () =>
+              Result.ok({
+                release: async () => {},
+                commit: async () => {},
+              }),
             isDeliveryConfigured: () => true,
             deliver: async ({ to, link }) => {
               const gate = to === "a@example.test" ? gates.a : gates.b;

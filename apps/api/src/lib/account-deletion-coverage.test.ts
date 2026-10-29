@@ -10,6 +10,7 @@ import {
   ACCOUNT_DELETION_MANUAL_TABLES,
   ACCOUNT_DELETION_NON_FK_OWNERSHIP,
 } from "@/api/lib/account-deletion-steps";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/lib/user-attribution-retention";
 
 // ── Account-deletion FK coverage guard ──────────────────────────────────
 //
@@ -270,6 +271,34 @@ describe("account deletion FK coverage", () => {
         (fk) => fk.tableName === "session" && fk.columnName === "user_id",
       ),
     ).toBe(true);
+  });
+
+  test("retained historical attribution columns remain in the schema outside account cleanup", () => {
+    const tables = Object.values(allSchemaExports).filter(isPgTable);
+    const manualTables = new Set<PgTable>(ACCOUNT_DELETION_MANUAL_TABLES);
+    const userForeignKeys = findUserForeignKeys();
+    const keys = new Set<string>();
+    for (const { column, reason } of RETAINED_USER_ATTRIBUTION_COLUMNS) {
+      const table = column.table;
+      const config = getTableConfig(table);
+      const key = gapKey(config.name, column.name);
+      expect(keys.has(key)).toBe(false);
+      keys.add(key);
+      expect(tables).toContain(table);
+      expect(config.columns).toContain(column);
+      expect(column.dataType).toBe(authSchema.user.id.dataType);
+      expect(column.getSQLType()).toBe(authSchema.user.id.getSQLType());
+      expect(reason.length).toBeGreaterThan(0);
+      // A cleanup step deleting or reassigning rows on this table would erase attribution.
+      expect(manualTables.has(table)).toBe(false);
+      expect(
+        userForeignKeys.some(
+          (foreignKey) =>
+            foreignKey.tableName === config.name &&
+            foreignKey.columnName === column.name,
+        ),
+      ).toBe(false);
+    }
   });
 
   test("every direct FK to the user table is DB-cascaded, manually handled, or a tracked known gap", () => {

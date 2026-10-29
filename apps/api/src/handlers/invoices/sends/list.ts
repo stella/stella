@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { invoiceSends } from "@/api/db/schema";
@@ -9,13 +12,20 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { readInvoiceEmailSender } from "@/api/lib/billing/invoice-send-sender";
-import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { readBounded } from "@/api/lib/db/read-bounded";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createCursorPage } from "@/api/lib/pagination";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { brandPersistedInvoiceSendId } from "@/api/lib/safe-id-boundaries";
 
 type InvoiceSendTableRow = typeof invoiceSends.$inferSelect;
 
@@ -80,13 +90,18 @@ const defaultRecipientsOf = (
   ];
 };
 
-/** More sends than the per-invoice limit allows in a long while. */
-const MAX_LISTED_SENDS = 100;
+const SENDS_PAGE_SIZE_DEFAULT = 20;
+const SENDS_PAGE_SIZE_MAX = 100;
+
+const sendHistoryCursor = createTimestampIdCursorCodec({
+  column: invoiceSends.createdAt,
+  brandId: brandPersistedInvoiceSendId,
+});
 
 const config = {
   contract: "patch",
   description:
-    "List the emails an invoice was sent with, newest first: recipients, time, delivery, reply-to, and whether its link is active, expired, revoked or failed, with when it was first opened. defaultRecipients are the client's email addresses, primary first; replyTo is where replies to a new send would go.",
+    "List the emails an invoice was sent with, newest first with cursor pagination: recipients, time, delivery, reply-to, and whether its link is active, expired, revoked or failed, with when it was first opened. defaultRecipients are the client's email addresses, primary first; replyTo is where replies to a new send would go, or null when the reader has no verified sending address. Pass nextCursor as cursor to read older sends.",
   permissions: { invoice: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -97,11 +112,44 @@ const config = {
     readClass: "tenant",
   },
   params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(SENDS_PAGE_SIZE_MAX),
+        ),
+      ),
+    ),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 const listInvoiceSends = createSafeHandler(
   config,
-  async function* ({ safeDb, user, session, workspaceId, params }) {
+  async function* ({ safeDb, user, session, workspaceId, params, query }) {
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? SENDS_PAGE_SIZE_DEFAULT,
+    );
+    const conditions = [eq(invoiceSends.invoiceId, params.invoiceId)];
+    if (query.cursor !== undefined) {
+      const cursor = sendHistoryCursor.decode(query.cursor);
+      if (cursor === null) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+      const condition = sendHistoryCursor.keysetAfter({
+        cursor,
+        idColumn: invoiceSends.id,
+        direction: "descending",
+      });
+      if (condition !== undefined) {
+        conditions.push(condition);
+      }
+    }
     const loaded = yield* Result.await(
       safeDb(async (tx) => {
         const invoice = await tx.query.invoices.findFirst({
@@ -126,27 +174,27 @@ const listInvoiceSends = createSafeHandler(
           userId: user.id,
           sellerProfileId: invoice.sellerProfileId,
         });
-        const sends = await readBounded(
-          tx
-            .select({
-              ...INVOICE_SEND_SELECTION,
-              sentById: authUser.id,
-              sentByName: authUser.name,
-            })
-            .from(invoiceSends)
-            // A sender is named while still a member of this organization.
-            .leftJoin(
-              member,
-              and(
-                eq(member.userId, invoiceSends.sentByUserId),
-                eq(member.organizationId, invoiceSends.organizationId),
-              ),
-            )
-            .leftJoin(authUser, eq(authUser.id, member.userId))
-            .where(eq(invoiceSends.invoiceId, invoice.id))
-            .orderBy(desc(invoiceSends.createdAt), desc(invoiceSends.id)),
-          MAX_LISTED_SENDS,
-        );
+        const sends = await tx
+          .select({
+            ...INVOICE_SEND_SELECTION,
+            sentById: authUser.id,
+            sentByName: authUser.name,
+            createdAtCursor:
+              sendHistoryCursor.cursorValue.as("created_at_cursor"),
+          })
+          .from(invoiceSends)
+          // A sender is named while still a member of this organization.
+          .leftJoin(
+            member,
+            and(
+              eq(member.userId, invoiceSends.sentByUserId),
+              eq(member.organizationId, invoiceSends.organizationId),
+            ),
+          )
+          .leftJoin(authUser, eq(authUser.id, member.userId))
+          .where(and(...conditions))
+          .orderBy(desc(invoiceSends.createdAt), desc(invoiceSends.id))
+          .limit(limit + 1);
         return {
           sends,
           clientEmails: client?.emails ?? null,
@@ -159,32 +207,30 @@ const listInvoiceSends = createSafeHandler(
         new HandlerError({ status: 404, message: "Invoice not found" }),
       );
     }
-    if (loaded.sends.type === "overflow") {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Invoice send history exceeds the read limit",
-        }),
-      );
-    }
-    if (loaded.sender.isErr()) {
-      return Result.err(loaded.sender.error);
-    }
+    const page = createCursorPage({
+      rows: loaded.sends,
+      limit,
+      cursorForItem: (row) =>
+        sendHistoryCursor.encode(row.createdAtCursor, row.id),
+    });
     const now = new Date();
     return Result.ok({
       defaultRecipients: defaultRecipientsOf(loaded.clientEmails),
-      replyTo: loaded.sender.value.replyTo,
-      sends: loaded.sends.rows.map(({ sentById, sentByName, ...row }) =>
-        projectInvoiceSend(
-          {
-            ...row,
-            sentBy:
-              sentById === null || sentByName === null
-                ? null
-                : { id: sentById, name: sentByName },
-          },
-          now,
-        ),
+      replyTo: loaded.sender.isOk() ? loaded.sender.value.replyTo : null,
+      nextCursor: page.nextCursor,
+      limit: page.limit,
+      items: page.items.map(
+        ({ sentById, sentByName, createdAtCursor: _createdAtCursor, ...row }) =>
+          projectInvoiceSend(
+            {
+              ...row,
+              sentBy:
+                sentById === null || sentByName === null
+                  ? null
+                  : { id: sentById, name: sentByName },
+            },
+            now,
+          ),
       ),
     });
   },

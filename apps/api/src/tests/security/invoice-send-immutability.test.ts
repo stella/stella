@@ -2,12 +2,15 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { member, user as authUser } from "@/api/db/auth-schema";
 import {
   INVOICE_SEND_UPDATE_COLUMNS,
   INVOICE_STATUS,
   invoices,
   invoiceSends,
+  workspaceMembers,
 } from "@/api/db/schema";
+import type { InvoiceSendDeliveryStatus } from "@/api/db/schema";
 import { createMembershipSafeDb, createScopedDb } from "@/api/db/scoped";
 import {
   createInvoiceLinkToken,
@@ -17,6 +20,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { cents } from "@/api/lib/money";
 import { getPgErrorCode } from "@/api/lib/pg-error";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
@@ -35,7 +42,9 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const seedSend = async () => {
+const seedSend = async (
+  deliveryStatus: InvoiceSendDeliveryStatus = "delivered",
+) => {
   const { testDb, ids } = fixture;
   const invoiceId = createSafeId<"invoice">();
   const sendId = createSafeId<"invoiceSend">();
@@ -70,11 +79,17 @@ const seedSend = async () => {
     replyTo: "billing@example.test",
     tokenHash,
     expiresAt: new Date(Date.now() + 86_400_000),
-    deliveryStatus: "delivered",
+    deliveryStatus: "pending",
   } satisfies typeof invoiceSends.$inferInsert;
   (
     await safeDb(async (tx) => {
       await tx.insert(invoiceSends).values(values);
+      if (deliveryStatus !== "pending") {
+        await tx
+          .update(invoiceSends)
+          .set({ deliveryStatus })
+          .where(eq(invoiceSends.id, sendId));
+      }
     })
   ).unwrap();
   return { invoiceId, sendId, tokenHash, safeDb, values };
@@ -174,30 +189,140 @@ describe("invoice send mutation authority", () => {
     }
   });
 
-  test("revocation cannot be cleared or moved by the application or the owner", async () => {
-    const { testDb } = fixture;
-    const { sendId, safeDb } = await seedSend();
-    const revokedAt = new Date();
-    (
-      await safeDb(async (tx) => {
-        await tx
-          .update(invoiceSends)
-          .set({ revokedAt })
-          .where(eq(invoiceSends.id, sendId));
-      })
-    ).unwrap();
-    for (const revoked of [null, new Date(revokedAt.getTime() + 1)]) {
+  test.each(["member", "anonymous"] as const)(
+    "the application and owner cannot change a revocation or its original %s actor",
+    async (actor) => {
+      const { testDb, ids } = fixture;
+      const { sendId, safeDb } = await seedSend();
+      const revokedAt = new Date();
+      const revokedByUserId = actor === "member" ? ids.userA1 : null;
+      (
+        await safeDb(async (tx) => {
+          await tx
+            .update(invoiceSends)
+            .set({ revokedAt, revokedByUserId })
+            .where(eq(invoiceSends.id, sendId));
+        })
+      ).unwrap();
+      const changes = [
+        { revokedAt: null },
+        { revokedAt: new Date(revokedAt.getTime() + 1) },
+        { revokedByUserId: ids.userA2 },
+        ...(actor === "member" ? [{ revokedByUserId: null }] : []),
+      ];
+      for (const patch of changes) {
+        const app = await safeDb(async (tx) => {
+          await tx
+            .update(invoiceSends)
+            .set(patch)
+            .where(eq(invoiceSends.id, sendId));
+        });
+        const owner = await Result.tryPromise(async () => {
+          await testDb
+            .update(invoiceSends)
+            .set(patch)
+            .where(eq(invoiceSends.id, sendId));
+        });
+        for (const result of [app, owner]) {
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(getPgErrorCode(result.error)).toBe("42501");
+          }
+        }
+      }
+      expect(
+        await testDb
+          .select({
+            revokedAt: invoiceSends.revokedAt,
+            revokedByUserId: invoiceSends.revokedByUserId,
+          })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, sendId)),
+      ).toEqual([{ revokedAt, revokedByUserId }]);
+    },
+  );
+
+  test.each(["delivered", "partial", "failed"] as const)(
+    "pending may complete as %s exactly once, including for the owner",
+    async (terminal) => {
+      const { testDb } = fixture;
+      const { sendId, safeDb } = await seedSend("pending");
+      (
+        await safeDb(async (tx) => {
+          await tx
+            .update(invoiceSends)
+            .set({ deliveryStatus: terminal })
+            .where(eq(invoiceSends.id, sendId));
+        })
+      ).unwrap();
+      for (const status of [
+        "pending",
+        "delivered",
+        "partial",
+        "failed",
+      ] as const) {
+        if (status === terminal) {
+          continue;
+        }
+        const app = await safeDb(async (tx) => {
+          await tx
+            .update(invoiceSends)
+            .set({ deliveryStatus: status })
+            .where(eq(invoiceSends.id, sendId));
+        });
+        const owner = await Result.tryPromise(async () => {
+          await testDb
+            .update(invoiceSends)
+            .set({ deliveryStatus: status })
+            .where(eq(invoiceSends.id, sendId));
+        });
+        for (const result of [app, owner]) {
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(getPgErrorCode(result.error)).toBe("42501");
+          }
+        }
+      }
+      expect(
+        await testDb
+          .select({ deliveryStatus: invoiceSends.deliveryStatus })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, sendId)),
+      ).toEqual([{ deliveryStatus: terminal }]);
+    },
+  );
+
+  test.each([
+    "delivered",
+    "partial",
+    "failed",
+    "revoked",
+    "long-lived",
+  ] as const)(
+    "neither the application nor the owner can insert an already %s send",
+    async (violation) => {
+      const { testDb } = fixture;
+      const { safeDb, values } = await seedSend();
+      const invalid = {
+        ...values,
+        id: createSafeId<"invoiceSend">(),
+        tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
+        deliveryStatus:
+          violation === "delivered" ||
+          violation === "partial" ||
+          violation === "failed"
+            ? violation
+            : "pending",
+        ...(violation === "revoked" ? { revokedAt: new Date() } : {}),
+        ...(violation === "long-lived"
+          ? { expiresAt: new Date(Date.now() + 61 * 86_400_000) }
+          : {}),
+      } satisfies typeof invoiceSends.$inferInsert;
       const app = await safeDb(async (tx) => {
-        await tx
-          .update(invoiceSends)
-          .set({ revokedAt: revoked })
-          .where(eq(invoiceSends.id, sendId));
+        await tx.insert(invoiceSends).values(invalid);
       });
       const owner = await Result.tryPromise(async () => {
-        await testDb
-          .update(invoiceSends)
-          .set({ revokedAt: revoked })
-          .where(eq(invoiceSends.id, sendId));
+        await testDb.insert(invoiceSends).values(invalid);
       });
       for (const result of [app, owner]) {
         expect(result.isErr()).toBe(true);
@@ -205,13 +330,96 @@ describe("invoice send mutation authority", () => {
           expect(getPgErrorCode(result.error)).toBe("42501");
         }
       }
+      expect(
+        await testDb
+          .select({ id: invoiceSends.id })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, invalid.id)),
+      ).toEqual([]);
+    },
+  );
+
+  test("deleting a revoker account preserves its historical identifier and the dead link", async () => {
+    const { testDb, ids } = fixture;
+    const { sendId, tokenHash } = await seedSend();
+    const revokerId = mintAuthProviderId<"user">();
+    await testDb.insert(authUser).values({
+      id: revokerId,
+      name: "Link revoker",
+      email: `${revokerId}@example.test`,
+      emailVerified: true,
+    });
+    try {
+      await testDb.insert(member).values({
+        id: mintAuthProviderIdValue(),
+        organizationId: ids.orgA,
+        userId: revokerId,
+        role: "member",
+        createdAt: new Date(),
+      });
+      await testDb.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: ids.wsA1,
+        userId: revokerId,
+      });
+      const revokerDb = createMembershipSafeDb(testDb, {
+        organizationId: ids.orgA,
+        userId: revokerId,
+        serverValidatedWorkspaceIds: [ids.wsA1],
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          organizationId: ids.orgA,
+          userId: revokerId,
+        }),
+      });
+      const publicDb = createScopedDb(testDb, [], ids.orgA, null);
+      const liveBefore = await publicDb(
+        async (tx) =>
+          await tx.execute(
+            sql`SELECT * FROM public.invoice_link_scope(${tokenHash})`,
+          ),
+      );
+      expect(executedRows(liveBefore)).toMatchObject([{ send_id: sendId }]);
+      const revokedAt = new Date();
+      const revoked = await revokerDb(
+        async (tx) =>
+          await tx
+            .update(invoiceSends)
+            .set({ revokedAt, revokedByUserId: revokerId })
+            .where(eq(invoiceSends.id, sendId))
+            .returning({ id: invoiceSends.id }),
+      );
+      expect(revoked.unwrap()).toEqual([{ id: sendId }]);
+      const deleted = await testDb
+        .delete(authUser)
+        .where(eq(authUser.id, revokerId))
+        .returning({ id: authUser.id });
+      expect(deleted).toEqual([{ id: revokerId }]);
+      expect(
+        await testDb
+          .select({
+            revokedAt: invoiceSends.revokedAt,
+            revokedByUserId: invoiceSends.revokedByUserId,
+          })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, sendId)),
+      ).toEqual([{ revokedAt, revokedByUserId: revokerId }]);
+      const resolution = await publicDb(
+        async (tx) =>
+          await tx.execute(
+            sql`SELECT * FROM public.invoice_link_scope(${tokenHash})`,
+          ),
+      );
+      expect(executedRows(resolution)).toEqual([]);
+      const gate = await publicDb(
+        async (tx) =>
+          await tx.execute(
+            sql`SELECT public.invoice_link_mark_viewed(${tokenHash}) AS live`,
+          ),
+      );
+      expect(executedRows(gate)).toEqual([{ live: false }]);
+    } finally {
+      await testDb.delete(authUser).where(eq(authUser.id, revokerId));
     }
-    expect(
-      await testDb
-        .select({ revokedAt: invoiceSends.revokedAt })
-        .from(invoiceSends)
-        .where(eq(invoiceSends.id, sendId)),
-    ).toEqual([{ revokedAt }]);
   });
 
   test("the live-token owner gate can stamp first view while a plain app write cannot", async () => {

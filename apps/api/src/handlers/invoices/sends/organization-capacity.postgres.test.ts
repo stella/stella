@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { count, eq } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -114,33 +114,36 @@ const seedCapacity = async ({
     }),
   });
   (
-    await safeDb(
-      async (tx) =>
-        await tx.insert(invoiceSends).values(
-          historyInvoiceIds.flatMap((invoiceId, invoiceIndex) =>
-            Array.from(
-              {
-                length: Math.min(
-                  INVOICE_SENDS_PER_INVOICE_PER_DAY,
-                  existingSendCount -
-                    invoiceIndex * INVOICE_SENDS_PER_INVOICE_PER_DAY,
-                ),
-              },
-              () => ({
-                id: createSafeId<"invoiceSend">(),
-                organizationId,
-                invoiceId,
-                recipients: ["client@example.test"],
-                language: "en" as const,
-                replyTo: `${userId}@example.test`,
-                tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-                expiresAt: new Date(Date.now() + 86_400_000),
-                deliveryStatus: "delivered" as const,
-              }),
-            ),
+    await safeDb(async (tx) => {
+      await tx.insert(invoiceSends).values(
+        historyInvoiceIds.flatMap((invoiceId, invoiceIndex) =>
+          Array.from(
+            {
+              length: Math.min(
+                INVOICE_SENDS_PER_INVOICE_PER_DAY,
+                existingSendCount -
+                  invoiceIndex * INVOICE_SENDS_PER_INVOICE_PER_DAY,
+              ),
+            },
+            () => ({
+              id: createSafeId<"invoiceSend">(),
+              organizationId,
+              invoiceId,
+              recipients: ["client@example.test"],
+              language: "en" as const,
+              replyTo: `${userId}@example.test`,
+              tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
+              expiresAt: new Date(Date.now() + 86_400_000),
+              deliveryStatus: "pending" as const,
+            }),
           ),
         ),
-    )
+      );
+      await tx
+        .update(invoiceSends)
+        .set({ deliveryStatus: "delivered" })
+        .where(inArray(invoiceSends.invoiceId, historyInvoiceIds));
+    })
   ).unwrap();
 };
 

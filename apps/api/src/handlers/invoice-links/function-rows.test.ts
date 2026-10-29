@@ -119,7 +119,7 @@ const timeRow = {
   dateWorked: invoiceDate,
   billedMinutes: 60,
   rateAtEntry: 12_345,
-  invoiceNarrative: null,
+  documentDescription: "Legal services",
   noCharge: false,
   invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
 };
@@ -180,6 +180,7 @@ describe("invoice link function rows", () => {
     const projected = parseInvoiceLinkTimeRow({
       ...timeRow,
       narrative: "Internal privileged note",
+      invoiceNarrative: "Unselected raw invoice narrative",
       userId: "internal-timekeeper",
       status: "approved",
       taskCode: "private-task",
@@ -194,7 +195,8 @@ describe("invoice link function rows", () => {
     ]) {
       expect(projected).not.toHaveProperty(field);
     }
-    expect(projected.invoiceNarrative).toBeNull();
+    expect(projected.documentDescription).toBe("Legal services");
+    expect(projected).not.toHaveProperty("invoiceNarrative");
   });
   for (const { name, parse, row } of parsedRows) {
     test(`${name} decoded rows preserve selected fields and strip extras`, () => {

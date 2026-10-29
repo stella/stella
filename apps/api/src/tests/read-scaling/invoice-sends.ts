@@ -38,7 +38,11 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 const SENDS_PER_INVOICE = 3;
 // Exercise the real handler operation and SQL; only the email provider is replaced.
 const measuredSendInvoice = createSendInvoice({
-  admitEmail: async () => Result.ok(undefined),
+  admitEmail: async () =>
+    Result.ok({
+      release: async () => undefined,
+      commit: async () => undefined,
+    }),
   deliver: async () => {
     await Promise.resolve();
   },
@@ -115,7 +119,7 @@ export const seedInvoiceSendScaling = async (db: GatedTestDb, size: number) => {
       replyTo: `${userId}@example.test`,
       tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
       expiresAt: new Date("2020-03-01T12:00:00Z"),
-      deliveryStatus: "delivered" as const,
+      deliveryStatus: "pending" as const,
       createdAt: new Date("2020-01-01T12:00:00Z"),
     })),
   );
@@ -123,6 +127,10 @@ export const seedInvoiceSendScaling = async (db: GatedTestDb, size: number) => {
   (
     await safeDb(async (tx) => {
       await tx.insert(invoiceSends).values(sends);
+      await tx
+        .update(invoiceSends)
+        .set({ deliveryStatus: "delivered" })
+        .where(eq(invoiceSends.organizationId, organizationId));
     })
   ).unwrap();
   const request = new Request("https://example.test/invoice-sends");
@@ -175,6 +183,7 @@ export const invoiceSendScalingScenarios = [
               invoiceId: fixture.invoiceId,
             },
             route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+            query: {},
           }),
         );
         if (response instanceof HttpStatusResponse) {
@@ -184,7 +193,7 @@ export const invoiceSendScalingScenarios = [
           statements: counter.count,
           transactionRoundTrips: counter.transactions,
           responseBytes: Buffer.byteLength(JSON.stringify(response)),
-          rows: response.sends.length,
+          rows: response.items.length,
         };
       }),
   },
