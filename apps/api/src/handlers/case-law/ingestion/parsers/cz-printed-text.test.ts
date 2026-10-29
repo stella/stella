@@ -270,7 +270,15 @@ describe("structure", () => {
           ? [block.plainText]
           : [],
       ),
-    ).toEqual(["25 Cdo 803/2003", "ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"]);
+    ).toEqual(["25 Cdo 803/2003", "ROZSUDEK"]);
+    // The state and the formula beside the title are the opening's lines.
+    expect(
+      ast.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.role === "intro"
+          ? [block.plainText]
+          : [],
+      ),
+    ).toEqual(["ČESKÁ REPUBLIKA", "JMÉNEM REPUBLIKY"]);
   });
 });
 

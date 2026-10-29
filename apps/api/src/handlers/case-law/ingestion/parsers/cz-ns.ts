@@ -759,17 +759,24 @@ const embeddedCaption = (text: string): EmbeddedCaption | null => {
   if (match === null || caseNumber === undefined) {
     return null;
   }
+  const preamble = text.slice(0, match.index).trim();
   const title = text.slice(match.index + caseNumber.length).trim();
+  // The case number ends the court's line; the title follows on lines of
+  // its own, beside the state and the formula.
+  if (title === "") {
+    return preamble !== "" && CAPTION_TITLE_RE.test(preamble)
+      ? { preamble, caseNumber, title }
+      : null;
+  }
   const letters = title.match(/\p{L}/gu)?.length ?? 0;
   if (!CAPTION_TITLE_RE.test(title) || letters < MIN_CAPTION_TITLE_LETTERS) {
     return null;
   }
-  return {
-    preamble: text.slice(0, match.index).trim(),
-    caseNumber,
-    title,
-  };
+  return { preamble, caseNumber, title };
 };
+
+/** How far below the case number a caption's own title line may stand. */
+const CAPTION_TITLE_LOOKAHEAD = 3;
 
 /**
  * The paragraph holding the caption: the first one, or the one after it
@@ -788,6 +795,98 @@ const captionParagraphIndex = (blocks: readonly Block[]): number => {
     embeddedCaption(next.plainText) !== null
     ? first + 1
     : first;
+};
+
+/**
+ * Split the first paragraph if it contains an embedded caption (older HTML:
+ * "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY 29 Odo 975/2006 U S N E S E N Í", "21 Cdo
+ * 4994/2007 ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
+ * before the case number, the case number, and the capitals after it as the
+ * title. Every character stays in a block.
+ */
+const splitEmbeddedCaption = (
+  merged: Block[],
+  makeBlockId: () => string,
+): void => {
+  const firstParaIdx = captionParagraphIndex(merged);
+  if (firstParaIdx !== -1) {
+    const firstPara = merged.at(firstParaIdx);
+    if (!firstPara) {
+      return;
+    }
+    if (firstPara.type === "paragraph") {
+      const caption = embeddedCaption(firstPara.plainText);
+
+      if (caption !== null) {
+        // The court's name keeps the block it was stored in.
+        const preamble: Block[] =
+          caption.preamble === ""
+            ? []
+            : [
+                {
+                  id: firstPara.id,
+                  anchorId: firstPara.anchorId,
+                  type: "paragraph",
+                  inlines: [{ type: "text", text: caption.preamble }],
+                  plainText: caption.preamble,
+                },
+              ];
+        const caseNumberBlock: Block = {
+          id: makeBlockId(),
+          anchorId: `p-cn`,
+          type: "paragraph",
+          role: "case-number",
+          inlines: [{ type: "text", text: caption.caseNumber }],
+          plainText: caption.caseNumber,
+        };
+        if (caption.title === "") {
+          // The title is the decision-type line among the caption's own
+          // lines below the case number.
+          const titleIdx = merged.findIndex(
+            (block, index) =>
+              index > firstParaIdx &&
+              index <= firstParaIdx + CAPTION_TITLE_LOOKAHEAD &&
+              block.type === "paragraph" &&
+              isDecisionTitle(block.plainText),
+          );
+          const titleBlock = merged.at(titleIdx);
+          if (titleIdx !== -1 && titleBlock?.type === "paragraph") {
+            merged.splice(titleIdx, 1, {
+              id: titleBlock.id,
+              anchorId: `p-dt`,
+              type: "heading",
+              level: 1,
+              role: "decision-title",
+              inlines: titleBlock.inlines,
+              plainText: titleBlock.plainText,
+            });
+          }
+        }
+        const replacements: Block[] =
+          caption.title === ""
+            ? [...preamble, caseNumberBlock]
+            : [
+                ...preamble,
+                caseNumberBlock,
+                {
+                  id: makeBlockId(),
+                  anchorId: `p-dt`,
+                  type: "heading",
+                  level: 1,
+                  role: "decision-title",
+                  inlines: [{ type: "text", text: caption.title }],
+                  plainText: caption.title,
+                },
+              ];
+        merged.splice(firstParaIdx, 1, ...replacements);
+      } else if (
+        firstPara.plainText.length < 30 &&
+        /^\d+\s+\w+\s+\d+\/\d{4}/u.test(firstPara.plainText)
+      ) {
+        firstPara.role = "case-number";
+      }
+    }
+  }
 };
 
 const mergeBlocks = (
@@ -836,64 +935,7 @@ const mergeBlocks = (
     break;
   }
 
-  // Split the first paragraph if it contains an embedded
-  // caption (older HTML: "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY 29 Odo
-  // 975/2006 U S N E S E N Í", "21 Cdo 4994/2007 ČESKÁ
-  // REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
-  // before the case number, the case number, and the capitals
-  // after it as the title. Every character stays in a block.
-  const firstParaIdx = captionParagraphIndex(merged);
-  if (firstParaIdx !== -1) {
-    const firstPara = merged.at(firstParaIdx);
-    if (!firstPara) {
-      return merged;
-    }
-    if (firstPara.type === "paragraph") {
-      const caption = embeddedCaption(firstPara.plainText);
-
-      if (caption !== null) {
-        // The court's name keeps the block it was stored in.
-        const preamble: Block[] =
-          caption.preamble === ""
-            ? []
-            : [
-                {
-                  id: firstPara.id,
-                  anchorId: firstPara.anchorId,
-                  type: "paragraph",
-                  inlines: [{ type: "text", text: caption.preamble }],
-                  plainText: caption.preamble,
-                },
-              ];
-        const replacements: Block[] = [
-          ...preamble,
-          {
-            id: makeBlockId(),
-            anchorId: `p-cn`,
-            type: "paragraph",
-            role: "case-number",
-            inlines: [{ type: "text", text: caption.caseNumber }],
-            plainText: caption.caseNumber,
-          },
-          {
-            id: makeBlockId(),
-            anchorId: `p-dt`,
-            type: "heading",
-            level: 1,
-            role: "decision-title",
-            inlines: [{ type: "text", text: caption.title }],
-            plainText: caption.title,
-          },
-        ];
-        merged.splice(firstParaIdx, 1, ...replacements);
-      } else if (
-        firstPara.plainText.length < 30 &&
-        /^\d+\s+\w+\s+\d+\/\d{4}/u.test(firstPara.plainText)
-      ) {
-        firstPara.role = "case-number";
-      }
-    }
-  }
+  splitEmbeddedCaption(merged, makeBlockId);
 
   // Tag paragraphs in the holding zone (výrok): blocks
   // between the intro ending with "takto:" and the first
