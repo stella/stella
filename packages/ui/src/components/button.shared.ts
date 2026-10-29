@@ -72,8 +72,8 @@ export type ButtonSize = (typeof BUTTON_SIZES)[number];
  * `onPress` and `hitSlop`) on top.
  */
 export type ButtonContract = {
-  variant?: ButtonVariant | null;
-  size?: ButtonSize | null;
+  variant?: ButtonVariant | null | undefined;
+  size?: ButtonSize | null | undefined;
   /** Busy: a spinner takes the icon's place and the button cannot act. */
   loading?: boolean;
   disabled?: boolean;

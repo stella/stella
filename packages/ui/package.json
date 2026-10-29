@@ -299,15 +299,11 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
-    "lucide-react-native": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
-    "react-native": "0.88.0",
-    "react-native-svg": "15.16.0",
     "tailwindcss": "catalog:",
     "tsdown": "catalog:",
     "tsrs": "catalog:",
-    "uniwind": "1.13.0",
     "vite": "catalog:"
   },
   "peerDependencies": {
