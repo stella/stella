@@ -163,14 +163,52 @@ const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const postgresPatternSource = (pattern: RegExp) => {
   const source = pattern.source
     .replaceAll("(?<year>", "(")
-    .replaceAll(/\(\?<\w+>/gu, "(?:")
-    .replaceAll(String.raw`\p{L}`, "[[:alpha:]]")
-    .replaceAll(String.raw`\p{Lu}`, "[[:upper:]]")
-    .replaceAll(String.raw`\p{Ll}`, "[[:lower:]]");
-  if (source.includes(String.raw`\p{`)) {
-    return panic("Filing-year SQL has an unsupported Unicode class");
+    .replaceAll(/\(\?<\w+>/gu, "(?:");
+  const unicodeClasses = [
+    [String.raw`\p{L}`, "[:alpha:]"],
+    [String.raw`\p{Lu}`, "[:upper:]"],
+    [String.raw`\p{Ll}`, "[:lower:]"],
+  ] as const;
+  let context: "pattern" | "character-class" = "pattern";
+  let translated = "";
+  for (let index = 0; index < source.length; index += 1) {
+    const character =
+      source[index] ?? panic("Missing filing-year regex character");
+    if (character === "\\") {
+      const property = unicodeClasses.find(([token]) =>
+        source.startsWith(token, index),
+      );
+      if (property !== undefined) {
+        const [token, posix] = property;
+        translated += context === "character-class" ? posix : `[${posix}]`;
+        index += token.length - 1;
+        continue;
+      }
+      if (
+        source.startsWith(String.raw`\p{`, index) ||
+        source.startsWith(String.raw`\P{`, index)
+      ) {
+        return panic("Filing-year SQL has an unsupported Unicode class");
+      }
+      const escaped =
+        source[index + 1] ?? panic("Unterminated filing-year regex escape");
+      // ECMAScript digits are ASCII; PostgreSQL's digit class is locale-aware.
+      if (escaped === "d") {
+        translated += context === "character-class" ? "0-9" : "[0-9]";
+      } else {
+        translated += `${character}${escaped}`;
+      }
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      context = "character-class";
+    } else if (character === "]") {
+      context = "pattern";
+    }
+    translated += character;
   }
-  return `${pattern.ignoreCase ? "(?i)" : ""}${source}`;
+  return `${pattern.ignoreCase ? "(?i)" : ""}${translated}`;
 };
 
 /** Migration DDL derived from every registered grammar's explicit policy. */

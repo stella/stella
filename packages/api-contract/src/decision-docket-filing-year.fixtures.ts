@@ -115,6 +115,14 @@ export const DECISION_DOCKET_FILING_YEAR_FIXTURES: readonly FilingYearFixture[] 
               .replaceAll(" ", "\u202f"),
             expected,
           },
+          // Arabic-Indic and Devanagari digits do not fold to ASCII.
+          ...[1632, 2406].map((zero) => ({
+            jurisdiction,
+            caseNumber: base.replace(/[0-9]/gu, (digit) =>
+              String.fromCodePoint(zero + Number(digit)),
+            ),
+            expected: unparseable,
+          })),
           { jurisdiction, caseNumber: `${base} extra`, expected: unparseable },
         ];
       }),

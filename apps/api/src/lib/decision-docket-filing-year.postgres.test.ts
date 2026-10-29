@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
 
 import { DECISION_DOCKET_FILING_YEAR_FIXTURES } from "@stll/api-contract/decision-docket-filing-year.fixtures";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
@@ -12,34 +10,13 @@ import {
   decisionDateNotBeforeFilingYearSql,
   decisionDocketFilingYearFunctionSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { readDecisionDocketFilingYearMigration } from "@/api/tests/decision-docket-filing-year-migration";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 test("the committed SQL function is derived from the registered filing-year rules", () => {
-  const root = path.resolve(import.meta.dir, "../../drizzle");
-  let latest: string | undefined;
-  for (const directory of readdirSync(root).toSorted().toReversed()) {
-    const file = path.join(root, directory, "migration.sql");
-    if (!existsSync(file)) {
-      continue;
-    }
-    const migration = readFileSync(file, "utf-8");
-    const declaration =
-      /CREATE(?: OR REPLACE)? FUNCTION public\.decision_docket_filing_year\(/u.exec(
-        migration,
-      );
-    if (declaration === null) {
-      continue;
-    }
-    const end = migration.indexOf("$function$;", declaration.index);
-    if (end === -1) {
-      panic("Filing-year migration has no function terminator");
-    }
-    latest = migration.slice(declaration.index, end + "$function$;".length);
-    break;
-  }
-  expect(latest ?? panic("Filing-year migration is missing")).toBe(
+  expect(readDecisionDocketFilingYearMigration()).toBe(
     decisionDocketFilingYearFunctionSql(),
   );
 });

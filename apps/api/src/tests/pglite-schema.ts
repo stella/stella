@@ -11,6 +11,8 @@ import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
+import { readDecisionDocketFilingYearMigration } from "./decision-docket-filing-year-migration";
+
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
@@ -1455,16 +1457,5 @@ export const installPgliteInvoiceObjects = async (
 export const installPgliteDecisionDocketFilingYear = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261027160700_decision_docket_filing_year",
-      "migration.sql",
-    ),
-  ).filter((statement) =>
-    executableSql(statement).startsWith("CREATE FUNCTION"),
-  );
-  for (const statement of statements) {
-    await db.execute(sql.raw(statement));
-  }
+  await db.execute(sql.raw(readDecisionDocketFilingYearMigration()));
 };
