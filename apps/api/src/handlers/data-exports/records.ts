@@ -218,6 +218,7 @@ export const TIME_ENTRY_COLUMNS = {
 
 export const INVOICE_COLUMNS = {
   id: "export",
+  clientId: "export",
   organizationId: "omit",
   workspaceId: "omit",
   invoiceNumber: "export",
@@ -263,6 +264,11 @@ export const INVOICE_LINE_COLUMNS = {
   workspaceId: "omit",
   invoiceId: "export",
   billingPurpose: "export",
+  recordedDescription: "export",
+  recordedQuantity: "export",
+  recordedUnit: "export",
+  recordedUnitPrice: "export",
+  recordedNetAmount: "export",
   position: "export",
   description: "export",
   quantity: "export",
