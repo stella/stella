@@ -41,6 +41,7 @@ const excluded = (reason: string): MetadataTextDisposition => ({
 });
 
 export const METADATA_TEXT_DISPOSITIONS = {
+  detailFieldEvidence: INSPECTED,
   identifiers: INSPECTED,
   xmlFields: INSPECTED,
   feedFields: INSPECTED,

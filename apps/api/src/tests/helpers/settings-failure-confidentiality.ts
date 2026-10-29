@@ -1,6 +1,7 @@
 import { expect } from "bun:test";
 
 import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import type {
   OrganizationGroupIdentifyParams,
   ServerAnalyticsCaptureParams,
@@ -83,12 +84,64 @@ const descriptorGraph = (
   return properties;
 };
 
+const SOURCE_LOCATION_KEYS = new Set<PropertyKey>([
+  "column",
+  "line",
+  "originalColumn",
+  "originalLine",
+  "sourceURL",
+  "stack",
+]);
+
+const errorPayload = (error: Error): Record<string, unknown> =>
+  Object.fromEntries(
+    Reflect.ownKeys(error)
+      .filter((key) => typeof key === "string")
+      .filter((key) => !SOURCE_LOCATION_KEYS.has(key))
+      .map((key) => [key, Reflect.get(error, key)]),
+  );
+
 const assertReturnedAllowlist = (returned: unknown): void => {
   const graph = descriptorGraph(returned);
   expect(JSON.stringify(graph)).not.toContain("cause");
   expect(JSON.stringify(graph)).not.toContain("metadata");
 
   if (returned instanceof Error) {
+    if ("code" in returned) {
+      expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
+        [
+          "_tag",
+          "claim",
+          "clause",
+          "code",
+          "column",
+          "confirmation",
+          "contactUrl",
+          "error",
+          "hint",
+          "issues",
+          "line",
+          "message",
+          "name",
+          "originalColumn",
+          "originalLine",
+          "requiredFields",
+          "retryAfterMs",
+          "retryable",
+          "sourceURL",
+          "stack",
+          "status",
+          "stepUp",
+          "usage",
+        ].toSorted(compareKeys),
+      );
+      // Every serialized field (error, hint, issues, ...) must equal the
+      // canonical error's, so stored data cannot ride on an allowlisted key.
+      expect(errorPayload(returned)).toStrictEqual(
+        errorPayload(storedAIConfigUnreadableError()),
+      );
+      return;
+    }
     expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
       [
         "_tag",
@@ -102,6 +155,21 @@ const assertReturnedAllowlist = (returned: unknown): void => {
         "sourceURL",
         "stack",
       ].toSorted(compareKeys),
+    );
+    return;
+  }
+  if (
+    typeof returned === "object" &&
+    returned !== null &&
+    "orgAIConfigStatus" in returned
+  ) {
+    expect(graph).toEqual(
+      descriptorGraph({
+        orgAIConfig: null,
+        orgAIConfigStatus: "unreadable",
+        promptCachingEnabled: null,
+        managedAIResidency: null,
+      }),
     );
     return;
   }
@@ -136,7 +204,12 @@ export const assertSettingsFailureConfidential = ({
       source: "organization_ai_config",
     },
   };
-  if (outputs.returned instanceof Error) {
+  const isDirectFailure =
+    outputs.returned instanceof Error ||
+    (typeof outputs.returned === "object" &&
+      outputs.returned !== null &&
+      "orgAIConfigStatus" in outputs.returned);
+  if (isDirectFailure) {
     expect(outputs.logRecords).toEqual([diagnostic]);
     expect(outputs.developmentEntries).toEqual([]);
     expect(outputs.analyticsEvents).toEqual([]);

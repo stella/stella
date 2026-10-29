@@ -8,6 +8,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
+  parsePersistedCorpusAst,
   readCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -91,14 +92,14 @@ export const readDecisionAnalysisAst = async (
     astS3Key === null ||
     contentHash === null
   ) {
-    return parseCaseLawDecisionAst(documentAst);
+    return parseCaseLawDecisionAst(parsePersistedCorpusAst(documentAst, id));
   }
   const stored = await readCorpusPayloadOrFallback({
     documentId: id,
     key: astS3Key,
     step: "analysis.readDecisionAst",
     read: async () => await readCorpusAst(astS3Key, { readTombstones }),
-    fallback: async () => await Promise.resolve(documentAst),
+    fallback: () => parsePersistedCorpusAst(documentAst, id),
   });
   return parseCaseLawDecisionAst(stored);
 };

@@ -377,6 +377,14 @@ const installStub = ({
             ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
+        if (
+          url.hostname === "www.nssoud.cz" &&
+          url.pathname === "/rozhodovaci-cinnost/rozsireny-senat"
+        ) {
+          return htmlResponse(
+            "<table><tbody><tr><td>Nebyl nalezen žádný záznam.</td></tr></tbody></table>",
+          );
+        }
         if (url.pathname === "/") {
           return htmlResponse(SESSION_PAGE);
         }
