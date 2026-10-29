@@ -6,7 +6,7 @@ import { session } from "@/api/db/auth-schema";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 // A web-link handoff session ends after this long without a request.
-export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
+const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 
 // SQL and adapter reads derive the same expiry and creation cutoffs.
 export const liveSessionAdapterWhere = (now: Date) =>

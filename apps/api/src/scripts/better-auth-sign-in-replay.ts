@@ -13,7 +13,6 @@ import { betterAuth } from "better-auth";
  * only.
  */
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { makeSignature } from "better-auth/crypto";
 import { Result, TaggedError } from "better-result";
 import type { SQL } from "bun";
 import { desc } from "drizzle-orm";
@@ -28,6 +27,7 @@ import { session as authSession } from "@/api/db/auth-schema";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { isRecord } from "@/api/lib/type-guards";
 import { normalizeBetterAuthOAuthBaseUrl } from "@/api/mcp/resource-policy-contract";
 import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
@@ -433,11 +433,14 @@ const run = async (
         return;
       }
       // Sessions are cookie credentials; sign the stored token like the runtime.
-      const signature = await makeSignature(next.value.token, secret);
+      const cookieValue = createSignedSessionCookieValue(
+        next.value.token,
+        secret,
+      );
       const response = await auth.handler(
         new Request(`${oauthBaseUrl}/api/auth/get-session`, {
           headers: {
-            cookie: `${sessionCookieName}=${encodeURIComponent(`${next.value.token}.${signature}`)}`,
+            cookie: `${sessionCookieName}=${encodeURIComponent(cookieValue)}`,
           },
         }),
       );

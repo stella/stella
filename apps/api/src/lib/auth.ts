@@ -44,7 +44,6 @@ import {
   user as authUser,
 } from "@/api/db/auth-schema";
 import {
-  authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
   isPartnerOAuthClient,
   rlsDb,
@@ -61,6 +60,7 @@ import {
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import type { AppleSignIn } from "@/api/env-apple-sign-in";
 import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
@@ -85,6 +85,17 @@ import {
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
+import {
+  admitApiAccessTokenRoute,
+  authenticateApiAccessToken,
+  readAccessTokenBearer,
+} from "@/api/lib/auth/api-access-token";
+import { withAppleFormPostOrigin } from "@/api/lib/auth/apple-callback";
+import {
+  createAppleClientSecretSource,
+  createAppleProviderOptions,
+} from "@/api/lib/auth/apple-sign-in";
+import { configuredAppleSignIn } from "@/api/lib/auth/apple-sign-in-env";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   AUTH_API_PATH,
@@ -173,6 +184,7 @@ import {
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   checkConfiguredReviewAccountAccess,
+  checkReviewAccountOrganization,
   getReviewAccountConfig,
   isReviewAccountConfigured,
 } from "@/api/lib/auth/review-account";
@@ -220,6 +232,7 @@ import {
 import { createSocialLinkHintPlugin } from "@/api/lib/auth/social-link-hint";
 import {
   classifySocialCallback,
+  completesSocialCallback,
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
@@ -275,12 +288,19 @@ import {
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { isMemberRole } from "@/api/lib/member-roles";
+import type { MemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
   ownerRequiredError,
 } from "@/api/lib/membership-role-invariants";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
-import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import {
+  getAllowedClientResourceIdentifiers,
+  getBetterAuthOAuthResources,
+  getDefaultClientResourceIdentifiers,
+  getOwnNativeClientResources,
+  isApiResourceClient,
+} from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -330,13 +350,20 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
-import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
+import {
+  isSyntheticPrincipal,
+  isSyntheticSessionPrincipal,
+} from "@/api/lib/synthetic-principal/constants";
 import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
-import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -369,10 +396,11 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
   ? instrumentQueryOrigins(authoritativeSessionReader)
   : authoritativeSessionReader;
 
-/** Access token lifetime in seconds (15 minutes). */
-const syntheticSessionAuthorityReader =
+/** Authenticated handlers receive a bounded session reader. */
+export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
 
+/** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -398,6 +426,7 @@ type SocialProviderSettings = {
   microsoftClientId: string | undefined;
   microsoftClientSecret: string | undefined;
   microsoftTenantId: string | undefined;
+  apple: AppleSignIn;
 };
 
 export const createSocialProviders = (settings: SocialProviderSettings) => ({
@@ -421,6 +450,16 @@ export const createSocialProviders = (settings: SocialProviderSettings) => ({
             settings.microsoftTenantId,
           ),
         }),
+      }
+    : {}),
+  // Not through `createSocialProvider`: its spread would freeze the client
+  // secret the options' getter mints and renews.
+  ...(settings.apple.type === "enabled"
+    ? {
+        apple: createAppleProviderOptions(
+          settings.apple,
+          createAppleClientSecretSource(settings.apple),
+        ),
       }
     : {}),
 });
@@ -1287,8 +1326,7 @@ const socialSignInOutcomePlugin = {
   hooks: {
     after: [
       {
-        matcher: (ctx: HookEndpointContext) =>
-          isSocialSignInCallbackPath(ctx.path),
+        matcher: (ctx: HookEndpointContext) => completesSocialCallback(ctx),
         handler: createAuthMiddleware(async (ctx) => {
           logger.info("auth.social_sign_in", {
             outcome: classifySocialCallback(
@@ -1431,9 +1469,6 @@ export const createAuth = (
     mode: demoConfig.email ? configuredDemoMode : "disabled",
   });
   const oauthResources = getBetterAuthOAuthResources();
-  const oauthResourceIdentifiers = oauthResources.map(
-    ({ identifier }) => identifier,
-  );
   const twoFactorPlugin = twoFactor({
     // Stella is passwordless (email OTP is the first factor), so 2FA
     // enable/disable/verify never require a password fallback.
@@ -1553,7 +1588,7 @@ export const createAuth = (
     if (model !== "oauthAccessToken" && model !== "oauthRefreshToken") {
       return undefined;
     }
-    const { userId, sessionId, authorizationCodeId } = data;
+    const { userId, sessionId, authorizationCodeId, referenceId } = data;
     if (typeof userId !== "string") {
       return undefined;
     }
@@ -1562,12 +1597,18 @@ export const createAuth = (
       sessionId: typeof sessionId === "string" ? sessionId : null,
       grantId:
         typeof authorizationCodeId === "string" ? authorizationCodeId : null,
+      // An organization-scoped grant names its organization as the reference.
+      organizationId:
+        typeof referenceId === "string"
+          ? brandPersistedOrganizationId(referenceId)
+          : null,
     };
   };
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
       adapter: rawAuthAdapter(options),
+      ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
           limit: env.OPEN_CLIENT_REGISTRATION_DAILY_LIMIT,
@@ -2029,15 +2070,16 @@ export const createAuth = (
     // The route table mounts the handler at this path; one constant for both.
     basePath: AUTH_API_PATH,
     logger: errorOutputLogger,
-    trustedOrigins: [
-      ...frontendOrigins({
-        frontendUrl: env.FRONTEND_URL,
-        runtimeMode: runtimeMode(),
-      }),
-      ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
-      ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
-      ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
-    ],
+    trustedOrigins: (request) =>
+      withAppleFormPostOrigin(request, [
+        ...frontendOrigins({
+          frontendUrl: env.FRONTEND_URL,
+          runtimeMode: runtimeMode(),
+        }),
+        ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
+        ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
+        ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
+      ]),
     disabledPaths: [
       "/token",
       // The API key plugin ships its own HTTP CRUD, and it authorizes on
@@ -2281,6 +2323,7 @@ export const createAuth = (
       microsoftClientId: env.MICROSOFT_AUTH_CLIENT_ID,
       microsoftClientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
       microsoftTenantId: env.MICROSOFT_AUTH_TENANT_ID,
+      apple: configuredAppleSignIn(),
     }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
@@ -2294,7 +2337,8 @@ export const createAuth = (
         config: syntheticPrincipalAuthConfig,
         localPasswordEnabled: true,
         checkAccess: checkSyntheticPrincipalAccess,
-        authorizeSession: authorizeOwnerSyntheticSession,
+        authorizeSession: async (current) =>
+          await authorizeSyntheticSession(rootDb, current),
       }),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
@@ -2423,8 +2467,10 @@ export const createAuth = (
           // a missed migration and add an owner-DB write to auth startup.
           resourceSeedMode: "none",
           enforcePerClientResources: true,
-          clientRegistrationDefaultResources: oauthResourceIdentifiers,
-          clientRegistrationAllowedResources: oauthResourceIdentifiers,
+          clientRegistrationDefaultResources:
+            getDefaultClientResourceIdentifiers(),
+          clientRegistrationAllowedResources:
+            getAllowedClientResourceIdentifiers(),
           allowDynamicClientRegistration: true,
           allowUnauthenticatedClientRegistration: true,
           rateLimit: {
@@ -2895,17 +2941,20 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
   message: "Accept the professional-use statement in stella to continue.",
 } as const;
 
-const VALIDATE_AUTH_REJECTION_BODY = {
-  401: AUTH_REJECTION_BODY[401],
-  403: PROFESSIONAL_USE_REJECTION_BODY,
-  500: AUTH_REJECTION_BODY[500],
-} as const satisfies Record<
-  Extract<
-    Awaited<ReturnType<typeof resolveValidateAuth>>,
-    { ok: false }
-  >["statusCode"],
-  { code: string; message: string }
->;
+/**
+ * How validateAuth refuses a request. Only the professional-use refusal has a
+ * body of its own; an app token refused a route gets the shared 403, never
+ * the professional-use prompt.
+ */
+type ValidateAuthRejection = {
+  ok: false;
+  statusCode: Exclude<AuthRejectionStatus, 404>;
+  body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+};
+
+const rejectValidateAuth = (
+  rejection: Omit<ValidateAuthRejection, "ok">,
+): ValidateAuthRejection => ({ ok: false, ...rejection });
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -3315,6 +3364,8 @@ export const realtimeAuthorizers = {
 type ResolveValidateAuthOptions = {
   getSession?: AuthSessionReader | undefined;
   request: Request;
+  /** The matched route pattern, which decides whether an API access token may open it. */
+  route: string | undefined;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
   initialWorkspaceId: SafeId<"workspace"> | null;
   responseHeaders: ResponseHeaders;
@@ -3366,7 +3417,8 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
-const createAuthDatabases = (
+/** Membership-scoped handles for one credential member's request authority. */
+export const createAuthDatabases = (
   databaseIdentity: Parameters<
     typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
   >[1],
@@ -3444,17 +3496,45 @@ const hasSyntheticSessionAuthority = async (current: {
   const userId = brandPersistedUserId(current.user.id);
   return (
     !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
-    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+    (await ownerSyntheticSessionAuthorityReader({ sessionId, userId })) !== null
   );
 };
 
-const resolveValidateAuth = async ({
+type ResolvedIdentity = {
+  userId: SafeId<"user">;
+  email: string;
+  sessionId: string;
+  /** Set when the browser session came from an MCP web handoff. */
+  originConsentId: string | null;
+  /** Keeps a stream authorized when no browser session backs the request. */
+  stream?: SseStreamBinding;
+  /** The scopes an app's access token was granted; absent for a session. */
+  grantedScopes?: readonly string[];
+  organizationId: SafeId<"organization">;
+  authorization: { role: MemberRole } & Pick<
+    MemberAuthorization,
+    | "workspace"
+    | "email"
+    | "emailVerified"
+    | "userDeleted"
+    | "enrolledFeatureIds"
+    | "professionalUse"
+  >;
+};
+
+type IdentityResolution =
+  | { ok: true; identity: ResolvedIdentity }
+  | Omit<ValidateAuthRejection, "body">;
+
+const resolveSessionIdentity = async ({
   getSession,
   request,
-  server,
   initialWorkspaceId,
   responseHeaders,
-}: ResolveValidateAuthOptions) => {
+}: Omit<
+  ResolveValidateAuthOptions,
+  "route" | "server"
+>): Promise<IdentityResolution> => {
   const { sessionResult, memberAuthorizationResult } =
     await getSessionAndMemberAuthorization({
       getSession,
@@ -3464,45 +3544,219 @@ const resolveValidateAuth = async ({
     });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false as const, statusCode: 500 as const };
+    return { ok: false, statusCode: 500 };
   }
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
   const rawOrgId = session?.activeOrganizationId;
 
   if (!session || !user || !rawOrgId) {
-    return { ok: false as const, statusCode: 401 as const };
+    return { ok: false, statusCode: 401 };
   }
 
   if (!(await hasSyntheticSessionAuthority({ session, user }))) {
-    return { ok: false as const, statusCode: 401 as const };
+    return { ok: false, statusCode: 401 };
   }
 
   if (Result.isError(memberAuthorizationResult)) {
-    return { ok: false as const, statusCode: 500 as const };
+    return { ok: false, statusCode: 500 };
   }
 
   const authorization = memberAuthorizationResult.value;
   if (!authorization) {
-    return { ok: false as const, statusCode: 401 as const };
+    return { ok: false, statusCode: 401 };
   }
-  // A signed-in session uses the product only once the account has accepted
-  // the professional-use statement. An account created where it was not
+  return {
+    ok: true,
+    identity: {
+      userId: toSafeId<"user">(user.id),
+      email: user.email,
+      sessionId: session.id,
+      originConsentId: session.originConsentId ?? null,
+      organizationId: toSafeId<"organization">(rawOrgId),
+      authorization,
+    },
+  };
+};
+
+/**
+ * An API access token opens the route only when the route admits it, and
+ * only on the membership it was issued under: a member removed and added
+ * again does not inherit an earlier grant. Restricted accounts are held to
+ * the same limits as on MCP.
+ */
+const resolveAccessTokenIdentity = async ({
+  token,
+  request,
+  route,
+  initialWorkspaceId,
+  responseHeaders,
+}: Omit<ResolveValidateAuthOptions, "getSession" | "server"> & {
+  token: string;
+}): Promise<IdentityResolution> => {
+  const authenticated = await authenticateApiAccessToken(token, {
+    reviewAccount: getReviewAccountConfig(),
+  });
+  if (Result.isError(authenticated)) {
+    if (authenticated.error.reason === "unavailable") {
+      return { ok: false, statusCode: 500 };
+    }
+    responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
+    return { ok: false, statusCode: 401 };
+  }
+  const tokenSession = authenticated.value;
+  if (!isApiResourceClient(tokenSession.clientId)) {
+    responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
+    return { ok: false, statusCode: 401 };
+  }
+  const admission = admitApiAccessTokenRoute({
+    method: request.method,
+    route,
+    scopes: tokenSession.scopes,
+  });
+  if (!admission.admitted) {
+    responseHeaders["www-authenticate"] = 'Bearer error="insufficient_scope"';
+    return { ok: false, statusCode: 403 };
+  }
+
+  const userId = toSafeId<"user">(tokenSession.userId);
+  const organizationId = toSafeId<"organization">(tokenSession.organizationId);
+  const authorizationResult = await Result.tryPromise(
+    async () =>
+      await resolveCredentialMemberAuthorization({
+        userId,
+        organizationId,
+        workspaceId: initialWorkspaceId ?? undefined,
+      }),
+  );
+  if (Result.isError(authorizationResult)) {
+    return { ok: false, statusCode: 500 };
+  }
+  const authorization = authorizationResult.value;
+  if (
+    !authorization ||
+    !isMemberRole(authorization.role) ||
+    authorization.memberId !== tokenSession.memberId
+  ) {
+    responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
+    return { ok: false, statusCode: 401 };
+  }
+  // The monitoring principal signs in through its own controlled sessions
+  // only; an app grant would outlive revoking them.
+  if (
+    isSyntheticPrincipal({ userId, organizationId, email: authorization.email })
+  ) {
+    responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
+    return { ok: false, statusCode: 401 };
+  }
+  const accountAccess = checkDemoAccountOperation(authorization.email).andThen(
+    () =>
+      checkReviewAccountOrganization({
+        email: authorization.email,
+        organizationId,
+      }),
+  );
+  if (Result.isError(accountAccess)) {
+    return { ok: false, statusCode: 403 };
+  }
+  return {
+    ok: true,
+    identity: {
+      userId,
+      email: authorization.email,
+      // No browser session exists; handlers that log a session id see which
+      // app the request came from instead.
+      sessionId: `oauth-client:${tokenSession.clientId}`,
+      // An app's token is never a handoff session.
+      originConsentId: null,
+      grantedScopes: tokenSession.scopes,
+      // An event stream holds while this token still authenticates on the
+      // membership it was issued under: a genuine rejection ends it, an
+      // outage leaves it to the next sweep.
+      stream: {
+        kind: "credential",
+        revalidate: async () => {
+          const again = await authenticateApiAccessToken(token, {
+            reviewAccount: getReviewAccountConfig(),
+          });
+          if (Result.isError(again)) {
+            return again.error.reason === "rejected"
+              ? false
+              : await Promise.reject(again.error);
+          }
+          const current = await resolveCredentialMemberAuthorization({
+            userId,
+            organizationId,
+            workspaceId: undefined,
+          });
+          return current?.memberId === tokenSession.memberId;
+        },
+      },
+      organizationId,
+      authorization: { ...authorization, role: authorization.role },
+    },
+  };
+};
+
+const resolveValidateAuth = async ({
+  getSession,
+  request,
+  route,
+  server,
+  initialWorkspaceId,
+  responseHeaders,
+}: ResolveValidateAuthOptions) => {
+  // Told apart by shape, never by fallback: a request carrying a JWT bearer
+  // is judged on that token alone, so a rejected token cannot fall through to
+  // a browser session that happens to ride along.
+  const accessToken = readAccessTokenBearer(request.headers);
+  const resolved =
+    accessToken === undefined
+      ? await resolveSessionIdentity({
+          getSession,
+          request,
+          initialWorkspaceId,
+          responseHeaders,
+        })
+      : await resolveAccessTokenIdentity({
+          token: accessToken,
+          request,
+          route,
+          initialWorkspaceId,
+          responseHeaders,
+        });
+  if (!resolved.ok) {
+    return rejectValidateAuth({ statusCode: resolved.statusCode });
+  }
+  const {
+    authorization,
+    email,
+    organizationId: activeOrganizationId,
+    originConsentId,
+    sessionId,
+    stream,
+    grantedScopes,
+    userId,
+  } = resolved.identity;
+  // A signed-in account uses the product only once it has accepted the
+  // professional-use statement, whether it signed in here or in the browser
+  // that granted an app its token. An account created where it was not
   // shown (agent provisioning, the operator command) accepts on its first
   // interactive sign-in. MCP and machine credentials never resolve here.
   switch (authorization.professionalUse.status) {
     case PROFESSIONAL_USE_STATUS.accepted:
       break;
     case PROFESSIONAL_USE_STATUS.required:
-      return { ok: false as const, statusCode: 403 as const };
+      return rejectValidateAuth({
+        statusCode: 403,
+        body: PROFESSIONAL_USE_REJECTION_BODY,
+      });
     default:
       authorization.professionalUse satisfies never;
       return panic("Unhandled professional-use state");
   }
   const { role } = authorization;
   const memberRole = sessionMemberRole(role);
-  const activeOrganizationId = toSafeId<"organization">(rawOrgId);
-  const userId = toSafeId<"user">(user.id);
   // Feature access comes from the member lookup above, so gated routes and
   // handlers reuse it instead of resolving it with queries of their own.
   const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
@@ -3522,12 +3776,6 @@ const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
   // membership lookup for the lifetime of this request's transactions. This
@@ -3627,13 +3875,15 @@ const resolveValidateAuth = async ({
 
   const caller: SessionMemberCaller = {
     user: {
-      id: toSafeId<"user">(user.id),
-      email: user.email,
+      id: userId,
+      email,
     },
     session: {
-      id: session.id,
+      id: sessionId,
       activeOrganizationId,
-      originConsentId: session.originConsentId ?? null,
+      originConsentId,
+      ...(stream === undefined ? {} : { stream }),
+      ...(grantedScopes === undefined ? {} : { grantedScopes }),
     },
     getActiveWorkspaceIds,
     getAccessibleWorkspaces,
@@ -3643,10 +3893,7 @@ const resolveValidateAuth = async ({
     safeDb,
     memberRole,
     featureAccessSnapshot,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
+    ...orgSettings,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: (opts) =>
       createAuditRecorder({
@@ -3674,9 +3921,10 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
     params,
     query,
     request,
+    route,
     server,
     set,
-  }: Pick<RequestContext, "request" | "server" | "set"> & {
+  }: Pick<RequestContext, "request" | "route" | "server" | "set"> & {
     // Read only as workspace-id sources, so a pre-validation transform context fits too.
     params: unknown;
     query: unknown;
@@ -3688,6 +3936,7 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
         await resolveValidateAuth({
           getSession,
           request,
+          route,
           server,
           initialWorkspaceId: readInitialWorkspaceId(params, query),
           responseHeaders: set.headers,
@@ -3746,7 +3995,7 @@ export const createMemberAuthenticator = ({
   return async (
     ctx: Pick<
       RequestContext,
-      "request" | "server" | "set" | "params" | "query"
+      "request" | "route" | "server" | "set" | "params" | "query"
     >,
     access: HandoffAccessMetadata,
   ): Promise<CallerOutcome<ValidateAuthValue>> => {
@@ -3756,7 +4005,7 @@ export const createMemberAuthenticator = ({
         ok: false,
         answer: status(
           result.statusCode,
-          VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
+          result.body ?? AUTH_REJECTION_BODY[result.statusCode],
         ),
       };
     }
