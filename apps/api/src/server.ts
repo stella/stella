@@ -9,6 +9,7 @@ import { apiRoutes } from "@/api/api-routes";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
@@ -29,6 +30,7 @@ import {
   startDatabaseLoginProbe,
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
@@ -202,6 +204,8 @@ const startServer = async (): Promise<void> => {
   }
 
   startMemoryPressureHandler();
+  const stopFeatureAccessGrantsRefresh =
+    await startFeatureAccessGrantsRefresh();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
@@ -246,6 +250,9 @@ const startServer = async (): Promise<void> => {
     maxRequestBodySize: HTTP_REQUEST_BODY_MAX_BYTES,
   });
 
+  // The listener stays available for liveness while /started holds traffic.
+  sanctionsStartupWarmup.start();
+
   // From here the loop serves requests; boot work before this point delays
   // none, so it stays out of the stall signal.
   startEventLoopDelayReporting();
@@ -276,6 +283,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: async () => {
+        await stopFeatureAccessGrantsRefresh?.();
         await backgroundWorkers.close();
       },
       closeManagedProviderChecks,

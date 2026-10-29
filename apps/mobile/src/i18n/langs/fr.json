@@ -1,12 +1,14 @@
 {
   "tabs": {
     "chat": "Conversation",
-    "tasks": "Tâches",
+    "close": "Fermer",
+    "law": "Jurisprudence",
     "matters": "Dossiers",
-    "settings": "Paramètres"
+    "more": "Plus",
+    "settings": "Paramètres",
+    "tasks": "Tâches"
   },
   "chat": {
-    "description": "Gardez votre travail en cours à portée de main et reprenez-le depuis n’importe quel appareil.",
     "emptyTitle": "Aucune conversation",
     "emptyDescription": "Les nouvelles conversations et les fils récents apparaîtront ici.",
     "noMatchesTitle": "Aucune conversation correspondante",
@@ -35,19 +37,62 @@
     "answerWorking": "En cours…",
     "answerStopped": "Arrêté.",
     "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
-    "answerFailed": "La réponse n’a pas pu être terminée."
+    "answerFailed": "La réponse n’a pas pu être terminée.",
+    "composerMenu": "Ouvrir le menu des pièces jointes et des outils",
+    "pickTitle": "Choisissez une conversation",
+    "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
   },
   "tasks": {
-    "description": "Voyez ce qui demande votre attention sans ouvrir tout l’espace de travail.",
     "emptyTitle": "Aucune tâche en cours",
-    "emptyDescription": "Les tâches assignées et à venir apparaîtront ici."
+    "emptyDescription": "Les tâches ouvertes qui vous sont attribuées apparaîtront ici.",
+    "loadFailed": "Vos tâches n’ont pas pu être chargées.",
+    "retry": "Réessayer",
+    "newTask": "Nouvelle tâche",
+    "add": "Ajouter",
+    "name": "Nom de la tâche",
+    "dueTitle": "Échéance",
+    "matterTitle": "Dossier",
+    "findMatter": "Rechercher un dossier",
+    "addFailed": "La tâche n’a pas pu être ajoutée. Réessayez.",
+    "mattersFailed": "Vos dossiers n’ont pas pu être chargés.",
+    "dueOn": "échéance {day}",
+    "dueChoice": {
+      "none": "Sans date",
+      "today": "Aujourd’hui",
+      "tomorrow": "Demain",
+      "nextWeek": "Dans une semaine"
+    },
+    "due": {
+      "overdue": "En retard",
+      "today": "Aujourd’hui",
+      "tomorrow": "Demain",
+      "week": "Cette semaine",
+      "later": "Plus tard",
+      "none": "Sans échéance"
+    },
+    "markDone": "Marquer comme terminée",
+    "reopen": "Rouvrir",
+    "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
+    "pickTitle": "Choisissez une tâche",
+    "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
+    "openMatter": "Ouvrir le dossier"
   },
   "matters": {
-    "description": "Trouvez un dossier et saisissez rapidement l’essentiel de son contexte.",
     "emptyTitle": "Aucun dossier pour le moment",
     "emptyDescription": "Vos dossiers récents apparaîtront ici.",
     "loadFailed": "Impossible de charger vos dossiers.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "groupBy": "Regrouper par ",
+    "noGrouping": "Ne pas regrouper",
+    "groupClient": "Client",
+    "personal": "Personnel",
+    "newMatter": "Nouveau dossier",
+    "create": "Créer",
+    "name": "Nom du dossier",
+    "personalHint": "Il est créé comme dossier personnel, visible de vous seul. Ajoutez un client et des membres sur le web.",
+    "createFailed": "Le dossier n’a pas pu être créé. Réessayez.",
+    "pickTitle": "Choisissez un dossier",
+    "pickDescription": "Choisissez un dossier dans la liste pour voir ses documents et tâches."
   },
   "matter": {
     "documents": "Documents",
@@ -71,7 +116,10 @@
       "in_review": "En relecture",
       "done": "Terminée",
       "cancelled": "Annulée"
-    }
+    },
+    "add": "Ajouter",
+    "scanDocument": "Numériser un document",
+    "newTask": "Nouvelle tâche"
   },
   "entity": {
     "type": "Type",
@@ -80,11 +128,18 @@
     "loadFailed": "Cet élément n’a pas pu être chargé."
   },
   "signIn": {
-    "title": "Se connecter à stella",
-    "description": "Saisissez l’adresse de votre serveur stella. Vous validerez la connexion dans votre navigateur.",
+    "beta": "Bêta",
+    "headline": "La clarté pour chaque affaire.",
+    "subtitle": "Documents, jurisprudence et revue sous contrôle. Avec l'aide de l'IA.",
+    "submit": "Se connecter",
+    "terms": "En continuant, vous acceptez nos <terms>conditions d’utilisation</terms>.",
+    "options": "Options de connexion",
+    "serverTitle": "Serveur",
+    "serverDescription": "L’application se connecte à stella. N’indiquez un autre serveur que si votre organisation exploite le sien.",
+    "useStella": "Utiliser stella",
+    "done": "Terminé",
     "serverLabel": "Adresse du serveur",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continuer",
     "sessionEnded": "Votre session a expiré. Reconnectez-vous.",
     "errors": {
       "address": "Saisissez une adresse https, par exemple stella.example.com.",
@@ -97,5 +152,79 @@
     "accountTitle": "Compte",
     "server": "Serveur",
     "signOut": "Se déconnecter"
+  },
+  "header": {
+    "search": "Rechercher"
+  },
+  "law": {
+    "title": "Jurisprudence",
+    "newest": "Décisions les plus récentes",
+    "noResults": "Aucun résultat ne correspond aux mots exigés par cette recherche.",
+    "noResultsHint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
+    "unavailable": "La recherche est temporairement indisponible",
+    "retry": "Réessayer",
+    "headnote": "Sommaire",
+    "textUnavailable": "Aucun texte n'est disponible pour cette décision",
+    "openSource": "Ouvrir la source d’origine",
+    "loadFailed": "Impossible de charger la jurisprudence.",
+    "share": "Partager"
+  },
+  "more": {
+    "soon": "Bientôt disponible",
+    "timers": "Chronomètres",
+    "voiceInput": "Saisie vocale"
+  },
+  "writes": {
+    "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",
+    "signInAgain": "Se reconnecter"
+  },
+  "timers": {
+    "title": "Minuteurs",
+    "start": "Démarrer",
+    "startTimer": "Démarrer un minuteur",
+    "newTimer": "Nouveau minuteur",
+    "description": "Sur quoi travaillez-vous ?",
+    "matterTitle": "Dossier",
+    "noMatter": "Sans dossier",
+    "noDescription": "Sans description",
+    "running": "En cours",
+    "paused": "En pause",
+    "pause": "Mettre en pause",
+    "resume": "Reprendre",
+    "save": "Enregistrer",
+    "discard": "Abandonner",
+    "emptyTitle": "Aucun minuteur",
+    "emptyDescription": "Démarrez un minuteur avec + et enregistrez-le comme saisie de temps une fois terminé.",
+    "loadFailed": "Vos minuteurs n’ont pas pu être chargés.",
+    "retry": "Réessayer",
+    "unavailable": "Le suivi du temps n’est pas activé pour votre organisation.",
+    "startFailed": "Le minuteur n’a pas pu être démarré. Réessayez.",
+    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez."
+  },
+  "scan": {
+    "title": "Numériser un document",
+    "upload": "Envoyer",
+    "name": "Nom du document",
+    "defaultName": "Numérisation {day}",
+    "pages": "{count, plural, one {# page} other {# pages}}",
+    "matterTitle": "Dossier",
+    "uploadFailed": "La numérisation n’a pas pu être envoyée. Réessayez.",
+    "failedTitle": "Échec de la numérisation",
+    "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez."
+  },
+  "shortcuts": {
+    "search": "Rechercher",
+    "palette": "Palette de commandes",
+    "next": "Résultat suivant",
+    "previous": "Résultat précédent",
+    "toggleList": "Afficher ou masquer la liste"
+  },
+  "palette": {
+    "placeholder": "Rechercher des dossiers et des conversations, ou lancer une commande",
+    "noResults": "Aucun résultat pour « {query} »"
+  },
+  "pane": {
+    "showList": "Afficher la liste",
+    "hideList": "Masquer la liste"
   }
 }

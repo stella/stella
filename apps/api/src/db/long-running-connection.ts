@@ -7,6 +7,10 @@ import {
   createDedicatedConnectionOwner,
   DEDICATED_CONNECTIONS_PER_PROCESS,
 } from "@/api/db/dedicated-connection-slots";
+import {
+  positiveDedicatedTimeoutMilliseconds,
+  setDedicatedStatementTimeout,
+} from "@/api/db/dedicated-connection-timeouts";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { terminateReserved } from "@/api/db/sql-close";
 import { instrumentDedicatedSqlCounts } from "@/api/lib/db-query-counter";
@@ -38,13 +42,6 @@ type LongRunningConnectionOptions = {
   statementTimeout: number;
   lockTimeout: number;
   signal: AbortSignal;
-};
-
-const positiveMilliseconds = (value: number, name: string): number => {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    return panic(`${name} must be a finite positive millisecond budget`);
-  }
-  return value;
 };
 
 type ReservableSession = {
@@ -196,14 +193,18 @@ export const withDedicatedReservedSession = async <
   });
   const body = (async () =>
     work(session, async ({ statementTimeout, lockTimeout }) => {
-      const statementBudget = positiveMilliseconds(
+      const statementBudget = positiveDedicatedTimeoutMilliseconds(
         statementTimeout,
         "statementTimeout",
       );
-      const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
+      const lockBudget = positiveDedicatedTimeoutMilliseconds(
+        lockTimeout,
+        "lockTimeout",
+      );
       await session.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
-      await session.unsafe(
-        `SET LOCAL statement_timeout = '${statementBudget}ms'`,
+      await setDedicatedStatementTimeout(
+        async (statement) => await session.unsafe(statement),
+        statementBudget,
       );
     }))();
   await Promise.allSettled([body]);
@@ -232,11 +233,14 @@ export const withLongRunningConnection = async <T>(
   { statementTimeout, lockTimeout, signal }: LongRunningConnectionOptions,
   work: (handle: LongRunningHandle) => Promise<T>,
 ): Promise<T> => {
-  const statementBudget = positiveMilliseconds(
+  const statementBudget = positiveDedicatedTimeoutMilliseconds(
     statementTimeout,
     "statementTimeout",
   );
-  const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
+  const lockBudget = positiveDedicatedTimeoutMilliseconds(
+    lockTimeout,
+    "lockTimeout",
+  );
   signal.throwIfAborted();
   const [{ envBase }, { databaseRelations }, { assertDatabaseLoginPosture }] =
     await Promise.all([
@@ -267,11 +271,11 @@ export const withLongRunningConnection = async <T>(
             statementTimeout: requestedStatementTimeout,
             lockTimeout: requestedLockTimeout,
           }) => {
-            const requestedStatement = positiveMilliseconds(
+            const requestedStatement = positiveDedicatedTimeoutMilliseconds(
               requestedStatementTimeout,
               "statementTimeout",
             );
-            const requestedLock = positiveMilliseconds(
+            const requestedLock = positiveDedicatedTimeoutMilliseconds(
               requestedLockTimeout,
               "lockTimeout",
             );
@@ -307,7 +311,10 @@ export const withDedicatedStatementTimeout = async <T>({
   statementTimeoutMs,
   work,
 }: DedicatedStatementTimeoutOptions<T>): Promise<T> => {
-  const budget = positiveMilliseconds(statementTimeoutMs, "statementTimeoutMs");
+  const budget = positiveDedicatedTimeoutMilliseconds(
+    statementTimeoutMs,
+    "statementTimeoutMs",
+  );
   const previous = (
     await query("SELECT current_setting('statement_timeout') AS timeout")
   ).find(isRecord)?.["timeout"];

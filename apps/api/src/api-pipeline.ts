@@ -10,6 +10,7 @@ import { setResponseHeaders } from "@/api/http/headers";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
 import { status } from "@/api/http/status";
+import { APPLE_FORM_POST } from "@/api/lib/auth/apple-callback";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -146,12 +147,20 @@ const clientTooOld: Middleware = async (ctx, inner) => {
     : toResponse(status(426, error), ctx.set);
 };
 
+/**
+ * Cross-site form posts the API accepts: Apple's sign-in response, posted by
+ * appleid.apple.com to the Apple callback (see `APPLE_FORM_POST`).
+ */
+const CROSS_SITE_FORM_POSTS = [APPLE_FORM_POST];
+
 /** A browser mutation from an origin the app does not run on is refused. */
 const browserOriginGuard: Middleware = async (ctx, inner) =>
   shouldRejectBrowserMutation({
     allowedOrigins: ALLOWED_BROWSER_ORIGINS,
+    crossSiteFormPosts: CROSS_SITE_FORM_POSTS,
     method: ctx.request.method,
     origin: ctx.request.headers.get("origin"),
+    pathname: new URL(ctx.request.url).pathname,
     secFetchSite: ctx.request.headers.get("sec-fetch-site"),
   })
     ? toResponse(status(403, httpError("Untrusted browser origin")), ctx.set)

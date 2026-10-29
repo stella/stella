@@ -51,7 +51,7 @@ describe("send lifecycle checkpoint indexing", () => {
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
-            reason: "unavailable",
+            reason: "lease_lost",
           });
         }),
         recordAuditEvent: async () => undefined,
@@ -200,7 +200,7 @@ describe("send lifecycle checkpoint indexing", () => {
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
-            reason: "unavailable",
+            reason: "lease_lost",
           });
         }),
         recordAuditEvent: async () => undefined,
@@ -231,7 +231,7 @@ describe("send lifecycle checkpoint indexing", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       if (run !== undefined) {

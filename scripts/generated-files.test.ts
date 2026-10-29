@@ -1413,14 +1413,19 @@ test("cloud setup has one generator owner and checks shared policy output", () =
 // A plan runs from a clean checkout, where no derived output exists: every
 // derived output a planned generator reads must come from a generator planned
 // before it, whichever file started the plan.
-// timeout: exhaustively checking every declared transitive input is CPU-bound.
 test("every plan builds the derived outputs its generators read before running them", () => {
   const witness = (glob: string) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
   const problems: string[] = [];
+  const planByGlob = new Map(
+    GENERATORS.flatMap((entry) => [...entry.inputs, ...entry.outputs]).map(
+      (glob) =>
+        [glob, orderGenerators(generatorsForFiles([witness(glob)]))] as const,
+    ),
+  );
   for (const start of GENERATORS) {
     for (const glob of [...start.inputs, ...start.outputs]) {
-      const plan = orderGenerators(generatorsForFiles([witness(glob)]));
+      const plan = planByGlob.get(glob) ?? [];
       const position = new Map(plan.map(({ id }, index) => [id, index]));
       for (const planned of plan) {
         for (const prerequisite of derivedPrerequisites(planned)) {
@@ -1440,7 +1445,7 @@ test("every plan builds the derived outputs its generators read before running t
     }
   }
   expect([...new Set(problems)]).toEqual([]);
-}, 10_000);
+});
 
 // Building a prerequisite first is useless if the run then skips it: a derived
 // generator's check guards tracking, so it passes on a clean checkout that
