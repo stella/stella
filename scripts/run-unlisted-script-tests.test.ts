@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,6 +21,8 @@ import {
   parseScriptTestArguments,
   prepareStrace,
   SCAN_PRELOAD_PATH,
+  SCRIPT_TEST_TRACE_FILTER,
+  SCRIPT_TEST_TRACE_SYSCALLS,
   selectAffectedScriptTests,
   selectScriptTests,
   tracedAllowance,
@@ -426,6 +429,51 @@ test("tracing names tracked reads outside the closure and declarations", () => {
       tracked: new Set(["apps/api/Dockerfile", "scripts/subject.test.ts"]),
     }),
   ).toEqual(["apps/api/Dockerfile"]);
+});
+
+test("a tracked existence probe requires a file declaration without an open", () => {
+  const file = "scripts/script-test-inputs.json";
+  expect(existsSync(path.resolve(file))).toBe(true);
+  const trace = `1 newfstatat(AT_FDCWD, "${path.resolve(file)}", {st_mode=S_IFREG|0644}, 0) = 0`;
+  const options = {
+    trace,
+    closure: new Set<string>(),
+    tracked: new Set([file]),
+  };
+  expect(undeclaredTracedFiles({ ...options, declared: [] })).toEqual([file]);
+  expect(undeclaredTracedFiles({ ...options, declared: [file] })).toEqual([]);
+});
+
+test("the trace filter is exactly the syscall dependency registry", () => {
+  expect(SCRIPT_TEST_TRACE_FILTER).toBe(
+    `trace=${Object.keys(SCRIPT_TEST_TRACE_SYSCALLS).join(",")}`,
+  );
+});
+
+test("every registered file probe verifies its path or descriptor argument", () => {
+  const file = "scripts/script-test-inputs.json";
+  for (const [name, syscall] of Object.entries(SCRIPT_TEST_TRACE_SYSCALLS)) {
+    if (syscall.type === "process" || syscall.type === "directory") {
+      continue;
+    }
+    const argument =
+      syscall.type === "descriptor"
+        ? `3<${path.resolve(file)}>`
+        : JSON.stringify(path.resolve(file));
+    const args = Array.from({ length: syscall.argument + 1 }, (_, index) =>
+      index === syscall.argument ? argument : "AT_FDCWD",
+    );
+    const trace = `1 ${name}(${args.join(", ")}) = 0`;
+    expect(
+      undeclaredTracedFiles({
+        trace,
+        closure: new Set(),
+        tracked: new Set([file]),
+        declared: [],
+      }),
+      name,
+    ).toEqual([file]);
+  }
 });
 
 test("the Dockerfile reader's trace is covered by its declaration", () => {

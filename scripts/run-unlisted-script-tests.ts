@@ -394,6 +394,113 @@ const scan = (pattern: string): string[] => [
 
 const TRACE_STRING_LIMIT = 65_535;
 
+type TraceSyscall =
+  | { type: "file"; argument: number }
+  | { type: "descriptor" | "directory"; argument: number }
+  | { type: "process" };
+
+export const SCRIPT_TEST_TRACE_SYSCALLS = {
+  open: { type: "file", argument: 0 },
+  openat: { type: "file", argument: 1 },
+  openat2: { type: "file", argument: 1 },
+  creat: { type: "file", argument: 0 },
+  stat: { type: "file", argument: 0 },
+  lstat: { type: "file", argument: 0 },
+  newfstatat: { type: "file", argument: 1 },
+  statx: { type: "file", argument: 1 },
+  fstat: { type: "descriptor", argument: 0 },
+  statfs: { type: "file", argument: 0 },
+  access: { type: "file", argument: 0 },
+  faccessat: { type: "file", argument: 1 },
+  faccessat2: { type: "file", argument: 1 },
+  readlink: { type: "file", argument: 0 },
+  readlinkat: { type: "file", argument: 1 },
+  getxattr: { type: "file", argument: 0 },
+  lgetxattr: { type: "file", argument: 0 },
+  listxattr: { type: "file", argument: 0 },
+  llistxattr: { type: "file", argument: 0 },
+  execve: { type: "file", argument: 0 },
+  execveat: { type: "file", argument: 1 },
+  getdents: { type: "directory", argument: 0 },
+  getdents64: { type: "directory", argument: 0 },
+  clone: { type: "process" },
+  clone3: { type: "process" },
+  fork: { type: "process" },
+  vfork: { type: "process" },
+  chdir: { type: "process" },
+  fchdir: { type: "process" },
+} as const satisfies Record<string, TraceSyscall>;
+
+export const SCRIPT_TEST_TRACE_FILTER = `trace=${Object.keys(SCRIPT_TEST_TRACE_SYSCALLS).join(",")}`;
+const traceSyscalls = new Map(Object.entries(SCRIPT_TEST_TRACE_SYSCALLS));
+
+const syscallArguments = (source: string): string[] => {
+  const args: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let annotation = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source.at(index);
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (!annotation && char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (quoted) {
+      continue;
+    }
+    if (char === "<") {
+      annotation = true;
+    } else if (char === ">") {
+      annotation = false;
+    }
+    if (annotation) {
+      continue;
+    }
+    if (char === "(" || char === "[" || char === "{") {
+      depth += 1;
+    } else if (char === ")" && depth === 0) {
+      args.push(source.slice(start, index).trim());
+      return args;
+    } else if (char === ")" || char === "]" || char === "}") {
+      depth -= 1;
+    } else if (char === "," && depth === 0) {
+      args.push(source.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  panic(`Incomplete syscall arguments: ${source}`);
+};
+
+const traceCall = (line: string) => {
+  const match = /\b([a-z][a-z0-9_]*)\(/u.exec(line);
+  if (match === null) {
+    return undefined;
+  }
+  const syscall = traceSyscalls.get(match.at(1) ?? "");
+  if (syscall === undefined) {
+    panic(`Unregistered traced syscall: ${line}`);
+  }
+  return {
+    syscall,
+    args: syscallArguments(line.slice(match.index + match[0].length)),
+  };
+};
+
+const descriptorPath = (argument: string) => {
+  const match = /^(?:AT_FDCWD|\d+)<((?:\\.|[^>])*)>$/u.exec(argument);
+  return match === null ? undefined : decodeTraceString(match.at(1) ?? "");
+};
+
 const TRACE_ESCAPES: Readonly<Record<string, number>> = {
   n: 0x0a,
   t: 0x09,
@@ -467,12 +574,25 @@ export const undeclaredTracedFiles = ({
   const opened = new Set<string>();
   for (const line of joinedTraceRecords(trace)) {
     assertWholeRecord(line);
-    const match =
-      /(?:open|openat|openat2|execve)\([^"]*"((?:\\.|[^"])*)"/u.exec(line);
-    if (match?.[1] === undefined) {
+    const call = traceCall(line);
+    if (
+      call === undefined ||
+      call.syscall.type === "process" ||
+      call.syscall.type === "directory"
+    ) {
       continue;
     }
-    const openedPath = decodeTraceString(match[1]);
+    const argument = call.args.at(call.syscall.argument) ?? "";
+    const match = /^"((?:\\.|[^"])*)"$/u.exec(argument);
+    const quotedPath =
+      match === null ? undefined : decodeTraceString(match.at(1) ?? "");
+    const openedPath =
+      call.syscall.type === "descriptor"
+        ? descriptorPath(argument)
+        : quotedPath;
+    if (openedPath === undefined) {
+      continue;
+    }
     const directory = pathDirectoryAnnotation(line);
     const absolute = path.isAbsolute(openedPath)
       ? path.normalize(openedPath)
@@ -679,15 +799,11 @@ export const gitInvocation = (args: readonly string[]) => {
  * -yy names the directory behind the descriptor.
  */
 const listedDirectory = (line: string): string | undefined => {
-  const call = line.indexOf(" getdents");
-  if (call === -1) {
+  const call = traceCall(line);
+  if (call?.syscall.type !== "directory") {
     return undefined;
   }
-  const open = line.indexOf("<", call);
-  const close = line.indexOf(">,", open);
-  return open === -1 || close === -1
-    ? undefined
-    : decodeTraceString(line.slice(open + 1, close));
+  return descriptorPath(call.args.at(call.syscall.argument) ?? "");
 };
 
 /** The directories a scanning command lists, or undefined for any other. */
@@ -904,7 +1020,7 @@ const run = async ({
           "-s",
           String(TRACE_STRING_LIMIT),
           "-e",
-          "trace=open,openat,openat2,execve,clone,clone3,fork,vfork,chdir,fchdir,getdents,getdents64",
+          SCRIPT_TEST_TRACE_FILTER,
           "-o",
           tracePath,
           ...testCommand,
