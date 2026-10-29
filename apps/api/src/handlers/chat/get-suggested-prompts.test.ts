@@ -270,15 +270,13 @@ const providerRun = (
     structuredOutput: () =>
       panic("Suggested prompts never request structured output"),
   };
-  // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives as it
-  // drives a provider; the other fields are bookkeeping this test never reads.
   return {
     adapter,
     keySource: "instance",
     modelId: "suggestions-fixture",
     modelOptions: {},
     provider: "openai",
-  } as ResolvedTanStackTextModel;
+  };
 };
 
 const generateFrom = async (model: ResolvedTanStackTextModel) =>
