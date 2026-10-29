@@ -37,6 +37,12 @@ export const READ_BUDGETS = {
     reason:
       "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
   },
+  "statement.caseLaw.coverageSources": {
+    surface: "statement",
+    pages: 256,
+    reason:
+      "Four fixture sources: eight date endpoint seeks at eight pages each (64), ninety precomputed court rows at two pages each (180), and twelve pages for the twenty-row uncached court source and grouped pending-text read: 256 pages total. Rejected filing dates must cost no heap walk.",
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,

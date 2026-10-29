@@ -145,6 +145,7 @@ export const scheduledJobMeasurementViolations = (
 export const READ_BUDGET_PROFILES = {
   "scheduled.caseLaw.reportFreshness": "corpus",
   "scheduled.requests.sweepReceipts": "corpus",
+  "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
-} as const satisfies Record<ReadBudgetId, "corpus" | "tenant">;
+} as const satisfies Record<ReadBudgetId, "corpus" | "tenant" | "coverage">;

@@ -812,6 +812,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   );
   await db.execute(sql.raw("CREATE ROLE stella_corpus_sample_reader NOLOGIN"));
   await installPgliteSchemaPrerequisites(db);
+  // Coverage's partial index needs the immutable filing-year predicate at creation.
+  await installPgliteDecisionDocketFilingYear(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this
   // build path so snapshot-booted test processes never load it.
@@ -831,7 +833,6 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
-  await installPgliteDecisionDocketFilingYear(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
