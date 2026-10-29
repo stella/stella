@@ -17,8 +17,6 @@ import {
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import { publicLawNumberedPagerModel } from "@/components/public-law-table/public-law-pagination.logic";
@@ -129,7 +127,11 @@ import {
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { isSearchUnavailableError } from "@/lib/public-law-api";
+import { queryView, queryViewError } from "@/lib/query-view.logic";
+import {
+  PublicLawListFailure,
+  PublicLawResultsBoundary,
+} from "@/routes/law/-components/public-law-list-failure";
 
 import { caseLawResultsFeedback } from "./-case-law-filter-notice";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
@@ -308,6 +310,7 @@ export function PublicCaseLawIndex({
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
   const scopedSearch = { ...search, country: countryParam };
+  const { page: _page, pageSize: _pageSize, ...resultSetSearch } = scopedSearch;
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
   const typedFilters = createDecisionFiltersFromSearch(scopedSearch, {
@@ -358,18 +361,17 @@ export function PublicCaseLawIndex({
     // The count and the facets stay drawn while a new search is in flight.
     placeholderData: keepPreviousData,
   });
-  const {
-    data: pageData,
-    error,
-    isLoading,
-    isPlaceholderData,
-    refetch,
-  } = useQuery({
+  const pageQuery = useQuery({
     ...decisionsPageOptions({ filters, page: wantedPage, pageSize }),
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
   });
+  const { data: pageData, isPlaceholderData, refetch } = pageQuery;
+  const pageView = queryView(pageQuery);
+  const error = queryViewError(pageView);
+  const firstPageError = queryViewError(queryView(firstPageQuery));
+  const isLoading = pageView.type === "pending";
   useCaseLawResultsTiming({
     query: search.q,
     page: pageData,
@@ -382,7 +384,7 @@ export function PublicCaseLawIndex({
     searchFetched: firstPageQuery.isFetched,
     searchFetchStatus: firstPageQuery.fetchStatus,
   });
-  // A backend that cannot be reached is this region's failure, not the page's.
+  // A failed search is this region's failure, not the page's.
   // The loader lets it through for the same reason, so both the first render
   // and a filter applied to a drawn page arrive here.
   const loadedSearch = Route.useMatch({
@@ -390,9 +392,7 @@ export function PublicCaseLawIndex({
   });
   const isSearchUnavailable = publicLawSearchOutage({
     hasPages: pageData !== undefined,
-    isQueryOutage:
-      isSearchUnavailableError(error) ||
-      isSearchUnavailableError(firstPageQuery.error),
+    isQueryOutage: error !== undefined || firstPageError !== undefined,
     loaded: loadedSearch,
   });
   // The rows are the only region that waits: either they are not there yet,
@@ -433,8 +433,9 @@ export function PublicCaseLawIndex({
     page: rows === "rows" ? pager.nextPage : null,
     pageSize,
   });
-  // A page the reader steps to brings them to its first row once it is drawn.
+  // Keep the pager reachable for another keyboard step after the rows change.
   const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "preserve",
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
@@ -874,8 +875,10 @@ export function PublicCaseLawIndex({
         {feedback.aboveResults}
 
         {isSearchUnavailable ? (
-          <SearchUnavailable
-            onRetry={() => {
+          <PublicLawListFailure
+            description={t("caseLaw.searchUnavailable.description")}
+            error={error ?? firstPageError}
+            reset={() => {
               detached(
                 Promise.all([refetch(), firstPageQuery.refetch()]),
                 "cases.search-retry",
@@ -883,7 +886,10 @@ export function PublicCaseLawIndex({
             }}
           />
         ) : (
-          <>
+          <PublicLawResultsBoundary
+            searchKey={JSON.stringify(resultSetSearch)}
+            resetOn={pageData}
+          >
             <DecisionTable
               dateOrder={dateOrder}
               decisions={find.rows}
@@ -917,7 +923,7 @@ export function PublicCaseLawIndex({
               )}
               pageSize={pageSize}
             />
-          </>
+          </PublicLawResultsBoundary>
         )}
       </div>
     </main>
@@ -1017,36 +1023,3 @@ const useCaseLawRewriteFlow = ({
     searchOriginalWords,
   };
 };
-
-type SearchUnavailableProps = {
-  onRetry: () => void;
-};
-
-/**
- * The results region when the search backend could not be reached. It stands
- * where the grid stands, so the box and the filters above it keep working and
- * the reader's query stays in the URL for the retry to use.
- *
- * The same shape the workspace tables and the citation panels use for a read
- * that failed, rather than the page-level `EmptyScreen`: this replaces one
- * region of a drawn page, and a hero would read as the whole page being gone.
- */
-function SearchUnavailable({ onRetry }: SearchUnavailableProps) {
-  const t = useTranslations();
-
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <SearchXIcon className="text-muted-foreground size-8" />
-      <div className="max-w-sm">
-        <p className="text-sm">{t("caseLaw.searchUnavailable.title")}</p>
-        <p className="text-foreground-strong-muted mt-1 text-xs">
-          {t("caseLaw.searchUnavailable.description")}
-        </p>
-      </div>
-      <Button onClick={onRetry} size="sm" variant="secondary">
-        <RefreshCwIcon />
-        {t("common.retry")}
-      </Button>
-    </div>
-  );
-}

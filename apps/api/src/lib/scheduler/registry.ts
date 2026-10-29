@@ -28,6 +28,7 @@ import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
@@ -36,6 +37,10 @@ import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import {
+  RECONCILE_PUBLISHER_REMOVALS_TASK,
+  reconcilePublisherRemovalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   censusCaseLawRawObjectsTask,
@@ -232,6 +237,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
@@ -307,9 +313,13 @@ type SchedulerTaskRegistryOptions = {
   resetReviewOrganization?: SchedulerTask;
 };
 
-const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+  [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -321,36 +331,37 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask)),
+  Object.keys(schedulerTasks(noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
-      ([name, registered]) => {
-        const entry =
-          name === RESET_REVIEW_ORGANIZATION_TASK
-            ? (options.resetReviewOrganization ?? registered)
-            : registered;
-        return [
-          name,
-          async (context: SchedulerTaskContext) =>
-            runWithStatementCeiling({
-              kind: "scheduler",
-              key: name,
-              run: async () => {
-                const task = typeof entry === "function" ? entry : entry.task;
-                const outcome = await task(context);
-                if (outcome === undefined) {
-                  return undefined;
-                }
-                return outcome;
-              },
-            }),
-        ];
-      },
-    ),
+    Object.entries(
+      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
+    ).map(([name, registered]) => {
+      const entry =
+        name === RESET_REVIEW_ORGANIZATION_TASK
+          ? (options.resetReviewOrganization ?? registered)
+          : registered;
+      return [
+        name,
+        async (context: SchedulerTaskContext) =>
+          runWithStatementCeiling({
+            kind: "scheduler",
+            key: name,
+            run: async () => {
+              const task = typeof entry === "function" ? entry : entry.task;
+              const outcome = await task(context);
+              if (outcome === undefined) {
+                return undefined;
+              }
+              return outcome;
+            },
+          }),
+      ];
+    }),
   );

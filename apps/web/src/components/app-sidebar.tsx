@@ -24,6 +24,15 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -39,6 +48,7 @@ import {
   PinOffIcon,
   PlusIcon,
   SearchIcon,
+  Trash2Icon,
   UsersIcon,
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
@@ -55,6 +65,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { appSidebarSurfaceProps } from "@/components/app-sidebar-surface";
+import type { AppSidebarSurface } from "@/components/app-sidebar-surface";
 import {
   chatActivityByWorkspace,
   getMatterBillingLinks,
@@ -69,12 +81,14 @@ import {
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
   SidebarContent,
@@ -118,7 +132,7 @@ import {
 } from "@/features/guides/guide-drawer-store";
 import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -152,6 +166,7 @@ import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
+import { useDeleteEntities } from "@/lib/workspaces/mutations/entities";
 import {
   workspaceActivityOptions,
   workspacesKeys,
@@ -187,7 +202,7 @@ const SEARCH_DIALOG_STATES = {
 type SearchDialogState =
   (typeof SEARCH_DIALOG_STATES)[keyof typeof SEARCH_DIALOG_STATES];
 
-export const AppSidebar = (props: AppSidebarProps) => {
+export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
@@ -195,8 +210,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const router = useRouter();
+  // On compact layouts the sidebar is a sheet over the page, so a navigation
+  // started from it would land behind it. Close it once the new location
+  // resolves, whichever item (link, button or matter sub-row) started it.
+  useMountEffect(() =>
+    router.subscribe("onResolved", ({ hrefChanged }) => {
+      if (hrefChanged) {
+        setOpenMobile(false);
+      }
+    }),
+  );
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
@@ -636,20 +662,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   }, [showNavBadges, runNavTarget]);
 
   return (
-    <Sidebar
-      {...props}
-      className={cn(
-        // Unified glass language with the chat composer tray: the same
-        // translucent veil + backdrop-blur-md instead of the solid
-        // sidebar fill so the app chrome reads as one system. The
-        // opaque-leaning fallback keeps contrast where backdrop-filter
-        // is unsupported.
-        "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 [&_[data-slot=sidebar-inner]]:backdrop-blur-md supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
-        props.className,
-      )}
-      collapsible="icon"
-      style={props.style}
-    >
+    <Sidebar {...appSidebarSurfaceProps(surface)} collapsible="icon">
       {/* Stella logo header */}
       <SidebarHeader className="h-12 border-b p-0">
         <div
@@ -725,6 +738,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
                                 )}
                               </kbd>
                             </SidebarMenuBadge>
+                          );
+                        }
+                        if (item.id === "timesheets") {
+                          return (
+                            <PendingApprovalsNavBadge
+                              organizationId={user.activeOrganizationId}
+                              userId={user.id}
+                            />
                           );
                         }
                         if (item.id === "inbox" && openInboxCount > 0) {
@@ -1007,7 +1028,7 @@ type PendingEntityDrop = {
   entities: CopyToMatterEntity[];
 };
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
+type AppSidebarProps = { surface: AppSidebarSurface };
 type MatterItemProps = {
   activeOrganizationId: string;
   userId: string;
@@ -1091,7 +1112,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
   return result;
 };
 
-const MatterItem = ({
+export const MatterItem = ({
   activeOrganizationId,
   workspace: ws,
   isActive,
@@ -1365,7 +1386,12 @@ const MatterItem = ({
           isEntityDropTarget &&
             "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
         )}
+        data-entity-id={ws.id}
+        data-entity-kind="matter"
         onContextMenu={containedEventHandler((e) => {
+          if (!contextMenuBelongsTo(e, { id: ws.id, kind: "matter" })) {
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const x = e.clientX;
@@ -1621,6 +1647,15 @@ export const MatterActivityList = ({
   const queryClient = useQueryClient();
   const router = useRouter();
   const mounted = useHasMounted();
+  const deleteEntities = useDeleteEntities();
+  const [contextTarget, setContextTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [contextAnchor, setContextAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const {
     data,
     fetchNextPage,
@@ -1723,94 +1758,174 @@ export const MatterActivityList = ({
   }
 
   return (
-    <SidebarMenuSub className="border-0" id={id}>
-      {items.map((item) => {
-        const title =
-          item.type === "thread" && isPlaceholderThreadTitle(item.title)
-            ? t("chat.newChat")
-            : item.title;
-        const relativeTime = formatRelativeTime(item.activityAt);
-        const content = (
-          <>
-            {item.type === "thread" ? (
-              <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
-            ) : (
-              <EntityKindIcon
-                className="text-muted-foreground size-3.5 shrink-0"
-                fileName={item.fileName}
-                kind={item.entityKind}
-                mimeType={item.mimeType}
-                status={item.status}
-                thumbnail={
-                  item.fieldId
-                    ? {
-                        fieldId: item.fieldId,
-                        hasThumbnail: item.hasThumbnail,
-                        workspaceId,
-                      }
-                    : null
-                }
-              />
-            )}
-            <BidiText as="span" className="min-w-0 flex-1 truncate text-start">
-              {title}
-            </BidiText>
-            {relativeTime ? (
-              <Tooltip
-                content={formatFullTimestamp(item.activityAt)}
-                render={
-                  <span className="text-muted-foreground shrink-0 tabular-nums" />
-                }
+    <>
+      <SidebarMenuSub className="border-0" id={id}>
+        {items.map((item) => {
+          const title =
+            item.type === "thread" && isPlaceholderThreadTitle(item.title)
+              ? t("chat.newChat")
+              : item.title;
+          const relativeTime = formatRelativeTime(item.activityAt);
+          const content = (
+            <>
+              {item.type === "thread" ? (
+                <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
+              ) : (
+                <EntityKindIcon
+                  className="text-muted-foreground size-3.5 shrink-0"
+                  fileName={item.fileName}
+                  kind={item.entityKind}
+                  mimeType={item.mimeType}
+                  status={item.status}
+                  thumbnail={
+                    item.fieldId
+                      ? {
+                          fieldId: item.fieldId,
+                          hasThumbnail: item.hasThumbnail,
+                          workspaceId,
+                        }
+                      : null
+                  }
+                />
+              )}
+              <BidiText
+                as="span"
+                className="min-w-0 flex-1 truncate text-start"
               >
-                {relativeTime}
-              </Tooltip>
-            ) : null}
-          </>
-        );
+                {title}
+              </BidiText>
+              {relativeTime ? (
+                <Tooltip
+                  content={formatFullTimestamp(item.activityAt)}
+                  render={
+                    <span className="text-muted-foreground shrink-0 tabular-nums" />
+                  }
+                >
+                  {relativeTime}
+                </Tooltip>
+              ) : null}
+            </>
+          );
 
-        return (
-          <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
-            {item.type === "thread" ? (
-              <MatterActivityRow>
-                <Link
-                  activeProps={{ "data-active": true }}
-                  params={{ threadId: item.id, workspaceId }}
-                  to="/chat/workspaces/$workspaceId/$threadId"
-                >
-                  {content}
-                </Link>
-              </MatterActivityRow>
-            ) : (
-              <MatterActivityRow>
-                <button
-                  onClick={() => {
-                    detached(openEntity(item), "app-sidebar.open-entity");
-                  }}
-                  type="button"
-                >
-                  {content}
-                </button>
-              </MatterActivityRow>
-            )}
+          return (
+            <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
+              {item.type === "thread" ? (
+                <MatterActivityRow>
+                  <Link
+                    activeProps={{ "data-active": true }}
+                    params={{ threadId: item.id, workspaceId }}
+                    to="/chat/workspaces/$workspaceId/$threadId"
+                  >
+                    {content}
+                  </Link>
+                </MatterActivityRow>
+              ) : (
+                <MatterActivityRow>
+                  <button
+                    data-entity-id={item.id}
+                    data-entity-kind={item.entityKind}
+                    onContextMenu={(event) => {
+                      if (
+                        !contextMenuBelongsTo(event, {
+                          id: item.id,
+                          kind: item.entityKind,
+                        })
+                      ) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const x = event.clientX;
+                      const y = event.clientY;
+                      setContextTarget({ id: item.id, title: item.title });
+                      setContextAnchor({
+                        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+                      });
+                    }}
+                    onClick={() => {
+                      detached(openEntity(item), "app-sidebar.open-entity");
+                    }}
+                    type="button"
+                  >
+                    {content}
+                  </button>
+                </MatterActivityRow>
+              )}
+            </SidebarMenuSubItem>
+          );
+        })}
+        {hasNextPage ? (
+          <SidebarMenuSubItem>
+            <MatterActivityRow className="text-muted-foreground justify-start">
+              <button
+                disabled={isFetchingNextPage}
+                onClick={() => {
+                  detached(fetchNextPage(), "app-sidebar.fetch-next-page");
+                }}
+                type="button"
+              >
+                {isFetchingNextPage
+                  ? t("common.loading")
+                  : t("common.showMore")}
+              </button>
+            </MatterActivityRow>
           </SidebarMenuSubItem>
-        );
-      })}
-      {hasNextPage ? (
-        <SidebarMenuSubItem>
-          <MatterActivityRow className="text-muted-foreground justify-start">
-            <button
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "app-sidebar.fetch-next-page");
-              }}
-              type="button"
+        ) : null}
+      </SidebarMenuSub>
+      <Menu
+        onOpenChange={(open) => {
+          if (!open) {
+            setContextAnchor(null);
+          }
+        }}
+        open={contextAnchor !== null}
+      >
+        <MenuTrigger
+          nativeButton={false}
+          render={<span aria-hidden="true" className="sr-only" tabIndex={-1} />}
+        />
+        <MenuPopup anchor={contextAnchor ?? undefined}>
+          <MenuItem onClick={() => setDeleteOpen(true)} variant="destructive">
+            <Trash2Icon />
+            {t("common.delete")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("workspaces.deleteItem")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("common.deleteConfirmDescription", {
+                name: contextTarget?.title ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={
+                <Button
+                  onClick={() => {
+                    if (contextTarget) {
+                      deleteEntities.mutate({
+                        workspaceId,
+                        entityIds: [contextTarget.id],
+                      });
+                    }
+                  }}
+                  variant="destructive"
+                />
+              }
             >
-              {isFetchingNextPage ? t("common.loading") : t("common.showMore")}
-            </button>
-          </MatterActivityRow>
-        </SidebarMenuSubItem>
-      ) : null}
-    </SidebarMenuSub>
+              {t("common.delete")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 };
 

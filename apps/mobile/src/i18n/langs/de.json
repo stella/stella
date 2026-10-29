@@ -1,33 +1,145 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Aufgaben",
+    "close": "Schließen",
+    "law": "Rechtsprechung",
     "matters": "Akten",
-    "settings": "Einstellungen"
+    "more": "Mehr",
+    "settings": "Einstellungen",
+    "tasks": "Aufgaben"
   },
   "chat": {
-    "description": "Behalten Sie laufende Arbeit im Blick und machen Sie auf jedem Gerät weiter.",
     "emptyTitle": "Noch keine Konversationen",
-    "emptyDescription": "Neue Konversationen und aktuelle Verläufe erscheinen hier."
+    "emptyDescription": "Neue Konversationen und aktuelle Verläufe erscheinen hier.",
+    "noMatchesTitle": "Keine passenden Chats",
+    "noMatchesDescription": "Kein Chattitel und keine Akte enthält „{search}“.",
+    "search": "Chats durchsuchen",
+    "loadFailed": "Ihre Unterhaltungen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "untitled": "Unbenannte Unterhaltung",
+    "loadMoreFailed": "Mehr laden",
+    "loadOlderFailed": "Ältere Nachrichten laden",
+    "toolUsed": "Verwendet: {tool}",
+    "threadTitle": "Unterhaltung",
+    "threadLoadFailed": "Diese Unterhaltung konnte nicht geladen werden.",
+    "threadEmptyDescription": "Diese Unterhaltung enthält noch keine Nachrichten.",
+    "sections": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "week": "Letzte 7 Tage",
+      "earlier": "Früher"
+    },
+    "newChat": "Neue Unterhaltung",
+    "composerPlaceholder": "stella fragen",
+    "send": "Senden",
+    "stop": "Stoppen",
+    "sendFailed": "Ihre Nachricht konnte nicht gesendet werden. Versuchen Sie es erneut.",
+    "answerWorking": "Wird bearbeitet…",
+    "answerStopped": "Gestoppt.",
+    "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
+    "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
+    "composerMenu": "Menü für Anhänge und Werkzeuge öffnen",
+    "pickTitle": "Unterhaltung wählen",
+    "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen."
   },
   "tasks": {
-    "description": "Sehen Sie, was Aufmerksamkeit braucht, ohne den ganzen Arbeitsbereich zu öffnen.",
     "emptyTitle": "Keine offenen Aufgaben",
-    "emptyDescription": "Zugewiesene und anstehende Aufgaben erscheinen hier."
+    "emptyDescription": "Hier erscheinen offene Aufgaben, die Ihnen zugewiesen sind.",
+    "loadFailed": "Ihre Aufgaben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "newTask": "Neue Aufgabe",
+    "add": "Hinzufügen",
+    "name": "Name der Aufgabe",
+    "dueTitle": "Fällig",
+    "matterTitle": "Akte",
+    "findMatter": "Akte suchen",
+    "addFailed": "Die Aufgabe konnte nicht hinzugefügt werden. Versuchen Sie es erneut.",
+    "mattersFailed": "Ihre Akten konnten nicht geladen werden.",
+    "dueOn": "fällig {day}",
+    "dueChoice": {
+      "none": "Kein Datum",
+      "today": "Heute",
+      "tomorrow": "Morgen",
+      "nextWeek": "In einer Woche"
+    },
+    "due": {
+      "overdue": "Überfällig",
+      "today": "Heute",
+      "tomorrow": "Morgen",
+      "week": "Diese Woche",
+      "later": "Später",
+      "none": "Ohne Fälligkeit"
+    },
+    "markDone": "Als erledigt markieren",
+    "reopen": "Wieder öffnen",
+    "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut.",
+    "pickTitle": "Aufgabe wählen",
+    "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen.",
+    "openMatter": "Akte öffnen"
   },
   "matters": {
-    "description": "Finden Sie eine Akte und erfassen Sie schnell den wesentlichen Kontext.",
     "emptyTitle": "Noch keine Akten",
     "emptyDescription": "Ihre zuletzt bearbeiteten Akten erscheinen hier.",
     "loadFailed": "Ihre Akten konnten nicht geladen werden.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "groupBy": "Gruppieren nach",
+    "noGrouping": "Nicht gruppieren",
+    "groupClient": "Klient",
+    "personal": "Persönlich",
+    "newMatter": "Neue Akte",
+    "create": "Erstellen",
+    "name": "Name der Akte",
+    "personalHint": "Sie wird als persönliche Akte angelegt, die nur Sie sehen. Mandant und Mitglieder fügen Sie im Web hinzu.",
+    "createFailed": "Die Akte konnte nicht erstellt werden. Versuchen Sie es erneut.",
+    "pickTitle": "Akte wählen",
+    "pickDescription": "Wählen Sie eine Akte aus der Liste, um ihre Dokumente und Aufgaben zu sehen."
+  },
+  "matter": {
+    "documents": "Dokumente",
+    "tasks": "Aufgaben",
+    "emptyTitle": "Noch nichts vorhanden",
+    "emptyDescription": "Dokumente und Aufgaben dieser Akte erscheinen hier.",
+    "loadFailed": "Diese Akte konnte nicht geladen werden.",
+    "loadMoreFailed": "Weitere Einträge konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "retry": "Erneut versuchen",
+    "untitled": "Ohne Titel",
+    "updated": "Geändert {time}",
+    "kind": {
+      "folder": "Ordner",
+      "document": "Dokument",
+      "task": "Aufgabe"
+    },
+    "status": {
+      "open": "Offen",
+      "in_progress": "In Bearbeitung",
+      "in_review": "In Prüfung",
+      "done": "Erledigt",
+      "cancelled": "Abgebrochen"
+    },
+    "add": "Hinzufügen",
+    "scanDocument": "Dokument scannen",
+    "newTask": "Neue Aufgabe"
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Aktenzeichen",
+    "currentVersion": "Aktuelle Version",
+    "loadFailed": "Dieser Eintrag konnte nicht geladen werden."
   },
   "signIn": {
-    "title": "Bei stella anmelden",
-    "description": "Geben Sie die Adresse Ihres stella-Servers ein. Die Anmeldung bestätigen Sie im Browser.",
+    "beta": "Beta",
+    "headline": "Klarheit für jeden Fall.",
+    "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
+    "submit": "Anmelden",
+    "terms": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> zu.",
+    "options": "Anmeldeoptionen",
+    "serverTitle": "Server",
+    "serverDescription": "Die App meldet sich bei stella an. Geben Sie nur dann einen anderen Server an, wenn Ihre Organisation einen eigenen betreibt.",
+    "useStella": "stella verwenden",
+    "done": "Fertig",
     "serverLabel": "Serveradresse",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Weiter",
     "sessionEnded": "Ihre Sitzung ist abgelaufen. Melden Sie sich erneut an.",
     "errors": {
       "address": "Geben Sie eine https-Adresse ein, etwa stella.example.com.",
@@ -40,5 +152,79 @@
     "accountTitle": "Konto",
     "server": "Server",
     "signOut": "Abmelden"
+  },
+  "header": {
+    "search": "Suchen"
+  },
+  "law": {
+    "title": "Rechtsprechung",
+    "newest": "Neueste Entscheidungen",
+    "noResults": "Nichts entspricht den Wörtern, die diese Suche verlangt hat.",
+    "noResultsHint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
+    "unavailable": "Die Suche ist vorübergehend nicht verfügbar",
+    "retry": "Erneut versuchen",
+    "headnote": "Leitsatz",
+    "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
+    "openSource": "Originalquelle öffnen",
+    "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
+    "share": "Teilen"
+  },
+  "more": {
+    "soon": "Demnächst verfügbar",
+    "timers": "Timer",
+    "voiceInput": "Spracheingabe"
+  },
+  "writes": {
+    "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
+    "signInAgain": "Erneut anmelden"
+  },
+  "timers": {
+    "title": "Timer",
+    "start": "Starten",
+    "startTimer": "Timer starten",
+    "newTimer": "Neuer Timer",
+    "description": "Woran arbeiten Sie?",
+    "matterTitle": "Akte",
+    "noMatter": "Keine Akte",
+    "noDescription": "Keine Beschreibung",
+    "running": "Läuft",
+    "paused": "Pausiert",
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "save": "Speichern",
+    "discard": "Verwerfen",
+    "emptyTitle": "Keine Timer",
+    "emptyDescription": "Starten Sie einen Timer mit + und speichern Sie ihn danach als Zeiteintrag.",
+    "loadFailed": "Ihre Timer konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "unavailable": "Die Zeiterfassung ist für Ihre Organisation nicht aktiviert.",
+    "startFailed": "Der Timer konnte nicht gestartet werden. Versuchen Sie es erneut.",
+    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut."
+  },
+  "scan": {
+    "title": "Dokument scannen",
+    "upload": "Hochladen",
+    "name": "Dokumentname",
+    "defaultName": "Scan {day}",
+    "pages": "{count, plural, one {# Seite} other {# Seiten}}",
+    "matterTitle": "Akte",
+    "uploadFailed": "Der Scan konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
+    "failedTitle": "Scan fehlgeschlagen",
+    "failed": "Die Kamera konnte den Scan nicht speichern. Versuchen Sie es erneut."
+  },
+  "shortcuts": {
+    "search": "Suchen",
+    "palette": "Befehlspalette",
+    "next": "Nächstes Ergebnis",
+    "previous": "Vorheriges Ergebnis",
+    "toggleList": "Liste ein- oder ausblenden"
+  },
+  "palette": {
+    "placeholder": "Akten und Chats suchen oder einen Befehl ausführen",
+    "noResults": "Nichts passt zu „{query}“"
+  },
+  "pane": {
+    "showList": "Liste einblenden",
+    "hideList": "Liste ausblenden"
   }
 }

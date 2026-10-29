@@ -3003,7 +3003,7 @@
       "scope": "matters_write"
     },
     "name": "delete_matter",
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter with its documents, tasks, fields and chat history; irreversible. Refused (409) when it has time, expenses or invoices: archive it instead.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -3164,8 +3164,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": ["precision", "year"],
@@ -3180,8 +3179,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3201,8 +3199,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3498,8 +3495,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": ["precision", "year"],
@@ -3514,8 +3510,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -3535,8 +3530,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -4906,7 +4900,7 @@
           }
         },
         "status": {
-          "enum": ["draft", "approved", "billed", "written_off"],
+          "enum": ["draft", "submitted", "approved", "billed", "written_off"],
           "type": "string",
           "description": "List only entries with this status"
         },
@@ -5103,7 +5097,7 @@
       "featureId": "time-billing"
     },
     "name": "resolve_rate",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id", "date"],
@@ -5113,6 +5107,11 @@
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",
@@ -5144,7 +5143,7 @@
       "featureId": "time-billing"
     },
     "name": "list_invoices",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "inputSchema": {
       "type": "object",
       "required": [],

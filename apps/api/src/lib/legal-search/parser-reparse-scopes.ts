@@ -109,35 +109,35 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "page furniture, page-break cuts, letter-spaced words, layout tables, list numbers, subsection headings, separate opinions and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 29,
+    version: 31,
     scope: {
       type: "all",
       reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -149,19 +149,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 13,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
+        "paragraph text, paragraph numbers and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; letter-spaced words and section markers include uneven chunks witnessed by intact words in the decision; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 15,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
@@ -173,19 +173,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
+    },
+  },
+  [ADAPTER_KEYS.PL_TK]: {
     version: 9,
     scope: {
       type: "all",
       reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
-    },
-  },
-  [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -297,6 +297,14 @@ export const PARSER_VERSION_SCOPES = {
         "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
     },
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    version: 3,
+    scope: {
+      type: "all",
+      reason:
+        "Read the stated judgment type and ECLI availability from the stored XML envelope.",
+    },
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     version: 21,
     scope: {
@@ -330,11 +338,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
     },
   },
 } as const satisfies ParserVersionScopes<

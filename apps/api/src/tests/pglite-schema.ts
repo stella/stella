@@ -17,6 +17,16 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   "20260710173000_scalable_workspace_authorization",
   "migration.sql",
 );
+const CLIENT_INVOICES_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261026220000_client_invoices",
+  "migration.sql",
+);
+const BILLING_ACTIVITY_HOUR_CAP_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261029076000_billing_activity_rates_hour_caps",
+  "migration.sql",
+);
 const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261015090000_matter_access_rule_function",
@@ -116,6 +126,11 @@ const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
 const PROVISION_PENDING_SINCE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261010110000_case_law_provision_pending_since",
+  "migration.sql",
+);
+const PROVISION_REDACTION_RETIREMENT_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261027160600_case_law_redaction_retirement",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
@@ -273,6 +288,21 @@ export const installPgliteSchemaPrerequisites = async (
       latestMigrationStatementContaining(
         "CREATE FUNCTION stella_list_verification_day",
       ),
+    ),
+  );
+  const invoiceAccessDefinition =
+    readMigrationStatements(CLIENT_INVOICES_MIGRATION_PATH)
+      .map(executableSql)
+      .find((statement) =>
+        statement.startsWith("CREATE FUNCTION public.stella_invoice_access("),
+      ) ?? panic("Invoice access migration function is missing");
+  // Its signature must exist before schema policies; no data can be read until
+  // the migration-owned body replaces this deny-all bootstrap implementation.
+  await db.execute(
+    sql.raw(
+      invoiceAccessDefinition
+        .replace(/CREATE FUNCTION/u, "CREATE OR REPLACE FUNCTION")
+        .replace(/AS \$\$[\s\S]*\$\$;/u, () => "AS $$ SELECT false $$;"),
     ),
   );
   // The reader-annotation policies call these claim and document checks, so
@@ -865,6 +895,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
     PROVISION_PENDING_SINCE_MIGRATION_PATH,
+    PROVISION_REDACTION_RETIREMENT_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>
@@ -924,6 +955,30 @@ export const installPgliteServiceClientCredentialCascade = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the summary reader and its privileges from the committed migration. */
+export const installPgliteCaseLawCoverageSummary = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261027160000_case_law_coverage_summary",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("GRANT EXECUTE ON FUNCTION") ||
+      source.startsWith('ALTER TABLE "case_law_coverage_summaries" FORCE')
+    );
+  });
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
@@ -1153,6 +1208,26 @@ export const installPgliteOrganizationMemberCapacity = async (
 };
 
 /** Install migration-owned timer signals and grants omitted by schema push. */
+/** Install the chat stored-content egress fences on threads and memberships. */
+export const installPgliteChatStoredContentEgress = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261028061100_chat_stored_content_egress",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteTimeEntryTimerSignals = async (
   db: PgliteSchemaDb,
 ) => {
@@ -1344,6 +1419,59 @@ export const installPgliteListVerificationBudgets = async (
       "ALTER TABLE",
     ].some((prefix) => source.startsWith(prefix));
   });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install invoice authorization and guards from the production migration after schema push. */
+export const installPgliteInvoiceObjects = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = [
+    ...readMigrationStatements(CLIENT_INVOICES_MIGRATION_PATH),
+    ...readMigrationStatements(BILLING_ACTIVITY_HOUR_CAP_MIGRATION_PATH),
+  ]
+    .map(executableSql)
+    .filter((statement) =>
+      /^(?:CREATE (?:OR REPLACE )?FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
+        statement,
+      ),
+    );
+  for (const statement of statements) {
+    const policy = /^CREATE POLICY (?<name>\w+) ON (?<table>\w+)/u.exec(
+      statement,
+    )?.groups;
+    if (policy?.["name"] !== undefined && policy["table"] !== undefined) {
+      // Schema push already created policies; workspace-access replay can also
+      // replace them, so reinstall the owning migration's final definitions.
+      await db.execute(
+        sql.raw(
+          `DROP POLICY IF EXISTS ${policy["name"]} ON ${policy["table"]}`,
+        ),
+      );
+    }
+    await db.execute(
+      sql.raw(
+        statement.replace(/^CREATE FUNCTION/u, "CREATE OR REPLACE FUNCTION"),
+      ),
+    );
+  }
+};
+
+/** Install filing-year semantics from the committed function migration. */
+export const installPgliteDecisionDocketFilingYear = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261027160700_decision_docket_filing_year",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith("CREATE FUNCTION"),
+  );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

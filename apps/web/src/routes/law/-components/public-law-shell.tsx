@@ -12,7 +12,6 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Separator } from "@stll/ui/separator";
-import { cn } from "@stll/ui/utils";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
@@ -22,7 +21,10 @@ import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
 import { useLawCrumbTrail } from "@/routes/law/-law-crumb-trail";
-import { LawDocumentCrumbs } from "@/routes/law/-law-document-crumbs";
+import {
+  LawDocumentCrumbs,
+  LawSectionCrumb,
+} from "@/routes/law/-law-document-crumbs";
 
 type PublicLawShellProps = {
   /** The routed page, unless the shell is standing in for one that loads. */
@@ -89,6 +91,7 @@ export function PublicLawBreadcrumbs() {
     select: (state) => sectionOfRoute(state.matches.at(-1)?.routeId),
   });
   const trail = useLawCrumbTrail();
+  const aboveDocument = trail !== null;
   const country = useMatches({
     select: (matches) => {
       const params = matches.at(-1)?.params;
@@ -98,29 +101,24 @@ export function PublicLawBreadcrumbs() {
     },
   });
 
+  // The bar is the `law-crumbs` container: its own width, which an open
+  // inspector narrows, decides which crumbs fold.
   return (
-    <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-      <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
-        <BreadcrumbItem
-          className={cn("min-w-0", trail !== null && "max-sm:hidden")}
-        >
-          <Link
-            activeOptions={CRUMB_ACTIVE_OPTIONS}
-            activeProps={CRUMB_ACTIVE_PROPS}
-            className={CRUMB_LINK_CLASS}
-            to="/law"
-          >
-            {t("common.legalDatabase")}
-          </Link>
-        </BreadcrumbItem>
-        {section === "decisions" && (
-          <>
-            <BreadcrumbSeparator
-              className={cn("shrink-0", trail !== null && "max-sm:hidden")}
-            />
-            <BreadcrumbItem
-              className={cn("min-w-0", trail !== null && "max-sm:hidden")}
+    <div className="@container/law-crumbs flex min-w-0 flex-1">
+      <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
+          <LawSectionCrumb aboveDocument={aboveDocument} first>
+            <Link
+              activeOptions={CRUMB_ACTIVE_OPTIONS}
+              activeProps={CRUMB_ACTIVE_PROPS}
+              className={CRUMB_LINK_CLASS}
+              to="/law"
             >
+              {t("common.legalDatabase")}
+            </Link>
+          </LawSectionCrumb>
+          {section === "decisions" && (
+            <LawSectionCrumb aboveDocument={aboveDocument}>
               <Link
                 activeOptions={CRUMB_ACTIVE_OPTIONS}
                 activeProps={CRUMB_ACTIVE_PROPS}
@@ -132,17 +130,10 @@ export function PublicLawBreadcrumbs() {
               >
                 {t("common.caseLaw")}
               </Link>
-            </BreadcrumbItem>
-          </>
-        )}
-        {section === "statutes" && (
-          <>
-            <BreadcrumbSeparator
-              className={cn("shrink-0", trail !== null && "max-sm:hidden")}
-            />
-            <BreadcrumbItem
-              className={cn("min-w-0", trail !== null && "max-sm:hidden")}
-            >
+            </LawSectionCrumb>
+          )}
+          {section === "statutes" && (
+            <LawSectionCrumb aboveDocument={aboveDocument}>
               <Link
                 activeOptions={CRUMB_ACTIVE_OPTIONS}
                 activeProps={CRUMB_ACTIVE_PROPS}
@@ -152,27 +143,25 @@ export function PublicLawBreadcrumbs() {
               >
                 {t("statutes.title")}
               </Link>
-            </BreadcrumbItem>
-          </>
-        )}
-        {section === "coverage" && (
-          <>
-            <BreadcrumbSeparator
-              className={cn("shrink-0", trail !== null && "max-sm:hidden")}
-            />
-            <BreadcrumbItem
-              className={cn("min-w-0", trail !== null && "max-sm:hidden")}
-            >
-              <BreadcrumbPage className="min-w-0">
-                <span className="block truncate">
-                  {t("caseLaw.coverage.title")}
-                </span>
-              </BreadcrumbPage>
-            </BreadcrumbItem>
-          </>
-        )}
-        {trail !== null && <LawDocumentCrumbs trail={trail} />}
-      </BreadcrumbList>
-    </Breadcrumb>
+            </LawSectionCrumb>
+          )}
+          {/* The coverage page ends its trail: no document follows it, so
+              its crumb is the one that shrinks, and it truncates. */}
+          {section === "coverage" && (
+            <>
+              <BreadcrumbSeparator className="shrink-0" />
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="min-w-0">
+                  <span className="block truncate">
+                    {t("caseLaw.coverage.title")}
+                  </span>
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          )}
+          {trail !== null && <LawDocumentCrumbs trail={trail} />}
+        </BreadcrumbList>
+      </Breadcrumb>
+    </div>
   );
 }

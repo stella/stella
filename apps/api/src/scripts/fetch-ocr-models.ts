@@ -13,11 +13,11 @@ import path from "node:path";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sanitizeQueryErrorText } from "@stll/errors";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { fetchBytesFollowingRedirects } from "@/api/lib/redirect-fetch";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 import { hashArtifactBytes as sha256Hex } from "./artifact-content-hash";
 

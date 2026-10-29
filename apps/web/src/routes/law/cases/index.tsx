@@ -58,6 +58,7 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
 import { correctedCaseLawFilterSearch } from "./-case-law-filter-scope.logic";
+import { PublicCaseLawIndexError } from "./-case-law-index-error";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { searchSchema } from "./-case-law-search-schema";
 
@@ -388,6 +389,7 @@ export const Route = createFileRoute("/law/cases/")({
     async () => import("./-case-law-index-page"),
     "PublicCaseLawIndex",
   ),
+  errorComponent: PublicCaseLawIndexError,
   pendingComponent: lazyRouteComponent(
     async () => import("./-case-law-index-page"),
     "PublicCaseLawIndexPending",

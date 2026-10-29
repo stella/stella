@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -93,10 +94,15 @@ const write = (root: string, file: string, contents: string) => {
 };
 
 /** A release tree with a pending changeset, as the cut meets it on main. */
-const releaseTree = (): string => {
+const releaseTree = (mainVersion = "1.2.3"): string => {
   const root = mkdtempSync(nodePath.join(tmpdir(), "stella-cut-gates-"));
   roots.push(root);
-  write(root, "VERSION", "1.2.3\n");
+  write(root, "VERSION", `${mainVersion}\n`);
+  write(
+    root,
+    "scripts/check-npm-publish-lag.ts",
+    `await Bun.write(${JSON.stringify(`${root}.npm-arguments.json`)}, JSON.stringify(process.argv.slice(2)));\n`,
+  );
   write(root, "docs/changelog/v1.2.3.md", "# Previous release\n");
   write(
     root,
@@ -149,6 +155,8 @@ type CutRun = {
   /** Whether the tree was untouched each time a gate ran. */
   untouchedAtEveryGate: boolean;
   versioned: number;
+  npmFinalTags: readonly string[];
+  npmArguments: readonly string[];
 };
 
 const runCut = async (
@@ -157,17 +165,26 @@ const runCut = async (
   args: readonly string[] = [],
 ): Promise<CutRun> => {
   const before = snapshot(root);
+  const npmArgumentsPath = `${root}.npm-arguments.json`;
+  roots.push(npmArgumentsPath);
   const output: string[] = [];
   const gatesRun: string[] = [];
+  const npmFinalTags: string[] = [];
   let untouchedAtEveryGate = true;
   let versioned = 0;
-  const runGate: CutGateRunner = async (gate) => {
+  const runGate: CutGateRunner = async (gate, context) => {
     gatesRun.push(gate.name);
+    if (gate.check.kind === "npm-publish-lag") {
+      npmFinalTags.push(context.previousFinalTag);
+    }
     untouchedAtEveryGate &&=
       JSON.stringify(snapshot(root)) === JSON.stringify(before);
     const verdict = script[gate.name] ?? "pass";
     if (verdict === "throw") {
       throw new Error(`${gate.name} could not run`);
+    }
+    if (verdict === "pass" && gate.check.kind === "npm-publish-lag") {
+      return runCutGate(gate, context);
     }
     return verdict === "pass"
       ? { passed: true }
@@ -177,6 +194,9 @@ const runCut = async (
     rootDir: root,
     assertCleanWorktree: () => undefined,
     resolveHeadSha: () => BASE_SHA,
+    latestFinalVersion: () => "1.2.3",
+    assertNoOpenRelease: () => undefined,
+    openReleasePullRequest: () => undefined,
     runGate,
     queueHistoryWarning: () => null,
     readPreviousRelease: async () => ({
@@ -215,8 +235,28 @@ const runCut = async (
     output: output.join(""),
     untouchedAtEveryGate,
     versioned,
+    npmFinalTags,
+    npmArguments: existsSync(npmArgumentsPath)
+      ? v.parse(
+          v.array(v.string()),
+          JSON.parse(readFileSync(npmArgumentsPath, "utf-8")),
+        )
+      : [],
   };
 };
+
+test("deployment environment contract blocks a cut without an override", () => {
+  expect(preCutGates()).toContainEqual({
+    name: "deploy-env-contract",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  });
+});
 
 const PRE_CUT_NAMES = preCutGates().map(({ name }) => name);
 
@@ -267,6 +307,19 @@ describe("the maintenance cut checks the tag gates first", () => {
     );
     expect(run.output).toContain("maintenance-release: prepared 1.2.4");
   });
+
+  for (const mainVersion of ["1.2.3", "1.2.2"]) {
+    test(`checks npm for the newest final when main VERSION is ${mainVersion}`, async () => {
+      const root = releaseTree(mainVersion);
+      const run = await runCut(root, {});
+      expect(run.error).toBeNull();
+      expect(run.npmFinalTags).toEqual(["v1.2.3"]);
+      expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
+      expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+        "1.2.4\n",
+      );
+    });
+  }
 
   test("reads a gate that cannot run as a failed gate and still runs the rest", async () => {
     const root = releaseTree();
@@ -344,7 +397,7 @@ describe("every release-tag gate is classified for the cut", () => {
     ]);
   });
 
-  test("each pre-cut tag gate runs the command the tag runs", () => {
+  test("pre-cut guards match the tag guards with an explicit final ref before the cut", () => {
     const commands = tagGateCommands();
     const tagPreCut = preCutGates().filter(
       ({ source }) => source === "release-tag",
@@ -352,13 +405,26 @@ describe("every release-tag gate is classified for the cut", () => {
     expect(tagPreCut.map(({ name }) => name)).toEqual([
       "dependency-audit",
       "npm-publish-lag",
+      "npm-publish-readiness",
     ]);
     for (const gate of tagPreCut) {
-      expect(gate.check.kind).toBe("command");
-      if (gate.check.kind === "command") {
-        expect(commands.get(gate.name), gate.name).toBe(
-          gate.check.command.join(" "),
-        );
+      switch (gate.check.kind) {
+        case "command":
+          expect(commands.get(gate.name), gate.name).toBe(
+            gate.check.command.join(" "),
+          );
+          break;
+        case "npm-publish-lag":
+          expect(gate.name).toBe("npm-publish-lag");
+          expect(commands.get(gate.name)).toBe(
+            "bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD",
+          );
+          break;
+        case "main-statuses":
+          throw new TypeError("Main status checks must be cut-owned");
+        default:
+          gate.check satisfies never;
+          throw new TypeError("Unhandled pre-cut gate");
       }
     }
     expect(
@@ -387,6 +453,7 @@ describe("a command gate", () => {
   });
   const context = {
     baseSha: BASE_SHA,
+    previousFinalTag: "v1.2.3",
     rootDir: import.meta.dirname,
     write: () => undefined,
   };

@@ -2,7 +2,6 @@ import type {
   ComponentProps,
   Dispatch,
   MouseEvent,
-  ReactNode,
   SetStateAction,
 } from "react";
 
@@ -20,6 +19,7 @@ import type {
   DownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import {
+  type HeaderAction,
   type InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
@@ -31,6 +31,10 @@ import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { splitFileName } from "@/lib/files/file-name-edit";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
 
 export type MatterOrigin = {
   color: string | null;
@@ -91,9 +95,7 @@ export const getFileTabHeaderProps = ({
     },
   }) satisfies Omit<ComponentProps<typeof InspectorTabHeader>, "actions">;
 
-type FileTabHeaderActionsProps = {
-  /** The persona's own actions, after the file's. */
-  children?: ReactNode;
+type FileTabHeaderActionsOptions = {
   desktopEditTarget: Pick<DesktopOpenTarget, "fileType" | "propertyId"> | null;
   downloadRenditions: readonly DownloadRendition[];
   /** The current PDF file the signer may sign, or `null` to offer no signing. */
@@ -102,16 +104,16 @@ type FileTabHeaderActionsProps = {
 };
 
 /**
- * Download, open-in-desktop-app and sign, rendered by both the peek header and the
- * full-view header so the two cannot drift apart.
+ * Download, open-in-desktop-app and sign, shared by the peek header and the
+ * full-view header so the two cannot drift apart. Each persona appends its own
+ * actions after these.
  */
-export const FileTabHeaderActions = ({
-  children,
+export const fileTabHeaderActions = ({
   desktopEditTarget,
   downloadRenditions,
   pdfSignTarget,
   tab,
-}: FileTabHeaderActionsProps) => {
+}: FileTabHeaderActionsOptions): HeaderAction[] => {
   const startDownload = (variant: DownloadVariant) => {
     detached(
       downloadTabFile({
@@ -126,13 +128,23 @@ export const FileTabHeaderActions = ({
       "file-tab-panel.download-tab-file",
     );
   };
-  return (
-    <>
-      <DownloadSplitButton
-        onDownload={startDownload}
-        renditions={downloadRenditions}
-      />
-      {desktopEditTarget !== null ? (
+  const actions: HeaderAction[] = [
+    {
+      id: "download",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => (
+        <DownloadSplitButton
+          onDownload={startDownload}
+          renditions={downloadRenditions}
+        />
+      ),
+    },
+  ];
+  if (desktopEditTarget !== null) {
+    actions.push({
+      id: "open-in-desktop-app",
+      requires: [REQUIREMENT.desktopAppHost],
+      render: () => (
         <DesktopOpenButton
           entityId={tab.entityId}
           fieldId={tab.id}
@@ -140,11 +152,17 @@ export const FileTabHeaderActions = ({
           propertyId={desktopEditTarget.propertyId}
           workspaceId={tab.workspaceId}
         />
-      ) : null}
-      {pdfSignTarget !== null ? <PdfSignButton target={pdfSignTarget} /> : null}
-      {children}
-    </>
-  );
+      ),
+    });
+  }
+  if (pdfSignTarget !== null) {
+    actions.push({
+      id: "sign",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => <PdfSignButton target={pdfSignTarget} />,
+    });
+  }
+  return actions;
 };
 
 export const MoveToMainButton = ({

@@ -47,11 +47,19 @@ export const actionAdmissionOutcome = (error: unknown) => {
           new URL(href).protocol === "http:")
           ? href
           : undefined;
+      const retryAfterMs =
+        typeof details === "object" &&
+        details !== null &&
+        "retryAfterMs" in details &&
+        typeof details.retryAfterMs === "number"
+          ? details.retryAfterMs
+          : undefined;
       return {
         code,
         contactUrl,
         messageKey: ACTION_ADMISSION_ERROR_KEYS[code],
         retryable: ACTION_ADMISSION_REFUSALS[code].retryable,
+        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
       };
     }
     current = current.cause;

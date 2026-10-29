@@ -83,7 +83,7 @@ organization_access_states.updated_at             timestamptz         default,no
 Separate from the original standing: feature disablement and older builds read organization_access_states without observing or rewriting this overlay.
 
 ```text
-organization_configured_access.organization_id                 safeOrganizationId  pk,not null       usage.ts:545
+organization_configured_access.organization_id                 safeOrganizationId  pk,fk,not null    usage.ts:545
 organization_configured_access.source_signature                text                not null          usage.ts:546
 organization_configured_access.source_event_at                 timestamptz         null              usage.ts:547
 organization_configured_access.source_entitlement_external_id  text                not null          usage.ts:548
@@ -170,7 +170,7 @@ Which members occupy the organisation's purchased seats.
 ```text
 usage_seat_assignments.id                   pUuid               pk,not null       usage.ts:848
 usage_seat_assignments.organization_id      safeOrganizationId  fk,not null       usage.ts:849
-usage_seat_assignments.user_id              text                not null          usage.ts:852
+usage_seat_assignments.user_id              text                fk,not null       usage.ts:852
 usage_seat_assignments.assigned_by_user_id  text                fk,null           usage.ts:853
 usage_seat_assignments.created_at           timestamptz         default,not null  usage.ts:856
 ```

@@ -1,33 +1,145 @@
 {
   "tabs": {
     "chat": "الدردشة",
-    "tasks": "المهام",
+    "close": "إغلاق",
+    "law": "الاجتهاد القضائي",
     "matters": "الملفات القانونية",
-    "settings": "الإعدادات"
+    "more": "المزيد",
+    "settings": "الإعدادات",
+    "tasks": "المهام"
   },
   "chat": {
-    "description": "أبقِ عملك الجاري في متناولك وتابعه من أي جهاز.",
     "emptyTitle": "لا توجد محادثات بعد",
-    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة."
+    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة.",
+    "noMatchesTitle": "لا توجد محادثات مطابقة",
+    "noMatchesDescription": "لا يحتوي أي عنوان محادثة أو ملف قانوني على \"{search}\".",
+    "search": "البحث في المحادثات",
+    "loadFailed": "تعذّر تحميل محادثاتك.",
+    "retry": "إعادة المحاولة",
+    "untitled": "محادثة بلا عنوان",
+    "loadMoreFailed": "تحميل المزيد",
+    "loadOlderFailed": "تحميل الرسائل السابقة",
+    "toolUsed": "تم استخدام: {tool}",
+    "threadTitle": "محادثة",
+    "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
+    "threadEmptyDescription": "لا تحتوي هذه المحادثة على رسائل بعد.",
+    "sections": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "week": "آخر 7 أيام",
+      "earlier": "سابقًا"
+    },
+    "newChat": "محادثة جديدة",
+    "composerPlaceholder": "اسأل stella",
+    "send": "إرسال",
+    "stop": "إيقاف",
+    "sendFailed": "تعذّر إرسال رسالتك. حاول مرة أخرى.",
+    "answerWorking": "جارٍ العمل…",
+    "answerStopped": "تم الإيقاف.",
+    "answerNeedsInput": "تحتاج هذه الإجابة إلى إدخالك. تابعها في stella على الويب.",
+    "answerFailed": "تعذّر إكمال الإجابة.",
+    "composerMenu": "فتح قائمة المرفقات والأدوات",
+    "pickTitle": "اختر محادثة",
+    "pickDescription": "اختر سلسلة من القائمة أو ابدأ واحدة جديدة بزر +."
   },
   "tasks": {
-    "description": "اطّلع على ما يحتاج إلى اهتمامك دون فتح مساحة العمل بالكامل.",
     "emptyTitle": "لا توجد مهام مفتوحة",
-    "emptyDescription": "ستظهر هنا المهام المسندة والقادمة."
+    "emptyDescription": "ستظهر هنا المهام المفتوحة المسندة إليك.",
+    "loadFailed": "تعذّر تحميل مهامك.",
+    "retry": "إعادة المحاولة",
+    "newTask": "مهمة جديدة",
+    "add": "إضافة",
+    "name": "اسم المهمة",
+    "dueTitle": "الاستحقاق",
+    "matterTitle": "القضية",
+    "findMatter": "البحث عن قضية",
+    "addFailed": "تعذّرت إضافة المهمة. حاول مرة أخرى.",
+    "mattersFailed": "تعذّر تحميل قضاياك.",
+    "dueOn": "تستحق {day}",
+    "dueChoice": {
+      "none": "بلا تاريخ",
+      "today": "اليوم",
+      "tomorrow": "غدًا",
+      "nextWeek": "بعد أسبوع"
+    },
+    "due": {
+      "overdue": "متأخرة",
+      "today": "اليوم",
+      "tomorrow": "غدًا",
+      "week": "هذا الأسبوع",
+      "later": "لاحقًا",
+      "none": "بلا تاريخ استحقاق"
+    },
+    "markDone": "وضع علامة كمنجزة",
+    "reopen": "إعادة الفتح",
+    "statusFailed": "تعذّر تغيير المهمة. حاول مرة أخرى.",
+    "pickTitle": "اختر مهمة",
+    "pickDescription": "اختر مهمة من القائمة لرؤيتها هنا.",
+    "openMatter": "فتح القضية"
   },
   "matters": {
-    "description": "ابحث عن ملف قانوني واحصل على سياقه الأساسي بسرعة.",
     "emptyTitle": "لا توجد ملفات قانونية بعد",
     "emptyDescription": "ستظهر هنا ملفاتك القانونية الأخيرة.",
     "loadFailed": "تعذّر تحميل ملفاتك القانونية.",
-    "retry": "حاول مرة أخرى"
+    "retry": "حاول مرة أخرى",
+    "groupBy": "التجميع حسب",
+    "noGrouping": "بلا تجميع",
+    "groupClient": "عميل",
+    "personal": "شخصية",
+    "newMatter": "قضية جديدة",
+    "create": "إنشاء",
+    "name": "اسم القضية",
+    "personalHint": "تُنشأ قضيةً شخصية لا يراها غيرك. أضف عميلًا وأعضاء من الويب.",
+    "createFailed": "تعذّر إنشاء القضية. حاول مرة أخرى.",
+    "pickTitle": "اختر قضية",
+    "pickDescription": "اختر قضية من القائمة لرؤية مستنداتها ومهامها."
+  },
+  "matter": {
+    "documents": "المستندات",
+    "tasks": "المهام",
+    "emptyTitle": "لا يوجد شيء بعد",
+    "emptyDescription": "ستظهر هنا مستندات هذه القضية ومهامها.",
+    "loadFailed": "تعذّر تحميل هذه القضية.",
+    "loadMoreFailed": "تعذّر تحميل المزيد من العناصر.",
+    "loadMore": "تحميل المزيد",
+    "retry": "إعادة المحاولة",
+    "untitled": "بلا عنوان",
+    "updated": "عُدّل {time}",
+    "kind": {
+      "folder": "مجلد",
+      "document": "مستند",
+      "task": "مهمة"
+    },
+    "status": {
+      "open": "مفتوحة",
+      "in_progress": "قيد التنفيذ",
+      "in_review": "قيد المراجعة",
+      "done": "منجزة",
+      "cancelled": "ملغاة"
+    },
+    "add": "إضافة",
+    "scanDocument": "مسح مستند ضوئيًا",
+    "newTask": "مهمة جديدة"
+  },
+  "entity": {
+    "type": "النوع",
+    "reference": "المرجع",
+    "currentVersion": "الإصدار الحالي",
+    "loadFailed": "تعذّر تحميل هذا العنصر."
   },
   "signIn": {
-    "title": "سجّل الدخول إلى stella",
-    "description": "أدخل عنوان خادم stella الخاص بك. ستوافق على تسجيل الدخول في المتصفح.",
+    "beta": "تجريبي",
+    "headline": "وضوح لكل قضية.",
+    "subtitle": "المستندات والاجتهاد القضائي والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
+    "submit": "تسجيل الدخول",
+    "terms": "بالمتابعة، فإنك توافق على <terms>شروط الخدمة</terms> الخاصة بنا.",
+    "options": "خيارات تسجيل الدخول",
+    "serverTitle": "الخادم",
+    "serverDescription": "يسجّل التطبيق الدخول إلى stella. حدّد خادمًا آخر فقط إذا كانت مؤسستك تشغّل خادمها الخاص.",
+    "useStella": "استخدام stella",
+    "done": "تم",
     "serverLabel": "عنوان الخادم",
     "serverPlaceholder": "stella.example.com",
-    "submit": "متابعة",
     "sessionEnded": "انتهت جلستك. سجّل الدخول مرة أخرى.",
     "errors": {
       "address": "أدخل عنوان https، مثل stella.example.com.",
@@ -40,5 +152,79 @@
     "accountTitle": "الحساب",
     "server": "الخادم",
     "signOut": "تسجيل الخروج"
+  },
+  "header": {
+    "search": "بحث"
+  },
+  "law": {
+    "title": "الاجتهاد القضائي",
+    "newest": "أحدث الأحكام",
+    "noResults": "لا شيء يطابق الكلمات التي اشترطها هذا البحث.",
+    "noResultsHint": "جرّب كلمات أقل أو كلمات مختلفة: المصطلحات التي يستخدمها الحكم، لا الجملة التي يُطرح بها السؤال.",
+    "unavailable": "البحث غير متاح مؤقتًا",
+    "retry": "حاول مرة أخرى",
+    "headnote": "خلاصة الحكم",
+    "textUnavailable": "لا يتوفر نص لهذا الحكم",
+    "openSource": "فتح المصدر الأصلي",
+    "loadFailed": "تعذّر تحميل الاجتهاد القضائي.",
+    "share": "مشاركة"
+  },
+  "more": {
+    "soon": "قريبًا",
+    "timers": "مؤقتات",
+    "voiceInput": "الإدخال الصوتي"
+  },
+  "writes": {
+    "consentNeeded": "لإجراء تغييرات من التطبيق، تحتاج stella إلى إذنك. سجّل الدخول مجددًا لمنحه.",
+    "signInAgain": "تسجيل الدخول مجددًا"
+  },
+  "timers": {
+    "title": "المؤقتات",
+    "start": "بدء",
+    "startTimer": "بدء مؤقت",
+    "newTimer": "مؤقت جديد",
+    "description": "على ماذا تعمل؟",
+    "matterTitle": "القضية",
+    "noMatter": "بلا قضية",
+    "noDescription": "بلا وصف",
+    "running": "يعمل",
+    "paused": "متوقف مؤقتًا",
+    "pause": "إيقاف مؤقت",
+    "resume": "استئناف",
+    "save": "حفظ",
+    "discard": "تجاهل",
+    "emptyTitle": "لا توجد مؤقتات",
+    "emptyDescription": "ابدأ مؤقتًا بزر + واحفظه كقيد وقت عند الانتهاء.",
+    "loadFailed": "تعذّر تحميل مؤقتاتك.",
+    "retry": "إعادة المحاولة",
+    "unavailable": "تتبع الوقت غير مفعّل في مؤسستك.",
+    "startFailed": "تعذّر بدء المؤقت. حاول مرة أخرى.",
+    "changeFailed": "تعذّر تغيير المؤقت. حاول مرة أخرى."
+  },
+  "scan": {
+    "title": "مسح مستند ضوئيًا",
+    "upload": "رفع",
+    "name": "اسم المستند",
+    "defaultName": "مسح {day}",
+    "pages": "{count, plural, zero {لا صفحات} one {صفحة واحدة} two {صفحتان} few {# صفحات} many {# صفحة} other {# صفحة}}",
+    "matterTitle": "القضية",
+    "uploadFailed": "تعذّر رفع المسح. حاول مرة أخرى.",
+    "failedTitle": "فشل المسح",
+    "failed": "تعذّر على الكاميرا حفظ المسح. حاول مرة أخرى."
+  },
+  "shortcuts": {
+    "search": "بحث",
+    "palette": "لوحة الأوامر",
+    "next": "النتيجة التالية",
+    "previous": "النتيجة السابقة",
+    "toggleList": "إظهار القائمة أو إخفاؤها"
+  },
+  "palette": {
+    "placeholder": "ابحث في القضايا والمحادثات أو نفّذ أمرًا",
+    "noResults": "لا شيء يطابق «{query}»"
+  },
+  "pane": {
+    "showList": "إظهار القائمة",
+    "hideList": "إخفاء القائمة"
   }
 }

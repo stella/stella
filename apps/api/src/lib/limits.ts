@@ -329,6 +329,8 @@ export const LIMITS = {
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
   timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  /** Ceiling of the approval queue's pending count; the badge shows more as "999+". */
+  timeApprovalPendingCountMax: 1000,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
@@ -355,10 +357,14 @@ export const LIMITS = {
   /** Longest span of work dates one personal time read covers: a week. */
   timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
+  clientInvoiceMatters: 50,
+  invoiceSourceItemsPerKind: 500,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.
   invoiceLinesPerInvoice: 1000,
+  // An invoice read returns every payment, voided ones included.
+  invoicePaymentsPerInvoice: 200,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */
@@ -567,6 +573,8 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /** Documents in a case file, after language-version deduplication. */
+  caseLawCaseFilePageSize: 50,
   /**
    * Judges one decision may name. A bench and its dissenters are a handful of
    * people; a decision listing more of them is a parser defect, and the read

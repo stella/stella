@@ -1,33 +1,145 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Tasks",
+    "close": "Close",
+    "law": "Case Law",
     "matters": "Matters",
-    "settings": "Settings"
+    "more": "More",
+    "settings": "Settings",
+    "tasks": "Tasks"
   },
   "chat": {
-    "description": "Keep ongoing work close and continue from any device.",
     "emptyTitle": "No conversations yet",
-    "emptyDescription": "New conversations and recent threads will appear here."
+    "emptyDescription": "New conversations and recent threads will appear here.",
+    "noMatchesTitle": "No matching chats",
+    "noMatchesDescription": "No chat title or matter contains “{search}”.",
+    "search": "Search chats",
+    "loadFailed": "Your conversations could not be loaded.",
+    "retry": "Try again",
+    "untitled": "Untitled conversation",
+    "loadMoreFailed": "Load more",
+    "loadOlderFailed": "Load earlier messages",
+    "toolUsed": "Used {tool}",
+    "threadTitle": "Conversation",
+    "threadLoadFailed": "This conversation could not be loaded.",
+    "threadEmptyDescription": "This conversation has no messages yet.",
+    "sections": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Previous 7 days",
+      "earlier": "Earlier"
+    },
+    "newChat": "New conversation",
+    "composerPlaceholder": "Ask stella",
+    "send": "Send",
+    "stop": "Stop",
+    "sendFailed": "Your message could not be sent. Try again.",
+    "answerWorking": "Working…",
+    "answerStopped": "Stopped.",
+    "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
+    "answerFailed": "The answer could not be completed.",
+    "composerMenu": "Open attachments and tools menu",
+    "pickTitle": "Pick a conversation",
+    "pickDescription": "Choose a thread from the list, or start a new one with +."
   },
   "tasks": {
-    "description": "See what needs attention without opening the full workspace.",
     "emptyTitle": "No open tasks",
-    "emptyDescription": "Assigned and upcoming work will appear here."
+    "emptyDescription": "Open tasks assigned to you will appear here.",
+    "loadFailed": "Your tasks could not be loaded.",
+    "retry": "Try again",
+    "newTask": "New task",
+    "add": "Add",
+    "name": "Task name",
+    "dueTitle": "Due",
+    "matterTitle": "Matter",
+    "findMatter": "Find a matter",
+    "addFailed": "The task could not be added. Try again.",
+    "mattersFailed": "Your matters could not be loaded.",
+    "dueOn": "due {day}",
+    "dueChoice": {
+      "none": "No date",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "nextWeek": "In a week"
+    },
+    "due": {
+      "overdue": "Overdue",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "week": "This week",
+      "later": "Later",
+      "none": "No due date"
+    },
+    "markDone": "Mark as done",
+    "reopen": "Reopen",
+    "statusFailed": "The task could not be changed. Try again.",
+    "pickTitle": "Pick a task",
+    "pickDescription": "Choose a task from the list to see it here.",
+    "openMatter": "Open matter"
   },
   "matters": {
-    "description": "Find a matter and get the essential context quickly.",
     "emptyTitle": "No matters yet",
     "emptyDescription": "Your recent matters will appear here.",
     "loadFailed": "Your matters could not be loaded.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "groupBy": "Group by",
+    "noGrouping": "No grouping",
+    "groupClient": "Client",
+    "personal": "Personal",
+    "newMatter": "New matter",
+    "create": "Create",
+    "name": "Matter name",
+    "personalHint": "It opens as a personal matter, visible only to you. Add a client and members on the web.",
+    "createFailed": "The matter could not be created. Try again.",
+    "pickTitle": "Pick a matter",
+    "pickDescription": "Choose a matter from the list to see its documents and tasks."
+  },
+  "matter": {
+    "documents": "Documents",
+    "tasks": "Tasks",
+    "emptyTitle": "Nothing here yet",
+    "emptyDescription": "Documents and tasks in this matter will appear here.",
+    "loadFailed": "This matter could not be loaded.",
+    "loadMoreFailed": "More items could not be loaded.",
+    "loadMore": "Load more",
+    "retry": "Try again",
+    "untitled": "Untitled",
+    "updated": "Updated {time}",
+    "kind": {
+      "folder": "Folder",
+      "document": "Document",
+      "task": "Task"
+    },
+    "status": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "in_review": "In review",
+      "done": "Done",
+      "cancelled": "Cancelled"
+    },
+    "add": "Add",
+    "scanDocument": "Scan a document",
+    "newTask": "New task"
+  },
+  "entity": {
+    "type": "Type",
+    "reference": "Reference",
+    "currentVersion": "Current version",
+    "loadFailed": "This item could not be loaded."
   },
   "signIn": {
-    "title": "Sign in to stella",
-    "description": "Enter the address of your stella server. You approve the sign-in in your browser.",
+    "beta": "Beta",
+    "headline": "Clarity for every case.",
+    "subtitle": "Documents, case law, and review under control. Powered by AI.",
+    "submit": "Sign in",
+    "terms": "By continuing, you agree to our <terms>Terms of Service</terms>.",
+    "options": "Sign-in options",
+    "serverTitle": "Server",
+    "serverDescription": "The app signs in to stella. Name another server only if your organisation runs its own.",
+    "useStella": "Use stella",
+    "done": "Done",
     "serverLabel": "Server address",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continue",
     "sessionEnded": "Your session ended. Sign in again.",
     "errors": {
       "address": "Enter an https address, such as stella.example.com.",
@@ -40,5 +152,79 @@
     "accountTitle": "Account",
     "server": "Server",
     "signOut": "Sign out"
+  },
+  "header": {
+    "search": "Search"
+  },
+  "law": {
+    "title": "Case Law",
+    "newest": "Newest decisions",
+    "noResults": "Nothing matched the words this search required.",
+    "noResultsHint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
+    "unavailable": "Search is temporarily unavailable",
+    "retry": "Try again",
+    "headnote": "Headnote",
+    "textUnavailable": "No text is available for this decision",
+    "openSource": "Open original source",
+    "loadFailed": "Case law could not be loaded.",
+    "share": "Share"
+  },
+  "more": {
+    "soon": "Coming soon",
+    "timers": "Timers",
+    "voiceInput": "Voice input"
+  },
+  "writes": {
+    "consentNeeded": "To make changes from the app, stella needs your permission. Sign in again to give it.",
+    "signInAgain": "Sign in again"
+  },
+  "timers": {
+    "title": "Timers",
+    "start": "Start",
+    "startTimer": "Start a timer",
+    "newTimer": "New timer",
+    "description": "What are you working on?",
+    "matterTitle": "Matter",
+    "noMatter": "No matter",
+    "noDescription": "No description",
+    "running": "Running",
+    "paused": "Paused",
+    "pause": "Pause",
+    "resume": "Resume",
+    "save": "Save",
+    "discard": "Discard",
+    "emptyTitle": "No timers",
+    "emptyDescription": "Start a timer with + and save it as a time entry when you're done.",
+    "loadFailed": "Your timers could not be loaded.",
+    "retry": "Try again",
+    "unavailable": "Time tracking is not turned on for your organization.",
+    "startFailed": "The timer could not be started. Try again.",
+    "changeFailed": "The timer could not be changed. Try again."
+  },
+  "scan": {
+    "title": "Scan a document",
+    "upload": "Upload",
+    "name": "Document name",
+    "defaultName": "Scan {day}",
+    "pages": "{count, plural, one {# page} other {# pages}}",
+    "matterTitle": "Matter",
+    "uploadFailed": "The scan could not be uploaded. Try again.",
+    "failedTitle": "Scan failed",
+    "failed": "The camera could not save the scan. Try again."
+  },
+  "shortcuts": {
+    "search": "Search",
+    "palette": "Command palette",
+    "next": "Next result",
+    "previous": "Previous result",
+    "toggleList": "Show or hide the list"
+  },
+  "palette": {
+    "placeholder": "Search matters and chats, or run a command",
+    "noResults": "Nothing matches “{query}”"
+  },
+  "pane": {
+    "showList": "Show the list",
+    "hideList": "Hide the list"
   }
 }

@@ -1,104 +1,41 @@
-import { useState } from "react";
-
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@stll/api-contract";
-import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
-import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
-import { timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
-import { Input } from "@stll/ui/input";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { ReturnSelected } from "@/features/time-review/return-selected";
+import {
+  TimeReviewRow,
+  type TimeReviewRowData,
+} from "@/features/time-review/time-review-row";
+import {
+  useItemErrors,
+  usePendingRows,
+  useTimeReview,
+} from "@/features/time-review/use-time-review";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
-import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { useUpdateExpense } from "@/lib/workspaces/mutations/expenses";
-import {
-  useApproveTimeEntries,
-  useReturnTimeEntry,
-} from "@/lib/workspaces/mutations/time-entries";
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 
-const REFUSAL_KEYS = {
-  not_found: "billing.approval.refusals.notFound",
-  not_approver: "billing.approval.refusals.notApprover",
-  wrong_status: "billing.approval.refusals.wrongStatus",
-  running_timer: "billing.approval.refusals.runningTimer",
-  unpriced: "billing.approval.refusals.unpriced",
-  time_period_locked: "billing.globalTimer.periodLocked",
-  invalid_entry: "billing.approval.refusals.invalidEntry",
-} as const satisfies Record<TimeApprovalRefusal, TranslationKey>;
-
-const isRefusal = (code: string | undefined): code is TimeApprovalRefusal =>
-  code !== undefined && Object.hasOwn(REFUSAL_KEYS, code);
-
 type Props = { workspaceId: string };
 
 /**
- * The matter's draft time and expenses from every timekeeper, for someone
- * who may approve them; invoices bill only approved work. Nothing renders for
- * anyone else, mirroring the API's `timeEntry:approve` check.
+ * The matter's submitted time and draft expenses from every timekeeper, for
+ * someone who may approve them; invoices bill only approved work. Nothing
+ * renders for anyone else, mirroring the API's `timeEntry:approve` check.
  */
 export const MatterApprovalView = ({ workspaceId }: Props) => {
   const canApprove = usePermissions({ timeEntry: ["approve"] });
   return canApprove ? <ApprovalLists workspaceId={workspaceId} /> : null;
-};
-
-/**
- * The rows with a request in flight. Each row action awaits its own request
- * and settles only its own rows, so concurrent actions never drop an outcome.
- */
-const usePendingRows = () => {
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-  const track = async (ids: readonly string[], request: Promise<void>) => {
-    setPending((current) => new Set([...current, ...ids]));
-    const settle = () =>
-      setPending((current) => {
-        const next = new Set(current);
-        for (const id of ids) {
-          next.delete(id);
-        }
-        return next;
-      });
-    await request.finally(settle);
-  };
-  return { has: (id: string) => pending.has(id), track };
-};
-
-/** Per-item errors, shown next to the entry or expense they are about. */
-const useItemErrors = () => {
-  const t = useTranslations();
-  const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
-  const failed = t("billing.approval.failed");
-  return {
-    errors,
-    refusalText: (reason: TimeApprovalRefusal) => t(REFUSAL_KEYS[reason]),
-    errorText: (error: unknown) =>
-      APIError.is(error) && isRefusal(error.code)
-        ? t(REFUSAL_KEYS[error.code])
-        : userErrorFromThrown(error, failed),
-    /** Replaces the errors of `ids` with `next`, keeping everyone else's. */
-    show: (ids: readonly string[], next: Readonly<Record<string, string>>) =>
-      setErrors((current) => ({
-        ...Object.fromEntries(
-          Object.entries(current).filter(([id]) => !ids.includes(id)),
-        ),
-        ...next,
-      })),
-  };
 };
 
 const useWorkDate = () => {
@@ -125,8 +62,8 @@ const ApprovalLists = ({ workspaceId }: Props) => {
     from: "/_protected",
     select: (context) => context.user.id,
   });
-  const { data: draftEntries } = useSuspenseQuery(
-    timeEntriesOptions(workspaceId, userId, { status: "draft" }),
+  const { data: submittedEntries } = useSuspenseQuery(
+    timeEntriesOptions(workspaceId, userId, { status: "submitted" }),
   );
   const { data: approvedEntries } = useSuspenseQuery(
     timeEntriesOptions(workspaceId, userId, { status: "approved" }),
@@ -142,7 +79,7 @@ const ApprovalLists = ({ workspaceId }: Props) => {
     : [];
 
   if (
-    draftEntries.length === 0 &&
+    submittedEntries.length === 0 &&
     approvedEntries.length === 0 &&
     expenses.length === 0
   ) {
@@ -156,7 +93,7 @@ const ApprovalLists = ({ workspaceId }: Props) => {
     <div className="flex flex-col gap-6">
       <TimeApprovals
         approvedEntries={approvedEntries}
-        draftEntries={draftEntries}
+        submittedEntries={submittedEntries}
         workspaceId={workspaceId}
       />
       {expenses.length > 0 && (
@@ -170,88 +107,39 @@ type TimeEntryItem = Awaited<
   ReturnType<NonNullable<ReturnType<typeof timeEntriesOptions>["queryFn"]>>
 >[number];
 
+const reviewRowOf =
+  (workspaceId: string) =>
+  (entry: TimeEntryItem): TimeReviewRowData => ({
+    id: entry.id,
+    workspaceId,
+    timekeeperName: entry.userName,
+    matterName: null,
+    dateWorked: entry.dateWorked,
+    durationMinutes: entry.durationMinutes,
+    billedMinutes: entry.billedMinutes,
+    rateAtEntry: entry.rateAtEntry,
+    currency: entry.currency,
+    billable: entry.billable,
+    noCharge: entry.noCharge,
+    narrative: entry.narrative,
+    returnComment: entry.returnComment,
+  });
+
 const TimeApprovals = ({
   workspaceId,
-  draftEntries,
+  submittedEntries,
   approvedEntries,
 }: Props & {
-  draftEntries: readonly TimeEntryItem[];
+  submittedEntries: readonly TimeEntryItem[];
   approvedEntries: readonly TimeEntryItem[];
 }) => {
   const t = useTranslations();
-  const workDate = useWorkDate();
-  const itemErrors = useItemErrors();
-  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
-  const [comments, setComments] = useState<Record<string, string>>({});
-  const approve = useApproveTimeEntries();
-  const returnEntry = useReturnTimeEntry();
-  const pending = usePendingRows();
-
+  const review = useTimeReview();
+  const submitted = submittedEntries.map(reviewRowOf(workspaceId));
+  const approved = approvedEntries.map(reviewRowOf(workspaceId));
   // A checked entry that another approver handled meanwhile is no longer here.
-  const selected = draftEntries
-    .filter((entry) => checked.has(entry.id))
-    .map((entry) => entry.id);
-  const requestApproval = async (ids: readonly string[]) => {
-    const outcome = await approve.mutateAsync({ workspaceId, ids }).then(
-      (batch) => ({ type: "answered" as const, batch }),
-      (error: unknown) => ({ type: "failed" as const, error }),
-    );
-    if (outcome.type === "failed") {
-      itemErrors.show(
-        ids,
-        Object.fromEntries(
-          ids.map((id) => [id, itemErrors.errorText(outcome.error)]),
-        ),
-      );
-      return;
-    }
-    itemErrors.show(
-      ids,
-      Object.fromEntries(
-        outcome.batch.results.flatMap((result) =>
-          result.status === "refused"
-            ? [[result.id, itemErrors.refusalText(result.reason)]]
-            : [],
-        ),
-      ),
-    );
-    setChecked((current) => {
-      const next = new Set(current);
-      for (const id of ids) {
-        next.delete(id);
-      }
-      return next;
-    });
-  };
-  // The API takes a bounded batch; a larger selection goes out in batches,
-  // each settling its own entries.
-  const approveEntries = (ids: readonly string[]) => {
-    for (
-      let start = 0;
-      start < ids.length;
-      start += TIME_ENTRIES_APPROVAL_BATCH_MAX
-    ) {
-      const batch = ids.slice(start, start + TIME_ENTRIES_APPROVAL_BATCH_MAX);
-      detached(
-        pending.track(batch, requestApproval(batch)),
-        "matter-approval.approve-time",
-      );
-    }
-  };
-  const returnToDraft = (id: string) =>
-    detached(
-      pending.track(
-        [id],
-        returnEntry
-          .mutateAsync({ workspaceId, id, comment: comments[id]?.trim() ?? "" })
-          .then(
-            () => itemErrors.show([id], {}),
-            (error: unknown) =>
-              itemErrors.show([id], { [id]: itemErrors.errorText(error) }),
-          ),
-      ),
-      "matter-approval.return-time",
-    );
+  const selected = review.selectedOf(submitted);
+  const show = { timekeeper: true, matter: false, date: true };
 
   return (
     <section className="flex flex-col gap-3">
@@ -260,105 +148,47 @@ const TimeApprovals = ({
           {t("billing.approval.timeEntries")}
         </h2>
         {selected.length > 0 && (
-          <Button
-            loading={selected.some(pending.has)}
-            onClick={() => approveEntries(selected)}
-            size="sm"
-          >
-            {t("billing.approval.approveSelected", { count: selected.length })}
-          </Button>
-        )}
-      </div>
-      {draftEntries.map((entry) => (
-        <div className="rounded-md border p-3" key={entry.id}>
-          <div className="flex items-start gap-3">
-            <Checkbox
-              aria-label={t("billing.approval.selectEntry")}
-              checked={checked.has(entry.id)}
-              onCheckedChange={(value) =>
-                setChecked((current) => {
-                  const next = new Set(current);
-                  if (value) {
-                    next.add(entry.id);
-                  } else {
-                    next.delete(entry.id);
-                  }
-                  return next;
-                })
-              }
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap gap-x-4 text-sm tabular-nums">
-                <strong>{entry.userName}</strong>
-                <span>{workDate(entry.dateWorked)}</span>
-                <span>{formatMinutes(entry.durationMinutes)}</span>
-                {entry.currency === UNPRICED_TIME_ENTRY_CURRENCY ? (
-                  <span>{t("billing.rates.noRateFound")}</span>
-                ) : (
-                  <>
-                    <span>
-                      {formatCurrencyAmount(entry.rateAtEntry, entry.currency)}
-                    </span>
-                    <span>
-                      {formatCurrencyAmount(
-                        timeEntryAmount(entry),
-                        entry.currency,
-                      )}
-                    </span>
-                  </>
-                )}
-              </div>
-              <p className="text-muted-foreground mt-1 text-sm" dir="auto">
-                {entry.narrative}
-              </p>
-              <ItemError message={itemErrors.errors[entry.id]} />
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ReturnSelected review={review} selected={selected} />
             <Button
-              loading={pending.has(entry.id)}
-              onClick={() => approveEntries([entry.id])}
+              loading={selected.some(({ id }) => review.isPending(id))}
+              onClick={() => review.approve(selected)}
               size="sm"
             >
-              {t("billing.approve")}
+              {t("billing.approval.approveSelected", {
+                count: selected.length,
+              })}
             </Button>
           </div>
-        </div>
-      ))}
-      {approvedEntries.length > 0 && (
+        )}
+      </div>
+      <ul className="flex flex-col gap-3">
+        {submitted.map((row) => (
+          <TimeReviewRow
+            key={row.id}
+            review={review}
+            row={row}
+            show={show}
+            stage="submitted"
+          />
+        ))}
+      </ul>
+      {approved.length > 0 && (
         <h3 className="text-muted-foreground text-xs font-medium">
           {t("billing.statuses.approved")}
         </h3>
       )}
-      {approvedEntries.map((entry) => (
-        <div className="rounded-md border p-3" key={entry.id}>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 flex-1 text-sm" dir="auto">
-              {entry.userName}: {entry.narrative}
-            </span>
-            <Input
-              aria-label={t("billing.approval.returnComment")}
-              className="max-w-64"
-              onChange={(event) =>
-                setComments((value) => ({
-                  ...value,
-                  [entry.id]: event.target.value,
-                }))
-              }
-              placeholder={t("billing.approval.returnComment")}
-              value={comments[entry.id] ?? ""}
-            />
-            <Button
-              disabled={!comments[entry.id]?.trim()}
-              loading={pending.has(entry.id)}
-              onClick={() => returnToDraft(entry.id)}
-              size="sm"
-              variant="outline"
-            >
-              {t("billing.revertToDraft")}
-            </Button>
-          </div>
-          <ItemError message={itemErrors.errors[entry.id]} />
-        </div>
-      ))}
+      <ul className="flex flex-col gap-3">
+        {approved.map((row) => (
+          <TimeReviewRow
+            key={row.id}
+            review={review}
+            row={row}
+            show={show}
+            stage="approved"
+          />
+        ))}
+      </ul>
     </section>
   );
 };

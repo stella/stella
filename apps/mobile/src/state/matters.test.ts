@@ -6,7 +6,8 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
-import { listMatters } from "./matters";
+import { needsConsent } from "./api-request";
+import { createMatter, listMatters } from "./matters";
 
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
@@ -101,12 +102,59 @@ describe("listing matters", () => {
     ]);
 
     const refused = server(() => new Response(null, { status: 401 }));
-    expect(await outcome(refused.fetch)).toBe("MattersRequestError");
+    expect(await outcome(refused.fetch)).toBe("ApiRequestError");
     expect(refused.calls).toHaveLength(3);
   });
 
   test("a response in a shape this build cannot read is an error, not an empty list", async () => {
     const { fetch } = server(() => Response.json({ workspaces: [{ id: 7 }] }));
-    expect(await outcome(fetch)).toBe("MattersRequestError");
+    expect(await outcome(fetch)).toBe("ApiRequestError");
+  });
+});
+
+describe("opening a matter", () => {
+  test("puts the matter under the id the app named, with the web's documents column", async () => {
+    const bodies: unknown[] = [];
+    const { fetch, calls } = server(() => Response.json({ id: "matter-9" }));
+    const recording: Fetch = async (input, init) => {
+      if (init?.method === "PUT" && typeof init.body === "string") {
+        bodies.push(JSON.parse(init.body));
+      }
+      return await fetch(input, init);
+    };
+    const created = await createMatter({
+      fetch: recording,
+      id: "matter-9",
+      name: "Harbor lease renewal",
+      source: sourceFor(recording),
+    });
+    expect(created.isOk() ? created.value : created.error).toBe("matter-9");
+    expect(calls).toEqual([
+      "https://stella.example.com/v1/workspaces Bearer access-0",
+    ]);
+    expect(bodies).toEqual([
+      {
+        filePropertyName: "Documents",
+        id: "matter-9",
+        name: "Harbor lease renewal",
+      },
+    ]);
+  });
+
+  test("a sign-in without the write scope asks for consent", async () => {
+    const { fetch } = server(
+      () =>
+        new Response(null, {
+          status: 403,
+          headers: { "WWW-Authenticate": 'Bearer error="insufficient_scope"' },
+        }),
+    );
+    const created = await createMatter({
+      fetch,
+      id: "matter-9",
+      name: "Harbor lease renewal",
+      source: sourceFor(fetch),
+    });
+    expect(created.isErr() && needsConsent(created.error)).toBe(true);
   });
 });
