@@ -11,8 +11,8 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import {
-  MATTER_VISIBILITY,
   MATTER_REFERENCE_RETIRED_CODE,
+  MATTER_VISIBILITY,
 } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";

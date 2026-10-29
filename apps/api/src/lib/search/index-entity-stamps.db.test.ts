@@ -4,8 +4,8 @@ import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  MATTER_VISIBILITY,
   isDocumentReferenceQuery,
+  MATTER_VISIBILITY,
 } from "@stll/api-contract";
 
 import { organization } from "@/api/db/auth-schema";

@@ -11,8 +11,8 @@ import {
   timerDetails,
   timerItem,
   timerNotFound,
-  timerScopeChanged,
   timerParams,
+  timerScopeChanged,
 } from "@/api/lib/billing/time-timers";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
