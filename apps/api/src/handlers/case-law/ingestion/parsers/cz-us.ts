@@ -96,7 +96,11 @@ import {
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
+import {
+  separateOpinionAuthorLine,
+  separateOpinionHeadingNamesAuthor,
+  separateOpinionHeadingTail,
+} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
@@ -679,10 +683,6 @@ const readsAsSentence = (text: string): boolean =>
   UNFINISHED_TITLE_RE.test(text) ||
   (text.endsWith(".") && text.split(/\s+/u).length > TITLE_SENTENCE_MAX_WORDS);
 
-/** A heading line that names its author. */
-const NAMES_AUTHOR_RE = /(?:^|\s)(?:soudc|soudky|soudkyň|JUDr)/iu;
-/** The judges named on the lines after a bare heading. */
-const AUTHOR_CONTINUATION_RE = /^(?:soudc|soudky|soudkyň)/iu;
 const DISSENT_HEADING_MAX_CHARS = 120;
 /**
  * A closing names the place and the date and nothing else. A paragraph that
@@ -816,7 +816,7 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      ...(NAMES_AUTHOR_RE.test(dissentTail)
+      ...(separateOpinionHeadingNamesAuthor(dissentTail)
         ? { inlines, plainText }
         : withAuthorContinuation({ heading: normalized, i, lines, state })),
     });
@@ -1053,10 +1053,7 @@ const withAuthorContinuation = ({
   const inlines = [...heading.inlines];
   let { plainText } = heading;
   let next = findNextNonEmpty(lines, i + 1);
-  if (
-    next === undefined ||
-    !AUTHOR_CONTINUATION_RE.test(next.value.plainText)
-  ) {
+  if (next === undefined || !separateOpinionAuthorLine(next.value.plainText)) {
     return { inlines, plainText };
   }
   while (

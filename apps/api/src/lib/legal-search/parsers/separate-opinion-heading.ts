@@ -1,1 +1,5 @@
-export { separateOpinionHeadingTail } from "@stll/legal-ast/separate-opinion-heading";
+export {
+  separateOpinionAuthorLine,
+  separateOpinionHeadingNamesAuthor,
+  separateOpinionHeadingTail,
+} from "@stll/legal-ast/separate-opinion-heading";

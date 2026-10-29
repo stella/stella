@@ -70,7 +70,7 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
   ])("%s carries the court's paragraph numbers 1 to %d", async (name, last) => {
     const { documentAst } = await parsedFixture(name);
     const numbered = bodyParagraphs(documentAst.blocks).filter(
-      (block) => block.number !== undefined,
+      (block) => block.number !== undefined && block.role !== "dissent",
     );
 
     expect(numbered.map((block) => block.number)).toEqual(
@@ -79,6 +79,28 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
     for (const block of numbered) {
       expect(block.plainText).not.toMatch(/^\d+\.\s/u);
     }
+  });
+
+  test("Pl. ÚS 52/23 retains the separate opinion's own printed 1 to 15", async () => {
+    const { documentAst } = await parsedFixture("cz-us-pl-us-52-23.html.gz");
+    const opinion = documentAst.blocks.findIndex(
+      (block) =>
+        block.type === "heading" &&
+        block.plainText === "2. Odlišné stanovisko soudce Milana Hulmáka",
+    );
+    expect(opinion).toBeGreaterThan(-1);
+    const numbered = bodyParagraphs(
+      documentAst.blocks.slice(opinion + 1),
+    ).filter((block) => block.role === "dissent" && block.number !== undefined);
+    expect(numbered.map((block) => block.number)).toEqual(
+      Array.from({ length: 15 }, (_, index) => index + 1),
+    );
+    for (const block of numbered) {
+      expect(block.plainText).not.toMatch(/^\d+\.\s/u);
+    }
+    expect(numbered.at(0)?.plainText).toStartWith(
+      "Odlišné stanovisko není motivováno",
+    );
   });
 
   test("the ruling after an opening sentence ending in takto: is the holding", async () => {

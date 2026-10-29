@@ -1,36 +1,203 @@
-/**
- * The heading of a separate opinion in a Czech decision ("Odlišné stanovisko
- * soudce …", "Odlišná stanoviska …", "Stanovisko menšiny"), shared by the
- * parsers of every court that prints one.
- *
- * The court prints the heading on its own or as the next enumerated item, and
- * names the dissenting judges after it, so the pattern is anchored at the
- * start and bounded by length rather than closed at the end. How long a
- * heading runs is the court's: the caller bounds it.
- */
+import { escapeRegExp, stripDiacritics } from "@stll/text-normalize";
 
-const SEPARATE_OPINION_HEADING_RE =
-  /^(?:Odli[šs]n[ée]\s+stanovisko|Odli[šs]n[áa]\s+stanoviska|Stanovisko\s+men[šs]iny)(?<tail>.*)$/iu;
+const OPINION_HEADING_KINDS = ["dissent", "concurring"] as const;
+
+type OpinionHeadingKind = (typeof OPINION_HEADING_KINDS)[number];
+
+type OpinionLanguageVocabulary = {
+  readonly titles: Readonly<
+    Record<OpinionHeadingKind, readonly (readonly [string, string])[]>
+  >;
+  readonly authors: readonly string[];
+  readonly prepositions: readonly string[];
+  readonly targets: readonly string[];
+  readonly contexts: readonly string[];
+  readonly subjects: readonly string[];
+};
+
+type OpinionHeadingVocabulary = {
+  readonly bareTitles: readonly string[];
+  readonly academicTitles: readonly string[];
+  readonly languages: Readonly<Record<"cs" | "sk", OpinionLanguageVocabulary>>;
+};
+
+/** Title agreement and author inflections belong to the same heading grammar. */
+const OPINION_HEADING_VOCABULARY = {
+  bareTitles: ["STANOVISKO"],
+  academicTitles: ["JUDr.", "Mgr.", "prof.", "doc."],
+  languages: {
+    cs: {
+      titles: {
+        dissent: [
+          ["Odlišné", "stanovisko"],
+          ["Odlišná", "stanoviska"],
+          ["Stanovisko", "menšiny"],
+        ],
+        concurring: [
+          ["Paralelní", "stanovisko"],
+          ["Paralelní", "stanoviska"],
+          ["Konkurující", "stanovisko"],
+          ["Konkurující", "stanoviska"],
+          ["Souhlasné", "stanovisko"],
+          ["Souhlasná", "stanoviska"],
+        ],
+      },
+      authors: [
+        "soudce",
+        "soudci",
+        "soudců",
+        "soudkyně",
+        "soudkyň",
+        "předsedy",
+        "předsedkyně",
+        "místopředsedy",
+        "místopředsedkyně",
+        "člena",
+        "členů",
+        "členky",
+        "členek",
+      ],
+      prepositions: ["k", "ke"],
+      targets: [
+        "nálezu",
+        "usnesení",
+        "rozsudku",
+        "rozhodnutí",
+        "výroku",
+        "věci",
+        "sp.",
+        "č.",
+        "§",
+        "čl.",
+      ],
+      contexts: ["ve věci", "podle §"],
+      subjects: ["pléna", "menšiny"],
+    },
+    sk: {
+      titles: {
+        dissent: [
+          ["Odlišné", "stanovisko"],
+          ["Odlišné", "stanoviská"],
+          ["Stanovisko", "menšiny"],
+        ],
+        concurring: [
+          ["Paralelné", "stanovisko"],
+          ["Paralelné", "stanoviská"],
+          ["Konkurujúce", "stanovisko"],
+          ["Konkurujúce", "stanoviská"],
+          ["Súhlasné", "stanovisko"],
+          ["Súhlasné", "stanoviská"],
+        ],
+      },
+      authors: [
+        "sudcu",
+        "sudcov",
+        "sudkyne",
+        "sudkýň",
+        "sudca",
+        "sudcovia",
+        "sudkyňa",
+        "predsedu",
+        "predsedníčky",
+        "podpredsedu",
+        "podpredsedníčky",
+        "člena",
+        "členov",
+        "členky",
+        "členiek",
+      ],
+      prepositions: ["k", "ku"],
+      targets: [
+        "nálezu",
+        "uzneseniu",
+        "rozsudku",
+        "rozhodnutiu",
+        "výroku",
+        "veci",
+        "sp.",
+        "č.",
+        "§",
+        "čl.",
+      ],
+      contexts: ["vo veci", "podľa §"],
+      subjects: ["pléna", "menšiny"],
+    },
+  },
+} as const satisfies OpinionHeadingVocabulary;
+
+const languages = Object.values(OPINION_HEADING_VOCABULARY.languages);
+
+const foldedAlternation = (forms: readonly string[]): string =>
+  [
+    ...new Set(
+      forms.map((form) =>
+        escapeRegExp(stripDiacritics(form)).replace(/ /gu, "\\s+"),
+      ),
+    ),
+  ].join("|");
+
+const titlePattern = foldedAlternation(
+  languages.flatMap(({ titles }) => {
+    const forms: string[] = [];
+    for (const kind of OPINION_HEADING_KINDS) {
+      for (const words of titles[kind]) {
+        forms.push(words.join(" "));
+      }
+    }
+    return forms;
+  }),
+);
+const authorPattern = foldedAlternation([
+  ...languages.flatMap(({ authors }) => authors),
+  ...OPINION_HEADING_VOCABULARY.academicTitles.flatMap((title) => [
+    title,
+    title.replace(/\.$/u, ""),
+  ]),
+]);
+const contextForms = languages.flatMap(
+  ({ prepositions, targets, contexts, subjects }) => [
+    ...prepositions.flatMap((preposition) =>
+      targets.map((target) => `${preposition} ${target}`),
+    ),
+    ...contexts,
+    ...subjects,
+  ],
+);
+const endsWithWord = (form: string): boolean => /\p{L}$/u.test(form);
+const wordContextPattern = foldedAlternation(contextForms.filter(endsWithWord));
+const referenceContextPattern = foldedAlternation(
+  contextForms.filter((form) => !endsWithWord(form)),
+);
+
+const TITLE_RE = new RegExp(`^(?:${titlePattern})$`, "iu");
+const TAIL_RE = new RegExp(
+  `^(?:\\s*[.:]?$|\\s+(?:(?:${authorPattern}|${wordContextPattern})(?=$|[\\s,.:])|${referenceContextPattern}))`,
+  "iu",
+);
+const NAMES_AUTHOR_RE = new RegExp(
+  `(?:^|\\s)(?:${authorPattern})(?=$|[\\s,.:])`,
+  "iu",
+);
+
+const AUTHOR_LINE_RE = new RegExp(`^(?:${authorPattern})(?=$|[\\s,.:])`, "iu");
+
+/** Capture the original tail before folding, including decomposed diacritics. */
+const HEADING_WORDS_RE =
+  /^(?<first>[\p{L}\p{M}]+)\s+(?<second>[\p{L}\p{M}]+)(?<tail>.*)$/u;
+
+/** Whether a validated heading tail explicitly names an opinion's author. */
+export const separateOpinionHeadingNamesAuthor = (tail: string): boolean =>
+  NAMES_AUTHOR_RE.test(stripDiacritics(tail));
+
+/** Whether a line after a bare title begins by naming its author. */
+export const separateOpinionAuthorLine = (text: string): boolean =>
+  AUTHOR_LINE_RE.test(stripDiacritics(text));
 
 /**
- * The early plenary of the Constitutional Court set its opinions under a
- * bare, letter-spaced "S T A N O V I S K O" and named the judges on the
- * following lines.
- */
-const BARE_OPINION_HEADING_RE = /^STANOVISKO(?<tail>)$/u;
-
-/**
- * What the heading line goes on with: nothing, or whose opinion it is and
- * what it is to. "Odlišné stanovisko odůvodňuji takto:" is a sentence of the
- * opinion, not its heading.
- */
-const SEPARATE_OPINION_HEADING_TAIL_RE =
-  /^(?:\s*[.:]?$|\s+(?:(?:k|ke)\s+(?:nálezu|usnesení|rozsudku|rozhodnutí|výroku|věci|sp\.|č\.|§|čl\.)|ve\s+věci|podle\s+§|soud|předsed|místopředsed|JUDr|prof|doc|Mgr|pléna|člen|men[šs]in))/iu;
-
-/**
- * What follows the title of a separate opinion's heading on its line, or
- * `undefined` for a line that is no such heading or runs longer than
- * `maxChars`.
+ * Return the original text after a CS/SK separate-opinion title. A sentence
+ * such as "Odlišné stanovisko odůvodňuji takto:" remains prose. The caller
+ * supplies its court's heading length bound; bare uppercase STANOVISKO is
+ * the older plenary heading whose authors follow on their own lines.
  */
 export const separateOpinionHeadingTail = (
   plainText: string,
@@ -39,11 +206,23 @@ export const separateOpinionHeadingTail = (
   if (plainText.length > maxChars) {
     return undefined;
   }
-  const tail = (
-    SEPARATE_OPINION_HEADING_RE.exec(plainText) ??
-    BARE_OPINION_HEADING_RE.exec(plainText)
-  )?.groups?.["tail"];
-  return tail !== undefined && SEPARATE_OPINION_HEADING_TAIL_RE.test(tail)
-    ? tail
-    : undefined;
+  if (
+    OPINION_HEADING_VOCABULARY.bareTitles.some((title) => title === plainText)
+  ) {
+    return "";
+  }
+  const groups = HEADING_WORDS_RE.exec(plainText)?.groups;
+  const first = groups?.["first"];
+  const second = groups?.["second"];
+  const tail = groups?.["tail"];
+  if (
+    first === undefined ||
+    second === undefined ||
+    tail === undefined ||
+    !TITLE_RE.test(stripDiacritics(`${first} ${second}`)) ||
+    !TAIL_RE.test(stripDiacritics(tail))
+  ) {
+    return undefined;
+  }
+  return tail;
 };

@@ -709,3 +709,173 @@ test("a sparse short scope cannot corroborate a later opinion's marker", () => {
     blocks,
   });
 });
+
+test.each([
+  [
+    "Odlišné stanovisko sudcu Jána Nováka",
+    "Odlišné stanovisko sudcu Petra Nováka",
+  ],
+  [
+    "Odlišné stanovisko sudcu Jána Nováka",
+    "Paralelné stanovisko sudkyne Evy Novákovej",
+  ],
+  [
+    "Odlišné stanovisko soudce Jana Nováka",
+    "Konkurujúce stanovisko sudkyne Evy Novákovej",
+  ],
+])(
+  "separate opinion headings retain two printed 1..3 scopes: %s / %s",
+  (firstTitle, secondTitle) => {
+    const majority = [1, 2, 3, 4].map((number, index) =>
+      printedParagraph(index, `${String(number)}. `),
+    );
+    const firstHeading: Block = {
+      type: "heading",
+      id: "first-opinion",
+      anchorId: "first-opinion",
+      level: 2,
+      plainText: firstTitle,
+      inlines: [{ type: "text", text: firstTitle }],
+    };
+    const secondHeading: Block = {
+      type: "heading",
+      id: "second-opinion",
+      anchorId: "second-opinion",
+      level: 2,
+      plainText: secondTitle,
+      inlines: [{ type: "text", text: secondTitle }],
+    };
+    const first = [1, 2, 3].map((number, index) => ({
+      ...printedParagraph(index + 5, `${String(number)}. `),
+      role: "dissent" as const,
+    }));
+    const second = [1, 2, 3].map((number, index) => ({
+      ...printedParagraph(index + 9, `${String(number)}. `),
+      role: "dissent" as const,
+    }));
+    const result = extractCourtParagraphNumbers([
+      ...majority,
+      firstHeading,
+      ...first,
+      secondHeading,
+      ...second,
+    ]);
+    expect(labelsOf(result.blocks)).toEqual([
+      1,
+      2,
+      3,
+      4,
+      undefined,
+      1,
+      2,
+      3,
+      undefined,
+      1,
+      2,
+      3,
+    ]);
+    expect(result).toMatchObject({
+      type: "numbered",
+      scopes: [
+        { type: "fresh-start", blockIndex: 0 },
+        { type: "fresh-start", blockIndex: 5 },
+        { type: "fresh-start", blockIndex: 9 },
+      ],
+    });
+  },
+);
+
+test("recognized CS/SK opinion headings start independent numbering regardless of paragraph roles", () => {
+  assertProperty(
+    "recognized CS/SK opinion headings start independent numbering regardless of paragraph roles",
+    fc.property(
+      fc.record({
+        majorityLength: fc.integer({ min: 3, max: 10 }),
+        firstRoles: fc.array(
+          fc.constantFrom(undefined, "argumentation", "dissent"),
+          { minLength: 2, maxLength: 8 },
+        ),
+        secondRoles: fc.array(
+          fc.constantFrom(undefined, "argumentation", "dissent"),
+          { minLength: 2, maxLength: 8 },
+        ),
+        firstTitle: fc.constantFrom(
+          "Odlišné stanovisko sudcu",
+          "Odlišné stanovisko soudce",
+          "Odlišná stanoviska soudců",
+          "Odlišné stanoviská sudkýň",
+        ),
+        secondTitle: fc.constantFrom(
+          "Odlišné stanovisko sudcu",
+          "Paralelné stanovisko sudkyne",
+          "Konkurujúce stanoviská sudcov",
+          "Souhlasné stanovisko soudkyně",
+        ),
+      }),
+      ({
+        majorityLength,
+        firstRoles,
+        secondRoles,
+        firstTitle,
+        secondTitle,
+      }) => {
+        const firstLength = firstRoles.length;
+        const secondLength = secondRoles.length;
+        const majority = Array.from({ length: majorityLength }, (_, index) =>
+          printedParagraph(index, `${String(index + 1)}. `),
+        );
+        const firstHeading: Block = {
+          type: "heading",
+          id: "first-opinion",
+          anchorId: "first-opinion",
+          level: 2,
+          plainText: firstTitle,
+          inlines: [{ type: "text", text: firstTitle }],
+        };
+        const secondHeading: Block = {
+          type: "heading",
+          id: "second-opinion",
+          anchorId: "second-opinion",
+          level: 2,
+          plainText: secondTitle,
+          inlines: [{ type: "text", text: secondTitle }],
+        };
+        const firstStart = majorityLength + 1;
+        const secondStart = firstStart + firstLength + 1;
+        const first = Array.from({ length: firstLength }, (_, index) => ({
+          ...printedParagraph(firstStart + index, `${String(index + 1)}. `),
+          role: firstRoles[index],
+        }));
+        const second = Array.from({ length: secondLength }, (_, index) => ({
+          ...printedParagraph(secondStart + index, `${String(index + 1)}. `),
+          role: secondRoles[index],
+        }));
+        const result = extractCourtParagraphNumbers([
+          ...majority,
+          firstHeading,
+          ...first,
+          secondHeading,
+          ...second,
+        ]);
+        expect(labelsOf(result.blocks)).toEqual([
+          ...Array.from({ length: majorityLength }, (_, index) => index + 1),
+          undefined,
+          ...Array.from({ length: firstLength }, (_, index) => index + 1),
+          undefined,
+          ...Array.from({ length: secondLength }, (_, index) => index + 1),
+        ]);
+        expect(result).toMatchObject({
+          type: "numbered",
+          scopes: [
+            { type: "fresh-start", blockIndex: 0 },
+            { type: "fresh-start", blockIndex: firstStart },
+            { type: "fresh-start", blockIndex: secondStart },
+          ],
+        });
+        expect(extractCourtParagraphNumbers(result.blocks).blocks).toEqual(
+          result.blocks,
+        );
+      },
+    ),
+  );
+});

@@ -198,18 +198,25 @@ const bodyOf = (blocks: readonly Block[]): Body => {
   /** Body positions a heading or a separate opinion opens. */
   const sectionStarts = new Set<number>();
   let headingSinceBody = false;
-  let opinionHeadingSinceBody = false;
+  // Explicit opinion headings delimit scopes even when paragraph roles vary.
+  let opinionBoundary: "role" | "heading" = "role";
   let inDissent = false;
   let inInstruction = false;
   for (const [index, block] of blocks.entries()) {
     if (block.type === "heading") {
       headingSinceBody = true;
-      opinionHeadingSinceBody ||=
+      const opinionHeading =
         separateOpinionHeadingTail(
           block.plainText.replace(/^\d+[.)]\s*/u, ""),
           1000,
         ) !== undefined;
-      inInstruction ||= INSTRUCTION_RE.test(block.plainText);
+      if (opinionHeading) {
+        opinionStarts.add(paragraphs.length);
+        opinionBoundary = "heading";
+        inInstruction = false;
+      } else {
+        inInstruction ||= INSTRUCTION_RE.test(block.plainText);
+      }
       continue;
     }
     if (!isBodyParagraph(block)) {
@@ -226,7 +233,7 @@ const bodyOf = (blocks: readonly Block[]): Body => {
       continue;
     }
     inInstruction = false;
-    if (dissent && (!inDissent || opinionHeadingSinceBody)) {
+    if (opinionBoundary === "role" && dissent && !inDissent) {
       opinionStarts.add(paragraphs.length);
     }
     if (headingSinceBody) {
@@ -234,7 +241,6 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     }
     inDissent = dissent;
     headingSinceBody = false;
-    opinionHeadingSinceBody = false;
     paragraphs.push(index);
   }
   const quotedStarts = closedQuotationParagraphStarts(

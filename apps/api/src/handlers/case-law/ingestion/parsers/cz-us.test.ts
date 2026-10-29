@@ -521,6 +521,42 @@ describe("parseUsDecisionHtml", () => {
       });
     });
 
+    test.each([
+      "Odlišné stanovisko sudcu A. B.",
+      "Odlišné stanovisko sudkyne A. B.",
+      "Paralelní stanovisko soudkyně A. B.",
+      "Konkurujúce stanovisko sudcov A. B. a C. D.",
+    ])("shares CS/SK opinion roles at %s", (opinionLine) => {
+      const lines = [
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        opinionLine,
+        `2. ${DISSENT_TEXT}`,
+      ].map((text) => ({
+        kind: "body" as const,
+        value: normalizeInlineLine([{ type: "text", text }]),
+      }));
+      const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+        parser: "cz-us",
+        caseNumber: "test",
+      });
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "heading",
+          plainText: opinionLine,
+          role: "section-heading",
+        }),
+      );
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "paragraph",
+          plainText: DISSENT_TEXT,
+          number: 2,
+          role: "dissent",
+        }),
+      );
+    });
+
     test("keeps the number the court printed on the opinion heading", () => {
       const heading = "3. Odlišné stanovisko soudce Jana Nováka";
       const parsed = parseUsDecisionHtml(baseInput(decisionWith(heading)));
