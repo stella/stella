@@ -1008,6 +1008,10 @@
       "p95Seconds": 134,
       "p99Seconds": 134
     },
+    "Online unique index dependency guard": {
+      "minutes": 30,
+      "samples": 0
+    },
     "API timeout mutation guard": {
       "minutes": 5,
       "samples": 19,
