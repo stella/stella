@@ -152,8 +152,20 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
     ]);
     const refreshDb =
       asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db);
-    await refreshCaseLawSitemapShards(refreshDb);
-    await refreshCaseLawSitemapShards(refreshDb);
+    // Broad invalidations expand into monthly work across scheduler runs.
+    // Start with one work unit so setup also exercises its continuation.
+    expect(
+      (await refreshCaseLawSitemapShards(refreshDb, { runBudgetMs: 0 })).type,
+    ).toBe("pending");
+    for (let run = 0; run < 100; run += 1) {
+      // db-await-in-loop: continue scheduler runs until their durable work is drained.
+      if ((await refreshCaseLawSitemapShards(refreshDb)).type === "refreshed") {
+        break;
+      }
+      if (run === 99) {
+        panic("The sitemap fixture refresh never finished");
+      }
+    }
     expect(
       await db
         .select()
