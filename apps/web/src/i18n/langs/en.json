@@ -547,6 +547,14 @@
     },
     "approve": "Approve",
     "approveSelected": "Approve selected",
+    "arrangement": {
+      "alertThreshold": "Alert threshold (%)",
+      "amountCap": "Amount cap",
+      "flatFee": "Flat fee",
+      "invalidCap": "Enter positive caps and an alert threshold between 0.01% and 100%.",
+      "minuteCap": "Time cap (minutes)",
+      "title": "Billing arrangement"
+    },
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",

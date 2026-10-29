@@ -547,6 +547,14 @@
     },
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
+    "arrangement": {
+      "alertThreshold": "Umbral de aviso (%)",
+      "amountCap": "Límite de honorarios",
+      "flatFee": "Honorarios fijos",
+      "invalidCap": "Introduzca límites positivos y un umbral de aviso entre el 0,01 % y el 100 %.",
+      "minuteCap": "Límite de tiempo (minutos)",
+      "title": "Acuerdo de honorarios"
+    },
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",

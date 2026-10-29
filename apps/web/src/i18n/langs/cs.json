@@ -547,6 +547,14 @@
     },
     "approve": "Schválit",
     "approveSelected": "Schválit vybrané",
+    "arrangement": {
+      "alertThreshold": "Práh upozornění (%)",
+      "amountCap": "Limit odměny",
+      "flatFee": "Paušální odměna",
+      "invalidCap": "Zadejte kladné limity a práh upozornění od 0,01 % do 100 %.",
+      "minuteCap": "Časový limit (minuty)",
+      "title": "Ujednání o odměně"
+    },
     "batchActions": "Hromadné akce",
     "billable": "Fakturovatelné",
     "billedAmount": "Fakturovaná částka",

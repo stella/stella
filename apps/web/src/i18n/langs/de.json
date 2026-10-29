@@ -547,6 +547,14 @@
     },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
+    "arrangement": {
+      "alertThreshold": "Warnschwelle (%)",
+      "amountCap": "Honorarobergrenze",
+      "flatFee": "Pauschalhonorar",
+      "invalidCap": "Geben Sie positive Obergrenzen und eine Warnschwelle zwischen 0,01 % und 100 % ein.",
+      "minuteCap": "Zeitlimit (Minuten)",
+      "title": "Honorarvereinbarung"
+    },
     "batchActions": "Massenaktionen",
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
