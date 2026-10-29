@@ -59,6 +59,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type {
   Context,
+  ESTree,
   Ranged,
   RuleOptionsSchema,
   Variable,
@@ -146,7 +147,10 @@ const SQL_TAG_NAMES: ReadonlySet<string> = new Set(["sql"]);
 
 // Admit only a direct, single-statement INSERT into the imported audit table.
 // The surrounding file check confines this to the canonical recording owner.
-const isRawAuditInsert = (context: RuleContext, node: AstNode): boolean => {
+const isRawAuditInsert = (
+  context: RuleContext,
+  node: ESTree.CallExpression,
+): boolean => {
   const callee = unwrapExpression(node.callee);
   if (
     callee?.type !== "MemberExpression" ||
@@ -193,7 +197,10 @@ const isRawAuditInsert = (context: RuleContext, node: AstNode): boolean => {
   );
 };
 
-const isAuditRecorderInsert = (context: RuleContext, node: AstNode): boolean =>
+const isAuditRecorderInsert = (
+  context: RuleContext,
+  node: ESTree.CallExpression,
+): boolean =>
   AUDIT_RECORDER_INSERTS.has(databaseWriteTarget(context, node)) ||
   isRawAuditInsert(context, node);
 const SYSTEM_AUDIT_RECORDER_FILE = "apps/api/src/lib/system-audit/record.ts";
