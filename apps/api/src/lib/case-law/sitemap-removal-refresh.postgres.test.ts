@@ -208,7 +208,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
                       await removalCommitted.promise;
                     }
                     const rows = await target.execute(query);
-                    if (!paused && text.includes("WITH logged AS")) {
+                    if (!paused && text.includes("count(*)::int AS total")) {
                       paused = true;
                       counted.resolve(undefined);
                       await release.promise;

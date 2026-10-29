@@ -361,7 +361,7 @@ if (!databaseUrl || !runPostgresTests) {
                             if (
                               !state.paused &&
                               rendered.sql.includes("count(*)::int AS total") &&
-                              rendered.params.includes("1904")
+                              rendered.params.includes("1904-01-01")
                             ) {
                               state.paused = true;
                               await pause();

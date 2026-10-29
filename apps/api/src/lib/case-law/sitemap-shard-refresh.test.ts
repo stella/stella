@@ -900,8 +900,10 @@ test(
         expect(plan).toContain(
           "Index Scan using case_law_sitemap_changes_pkey",
         );
-        expect(plan).toMatch(/actual rows=500(?:\.0+)? loops=1/u);
-        expect(plan).not.toMatch(/Aggregate|Sort|Seq Scan/u);
+        expect(plan).toMatch(/actual rows=1(?:\.0+)? loops=1/u);
+        expect(plan).not.toMatch(
+          /Aggregate|Sort|Seq Scan on case_law_sitemap_changes/u,
+        );
         await db
           .delete(caseLawSitemapChanges)
           .where(eq(caseLawSitemapChanges.country, "XBG"));

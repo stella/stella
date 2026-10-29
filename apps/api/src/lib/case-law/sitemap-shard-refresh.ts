@@ -11,6 +11,7 @@ import {
   caseLawDecisions,
   caseLawSitemapChanges,
   caseLawSitemapCountryGenerations,
+  caseLawSitemapDrainProgress,
   caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSources,
@@ -55,8 +56,9 @@ export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
  */
 export const SITEMAP_WHOLE_COUNTRY = "*";
 
-/** Log rows read per page before deduplicating months. */
-const PENDING_MONTHS_PAGE_SIZE = 500;
+/** Discovery rows and retirement candidates allowed across one tick. */
+const DEFAULT_CHANGE_ROW_BUDGET = 500;
+const MAX_CHANGE_ROWS_PER_RUN = 10_000;
 
 /** Both budgets in milliseconds. */
 export type SitemapRefreshBudget = {
@@ -153,11 +155,9 @@ const monthRangeSql = ({ year, month }: SitemapMonth): SQL => {
 
 /**
  * One month's published decisions among the redistributable sources, counted
- * per bucket with their newest `updated_at`, together with the ids of the
- * month's change-log rows read from the same snapshot. A log row visible to
- * that snapshot was written by a transaction that committed before it, so
- * its change is in the count; one committed later is not listed and stays
- * logged. An empty month answers one row with its log ids and no bucket.
+ * per bucket with their newest `updated_at`. Retirement uses the durable
+ * transaction boundary captured before this count; later commits stay queued.
+ * An empty month answers one row with no bucket.
  *
  * The country and the month's date range are the leading keys of
  * `case_law_decisions_sitemap_shard_published_idx` and the publication gate is
@@ -165,14 +165,7 @@ const monthRangeSql = ({ year, month }: SitemapMonth): SQL => {
  * nothing else. Exported for the plan contract.
  */
 export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
-  WITH logged AS (
-    SELECT string_agg(${caseLawSitemapChanges.id}::text, ',') AS consumed
-    FROM ${caseLawSitemapChanges}
-    WHERE ${caseLawSitemapChanges.country} = ${target.country}
-      AND ${caseLawSitemapChanges.year} = ${target.year}
-      AND ${caseLawSitemapChanges.month} = ${target.month}
-  ),
-  counts AS (
+  WITH counts AS (
     SELECT
       ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
       count(*)::int AS total,
@@ -186,8 +179,8 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY 1
   )
-  SELECT logged.consumed, counts.bucket, counts.total, counts.last_modified_ms
-  FROM logged
+  SELECT counts.bucket, counts.total, counts.last_modified_ms
+  FROM (VALUES (1)) AS empty_month(value)
   LEFT JOIN counts ON true
 `;
 
@@ -265,17 +258,13 @@ const sitemapCountriesSql = (): SQL => sql`
   WHERE countries.country IS NOT NULL
 `;
 
-const LOG_IDS = /^[0-9]+(?:,[0-9]+)*$/u;
-
 const monthCountRowSchema = v.union([
   v.object({
-    consumed: v.nullable(v.pipe(v.string(), v.regex(LOG_IDS))),
     bucket: v.string(),
     total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
     last_modified_ms: v.number(),
   }),
   v.object({
-    consumed: v.nullable(v.pipe(v.string(), v.regex(LOG_IDS))),
     bucket: v.null(),
     total: v.null(),
     last_modified_ms: v.null(),
@@ -331,12 +320,15 @@ const shardRows = (
   ];
 };
 
-const loggedRowsOf = (target: SitemapMonth): SQL =>
+const targetConditions = (target: SitemapMonth) =>
   and(
-    eq(caseLawSitemapChanges.country, target.country),
-    eq(caseLawSitemapChanges.year, target.year),
-    eq(caseLawSitemapChanges.month, target.month),
-  ) ?? panic("A logged month has conditions");
+    eq(caseLawSitemapDrainProgress.country, target.country),
+    eq(caseLawSitemapDrainProgress.year, target.year),
+    eq(caseLawSitemapDrainProgress.month, target.month),
+  );
+
+/** A tick accounts for discovery rows and retirement candidates together. */
+type SitemapChangeBudget = { remainingRows: number };
 
 type RunContext = {
   db: RefreshDb;
@@ -344,61 +336,29 @@ type RunContext = {
   signal: AbortSignal | undefined;
 };
 
-/**
- * Recount one month and replace its shard rows, in one short transaction
- * that holds the month from its count to its write.
- *
- * The count statement also lists the month's log rows its own snapshot sees,
- * and the write deletes exactly those, so a change is consumed only by a
- * count that includes it, whatever else is running in the database. Holding
- * the month keeps overlapping refreshes from interleaving on it: one that
- * finds the month held skips it, since the holder's count is at least as new
- * as one it could take, and a change the holder does not see stays logged.
- * Answers whether the month was written.
- */
+/** Recount and publish while the caller holds the month and removal fence. */
 const recountMonth = async (
-  { db, budget, signal }: RunContext,
+  tx: RefreshTransaction,
   target: SitemapMonth,
-): Promise<boolean> =>
-  await withAggregateTransaction(db, async (tx) => {
-    await setTransactionBudget(tx, budget);
-    if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
-      return false;
-    }
-    // Skip an already held month before waiting on the shared removal fence.
-    // Hold that fence from the count's snapshot through publication.
-    await lockCaseLawRemovalSnapshots(tx);
-    const counted = executedRows(
-      await tx.execute(sitemapMonthCountSql(target)),
-    ).map((row) => v.parse(monthCountRowSchema, row));
-    const consumed = counted.at(0)?.consumed ?? null;
-    const buckets = counted.flatMap((row) =>
-      row.bucket === null ? [] : [row],
+): Promise<void> => {
+  const counted = executedRows(
+    await tx.execute(sitemapMonthCountSql(target)),
+  ).map((row) => v.parse(monthCountRowSchema, row));
+  const buckets = counted.flatMap((row) => (row.bucket === null ? [] : [row]));
+  const rows = shardRows(target, buckets);
+  await tx
+    .delete(caseLawSitemapShards)
+    .where(
+      and(
+        eq(caseLawSitemapShards.country, target.country),
+        eq(caseLawSitemapShards.year, target.year),
+        eq(caseLawSitemapShards.month, target.month),
+      ),
     );
-    const rows = shardRows(target, buckets);
-    await tx
-      .delete(caseLawSitemapShards)
-      .where(
-        and(
-          eq(caseLawSitemapShards.country, target.country),
-          eq(caseLawSitemapShards.year, target.year),
-          eq(caseLawSitemapShards.month, target.month),
-        ),
-      );
-    if (rows.length > 0) {
-      await tx.insert(caseLawSitemapShards).values(rows);
-    }
-    if (consumed !== null) {
-      await tx
-        .delete(caseLawSitemapChanges)
-        .where(
-          sql`${caseLawSitemapChanges.id} = ANY(string_to_array(${consumed}, ',')::bigint[])`,
-        );
-    }
-    // A run whose lease was lost while it wrote rolls back here.
-    throwIfAborted(signal);
-    return true;
-  });
+  if (rows.length > 0) {
+    await tx.insert(caseLawSitemapShards).values(rows);
+  }
+};
 
 const wholeCountryRow = (country: string): SitemapMonth => ({
   country,
@@ -406,138 +366,195 @@ const wholeCountryRow = (country: string): SitemapMonth => ({
   month: SITEMAP_WHOLE_COUNTRY,
 });
 
-/** The ids of a target's log rows, read before the enumeration that answers them. */
-const readLoggedIds = async (
-  tx: RefreshTransaction,
-  target: SitemapMonth,
-): Promise<number[]> =>
-  (
-    await tx
-      .select({ id: caseLawSitemapChanges.id })
-      .from(caseLawSitemapChanges)
-      .where(loggedRowsOf(target))
-  ).map(({ id }) => id);
-
-const deleteLoggedIds = async (
-  tx: RefreshTransaction,
-  ids: readonly number[],
-): Promise<void> => {
-  if (ids.length > 0) {
-    await tx
-      .delete(caseLawSitemapChanges)
-      .where(inArray(caseLawSitemapChanges.id, [...ids]));
-  }
-};
-
 /**
  * Turn a whole-country row into one log row per month its recount covers, in
- * one short write transaction that also consumes the whole-country rows it
- * read first: the months the country holds published decisions in, and the
+ * the same transaction as its durable retirement boundary: the months the
+ * country holds published decisions in, and the
  * months its shards list (an emptied month is recounted to no rows). The new
  * rows are recounted month by month like any other, so a country larger than
  * one run's budget keeps its progress between runs.
  */
 const expandCountry = async (
-  { db, budget, signal }: RunContext,
+  tx: RefreshTransaction,
   country: string,
 ): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
-    await setTransactionBudget(tx, budget);
-    const whole = await readLoggedIds(tx, wholeCountryRow(country));
-    const held = executedRows(
-      await tx.execute(sitemapCountryMonthsSql(country)),
-    ).map((row) => v.parse(monthRowSchema, row));
-    const listed = await tx
-      .selectDistinct({
-        year: caseLawSitemapShards.year,
-        month: caseLawSitemapShards.month,
-      })
-      .from(caseLawSitemapShards)
-      .where(eq(caseLawSitemapShards.country, country));
-    const months = new Map<string, SitemapMonth>();
-    for (const { year, month } of [...held, ...listed]) {
-      const target = { country, year, month };
-      months.set(monthKey(target), target);
-    }
-    if (months.size > 0) {
-      await tx
-        .insert(caseLawSitemapChanges)
-        .values(
-          [...months.values()].toSorted((a, b) =>
-            compareCodeUnit(monthKey(a), monthKey(b)),
-          ),
-        );
-    }
-    await deleteLoggedIds(tx, whole);
-    throwIfAborted(signal);
-  });
+  const held = executedRows(
+    await tx.execute(sitemapCountryMonthsSql(country)),
+  ).map((row) => v.parse(monthRowSchema, row));
+  const listed = await tx
+    .selectDistinct({
+      year: caseLawSitemapShards.year,
+      month: caseLawSitemapShards.month,
+    })
+    .from(caseLawSitemapShards)
+    .where(eq(caseLawSitemapShards.country, country));
+  const months = new Map<string, SitemapMonth>();
+  for (const { year, month } of [...held, ...listed]) {
+    const target = { country, year, month };
+    months.set(monthKey(target), target);
+  }
+  if (months.size > 0) {
+    await tx
+      .insert(caseLawSitemapChanges)
+      .values(
+        [...months.values()].toSorted((a, b) =>
+          compareCodeUnit(monthKey(a), monthKey(b)),
+        ),
+      );
+  }
 };
 
 /**
  * Turn an every-country row into one whole-country row per country, in one
- * short write transaction that also consumes the every-country rows it read
- * first: the countries holding a published decision and those the shards
+ * transaction as its durable retirement boundary: the countries holding a
+ * published decision and those the shards
  * list (a country with no decision left is recounted to no rows).
  */
-const expandEveryCountry = async ({
-  db,
-  budget,
-  signal,
-}: RunContext): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
-    await setTransactionBudget(tx, budget);
-    const every = await readLoggedIds(
-      tx,
-      wholeCountryRow(SITEMAP_WHOLE_COUNTRY),
-    );
-    const held = executedRows(await tx.execute(sitemapCountriesSql())).map(
-      (row) => v.parse(v.object({ country: v.string() }), row).country,
-    );
-    const listed = await tx
-      .selectDistinct({ country: caseLawSitemapShards.country })
-      .from(caseLawSitemapShards);
-    const countries = new Set([
-      ...held,
-      ...listed.map(({ country }) => country),
-    ]);
-    if (countries.size > 0) {
-      await tx
-        .insert(caseLawSitemapChanges)
-        .values([...countries].toSorted(compareCodeUnit).map(wholeCountryRow));
-    }
-    await deleteLoggedIds(tx, every);
-    throwIfAborted(signal);
-  });
+const expandEveryCountry = async (tx: RefreshTransaction): Promise<void> => {
+  const held = executedRows(await tx.execute(sitemapCountriesSql())).map(
+    (row) => v.parse(v.object({ country: v.string() }), row).country,
+  );
+  const listed = await tx
+    .selectDistinct({ country: caseLawSitemapShards.country })
+    .from(caseLawSitemapShards);
+  const countries = new Set([...held, ...listed.map(({ country }) => country)]);
+  if (countries.size > 0) {
+    await tx
+      .insert(caseLawSitemapChanges)
+      .values([...countries].toSorted(compareCodeUnit).map(wholeCountryRow));
+  }
 };
 
-/** Read the oldest bounded row range before deduplicating months. Exported for its plan guard. */
+/** One index descent finds the oldest remaining target, without aggregating the log. */
 export const sitemapPendingMonthsSql = (): SQL => sql`
-  SELECT country, year, month
-  FROM ${caseLawSitemapChanges}
-  ORDER BY id
-  LIMIT ${PENDING_MONTHS_PAGE_SIZE}
+  WITH draining AS MATERIALIZED (
+    SELECT country, year, month FROM ${caseLawSitemapDrainProgress} LIMIT 1
+  )
+  SELECT country, year, month FROM draining
+  UNION ALL
+  (
+    SELECT country, year, month
+    FROM ${caseLawSitemapChanges}
+    WHERE NOT EXISTS (SELECT 1 FROM draining)
+    ORDER BY id
+    LIMIT 1
+  )
+  LIMIT 1
 `;
 
-/** The next page of logged months, oldest log row first. */
-const readPendingMonths = async ({
+const readPendingMonth = async ({
   db,
   budget,
-}: RunContext): Promise<SitemapMonth[]> =>
+}: RunContext): Promise<SitemapMonth | undefined> =>
   await withAggregateTransaction(db, async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
     await setTransactionBudget(tx, budget);
-    const rows = executedRows(await tx.execute(sitemapPendingMonthsSql())).map(
-      (row) =>
-        v.parse(
+    const row = executedRows(await tx.execute(sitemapPendingMonthsSql())).at(0);
+    return row === undefined
+      ? undefined
+      : v.parse(
           v.object({
             country: v.string(),
             year: v.string(),
             month: v.string(),
           }),
           row,
-        ),
+        );
+  });
+
+/**
+ * Every visible log row older than the snapshot's xmin committed before it.
+ * The month/xact index bounds this range even when newer changes keep arriving.
+ * IDs cannot supply this boundary: a smaller ID may commit after the count.
+ * Inside the covered range every transaction has finished, so advancing the
+ * retirement cursor cannot skip a late commit and avoids rescanning dead entries.
+ */
+type DrainMonthResult =
+  | { status: "held" }
+  | { status: "complete" | "draining"; retired: number; recounted: boolean };
+
+const drainMonth = async (
+  { db, budget, signal }: RunContext,
+  target: SitemapMonth,
+  rows: number,
+): Promise<DrainMonthResult> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await setTransactionBudget(tx, budget);
+    if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
+      return { status: "held" };
+    }
+    await lockCaseLawRemovalSnapshots(tx);
+    const [progress] = await tx
+      .select()
+      .from(caseLawSitemapDrainProgress)
+      .where(targetConditions(target))
+      .limit(1);
+    let coveredBefore = progress?.coveredBefore;
+    let retiredThrough = progress?.retiredThrough ?? "0";
+    let recounted = false;
+    if (coveredBefore === undefined) {
+      // Capture before counting/enumerating; every earlier transaction is in
+      // every subsequent READ COMMITTED snapshot used to publish this work.
+      const snapshot = executedRows(
+        await tx.execute(sql`
+        SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS covered_before
+      `),
+      ).at(0);
+      coveredBefore = v.parse(
+        v.object({ covered_before: v.string() }),
+        snapshot,
+      ).covered_before;
+      if (target.country === SITEMAP_WHOLE_COUNTRY) {
+        await expandEveryCountry(tx);
+      } else if (target.year === SITEMAP_WHOLE_COUNTRY) {
+        await expandCountry(tx, target.country);
+      } else {
+        await recountMonth(tx, target);
+        recounted = true;
+      }
+      await tx
+        .insert(caseLawSitemapDrainProgress)
+        .values({ ...target, coveredBefore });
+    }
+    const retiredRows = executedRows(
+      await tx.execute(sql`
+      WITH retiring AS MATERIALIZED (
+        SELECT xact FROM ${caseLawSitemapChanges}
+        WHERE country = ${target.country} AND year = ${target.year} AND month = ${target.month}
+          AND xact > ${retiredThrough}::xid8 AND xact < ${coveredBefore}::xid8
+        ORDER BY country, year, month, xact
+        LIMIT ${rows}
+      )
+      DELETE FROM ${caseLawSitemapChanges} AS changes
+      USING retiring WHERE changes.country = ${target.country}
+          AND changes.year = ${target.year} AND changes.month = ${target.month}
+          AND changes.xact = retiring.xact
+      RETURNING changes.id, changes.xact::text AS retired_through
+    `),
     );
-    return [...new Map(rows.map((item) => [monthKey(item), item])).values()];
+    for (const row of retiredRows) {
+      const { retired_through: xact } = v.parse(
+        v.object({ retired_through: v.string() }),
+        row,
+      );
+      if (BigInt(xact) > BigInt(retiredThrough)) {
+        retiredThrough = xact;
+      }
+    }
+    const retired = retiredRows.length;
+    const complete = retired < rows;
+    if (complete) {
+      await tx
+        .delete(caseLawSitemapDrainProgress)
+        .where(targetConditions(target));
+    } else {
+      await tx
+        .update(caseLawSitemapDrainProgress)
+        .set({ retiredThrough })
+        .where(targetConditions(target));
+    }
+    throwIfAborted(signal);
+    return { status: complete ? "complete" : "draining", retired, recounted };
   });
 
 /** The public index's size, read back for the capacity alarm. */
@@ -599,12 +616,14 @@ type RunProgress = {
  * names.
  *
  * Each logged month is recounted on its own short transaction, so no
- * statement or transaction grows with the corpus and no lock is held across
- * months. A whole-country row is first expanded into one logged row per
- * month (and an every-country row into one whole-country row per country),
+ * change-log read or deletion grows with the backlog; no lock is held across
+ * months. Completed recounts persist their snapshot xmin, so later ticks
+ * retire covered transactions without repeating the count. A whole-country
+ * row is first expanded into one logged row per month (and an every-country row into one whole-country row per country),
  * which are then recounted like any other and drop the rows of months the
- * country no longer holds. A run works oldest log row first, works a month
- * at most once, and stops between units once its budget is spent
+ * country no longer holds. A run resumes retirement before discovering the
+ * oldest remaining log row, works a month at most once, and stops when its
+ * row or time budget is spent
  * (`pending`); the next run continues from the rows still logged.
  *
  * The index read refuses a snapshot it cannot serve, so an over-capacity
@@ -615,17 +634,29 @@ export const refreshCaseLawSitemapShards = async (
   {
     poolIdleTimeoutS = envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
     runBudgetMs = SITEMAP_REFRESH_RUN_BUDGET_MS,
+    changeRowBudget = DEFAULT_CHANGE_ROW_BUDGET,
     clock = () => performance.now(),
     signal,
   }: {
     /** The idle timeout of the pool `db` draws from; see `sitemapRefreshBudget`. */
     poolIdleTimeoutS?: number;
     runBudgetMs?: number;
+    /** Discovery rows plus retirement candidates, across the entire tick. */
+    changeRowBudget?: number;
     /** Monotonic milliseconds; only differences are read. */
     clock?: () => number;
     signal?: AbortSignal;
   } = {},
 ): Promise<SitemapRefreshOutcome> => {
+  if (
+    !Number.isSafeInteger(changeRowBudget) ||
+    changeRowBudget < 2 ||
+    changeRowBudget > MAX_CHANGE_ROWS_PER_RUN
+  ) {
+    return panic(
+      `Sitemap change-row budget must be between 2 and ${MAX_CHANGE_ROWS_PER_RUN}`,
+    );
+  }
   const startedAt = clock();
   const budget = sitemapRefreshBudget(poolIdleTimeoutS);
   throwIfAborted(signal);
@@ -639,68 +670,72 @@ export const refreshCaseLawSitemapShards = async (
     months: 0,
     recountedCountries: new Set(),
   };
-  const queue: SitemapMonth[] = [];
-
-  /** One step of the run: list more logged months, or work the next one. */
+  const changeBudget: SitemapChangeBudget = { remainingRows: changeRowBudget };
+  const pendingOutcome = (
+    retry: "immediate" | "delayed",
+  ): SitemapRefreshOutcome => ({
+    type: "pending",
+    months: progress.months,
+    retry,
+  });
   const advance = async (): Promise<
-    "progress" | "pending" | "deferred" | "done"
+    "progress" | "immediate" | "delayed" | "done"
   > => {
-    const target = queue.shift();
+    if (changeBudget.remainingRows < 2) {
+      return "immediate";
+    }
+    const target = await readPendingMonth(run);
     if (target === undefined) {
-      const logged = await readPendingMonths(run);
-      const pending = logged.filter(
-        (item) => !progress.worked.has(monthKey(item)),
-      );
-      if (pending.length === 0 && logged.length > 0) {
-        return "deferred";
-      }
-      queue.push(...pending);
-      return pending.length === 0 ? "done" : "progress";
+      return "done";
     }
+    changeBudget.remainingRows -= 1;
     if (progress.worked.has(monthKey(target))) {
-      return "progress";
+      return "delayed";
     }
-    // Expanding a broad invalidation after a count could consume the row
-    // that removal just appended. Leave it for a fresh run, including when
-    // the country now has no decisions or shards to enumerate.
     if (
       target.year === SITEMAP_WHOLE_COUNTRY &&
       (target.country === SITEMAP_WHOLE_COUNTRY
         ? progress.recountedCountries.size > 0
         : progress.recountedCountries.has(target.country))
     ) {
-      return "deferred";
+      return "delayed";
     }
     throwIfAborted(signal);
-    // Checked before every unit but the first, so every run advances.
     if (progress.units > 0 && clock() - startedAt >= runBudgetMs) {
-      return "pending";
+      return "immediate";
     }
-    progress.units += 1;
-    progress.worked.add(monthKey(target));
-    if (target.country === SITEMAP_WHOLE_COUNTRY) {
-      await expandEveryCountry(run);
-    } else if (target.year === SITEMAP_WHOLE_COUNTRY) {
-      await expandCountry(run, target.country);
-    } else if (await recountMonth(run, target)) {
-      progress.months += 1;
-      progress.recountedCountries.add(target.country);
+    const step = await drainMonth(run, target, changeBudget.remainingRows);
+    switch (step.status) {
+      case "held":
+        return "delayed";
+      case "complete":
+      case "draining":
+        changeBudget.remainingRows -= step.retired;
+        progress.units += 1;
+        if (step.recounted) {
+          progress.months += 1;
+          progress.recountedCountries.add(target.country);
+        }
+        if (step.status === "draining") {
+          return "immediate";
+        }
+        progress.worked.add(monthKey(target));
+        return "progress";
+      default: {
+        step satisfies never;
+        return panic("Unknown sitemap drain result");
+      }
     }
-    return "progress";
   };
 
   for (;;) {
-    // db-await-in-loop: logged months are worked oldest first, one short transaction at a time, so the run can stop between any two
+    // db-await-in-loop: consecutive durable drain steps share one tick row budget and stop between month transactions
     const step = await advance();
-    if (step === "pending" || step === "deferred") {
-      return {
-        type: "pending",
-        months: progress.months,
-        retry: step === "deferred" ? "delayed" : "immediate",
-      };
-    }
     if (step === "done") {
       break;
+    }
+    if (step !== "progress") {
+      return pendingOutcome(step);
     }
   }
 

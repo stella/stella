@@ -458,9 +458,10 @@ export const seedSitemapReadBudget = async ({
     (country, year, month, bucket, total, last_modified_at)
     SELECT 'XQN', (1000 + i / 12)::text, lpad((1 + i % 12)::text, 2, '0'),
       'all', 1, '2026-01-01'::timestamptz FROM generate_series(1, ${scenario.rows}) i`);
+  await database.execute(sql`DELETE FROM case_law_sitemap_drain_progress`);
   await database.execute(sql`DELETE FROM case_law_sitemap_changes`);
   // Many committed changes of the same month exercise the bounded queue
-  // page and its full-month consumption without adding dirty months.
+  // discovery and retirement without adding dirty months.
   await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
     SELECT 'XQT', '2024', '01', (1000000 + i)::text::xid8
     FROM generate_series(1, 2000) i`);
