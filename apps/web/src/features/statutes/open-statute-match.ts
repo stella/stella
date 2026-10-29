@@ -59,7 +59,11 @@ export const readStatuteMatch = async ({
     queryClient,
     statutesInfiniteOptions(createStatuteFilters(country, intent)),
   );
-  return { intent, items: pages.pages.at(0)?.items ?? [] };
+  const page = pages.pages.at(0);
+  if (page === undefined) {
+    return panic("Statute lookup must return its initial page");
+  }
+  return { intent, items: page.items };
 };
 
 /**

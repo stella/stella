@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-const sourceRoot = fileURLToPath(new URL("../", import.meta.url));
+const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
 const sourceFiles = [
   ...new Bun.Glob("**/*.{ts,tsx}").scanSync(sourceRoot),
 ].filter((path) => !/\.(?:test|spec)\./u.test(path));
@@ -11,11 +11,11 @@ const sourceFiles = [
 const lookupCallers = {
   readDecisionMatch: [
     "features/case-law/open-decision-match.ts",
-    "lib/legal-citation-search.ts",
+    "features/search/legal-citation-search.ts",
   ],
   readStatuteMatch: [
     "features/statutes/open-statute-match.ts",
-    "lib/legal-citation-search.ts",
+    "features/search/legal-citation-search.ts",
   ],
 } as const;
 

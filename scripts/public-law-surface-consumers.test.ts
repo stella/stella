@@ -101,7 +101,7 @@ const CONSUMERS = {
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
-  "apps/web/src/lib/legal-citation-search.ts": "search",
+  "apps/web/src/features/search/legal-citation-search.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",

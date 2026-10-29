@@ -61,6 +61,7 @@ const decision = {
   headline: null,
   keywords: null,
   textWithheldReason: null,
+  textAvailability: "available",
   citationAuthority: 0,
   matchingPassages: 1,
   match: "all_terms",

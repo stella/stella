@@ -144,6 +144,10 @@ import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context"
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
 import { useCommandActions } from "@/features/command-palette/hooks/use-command-actions";
+import {
+  isLegalCitationSearch,
+  legalCitationSearchOptions,
+} from "@/features/search/legal-citation-search";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -169,10 +173,6 @@ import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
-import {
-  isLegalCitationSearch,
-  legalCitationSearchOptions,
-} from "@/lib/legal-citation-search";
 import {
   CapabilityAction,
   useActionCapabilities,

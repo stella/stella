@@ -104,7 +104,7 @@ export const legalCitationSearchOptions = ({
 }: LegalCitationSearchInput) =>
   queryOptions({
     queryKey: ["legal-citation-search", country, query],
-    queryFn: ({ client }) =>
+    queryFn: async ({ client }) =>
       readLegalCitationSearch({ country, query, queryClient: client }),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
