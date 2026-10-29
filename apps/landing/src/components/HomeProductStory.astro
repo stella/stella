@@ -1,4 +1,5 @@
 ---
+import { productCaptures } from "../data/product-captures";
 import { productHref } from "../data/products/links";
 import type { ProductSlug } from "../data/products/pillars";
 import { resolveProductDiscoverLabels } from "../data/site-nav";
@@ -74,21 +75,18 @@ const chapters = [
 // apps/web/e2e/marketing/product-screenshots.spec.ts.
 const storyShots = [
   {
-    darkSrc: "/media/products/story-public-data-1-dark.png",
-    lightSrc: "/media/products/story-public-data-1.png",
+    ...productCaptures["story-public-data-1"][locale],
     altKey: "story.dataMainAlt",
   },
   {
-    darkSrc: "/media/products/story-public-data-2-dark.png",
-    lightSrc: "/media/products/story-public-data-2.png",
+    ...productCaptures["story-public-data-2"][locale],
     altKey: "story.dataConstitutionalAlt",
   },
   {
-    darkSrc: "/media/products/story-public-data-3-dark.png",
-    lightSrc: "/media/products/story-public-data-3.png",
+    ...productCaptures["story-public-data-3"][locale],
     altKey: "story.dataSupremeAlt",
   },
-] as const satisfies readonly { darkSrc: string; lightSrc: string; altKey: TranslationKey }[];
+] as const satisfies readonly { darkSrc: string; src: string; altKey: TranslationKey }[];
 
 // Each shot holds at full opacity for ~3.6s and cross-fades over ~0.8s, for
 // a ~13.2s total loop. The keyframes (below, in .story-shot-layer) are
@@ -245,7 +243,7 @@ const proofItems = [
                               darkSrc={shot.darkSrc}
                               decoding="async"
                               defer="visible"
-                              lightSrc={shot.lightSrc}
+                              lightSrc={shot.src}
                               loading="lazy"
                             />
                           </div>

@@ -4,8 +4,7 @@ export const publicData = {
   slug: "public-data",
   hero: {
     type: "image",
-    src: "/media/products/story-public-data-1.png",
-    darkSrc: "/media/products/story-public-data-1-dark.png",
+    captureId: "story-public-data-1",
     altKey: "story.dataMainAlt",
     aspect: "1440 / 760",
   },

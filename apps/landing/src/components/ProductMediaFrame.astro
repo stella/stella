@@ -1,6 +1,7 @@
 ---
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { productCaptures } from "../data/product-captures";
 import type { FrameAccent, FrameVariant, ProductMedia } from "../data/products/types";
 import { productStoryThumbnails, resolveSceneWindowLabels } from "../data/product-story";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -52,7 +53,7 @@ const mobileAspect =
 const videoOnDisk = (p: string) => existsSync(path.join(process.cwd(), "public", p));
 const videoReady = media.type === "video" && videoOnDisk(media.src);
 const posterReady = media.type === "video" && media.poster !== undefined && videoOnDisk(media.poster);
-const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
+const storyThumbnail = media.type === "story" ? productStoryThumbnails(locale)[media.sceneId] : undefined;
 ---
 
 <div
@@ -130,8 +131,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   {
     media.type === "image" && (
       <ThemeImage
-        lightSrc={media.src}
-        darkSrc={media.darkSrc}
+        lightSrc={productCaptures[media.captureId][locale].src}
+        darkSrc={productCaptures[media.captureId][locale].darkSrc}
         alt={t(media.altKey)}
         class={`h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
         style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
@@ -182,8 +183,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         <div class="absolute inset-0 sm:hidden" data-editor-preview="static">
           <MacWindow class="h-full" label={staticEditorLabel}>
             <ThemeImage
-              lightSrc="/media/products/editor.png"
-              darkSrc="/media/products/editor-dark.png"
+              lightSrc={productCaptures.editor[locale].src}
+              darkSrc={productCaptures.editor[locale].darkSrc}
               alt=""
               class="h-full w-full object-contain object-top"
               media="(max-width: 639px)"
@@ -209,11 +210,11 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
       thumbnail && (
         <ThemeImage
           lightSrc={media.type === "live-editor"
-            ? "/media/products/editor.png"
-            : "/media/products/anonymization.png"}
+            ? productCaptures.editor[locale].src
+            : productCaptures.anonymization[locale].src}
           darkSrc={media.type === "live-editor"
-            ? "/media/products/editor-dark.png"
-            : "/media/products/anonymization-dark.png"}
+            ? productCaptures.editor[locale].darkSrc
+            : productCaptures.anonymization[locale].darkSrc}
           alt={media.alt}
           class="h-full w-full rounded-lg border object-cover"
           style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"

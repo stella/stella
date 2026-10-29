@@ -1,4 +1,6 @@
+import type { Locale } from "../i18n/config";
 import type { TranslationKey } from "../i18n/utils";
+import { productCaptures } from "./product-captures";
 
 type SceneWindowLabelKey = Extract<
   TranslationKey,
@@ -106,56 +108,50 @@ export const openingProductStory = [
   },
 ] as const satisfies readonly ProductStoryPlaybackStep[];
 
-export const productStoryThumbnails = {
-  workspace: {
-    src: "/media/products/workspace.png",
-    darkSrc: "/media/products/workspace-dark.png",
-    alt: "Matter workspace in stella",
-  },
-  review: {
-    src: "/media/products/tabular-review.png",
-    darkSrc: "/media/products/tabular-review-dark.png",
-    alt: "Contract review table in stella",
-  },
-  // Product-page-only scene (same product area as "review"); reuses its
-  // thumbnail since nothing lists this scene by icon (nav mega-menu,
-  // homepage chapters) the way "review" itself is.
-  "review-citation": {
-    src: "/media/products/tabular-review.png",
-    darkSrc: "/media/products/tabular-review-dark.png",
-    alt: "Contract review table in stella",
-  },
-  editor: {
-    src: "/media/products/editor.png",
-    darkSrc: "/media/products/editor-dark.png",
-    alt: "Word document open in the stella Editor",
-  },
-  agent: {
-    src: "/media/products/agent.png",
-    darkSrc: "/media/products/agent-dark.png",
-    alt: "AI agent in stella: a cited change-of-control review with a generated exposure view",
-  },
-  cli: {
-    src: "/media/products/story-cli-poster.jpg",
-    darkSrc: "/media/products/story-cli-dark-poster.jpg",
-    alt: "The tools and capability catalogue in stella",
-  },
-  templates: {
-    src: "/media/products/story-templates-poster.jpg",
-    darkSrc: "/media/products/story-templates-dark-poster.jpg",
-    alt: "A template with fields and conditional clauses in the stella template studio",
-  },
-  // Product-page-only scene (same product area as "templates"); reuses its
-  // thumbnail since nothing lists this scene by icon.
-  "template-fill": {
-    src: "/media/products/story-templates-poster.jpg",
-    darkSrc: "/media/products/story-templates-dark-poster.jpg",
-    alt: "A template with fields and conditional clauses in the stella template studio",
-  },
-} as const satisfies Record<
-  ProductStorySceneId,
-  { alt: string; darkSrc: string; src: string }
->;
+export const productStoryThumbnails = (locale: Locale) =>
+  ({
+    workspace: {
+      ...productCaptures["workspace"][locale],
+      alt: "Matter workspace in stella",
+    },
+    review: {
+      ...productCaptures["tabular-review"][locale],
+      alt: "Contract review table in stella",
+    },
+    // Product-page-only scene (same product area as "review"); reuses its
+    // thumbnail since nothing lists this scene by icon (nav mega-menu,
+    // homepage chapters) the way "review" itself is.
+    "review-citation": {
+      ...productCaptures["tabular-review"][locale],
+      alt: "Contract review table in stella",
+    },
+    editor: {
+      ...productCaptures["editor"][locale],
+      alt: "Word document open in the stella Editor",
+    },
+    agent: {
+      ...productCaptures["agent"][locale],
+      alt: "AI agent in stella: a cited change-of-control review with a generated exposure view",
+    },
+    cli: {
+      src: "/media/products/story-cli-poster.jpg",
+      darkSrc: "/media/products/story-cli-dark-poster.jpg",
+      alt: "The tools and capability catalogue in stella",
+    },
+    templates: {
+      ...productCaptures.templates[locale],
+      alt: "A template with fields and conditional clauses in the stella template studio",
+    },
+    // Product-page-only scene (same product area as "templates"); reuses its
+    // thumbnail since nothing lists this scene by icon.
+    "template-fill": {
+      ...productCaptures.templates[locale],
+      alt: "A template with fields and conditional clauses in the stella template studio",
+    },
+  }) as const satisfies Record<
+    ProductStorySceneId,
+    { alt: string; darkSrc: string; src: string }
+  >;
 
 // Stella-owned surfaces are recorded from deterministic, seeded app routes by
 // apps/web/e2e/marketing/record-product-story.ts. The homepage and product
