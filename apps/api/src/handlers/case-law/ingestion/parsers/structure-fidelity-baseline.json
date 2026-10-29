@@ -1,0 +1,639 @@
+{
+  "comment": "Structure-fidelity findings per adapter and recorded fixture (structure-fidelity.ts). Shrink-only: a new finding fails the guard; a fixed one must be removed with apps/api/scripts/update-structure-fidelity-baseline.ts.",
+  "findings": {
+    "us-courtlistener": {
+      "courtlistener-clusters-2026-06-30.ndjson.gz[3]": {
+        "sentence-cut": 2,
+        "page-number-block": 11
+      },
+      "courtlistener/html/html-383875.html (recorded document; census metadata)": {
+        "page-number-block": 7
+      }
+    },
+    "cz-nss": {
+      "cz-nss-57-af-17-2023.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 2
+      }
+    },
+    "cz-us": {
+      "cz-us-pl-us-42-2000.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 4
+      },
+      "cz-us-page.json.gz[4]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[6]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[7]": {
+        "holding-after-signature": 3
+      },
+      "cz-us-page.json.gz[10]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[12]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[14]": {
+        "sentence-cut": 1
+      },
+      "cz-us-page.json.gz[15]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[17]": {
+        "holding-after-signature": 2
+      },
+      "cz-us-page.json.gz[19]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[20]": {
+        "sentence-cut": 5
+      },
+      "cz-us-page.json.gz[22]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[23]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[24]": {
+        "sentence-cut": 1
+      },
+      "cz-us-page.json.gz[25]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[26]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[29]": {
+        "page-number-block": 1
+      },
+      "cz-us-page.json.gz[31]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "cz-us-page.json.gz[32]": {
+        "holding-after-signature": 2
+      },
+      "cz-us-page.json.gz[38]": {
+        "holding-after-signature": 1
+      },
+      "cz-us-page.json.gz[39]": {
+        "page-number-block": 1
+      }
+    },
+    "cz-regional": {
+      "cz-regional-finaldoc-district.json.gz": {
+        "sentence-cut": 2
+      },
+      "cz-regional-finaldoc-appellate.json.gz": {
+        "sentence-cut": 2
+      },
+      "cz-regional-17-c-33-2019.finaldoc.json.gz (recorded document; census metadata)": {
+        "sentence-cut": 1
+      },
+      "cz-regional-26-c-151-2021.finaldoc.json.gz (recorded document; census metadata)": {
+        "sentence-cut": 1
+      },
+      "cz-regional-3-t-96-2026.finaldoc.json.gz (recorded document; census metadata)": {
+        "sentence-cut": 6
+      }
+    },
+    "sk-us": {
+      "conformance (synthetic field census; recorded documents where supplied)": {
+        "ast-missing": 1
+      },
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-iii-us-265-2026.content.json.gz (recorded document; census metadata)": {
+        "sentence-cut": 1
+      },
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-15-98.content.json.gz (recorded document; census metadata)": {
+        "ast-missing": 1
+      },
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-24-2014.content.json.gz (recorded document; census metadata)": {
+        "ast-missing": 1
+      },
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": {
+        "ast-missing": 1
+      }
+    },
+    "pl-courts": {
+      "pl-courts-page.json.gz[9]": {
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[12]": {
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[14]": {
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[15]": {
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[18]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[19]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[20]": {
+        "page-number-block": 1,
+        "sentence-cut": 3
+      },
+      "pl-courts-page.json.gz[21]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[22]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[23]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[27]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[28]": {
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[29]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[30]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[32]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[35]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[36]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[37]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[38]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[39]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[40]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[41]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[42]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[43]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[44]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[45]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[46]": {
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[47]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[48]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[49]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[51]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[54]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[55]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[56]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[58]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[63]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[65]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[66]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[67]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[68]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[69]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[70]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[72]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[73]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[74]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[75]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[77]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[78]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[79]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[80]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[81]": {
+        "page-number-block": 1,
+        "sentence-cut": 2
+      },
+      "pl-courts-page.json.gz[83]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[85]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[86]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[87]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[88]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[89]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[90]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[91]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[93]": {
+        "page-number-block": 1
+      },
+      "pl-courts-page.json.gz[94]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[98]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-page.json.gz[99]": {
+        "page-number-block": 1,
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:3": {
+        "sentence-cut": 2
+      },
+      "pl-courts-dump-day.json.gz:4": {
+        "sentence-cut": 5
+      },
+      "pl-courts-dump-day.json.gz:12": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:13": {
+        "sentence-cut": 5
+      },
+      "pl-courts-dump-day.json.gz:15": {
+        "sentence-cut": 2
+      },
+      "pl-courts-dump-day.json.gz:17": {
+        "sentence-cut": 4
+      },
+      "pl-courts-dump-day.json.gz:20": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:21": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:23": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:24": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:26": {
+        "stray-leading-number": 2
+      },
+      "pl-courts-dump-day.json.gz:30": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:32": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:33": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:34": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:38": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:50": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:52": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:53": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:54": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:55": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:56": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:57": {
+        "sentence-cut": 2
+      },
+      "pl-courts-dump-day.json.gz:58": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:59": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:67": {
+        "sentence-cut": 2
+      },
+      "pl-courts-dump-day.json.gz:68": {
+        "sentence-cut": 4
+      },
+      "pl-courts-dump-day.json.gz:69": {
+        "sentence-cut": 1,
+        "stray-leading-number": 2
+      },
+      "pl-courts-dump-day.json.gz:74": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:76": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:77": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:80": {
+        "sentence-cut": 2,
+        "stray-leading-number": 1
+      },
+      "pl-courts-dump-day.json.gz:81": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:82": {
+        "sentence-cut": 2
+      },
+      "pl-courts-dump-day.json.gz:83": {
+        "sentence-cut": 3
+      },
+      "pl-courts-dump-day.json.gz:84": {
+        "stray-leading-number": 2,
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:85": {
+        "sentence-cut": 3
+      },
+      "pl-courts-dump-day.json.gz:88": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:91": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:93": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:94": {
+        "sentence-cut": 2
+      },
+      "pl-courts-dump-day.json.gz:95": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:96": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:97": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:99": {
+        "sentence-cut": 1
+      }
+    },
+    "pl-kio": {
+      "pl-kio-listing-2010-so.html:1": {
+        "sentence-cut": 2
+      },
+      "pl-kio-listing-2025-09-01-p1.html:1": {
+        "sentence-cut": 7
+      },
+      "pl-kio-listing-undated-p1.html:8": {
+        "sentence-cut": 3
+      },
+      "pl-kio-detail-13694.html": {
+        "sentence-cut": 3
+      },
+      "pl-kio-detail-30308.html": {
+        "sentence-cut": 7
+      },
+      "pl-kio-detail-8247.html": {
+        "sentence-cut": 2
+      }
+    },
+    "pl-tk": {
+      "pl-tk-case-k-24-04.html.gz:238": {
+        "sentence-cut": 2
+      }
+    },
+    "pl-ncourt": {
+      "pl-ncourt-listing-151025200001006_II_K_000937_2025_Uz_2026-03-09_001.xml:0": {
+        "sentence-cut": 1
+      },
+      "pl-ncourt-content-151025200001006_II_K_000937_2025_Uz_2026-03-09_001.xml.gz:minimal-listing-context": {
+        "sentence-cut": 1
+      }
+    },
+    "at-umse": {
+      "at-ris-listing-umse.json[0]+at-ris-umse-text.xml": {
+        "sentence-cut": 13
+      }
+    },
+    "eu-ecj": {
+      "conformance (synthetic field census; recorded documents where supplied)": {
+        "sentence-cut": 5
+      },
+      "eu-ecj/61990CJ0006.en.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 2
+      },
+      "eu-ecj/62004CJ0144.hu.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 3
+      },
+      "eu-ecj/62013TO0488.cs.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 8
+      },
+      "eu-ecj/62017CJ0258.pl.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 4
+      },
+      "eu-ecj/62018CC0311.fi.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 4
+      },
+      "eu-ecj/62018CJ0311.en.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 3
+      },
+      "eu-ecj/62018CJ0311.lv.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 4
+      },
+      "eu-ecj/62019CO0791.en.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 4
+      },
+      "eu-ecj/62022CJ0128.el.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 8
+      },
+      "eu-ecj/62022CJ0128.en.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 5
+      },
+      "eu-ecj/62022CJ0128.en.page.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 5
+      },
+      "eu-ecj/62023CO0786.en.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 2
+      },
+      "eu-ecj/62023TJ0201.en.html.gz (recorded document; census metadata)": {
+        "sentence-cut": 3
+      },
+      "eu-ecj-61985CJ0214.cs.page.html.gz (recorded portal document; census metadata)": {
+        "sentence-cut": 1
+      },
+      "eu-ecj-61992TJ0027.sk.page.html.gz (recorded portal document; census metadata)": {
+        "sentence-cut": 1
+      },
+      "eu-ecj-61996TJ0183.lt.page.html.gz (recorded portal document; census metadata)": {
+        "sentence-cut": 1
+      }
+    },
+    "pl-kis": {
+      "pl-kis-listing-01-ind-2008.json:0": {
+        "sentence-cut": 8
+      },
+      "pl-kis-listing-01-ind-superseded.json:0": {
+        "stray-leading-number": 1
+      },
+      "pl-kis-listing-01-ind.json:0": {
+        "sentence-cut": 2
+      },
+      "pl-kis-listing-02-ind-zm.json:0": {
+        "stray-leading-number": 1,
+        "sentence-cut": 1
+      },
+      "pl-kis-document-05-objas.pdf": {
+        "sentence-cut": 5,
+        "page-number-block": 2
+      },
+      "pl-kis-listing-06-wis.json:0": {
+        "sentence-cut": 2
+      },
+      "pl-kis-listing-09-wis-uch.json:0": {
+        "sentence-cut": 2
+      },
+      "pl-kis-listing-17-opw.json:0": {
+        "sentence-cut": 3,
+        "stray-leading-number": 1
+      },
+      "pl-kis-listing-18-opw-odm.json:0": {
+        "stray-leading-number": 1,
+        "sentence-cut": 1
+      }
+    },
+    "pl-uodo": {
+      "conformance (synthetic field census; recorded documents where supplied)": {
+        "sentence-cut": 2
+      },
+      "pl-uodo-listing-2023.json.gz:14": {
+        "sentence-cut": 2
+      },
+      "pl-uodo-zsoss-440-82-2019.xml:recorded-listing-context": {
+        "sentence-cut": 2
+      }
+    },
+    "pl-uokik": {
+      "conformance (synthetic field census; recorded documents where supplied)": {
+        "sentence-cut": 66,
+        "stray-leading-number": 24,
+        "page-number-block": 13
+      },
+      "pl-uokik-ruling-iii-sk-17-09.pdf": {
+        "sentence-cut": 1
+      },
+      "pl-uokik-view-2011.json.gz:200": {
+        "sentence-cut": 66,
+        "stray-leading-number": 24,
+        "page-number-block": 13
+      }
+    }
+  }
+}
