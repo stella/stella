@@ -464,11 +464,20 @@ export const report = (verdict: CliReleaseVerdict): number => {
 
 type CommandRun = { readonly ok: boolean; readonly stdout: string };
 
-const run = (command: readonly string[], cwd: string): CommandRun => {
+// Remote lookups that stall must fail, so the caller runs the full check.
+const REMOTE_TIMEOUT_MS = 60_000;
+
+const run = (
+  command: readonly string[],
+  cwd: string,
+  timeoutMs?: number,
+): CommandRun => {
   const result = Bun.spawnSync([...command], {
     cwd,
     stdout: "pipe",
     stderr: "inherit",
+    maxBuffer: 64 * 1024 * 1024,
+    ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
   });
   return { ok: result.exitCode === 0, stdout: result.stdout.toString() };
 };
@@ -486,15 +495,19 @@ const parseQueuedPullRequest = (ref: string): QueuedPullRequest | undefined => {
 
 /** The history this run lands; squash merge groups do not contain the PR head. */
 const landedCommit = (): string | undefined => {
-  if (process.env.GITHUB_EVENT_NAME !== "merge_group") {
+  if (process.env["GITHUB_EVENT_NAME"] !== "merge_group") {
     return "HEAD";
   }
-  const queued = parseQueuedPullRequest(process.env.GITHUB_REF ?? "");
+  const queued = parseQueuedPullRequest(process.env["GITHUB_REF"] ?? "");
   if (queued === undefined) {
     return undefined;
   }
   const ref = `refs/pull/${queued.number}/head`;
-  const remote = run(["git", "ls-remote", "origin", ref], REPO_ROOT);
+  const remote = run(
+    ["git", "ls-remote", "origin", ref],
+    REPO_ROOT,
+    REMOTE_TIMEOUT_MS,
+  );
   const match = /^([0-9a-f]{40})\t([^\s]+)\n?$/u.exec(remote.stdout);
   const commit = match?.at(1);
   if (!remote.ok || commit === undefined || match?.at(2) !== ref) {
@@ -505,6 +518,7 @@ const landedCommit = (): string | undefined => {
     const fetched = run(
       ["git", "fetch", "--no-tags", "origin", commit],
       REPO_ROOT,
+      REMOTE_TIMEOUT_MS,
     );
     if (!fetched.ok) {
       return undefined;
@@ -533,6 +547,7 @@ const releasedTagCommit = (
     const remote = run(
       ["git", "ls-remote", "origin", `${ref}^{}`, ref],
       REPO_ROOT,
+      REMOTE_TIMEOUT_MS,
     );
     const lines = remote.ok ? remote.stdout.trim().split("\n") : [];
     const peeled = lines.find((line) => line.endsWith(`${ref}^{}`));

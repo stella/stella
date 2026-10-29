@@ -707,7 +707,11 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
 const mergeGroupFixture = (tagged: "release" | "elsewhere") => {
   const root = releasedTagFixture(tagged);
   const git = (...args: string[]) => {
-    const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+    const result = spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+      encoding: "utf-8",
+    });
     expect(result.status, result.stderr).toBe(0);
     return result.stdout.trim();
   };
@@ -729,6 +733,7 @@ const mergeGroupFixture = (tagged: "release" | "elsewhere") => {
   git("commit", "-m", "fixture squash merge group");
   expect(
     spawnSync("git", ["merge-base", "--is-ancestor", prHead, "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
     }).status,
   ).toBe(1);
@@ -747,7 +752,7 @@ const mergeGroupFixture = (tagged: "release" | "elsewhere") => {
   const env = {
     GITHUB_EVENT_NAME: "merge_group",
     GITHUB_REF: `refs/heads/gh-readonly-queue/main/pr-123-${git("rev-parse", "HEAD")}`,
-    PATH: `${path.join(root, "bin")}${path.delimiter}${process.env.PATH}`,
+    PATH: `${path.join(root, "bin")}${path.delimiter}${process.env["PATH"] ?? ""}`,
   };
   return { root, git, prHead, env };
 };
@@ -779,7 +784,10 @@ test("a squash merge group fetches a PR head absent from the checkout", () => {
       checkout,
     );
     expect(
-      spawnSync("git", ["cat-file", "-e", prHead], { cwd: checkout }).status,
+      spawnSync("git", ["cat-file", "-e", prHead], {
+        maxBuffer: 2 ** 30,
+        cwd: checkout,
+      }).status,
     ).not.toBe(0);
     const result = runBase(checkout, env);
     expect(result.exitCode, result.stderr.toString()).toBe(0);
