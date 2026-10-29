@@ -446,7 +446,7 @@ test("scope commit retires old work and accepts new writes before passive effect
   const previous = view.result.current;
   const creating = previous.create(scopeInput);
   const undoing = previous.undo();
-  const next = Promise.withResolvers<Promise<void>[]>();
+  const next = Promise.withResolvers<Promise<unknown>[]>();
   view.rerender({
     scope: "B",
     writes: b.writes,
@@ -468,7 +468,7 @@ test("scope commit retires old work and accepts new writes before passive effect
 test("unmount commit rejects stale writes before passive cleanup", async () => {
   const store = recordingStore();
   const view = scopeHistory({ scope: "A", writes: store.writes });
-  const completed = Promise.withResolvers<Promise<void>>();
+  const completed = Promise.withResolvers<Promise<unknown>>();
   view.rerender({
     scope: "A",
     writes: store.writes,

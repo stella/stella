@@ -6,15 +6,15 @@ import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type { SearchQuery } from "@/api/lib/search/types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
-import type { QueryPerfProfileId } from "./profiles";
+import type { QueryPerfTenantProfileId } from "./profiles";
 
-export const QUERY_PERF_SEED_ID = "document-search-placeholder-v4";
 const DOCUMENT_COUNTS = {
   small: 3000,
   growth: 100_000,
-} as const satisfies Record<QueryPerfProfileId, number>;
+} as const satisfies Record<QueryPerfTenantProfileId, number>;
 const MATCH_COUNT = 200;
 const GROWTH_SELECTED_WORKSPACE_FRACTION = 1 / 100;
 
@@ -65,7 +65,7 @@ const seedDocumentChunk = async (
 
 const seedPlaceholderQueryPerf = async (
   database: GatedTestDb,
-  profileId: QueryPerfProfileId,
+  profileId: QueryPerfTenantProfileId,
 ) => {
   const documentCount = DOCUMENT_COUNTS[profileId];
   const organizationId = toSafeId<"organization">(
@@ -88,6 +88,10 @@ const seedPlaceholderQueryPerf = async (
   await database.transaction(async (tx) => {
     await tx.execute(sql`INSERT INTO organization (id, name, slug, created_at)
       VALUES (${organizationId}, 'Query perf fixture', ${organizationId}, now())`);
+    await recordNewOrganizationAccessState(tx, {
+      organizationId,
+      now: new Date(),
+    });
     await tx.execute(sql`INSERT INTO "user" (id, name, email)
       VALUES (${userId}, 'Query perf fixture', 'query-perf@example.test')`);
     await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
@@ -125,7 +129,7 @@ const seedPlaceholderQueryPerf = async (
 
 export const seedQueryPerf = async (
   database: GatedTestDb,
-  profileId: QueryPerfProfileId,
+  profileId: QueryPerfTenantProfileId,
 ) => {
   const { organizationId, userId, bigWorkspaceId, query, searchMatchCount } =
     await seedPlaceholderQueryPerf(database, profileId);

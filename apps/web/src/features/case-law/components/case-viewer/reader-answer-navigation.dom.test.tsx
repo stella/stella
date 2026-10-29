@@ -96,7 +96,8 @@ const ReopenHarness = () => {
         active
         openRevision={revision}
         busy={false}
-        citationLabel={() => "¶48"}
+        citationTarget={() => ({ type: "unresolved" })}
+        language="en"
         onOpen={() => undefined}
         onFollowUp={() => undefined}
         onRegenerate={() => undefined}

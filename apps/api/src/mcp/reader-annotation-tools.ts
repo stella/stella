@@ -42,7 +42,10 @@ import type {
   CreateAnnotationBody,
   UpdateAnnotationBody,
 } from "@/api/lib/legal-search/reader-annotations/schema";
-import { DOCUMENT_ANNOTATION_REACH } from "@/api/lib/legal-search/reader-annotations/target";
+import {
+  DOCUMENT_ANNOTATION_REACH,
+  PUBLIC_LAW_ANNOTATION_PLACEMENT,
+} from "@/api/lib/legal-search/reader-annotations/target";
 import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
@@ -554,6 +557,7 @@ const handleCreateTool: TypedMcpToolHandler<
     createReaderAnnotationHandler({
       body,
       organizationId: context.organizationId,
+      placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       recordAuditEvent: context.recordAuditEvent,
       // A retry may find the passages elsewhere after a re-parse; the words
       // are the request, and the mark keeps its first placement.

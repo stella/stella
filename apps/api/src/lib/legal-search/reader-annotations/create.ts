@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { randomUUIDv7 } from "bun";
 import { and, eq } from "drizzle-orm";
 
+import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+
 import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -19,7 +21,7 @@ import type { CreateAnnotationRequest } from "@/api/lib/legal-search/reader-anno
 import { annotationAuditSubject } from "@/api/lib/legal-search/reader-annotations/target";
 import type {
   AnnotationAuthorScope,
-  VerificationClaimRef,
+  AnnotationPlacement,
 } from "@/api/lib/legal-search/reader-annotations/target";
 
 /** What a replayed request is compared with: every row of the stored mark. */
@@ -45,40 +47,111 @@ const annotationVisibility = ({ visibility }: CreateAnnotationRequest) =>
   requireAnnotationVisibility(visibility ?? "private");
 
 /**
- * Leaves a highlight or a comment on a passage of a decision or a statute. A
- * passage over several paragraphs becomes one row per paragraph under one
- * group, so it reads, changes and disappears as one mark. Private unless the
- * reader says otherwise; the author and organization come from the session,
- * never from the request.
+ * The placement a request's target needs, so a matter target is only ever
+ * written with the row its matter route read, and a public-law one with none.
+ */
+const PLACEMENT_BY_TARGET_TYPE = {
+  decision: "public-law",
+  statute: "public-law",
+  "verification-claim": "verification-claim",
+  "matter-document": "matter-document",
+} as const satisfies Record<
+  ReaderAnnotationTargetType,
+  AnnotationPlacement["type"]
+>;
+
+/** The id the placement read, which the request's `targetId` must name. */
+const placedTargetId = (placement: AnnotationPlacement): string | null => {
+  switch (placement.type) {
+    case "public-law": {
+      return null;
+    }
+    case "verification-claim": {
+      return placement.claimId;
+    }
+    case "matter-document": {
+      return placement.fieldId;
+    }
+    default: {
+      placement satisfies never;
+      return panic(`Unhandled annotation placement: ${String(placement)}`);
+    }
+  }
+};
+
+/** The matter columns one row of the mark carries, on the given block. */
+const placementColumns = (
+  placement: AnnotationPlacement,
+  blockAnchorId: string,
+) => {
+  switch (placement.type) {
+    case "public-law": {
+      return {
+        workspaceId: null,
+        verificationRunId: null,
+        verificationClaimId: null,
+        entityId: null,
+        pageTextSha256: null,
+      };
+    }
+    case "verification-claim": {
+      return {
+        workspaceId: placement.workspaceId,
+        verificationRunId: placement.runId,
+        verificationClaimId: placement.claimId,
+        entityId: null,
+        pageTextSha256: null,
+      };
+    }
+    case "matter-document": {
+      return {
+        workspaceId: placement.workspaceId,
+        verificationRunId: null,
+        verificationClaimId: null,
+        entityId: placement.entityId,
+        pageTextSha256:
+          placement.pageTextSha256ByAnchorId.get(blockAnchorId) ??
+          panic("A placed document span has no page digest"),
+      };
+    }
+    default: {
+      placement satisfies never;
+      return panic(`Unhandled annotation placement: ${String(placement)}`);
+    }
+  }
+};
+
+/**
+ * Leaves a highlight or a comment on a passage of a decision, a statute or
+ * matter content. A passage over several paragraphs (or pages) becomes one
+ * row per paragraph under one group, so it reads, changes and disappears as
+ * one mark. Private unless the reader says otherwise; the author and
+ * organization come from the session, never from the request.
  */
 type CreateReaderAnnotationProps = AnnotationAuthorScope & {
   body: CreateAnnotationRequest;
   /** What a request replayed under the same `requestId` must match. */
   replayIdentity: AnnotationReplayIdentity;
-  /**
-   * The claim a `verification-claim` request comments on, read by the matter
-   * route under the caller's scope; absent for every other target.
-   */
-  verificationClaim?: VerificationClaimRef;
+  /** Where the mark lands: the matter row a matter target's route read. */
+  placement: AnnotationPlacement;
 };
 
 export const createReaderAnnotationHandler = async function* ({
   body,
   organizationId,
+  placement,
   recordAuditEvent,
   replayIdentity,
   safeDb,
   userId,
-  verificationClaim,
 }: CreateReaderAnnotationProps) {
   const targetType = requireAnnotationTargetType(body.targetType);
+  const placedId = placedTargetId(placement);
   if (
-    (targetType === "verification-claim") !==
-      (verificationClaim !== undefined) ||
-    (verificationClaim !== undefined &&
-      verificationClaim.claimId !== body.targetId)
+    PLACEMENT_BY_TARGET_TYPE[targetType] !== placement.type ||
+    (placedId !== null && placedId !== body.targetId)
   ) {
-    return panic("A claim comment must name the claim its matter route read");
+    return panic("A matter mark must name the row its matter route read");
   }
   if (body.spans.some((span) => span.endOffset <= span.startOffset)) {
     return Result.err(
@@ -116,9 +189,7 @@ export const createReaderAnnotationHandler = async function* ({
         userId,
         targetType,
         targetId,
-        workspaceId: verificationClaim?.workspaceId ?? null,
-        verificationRunId: verificationClaim?.runId ?? null,
-        verificationClaimId: verificationClaim?.claimId ?? null,
+        ...placementColumns(placement, span.blockAnchorId),
         groupId,
         kind: body.kind,
         visibility,
@@ -212,10 +283,9 @@ export const createReaderAnnotationHandler = async function* ({
       if (first !== undefined) {
         const subject = annotationAuditSubject({
           annotationId: first.id,
+          ...placementColumns(placement, firstValue.blockAnchorId),
+          targetId,
           targetType,
-          verificationClaimId: verificationClaim?.claimId ?? null,
-          verificationRunId: verificationClaim?.runId ?? null,
-          workspaceId: verificationClaim?.workspaceId ?? null,
         });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,

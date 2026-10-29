@@ -2,6 +2,13 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { acceptsDocumentOcrRequests } from "@stll/api-contract/document-ocr-availability";
+import type {
+  AcceptingDocumentOcrAvailability,
+  DocumentOcrAvailability,
+} from "@stll/api-contract/document-ocr-availability";
+import { classifyFailure } from "@stll/errors";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -12,6 +19,7 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { getDocumentOcrAvailability } from "@/api/lib/document-processing-readiness";
 import type {
   ManualOcrSource,
   PersistedDocumentProcessingRun,
@@ -31,8 +39,10 @@ const config = {
   contract: "patch",
   description:
     "Queue an unencrypted PDF field for the next searchable-text " +
-    "recognition batch. Returns the durable run and reports when that source " +
-    "was already processed.",
+    "recognition batch. Returns the durable run and the OCR availability " +
+    "it was accepted under (`live` or `batched`), and reports when that " +
+    "source was already processed. Refused when the deployment would not " +
+    "process it.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -50,24 +60,36 @@ type FindManualOcrSourceResult = Result<
   HandlerError<400 | 404 | 409> | SafeDbError
 >;
 
-type ManualOcrResponse = {
-  outcome: "already_processed" | "queued";
-  runId: SafeId<"documentProcessingRun">;
-};
+type ManualOcrResponse =
+  | {
+      outcome: "already_processed";
+      runId: SafeId<"documentProcessingRun">;
+    }
+  | {
+      outcome: "queued";
+      runId: SafeId<"documentProcessingRun">;
+      availability: AcceptingDocumentOcrAvailability;
+    };
 
 type RequestManualOcrProps = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   persistRun: typeof persistRequestedManualOcrRun;
+  readAvailability: () => Promise<DocumentOcrAvailability>;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
 
-const getManualOcrOutcome = ({ status }: PersistedDocumentProcessingRun) =>
-  status === "succeeded" ? "already_processed" : "queued";
+const manualOcrResponse = (
+  { id, status }: PersistedDocumentProcessingRun,
+  availability: AcceptingDocumentOcrAvailability,
+): ManualOcrResponse =>
+  status === "succeeded"
+    ? { outcome: "already_processed", runId: id }
+    : { outcome: "queued", runId: id, availability };
 
 const findManualOcrSource = async ({
   entityId,
@@ -163,11 +185,30 @@ export const requestManualOcrHandler = async function* ({
   fieldId,
   organizationId,
   persistRun,
+  readAvailability,
   recordAuditEvent,
   safeDb,
   userId,
   workspaceId,
 }: RequestManualOcrProps): SafeHandlerGenerator<ManualOcrResponse> {
+  const availability = await readAvailability();
+  if (!acceptsDocumentOcrRequests(availability)) {
+    return Result.err(
+      classifyFailure(
+        new HandlerError({
+          status: 503,
+          code: "internal_error",
+          message:
+            "Searchable-text recognition is not available on this deployment",
+          hint:
+            "Call organization-settings.document-ocr-availability.get and " +
+            "retry once it reports live or batched.",
+          retryable: true,
+        }),
+        "document_ocr_unconfigured",
+      ),
+    );
+  }
   const source = yield* Result.await(
     findManualOcrSource({ entityId, fieldId, safeDb, workspaceId }),
   );
@@ -198,7 +239,7 @@ export const requestManualOcrHandler = async function* ({
     );
   }
 
-  return Result.ok({ outcome: getManualOcrOutcome(run), runId: run.id });
+  return Result.ok(manualOcrResponse(run, availability));
 };
 
 const requestOcr = createSafeHandler(
@@ -217,6 +258,7 @@ const requestOcr = createSafeHandler(
       fieldId: body.fieldId,
       organizationId: session.activeOrganizationId,
       persistRun: persistRequestedManualOcrRun,
+      readAvailability: getDocumentOcrAvailability,
       recordAuditEvent,
       safeDb,
       userId: user.id,

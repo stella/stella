@@ -38,6 +38,12 @@ checks:
       # `if:` holds; scripts/generated-files-guard.test.ts binds each entry to
       # its owning job's condition. An empty entry delegates nothing.
       GENERATED_CHECKS_IN_OTHER_JOBS: ${{ format('["{0}","{1}"]', inputs.pr_depth_only != true && needs.ci-plan.outputs.scan_engine_wasm_required == 'true' && 'scan-engine-wasm' || '', (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true') && needs.ci-plan.outputs.run_required != 'false' && inputs.heavy_only != true && needs.ci-plan.outputs.package_checks_required == 'true' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && 'api-typecheck-projects' || '') }}
+      # A plan that proves the scan engine's inputs unchanged leaves its
+      # committed WebAssembly as scan-engine-wasm-drift last proved it; this
+      # job has no Rust cache, so rebuilding it here compiles the toolchain
+      # from source. scripts/generated-files-guard.test.ts binds the entry to
+      # the plan paths that cover the family.
+      GENERATED_CHECKS_UNCHANGED: ${{ format('["{0}"]', needs.ci-plan.outputs.scan_engine_wasm_required == 'false' && 'scan-engine-wasm' || '') }}
     id: generated_manifest
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
     # Guard A registers tracked generated files; Guard B checks the
@@ -60,7 +66,7 @@ checks:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_014
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test release image CI gate')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
     # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
     run: bun test --timeout 50000 scripts/ci-plan.test.ts
 
@@ -666,6 +672,22 @@ checks:
     # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
     run: bun scripts/design-tokens-doc.ts --check
 
+  - name: Icon module imports
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    id: static_check_126
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Icon module imports')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_126 != 'true') }}
+    timeout-minutes: 2
+    # Every lucide-react import goes through packages/ui/src/icons.ts, whose
+    # re-export list follows what the apps and packages import from it. A
+    # direct import or a re-export nothing imports fails here.
+    # Rewrite: `bun scripts/codemod-icons.ts`.
+    run: |
+      bun test scripts/codemod-icons.test.ts
+      bun --preload ./scripts/offline-network-preload.ts scripts/codemod-icons.ts --check
+
   - name: Suppression waiver ledger
     env:
       CI_CHECK_KIND: STATIC
@@ -1006,7 +1028,6 @@ checks:
       bash scripts/check-release-changelog.test.sh
       bash scripts/prepare-release-tag.test.sh
       bash scripts/release-pull-requests.test.sh
-      bash scripts/check-main-merge-hold.test.sh
       bash scripts/create-release-manifest.test.sh
       bash scripts/promote-desktop-release.test.sh
 

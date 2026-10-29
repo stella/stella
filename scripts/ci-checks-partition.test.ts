@@ -14,6 +14,7 @@ import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
+  type CheckPoolJob,
   checkPoolRegistryPath,
   checkPoolStepRun,
   type ReadCheckPool,
@@ -25,7 +26,10 @@ import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { CI_GENERATED_OUTPUTS } from "./generated-files";
-import { DELEGATED_CHECKS_ENV } from "./generated-files-guard";
+import {
+  DELEGATED_CHECKS_ENV,
+  UNCHANGED_CHECKS_ENV,
+} from "./generated-files-guard";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -385,6 +389,9 @@ const jobs = v.parse(
 // today's form, so its pooled checks still expand and compare. Matches only
 // the old form, so it is inert once the merge base carries the new one.
 const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// Pool steps then ran the pool without `exec`; that form reads as today's too.
+const preExecPoolRun = (job: CheckPoolJob) =>
+  checkPoolStepRun(job).replace(" exec bun ", " bun ");
 const withCurrentPoolSteps = (workflow: unknown): unknown => {
   const parsed = v.parse(
     v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
@@ -404,7 +411,8 @@ const withCurrentPoolSteps = (workflow: unknown): unknown => {
           }),
           step,
         ) ||
-        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+        (LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job &&
+          step.run !== preExecPoolRun(job))
       ) {
         return step;
       }
@@ -781,7 +789,8 @@ const withoutTestTimeout = (step: Step): Step => {
 };
 
 // Delegation drops only a family whose owning job runs the same check in this
-// run; scripts/generated-files-guard.test.ts binds it to that job's `if:`.
+// run, and an unchanged family only when the plan proves its paths untouched;
+// scripts/generated-files-guard.test.ts binds each to its job's `if:` or plan.
 const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   const { env } = v.parse(
     v.looseObject({ env: v.optional(v.record(v.string(), v.unknown())) }),
@@ -790,11 +799,18 @@ const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   if (
     step.name !== "Generated files manifest guard" ||
     env === undefined ||
-    !Object.hasOwn(env, DELEGATED_CHECKS_ENV)
+    !(
+      Object.hasOwn(env, DELEGATED_CHECKS_ENV) ||
+      Object.hasOwn(env, UNCHANGED_CHECKS_ENV)
+    )
   ) {
     return step;
   }
-  const { [DELEGATED_CHECKS_ENV]: _delegated, ...environment } = env;
+  const {
+    [DELEGATED_CHECKS_ENV]: _delegated,
+    [UNCHANGED_CHECKS_ENV]: _unchanged,
+    ...environment
+  } = env;
   const { env: _env, ...original } = step;
   return Object.keys(environment).length === 0
     ? original
@@ -1222,21 +1238,26 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
       },
     };
   }
-  if (
-    step.name === "Test release policy scripts" &&
-    fields.run?.includes(
-      "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
-    )
-  ) {
-    return {
-      ...step,
-      run: fields.run
+  if (step.name === "Test release policy scripts" && fields.run !== undefined) {
+    let run = fields.run;
+    if (
+      run.includes(
+        "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+      )
+    ) {
+      run = run
         .replace(
           "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
           "bun test scripts/release-version-dispatch.test.ts\n",
         )
-        .replace("bash scripts/release-pending.test.sh\n", ""),
-    };
+        .replace("bash scripts/release-pending.test.sh\n", "");
+    }
+    // A baseline before the release hold retired still carries its shell
+    // suite. Normalize only that removed owner, never another release check.
+    if (!trackedFiles.has("scripts/check-main-merge-hold.test.sh")) {
+      run = run.replace("bash scripts/check-main-merge-hold.test.sh\n", "");
+    }
+    return { ...step, run };
   }
   if (
     step.name === "Test oxlint plugins" &&
@@ -1394,6 +1415,8 @@ test("code-quality pool preserves every moved check exactly once", () => {
   ];
   const withoutPoolMetadata = (step: Record<string, unknown>) => {
     const normalized = { ...step };
+    // An expanded pooled check carries its generated budget as its timeout.
+    delete normalized["timeout-minutes"];
     // An ordinary step's implicit success() is `!cancelled()` in the pool.
     if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
       delete normalized["if"];

@@ -8,7 +8,10 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
+import {
+  READER_ANNOTATION_QUOTE_MAX_LENGTH,
+  readerPdfPageAnchorId,
+} from "@stll/api-contract/legal-reader-annotations";
 
 import type { Transaction } from "@/api/db/root";
 import { legalListClaims } from "@/api/db/schema";
@@ -58,7 +61,7 @@ const anchorBlockId = (anchor: ClaimAnchor): string => {
       return anchor.blockId;
     }
     case "pdf-page": {
-      return `page-${String(anchor.pageNumber)}`;
+      return readerPdfPageAnchorId(anchor.pageNumber);
     }
     default: {
       anchor satisfies never;

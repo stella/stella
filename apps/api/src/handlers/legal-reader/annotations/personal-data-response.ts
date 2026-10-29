@@ -1,3 +1,5 @@
+import { READER_MATTER_TARGET_TYPES } from "@stll/api-contract/legal-reader-annotations";
+
 import type { legalReaderAnnotations } from "@/api/db/schema";
 import type {
   UnbackedProjectionKeys,
@@ -13,6 +15,8 @@ type PrivateAnnotationExportRow = Pick<
   | "workspaceId"
   | "verificationRunId"
   | "verificationClaimId"
+  | "entityId"
+  | "pageTextSha256"
   | "groupId"
   | "kind"
   | "visibility"
@@ -29,15 +33,23 @@ type PrivateAnnotationExportRow = Pick<
   | "updatedAt"
 >;
 
+const MATTER_TARGET_TYPES: ReadonlySet<string> = new Set(
+  READER_MATTER_TARGET_TYPES,
+);
+
 /**
- * A user's private document notes and all of their verification-claim comments.
- * Shared document annotations remain organization data, while a claim comment's
- * authored words remain part of the author's personal-data export.
+ * A user's private public-law notes and all of their notes on matter content
+ * (verification-claim comments, matter document marks). Shared public-law
+ * annotations remain organization data, while the words a user wrote on a
+ * matter remain part of the author's personal-data export.
  */
 export const projectPrivateAnnotationForAccountExport = (
   row: PrivateAnnotationExportRow,
 ) => {
-  if (row.visibility !== "private" && row.targetType !== "verification-claim") {
+  if (
+    row.visibility !== "private" &&
+    !MATTER_TARGET_TYPES.has(row.targetType)
+  ) {
     return undefined;
   }
   return {
@@ -48,6 +60,8 @@ export const projectPrivateAnnotationForAccountExport = (
     workspaceId: row.workspaceId,
     verificationRunId: row.verificationRunId,
     verificationClaimId: row.verificationClaimId,
+    entityId: row.entityId,
+    pageTextSha256: row.pageTextSha256,
     groupId: row.groupId,
     kind: row.kind,
     visibility: row.visibility,

@@ -10,6 +10,7 @@ import {
   READER_ANNOTATION_VISIBILITIES,
   READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
+import { mapWithConcurrency } from "@stll/concurrency";
 import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 
 import type {
@@ -17,17 +18,22 @@ import type {
   UpdateAnnotationInput,
 } from "@/components/legal-reader/annotations/annotation-types";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import {
+  CLAIMED_GUEST_ANNOTATIONS_STORAGE_KEY,
+  GUEST_ANNOTATIONS_STORAGE_KEY,
+  LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
+} from "@/lib/account/storage-keys";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson } from "@/lib/stored-json";
 
-const GUEST_ANNOTATIONS_STORAGE_KEY = "legal-reader-guest-annotations:v2";
 /**
  * Where a tab that was reading a decision when this shipped still holds its
  * marks. Session storage, so the window is one open tab wide, but the marks
  * are the reader's own words and are not worth dropping.
  */
-const LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY = "case-law-guest-annotations:v1";
 /**
  * v1 held decision notes under `decisionId`, before statutes could be marked.
  * v2 names the document the way the reader and the API now do.
@@ -139,7 +145,7 @@ export const EMPTY_GUEST_ANNOTATION_STORE: GuestAnnotationStore = {
   version: GUEST_ANNOTATIONS_VERSION,
 };
 
-type GuestAnnotationStorage = Pick<
+export type GuestAnnotationStorage = Pick<
   Storage,
   "getItem" | "removeItem" | "setItem"
 >;
@@ -217,32 +223,135 @@ export const writeGuestAnnotationStore = (
       }),
   });
 
-export const removeGuestAnnotation = (
+/** An account that takes over the tab's guest marks. */
+export type GuestAnnotationClaimant = Extract<StorageOwner, { kind: "user" }>;
+
+/**
+ * Marks an account has claimed but not uploaded yet. Not capped like the
+ * tab's own store: a sign-out mid-upload leaves some here, and the next
+ * visitor in the tab may leave a full store on top for this account.
+ */
+const claimedGuestAnnotationStoreSchema = v.object({
+  items: v.array(guestAnnotationSchema),
+  version: v.literal(GUEST_ANNOTATIONS_VERSION),
+});
+
+const claimedKey = (owner: GuestAnnotationClaimant) =>
+  userStorageKey(CLAIMED_GUEST_ANNOTATIONS_STORAGE_KEY, owner);
+
+const readClaimedGuestAnnotations = (
   storage: GuestAnnotationStorage,
+  owner: GuestAnnotationClaimant,
+): GuestAnnotationStore => {
+  const raw = Result.try(() => storage.getItem(claimedKey(owner)));
+  if (Result.isError(raw)) {
+    return EMPTY_GUEST_ANNOTATION_STORE;
+  }
+  const parsed = readStoredJson(raw.value, claimedGuestAnnotationStoreSchema);
+  return parsed !== null && isCoherent(parsed)
+    ? parsed
+    : EMPTY_GUEST_ANNOTATION_STORE;
+};
+
+const claimFailed = (cause: unknown) =>
+  new ClientOperationError({
+    action: "claim-guest-reader-annotations",
+    cause,
+    message: "Guest annotation storage is unavailable",
+  });
+
+/**
+ * Moves the tab's guest marks under `owner`'s own key and returns every mark
+ * that account still has to upload. Keyed by the account, they outlast its
+ * sign-out for its next sign-in in this tab, and no other account reads them.
+ */
+export const claimGuestAnnotations = (
+  storage: GuestAnnotationStorage,
+  owner: GuestAnnotationClaimant,
+): Result<GuestAnnotationStore, ClientOperationError> => {
+  const claimed = readClaimedGuestAnnotations(storage, owner);
+  const guest = readGuestAnnotationStore(storage);
+  if (guest.items.length === 0) {
+    return Result.ok(claimed);
+  }
+  const held = new Set(claimed.items.map((item) => item.requestId));
+  const next: GuestAnnotationStore = {
+    items: [
+      ...claimed.items,
+      ...guest.items.filter((item) => !held.has(item.requestId)),
+    ],
+    version: GUEST_ANNOTATIONS_VERSION,
+  };
+  return Result.try({
+    try: () => {
+      // The account's copy is written before the tab's goes, so the marks
+      // always have one home.
+      storage.setItem(claimedKey(owner), JSON.stringify(next));
+      storage.removeItem(GUEST_ANNOTATIONS_STORAGE_KEY);
+      storage.removeItem(LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY);
+    },
+    catch: claimFailed,
+  }).map(() => next);
+};
+
+const removeClaimedGuestAnnotation = (
+  storage: GuestAnnotationStorage,
+  owner: GuestAnnotationClaimant,
   requestId: string,
 ) => {
-  const current = readGuestAnnotationStore(storage);
-  const next = {
-    items: current.items.filter((item) => item.requestId !== requestId),
-    version: GUEST_ANNOTATIONS_VERSION,
-  } as const satisfies GuestAnnotationStore;
-
-  if (next.items.length === 0) {
-    return Result.try({
-      try: () => {
-        storage.removeItem(GUEST_ANNOTATIONS_STORAGE_KEY);
-        storage.removeItem(LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY);
-      },
-      catch: (cause) =>
-        new ClientOperationError({
-          action: "remove-guest-reader-annotation",
-          cause,
-          message: "Guest annotation storage could not be cleared",
-        }),
-    }).map(() => next);
-  }
-  return writeGuestAnnotationStore(storage, next).map(() => next);
+  const items = readClaimedGuestAnnotations(storage, owner).items.filter(
+    (item) => item.requestId !== requestId,
+  );
+  return Result.try({
+    try: () => {
+      if (items.length === 0) {
+        storage.removeItem(claimedKey(owner));
+        return;
+      }
+      storage.setItem(
+        claimedKey(owner),
+        JSON.stringify({ items, version: GUEST_ANNOTATIONS_VERSION }),
+      );
+    },
+    catch: claimFailed,
+  });
 };
+
+/**
+ * Uploads the marks `owner` claimed, at most `limit` at a time, removing each
+ * only once its upload succeeded. Nothing is posted once `owner` is no longer
+ * signed in; what is left waits under their key for their next sign-in, and
+ * each mark's request id keeps a repeated upload from creating it twice.
+ */
+export const uploadClaimedGuestAnnotations = async ({
+  isCurrentOwner,
+  items,
+  limit,
+  owner,
+  storage,
+  upload,
+}: {
+  isCurrentOwner: () => boolean;
+  items: readonly GuestAnnotation[];
+  limit: number;
+  owner: GuestAnnotationClaimant;
+  storage: GuestAnnotationStorage;
+  upload: (item: GuestAnnotation) => Promise<Result<void, Error>>;
+}): Promise<Result<void, Error>[]> =>
+  await mapWithConcurrency({
+    items,
+    limit,
+    operation: async (item): Promise<Result<void, Error>> => {
+      if (!isCurrentOwner()) {
+        return Result.ok(undefined);
+      }
+      const uploaded = await upload(item);
+      if (Result.isError(uploaded)) {
+        return uploaded;
+      }
+      return removeClaimedGuestAnnotation(storage, owner, item.requestId);
+    },
+  });
 
 export const createGuestAnnotation = ({
   input,

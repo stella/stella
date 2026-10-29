@@ -8,6 +8,7 @@ export const DESKTOP_FEATURE_ACCESS_PATH =
 export const DESKTOP_FEATURE_IDS = [
   "activity-timeline",
   "time-billing",
+  "local-agents",
 ] as const;
 
 export type DesktopFeatureId = (typeof DESKTOP_FEATURE_IDS)[number];

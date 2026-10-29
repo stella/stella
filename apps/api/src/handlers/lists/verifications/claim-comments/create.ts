@@ -105,12 +105,12 @@ const createClaimComment = createSafeHandler(
         ...(body.requestId === undefined ? {} : { requestId: body.requestId }),
       },
       organizationId: session.activeOrganizationId,
+      placement: { type: "verification-claim", claimId, runId, workspaceId },
       recordAuditEvent,
       // The span is the claim's own, the same on every retry.
       replayIdentity: "spans",
       safeDb,
       userId: user.id,
-      verificationClaim: { claimId, runId, workspaceId },
     });
   },
 );

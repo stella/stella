@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { user as authUser } from "@/api/db/auth-schema";
 import { featureEnrolments, savedTimeNarratives } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -89,7 +90,7 @@ const context = (
     auditEvents.push(...(Array.isArray(event) ? event : [event]));
   },
   request: new Request("https://example.test/saved-time-narratives"),
-  route: "/test/saved-time-narratives",
+  route: "/v1/saved-time-narratives" satisfies ApiRoutePath,
 });
 
 test("saved narrative CRUD stays personal and scoped to the active organization", async () => {

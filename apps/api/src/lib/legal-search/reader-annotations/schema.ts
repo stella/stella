@@ -71,14 +71,14 @@ export const annotationTargetTypeSchema = v.union([
   v.literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[0]),
   v.literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[1]),
 ]);
-const annotationColorSchema = v.union([
+export const annotationColorSchema = v.union([
   v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[0]),
   v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[1]),
   v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[2]),
   v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[3]),
   v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[4]),
 ]);
-const annotationStyleSchema = v.union([
+export const annotationStyleSchema = v.union([
   v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[0]),
   v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[1]),
   v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[2]),
@@ -97,6 +97,7 @@ export const requireAnnotationTargetType = (
     case "decision":
     case "statute":
     case "verification-claim":
+    case "matter-document":
       return value;
     default:
       return panic(`Invalid annotation target type: ${value}`);

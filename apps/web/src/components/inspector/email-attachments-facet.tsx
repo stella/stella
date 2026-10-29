@@ -730,6 +730,7 @@ const AttachmentSaveControls = ({
       onPrimaryClick={onSave}
       primaryDescriptionId={descriptionId}
       primaryDisabled={disabled}
+      primaryContent={compact ? "icon" : "text"}
       primaryLabel={t("common.save")}
       size="sm"
       menu={

@@ -2,6 +2,14 @@ import { expect, test } from "bun:test";
 
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 
+test.each([
+  "upstream_unavailable",
+  "public_read_timeout",
+  "search_index_unavailable",
+])("%s uses the server exit class", (code) => {
+  expect(resolveMcpErrorCodeExit(code)).toBe(EXIT_CODES.server);
+});
+
 test("admission refusals distinguish retryable failures from operator action", () => {
   expect(resolveMcpErrorCodeExit("action_period_exhausted")).toBe(
     EXIT_CODES.usageLimited,
@@ -12,7 +20,7 @@ test("admission refusals distinguish retryable failures from operator action", (
   expect(resolveMcpErrorCodeExit("action_concurrency_busy")).toBe(
     EXIT_CODES.server,
   );
-  expect(resolveMcpErrorCodeExit("action_admission_unavailable")).toBe(
+  expect(resolveMcpErrorCodeExit("limiter_store_unavailable")).toBe(
     EXIT_CODES.server,
   );
 });

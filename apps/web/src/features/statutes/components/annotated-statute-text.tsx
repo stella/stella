@@ -1,5 +1,6 @@
 import type { ComponentProps, RefObject } from "react";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 
@@ -19,7 +20,7 @@ import { detached } from "@/lib/detached";
 
 type AnnotatedStatuteTextProps = Omit<
   ComponentProps<typeof StatuteText>,
-  "annotationAnchors"
+  "annotationAnchors" | "statuteLists"
 > & {
   country: string;
   eli: string;
@@ -92,7 +93,12 @@ export const AnnotatedStatuteText = ({
         }}
         orphaned={orphaned}
       />
-      <StatuteText {...statuteText} annotationAnchors={annotationAnchors} />
+      <StatuteText
+        {...statuteText}
+        annotationAnchors={annotationAnchors}
+        statuteLists={statuteListSchemeFor(country)}
+      />
+
       <AnnotationToolbar
         activeAnnotation={activeAnnotation}
         activeSpans={activeSpans}

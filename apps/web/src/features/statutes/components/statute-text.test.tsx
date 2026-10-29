@@ -8,6 +8,7 @@ import { IntlProvider } from "use-intl";
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteText } from "@/features/statutes/components/statute-text";
@@ -114,6 +115,7 @@ const renderStatute = (
       language="cs"
       masthead={null}
       provisionCitationCounts={new Map()}
+      statuteLists={E_SBIRKA_LIST_SCHEME}
       statuteTitle={STATUTE_TITLE}
       versionCount={1}
       versionValidFrom="2024-01-01"
@@ -415,6 +417,7 @@ describe("StatuteText", () => {
             language="cs"
             masthead={null}
             provisionCitationCounts={new Map()}
+            statuteLists={E_SBIRKA_LIST_SCHEME}
             statuteTitle={STATUTE_TITLE}
             versionCount={3}
             versionValidFrom="2024-01-01"

@@ -614,7 +614,6 @@ const converse = async (combination: ChatCombination): Promise<Conversation> =>
           async () => {
             const outcome = await runChatThreadCompaction({
               abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
-              dataWorkspaceIds: [],
               orgAIConfig: orgConfigOf(origin),
               managedAIResidency: "eu",
               organizationId: ids.orgA,
@@ -623,6 +622,8 @@ const converse = async (combination: ChatCombination): Promise<Conversation> =>
               safeDb,
               threadId,
               triggerTokens: 1,
+              userId: ids.userA1,
+              withStoredContentEgress: async ({ work }) => await work(),
             });
             expect(
               Result.isOk(outcome) ? outcome.value.type : outcome.error.message,
