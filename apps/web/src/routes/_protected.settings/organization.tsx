@@ -7,14 +7,9 @@ import { detached } from "@/lib/detached";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
-import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
-
-const searchSchema = routeSearchSchema({
-  q: optionalSearchStringSchema(),
-});
+import { organizationSettingsSearchSchema } from "@/routes/_protected.admin/-route-cutover";
 
 export const Route = createFileRoute("/_protected/settings/organization")({
   staticData: {
@@ -24,7 +19,7 @@ export const Route = createFileRoute("/_protected/settings/organization")({
       to: "/settings/organization",
     }),
   },
-  validateSearch: searchSchema,
+  validateSearch: organizationSettingsSearchSchema,
   beforeLoad: async ({ context, location, matches }) => {
     // These routes already require enrolment before commit. Its read is
     // independent of the member role, so start both admission queries together.

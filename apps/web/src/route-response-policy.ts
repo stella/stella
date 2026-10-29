@@ -116,6 +116,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/law/cases/research/$tableId": "private-no-store",
   "/sitemaps/law-statutes/$country/{$bucket}.xml": "public-anonymous",
   "/admin/": "private-no-store",
+  "/settings/organization/": "private-no-store",
   "/workspaces/$workspaceId/": "private-no-store",
   "/law/$country/statutes/": "public-indexable",
   "/law/cases/research/": "private-no-store",
