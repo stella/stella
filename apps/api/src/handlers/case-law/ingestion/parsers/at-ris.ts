@@ -1,8 +1,6 @@
-// parser-output-unchanged: retention is checked by the pipeline against the stored raw; the parser no longer validates itself, and its blocks are unchanged.
 /** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
@@ -11,8 +9,16 @@ import type {
   DocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
+import {
+  readRisContent,
+  risContentLoss,
+  type RisItem,
+} from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;
@@ -37,21 +43,11 @@ export type RisDocumentSections = Readonly<Record<string, string>>;
 
 export type ParseRisDecisionOutput = {
   documentAst: DocumentAst;
+  /** Elements outside the RIS vocabulary; their text is kept. */
+  unknownElements: readonly string[];
   fulltext: string;
   sections: RisDocumentSections;
 };
-
-const normalizedText = (text: string): string =>
-  text
-    .replace(/\u00a0/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim();
-
-const elementText = ($: cheerio.CheerioAPI, element: Element): string =>
-  normalizedText($(element).text());
-
-const isPageFurniture = ($: cheerio.CheerioAPI, node: AnyNode): boolean =>
-  $(node).closest("kzinhalt, fzinhalt").length > 0;
 
 const paragraphRole = (
   contentType: string | undefined,
@@ -134,12 +130,97 @@ export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
   return [...contentTypes];
 };
 
+type RisParagraphItem = Extract<RisItem, { type: "paragraph" }>;
+
+/**
+ * A document whose `abstand` count is this share of its `absatz` count
+ * separates paragraphs with `abstand`. Documents set from a typed
+ * transcript print every wrapped line as an `absatz` and only a real
+ * paragraph break as an `abstand`; courts that print one `absatz` per
+ * paragraph use `abstand` seldom.
+ */
+const MIN_ABSTAND_SHARE = 0.2;
+
+/** A sentence ends here: the author ended the line, not a margin. */
+const SENTENCE_END_RE = /[.!?:;]["'’“”»«)\]]*$/u;
+
+/** A list marker or numbered point opens a unit of its own. */
+const STRUCTURAL_START_RE =
+  /^(?:\(?\d{1,3}[.)]|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*])(?:\s|$)/u;
+
+const continuesLine = (above: string, below: string): boolean =>
+  !SENTENCE_END_RE.test(above) && !STRUCTURAL_START_RE.test(below);
+
+const wrappableText = (item: RisItem | undefined): string | undefined =>
+  item?.type === "paragraph" &&
+  item.element === "absatz" &&
+  item.layout !== "pre"
+    ? plainTextOf(item.inlines)
+    : undefined;
+
+/**
+ * Join the printed lines of an abstand-delimited transcript into
+ * paragraphs: consecutive `absatz` lines of one content type belong to one
+ * paragraph when the first stops mid-sentence. Elsewhere every `absatz` is
+ * a paragraph, as the publisher sets it.
+ */
+const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
+  const breaks = items.filter((item) => item.type === "break").length;
+  const lines = items.filter(
+    (item) => wrappableText(item) !== undefined,
+  ).length;
+  if (lines === 0 || breaks < lines * MIN_ABSTAND_SHARE) {
+    return [...items];
+  }
+  const joined: RisItem[] = [];
+  let current: RisParagraphItem | undefined;
+  for (const item of items) {
+    const above = wrappableText(current);
+    const below = wrappableText(item);
+    if (
+      current !== undefined &&
+      item.type === "paragraph" &&
+      above !== undefined &&
+      below !== undefined &&
+      item.contentType === current.contentType &&
+      continuesLine(above, below)
+    ) {
+      current.inlines.push({ type: "text", text: " " }, ...item.inlines);
+      continue;
+    }
+    if (current !== undefined) {
+      joined.push(current);
+      current = undefined;
+    }
+    if (item.type === "paragraph" && below !== undefined) {
+      current = { ...item, inlines: [...item.inlines] };
+      continue;
+    }
+    joined.push(item);
+  }
+  if (current !== undefined) {
+    joined.push(current);
+  }
+  return joined;
+};
+
+type RisParseFailure = "no-text" | "no-blocks" | "content-lost";
+
+const FAILURE_MESSAGE = {
+  "no-text": "RIS XML nutzdaten element has no decision text",
+  "no-blocks": "RIS XML decision text produced no document blocks",
+  "content-lost": "RIS XML decision text did not survive into the document",
+} as const satisfies Record<RisParseFailure, string>;
+
+const parseFailure = (failure: RisParseFailure, cause?: unknown) =>
+  Result.err(new ParseXmlError({ message: FAILURE_MESSAGE[failure], cause }));
+
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
   const $ = cheerio.load(input.xml, { xml: true });
-  const content = $("nutzdaten").first();
-  if (content.length === 0) {
+  const content = $("nutzdaten").first().get(0);
+  if (content === undefined) {
     return Result.err(
       new ParseXmlError({
         message: "RIS XML has no nutzdaten element",
@@ -148,106 +229,60 @@ export const parseRisDecisionXml = (
     );
   }
 
-  const decisionContent = content.clone();
-  decisionContent.find("kzinhalt, fzinhalt").remove();
-  if (normalizedText(decisionContent.text()) === "") {
-    return Result.err(
-      new ParseXmlError({
-        message: "RIS XML nutzdaten element has no decision text",
-        cause: undefined,
-      }),
-    );
+  const { items, unknownElements } = readRisContent(content);
+  if (items.length === 0) {
+    return parseFailure("no-text");
+  }
+  const lost = risContentLoss(content, items);
+  if (lost !== 0) {
+    return parseFailure("content-lost", { lost });
   }
 
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
   let blockIndex = 0;
-
-  const appendSection = (contentType: string, text: string): void => {
-    const printed = sections.get(contentType);
-    if (printed === undefined) {
-      sections.set(contentType, [text]);
-      return;
+  for (const item of joinWrappedLines(items)) {
+    if (item.type === "break") {
+      continue;
     }
-    printed.push(text);
-  };
-
-  const appendParagraph = (
-    text: string,
-    role: ParagraphRole | undefined,
-  ): void => {
-    if (text === "") {
-      return;
-    }
+    const inlines = rewriteInlineWhitespace(
+      item.inlines,
+      collapseLetterSpacing,
+    );
+    const text = plainTextOf(inlines);
     blockIndex += 1;
-    blocks.push({
-      id: `b${blockIndex}`,
-      anchorId: `p-${blockIndex}`,
-      type: "paragraph",
-      ...(role ? { role } : {}),
-      inlines: [{ type: "text", text }],
-      plainText: text,
-    });
-  };
-
-  const appendNode = (node: AnyNode): void => {
-    if (!isTag(node)) {
-      if (isText(node)) {
-        appendParagraph(normalizedText(node.data), undefined);
-      }
-      return;
-    }
-    if (isPageFurniture($, node)) {
-      return;
-    }
-    const text = elementText($, node);
-    if (text === "") {
-      return;
-    }
-    if (node.tagName === "ueberschrift") {
-      blockIndex += 1;
+    if (item.type === "heading") {
       blocks.push({
         id: `b${blockIndex}`,
         anchorId: `h-${blockIndex}`,
         type: "heading",
         level: 1,
         role: "section-heading",
-        inlines: [{ type: "text", text }],
+        inlines,
         plainText: text,
       });
-      return;
+      continue;
     }
-
-    if (node.tagName === "absatz") {
-      const contentType = $(node).attr("ct");
-      if (contentType !== undefined && contentType !== "") {
-        appendSection(contentType, text);
+    if (item.contentType !== undefined) {
+      const printed = sections.get(item.contentType);
+      if (printed === undefined) {
+        sections.set(item.contentType, [text]);
+      } else {
+        printed.push(text);
       }
-      appendParagraph(text, paragraphRole(contentType));
-      return;
     }
-
-    if ($(node).find("ueberschrift, absatz").length === 0) {
-      appendParagraph(text, undefined);
-      return;
-    }
-    $(node)
-      .contents()
-      .each((_, child) => {
-        appendNode(child);
-      });
-  };
-
-  content.contents().each((_, node) => {
-    appendNode(node);
-  });
+    const role = paragraphRole(item.contentType);
+    blocks.push({
+      id: `b${blockIndex}`,
+      anchorId: `p-${blockIndex}`,
+      type: "paragraph",
+      ...(role ? { role } : {}),
+      inlines,
+      plainText: text,
+    });
+  }
   if (blocks.length === 0) {
-    return Result.err(
-      new ParseXmlError({
-        message: "RIS XML decision text produced no document blocks",
-        cause: undefined,
-      }),
-    );
+    return parseFailure("no-blocks");
   }
 
   return Result.ok({
@@ -277,5 +312,6 @@ export const parseRisDecisionXml = (
         printed.join("\n\n"),
       ]),
     ),
+    unknownElements,
   });
 };

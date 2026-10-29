@@ -295,6 +295,7 @@ one number, and a case can carry both a judgment and an opinion.
 | `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).     |
 | `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
 | `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                |
+| `case_law.ingestion.ris_unknown_element`      | WARN  | A RIS document printed an element outside `RIS_ELEMENTS`; its text is kept.              |
 | `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).         |
 | `case_law.retention.unverifiable`             | ERROR | A parsed decision whose retention could not be measured; `reason` says why.              |
 | `case_law.retention.unchecked`                | INFO  | Text held in a separately stored document (`separate-document`), a known blind spot.     |

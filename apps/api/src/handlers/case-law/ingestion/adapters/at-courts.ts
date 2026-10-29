@@ -59,6 +59,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -66,6 +67,9 @@ import {
   AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
   AT_RIS_METADATA_URL_SCHEMA,
 } from "./at-courts.metadata-urls";
+
+/** The document printed an element outside the RIS vocabulary; its text is kept. */
+const RIS_UNKNOWN_ELEMENT = "case_law.ingestion.ris_unknown_element";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const LANGUAGE = "de";
@@ -1240,6 +1244,13 @@ export const assembleAtRisDecision = (
     });
   }
   const parsed = parseResult.value;
+  if (parsed.unknownElements.length > 0) {
+    logger.warn(RIS_UNKNOWN_ELEMENT, {
+      adapterKey: source.key,
+      caseNumber: data.caseNumber,
+      elements: parsed.unknownElements.join(","),
+    });
+  }
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
   return plainTextIngestionResult(

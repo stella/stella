@@ -1,16 +1,25 @@
-// parser-output-unchanged: retention is checked by the pipeline against the stored raw; the parser no longer validates itself, and its blocks are unchanged.
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
-// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
-import { visibleHtmlText } from "./shared-inlines";
+import {
+  inlineNonSpaceCount,
+  nonSpaceCount,
+  normalizeInlineLayout,
+} from "./at-ris-markup";
+import {
+  inlinesToPlainText,
+  visibleHtmlText,
+  walkInlines,
+} from "./shared-inlines";
 
 export type ParseFindokDecisionInput = {
   caseNumber: string;
@@ -185,8 +194,20 @@ export const parseFindokDecisionXml = (
 
   const blocks: Block[] = [];
   let blockIndex = 0;
-  const appendParagraph = (text: string): void => {
-    if (text === "") {
+  let readChars = 0;
+  let sourceChars = 0;
+  const inlinesOf = (document: cheerio.CheerioAPI, node: AnyNode): Inline[] => {
+    const inlines = normalizeInlineLayout(
+      walkInlines(document, document(node), {
+        sanitizeHref: sanitizeUrl,
+        superscripts: true,
+      }),
+    );
+    readChars += inlineNonSpaceCount(inlines);
+    return inlines;
+  };
+  const appendParagraph = (inlines: Inline[]): void => {
+    if (inlines.length === 0) {
       return;
     }
     blockIndex += 1;
@@ -194,23 +215,26 @@ export const parseFindokDecisionXml = (
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
-      inlines: [{ type: "text", text }],
-      plainText: text,
+      inlines,
+      plainText: inlinesToPlainText(inlines),
     });
   };
 
   const appendNode = (node: AnyNode, document: cheerio.CheerioAPI): void => {
     if (!isTag(node)) {
       if (isText(node)) {
-        appendParagraph(normalizedText(node.data));
+        appendParagraph(
+          normalizeInlineLayout([{ type: "text", text: node.data }]),
+        );
+        readChars += nonSpaceCount(node.data);
       }
       return;
     }
-    const text = normalizedText(visibleHtmlText(document(node)));
-    if (text === "") {
-      return;
-    }
     if (/^h[1-6]$/u.test(node.tagName)) {
+      const inlines = inlinesOf(document, node);
+      if (inlines.length === 0) {
+        return;
+      }
       blockIndex += 1;
       blocks.push({
         id: `b${blockIndex}`,
@@ -218,17 +242,17 @@ export const parseFindokDecisionXml = (
         type: "heading",
         level: headingLevel(node),
         role: blockIndex === 1 ? "decision-title" : "section-heading",
-        inlines: [{ type: "text", text }],
-        plainText: text,
+        inlines,
+        plainText: inlinesToPlainText(inlines),
       });
       return;
     }
-    if (node.tagName === "p" || node.tagName === "li") {
-      appendParagraph(text);
-      return;
-    }
-    if (document(node).find("h1, h2, h3, h4, h5, h6, p, li").length === 0) {
-      appendParagraph(text);
+    if (
+      node.tagName === "p" ||
+      node.tagName === "li" ||
+      document(node).find("h1, h2, h3, h4, h5, h6, p, li").length === 0
+    ) {
+      appendParagraph(inlinesOf(document, node));
       return;
     }
     document(node)
@@ -250,9 +274,19 @@ export const parseFindokDecisionXml = (
       );
     }
 
+    sourceChars += nonSpaceCount(visibleHtmlText(body));
     body.contents().each((_, node) => {
       appendNode(node, document);
     });
+  }
+
+  if (sourceChars !== readChars) {
+    return Result.err(
+      new ParseXmlError({
+        message: "Findok decision text did not survive into the document",
+        cause: { lost: sourceChars - readChars },
+      }),
+    );
   }
 
   if (blocks.length === 0) {

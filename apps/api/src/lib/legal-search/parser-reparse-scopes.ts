@@ -205,88 +205,99 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VFGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VWGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_LVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_ASYLGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UBAS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UVS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VERG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UMSE]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BKS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 10,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VFGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VWGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BVWG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_LVWG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_ASYLGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UBAS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UVS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VERG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UMSE]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BKS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks.",
+    },
+  },
+  [ADAPTER_KEYS.AT_FINDOK]: {
+    version: 11,
+    scope: {
+      type: "all",
+      reason:
+        "Keep the line breaks of Findok paragraphs, emphasis, superscripts and links as inlines, so sentences either side of a break stay apart.",
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {

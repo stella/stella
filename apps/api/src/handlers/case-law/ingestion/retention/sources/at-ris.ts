@@ -31,7 +31,13 @@ const PAGE_FURNITURE = new Set(["kzinhalt", "fzinhalt"]);
  * Elements the RIS schema sets as one printed paragraph each: headings,
  * paragraphs and the empty spacer between them.
  */
-const PARAGRAPH_ELEMENTS = new Set(["absatz", "ueberschrift", "abstand"]);
+const PARAGRAPH_ELEMENTS = new Set([
+  "absatz",
+  "ueberschrift",
+  "abstand",
+  "listelem",
+  "schluss",
+]);
 
 /**
  * Elements printed as a character rather than as their content: the schema
@@ -44,6 +50,7 @@ const PRINTED_AS: Readonly<Record<string, string>> = {
   gdash: "-",
   gt: ">",
   lt: "<",
+  amp: "&",
 };
 
 /** Run-level markup that sits inside a paragraph's line of text. */
@@ -51,11 +58,16 @@ const INLINE_ELEMENTS = new Set([
   "b",
   "i",
   "u",
+  "super",
   "sup",
   "sub",
   "span",
   "feld",
   "gs",
+  "link",
+  "symbol",
+  "aw",
+  "wechsel",
 ]);
 
 const collapsed = (text: string): string =>

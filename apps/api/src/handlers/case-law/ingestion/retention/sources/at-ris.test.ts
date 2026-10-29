@@ -58,6 +58,16 @@ const CAPTURED_DOCUMENTS = [
   { adapter: ADAPTER_KEYS.AT_VWGH, file: "at-ris-vwgh-headnote.xml" },
   { adapter: ADAPTER_KEYS.AT_UBAS, file: "at-ris-ubas-text.xml" },
   { adapter: ADAPTER_KEYS.AT_UMSE, file: "at-ris-umse-text.xml" },
+  { adapter: ADAPTER_KEYS.AT_COURTS, file: "at-ris-ogh-sachwalter.xml" },
+  { adapter: ADAPTER_KEYS.AT_COURTS, file: "at-ris-ogh-strafsache.xml" },
+  { adapter: ADAPTER_KEYS.AT_VWGH, file: "at-ris-vwgh-randnummern.xml" },
+  { adapter: ADAPTER_KEYS.AT_LVWG, file: "at-ris-lvwg-noe.xml" },
+  { adapter: ADAPTER_KEYS.AT_LVWG, file: "at-ris-lvwg-kaernten.xml" },
+  { adapter: ADAPTER_KEYS.AT_BVWG, file: "at-ris-bvwg-beschluss.xml" },
+  { adapter: ADAPTER_KEYS.AT_VERG, file: "at-ris-verg-liste.xml" },
+  { adapter: ADAPTER_KEYS.AT_VERG, file: "at-ris-verg-bva.xml" },
+  { adapter: ADAPTER_KEYS.AT_UMSE, file: "at-ris-umse-abstand.xml" },
+  { adapter: ADAPTER_KEYS.AT_BKS, file: "at-ris-bks-gesperrt.xml" },
 ] as const;
 
 const firstListedItem = async (
