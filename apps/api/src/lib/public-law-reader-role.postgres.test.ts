@@ -19,7 +19,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const sessionRows = (value: unknown) =>
   v.parse(
-    v.array(v.object({ role: v.string(), pid: v.number() })),
+    v.tuple([v.object({ role: v.string(), pid: v.number() })]),
     executedRows(value),
   );
 
@@ -90,7 +90,7 @@ describe.skipIf(!enabled)("public-law reader transaction role", () => {
           ),
         );
         expect(during).toEqual([
-          { role: stellaPublicLawReader.name, pid: before.at(0)?.pid },
+          { role: stellaPublicLawReader.name, pid: before[0].pid },
         ]);
         expect(after).toEqual(before);
       });
