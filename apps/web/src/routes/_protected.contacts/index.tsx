@@ -613,7 +613,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
           content={t("common.actions")}
           render={
             <MenuTrigger
-              className="opacity-0! transition-opacity group-hover:opacity-100!"
+              className="opacity-0! transition-opacity group-hover:opacity-100! pointer-coarse:opacity-100!"
               render={<Button size="icon-xs" variant="ghost" />}
             />
           }

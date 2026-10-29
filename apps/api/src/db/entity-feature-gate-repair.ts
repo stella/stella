@@ -14,9 +14,9 @@ import { readConstraintValidated } from "./online-constraint-completion";
 import { analyzeTable, replacePolicy, validateConstraint } from "./online-ddl";
 import type { OnlineTableGate, PolicyDefinition } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "entity-feature-row-gates";
@@ -239,7 +239,8 @@ const schemaPolicies = (): readonly PolicyDefinition[] =>
 
 export const createEntityFeatureGateRepair = ({
   readPolicies,
-}: EntityFeatureGateRepairOptions): OnlineRepair => ({
+}: EntityFeatureGateRepairOptions): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261009112500_entity_feature_row_gates",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const installed = (
@@ -329,5 +330,5 @@ export const createEntityFeatureGateRepair = ({
   },
 });
 
-export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair =
+export const ENTITY_FEATURE_GATE_REPAIR: MigrationOwnedOnlineRepair =
   createEntityFeatureGateRepair({ readPolicies: schemaPolicies });

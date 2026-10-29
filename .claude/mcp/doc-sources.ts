@@ -142,12 +142,17 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo-google-fonts/dm-sans",
       "@expo/fingerprint",
+      "@expo/ui",
+      "@expo/vector-icons",
       "expo",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
       "expo-doctor",
+      "expo-font",
+      "expo-notifications",
       "expo-linking",
       "expo-router",
       "expo-secure-store",
@@ -155,8 +160,10 @@ export const DOC_SOURCES = {
       "expo-system-ui",
       "expo-updates",
       "expo-web-browser",
+      "expo-widgets",
       "react-native-safe-area-context",
       "react-native-screens",
+      "react-native-svg",
     ],
     url: "https://docs.expo.dev/llms.txt",
   },
@@ -178,6 +185,7 @@ export const DOC_SOURCES = {
       "@aws-sdk/client-cloudwatch",
       "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
+      "@aws-sdk/client-ssm",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
       "@aws-sdk/client-sts",
@@ -251,7 +259,7 @@ export const DOC_SOURCES = {
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
-    dependencies: ["lucide-react"],
+    dependencies: ["lucide-react", "lucide-react-native", "lucide-static"],
     url: "https://lucide.dev/llms.txt",
   },
   Tsdown: {
@@ -285,6 +293,10 @@ export const DOC_SOURCES = {
   AgentDevice: {
     dependencies: ["agent-device"],
     url: "https://agent-device.dev/llms.txt",
+  },
+  Uniwind: {
+    dependencies: ["uniwind"],
+    url: "https://docs.uniwind.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
 
@@ -599,6 +611,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "scslre",
     ["https://raw.githubusercontent.com/RunDevelopment/scslre/HEAD/llms.txt"],
+  ],
+  [
+    "sharp",
+    [
+      "https://sharp.pixelplumbing.com/llms.txt",
+      "https://raw.githubusercontent.com/lovell/sharp/HEAD/llms.txt",
+    ],
   ],
   ["sherif", ["https://raw.githubusercontent.com/QuiiBz/sherif/HEAD/llms.txt"]],
   [
