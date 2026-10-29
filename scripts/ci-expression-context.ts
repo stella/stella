@@ -275,6 +275,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "root-checks": { root_checks: "[]" },
   suites: { armed_delta: "false", run_required: "true", heavy_proof: "true" },
   "target-base": { base_sha: "" },
+  "ui-playground-plan": { specs: "[]" },
 };
 
 const NEEDS = [

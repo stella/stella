@@ -6,6 +6,7 @@ import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-
 import * as captureModule from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { createDecisionRowAstCache } from "@/api/lib/case-law/decision-row-ast-cache";
 import { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   parsePersistedCorpusAst,
@@ -55,6 +56,16 @@ const recordReports = () => ({
     () => undefined,
   ),
 });
+
+const readInvalidRowAst = () => {
+  const read = createDecisionRowAstCache({ maxBytes: 4096 });
+  return async () =>
+    await read({
+      key: decisionId,
+      documentId: decisionId,
+      read: async () => duplicateAnchors,
+    });
+};
 
 const expectStoredValidationLog = (
   logged: ReturnType<typeof recordReports>["logged"],
@@ -136,6 +147,33 @@ describe("invalid stored decision payloads", () => {
   // Summary and citation passages share the analysis reader; web, MCP blocks,
   // and MCP outlines share the served reader through readDecisionHandler.
   test.each([
+    {
+      surface: "summary and citation passages through a cached row",
+      read: async () =>
+        await readDecisionAnalysisAst(
+          {
+            id: decisionId,
+            astS3Key: null,
+            contentHash: null,
+            documentAst: null,
+          },
+          async () => new Set<string>(),
+          readInvalidRowAst(),
+        ),
+    },
+    {
+      surface: "web and MCP through a cached row",
+      read: async () =>
+        await readServedDecisionAst({
+          astS3Key: null,
+          contentHash: null,
+          pgAst: null,
+          readPgAst: readInvalidRowAst(),
+          decisionId,
+          corpusReadEnabled: false,
+          readStore: async () => null,
+        }),
+    },
     {
       surface: "summary and citation passages",
       read: async () =>

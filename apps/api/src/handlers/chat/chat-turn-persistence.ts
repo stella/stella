@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -1291,7 +1292,7 @@ export const renewChatTurnExecutionLease = async (options: {
 type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
 
 /** The index that makes a run id name one turn in its organization. */
-const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
+const CHAT_TURN_RUN_ID_INDEX = CHAT_TURNS_ORG_RUN_ID_UIDX;
 
 const classifyRunIdWrite = (
   written: Result<ChatTurnExecutionStanding, SafeDbError>,

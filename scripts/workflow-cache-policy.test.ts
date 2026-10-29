@@ -332,8 +332,14 @@ test("every scoped install key has exactly one declared saver across all workflo
   }
   // Main can reuse the queued proof and skip generated-sources. The browser
   // store must still have a writer in the main-heavy partition itself.
+  // The suite axis is plan-generated, so the census names the job without a
+  // matrix row.
   const browserStore = groups.find((group) =>
-    group.callers.some((caller) => caller.startsWith("ci.yml/ci-browser ")),
+    group.callers.some(
+      (caller) =>
+        caller === "ci.yml/ci-browser" ||
+        caller.startsWith("ci.yml/ci-browser "),
+    ),
   );
   if (browserStore === undefined) {
     expect.unreachable("Missing browser store callers");
