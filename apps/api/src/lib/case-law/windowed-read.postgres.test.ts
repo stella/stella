@@ -37,6 +37,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const CITATION_TEXT = "4 Tdo 348/2023";
 const PARAGRAPH_ID = "reasoning";
 const SCALES = [1, 10] as const;
+const STORED_VERSION = "2026-01-01T00:00:00.123456Z";
 
 const prepareFixture = async (db: GatedTestDb, scale: number) => {
   // Native SQL, driver result metering and canonical publication predicates;
@@ -95,7 +96,13 @@ const prepareFixture = async (db: GatedTestDb, scale: number) => {
       allowsDerivedAi: true,
     },
   });
-  const identity = { sourceId, country: "CZE", language: "cs", court: "Court" };
+  const identity = {
+    sourceId,
+    country: "CZE",
+    language: "cs",
+    court: "Court",
+    updatedAt: sql`${STORED_VERSION}::timestamptz`,
+  };
   await db.insert(caseLawDecisions).values([
     {
       ...identity,
@@ -172,7 +179,10 @@ const productionReads = {
       panic("Window fixture must reach the production citation page");
     }
     expect(read.page.items).toHaveLength(1);
-    expect(read.page.items.at(0)?.passage?.text).toContain(CITATION_TEXT);
+    const passage = read.page.items.at(0)?.passage;
+    expect(passage).not.toBeNull();
+    expect(passage?.anchorId).toBe(PARAGRAPH_ID);
+    expect(passage?.text).toContain(CITATION_TEXT);
   },
   "reader-answer": async (fixture: WindowFixture) => {
     const read = await readReaderAnswerRelated(

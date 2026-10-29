@@ -8,6 +8,7 @@ import {
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { DECISION_ROW_AST_VERSION_CHANGED } from "@/api/lib/case-law/decision-row-ast-cache";
 import { createDecisionSectionCache } from "@/api/lib/case-law/decision-section-cache";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import {
@@ -131,4 +132,29 @@ test("section references reject an index outside the supplying AST", () => {
   expect(() => classifiedCitationBlockIds(ast, [1])).toThrow(
     "missing document block",
   );
+});
+
+test("changed section versions are retried without caching an empty index", async () => {
+  const read = createDecisionSectionCache({ maxBytes: 1024 * 1024 });
+  const ast = astFor(["Reasoning"]);
+  let changed = 0;
+  expect(
+    await read({
+      key: "version",
+      ast,
+      readSections: async () => DECISION_ROW_AST_VERSION_CHANGED,
+      onVersionChanged: () => {
+        changed += 1;
+      },
+    }),
+  ).toBeNull();
+  expect(changed).toBe(1);
+  const sections = await read({
+    key: "version",
+    ast,
+    readSections: async () => [
+      { index: 0, type: "argumentation", title: null, text: "Reasoning" },
+    ],
+  });
+  expect(sections?.at(0)?.blockIndices).toEqual([0]);
 });

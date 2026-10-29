@@ -46,6 +46,7 @@ import {
   readDecisionTextMetadata,
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
+import { decisionPayloadKey } from "@/api/lib/case-law/decision-versioned-payload";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -56,6 +57,7 @@ import {
   publicRowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
+import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
@@ -356,6 +358,9 @@ export const decisionRecordQuery = (
       metadata: publishedCaseLawDecisions.metadata,
       createdAt: publishedCaseLawDecisions.createdAt,
       updatedAt: publishedCaseLawDecisions.updatedAt,
+      versionTimestamp: pgTimestampCursorValue(
+        publishedCaseLawDecisions.updatedAt,
+      ),
       hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions),
       astS3Key: publishedCaseLawDecisions.astS3Key,
       textS3Key: publishedCaseLawDecisions.textS3Key,
@@ -391,7 +396,7 @@ const readDecisionRecord = async (subject: RedistributableDecisionSubject) =>
 
 type DecisionPayloadIdentity = Pick<
   NonNullable<Awaited<ReturnType<typeof readDecisionRecord>>>,
-  "id" | "updatedAt" | "contentHash" | "astS3Key"
+  "id" | "versionTimestamp" | "contentHash" | "astS3Key"
 >;
 
 /** Lazy payload readers share the live row version and its admitted transaction. */
@@ -401,12 +406,7 @@ const decisionPayloadReaders = (
 ) => ({
   readAst: async () =>
     await readCachedDecisionRowAst({
-      key: JSON.stringify([
-        decision.id,
-        decision.updatedAt,
-        decision.contentHash,
-        decision.astS3Key,
-      ]),
+      key: decisionPayloadKey(decision),
       read: async () => {
         const [row] = await tx
           .select({ documentAst: publishedCaseLawDecisions.documentAst })
@@ -418,12 +418,7 @@ const decisionPayloadReaders = (
     }),
   readSections: async (ast: DocumentAst) =>
     await readDecisionSectionIndex({
-      key: JSON.stringify([
-        decision.id,
-        decision.updatedAt,
-        decision.astS3Key,
-        decision.contentHash,
-      ]),
+      key: decisionPayloadKey(decision),
       ast,
       readSections: async () => {
         const [row] = await tx

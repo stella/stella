@@ -1,10 +1,7 @@
 import { panic, TaggedError } from "better-result";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
-import {
-  buildFulltextParagraphBlocks,
-  parseCaseLawDecisionAst,
-} from "@stll/legal-ast/case-law-reader";
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionPieces } from "@stll/legal-ast/projection-digest";
@@ -17,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import {
@@ -208,7 +206,7 @@ export const readDecisionReaderSource = defineWindowedRead(
         if (!("caseNumber" in decision)) {
           return null;
         }
-        let ast = parseCaseLawDecisionAst(decision.documentAst);
+        let ast = parseCachedDecisionAst(decision.documentAst);
         // The shared read resolves flat text when no usable AST is stored.
         // Keep the web reader's fulltext:N anchors across every reader surface.
         if (ast === null && decision.fulltext) {

@@ -33,6 +33,7 @@ import {
   DECISION_ROW_AST_VERSION_CHANGED,
   readCachedDecisionRowAst,
 } from "@/api/lib/case-law/decision-row-ast-cache";
+import { decisionPayloadKey } from "@/api/lib/case-law/decision-versioned-payload";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 
@@ -79,11 +80,9 @@ export const resolveAnalysisInput = defineWindowedRead(
     decisionId: SafeId<"caseLawDecision">;
     scopedDb: ScopedDb;
   }): Promise<AnalysisInputResult> => {
-    for (
-      let attempt = 1;
-      attempt <= ANALYSIS_INPUT_VERSION_ATTEMPTS;
-      attempt += 1
-    ) {
+    const resolveAttempt = async (
+      attempt: number,
+    ): Promise<AnalysisInputResult> => {
       const decision =
         envBase.PUBLIC_LAW_DATABASE_URL === undefined
           ? await scopedDb(
@@ -131,12 +130,7 @@ export const resolveAnalysisInput = defineWindowedRead(
           readCorpusTombstones,
           async () =>
             await readCachedDecisionRowAst({
-              key: JSON.stringify([
-                decision.id,
-                decision.updatedAt,
-                decision.contentHash,
-                decision.astS3Key,
-              ]),
+              key: decisionPayloadKey(decision),
               onVersionChanged: () => {
                 versionState.changed = true;
               },
@@ -147,7 +141,7 @@ export const resolveAnalysisInput = defineWindowedRead(
                         async (tx) =>
                           await readDecisionAnalysisAstColumn(tx, {
                             decisionId,
-                            updatedAt: decision.updatedAt,
+                            versionTimestamp: decision.versionTimestamp,
                             contentHash: decision.contentHash,
                             astS3Key: decision.astS3Key,
                           }),
@@ -156,7 +150,7 @@ export const resolveAnalysisInput = defineWindowedRead(
                         async (tx) =>
                           await readDecisionAnalysisAstColumn(tx, {
                             decisionId,
-                            updatedAt: decision.updatedAt,
+                            versionTimestamp: decision.versionTimestamp,
                             contentHash: decision.contentHash,
                             astS3Key: decision.astS3Key,
                           }),
@@ -169,7 +163,16 @@ export const resolveAnalysisInput = defineWindowedRead(
             }),
         ));
       if (versionState.changed) {
-        continue;
+        if (attempt < ANALYSIS_INPUT_VERSION_ATTEMPTS) {
+          return await resolveAttempt(attempt + 1);
+        }
+        return Result.err(
+          new AnalysisInputVersionChangedError({
+            message: `Decision changed during analysis input resolution after ${String(attempt)} attempts`,
+            decisionId,
+            attempts: attempt,
+          }),
+        );
       }
       if (ast === null) {
         return Result.ok({ kind: "unparseable-document" });
@@ -185,13 +188,7 @@ export const resolveAnalysisInput = defineWindowedRead(
           systemPrompt: systemPrompt.value,
         }),
       });
-    }
-    return Result.err(
-      new AnalysisInputVersionChangedError({
-        message: `Decision changed during analysis input resolution after ${String(ANALYSIS_INPUT_VERSION_ATTEMPTS)} attempts`,
-        decisionId,
-        attempts: ANALYSIS_INPUT_VERSION_ATTEMPTS,
-      }),
-    );
+    };
+    return await resolveAttempt(1);
   },
 );

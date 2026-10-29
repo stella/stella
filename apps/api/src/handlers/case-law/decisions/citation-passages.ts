@@ -47,9 +47,17 @@ import {
   readCachedDecisionRowAst,
 } from "@/api/lib/case-law/decision-row-ast-cache";
 import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-cache";
-import { readDecisionVersionedPayload } from "@/api/lib/case-law/decision-versioned-payload";
+import {
+  decisionPayloadKey,
+  readDecisionVersionedPayloads,
+} from "@/api/lib/case-law/decision-versioned-payload";
+import type {
+  DecisionPayloadColumn,
+  DecisionPayloadRead,
+} from "@/api/lib/case-law/decision-versioned-payload";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
@@ -118,7 +126,7 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
-  updatedAt: Date;
+  versionTimestamp: string;
   textWithheldReason: DecisionTextWithheldReason | null;
 };
 
@@ -135,6 +143,9 @@ const readPassageSourcePointers = async (
       astS3Key: publishedCaseLawDecisions.astS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
       updatedAt: publishedCaseLawDecisions.updatedAt,
+      versionTimestamp: pgTimestampCursorValue(
+        publishedCaseLawDecisions.updatedAt,
+      ),
       descriptor: caseLawSources.descriptor,
     })
     .from(publishedCaseLawDecisions)
@@ -271,110 +282,135 @@ const sectionBlockIdsAt = (
  * read costs its rows their passage, never the page: the citation and the
  * decision it names are still the answer to what the court cited.
  */
+type DecisionTextGroupOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  pointers: readonly PassageSourcePointer[];
+  attempt: number;
+};
+
+const readDecisionTextGroup = async ({
+  caseLawDb,
+  pointers,
+  attempt,
+}: DecisionTextGroupOptions): Promise<Map<string, DecisionText>> => {
+  // Every lazy miss in this bounded group shares one version-qualified read.
+  // Storage-backed AST hits never start the Postgres AST read.
+  const payloadBatch = <K extends DecisionPayloadColumn>(column: K) => {
+    let pending: Promise<Map<string, DecisionPayloadRead<K>>> | undefined;
+    return async (pointer: PassageSourcePointer) => {
+      pending ??= caseLawDb(
+        async (tx) =>
+          await readDecisionVersionedPayloads({
+            tx,
+            versions: pointers,
+            column,
+          }),
+      );
+      return (
+        (await pending).get(pointer.id) ?? { kind: "version-changed" as const }
+      );
+    };
+  };
+  const readAst = payloadBatch("documentAst");
+  const readSections = payloadBatch("sections");
+  const changed: SafeId<"caseLawDecision">[] = [];
+  const entries = await Promise.all(
+    pointers.map(async (pointer) => {
+      if (pointer.textWithheldReason !== null) {
+        return null;
+      }
+      const versionState = { changed: false };
+      const onVersionChanged = () => {
+        versionState.changed = true;
+      };
+      const key = decisionPayloadKey(pointer);
+      const read = await Result.tryPromise(async () => {
+        const ast = await readDecisionAnalysisAst(
+          { ...pointer, documentAst: null },
+          readCorpusTombstones,
+          async () =>
+            await readCachedDecisionRowAst({
+              key,
+              onVersionChanged,
+              read: async () => {
+                const result = await readAst(pointer);
+                return result.kind === "version-changed"
+                  ? DECISION_ROW_AST_VERSION_CHANGED
+                  : result.value;
+              },
+            }),
+        );
+        if (versionState.changed || ast === null) {
+          return null;
+        }
+        const sections = await readDecisionSectionIndex({
+          key,
+          ast,
+          onVersionChanged,
+          readSections: async () => {
+            const result = await readSections(pointer);
+            return result.kind === "version-changed"
+              ? DECISION_ROW_AST_VERSION_CHANGED
+              : result.value;
+          },
+        });
+        return versionState.changed
+          ? null
+          : { id: pointer.id, text: { ast, sections } };
+      });
+      if (versionState.changed) {
+        changed.push(pointer.id);
+      }
+      if (Result.isError(read)) {
+        logger.warn("case_law.citation_passage.ast_unavailable", {
+          "error.type": errorTag(read.error),
+        });
+        return { status: "unavailable" as const };
+      }
+      return read.value === null
+        ? null
+        : { status: "found" as const, ...read.value };
+    }),
+  );
+  const textByDecision = new Map<string, DecisionText>();
+  for (const entry of entries) {
+    if (entry?.status === "found") {
+      textByDecision.set(entry.id, entry.text);
+    }
+  }
+  if (changed.length === 0 || attempt >= PASSAGE_VERSION_ATTEMPTS) {
+    return textByDecision;
+  }
+  const fresh = await caseLawDb(
+    async (tx) => await readPassageSourcePointers(tx, changed),
+  );
+  // Reapply source policy before any refreshed payload enters a cache or reply.
+  const retried = await readDecisionTextGroup({
+    caseLawDb,
+    pointers: fresh.filter(
+      ({ textWithheldReason }) => textWithheldReason === null,
+    ),
+    attempt: attempt + 1,
+  });
+  for (const [id, text] of retried) {
+    textByDecision.set(id, text);
+  }
+  return textByDecision;
+};
+
 const readDecisionTextByDecision = async (
   caseLawDb: CaseLawPublicReadDb,
   pointers: readonly PassageSourcePointer[],
 ): Promise<Map<string, DecisionText>> => {
   const textByDecision = new Map<string, DecisionText>();
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
-    const entries = await Promise.all(
-      group.map(async (pointer) => {
-        const read = await Result.tryPromise(async () => {
-          let current = pointer;
-          for (
-            let attempt = 1;
-            attempt <= PASSAGE_VERSION_ATTEMPTS;
-            attempt += 1
-          ) {
-            const version = current;
-            const versionState = { changed: false };
-            const ast = await readDecisionAnalysisAst(
-              { ...version, documentAst: null },
-              readCorpusTombstones,
-              async () =>
-                await readCachedDecisionRowAst({
-                  key: JSON.stringify([
-                    version.id,
-                    version.updatedAt,
-                    version.contentHash,
-                    version.astS3Key,
-                  ]),
-                  onVersionChanged: () => {
-                    versionState.changed = true;
-                  },
-                  read: async () => {
-                    const result = await caseLawDb(
-                      async (tx) =>
-                        await readDecisionVersionedPayload(
-                          tx,
-                          version,
-                          "documentAst",
-                        ),
-                    );
-                    return result.kind === "version-changed"
-                      ? DECISION_ROW_AST_VERSION_CHANGED
-                      : result.value;
-                  },
-                }),
-            );
-            if (versionState.changed) {
-              const [fresh] = await caseLawDb(
-                async (tx) => await readPassageSourcePointers(tx, [version.id]),
-              );
-              if (fresh === undefined) {
-                return null;
-              }
-              current = fresh;
-              continue;
-            }
-            if (ast === null) {
-              return null;
-            }
-            const sectionsRead = await caseLawDb(
-              async (tx) =>
-                await readDecisionVersionedPayload(tx, version, "sections"),
-            );
-            if (sectionsRead.kind === "version-changed") {
-              const [fresh] = await caseLawDb(
-                async (tx) => await readPassageSourcePointers(tx, [version.id]),
-              );
-              if (fresh === undefined) {
-                return null;
-              }
-              current = fresh;
-              continue;
-            }
-            const sections = await readDecisionSectionIndex({
-              key: JSON.stringify([
-                version.id,
-                version.updatedAt,
-                version.astS3Key,
-                version.contentHash,
-              ]),
-              ast,
-              readSections: async () =>
-                await Promise.resolve(sectionsRead.value),
-            });
-            return { id: version.id, text: { ast, sections } };
-          }
-          return null;
-        });
-        if (Result.isError(read)) {
-          logger.warn("case_law.citation_passage.ast_unavailable", {
-            "error.type": errorTag(read.error),
-          });
-          return null;
-        }
-        if (read.value === null) {
-          return null;
-        }
-        return read.value;
-      }),
-    );
-    for (const entry of entries) {
-      if (entry !== null) {
-        textByDecision.set(String(entry.id), entry.text);
-      }
+    const entries = await readDecisionTextGroup({
+      caseLawDb,
+      pointers: group,
+      attempt: 1,
+    });
+    for (const [id, text] of entries) {
+      textByDecision.set(id, text);
     }
   }
   return textByDecision;

@@ -12,6 +12,7 @@ import {
   type DecisionPayloadRead,
   readDecisionVersionedPayload,
 } from "@/api/lib/case-law/decision-versioned-payload";
+import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import {
@@ -26,6 +27,7 @@ const decisionAnalysisColumns = {
   country: publishedCaseLawDecisions.country,
   decisionType: publishedCaseLawDecisions.decisionType,
   updatedAt: publishedCaseLawDecisions.updatedAt,
+  versionTimestamp: pgTimestampCursorValue(publishedCaseLawDecisions.updatedAt),
   analysis: publishedCaseLawDecisions.analysis,
   // Object-storage pointers: under canonical corpus storage the row's own
   // `documentAst` is trimmed and the object is the document.
@@ -67,7 +69,7 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
 
 type DecisionAnalysisAstVersion = {
   decisionId: SafeId<"caseLawDecision">;
-  updatedAt: Date;
+  versionTimestamp: string;
   contentHash: string | null;
   astS3Key: string | null;
 };
