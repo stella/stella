@@ -856,6 +856,23 @@ describe("directory scan coverage", () => {
     });
   });
 
+  test("a late cwd annotation preserves the directory of the Git invocation", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/usr/bin/git", ["git", "-C", "parent", "ls-files", "--", "data"], 0x0) = 0',
+        '1 chdir("parent") = 0',
+        `1 openat(AT_FDCWD<${root}/parent>, ".", O_RDONLY) = 3`,
+      ].join("\n");
+      const options = { scanLog: "", trace, tracked, root };
+      expect(
+        uncoveredScans({ ...options, declared: ["parent/data/**"] }),
+      ).toEqual([]);
+      expect(uncoveredScans({ ...options, declared: [] })).toEqual([
+        { directory: path.join(root, "parent/data") },
+      ]);
+    });
+  });
+
   test("uses a child's annotation before a parent's resumed clone", () => {
     withTrackedFixture(({ root, tracked }) => {
       const trace = [

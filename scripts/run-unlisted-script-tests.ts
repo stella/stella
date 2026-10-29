@@ -680,7 +680,7 @@ const updateWorkingDirectory = (
   line: string,
   pid: string,
   workingDirectories: Map<string, string>,
-): boolean => {
+): string | undefined => {
   const annotatedDirectory = /\bAT_FDCWD<([^>]+)>/u.exec(line)?.[1];
   if (annotatedDirectory !== undefined) {
     workingDirectories.set(pid, decodeTraceString(annotatedDirectory));
@@ -689,23 +689,22 @@ const updateWorkingDirectory = (
     line,
   )?.[1];
   if (changedDirectory !== undefined) {
+    const directory = decodeTraceString(changedDirectory);
     const cwd = workingDirectories.get(pid);
-    if (cwd !== undefined) {
-      workingDirectories.set(
-        pid,
-        path.resolve(cwd, decodeTraceString(changedDirectory)),
-      );
+    if (cwd !== undefined || path.isAbsolute(directory)) {
+      workingDirectories.set(pid, path.resolve(cwd ?? directory, directory));
     }
-    return true;
+    return directory;
   }
   const changedFdDirectory = /\bfchdir\(\d+<([^>]+)>\)\s+=\s+0/u.exec(
     line,
   )?.[1];
   if (changedFdDirectory === undefined) {
-    return false;
+    return undefined;
   }
-  workingDirectories.set(pid, decodeTraceString(changedFdDirectory));
-  return true;
+  const directory = decodeTraceString(changedFdDirectory);
+  workingDirectories.set(pid, directory);
+  return directory;
 };
 
 // With -yy, strace annotates the directory descriptor that a relative path
@@ -841,30 +840,69 @@ const commandOperands = (
   return undefined;
 };
 
+type PendingScanRecord = {
+  scan: ScanRecord;
+  cwdChanges: string[];
+};
+
+const invocationDirectory = (current: string, changes: readonly string[]) => {
+  let directory = current;
+  const relativeChange = path.join(...changes);
+  const segments = relativeChange
+    .split(path.sep)
+    .filter((part) => part !== "" && part !== ".");
+  if (
+    changes.some((change) => path.isAbsolute(change)) ||
+    segments.includes("..")
+  ) {
+    panic(
+      "Cannot resolve an invocation working directory across an unanchored directory change",
+    );
+  }
+  for (const segment of segments.toReversed()) {
+    if (path.basename(directory) !== segment) {
+      panic(
+        "Cannot resolve an invocation working directory from its later annotation",
+      );
+    }
+    directory = path.dirname(directory);
+  }
+  return directory;
+};
+
 const commandScans = (trace: string): ScanRecord[] => {
   const scans: ScanRecord[] = [];
   const workingDirectories = new Map<string, string>();
-  const pending = new Map<string, ScanRecord[]>();
+  const pending = new Map<string, PendingScanRecord[]>();
   for (const line of joinedTraceRecords(trace)) {
     const pid = tracePid(line);
     if (pid === undefined) {
       continue;
     }
+    const previousCwd = workingDirectories.get(pid);
     const workingDirectoryChanged = updateWorkingDirectory(
       line,
       pid,
       workingDirectories,
     );
+    if (previousCwd === undefined && workingDirectoryChanged !== undefined) {
+      for (const record of pending.get(pid) ?? []) {
+        record.cwdChanges.push(workingDirectoryChanged);
+      }
+    }
     const annotatedCwd = workingDirectories.get(pid);
     if (annotatedCwd !== undefined) {
       for (const record of pending.get(pid) ?? []) {
+        const originalCwd = path.isAbsolute(record.scan.directory)
+          ? annotatedCwd
+          : invocationDirectory(annotatedCwd, record.cwdChanges);
         scans.push({
-          directory: path.resolve(annotatedCwd, record.directory),
+          directory: path.resolve(originalCwd, record.scan.directory),
         });
       }
       pending.delete(pid);
     }
-    if (workingDirectoryChanged) {
+    if (workingDirectoryChanged !== undefined) {
       continue;
     }
     assertWholeRecord(line);
@@ -903,14 +941,19 @@ const commandScans = (trace: string): ScanRecord[] => {
       };
       if (cwd === undefined) {
         const records = pending.get(pid) ?? [];
-        records.push(record);
+        records.push({ scan: record, cwdChanges: [] });
         pending.set(pid, records);
       } else {
         scans.push(record);
       }
     }
   }
-  return [...scans, ...pending.values()].flat();
+  return [
+    ...scans,
+    ...[...pending.values()].flatMap((records) =>
+      records.map(({ scan: pendingScan }) => pendingScan),
+    ),
+  ];
 };
 
 export const uncoveredScans = ({
