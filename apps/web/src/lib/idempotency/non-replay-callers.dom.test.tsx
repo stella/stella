@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { SampleCaseLoad } from "@/features/avt/types";
+import { APIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -76,7 +77,8 @@ test("a single-request memory intent keeps its key after a lost response and cha
     () => null,
     (error: unknown) => error,
   );
-  expect(failed).toBeInstanceOf(TypeError);
+  expect(failed).toBeInstanceOf(APIError);
+  expect(failed).toMatchObject({ status: 0, transportKind: "network" });
   expect(await submit()).toMatchObject({ id: memoryId });
   const keys = requests.map((request) =>
     request.headers.get("Idempotency-Key"),
