@@ -63,6 +63,7 @@ test.each([
   "declare const request: {headers?: Record<string, string>}; api.current.post(body, request);",
   "declare const request: RequestOptions<CurrentRoute>; api.current.post(body, request);",
   'api.current.post(body, {fetch: {headers: {"iDeMpOtEnCy-KeY": "intent"}}});',
+  'declare const request: {headers?: Record<never, never>} | {headers: {"iDeMpOtEnCy-KeY": string}}; api.current.post(body, request);',
 ])("non-replay request types reject reserved headers: %s", async (source) => {
   const result = await checkContract(source);
   expect(result.status).toBe(1);
@@ -71,6 +72,8 @@ test.each([
 
 test("replay contracts retain inferred request and ordinary header types", async () => {
   const result = await checkContract(`
+    declare const request: {headers: {"x-trace": string}} | {fetch: {signal: AbortSignal}};
+    api.current.post(body, request);
     api.current.post(body);
     api.current.post(body, {headers: {"x-stella-capability": "things.create"}});
     api.current.post(body, {fetch: {signal: new AbortController().signal}});
