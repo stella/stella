@@ -6,6 +6,7 @@
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
+import { Result } from "better-result";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type {
   PDFDocumentProxy,
@@ -60,11 +61,12 @@ export const PdfPages = ({
     // pdf.js takes ownership of the bytes it is given.
     const task = getDocument({ data: bytes.slice() });
     const open = async () => {
-      try {
-        setPdf(await task.promise);
-      } catch (error) {
-        failed(error);
+      const opened = await Result.tryPromise(async () => await task.promise);
+      if (Result.isError(opened)) {
+        failed(opened.error);
+        return;
       }
+      setPdf(opened.value);
     };
     void open();
     return () => {
@@ -79,13 +81,15 @@ export const PdfPages = ({
     let current = true;
     const measure = async () => {
       const width = document.documentElement.clientWidth;
-      try {
-        const heights = await pageHeights(pdf, width);
-        if (current) {
-          setLayout({ width, heights });
-        }
-      } catch (error) {
-        failed(error);
+      const heights = await Result.tryPromise(
+        async () => await pageHeights(pdf, width),
+      );
+      if (Result.isError(heights)) {
+        failed(heights.error);
+        return;
+      }
+      if (current) {
+        setLayout({ width, heights: heights.value });
       }
     };
     const remeasure = () => {
