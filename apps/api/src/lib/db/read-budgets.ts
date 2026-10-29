@@ -41,7 +41,11 @@ export const READ_BUDGETS = {
     surface: "scheduled-job",
     pages: 13_200,
     reason:
-      "A completed pass checks the shared backfill checkpoint and the bounded provision-state units. The production-shape corpus fixture measures 8,787 pages; 13,200 pages leaves 50% headroom for production-height indexes.",
+      "A governed run checks the shared backfill checkpoint and processes at most 200 bounded provision-state units; a completed pass reads only the checkpoint. 13,200 pages is the target for a run with pending units.",
+    overBudget: {
+      reason:
+        "A run with pending units measures 111,179 pages at both source sizes (about 556 pages per unit), so one unit's lookups are far wider than its bounded work needs; the per-unit read is being narrowed.",
+    },
   },
   "scheduled.legislation.backfillExpressionIds": {
     surface: "scheduled-job",

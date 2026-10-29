@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { type Logger, type SQL, sql } from "drizzle-orm";
 
+import { setSharedQueryTimeouts } from "@/api/db/shared-pool-timeouts";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
@@ -39,16 +40,37 @@ const leadingKeyword = (text: string) =>
 
 const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
 const TRANSACTION_KEYWORDS: ReadonlySet<string> = new Set([
-  // PostgreSQL cannot EXPLAIN utility statements. Their validation scans run
-  // under the task's explicit statement timeout; the replay measures every
-  // explainable statement around them.
-  "alter",
   "begin",
   "commit",
   "lock",
   "rollback",
   "savepoint",
 ]);
+
+const DDL_KEYWORDS: ReadonlySet<string> = new Set([
+  "alter",
+  "comment",
+  "create",
+  "drop",
+  "grant",
+  "revoke",
+  "truncate",
+]);
+
+export const statementsForMeasurement = (
+  jobId: string,
+  captured: readonly CapturedStatement[],
+): CapturedStatement[] =>
+  captured.filter(({ text }) => {
+    const keyword = leadingKeyword(text);
+    if (SESSION_KEYWORDS.has(keyword) || TRANSACTION_KEYWORDS.has(keyword)) {
+      return false;
+    }
+    if (DDL_KEYWORDS.has(keyword)) {
+      return panic(`${jobId} issued unmeasurable DDL: ${text}`);
+    }
+    return keyword !== "";
+  });
 
 /** A captured statement as a Drizzle query with the same bound parameters. */
 const asQuery = ({ text, params }: CapturedStatement): SQL => {
@@ -125,9 +147,18 @@ export const measureScheduledJobRun = async ({
                 lockTimeout,
                 statementTimeout,
               }) => {
-                await rawClient.unsafe(
-                  "SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $2, true)",
-                  [String(lockTimeout), String(statementTimeout)],
+                await setSharedQueryTimeouts(
+                  async (query, params = []) => {
+                    captured.push({ text: query, params });
+                    const result: unknown = await rawClient.unsafe(query, [
+                      ...params,
+                    ]);
+                    return result;
+                  },
+                  {
+                    lockTimeoutMs: lockTimeout,
+                    statementTimeoutMs: statementTimeout,
+                  },
                 );
               },
             }),
@@ -169,13 +200,7 @@ export const measureScheduledJobRun = async ({
   await database.execute(
     sql`DELETE FROM system_audit_runs WHERE subject = ${runId}`,
   );
-  const reads = captured.filter(({ text }) => {
-    const keyword = leadingKeyword(text);
-    if (SESSION_KEYWORDS.has(keyword)) {
-      return false;
-    }
-    return keyword !== "" && !TRANSACTION_KEYWORDS.has(keyword);
-  });
+  const reads = statementsForMeasurement(jobId, captured);
   if (reads.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }

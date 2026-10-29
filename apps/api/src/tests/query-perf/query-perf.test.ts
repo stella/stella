@@ -2,19 +2,25 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
   describeServed,
+  EXPRESSION_ID_BACKFILL_SIZES,
+  PROVISION_BACKFILL_SIZES,
   seedCorpusReadBudgets,
+  seedExpressionIdBackfillRows,
+  seedProvisionBackfillRows,
   serveCaseLaw,
   type ServedCaseLaw,
 } from "./corpus-seed";
@@ -34,7 +40,10 @@ import {
   READ_BUDGET_PROFILES,
   SCHEDULED_JOB_MEASUREMENTS,
 } from "./registry";
-import { measureScheduledJobRun } from "./scheduled-run";
+import {
+  measureScheduledJobRun,
+  statementsForMeasurement,
+} from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
@@ -50,6 +59,35 @@ const profileBudgets = (profile: "corpus" | "tenant") =>
     .filter(([, owner]) => owner === profile)
     .map(([id]) => id)
     .toSorted();
+
+const backfillFixture = (jobId: string) => {
+  if (jobId === SCHEDULER_BACKFILL_IDS.provisionState) {
+    return {
+      seed: seedProvisionBackfillRows,
+      sizes: PROVISION_BACKFILL_SIZES,
+    };
+  }
+  if (jobId === SCHEDULER_BACKFILL_IDS.expressionIds) {
+    return {
+      seed: seedExpressionIdBackfillRows,
+      sizes: EXPRESSION_ID_BACKFILL_SIZES,
+    };
+  }
+  return undefined;
+};
+
+test("a measured fixture job cannot hide DDL", () => {
+  expect(() =>
+    statementsForMeasurement("fixture.alter", [
+      {
+        text: "ALTER TABLE fixture_table VALIDATE CONSTRAINT fixture_check",
+        params: [],
+      },
+    ]),
+  ).toThrow(
+    "fixture.alter issued unmeasurable DDL: ALTER TABLE fixture_table VALIDATE CONSTRAINT fixture_check",
+  );
+});
 
 test("every measurement execution guard applies even when pages fit or carry an over-budget marker", () => {
   for (const id of [
@@ -251,10 +289,13 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const runMetrics = async (
           jobId: string,
           task: string,
-          served: ServedCaseLaw,
+          served?: ServedCaseLaw,
         ) => {
-          await serveCaseLaw(db, served);
-          const generation = describeServed(served);
+          if (served !== undefined) {
+            await serveCaseLaw(db, served);
+          }
+          const generation =
+            served === undefined ? "backfill-source" : describeServed(served);
           const run = await measureScheduledJobRun({
             database: db,
             openClient,
@@ -284,6 +325,48 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             continue;
           }
           measured.add(budgetId);
+          const backfill = backfillFixture(jobId);
+          if (backfill !== undefined) {
+            const pages: number[] = [];
+            for (const rows of [backfill.sizes.base, backfill.sizes.double]) {
+              // db-await-in-loop: the source table grows before the second bounded run is measured.
+              const result = await deadline.run(
+                `run ${jobId} with ${String(rows)} source rows`,
+                async () => {
+                  await backfill.seed(db, rows);
+                  const countResult = await db.execute(
+                    jobId === SCHEDULER_BACKFILL_IDS.provisionState
+                      ? sql`SELECT count(*)::int AS count FROM case_law_decisions
+                          WHERE source_id = '01990000-00c0-7000-8000-000000000001'::uuid`
+                      : sql`SELECT count(*)::int AS count FROM legislation_documents
+                          WHERE publisher_expression_id IS NULL`,
+                  );
+                  const countRow = executedRows(countResult).at(0);
+                  const count =
+                    typeof countRow === "object" &&
+                    countRow !== null &&
+                    "count" in countRow
+                      ? countRow.count
+                      : undefined;
+                  expect(
+                    count,
+                    `${jobId} fixture must grow to ${String(rows)} source rows`,
+                  ).toBe(rows);
+                  return await runMetrics(jobId, measurement.task);
+                },
+              );
+              pages.push(result.sharedBlocks);
+              note(budgetProblem(budgetId, result));
+            }
+            const size =
+              pages.at(0) ?? panic("missing base backfill measurement");
+            const double =
+              pages.at(1) ?? panic("missing double backfill measurement");
+            for (const violation of scaleViolations({ size, double })) {
+              note(`${jobId} on backfill source rows: ${violation}`);
+            }
+            continue;
+          }
           for (const scenario of measurement.scenarios) {
             const label = describeServed(scenario.size);
             // db-await-in-loop: scenarios move the served generations, so they run one at a time.
