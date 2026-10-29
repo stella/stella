@@ -184,7 +184,7 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
           .where(eq(caseLawSources.id, otherSourceId));
       }
     });
-  }, 120_000);
+  });
 
   test("a case-number listing entry counts a stored decision whose detail supplied a document id, once per stored row", async () => {
     const databaseUrl =
@@ -283,5 +283,5 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
     });
-  }, 120_000);
+  });
 });

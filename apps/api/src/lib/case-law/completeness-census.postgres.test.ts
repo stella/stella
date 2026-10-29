@@ -216,7 +216,7 @@ describe.skipIf(!enabled)(
           await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
         }
       });
-    }, 120_000);
+    });
 
     test("a stated count below the distinct listing cannot hide a missing decision", async () => {
       const databaseUrl =
@@ -324,7 +324,7 @@ describe.skipIf(!enabled)(
             .where(eq(caseLawSources.id, sourceId));
         }
       });
-    }, 120_000);
+    });
 
     test("folded publisher identities count once and require a current same-source judgment for their text", async () => {
       const databaseUrl =
@@ -512,7 +512,7 @@ describe.skipIf(!enabled)(
             );
         }
       });
-    }, 120_000);
+    });
 
     test("the registered adapter scope advances at the current publisher year boundary without observing it", async () => {
       const id = createSafeId<"caseLawSource">();
@@ -667,7 +667,6 @@ describe.skipIf(!enabled)(
           }
         });
       },
-      120_000,
     );
 
     test("the migrated public reader sees allowed census observations and rejects the previous grant map", async () => {
@@ -762,7 +761,7 @@ describe.skipIf(!enabled)(
             .where(sql`${caseLawSources.id} IN (${visible}, ${withheld})`);
         }
       });
-    }, 120_000);
+    });
 
     test("replays converge, text and slice gaps gate the persisted verdict, and stale leases cannot write", async () => {
       const databaseUrl =
@@ -972,6 +971,6 @@ describe.skipIf(!enabled)(
           await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
         }
       });
-    }, 120_000);
+    });
   },
 );

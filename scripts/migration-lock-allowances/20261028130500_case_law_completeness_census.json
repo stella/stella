@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The source foreign key is created with the new empty census table, so no existing rows are scanned while the short catalog lock is held.",
+  "row-level-security": "Row security is enabled and forced on the new empty census table before application code can write it.",
+  "create-policy": "Policies are catalog-only additions to the new empty census table under the migration one-second lock timeout."
+}

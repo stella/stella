@@ -21,6 +21,11 @@ export default {
     names: ["caseLawCompletenessCensus"],
     allowed: [
       {
+        path: "apps/api/src/db/entity-feature-gate-repair.ts",
+        reason:
+          "Full-schema policy introspection: renders the entity feature policies the online cutover installs; reads no rows.",
+      },
+      {
         path: "apps/api/src/lib/case-law/completeness-census.postgres.test.ts",
         reason:
           "Exercises census persistence, reader grants and conservative verdicts against PostgreSQL.",

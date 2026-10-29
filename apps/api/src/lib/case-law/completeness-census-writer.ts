@@ -1,6 +1,7 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { chunk } from "@stll/concurrency/chunk";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -96,9 +97,13 @@ export const recordCompletenessCensus = async (
     );
     return;
   }
-  const year = /^\d{4}/u.exec(options.slice)?.at(0);
-  if (capability.type !== "none-exposed" && year === undefined) {
+  const yearToken = /^\d{4}/u.exec(options.slice)?.at(0);
+  if (capability.type !== "none-exposed" && yearToken === undefined) {
     panic(`Census slice lacks a year: ${options.adapterKey}/${options.slice}`);
+  }
+  const year = parseIntegerToken(yearToken ?? "0", { min: 0, max: 9999 });
+  if (Result.isError(year)) {
+    panic(`Census slice has an invalid year: ${options.slice}`);
   }
   const measured = measureCensusCounts(options);
   const outcome =
@@ -146,7 +151,7 @@ export const recordCompletenessCensus = async (
     const observation = {
       sourceId: options.sourceId,
       slice: options.slice,
-      year: year === undefined || Number(year) === 0 ? null : Number(year),
+      year: year.value === 0 ? null : year.value,
       outcome,
       scopeExtent:
         capability.type === "none-exposed"
@@ -163,7 +168,7 @@ export const recordCompletenessCensus = async (
       expectedSlices: options.scope.expectedSlices,
       evidenceRef: capability.evidenceRef,
     } as const satisfies typeof census.$inferInsert;
-    // audit: skip — public-corpus sweep observation under the source ingestion lease
+    // audit: skip - Public corpus observation under the ingestion lease; no tenant actor.
     await tx
       .insert(census)
       .values(observation)
