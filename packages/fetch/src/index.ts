@@ -36,18 +36,13 @@ const executeFetchWithTimeout = async (
     input instanceof Request ? input.signal : undefined,
   ].filter((candidate): candidate is AbortSignal => candidate !== undefined);
   const activeFetcher = fetcher ?? globalThis.fetch;
-  if (timeout === undefined) {
-    const total = AbortSignal.timeout(timeoutMs);
-    return await activeFetcher(input, {
-      ...init,
-      signal: AbortSignal.any([...callerSignals, total]),
-    });
-  }
+  const duration = timeout?.ms ?? timeoutMs;
 
   if (
-    !Number.isFinite(timeout.ms) ||
-    timeout.ms < 0 ||
-    timeout.ms > 2_147_483_647
+    typeof duration !== "number" ||
+    !Number.isFinite(duration) ||
+    duration < 0 ||
+    duration > 2_147_483_647
   ) {
     throw new DOMException(
       "Invalid fetch timeout duration",
@@ -66,19 +61,24 @@ const executeFetchWithTimeout = async (
   };
   const reset = () => {
     clear();
-    timer = setTimeout(expire, timeout.ms);
+    timer = setTimeout(expire, duration);
   };
   reset();
   const response = await Promise.resolve()
     .then(async () => await activeFetcher(input, { ...init, signal: combined }))
-    .finally(clear);
+    .finally(() => {
+      if (timeout !== undefined) {
+        clear();
+      }
+    });
   if (combined.aborted) {
     // The abort reason is the failure. Cancelling only releases the body, and
     // a body the abort already errored rejects with that same stored reason.
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
-  if (timeout.type === "headers" || response.body === null) {
+  if (timeout?.type === "headers" || response.body === null) {
+    clear();
     return response;
   }
 
@@ -117,10 +117,16 @@ const executeFetchWithTimeout = async (
         await cancellation;
         return;
       }
-      reset();
+      if (timeout?.type === "idle") {
+        reset();
+      }
       await reader
         .read()
-        .finally(clear)
+        .finally(() => {
+          if (timeout?.type === "idle") {
+            clear();
+          }
+        })
         .then(
           ({ done, value }) => {
             if (stopped) {
