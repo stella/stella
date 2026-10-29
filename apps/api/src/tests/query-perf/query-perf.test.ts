@@ -44,6 +44,7 @@ import {
 } from "./registry";
 import {
   measureScheduledJobRun,
+  measureScheduledStatementsInOrder,
   statementsForMeasurement,
 } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
@@ -259,6 +260,50 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
     }
     expect([...measured].toSorted()).toEqual(profileBudgets("tenant"));
   }, 420_000); // timeout: two fresh databases are seeded and measured; each profile owns a 150-second deadline.
+
+  test("a fixture job measures reads against each statement's original state", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      run: async (db) => {
+        await db.execute(sql`CREATE TABLE query_perf_pending_fixture (
+          id integer PRIMARY KEY,
+          status text NOT NULL
+        )`);
+        await db.execute(
+          sql`INSERT INTO query_perf_pending_fixture (id, status)
+              VALUES (1, 'pending'), (2, 'pending')`,
+        );
+        const statements = await measureScheduledStatementsInOrder({
+          database: db,
+          jobId: "scheduled.caseLaw.refreshCoverage",
+          readBudgetId: "scheduled.caseLaw.refreshCoverage",
+          captured: [
+            {
+              text: "SELECT id FROM query_perf_pending_fixture WHERE status = 'pending' ORDER BY id",
+              params: [],
+            },
+            {
+              text: "UPDATE query_perf_pending_fixture SET status = 'done' WHERE status = 'pending'",
+              params: [],
+            },
+            {
+              text: "SELECT id FROM query_perf_pending_fixture WHERE status = 'pending' ORDER BY id",
+              params: [],
+            },
+          ],
+        });
+        expect(
+          [statements.at(0), statements.at(2)].map(
+            (statement) => statement?.actualRows,
+          ),
+        ).toEqual([2, 0]);
+      },
+    });
+  });
 
   test("corpus statements and scheduled jobs stay within their budgets at production shape", async () => {
     const databaseUrl =
