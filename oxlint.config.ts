@@ -8,6 +8,10 @@ import {
 } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
+import {
+  nativeEntries,
+  nativeRuleId,
+} from "./.oxlint-plugins/no-native-ui-registry.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
@@ -33,7 +37,10 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
-import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
+import {
+  DESIGN_SYSTEM_CONSUMER_FILES,
+  PRODUCT_FRONTEND_FILES,
+} from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -173,6 +180,12 @@ const derivedAttributeRuleOptions = {
     within,
   })),
 };
+
+// One rule per @stll/ui component that replaces native markup, generated
+// from .oxlint-plugins/no-native-ui-registry.ts.
+const NO_NATIVE_UI_RULE_IDS = nativeEntries().map(({ module }) =>
+  nativeRuleId(module),
+);
 
 const fixtureRuleOverrides = [
   {
@@ -435,6 +448,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
@@ -443,6 +457,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
+  ]),
+  fixtureRuleOverride("no-auto-hyphenation-in-reader.fixture.tsx", [
+    "no-auto-hyphenation-in-reader/no-auto-hyphenation-in-reader",
   ]),
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
@@ -1790,6 +1807,7 @@ const config = defineConfig({
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
+    "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -1850,6 +1868,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
+    "./.oxlint-plugins/no-raw-query-error-capture.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
@@ -1998,6 +2017,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
+    "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
@@ -2071,6 +2091,14 @@ const config = defineConfig({
       ],
       rules: {
         "narrative-prose-component/require-prose": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-query-error-capture.fixture.ts",
+      ],
+      rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
       },
     },
     {
@@ -3764,6 +3792,26 @@ const config = defineConfig({
       },
     },
     {
+      // Reader prose must choose manual word breaks; automated hyphenation
+      // varies by browser and language. Model rationale keeps its own contract.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/ui/src/components/prose.tsx",
+        "apps/web/src/components/references/decision-citation-chip.tsx",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx",
+        ".oxlint-plugins/__fixtures__/no-auto-hyphenation-in-reader.fixture.tsx",
+      ],
+      excludeFiles: [
+        "apps/web/src/features/case-law/research/question-cell.tsx",
+      ],
+      rules: {
+        "no-auto-hyphenation-in-reader/no-auto-hyphenation-in-reader": "error",
+      },
+    },
+    {
       // The reader's face is inherited from the reader root, which reader.css
       // sets from `--reader-body-font`. A font utility on one element inside
       // it mixes two faces in one document; chrome that is sans on purpose
@@ -4881,6 +4929,7 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**"],
       rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
         "query-data-requires-state/query-data-requires-state": "error",
       },
     },
@@ -6688,6 +6737,22 @@ const config = defineConfig({
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
       },
+    },
+    {
+      // Surfaces that render through @stll/ui never hand-roll the native
+      // markup one of its components wraps (a role="switch" button, a raw
+      // <select>, a title tooltip); each rule names the import to use. The
+      // design system renders that markup itself and is not in this scope;
+      // tests render bare harness markup.
+      files: [...DESIGN_SYSTEM_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: Object.fromEntries(
+        NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
+      ),
     },
     {
       // `shadcn/no-restyle` judges a className by reading its classes. An

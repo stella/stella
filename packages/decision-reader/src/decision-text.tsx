@@ -12,6 +12,7 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -581,7 +582,7 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
-        render: (children): ReactElement => {
+        render: (children, { isRangeStart }): ReactElement => {
           const marked = renderLinkAnnotations({
             annotations: linkAnnotations,
             children,
@@ -595,6 +596,7 @@ const buildAnchorsByPieceId = ({
             treatment: span.source.treatment,
             blockId,
             children: marked,
+            showBadge: isRangeStart,
           });
         },
         start: span.start,
@@ -1129,7 +1131,10 @@ export const DecisionText = ({
     if (visibleBlocks.length > 0) {
       return (
         <article
-          className="text-card-foreground text-start"
+          className={cn(
+            LEGAL_TEXT_CLASS_NAME,
+            "text-card-foreground text-start",
+          )}
           lang={decision.language}
           ref={articleRef}
           style={{
@@ -1194,7 +1199,10 @@ export const DecisionText = ({
     if (decision.fulltext) {
       return (
         <article
-          className="text-card-foreground text-start"
+          className={cn(
+            LEGAL_TEXT_CLASS_NAME,
+            "text-card-foreground text-start",
+          )}
           lang={decision.language}
           ref={articleRef}
           style={{
@@ -1240,7 +1248,7 @@ export const DecisionText = ({
     // can still work from.
     return (
       <article
-        className="text-card-foreground text-start"
+        className={cn(LEGAL_TEXT_CLASS_NAME, "text-card-foreground text-start")}
         lang={decision.language}
         ref={articleRef}
         style={{

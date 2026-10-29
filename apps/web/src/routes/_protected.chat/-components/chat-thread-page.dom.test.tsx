@@ -230,12 +230,17 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
       }
+      if (pathname.endsWith("/mcp/connections")) {
+        return Response.json({
+          connections: [],
+        } satisfies WebApiRoutes["mcp"]["connections"]["get"]["response"][200]);
+      }
       if (pathname.endsWith("/mcp/connectors")) {
         return Response.json({
           canManageCustomConnectors: false,
           connectors: [],
           nativeTools: [],
-        });
+        } satisfies WebApiRoutes["mcp"]["connectors"]["get"]["response"][200]);
       }
       if (pathname.endsWith("/chat/skill-availability")) {
         return Response.json({ unavailable: [] });
