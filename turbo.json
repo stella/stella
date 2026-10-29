@@ -964,6 +964,8 @@
       ],
       "outputs": [
         "src/*/generated/app.html.txt",
+        "src/*/generated/app.js.txt",
+        "src/*/generated/app.css.txt",
         "src/shared/generated/messages.json",
         "src/shared/generated/schemas.json",
         "src/shared/generated/reader-messages.json",
@@ -971,6 +973,8 @@
         "src/shared/generated/contracts.js",
         "src/shared/generated/contracts.d.ts",
         "src/shared/generated/style.css",
+        "src/generated/runtime.js.txt",
+        "src/generated/runtime.css.txt",
         "src/generated/bundles.ts"
       ]
     },
@@ -1069,6 +1073,8 @@
       ],
       "outputs": [
         "src/*/generated/app.html.txt",
+        "src/*/generated/app.js.txt",
+        "src/*/generated/app.css.txt",
         "src/shared/generated/messages.json",
         "src/shared/generated/schemas.json",
         "src/shared/generated/reader-messages.json",
@@ -1076,6 +1082,8 @@
         "src/shared/generated/contracts.js",
         "src/shared/generated/contracts.d.ts",
         "src/shared/generated/style.css",
+        "src/generated/runtime.js.txt",
+        "src/generated/runtime.css.txt",
         "src/generated/bundles.ts"
       ]
     },
