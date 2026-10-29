@@ -1727,6 +1727,32 @@ test("everything CI runs without the dependency install imports only built-ins",
 const NO_FETCH_COMMAND =
   /^bun(?:\s+--[\w-]+)*\s+(?:dedupe\b|[^\n]*--no-install\b)/u;
 
+test("preserved staging proof commands resolve to their built-in import closure", () => {
+  const invocations = installFreeInvocations({
+    root: REPO_ROOT,
+    workflow: ".github/workflows/deploy-staging.yml",
+  }).filter(
+    ({ job, step }) =>
+      job === "promote-staging" &&
+      step === "Verify staging serves the release commit and environment",
+  );
+  expect(invocations.map(({ classification }) => classification)).toEqual([
+    {
+      type: "files",
+      cwd: "",
+      entries: ["scripts/staging-proof-readiness-cli.ts"],
+    },
+    {
+      type: "files",
+      cwd: "",
+      entries: ["scripts/staging-proof-readiness-cli.ts"],
+    },
+  ]);
+  for (const invocation of invocations) {
+    expect(invocationProblems(REPO_ROOT, invocation)).toEqual([]);
+  }
+});
+
 test("every workflow's install-free Bun commands load only built-ins", () => {
   const workflows = readdirSync(path.join(REPO_ROOT, ".github/workflows"))
     .filter((name) => /\.ya?ml$/u.test(name))

@@ -14,9 +14,9 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { fetchWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
-  fetchWithResolvedAddress,
   OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";

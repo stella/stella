@@ -25,6 +25,7 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -41,7 +42,10 @@ import {
   searchDocumentsAccessSql,
   workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
+import {
+  mapEntityHit,
+  searchRankingTier,
+} from "@/api/lib/search/global-search-mappers";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
@@ -52,12 +56,20 @@ import {
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
+import type {
+  GlobalSearchCursor,
+  SearchRankingTier,
+} from "@/api/lib/search/pagination";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
-import { buildSearchTsQuery } from "@/api/lib/search/query";
+import {
+  buildSearchCandidateTsQuery,
+  buildSearchTsQuery,
+} from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
+import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
   ChatGlobalSearchHit,
@@ -68,21 +80,24 @@ import type {
   GlobalSearchResultType,
   MatterGlobalSearchHit,
 } from "@/api/lib/search/types";
+import {
+  projectChatSearchCandidates,
+  readChatCandidateBatches,
+} from "@/api/lib/search/withdrawn-chat-candidates";
+import type { ChatSearchCandidateRow } from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
 const MATTER_RELEVANCE_BOOST = 0.15;
-
 type RawRow = Record<string, unknown>;
 type CountRow = { total?: unknown };
 
 type ScoredGlobalSearchHit = {
   hit: GlobalSearchHit;
+  tier: SearchRankingTier;
   score: number;
 };
-
-type SearchPromise = Promise<RawRow[]>;
 
 type ReadLanguageAlternates = (
   languageGroupKeys: readonly string[],
@@ -355,7 +370,11 @@ const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
     color: toNullableString(row["color"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -376,7 +395,11 @@ const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -414,7 +437,11 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -435,7 +462,11 @@ const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const facetBuckets = (
@@ -454,10 +485,10 @@ const facetBuckets = (
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
-const rowsWhen = async (
+const rowsWhen = async <Row extends RawRow>(
   condition: boolean,
-  query: () => SearchPromise,
-): SearchPromise => {
+  query: () => Promise<Row[]>,
+) => {
   if (!condition) {
     return [];
   }
@@ -594,10 +625,11 @@ const buildSearchFilterFragments = ({
     hasSearchQuery,
     () => sql`AND clsd.tsv @@ ${tsQuery}`,
   );
-  const chatTextSearchFilter = sqlWhen(
-    hasSearchQuery,
-    () => sql`AND cst.tsv @@ ${tsQuery}`,
-  );
+  const chatCandidateTsQuery = buildSearchCandidateTsQuery(query);
+  const chatTextSearchFilter =
+    hasSearchQuery && chatCandidateTsQuery !== null
+      ? sql`AND cst.tsv @@ ${chatCandidateTsQuery}`
+      : sql``;
   // The truncation belongs here, not at the call sites: `ts_headline` cost
   // grows with the document it is handed, and a per-branch `left(...)` is a
   // bound each new branch has to remember. Snippets come from the head of the
@@ -633,6 +665,9 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
     relevanceBoost?: number | undefined;
   }): SQL => sql`${searchScoreValue(options)} AS score`;
+  const searchTierValue = (title: SQL): SQL => searchTitleTierSql(title, query);
+  const searchTier = (title: SQL): SQL =>
+    sql`${searchTierValue(title)} AS tier`;
   const searchOrderBy = ({
     id,
     updatedAt,
@@ -641,7 +676,7 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
   }): SQL =>
     hasSearchQuery
-      ? sql`score DESC, ${id} DESC`
+      ? sql`tier DESC, score DESC, ${id} DESC`
       : sql`${updatedAt} DESC, ${id} DESC`;
   const entityTypeFilter = sqlWhen(
     selected.size > 0,
@@ -657,7 +692,6 @@ const buildSearchFilterFragments = ({
     hasEditorFilter,
     hasMimeTypeFilter,
     restrictToEntities,
-    tsQuery,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -673,6 +707,8 @@ const buildSearchFilterFragments = ({
     searchHeadline,
     searchScore,
     searchScoreValue,
+    searchTier,
+    searchTierValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -753,6 +789,8 @@ const readGlobalSearch = async (
     searchHeadline,
     searchScore,
     searchScoreValue,
+    searchTier,
+    searchTierValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -804,6 +842,7 @@ const readGlobalSearch = async (
         file_field.property_id AS file_property_id,
         file_field.mime_type,
         ${searchHeadline(sql`sd.title || ' ' || sd.searchable_text`)},
+        ${searchTier(sql`sd.title`)},
         ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},
         sd.updated_at
       FROM search_documents sd
@@ -822,6 +861,7 @@ const readGlobalSearch = async (
         ${entityWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`sd.title`),
           score: searchScoreValue({
             tsv: sql`sd.tsv`,
             updatedAt: sql`sd.updated_at`,
@@ -842,6 +882,7 @@ const readGlobalSearch = async (
         wsd.title,
         w.color,
         ${searchHeadline(sql`wsd.title || ' ' || wsd.searchable_text`)},
+        ${searchTier(sql`wsd.title`)},
         ${searchScore({
           tsv: sql`wsd.tsv`,
           updatedAt: sql`wsd.updated_at`,
@@ -856,6 +897,7 @@ const readGlobalSearch = async (
         ${matterWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`wsd.title`),
           score: searchScoreValue({
             tsv: sql`wsd.tsv`,
             updatedAt: sql`wsd.updated_at`,
@@ -879,6 +921,7 @@ const readGlobalSearch = async (
         csd.contact_type,
         csd.title,
         ${searchHeadline(sql`csd.title || ' ' || csd.searchable_text`)},
+        ${searchTier(sql`csd.title`)},
         ${searchScore({ tsv: sql`csd.tsv`, updatedAt: sql`csd.updated_at` })},
         csd.updated_at
       FROM contact_search_documents csd
@@ -888,6 +931,7 @@ const readGlobalSearch = async (
         ${contactWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`csd.title`),
           score: searchScoreValue({
             tsv: sql`csd.tsv`,
             updatedAt: sql`csd.updated_at`,
@@ -926,6 +970,7 @@ const readGlobalSearch = async (
           WHERE identifier.decision_id = d.id
         ) AS identifiers,
         ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
+        ${searchTier(sql`clsd.title`)},
         ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
         d.updated_at
       FROM case_law_search_documents clsd
@@ -937,6 +982,7 @@ const readGlobalSearch = async (
         ${caseLawUpdatedFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`clsd.title`),
           score: searchScoreValue({
             tsv: sql`clsd.tsv`,
             updatedAt: sql`d.updated_at`,
@@ -955,16 +1001,44 @@ const readGlobalSearch = async (
     selectedWorkspaceIds,
   });
 
+  const chatSourceOrder = hasSearchQuery
+    ? sql`ms.created_at, ms.message_id`
+    : sql`ms.created_at DESC, ms.message_id DESC`;
   const chatPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "chat"),
-    () =>
-      database.execute(sql`
+    async () => {
+      const readPage = async (
+        pageCursor: GlobalSearchCursor | null,
+        rowLimit: number,
+      ) =>
+        await database.execute<ChatSearchCandidateRow>(sql`
       SELECT
         t.id AS id,
         t.workspace_id,
         w.name AS workspace_name,
-        cst.title,
-        ${searchHeadline(sql`cst.title || ' ' || cst.searchable_text`)},
+        t.title,
+        t.title_source,
+        t.subject_decision_id,
+        (SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'role', source_message.role,
+          'content', CASE WHEN source_message.source_bytes <= ${LIMITS.searchChatCandidateSourceBytesMax}
+            AND source_message.source_position <= ${LIMITS.searchChatCandidateSourceMessagesMax}
+            THEN source_message.content ELSE NULL END,
+          'overflow', source_message.source_bytes > ${LIMITS.searchChatCandidateSourceBytesMax}
+            OR source_message.source_position > ${LIMITS.searchChatCandidateSourceMessagesMax}
+        ) ORDER BY source_message.source_position), '[]'::jsonb) FROM (
+          SELECT m.role, m.content,
+            sum(octet_length(m.content::text)) OVER (ORDER BY ${chatSourceOrder}) AS source_bytes,
+            row_number() OVER (ORDER BY ${chatSourceOrder}) AS source_position
+          FROM chat_message_search_documents ms
+          JOIN chat_messages m ON m.id = ms.message_id AND m.thread_id = ms.thread_id
+          WHERE ms.thread_id = t.id
+          ORDER BY ${chatSourceOrder}
+          LIMIT ${hasSearchQuery ? LIMITS.searchChatCandidateSourceMessagesMax + 1 : LIMITS.searchChatPreviewMessageLimit}
+        ) source_message) AS source_messages,
+        NULL::text AS headline,
+        ${searchTier(sql`cst.title`)},
+
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
@@ -977,7 +1051,8 @@ const readGlobalSearch = async (
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         ${globalSearchCursorSql({
-          cursor: searchCursor,
+          cursor: pageCursor,
+          tier: searchTierValue(sql`cst.title`),
           score: searchScoreValue({
             tsv: sql`cst.tsv`,
             updatedAt: sql`t.updated_at`,
@@ -985,8 +1060,20 @@ const readGlobalSearch = async (
           id: sql`'chat:' || cst.thread_id::text`,
         })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
-      LIMIT ${fetchLimit}
-    `),
+      LIMIT ${rowLimit}
+    `);
+      if (!hasSearchQuery) {
+        return await readPage(searchCursor, fetchLimit);
+      }
+      const read = await readChatCandidateBatches({
+        readBatch: async (batchCursor) =>
+          await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
+      });
+      if (read.isErr()) {
+        return abortTransaction(read.error);
+      }
+      return read.value;
+    },
   );
 
   const hasAlternativeFacetPredicate =
@@ -1294,12 +1381,19 @@ const readGlobalSearch = async (
     mimeTypeFacetPromise,
   ]);
 
+  const projectedChatRows = await projectChatSearchCandidates({
+    database,
+    rows: chatRows,
+    query,
+    cursor: searchCursor,
+    limit: fetchLimit,
+  });
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
-    ...chatRows.map(mapChatHit),
+    ...projectedChatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
 

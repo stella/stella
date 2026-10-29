@@ -32,6 +32,7 @@ import {
   resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   type AIErrorKind,
   classifyAIError,
@@ -89,7 +90,10 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { resolveAnalysisInput } from "./analysis-input";
+import {
+  type AnalysisInputResolution,
+  resolveAnalysisInput,
+} from "./analysis-input";
 import {
   type AnalysisOutput,
   analysisOutputSchema,
@@ -653,7 +657,7 @@ type GenerateAnalysisOptions = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   /**
    * The reader asked to run again after a failure. Without it, a failure
    * record over this document answers for its hold, so polling never starts
@@ -694,6 +698,33 @@ const analysisStartFailure = (cause: unknown) =>
     cause,
   });
 
+type UnavailableAnalysisInput = Exclude<
+  AnalysisInputResolution,
+  { kind: "resolved" }
+>;
+
+const unavailableAnalysisInputResponse = (
+  resolution: UnavailableAnalysisInput,
+) => {
+  switch (resolution.kind) {
+    case "decision-not-found":
+      return unavailable("decision_not_found", "Decision not found");
+    case "unparseable-document":
+      return unavailable(
+        "document_unparseable",
+        "Decision has no parseable AST",
+      );
+    case "unsupported-language":
+      return unavailable(
+        "language_unsupported",
+        `Analysis is not available for decisions in language "${resolution.language}"`,
+      );
+    default:
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
+  }
+};
+
 export const generateAnalysis = async ({
   admitModelAction,
   startModelAction,
@@ -713,27 +744,19 @@ export const generateAnalysis = async ({
   Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
 > => {
   // audit: skip — background AI analysis output
-  const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
-  switch (resolution.kind) {
-    case "decision-not-found":
-      return Result.ok(unavailable("decision_not_found", "Decision not found"));
-    case "unparseable-document":
-      return Result.ok(
-        unavailable("document_unparseable", "Decision has no parseable AST"),
-      );
-    case "unsupported-language":
-      return Result.ok(
-        unavailable(
-          "language_unsupported",
-          `Analysis is not available for decisions in language "${resolution.language}"`,
-        ),
-      );
-    case "resolved":
-      break;
-    default: {
-      resolution satisfies never;
-      return panic(`Unhandled resolution: ${String(resolution)}`);
-    }
+  const resolved = await resolveAnalysisInput({ decisionId, scopedDb });
+  if (Result.isError(resolved)) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: resolved.error.message,
+        cause: resolved.error,
+      }),
+    );
+  }
+  const resolution = resolved.value;
+  if (resolution.kind !== "resolved") {
+    return Result.ok(unavailableAnalysisInputResponse(resolution));
   }
   const { anchorIds, decision, input } = resolution;
   const reader = readerKeyOf({ orgAIConfig, organizationId });
@@ -750,7 +773,7 @@ export const generateAnalysis = async ({
       // on the citation graph and written in the background, so a reader
       // never waits for it and a decision whose neighbourhood has not
       // moved costs one indexed query.
-      if (derivedAi) {
+      if (derivedAi && promptCachingEnabled !== null) {
         detached(
           refreshSignificance({
             admitModelAction,
@@ -850,6 +873,9 @@ export const generateAnalysis = async ({
   });
   if (Result.isError(available)) {
     return Result.err(available.error);
+  }
+  if (promptCachingEnabled === null) {
+    return Result.err(storedAIConfigUnreadableError());
   }
   if (reader === null) {
     return panic("An available analysis role must resolve a reader key");

@@ -33,7 +33,7 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
@@ -368,7 +368,7 @@ export const useFolioCollaborationRoom = ({
           return;
         }
         if (data.snapshotRecovery === "unsaved-changes-discarded") {
-          notifyUserError(undefined, getSnapshotRecoveryMessage());
+          notifyUserProblem(getSnapshotRecoveryMessage());
         }
 
         seedReceipt = data.shouldSeed ? "pending" : "acknowledged";

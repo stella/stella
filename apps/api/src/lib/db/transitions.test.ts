@@ -84,10 +84,18 @@ test("state-column ownership covers every scoped runtime transition", () => {
     scope: ["organizationId", "userId"],
     stateColumn: "status",
   };
+  // An organization's access state is one row keyed by the organization.
+  const organizationAccessState = {
+    tableName: "organizationAccessStates",
+    key: "organizationId",
+    scope: [],
+    stateColumn: "state",
+  };
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       desktopBatchReceipt,
+      organizationAccessState,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),

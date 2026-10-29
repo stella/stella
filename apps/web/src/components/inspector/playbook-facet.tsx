@@ -236,7 +236,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import type {
   Negotiation,
   PlaybookListItem,
@@ -591,7 +591,7 @@ export const PlaybookFacet = ({
     const { applied, tone, title, description } =
       reportCounterpartyNote(outcome);
     if (tone === "error") {
-      notifyUserError(undefined, t(title));
+      notifyUserProblem(t(title));
       return applied;
     }
     const toast = {
@@ -2206,7 +2206,7 @@ const ReferenceFilePicker = ({
       return;
     }
     if (reference.fileFieldId === target.fileFieldId) {
-      notifyUserError(undefined, t("inspector.review.targetAsReference"));
+      notifyUserProblem(t("inspector.review.targetAsReference"));
       return;
     }
     onChange([...references, reference]);

@@ -9,6 +9,10 @@ import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -40,7 +44,10 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveMemberAuthorization,
+} from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -52,6 +59,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
   ChatHarnessPhase,
@@ -430,10 +438,52 @@ export const createApprovalHarness = ({
       return await startExecutionAdmission(options);
     },
     indexThread: async () => await Promise.resolve(undefined),
-    // An approved write reads the member's role again when it runs; read it
-    // from this test's database, not the shared pools.
-    resolveCurrentMembership: async (lookup) =>
-      await resolveMemberAuthorization(lookup, testDb),
+    // Delayed tools rebuild live authority from this test's database, not the
+    // shared pools.
+    resolveCurrentExecutionContext: async ({
+      organizationId,
+      userId: executionUserId,
+    }) => {
+      const authorization = await resolveMemberAuthorization(
+        { organizationId, userId: executionUserId },
+        testDb,
+      );
+      if (authorization === null) {
+        return Result.ok(null);
+      }
+      const databaseIdentity = {
+        organizationId,
+        serverValidatedWorkspaceIds: [],
+        userId: executionUserId,
+      };
+      const executionScopedDb = asTestRaw<ScopedDb>(
+        createMembershipScopedDb(testDb, databaseIdentity),
+      );
+      const workspaces = await executionScopedDb(
+        async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+      );
+      if (workspaces.isErr()) {
+        return workspaces;
+      }
+      const accessibleWorkspaces = workspaces.value.workspaces;
+      const accessibleIds = new Set(accessibleWorkspaces.map(({ id }) => id));
+      return Result.ok({
+        accessibleWorkspaces,
+        featureAccessSnapshot: featureAccessSnapshotFromAuthorization({
+          organizationId,
+          userId: executionUserId,
+          authorization,
+        }),
+        pinServerValidatedWorkspaceId: (workspaceId) =>
+          accessibleIds.has(workspaceId),
+        role: authorization.role,
+        safeDb: asTestRaw<SafeDb>(
+          createMembershipSafeDb(testDb, databaseIdentity),
+        ),
+        scopedDb: executionScopedDb,
+        userEmail: authorization.email,
+      });
+    },
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({

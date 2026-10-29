@@ -9,7 +9,7 @@ import { Input } from "@stll/ui/input";
 
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
@@ -70,7 +70,7 @@ export const ContactCustomFieldsEditor = ({
     const value = patch.value.trim();
 
     if (!label) {
-      notifyUserError(undefined, t("contacts.customFields.labelRequired"));
+      notifyUserProblem(t("contacts.customFields.labelRequired"));
       return false;
     }
 
