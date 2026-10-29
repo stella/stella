@@ -9,7 +9,7 @@ import { cents } from "@stll/money";
 
 import type { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
-import { invoices } from "@/api/db/schema";
+import { BILLING_STATUS, invoices } from "@/api/db/schema";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -282,7 +282,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                     narrative: "work",
                     invoiceNarrative: null,
                     noCharge: false,
-                    status: "invoiced",
+                    status: BILLING_STATUS.BILLED,
                     invoiceAttachment: "charged",
                     workItem: {
                       id: toSafeId<"entity">(ENTITY_UUID),
