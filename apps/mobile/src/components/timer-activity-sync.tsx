@@ -40,18 +40,19 @@ const TimerActivityRefresh = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("timers");
 
   useEffect(() => {
-    let current = true;
+    // Unmounting aborts, so a refresh that outlives it changes nothing.
+    const unmounted = new AbortController();
     void (async () => {
       const timers = await listTimers({ fetch, source });
       // Time tracking off, or offline: the activity stays as it was.
-      if (!current || timers.isErr()) {
+      if (unmounted.signal.aborted || timers.isErr()) {
         return;
       }
       const named = timers.value.some(
         (timer) => timer.matterId !== null && timer.matterId !== undefined,
       );
       const matters = named ? await listMatters({ fetch, source }) : null;
-      if (!current) {
+      if (unmounted.signal.aborted) {
         return;
       }
       await showTimerActivity(
@@ -76,7 +77,7 @@ const TimerActivityRefresh = ({ source }: { source: AccessTokenSource }) => {
       );
     })();
     return () => {
-      current = false;
+      unmounted.abort();
     };
   }, [source, t]);
 
