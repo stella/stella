@@ -26,17 +26,18 @@ const glyphOf = (component: string) =>
     .toLowerCase();
 
 /**
- * The glyph each tab draws, by route: the lucide name it reads the asset
- * catalog's image by (`BAR_GLYPHS.layers`, `BAR_GLYPHS["list-todo"]`).
+ * The glyph each tab draws, by route: the lucide name `tabIcon` reads the
+ * asset catalog's image by on iOS and lucide's font draws elsewhere
+ * (`tabIcon("list-todo")`).
  */
 const tabGlyphs = (): Map<string, string> => {
   const layout = read("apps/mobile/src/app/(tabs)/_layout.tsx");
   return new Map(
     [
       ...layout.matchAll(
-        /Trigger name="(\w+)"[^>]*>[\s\S]*?xcasset=\{BAR_GLYPHS(?:\.(\w+)|\["([\w-]+)"\])\}/gu,
+        /Trigger name="(\w+)"[^>]*>[\s\S]*?tabIcon\("([\w-]+)"\)/gu,
       ),
-    ].map(([, route, dotted, quoted]) => [route ?? "", dotted ?? quoted ?? ""]),
+    ].map(([, route, glyph]) => [route ?? "", glyph ?? ""]),
   );
 };
 
