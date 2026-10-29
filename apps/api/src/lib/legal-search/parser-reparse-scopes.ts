@@ -330,7 +330,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:
