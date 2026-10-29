@@ -26,7 +26,7 @@ import type {
  * (`retention-sources.ts`) supplies it and projections stay independent of
  * it.
  */
-export type RetentionCheckOptions = Pick<
+type RetentionCheckOptions = Pick<
   NonNullable<Parameters<typeof validateAst>[2]>,
   | "hyphenatedLineBreaks"
   | "maxMissingWords"
@@ -70,7 +70,7 @@ export const RETENTION_PROJECTION_FAILURE = {
   UNREADABLE_DOCUMENT: "unreadable-document",
 } as const;
 
-export type RetentionProjectionFailure =
+type RetentionProjectionFailure =
   (typeof RETENTION_PROJECTION_FAILURE)[keyof typeof RETENTION_PROJECTION_FAILURE];
 
 /**
@@ -101,7 +101,7 @@ export const RETENTION_UNPARSED_REASON = {
   UNREGISTERED_SOURCE: "unregistered-source",
 } as const;
 
-export type RetentionUnparsedReason =
+type RetentionUnparsedReason =
   (typeof RETENTION_UNPARSED_REASON)[keyof typeof RETENTION_UNPARSED_REASON];
 
 export type RetentionPolicy =

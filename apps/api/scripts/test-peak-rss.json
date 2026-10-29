@@ -10280,14 +10280,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/analytics/posthog-node.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/analytics/source-map.artifact.test.ts": {
       "peakMb": 224,
       "baselineMb": 216,
@@ -10678,14 +10670,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-3"
-      }
-    },
-    "src/lib/auth/session-bearer.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
       }
     },
     "src/lib/auth/session-lifetime-revocation.test.ts": {
@@ -14968,14 +14952,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/case-law-dated-decisions.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/case-law-index-groups.db.test.ts": {
       "peakMb": 875,
       "baselineMb": 216,
@@ -16920,14 +16896,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/oauth-cli-client-document.db.test.ts": {
-      "peakMb": 1226,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
-      }
-    },
     "src/lib/oauth-client-id-metadata-document.db.test.ts": {
       "peakMb": 970,
       "baselineMb": 202,
@@ -16966,6 +16934,14 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
+      }
+    },
+    "src/lib/oauth-native-client-documents.db.test.ts": {
+      "peakMb": 1256,
+      "baselineMb": 211,
+      "source": {
+        "runId": "39090756337",
+        "job": "measure-3"
       }
     },
     "src/lib/oauth-native-consent.db.test.ts": {
@@ -21950,14 +21926,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
-      }
-    },
-    "src/tests/query-perf/baseline-recording.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
       }
     },
     "src/tests/query-perf/deadline.test.ts": {

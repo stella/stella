@@ -15,6 +15,8 @@ import {
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
 import { routes } from "@/api/http/route";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
@@ -101,6 +103,10 @@ const refineSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -146,6 +152,10 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const activeWorkspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );

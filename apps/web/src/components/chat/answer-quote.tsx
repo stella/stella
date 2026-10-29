@@ -24,10 +24,10 @@ import {
 import type { LocatedQuote } from "@/components/chat/answer-quote.logic";
 import { openReadCaseLawDecision } from "@/components/chat/case-law-open";
 import { useAnswerCitedDecisions } from "@/components/chat/chat-decision-citation";
-import { decisionCitationMetadata } from "@/components/chat/chat-decision-citation-metadata.logic";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { CitationCopyOptions } from "@/components/legal-reader/citation-copy-options";
 import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
+import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";

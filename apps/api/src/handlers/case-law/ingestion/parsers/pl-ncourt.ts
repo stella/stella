@@ -130,9 +130,8 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
     return `<a${href}>${children()}</a>`;
   }
   if (name === "xSUPx") {
-    // Set apart as the publisher's own rendering sets it: "art. 353 1", not
-    // "art. 3531", which is another article.
-    return `<sup> ${children()}</sup>`;
+    // An article index ("art. 353¹"), read as a superscript by the parser.
+    return `<sup>${children()}</sup>`;
   }
   if (isInlineTag(name)) {
     const tag = INLINE_TAGS[name];

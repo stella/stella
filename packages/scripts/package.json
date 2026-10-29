@@ -10,6 +10,9 @@
     "i18n-typegen": "src/i18n-typegen.ts"
   },
   "type": "module",
+  "exports": {
+    "./src/*": "./src/*.ts"
+  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
@@ -19,7 +22,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts"
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "3.5.20",
+    "@formatjs/icu-messageformat-parser": "3.5.22",
     "@stll/ai-catalog": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/fetch": "workspace:*",
@@ -32,8 +35,7 @@
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "oxc-parser": "catalog:",
-    "oxc-transform-react": "catalog:",
-    "typescript6": "catalog:"
+    "oxc-transform-react": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

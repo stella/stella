@@ -48,9 +48,7 @@ const documentIdOf = (listing: string): string | undefined => {
   return parsed.documentId;
 };
 
-export const projectPlTkSourceRaw = (
-  sourceRaw: string,
-): RetentionProjection => {
+const projectPlTkSourceRaw = (sourceRaw: string): RetentionProjection => {
   const parts = decodeSourceRawEnvelope(sourceRaw);
   if (parts === null) {
     return {

@@ -1,10 +1,15 @@
 import { Glob } from "bun";
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as cheerio from "cheerio";
 
 import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { ecjDocumentHtml, parseEcjDecisionHtml } from "./eu-ecj";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const decoder = new TextDecoder();

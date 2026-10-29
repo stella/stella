@@ -25,6 +25,15 @@ export type DocumentApp = {
   name: string;
 };
 
+export const SCREEN_EDGES = ["top", "bottom", "left", "right"] as const;
+
+/** Where the status icon sits: the screen edge and its centre along that
+ *  edge, 0 at its left (or top) end and 1 at the other. */
+export type TrayLocation = {
+  along: number;
+  edge: (typeof SCREEN_EDGES)[number];
+};
+
 /** The tour, permissions turned off since, or a feature that arrived later. */
 export type OnboardingMode =
   | { type: "tour" }
@@ -40,6 +49,8 @@ export type OnboardingSnapshot = {
   linked: boolean;
   step: OnboardingStep;
   steps: OnboardingStep[];
+  /** Read for the last step only; `null` when the OS cannot tell. */
+  trayLocation: TrayLocation | null;
 };
 
 /** Mirrors `CHANGED_EVENT`; payload-free. */
@@ -58,6 +69,14 @@ const isDocumentApp = (value: unknown): value is DocumentApp =>
   (value["iconDataUrl"] === null ||
     (typeof value["iconDataUrl"] === "string" &&
       value["iconDataUrl"].startsWith("data:image/png;base64,")));
+
+const isTrayLocation = (value: unknown): value is TrayLocation =>
+  isRecord(value) &&
+  typeof value["along"] === "number" &&
+  value["along"] >= 0 &&
+  value["along"] <= 1 &&
+  typeof value["edge"] === "string" &&
+  (SCREEN_EDGES as readonly string[]).includes(value["edge"]);
 
 const isMode = (value: unknown): value is OnboardingMode => {
   if (!isRecord(value)) {
@@ -90,7 +109,8 @@ export const isOnboardingSnapshot = (
   typeof value["activityAvailable"] === "boolean" &&
   Array.isArray(value["activityPermissions"]) &&
   value["activityPermissions"].every(isPermission) &&
-  (value["documentApp"] === null || isDocumentApp(value["documentApp"]));
+  (value["documentApp"] === null || isDocumentApp(value["documentApp"])) &&
+  (value["trayLocation"] === null || isTrayLocation(value["trayLocation"]));
 
 /**
  * What setup tells the user it never asks for. Each entry is bound by

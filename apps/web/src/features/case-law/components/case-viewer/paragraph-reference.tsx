@@ -1,118 +1,106 @@
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
-import type { AnalysisAnchorRange } from "@stll/legal-ast/analysis";
-import type { Block } from "@stll/legal-ast/document-ast";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import {
+  PreviewCard,
+  PreviewCardPopup,
+  PreviewCardTrigger,
+} from "@stll/ui/preview-card";
+import { ScrollArea } from "@stll/ui/scroll-area";
 
-import { useFormatter } from "@/i18n/formatting-context";
+import { paragraphPreview } from "./paragraph-reference.logic";
+import type { ResolvedParagraphReference } from "./paragraph-reference.logic";
 
-type ParagraphReferenceProps = AnalysisAnchorRange & {
-  blocks: Block[];
+/** Long enough that reading past a chip does not open its card. */
+const PREVIEW_OPEN_DELAY_MS = 400;
+const PREVIEW_CLOSE_DELAY_MS = 100;
+
+export type ParagraphReferenceProps = {
+  /** The decision's language, which the portalled card no longer inherits. */
+  language: string;
   onAnchorClick: (startAnchorId: string, endAnchorId: string) => void;
-};
-
-type ResolvedParagraphReference = AnalysisAnchorRange & {
-  endIndex: number;
-  label: string;
-  startIndex: number;
-};
-
-type FormatNumber = (value: number) => string;
-
-const paragraphNumber = (
-  block: Block,
-  index: number,
-  formatNumber: FormatNumber,
-): string =>
-  block.type === "paragraph" && block.number !== undefined
-    ? formatNumber(block.number)
-    : `¶${formatNumber(index + 1)}`;
-
-type ResolveParagraphReferenceOptions = {
-  blocks: Block[];
-  formatNumber: FormatNumber;
-  range: AnalysisAnchorRange;
+  reference: ResolvedParagraphReference;
 };
 
 /**
- * Where a cited range sits among the blocks: its first and last block index,
- * or null when either anchor is missing or the range runs backwards. The one
- * place a range is located, for drawing a reference and for highlighting it.
+ * A citation of the decision's own paragraphs. Hovering or focusing it shows
+ * their text in place; pressing it moves the reader to them, as a tap does
+ * on touch, where there is no hover. Surfaces render it through
+ * `CitationChip`, which owns citation kinds.
  */
-export const paragraphRangeIndices = (
-  blocks: readonly Block[],
-  { startAnchorId, endAnchorId }: AnalysisAnchorRange,
-): {
-  endBlock: Block;
-  endIndex: number;
-  startBlock: Block;
-  startIndex: number;
-} | null => {
-  const startIndex = blocks.findIndex(
-    (block) => block.anchorId === startAnchorId,
-  );
-  const endIndex = blocks.findIndex((block) => block.anchorId === endAnchorId);
-  const startBlock = blocks[startIndex];
-  const endBlock = blocks[endIndex];
-  return startBlock === undefined ||
-    endBlock === undefined ||
-    endIndex < startIndex
-    ? null
-    : { endBlock, endIndex, startBlock, startIndex };
-};
-
-export const resolveParagraphReference = ({
-  blocks,
-  formatNumber,
-  range,
-}: ResolveParagraphReferenceOptions): ResolvedParagraphReference | null => {
-  const indices = paragraphRangeIndices(blocks, range);
-  if (indices === null) {
-    return null;
-  }
-  const { startAnchorId, endAnchorId } = range;
-  const { startBlock, startIndex, endBlock, endIndex } = indices;
-
-  const startNumber = paragraphNumber(startBlock, startIndex, formatNumber);
-  const endNumber = paragraphNumber(endBlock, endIndex, formatNumber);
-  return {
-    startAnchorId,
-    endAnchorId,
-    startIndex,
-    endIndex,
-    label:
-      startIndex === endIndex
-        ? `[${startNumber}]`
-        : `[${startNumber}]-[${endNumber}]`,
-  };
-};
-
 export const ParagraphReference = ({
-  blocks,
-  startAnchorId,
-  endAnchorId,
+  language,
   onAnchorClick,
+  reference,
 }: ParagraphReferenceProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const reference = resolveParagraphReference({
-    blocks,
-    formatNumber: format.number,
-    range: { startAnchorId, endAnchorId },
-  });
-  if (reference === null) {
-    return null;
-  }
+  const [open, setOpen] = useState(false);
+  const { startAnchorId, endAnchorId, paragraphs } = reference;
+  const preview = paragraphPreview(paragraphs);
+  const jump = () => {
+    setOpen(false);
+    onAnchorClick(startAnchorId, endAnchorId);
+  };
 
   return (
-    <button
-      aria-label={t("caseLaw.viewer.paragraphReference", {
-        number: reference.label.slice(1, -1).replace("]-[", "–"),
-      })}
-      className="reader-chrome text-muted-foreground hover:text-foreground rounded-sm underline-offset-2 hover:underline"
-      onClick={() => onAnchorClick(startAnchorId, endAnchorId)}
-      type="button"
-    >
-      <bdi>{reference.label}</bdi>
-    </button>
+    <PreviewCard open={open} onOpenChange={setOpen}>
+      <PreviewCardTrigger
+        closeDelay={PREVIEW_CLOSE_DELAY_MS}
+        delay={PREVIEW_OPEN_DELAY_MS}
+        render={
+          <button
+            aria-label={t("caseLaw.viewer.paragraphReference", {
+              number: reference.label.slice(1, -1).replace("]-[", "–"),
+            })}
+            className="reader-chrome text-muted-foreground hover:text-foreground data-popup-open:text-foreground rounded-sm underline-offset-2 hover:underline data-popup-open:underline"
+            onClick={jump}
+            type="button"
+          />
+        }
+      >
+        <bdi>{reference.label}</bdi>
+      </PreviewCardTrigger>
+      <PreviewCardPopup align="start" className="w-96 max-w-[calc(100vw-2rem)]">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <ScrollArea axis="vertical" className="max-h-72" scrollFade>
+            <div
+              className="reader-body text-foreground flex flex-col gap-2 text-start text-sm leading-relaxed"
+              data-paragraph-preview=""
+              lang={language}
+            >
+              {preview.paragraphs.map(({ anchorId, number, text }, index) => (
+                <div className="flex items-baseline gap-2" key={anchorId}>
+                  <bdi className="reader-chrome text-muted-foreground shrink-0 text-xs tabular-nums">
+                    {number}
+                  </bdi>
+                  <BidiText
+                    as="span"
+                    className="min-w-0 flex-1 text-pretty whitespace-pre-line"
+                  >
+                    {text}
+                    {preview.truncated &&
+                      index === preview.paragraphs.length - 1 &&
+                      " …"}
+                  </BidiText>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          {preview.truncated && (
+            <Button
+              className="w-fit"
+              onClick={jump}
+              size="xs"
+              variant="outline"
+            >
+              {t("caseLaw.viewer.goToParagraph", { count: paragraphs.length })}
+            </Button>
+          )}
+        </div>
+      </PreviewCardPopup>
+    </PreviewCard>
   );
 };

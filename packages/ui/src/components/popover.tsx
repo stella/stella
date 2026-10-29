@@ -26,7 +26,7 @@ function PopoverTrigger({
   ...props
 }: PopoverPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: (
       <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
     ),

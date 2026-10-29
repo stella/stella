@@ -59,7 +59,7 @@ export const RETENTION_CHECK_BACKLOG = "check-backlog";
 export const MAX_RETENTION_CHECKS_IN_FLIGHT = 4;
 
 /** The document a retention signal names, without the parser that built it. */
-export type RetentionSubject = Omit<ValidationSubject, "parser">;
+type RetentionSubject = Omit<ValidationSubject, "parser">;
 
 const reportUnverifiable = (
   subject: ValidationSubject,
@@ -154,7 +154,7 @@ const settleCheck = async (
       });
     },
     catch: (cause) => cause,
-  });
+  }).unwrapOr(undefined);
 };
 
 type CheckProjectedRetentionOptions = {

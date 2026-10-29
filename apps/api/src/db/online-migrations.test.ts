@@ -7,6 +7,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
+import { ACCOUNT_AUDIT_CONSTRAINT_VALIDATION } from "./account-audit-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
@@ -211,6 +212,30 @@ describe("online migrations", () => {
       expect(harness.released()).toBe(true);
     },
   );
+
+  test("validates the account audit event check once and rejects incomplete startup", async () => {
+    const { name } = ACCOUNT_AUDIT_CONSTRAINT_VALIDATION;
+    const harness = createHarness({ unvalidatedConstraints: [name] });
+    const rejection = await assertOnlineMigrationsApplied(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: `Online repair ${name} is not complete: constraint ${name} is not validated`,
+    });
+    const beforeRepair = harness.statements.length;
+    await runOnlineMigrations(harness.pool);
+    await assertOnlineMigrationsApplied(harness.pool);
+    await runOnlineMigrations(harness.pool);
+    expect(
+      harness.statements
+        .slice(beforeRepair)
+        .filter((statement) =>
+          statement.includes(`VALIDATE CONSTRAINT "${name}"`),
+        ),
+    ).toHaveLength(1);
+    expect(harness.released()).toBe(true);
+  });
 
   test("every validation a registered repair runs is declared, and each runs once", async () => {
     const declared = ONLINE_CONSTRAINT_VALIDATIONS.map(
@@ -1499,6 +1524,97 @@ const createHarness = ({
     ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final),
   ];
 
+  const queryBackfillCheckpoint = (
+    query: string,
+    params: readonly unknown[],
+  ) => {
+    if (query.startsWith("INSERT")) {
+      const serialized = params.at(2);
+      if (typeof serialized !== "string") {
+        throw new TypeError("Expected checkpoint JSON");
+      }
+      const batch: unknown = JSON.parse(serialized);
+      if (!backfillStates.has(params.at(0))) {
+        backfillStates.set(params.at(0), {
+          cursor: params.at(1),
+          batch,
+        });
+      }
+      return [];
+    }
+    if (query.startsWith("UPDATE")) {
+      const serialized = params.at(2);
+      if (typeof serialized !== "string") {
+        throw new TypeError("Expected checkpoint JSON");
+      }
+      const batch: unknown = JSON.parse(serialized);
+      backfillStates.set(params.at(0), { cursor: params.at(1), batch });
+      return [];
+    }
+    return [backfillStates.get(params.at(0))];
+  };
+
+  const queryIndexArtifacts = (params: readonly unknown[]) => {
+    const newPrefix = params.at(2);
+    const oldPrefix = params.at(3);
+    const index = managedIndexes.find(
+      ({ name }) =>
+        artifactPrefix(name, "_ccnew") === newPrefix &&
+        artifactPrefix(name, "_ccold") === oldPrefix,
+    );
+    if (!index) {
+      throw new TypeError("Expected managed index artifact prefixes");
+    }
+    return (remainingArtifacts.get(index.name) ?? []).map(({ isValid, name }) =>
+      indexRow(index, isValid, name),
+    );
+  };
+
+  const queryIndexState = (params: readonly unknown[]) => {
+    const indexName = params.at(1);
+    if (typeof indexName !== "string") {
+      throw new TypeError("Expected index name query parameter");
+    }
+    if (legacyIndexes.has(indexName)) {
+      return droppedLegacyIndexes.has(indexName)
+        ? []
+        : [
+            {
+              definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
+              isReady: true,
+              isUnique: false,
+              isValid: true,
+              name: indexName,
+            },
+          ];
+    }
+    const index = managedIndexes.find(({ name }) => name === indexName);
+    if (!index) {
+      throw new TypeError("Expected managed index name");
+    }
+    if (pendingIndexes.has(indexName)) {
+      return [];
+    }
+    const offset = indexOffsets.get(indexName) ?? 0;
+    const states = indexStates[indexName];
+    let state: IndexState =
+      indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
+    if (states) {
+      state = offset < states.length ? states.at(offset) : states.at(-1);
+    }
+    indexOffsets.set(indexName, offset + 1);
+    if (state === undefined) {
+      return [];
+    }
+    if (typeof state === "boolean") {
+      return [indexRow(index, state)];
+    }
+    if ("isReady" in state) {
+      return [{ ...indexRow(index, state.isValid), isReady: state.isReady }];
+    }
+    return [indexRow(index, state.isValid, index.name, state.definitionBody)];
+  };
+
   return {
     pool: {
       reserve: async () => ({
@@ -1534,6 +1650,20 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (
+            query.includes('AS "uniquePresent"') &&
+            query.includes('AS "foreignReady"')
+          ) {
+            return [
+              {
+                indexReady: true,
+                uniquePresent: true,
+                uniqueReady: true,
+                foreignPresent: true,
+                foreignReady: true,
+              },
+            ];
+          }
           if (query.includes("pg_backend_pid() AS pid")) {
             return [{ pid: 1, database: "test" }];
           }
@@ -1577,30 +1707,7 @@ const createHarness = ({
             return [{ installed: false }];
           }
           if (query.includes("database_backfill_states")) {
-            if (query.startsWith("INSERT")) {
-              const serialized = params.at(2);
-              if (typeof serialized !== "string") {
-                throw new TypeError("Expected checkpoint JSON");
-              }
-              const batch: unknown = JSON.parse(serialized);
-              if (!backfillStates.has(params.at(0))) {
-                backfillStates.set(params.at(0), {
-                  cursor: params.at(1),
-                  batch,
-                });
-              }
-              return [];
-            }
-            if (query.startsWith("UPDATE")) {
-              const serialized = params.at(2);
-              if (typeof serialized !== "string") {
-                throw new TypeError("Expected checkpoint JSON");
-              }
-              const batch: unknown = JSON.parse(serialized);
-              backfillStates.set(params.at(0), { cursor: params.at(1), batch });
-              return [];
-            }
-            return [backfillStates.get(params.at(0))];
+            return queryBackfillCheckpoint(query, params);
           }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
@@ -1608,6 +1715,19 @@ const createHarness = ({
               throw new TypeError("Expected constraint name query parameter");
             }
             return [{ isValidated: !pendingConstraints.has(constraintName) }];
+          }
+          // This harness starts with invoice clients already backfilled.
+          if (
+            query.includes("FROM public.invoices i JOIN public.workspaces w")
+          ) {
+            return [];
+          }
+          // ...and with its invoices' sent markers and settling payments.
+          if (
+            query.includes("i.sent_at IS NULL") ||
+            query.includes("FROM public.invoice_payments p")
+          ) {
+            return [];
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
@@ -1641,6 +1761,11 @@ const createHarness = ({
           }
           // Its resource seed and its client walk: nothing stored yet, and no
           // registration to link, so both converge on the first pass.
+          // The finding decision backfill's probe: no decided finding is
+          // without history, so its completion holds.
+          if (query.includes("document_review_finding_decisions event")) {
+            return [];
+          }
           if (
             query.includes("oauth_resource") ||
             query.includes("oauth_client")
@@ -1648,67 +1773,10 @@ const createHarness = ({
             return [];
           }
           if (query.includes("starts_with")) {
-            const newPrefix = params.at(2);
-            const oldPrefix = params.at(3);
-            const index = managedIndexes.find(
-              ({ name }) =>
-                artifactPrefix(name, "_ccnew") === newPrefix &&
-                artifactPrefix(name, "_ccold") === oldPrefix,
-            );
-            if (!index) {
-              throw new TypeError("Expected managed index artifact prefixes");
-            }
-            return (remainingArtifacts.get(index.name) ?? []).map(
-              ({ isValid, name }) => indexRow(index, isValid, name),
-            );
+            return queryIndexArtifacts(params);
           }
 
-          const indexName = params.at(1);
-          if (typeof indexName !== "string") {
-            throw new TypeError("Expected index name query parameter");
-          }
-          if (legacyIndexes.has(indexName)) {
-            return droppedLegacyIndexes.has(indexName)
-              ? []
-              : [
-                  {
-                    definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
-                    isReady: true,
-                    isUnique: false,
-                    isValid: true,
-                    name: indexName,
-                  },
-                ];
-          }
-          const index = managedIndexes.find(({ name }) => name === indexName);
-          if (!index) {
-            throw new TypeError("Expected managed index name");
-          }
-          if (pendingIndexes.has(indexName)) {
-            return [];
-          }
-          const offset = indexOffsets.get(indexName) ?? 0;
-          const states = indexStates[indexName];
-          let state: IndexState =
-            indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
-          if (states) {
-            state = offset < states.length ? states.at(offset) : states.at(-1);
-          }
-          indexOffsets.set(indexName, offset + 1);
-          if (state === undefined) {
-            return [];
-          }
-          if (typeof state === "boolean") {
-            return [indexRow(index, state)];
-          }
-          if ("isReady" in state) {
-            return [
-              { ...indexRow(index, state.isValid), isReady: state.isReady },
-            ];
-          }
-          return [
-            indexRow(index, state.isValid, index.name, state.definitionBody),
-          ];
+          return queryIndexState(params);
         },
         terminate: async () => undefined,
         release: () => {

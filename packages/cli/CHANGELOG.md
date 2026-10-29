@@ -1,5 +1,67 @@
 # @stll/cli
 
+## 6.1.2
+
+### Patch Changes
+
+- [#7222](https://github.com/stella/stella/pull/7222) [`30ac91c`](https://github.com/stella/stella/commit/30ac91c66e02b341932af6b2eb33d3ab34c472fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe contact birth dates with one precision-aware rule in the generated MCP contract: a birth date cannot lie in the future or before 1900.
+
+- [#7355](https://github.com/stella/stella/pull/7355) [`23c50da`](https://github.com/stella/stella/commit/23c50da1f61fb0b8f5d2b1bfe030fa136d007c5e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support rates per activity code and hour caps on billing arrangements.
+
+- [#7178](https://github.com/stella/stella/pull/7178) [`d86d490`](https://github.com/stella/stella/commit/d86d490c06a74395109041a7ab39581f55e3201a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `capability invoices payments-create`, `payments-list` and `payments-void` record, list and void payments on a finalized or sent invoice; recording payments that reach the total marks it paid, which replaces the `mark_paid` transition.
+
+- [#7210](https://github.com/stella/stella/pull/7210) [`797fa1c`](https://github.com/stella/stella/commit/797fa1ccd5ed168dff70835a9cdaac2668464613) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose distinct limiter store, admission configuration, organization state and lease refusal codes in the generated MCP contract and CLI exit mapping.
+
+- [#7349](https://github.com/stella/stella/pull/7349) [`8dc5ea6`](https://github.com/stella/stella/commit/8dc5ea6da463971430943471c2ad596294a05dc7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `capability matters vocabulary-get` to read a bounded vocabulary sample for a matter.
+
+- [#7296](https://github.com/stella/stella/pull/7296) [`a3b49ee`](https://github.com/stella/stella/commit/a3b49eebfc32c56bd8607a92dfbcb4722d96571c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List item source and generation candidate locators accept character offsets, a PDF page digest and boxes, and refuse unknown fields.
+
+## 6.1.1
+
+### Patch Changes
+
+- [#7188](https://github.com/stella/stella/pull/7188) [`5aeb625`](https://github.com/stella/stella/commit/5aeb6257e2457a300fd4db319b612ebd00878f4d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve retry hints and advisory delays for concurrent public-law reads.
+
+## 6.1.0
+
+### Minor Changes
+
+- [#6189](https://github.com/stella/stella/pull/6189) [`34faed5`](https://github.com/stella/stella/commit/34faed5563266a9b413f4e8ca2cc6fe9f57bd179) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Prepare a matter's next invoice with `invoices prefill`, and create prefilled drafts that bill expenses and billed-time changes in one `invoices create` call. Seller profiles record whether the issuer is a VAT payer (`vatPayer`).
+
+### Patch Changes
+
+- [#7183](https://github.com/stella/stella/pull/7183) [`7b30990`](https://github.com/stella/stella/commit/7b3099091efa5a049d157b586adac10fff6c0089) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose pending and unprobeable case-law removal reconciliation counts.
+
+- [#7159](https://github.com/stella/stella/pull/7159) [`0f6787d`](https://github.com/stella/stella/commit/0f6787d847630e67782f3a188a4f31d02e2554ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters delete` refuses a matter that has time entries, expenses or invoices; archive it instead to keep its billing records.
+
+- [#7009](https://github.com/stella/stella/pull/7009) [`d2d46a7`](https://github.com/stella/stella/commit/d2d46a7f6d7e16a64822cd955694a010a6c19dc3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the public read timeout error code in the generated MCP contract and map it to the server exit class.
+
+- [#5603](https://github.com/stella/stella/pull/5603) [`72d2f00`](https://github.com/stella/stella/commit/72d2f00484a189e4b069bf77fc0bd86f4588ecfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Serve shipped skill guidance in the CLI resource catalog.
+
+- [#5603](https://github.com/stella/stella/pull/5603) [`72d2f00`](https://github.com/stella/stella/commit/72d2f00484a189e4b069bf77fc0bd86f4588ecfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose shipped skill guidance through CLI reference resources.
+
+- [#7160](https://github.com/stella/stella/pull/7160) [`61c786f`](https://github.com/stella/stella/commit/61c786fedac65aee81af9f2c210d2edbedd4b981) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks list` lists your open tasks across every matter you can open, soonest due first, each naming its matter.
+
+- [#7171](https://github.com/stella/stella/pull/7171) [`6ead297`](https://github.com/stella/stella/commit/6ead2978e0c1fdeaf42977b4c64c25e90d2f5eb8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries approval-queue return` returns up to 200 entries with one comment and answers per entry, and `time-entries update` moves a draft to another matter with `moveToWorkspaceId`.
+
+- [#7107](https://github.com/stella/stella/pull/7107) [`a640880`](https://github.com/stella/stella/commit/a6408801b667a761f77f46db628184ebec586be9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries me suggestions list` lists your pending suggested time entries across matters for up to a week, and `time-entries me list` takes an `endDate` to cover up to seven work dates with per-day totals.
+
+- [#7127](https://github.com/stella/stella/pull/7127) [`3131d0d`](https://github.com/stella/stella/commit/3131d0dde83bd987c1176a951917083e6df38a06) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries me submissions create` submits your draft time for up to a week to your approvers, and the approval queue now lists submitted entries only.
+- Updated dependencies []:
+  - @stll/agent-input@0.2.2
+
+## 6.0.2
+
+### Patch Changes
+
+- [#7041](https://github.com/stella/stella/pull/7041) [`38a1dc9`](https://github.com/stella/stella/commit/38a1dc9c439f037dee25d10112da9f26d6cfa2d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose explicit case-law facet selection; searches omit facets unless requested.
+
+## 6.0.1
+
+### Patch Changes
+
+- [#7018](https://github.com/stella/stella/pull/7018) [`16d1f58`](https://github.com/stella/stella/commit/16d1f58e9f0670401d13294d3199afedd92a4b9d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search `sort` option's description now says that `newest` lists undated decisions last instead of leaving them out.
+
 ## 6.0.0
 
 ### Major Changes

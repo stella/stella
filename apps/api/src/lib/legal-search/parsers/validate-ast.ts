@@ -4,6 +4,7 @@
 // parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
 // parser-output-unchanged: Paragraph input is a new optional entry point used only by cz-us; the HTML path and its results are unchanged for every other caller.
 // parser-output-unchanged: Text helpers are exported under descriptive names for the verdict golden and profiling script; their bodies and validation results are unchanged.
+// parser-output-unchanged: Word boundaries between the paragraphs of a table cell and soft hyphens in the reference text change validation diagnostics only; parsed records are unchanged.
 /**
  * AST sanity checker.
  *
@@ -86,6 +87,8 @@ type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
 export const normalizeValidationText = (text: string): string =>
   text
+    // A soft hyphen prints nothing; a parser that drops it loses no word.
+    .replace(/­/gu, "")
     .replace(/\s+/gu, " ")
     .replace(/\u00a0/gu, " ")
     .trim()
@@ -346,6 +349,9 @@ export const validateAst = (
     // "wrazz") and producing phantom MISSING_WORDS reports against a
     // correct AST. Make it a space before extracting reference text.
     $("br").replaceWith(" ");
+    // The paragraphs of a table cell are read as the cell's text, and the
+    // same gluing applies at their boundaries ("U. H.</p><p>doručovací").
+    $("td :is(p, li, div), th :is(p, li, div)").after(" ");
 
     // Extract text from content elements, but skip nested
     // elements whose text is already included by a parent

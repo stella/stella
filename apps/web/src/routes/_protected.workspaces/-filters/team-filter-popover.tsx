@@ -11,7 +11,7 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { LeadFilter, Workspace } from "@/lib/workspaces/types";
 
@@ -40,7 +40,7 @@ export const TeamFilterPopover = ({
   workspaces,
 }: TeamFilterPopoverProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [search, setSearch] = useState("");
 
   const members: MemberOption[] = (() => {

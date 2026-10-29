@@ -154,6 +154,8 @@ describe("API deployment health receipt", () => {
       CORPUS_SEARCH_WAIVED: "false",
       WAIVE_REASON: "",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
     };
     const cases = [
       { outcomes: success, state: "success" },
@@ -170,6 +172,14 @@ describe("API deployment health receipt", () => {
         })),
       ),
       { outcomes: { ...success, JOB_STATUS: "cancelled" }, state: "failure" },
+      ...["PROOF_READINESS", "PROOF_ENVIRONMENT"].flatMap((gate) =>
+        ["", "environment-unavailable", "environment-interrupted"].map(
+          (outcome) => ({
+            outcomes: { ...success, [gate]: outcome },
+            state: "error",
+          }),
+        ),
+      ),
     ];
     for (const { outcomes, state } of cases) {
       const result = Bun.spawnSync(
@@ -189,6 +199,8 @@ describe("API deployment health receipt", () => {
             GITHUB_SHA: "a".repeat(40),
             DEPLOY_SHA: "a".repeat(40),
             DEPLOYMENT_ID: "1",
+            // Status ownership is covered by post-staging-verification tests.
+            STAGING_STATUS_WRITER: "/dev/null",
           },
         },
       );
@@ -462,7 +474,9 @@ describe("API deployment health receipt", () => {
     for (const { run, env } of consumers) {
       // A readiness probe names its URL in the run or passes it to a script.
       const probe =
-        run.includes("$STAGING_HEALTH_URL") || "STAGING_HEALTH_URL" in env;
+        run.includes("$STAGING_HEALTH_URL") ||
+        "STAGING_HEALTH_URL" in env ||
+        "API_DEPLOYMENT_URL" in env;
       const prefix = probe ? "" : "E2E_";
       expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
       expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
@@ -555,7 +569,9 @@ describe("API deployment health receipt", () => {
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");
-    expect(promoteJob).toContain("needs: [resolve, build-api, build-web]");
+    expect(promoteJob).toContain(
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
+    );
     expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
     expect(promoteJob).toContain("Run staging web smoke");
@@ -644,12 +660,37 @@ describe("API deployment health receipt", () => {
         ),
       ).text(),
     ]);
-    const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
+    const promoteJobStart = releaseWorkflow.indexOf(
+      "\n  promote-production:\n",
+    );
     const stagingJobStart = releaseWorkflow.indexOf(
       "\n  promote-staging:\n",
       promoteJobStart,
     );
-    const promoteJob = releaseWorkflow.slice(promoteJobStart, stagingJobStart);
+    const publishReleaseStart = releaseWorkflow.indexOf(
+      "\n  publish-release:\n",
+      promoteJobStart,
+    );
+    const publishLatestStart = releaseWorkflow.indexOf(
+      "\n  publish-latest:\n",
+      publishReleaseStart,
+    );
+    const releaseHealthStart = releaseWorkflow.indexOf(
+      "\n  dispatch-release-health:\n",
+      publishLatestStart,
+    );
+    const promoteJob = releaseWorkflow.slice(
+      promoteJobStart,
+      publishReleaseStart,
+    );
+    const publishReleaseJob = releaseWorkflow.slice(
+      publishReleaseStart,
+      publishLatestStart,
+    );
+    const publishLatestJob = releaseWorkflow.slice(
+      publishLatestStart,
+      releaseHealthStart,
+    );
     const webBuildJobStart = releaseWorkflow.indexOf(
       "\n  prepare-web-image:\n",
     );
@@ -695,9 +736,8 @@ describe("API deployment health receipt", () => {
       `Immutable image tag \${image}:\${tag} points to a different digest.`,
     );
     expect(manifestJob).toContain('"STELLA_COMMIT_SHA=" + $commit');
-    // Publication is the promote job's last act: the release object is a
-    // draft and the mutable image aliases stay put until production
-    // verifiably serves the release.
+    // Production verification owns the promotion receipt. Independent
+    // publication jobs advance only after that receipt succeeds.
     expect(manifestJob).toContain('bash "$GH_RETRY_SCRIPT" release create');
     expect(manifestJob).toContain(
       "*-rc.*) extra_args+=(--draft --prerelease) ;;",
@@ -705,37 +745,75 @@ describe("API deployment health receipt", () => {
     expect(manifestJob).toContain("*) extra_args+=(--draft) ;;");
     expect(manifestJob).not.toContain("Advance stable image tags");
     expect(manifestJob).not.toContain(":latest");
-    const productionVerified = promoteJob.indexOf(
+    expect(publishReleaseStart).toBeGreaterThan(promoteJobStart);
+    expect(publishLatestStart).toBeGreaterThan(publishReleaseStart);
+    expect(releaseHealthStart).toBeGreaterThan(publishLatestStart);
+    expect(promoteJob).toContain(
       "Verify production web serves the release commit",
     );
-    const releasePublished = promoteJob.indexOf("Publish GitHub release");
-    const aliasesAdvanced = promoteJob.indexOf("Advance stable image tags");
-    expect(productionVerified).toBeGreaterThan(-1);
-    expect(releasePublished).toBeGreaterThan(productionVerified);
-    expect(aliasesAdvanced).toBeGreaterThan(releasePublished);
-    expect(promoteJob).toContain("--draft=false --latest=false");
-    // A rerun against an already published release must not touch it: the
-    // publish is gated on the draft state, so Latest is never cleared.
-    const publishStep = promoteJob.slice(releasePublished, aliasesAdvanced);
-    expect(publishStep.indexOf("--json isDraft")).toBeGreaterThan(-1);
-    expect(publishStep.indexOf("--json isDraft")).toBeLessThan(
-      publishStep.indexOf("--draft=false --latest=false"),
+    expect(promoteJob).not.toContain("Publish GitHub release");
+    expect(promoteJob).not.toContain("Advance stable image tags");
+    for (const publication of [publishReleaseJob, publishLatestJob]) {
+      expect(publication).toContain(
+        "needs: [resolve, alias-manifest, promote-production]",
+      );
+      expect(publication).not.toContain("needs.manifest.outputs");
+    }
+    expect(publishReleaseJob).toContain("Publish GitHub release");
+    expect(publishReleaseJob).toContain("--draft=false --latest=false");
+    expect(publishLatestJob).toContain("Advance stable image tags");
+    expect(publishLatestJob).toContain(
+      "needs.alias-manifest.outputs.api-image-digest",
     );
-    const stagingJob = releaseWorkflow.slice(stagingJobStart);
-    expect(stagingJob.indexOf("Publish GitHub prerelease")).toBeGreaterThan(
-      stagingJob.indexOf("Promote to staging"),
+    expect(publishLatestJob).toContain(
+      "needs.alias-manifest.outputs.production-web-image-digest",
     );
-    expect(stagingJob).toContain("--draft=false --prerelease");
-    expect(stagingJob.indexOf("--json isDraft")).toBeLessThan(
-      stagingJob.indexOf("--draft=false --prerelease"),
+    // Publishing a draft is idempotent; a completed release keeps Latest.
+    const draftReceipt = publishReleaseJob.indexOf("--json isDraft");
+    expect(draftReceipt).toBeGreaterThan(-1);
+    expect(draftReceipt).toBeLessThan(
+      publishReleaseJob.indexOf("--draft=false --latest=false"),
     );
+    const stagingJob = releaseWorkflow.slice(
+      stagingJobStart,
+      releaseWorkflow.indexOf("\n  release-complete:\n", stagingJobStart),
+    );
+    expect(stagingJob).toContain("needs: [resolve, manifest]");
+    expect(stagingJob).toContain("needs.resolve.outputs.channel == 'rc'");
+    for (const workflow of [
+      "deploy-staging.yml",
+      "main-heavy.yml",
+      "main-pr-depth.yml",
+    ]) {
+      expect(stagingJob).toContain(`actions/workflows/${workflow}/dispatches`);
+    }
+    expect(stagingJob).not.toContain("--draft=false");
+    const finalizer = await Bun.file(
+      new URL("finalize-release.sh", import.meta.url),
+    ).text();
+    const finalizerHealth = finalizer.indexOf("check-release-main-health.sh");
+    const rcPublication = finalizer.indexOf('release edit "$rc"');
+    expect(finalizerHealth).toBeGreaterThanOrEqual(0);
+    expect(rcPublication).toBeGreaterThan(finalizerHealth);
+    expect(finalizer).toContain("--draft=false --prerelease --latest=false");
     expect(releaseWorkflow).toContain(
       `group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}`,
     );
-    expect(releaseWorkflow).toContain(
-      "needs: [resolve, build, prepare-web-image, smoke]",
+    const release: unknown = Bun.YAML.parse(releaseWorkflow);
+    const releaseJobs =
+      isRecord(release) && isRecord(release["jobs"]) ? release["jobs"] : {};
+    const manifest = releaseJobs["manifest"];
+    expect(isRecord(manifest) ? manifest["needs"] : undefined).toEqual([
+      "resolve",
+      "build",
+      "prepare-web-image",
+      "prepare-production-web-image",
+      "prove-production-web-image",
+      "smoke",
+    ]);
+    expect(promoteJob).toContain(
+      `web-image-digest: \${{ needs.alias-manifest.outputs.production-web-image-digest }}`,
     );
-    expect(releaseWorkflow.match(/web-image-digest:/gu)).toHaveLength(2);
     expect(releaseWorkflow).toContain(
       "bash scripts/smoke-api-image.sh stella-api:smoke",
     );
@@ -821,10 +899,17 @@ describe("API deployment health receipt", () => {
     expect(desktopManifestStart).toBeGreaterThan(desktopVerifyStart);
     expect(desktopPromoteStart).toBeGreaterThan(desktopManifestStart);
     expect(desktopCarryStart).toBeGreaterThan(desktopPromoteStart);
-    expect(desktopResolve).toContain(
+    expect(desktopResolve).not.toContain(
       "github.event.workflow_run.conclusion == 'success'",
     );
-    expect(desktopResolve).not.toContain('["success", "failure"]');
+    expect(desktopResolve).toContain(
+      'bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"',
+    );
+    const publicationGuard = await Bun.file(
+      new URL("check-release-publication-source.sh", import.meta.url),
+    ).text();
+    expect(publicationGuard).toContain("job=promote-production");
+    expect(publicationGuard).toContain('.[0].conclusion == "success"');
     const desktopWindowsBuildAction = readFileSync(
       new URL(
         "../.github/actions/desktop-windows-build/action.yml",
@@ -1364,4 +1449,176 @@ test("journey reports upload from the directory the journey run writes", () => {
     }
   }
   expect(uploads).toBe(4);
+});
+
+describe("deployment environment verification", () => {
+  type ProbeOptions = {
+    expectedEnvironment: string | undefined;
+    reportedEnvironment: unknown;
+    edgeHeaderValue?: string;
+  };
+  const probe = async ({
+    expectedEnvironment,
+    reportedEnvironment,
+    edgeHeaderValue,
+  }: ProbeOptions) => {
+    const commit = "a".repeat(40);
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: (request) => {
+        if (
+          edgeHeaderValue &&
+          request.headers.get("x-fixture-edge-token") !== edgeHeaderValue
+        ) {
+          return new Response("Forbidden", { status: 403 });
+        }
+        return Response.json({
+          status: "ok",
+          commit,
+          deployEnvironment: reportedEnvironment,
+        });
+      },
+    });
+    try {
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "check-api-deployment.ts"),
+        ],
+        {
+          env: {
+            ...process.env,
+            API_DEPLOYMENT_URL: server.url.toString(),
+            API_DEPLOYMENT_EXPECTED_COMMIT: commit,
+            API_DEPLOYMENT_EXPECTED_ENVIRONMENT: expectedEnvironment,
+            EDGE_HEADER_NAME: edgeHeaderValue
+              ? "x-fixture-edge-token"
+              : undefined,
+            EDGE_HEADER_VALUE: edgeHeaderValue,
+            API_DEPLOYMENT_ATTEMPTS: "1",
+            API_DEPLOYMENT_STABLE_PROBES: "1",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode, stdout, stderr };
+    } finally {
+      await server.stop(true);
+    }
+  };
+
+  for (const expectedEnvironment of ["production", "staging"] as const) {
+    test(`${expectedEnvironment} deployment requires its own marker as well as the exact SHA`, async () => {
+      const result = await probe({
+        expectedEnvironment,
+        reportedEnvironment: expectedEnvironment,
+      });
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect(result.stdout).toContain("api-deployment: ok");
+    });
+    for (const reportedEnvironment of [
+      undefined,
+      null,
+      "development",
+      expectedEnvironment === "production" ? "staging" : "production",
+    ]) {
+      test(`${expectedEnvironment} deployment refuses ${String(reportedEnvironment)} even on the expected SHA`, async () => {
+        const result = await probe({
+          expectedEnvironment,
+          reportedEnvironment,
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toContain(
+          `deployEnvironment must be ${expectedEnvironment}`,
+        );
+        expect(result.stdout).not.toContain("api-deployment: ok");
+      });
+    }
+  }
+
+  test("a missing contract readiness field refuses an otherwise matching deployment", async () => {
+    const result = await probe({
+      expectedEnvironment: "production",
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
+      "deployEnvironment must be production; observed unset",
+    );
+  });
+
+  test("commit-only probes still accept a web version marker without a deployment environment", async () => {
+    const result = await probe({
+      expectedEnvironment: undefined,
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode, result.stderr).toBe(0);
+  });
+
+  test("staging readiness verification forwards its configured edge access header", async () => {
+    const result = await probe({
+      expectedEnvironment: "staging",
+      reportedEnvironment: "staging",
+      edgeHeaderValue: "fixture-access-token",
+    });
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(result.stdout).not.toContain("fixture-access-token");
+  });
+
+  test("unknown deployment target configuration is refused", async () => {
+    const result = await probe({
+      expectedEnvironment: "prod",
+      reportedEnvironment: "production",
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "API_DEPLOYMENT_EXPECTED_ENVIRONMENT must be production or staging",
+    );
+  });
+});
+
+test("hosted promotion API probes declare their deployment environment", () => {
+  for (const [file, target, apiUrl] of [
+    ["release.yml", "production", "https://api.stll.app"],
+    ["deploy-staging.yml", "staging", "https://api-staging.stll.app"],
+  ] as const) {
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const probes = workflowSteps(workflow, file).filter(
+      ({ run }) =>
+        run.includes("check-api-deployment.ts") ||
+        run.includes("staging-proof-readiness-cli.ts"),
+    );
+    const apiProbe = probes.find(
+      ({ env }) => (env["API_DEPLOYMENT_URL"] ?? env["E2E_API_URL"]) === apiUrl,
+    );
+    expect(apiProbe, target).toBeDefined();
+    if (target === "staging") {
+      expect(apiProbe?.run).toContain('staging-proof-readiness-cli.ts" wait');
+      expect(apiProbe?.env["EXPECTED_COMMIT"]).toBe(
+        `\${{ needs.resolve.outputs.sha }}`,
+      );
+      continue;
+    }
+    expect(apiProbe?.env["API_DEPLOYMENT_PROBE_PATH"], target).toBe("ready");
+    expect(apiProbe?.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"], target).toBe(
+      target,
+    );
+    for (const probe of probes.filter(
+      ({ env }) => env["API_DEPLOYMENT_PROBE_PATH"] === "version.json",
+    )) {
+      expect(probe.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"]).toBeUndefined();
+    }
+  }
 });

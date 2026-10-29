@@ -94,6 +94,7 @@ const INTERNAL_MODULE_MOCK_LEDGER_REL =
 // legacy site.
 const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
   "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
   "apps/api/src/db/sql-client.ts",
   "apps/api/src/lib/email/sns-queue-drain.ts",
 ]);

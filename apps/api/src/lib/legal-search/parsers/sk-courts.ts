@@ -577,6 +577,50 @@ const boldInline = (text: string): Inline[] => [
 
 type Section = SkDocumentSection;
 
+type AppendDecisionTitleOptions = {
+  blocks: Block[];
+  line: PdfLine;
+  makeId: () => string;
+  makeAnchor: (anchor: string) => string;
+};
+
+const appendDecisionTitle = ({
+  blocks,
+  line,
+  makeId,
+  makeAnchor,
+}: AppendDecisionTitleOptions): void => {
+  const previous = blocks.at(-1);
+  if (previous?.type === "heading" && previous.role === "decision-title") {
+    previous.plainText += ` ${line.text}`;
+    previous.inlines.push(
+      { type: "text", text: " " },
+      ...segmentsToInlines(line.segments),
+    );
+    return;
+  }
+  blocks.push({
+    id: makeId(),
+    anchorId: makeAnchor("h-title"),
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: segmentsToInlines(line.segments),
+    plainText: line.text,
+  });
+};
+
+const createSectionAnchorGenerator = (blocks: readonly Block[]) => {
+  const seen = new Set<string>();
+  return (anchor: string): string => {
+    if (seen.has(anchor)) {
+      return `${anchor}-${blocks.length + 1}`;
+    }
+    seen.add(anchor);
+    return anchor;
+  };
+};
+
 /**
  * Classify extracted PDF lines into AST blocks.
  *
@@ -587,6 +631,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
   const makeId = createIdGenerator();
   let blockCount = 0;
   const blocks: Block[] = [];
+  const makeAnchor = createSectionAnchorGenerator(blocks);
   let section: Section = "preamble";
 
   for (const line of lines) {
@@ -597,15 +642,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section === "preamble" &&
       (fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(text))
     ) {
-      blocks.push({
-        id: makeId(),
-        anchorId: "h-title",
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines: segmentsToInlines(line.segments),
-        plainText: text,
-      });
+      appendDecisionTitle({ blocks, line, makeId, makeAnchor });
       continue;
     }
 
@@ -614,7 +651,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "holding";
       blocks.push({
         id: makeId(),
-        anchorId: "h-holding",
+        anchorId: makeAnchor("h-holding"),
         type: "heading",
         level: 2,
         role: "section-heading",
@@ -628,7 +665,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "reasoning";
       blocks.push({
         id: makeId(),
-        anchorId: "h-reasoning",
+        anchorId: makeAnchor("h-reasoning"),
         type: "heading",
         level: 2,
         role: "section-heading",
@@ -644,7 +681,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       if (isStandalone) {
         blocks.push({
           id: makeId(),
-          anchorId: "h-instruction",
+          anchorId: makeAnchor("h-instruction"),
           type: "heading",
           level: 2,
           role: "section-heading",

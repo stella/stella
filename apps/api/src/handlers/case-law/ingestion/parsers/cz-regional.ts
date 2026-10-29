@@ -32,6 +32,11 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import {
+  continuesAcrossPageBreak,
+  isRunningHeaderLine,
+  withoutSoftHyphens,
+} from "@/api/lib/legal-search/parsers/page-furniture";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 
@@ -94,21 +99,31 @@ export const parseRegionalDecision = (
     paragraphs: FinaldocParagraph[],
     fallbackText: string,
   ) => {
-    const content = paragraphs
-      .map((para) => toInlines(para, styleMap))
-      .filter(({ plainText }) => plainText.length > 0);
+    const content = withoutPageFurniture(
+      paragraphs
+        .map((para) => toInlines(para, styleMap))
+        .filter(({ plainText }) => plainText.length > 0),
+    );
     if (content.length > 0 || !fallbackText.trim()) {
       return content;
     }
-    return [
-      { inlines: textInline(fallbackText), plainText: fallbackText.trim() },
-    ];
+    return withoutPageFurniture(
+      fallbackText
+        .split(/\r?\n/u)
+        .map((plainText) => ({
+          inlines: textInline(plainText),
+          plainText: plainText.trim(),
+        }))
+        .filter(({ plainText }) => plainText.length > 0),
+    );
   };
+  const header = sectionContent(input.header, "");
   const verdict = sectionContent(input.verdict, input.verdictText);
   const justification = sectionContent(
     input.justification,
     input.justificationText,
   );
+  const information = sectionContent(input.information, "");
 
   const blocks: Block[] = [];
   let blockIndex = 0;
@@ -122,7 +137,11 @@ export const parseRegionalDecision = (
     usnesení: "USNESENÍ",
     "trestní příkaz": "TRESTNÍ PŘÍKAZ",
   };
-  const title = titleMap[input.decisionType ?? ""];
+  // The court's own title line, where the header prints one, is the title;
+  // a synthesized one beside it would print the title twice.
+  const title = header.some(({ plainText }) => isDecisionTypeTitle(plainText))
+    ? undefined
+    : titleMap[input.decisionType ?? ""];
   if (title) {
     blockIndex += 1;
     blocks.push({
@@ -137,21 +156,29 @@ export const parseRegionalDecision = (
   }
 
   // ── Header (intro) ───────────────────────────────────
-  for (const para of input.header) {
-    const { inlines, plainText } = toInlines(para, styleMap);
-    if (!plainText) {
-      continue;
-    }
-
+  for (const { inlines, plainText } of header) {
     blockIndex += 1;
-    blocks.push({
-      id: makeBlockId(),
-      anchorId: `p-${blockIndex}`,
-      type: "paragraph",
-      role: "intro",
-      inlines,
-      plainText,
-    });
+    blocks.push(
+      isDecisionTypeTitle(plainText) ||
+        compactTitle(plainText) === IN_THE_NAME_OF_THE_REPUBLIC
+        ? {
+            id: makeBlockId(),
+            anchorId: `h-${blockIndex}`,
+            type: "heading",
+            level: 1,
+            role: "decision-title",
+            inlines,
+            plainText,
+          }
+        : {
+            id: makeBlockId(),
+            anchorId: `p-${blockIndex}`,
+            type: "paragraph",
+            role: "intro",
+            inlines,
+            plainText,
+          },
+    );
   }
 
   // ── Verdict (ruling items) ───────────────────────────
@@ -218,12 +245,7 @@ export const parseRegionalDecision = (
       plainText: "Poučení:",
     });
 
-    for (const para of input.information) {
-      const { inlines, plainText } = toInlines(para, styleMap);
-      if (!plainText) {
-        continue;
-      }
-
+    for (const { inlines, plainText } of information) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -271,6 +293,119 @@ export const parseRegionalDecision = (
 
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
+/** The decision types a header prints as its title line. */
+const DECISION_TYPE_TITLES = [
+  "ROZSUDEK",
+  "USNESENÍ",
+  "TRESTNÍ PŘÍKAZ",
+  "PLATEBNÍ ROZKAZ",
+  "ELEKTRONICKÝ PLATEBNÍ ROZKAZ",
+  "EVROPSKÝ PLATEBNÍ ROZKAZ",
+  "SMĚNEČNÝ PLATEBNÍ ROZKAZ",
+  "ŠEKOVÝ PLATEBNÍ ROZKAZ",
+] as const;
+
+/** A title line's letters, whatever the spacing: "R O Z S U D E K". */
+const compactTitle = (text: string): string =>
+  text.toLocaleUpperCase("cs-CZ").replace(/\s+/gu, "");
+
+const COMPACT_DECISION_TYPE_TITLES: ReadonlySet<string> = new Set(
+  DECISION_TYPE_TITLES.map(compactTitle),
+);
+
+const IN_THE_NAME_OF_THE_REPUBLIC = compactTitle("JMÉNEM REPUBLIKY");
+
+const isDecisionTypeTitle = (text: string): boolean =>
+  COMPACT_DECISION_TYPE_TITLES.has(compactTitle(text));
+
+type SectionParagraph = { inlines: Inline[]; plainText: string };
+
+/**
+ * A section's paragraphs without the running headers ("pokračování -3- sp.
+ * zn. 9 C 191/2025") the publisher keeps where a page broke, and with the
+ * sentence the page break cut read as one paragraph again.
+ */
+const withoutPageFurniture = (
+  paragraphs: readonly SectionParagraph[],
+): SectionParagraph[] => {
+  const kept: SectionParagraph[] = [];
+  let afterPageBreak = false;
+  for (const paragraph of paragraphs) {
+    if (isRunningHeaderLine(paragraph.plainText)) {
+      afterPageBreak = true;
+      continue;
+    }
+    const previous = kept.at(-1);
+    if (
+      afterPageBreak &&
+      previous !== undefined &&
+      continuesAcrossPageBreak(previous.plainText, paragraph.plainText)
+    ) {
+      previous.inlines.push({ type: "text", text: " " }, ...paragraph.inlines);
+      previous.plainText = `${previous.plainText} ${paragraph.plainText}`;
+    } else {
+      kept.push(paragraph);
+    }
+    afterPageBreak = false;
+  }
+  return kept;
+};
+
+const OPENING_QUOTE = "„";
+const SPACE_RE = /^[ \t ]$/u;
+const VISIBLE_RE = /^\S$/u;
+/** What a quotation may open right after, with no space between. */
+const OPENS_BEFORE_QUOTE_RE = /^[\s([{/]$/u;
+
+/**
+ * The paragraph's span texts as the court printed them.
+ *
+ * The publisher's conversion moves the space before an opening quotation
+ * mark inside it ("nazvané„ Dálnice", "(„ oprava“)"). Czech typography never
+ * spaces the inside of a quotation, so the space goes back before the mark,
+ * or away where the mark follows a bracket or opens the paragraph. The repair
+ * reads the paragraph's whole text, because the mark and the word it quotes
+ * can sit in different spans ("též„ " before an anonymised name), and each
+ * character stays in the span it came from.
+ */
+type SpanTextRun = { text: string; span: TextSpan };
+
+const spanTexts = (spans: readonly TextSpan[]): SpanTextRun[] => {
+  const chars = spans.flatMap((span) =>
+    Array.from(withoutSoftHyphens(span.text), (char) => ({ char, span })),
+  );
+  for (let index = 0; index < chars.length; index++) {
+    const quote = chars[index];
+    const space = chars[index + 1];
+    if (
+      quote?.char !== OPENING_QUOTE ||
+      space === undefined ||
+      !SPACE_RE.test(space.char) ||
+      !VISIBLE_RE.test(chars[index + 2]?.char ?? "")
+    ) {
+      continue;
+    }
+    const before = chars[index - 1]?.char;
+    if (before === undefined || OPENS_BEFORE_QUOTE_RE.test(before)) {
+      chars.splice(index + 1, 1);
+      continue;
+    }
+    chars[index] = space;
+    chars[index + 1] = quote;
+    index += 1;
+  }
+  const runs: SpanTextRun[] = [];
+  for (const { char, span } of chars) {
+    const previous = runs.at(-1);
+    if (previous?.span === span) {
+      previous.text += char;
+    } else {
+      runs.push({ text: char, span });
+    }
+  }
+  return runs;
+};
+
 /** Convert a finaldoc paragraph to Inline nodes. */
 const toInlines = (
   para: FinaldocParagraph,
@@ -279,17 +414,18 @@ const toInlines = (
   const style = styleMap.get(para.styleLocalId);
   const inlines: Inline[] = [];
   let plain = "";
+  const texts = spanTexts(para.texts);
 
-  for (const span of para.texts) {
-    if (!span.text) {
+  for (const { text, span } of texts) {
+    if (!text) {
       continue;
     }
-    plain += span.text;
+    plain += text;
 
     const isAnon = span.anonStyle === "ANON";
     const node: Inline = isAnon
-      ? { type: "text", text: span.text, anonymized: true }
-      : { type: "text", text: span.text };
+      ? { type: "text", text, anonymized: true }
+      : { type: "text", text };
 
     if (style?.bold && style.italic) {
       inlines.push({
