@@ -3408,7 +3408,8 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
-const createAuthDatabases = (
+/** Membership-scoped handles for one credential member's request authority. */
+export const createAuthDatabases = (
   databaseIdentity: Parameters<
     typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
   >[1],
@@ -3498,6 +3499,8 @@ type ResolvedIdentity = {
   originConsentId: string | null;
   /** Keeps a stream authorized when no browser session backs the request. */
   stream?: SseStreamBinding;
+  /** The scopes an app's access token was granted; absent for a session. */
+  grantedScopes?: readonly string[];
   organizationId: SafeId<"organization">;
   authorization: { role: MemberRole } & Pick<
     MemberAuthorization,
@@ -3657,6 +3660,7 @@ const resolveAccessTokenIdentity = async ({
       sessionId: `oauth-client:${tokenSession.clientId}`,
       // An app's token is never a handoff session.
       originConsentId: null,
+      grantedScopes: tokenSession.scopes,
       // An event stream holds while this token still authenticates on the
       // membership it was issued under: a genuine rejection ends it, an
       // outage leaves it to the next sweep.
@@ -3722,6 +3726,7 @@ const resolveValidateAuth = async ({
     originConsentId,
     sessionId,
     stream,
+    grantedScopes,
     userId,
   } = resolved.identity;
   // A signed-in account uses the product only once it has accepted the
@@ -3762,12 +3767,6 @@ const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
   // membership lookup for the lifetime of this request's transactions. This
@@ -3875,6 +3874,7 @@ const resolveValidateAuth = async ({
       activeOrganizationId,
       originConsentId,
       ...(stream === undefined ? {} : { stream }),
+      ...(grantedScopes === undefined ? {} : { grantedScopes }),
     },
     getActiveWorkspaceIds,
     getAccessibleWorkspaces,
@@ -3884,10 +3884,7 @@ const resolveValidateAuth = async ({
     safeDb,
     memberRole,
     featureAccessSnapshot,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
+    ...orgSettings,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: (opts) =>
       createAuditRecorder({

@@ -13,16 +13,32 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const todayIn = (timezoneId: string) =>
   Temporal.Now.plainDateISO(timezoneId).toString();
 
 export const Route = createFileRoute("/_protected/time_/approvals")({
   validateSearch: timeApprovalsSearchSchema,
+  staticData: {
+    presentation: routePresentation(
+      {
+        type: "label",
+        labelKey: "billing.approval.title",
+        to: "/time/approvals",
+      },
+      {
+        type: "label",
+        labelKey: "billing.timesheets",
+        to: "/time",
+      },
+    ),
+  },
   loaderDeps: ({ search }) => ({
     date: search.date,
     member: search.member,
@@ -59,6 +75,7 @@ export const Route = createFileRoute("/_protected/time_/approvals")({
       ),
     );
   },
+  head: () => ({ meta: [{ title: pageTitle("billing.approval.title") }] }),
   pendingComponent: TimeApprovalsPending,
   component: TimeApprovalsRoute,
 });

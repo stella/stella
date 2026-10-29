@@ -113,7 +113,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
+import { APIError, isCancellation } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
@@ -131,7 +131,10 @@ import {
   openReaderAnswerFromMark,
   readerAnswerAnchors,
 } from "./reader-answer-navigation";
-import { readerAnswerFailureKind } from "./reader-answers.logic";
+import {
+  ReaderAnswerFailure,
+  readerAnswerFailureKind,
+} from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 import { useReaderAnswers } from "./use-reader-answers";
 
@@ -300,7 +303,16 @@ export const ReaderStatusNotices = ({
       } else if (kind === "timeout") {
         fallback = t("readerAnswers.timeoutError");
       }
-      notifyUserError(error, fallback);
+      notifyUserError(
+        kind === "network" && isCancellation(error)
+          ? new ReaderAnswerFailure({
+              kind: "request",
+              message: "Reader answer request failed",
+              cause: error,
+            })
+          : error,
+        fallback,
+      );
     }
     if (
       foreignDecisionError !== null &&

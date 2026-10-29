@@ -73,6 +73,13 @@ export type ApiError<TResponses> = [ErrorKey<TResponses>] extends [never]
       };
     }[ErrorKey<TResponses>];
 
+export type ApiTransportError = {
+  readonly kind: "network" | "timeout" | "aborted";
+  readonly cause: unknown;
+  readonly status: 0;
+  readonly value: null;
+};
+
 /** What every request resolves to: the decoded answer, or the refusal. */
 export type ApiResult<TResponses> =
   | {
@@ -84,7 +91,7 @@ export type ApiResult<TResponses> =
     }
   | {
       readonly data: null;
-      readonly error: ApiError<TResponses>;
+      readonly error: ApiError<TResponses> | ApiTransportError;
       readonly status: number;
       readonly response: Response;
       readonly headers: Headers;
@@ -426,9 +433,32 @@ const send = async (
 
   await config.options.onRequest?.(path, init);
   const url = `${config.origin}${path}${queryString(options.query)}`;
-  const response = await (config.options.fetcher === undefined
-    ? globalThis.fetch(url, init)
-    : config.options.fetcher(url, init));
+  const request = await Result.tryPromise({
+    try: async () =>
+      config.options.fetcher === undefined
+        ? globalThis.fetch(url, init)
+        : config.options.fetcher(url, init),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(request)) {
+    const cause = request.error;
+    const name = cause instanceof Error ? cause.name : undefined;
+    let kind: "network" | "timeout" | "aborted" = "network";
+    if (name === "AbortError") {
+      kind = "aborted";
+    } else if (name === "TimeoutError") {
+      kind = "timeout";
+    }
+    const response = Response.error();
+    return {
+      data: null,
+      error: { kind, cause, status: 0, value: null },
+      status: 0,
+      response,
+      headers: response.headers,
+    };
+  }
+  const response = request.value;
   await config.options.onScopedResponse?.({
     response,
     scope: {

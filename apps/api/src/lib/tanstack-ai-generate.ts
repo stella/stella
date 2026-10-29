@@ -1893,7 +1893,7 @@ export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
   credentials: ReturnType<
     typeof getManagedOpenRouterCredentialProvider
-  > = getManagedOpenRouterCredentialProvider(),
+  > = getManagedOpenRouterCredentialProvider(options.admission.modelTier),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the
@@ -1935,7 +1935,7 @@ export const resolveTanStackTextModel = async (
       if (Result.isError(availability)) {
         throw availability.error;
       }
-      const configuration = getManagedOpenRouterConfiguration();
+      const configuration = getManagedOpenRouterConfiguration(modelTier);
       const credential = await credentials.get();
       if (Result.isError(credential)) {
         throw credential.error;

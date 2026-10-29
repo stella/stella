@@ -18,10 +18,10 @@
  * Redaction. The court anonymizes by painting a run black on black:
  * `<span style="color: #000000; background-color: #000000; …">` over a run
  * of `&nbsp;`. The span carries no words, so nothing is being uncovered
- * here; what it carries is a bar as wide as what it replaced. Dropped
- * rather than kept, because those spaces are not text the decision states,
- * and marked anonymized, because a reader has to see that something stood
- * there.
+ * here; what it carries is a bar as wide as what it replaced. Replace it
+ * with a visible anonymization marker. Some conversions omit the paint
+ * and leave only the non-breaking
+ * space run; those gaps must become visible before whitespace is trimmed.
  */
 
 import { panic } from "better-result";
@@ -30,6 +30,7 @@ import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -75,6 +76,32 @@ import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
  * with two different words.
  */
 const SK_US_ANONYMIZED_PLACEHOLDER = "anonymizované";
+
+/** The shortest redaction run in the court's I. ÚS 442/2020 conversion. */
+const REDACTION_GAP = /(\u00a0{4,})/u;
+
+/** Retain unpainted redaction gaps, including lines containing only a gap. */
+const preserveRedactionGaps = (inlines: readonly Inline[]): Inline[] =>
+  inlines.flatMap((inline): Inline[] => {
+    if (hasInlineChildren(inline)) {
+      return [{ ...inline, children: preserveRedactionGaps(inline.children) }];
+    }
+    if (inline.type !== "text") {
+      return [inline];
+    }
+    return inline.text
+      .split(REDACTION_GAP)
+      .filter((text) => text.length > 0)
+      .map((text) =>
+        REDACTION_GAP.test(text)
+          ? {
+              type: "text",
+              text: SK_US_ANONYMIZED_PLACEHOLDER,
+              anonymized: true,
+            }
+          : { ...inline, text },
+      );
+  });
 
 /** The declaration that paints a run the colour of its own background. */
 const HIDDEN_STYLE_PARTS = ["color: #000000", "background-color: #000000"];
@@ -220,7 +247,7 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
   // lines reads the same through either: the reader's text, and the text
   // left once a court number is cut off the inlines.
   for (const line of lines) {
-    setInlines(line, line.inlines);
+    setInlines(line, preserveRedactionGaps(line.inlines));
   }
   return lines;
 };

@@ -72,7 +72,7 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/knowledge/-components/category-sidebar";
@@ -136,7 +136,7 @@ export const TemplateList = ({
 
   const discover = async (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
 
@@ -164,7 +164,7 @@ export const TemplateList = ({
 
     const { data } = response;
     if (data instanceof Response) {
-      notifyUserError(undefined, t("templates.discoveryFailed"));
+      notifyUserProblem(t("templates.discoveryFailed"));
       return;
     }
 
@@ -173,7 +173,7 @@ export const TemplateList = ({
 
   const dropFile = (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     // Errors are surfaced as toasts inside discover
@@ -343,7 +343,7 @@ const MemberTemplateRow = ({
   const downloadSource = async () => {
     const sourceUrl = await templateActions.readSourceUrl(template.id);
     if (sourceUrl === null) {
-      notifyUserError(undefined, t("common.unexpectedError"));
+      notifyUserProblem(t("common.unexpectedError"));
       return;
     }
     openIsolatedWindow(sourceUrl);

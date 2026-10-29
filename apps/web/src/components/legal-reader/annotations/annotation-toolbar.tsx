@@ -44,7 +44,10 @@ import {
   MarkStyleButtons,
   MarkVisibilityToggle,
 } from "@/components/selection-toolbar-marks";
-import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
+import {
+  scrollMovesSelection,
+  selectionToolbarAnchor,
+} from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -398,6 +401,11 @@ export const AnnotationToolbar = ({
       }
     };
     const onViewportChange = () => readSelection();
+    const onScroll = (event: Event) => {
+      if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
+        readSelection();
+      }
+    };
     // Dragging selected words carries the passage with the document it came
     // from, so a drop on the chat composer lands as chips where the corpus
     // offers a reference for it.
@@ -420,7 +428,7 @@ export const AnnotationToolbar = ({
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
     ownerDoc.addEventListener("pointerup", onPointerEnd);
-    ownerDoc.addEventListener("scroll", onViewportChange, true);
+    ownerDoc.addEventListener("scroll", onScroll, true);
     ownerDoc.defaultView?.addEventListener("resize", onViewportChange);
     const observer = new ResizeObserver(onViewportChange);
     observer.observe(root);
@@ -435,7 +443,7 @@ export const AnnotationToolbar = ({
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
       ownerDoc.removeEventListener("pointerup", onPointerEnd);
-      ownerDoc.removeEventListener("scroll", onViewportChange, true);
+      ownerDoc.removeEventListener("scroll", onScroll, true);
       ownerDoc.defaultView?.removeEventListener("resize", onViewportChange);
       root.removeEventListener("click", onClick);
       root.removeEventListener("dragstart", onDragStart);

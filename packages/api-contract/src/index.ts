@@ -45,6 +45,7 @@ export {
   BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   parseBrowserControlCommand,
@@ -58,6 +59,7 @@ export type {
   BrowserControlErrorCode,
   BrowserControlResult,
   BrowserControlSnapshot,
+  BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
 } from "./browser-control";
@@ -221,6 +223,7 @@ export {
   CONTACT_IMPORT_SCHEMA_VERSION,
   CONTACT_IMPORT_TARGET_FIELDS,
   CONTACT_IMPORT_TAX_ID_SCHEMES,
+  CONTACT_IMPORT_WARNING_CODE,
   parseContactImportMapping,
 } from "./contact-import";
 export type {
@@ -231,6 +234,7 @@ export type {
   ContactImportMappingParseResult,
   ContactImportTargetField,
   ContactImportTaxIdScheme,
+  ContactImportWarningCode,
 } from "./contact-import";
 export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -1004,6 +1008,10 @@ export {
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,

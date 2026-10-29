@@ -672,9 +672,18 @@ describe("reader answer turn lifecycle", () => {
     { reason: "busy", code: ACTION_ADMISSION_CODES.concurrencyBusy },
     { reason: "not_enabled", code: ACTION_ADMISSION_CODES.notEnabled },
     {
-      reason: "unavailable",
-      code: ACTION_ADMISSION_CODES.admissionUnavailable,
+      reason: "store_unavailable",
+      code: ACTION_ADMISSION_CODES.storeUnavailable,
     },
+    {
+      reason: "configuration_incomplete",
+      code: ACTION_ADMISSION_CODES.configurationIncomplete,
+    },
+    {
+      reason: "organization_state_unreadable",
+      code: ACTION_ADMISSION_CODES.organizationStateUnreadable,
+    },
+    { reason: "lease_lost", code: ACTION_ADMISSION_CODES.leaseLost },
   ] as const)(
     "admission $reason persists its precise recovery code on stream and reload",
     async ({ reason, code }) => {
@@ -720,6 +729,28 @@ describe("reader answer turn lifecycle", () => {
       });
     },
   );
+
+  test("an unclassified admission failure persists an internal error without claiming a store outage", async () => {
+    const prepared = await create();
+    const { text } = await complete(prepared, {
+      admitModelAction: async () => {
+        throw new HandlerError({
+          status: 500,
+          code: "internal_error",
+          message: "Admission failed",
+        });
+      },
+    });
+    expect(terminalEvents(text).at(0)?.errorCode).toBe("internal");
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+    expect(await reload(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+  });
 
   test("model failures settle streaming messages as failed", async () => {
     const prepared = await create();
