@@ -58,10 +58,8 @@ import {
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import {
-  SITEMAP_REFRESH_PAGE_SIZE,
-  sitemapRefreshPageSql,
-} from "@/api/lib/case-law/sitemap-shard-refresh";
+import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
+import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
@@ -274,29 +272,24 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.docket-family-key-identity"],
   },
   {
-    id: "case-law.sitemap-refresh",
-    class: "page",
+    id: "case-law.sitemap-month-count",
+    class: "aggregate",
     role: "root",
-    // A resumed page, so the plan covers the row comparison on the index keys.
     build: () =>
-      sitemapRefreshPageSql({
+      sitemapMonthCountSql({
         country: QUERY_PLAN_SAMPLE.caseLaw.country,
-        cursor: {
-          decisionDate: "2010-02-01",
-          id: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
-          sourceId: "00000000-0000-0000-0000-000000000000",
-          updatedAt: "2020-01-01T00:00:00Z",
-        },
-        pageSize: SITEMAP_REFRESH_PAGE_SIZE,
-        phase: "dated",
+        year: "2010",
+        month: "02",
       }),
     seed: "case-law",
     planMode: "covering-index",
     heapFetchMitigation: {
-      type: "batched",
-      pageSize: SITEMAP_REFRESH_PAGE_SIZE,
+      type: "heapFetchBudget",
+      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      reason:
+        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
     },
-    contract: planContracts["case-law.sitemap-refresh"],
+    contract: planContracts["case-law.sitemap-month-count"],
   },
   {
     // A resumed page. Its generic plan is checked in the backfill's own test.

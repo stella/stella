@@ -1464,6 +1464,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_TEAM_ID",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
+  "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
@@ -1500,6 +1501,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  "UI_PLAYGROUND_CHANGED_PATHS",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",

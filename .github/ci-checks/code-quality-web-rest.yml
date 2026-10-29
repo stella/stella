@@ -102,6 +102,15 @@ checks:
       bun test scripts/db-await-in-loop.test.ts
       bun run check:db-await-in-loop
 
+  - name: Online unique index dependency guard
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Validates the current online index declarations and source dependencies."
+    run: |
+      bun test ./scripts/check-online-index-dependencies.test.ts
+      bun run check:online-index-dependencies
+
   - name: API timeout mutation guard
     if: ${{ !cancelled() }}
     env:

@@ -24,6 +24,18 @@
       "p95Seconds": 5,
       "p99Seconds": 5
     },
+    "Web raw JSON API census self-test": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
+    "Web raw JSON API census": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
     "Test subject reachability census": {
       "minutes": 18,
       "samples": 19,
@@ -1011,6 +1023,10 @@
       "samples": 19,
       "p95Seconds": 134,
       "p99Seconds": 134
+    },
+    "Online unique index dependency guard": {
+      "minutes": 30,
+      "samples": 0
     },
     "API timeout mutation guard": {
       "minutes": 5,

@@ -136,6 +136,9 @@ jobs:
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_durations_hash: ${{ steps.postgres-test-durations.outputs.hash }}
+      # `i/n` matrix values sized from measured durations; n is this run's own.
+      postgres_shards: ${{ steps.postgres-shards.outputs.postgres_shards || '["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8"]' }}
+      postgres_shard_count: ${{ steps.postgres-shards.outputs.postgres_shard_count || '8' }}
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
@@ -214,6 +217,7 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
+      ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -221,7 +225,7 @@ jobs:
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && steps.changed-files.outputs.ci_browser_scope_required == 'true'
-        && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
+        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]'))
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
         || (github.event_name == 'merge_group'
@@ -994,6 +998,25 @@ jobs:
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: bun scripts/ci-plan-scope.ts
 
+      - name: Plan UI playground geometry specs
+        id: ui-playground-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          UI_PLAYGROUND_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
+            echo "::warning::Changed files are unknown; running every geometry spec."
+            specs=""
+          else
+            specs=$(bun scripts/ui-playground-selection.ts) || specs=""
+          fi
+          if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
+            [[ "$SCOPE_UNKNOWN" == "true" ]] || echo "::warning::UI playground selection failed; running every geometry spec."
+            specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          fi
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+
       - name: Plan query performance scope
         id: query-perf-scope
         if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
@@ -1248,6 +1271,26 @@ jobs:
           overwrite: true
           retention-days: 1
           if-no-files-found: ignore
+
+      # The shard count follows the durations the shards verify: growth adds
+      # a shard, and a projection over budget at the maximum is a warning.
+      # Without the planner the maximum count stands in; time never fails.
+      - name: Plan Postgres test shards
+        id: postgres-shards
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && inputs.pr_depth_only != true
+          && steps.changed-files.outputs.postgres_suites_required == 'true'
+          && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on')
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-postgres-shard-plan.ts; then
+            echo '::warning::Postgres shard planning unavailable; using the maximum shard count.'
+            {
+              echo 'postgres_shards=["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8"]'
+              echo 'postgres_shard_count=8'
+            } >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select changed PR e2e shards
         id: e2e-pr-selection
@@ -3271,7 +3314,9 @@ jobs:
       matrix:
         # The UI playground suite runs alone in six Playwright shards: on one
         # runner its dev-server page loads made it the longest merge-group job.
-        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3","playground-4","playground-5","playground-6"]') }}
+        # A pull request runs only its selected geometry specs on one
+        # unsharded `playground` leg.
+        suite: ${{ github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["desktop","playground"]') || github.event_name == 'pull_request' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["playground"]') || github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3","playground-4","playground-5","playground-6"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3298,13 +3343,18 @@ jobs:
         run: echo "required=$REQUIRED" >> "$GITHUB_OUTPUT"
 
       - name: Check UI browser test scope
-        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
         run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            [[ "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
@@ -3436,7 +3486,8 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Test UI browser interactions
-        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        # On a pull request the UI leg runs only the selected playground specs.
+        if: matrix.suite == 'ui' && github.event_name != 'pull_request' && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
         run: bun --filter @stll/ui test:browser
@@ -3459,12 +3510,20 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: (matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
+        if: (matrix.suite == 'playground' || matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
           SUITE: ${{ matrix.suite }}
+          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
         run: |
           cd apps/web
+          if [[ "$SUITE" == playground ]]; then
+            # Selected specs are repository paths; Playwright matches them
+            # against each test file's absolute path.
+            mapfile -t specs < <(bun -e 'for (const spec of JSON.parse(process.env.SELECTED_SPECS ?? "[]")) console.log(spec)')
+            bun run test:e2e:ui-playground "${specs[@]}"
+            exit 0
+          fi
           bun run test:e2e:ui-playground --shard="${SUITE#playground-}/6"
 
       - name: Test extension browser boundary
@@ -3800,7 +3859,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # ci-plan sizes n from measured durations; each value is `i/n`, so
+        # every shard job name records the n its run planned.
+        shard: ${{ fromJSON(needs.ci-plan.outputs.postgres_shards) }}
     permissions:
       contents: read
       packages: read
@@ -3913,7 +3974,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: bun-install-${{ github.job }}-${{ matrix.shard }}
+          name: bun-install-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
@@ -3964,7 +4025,7 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
-          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/3
+          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -3993,7 +4054,7 @@ jobs:
         if: ${{ !cancelled() && steps.postgres-tests.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: postgres-test-timings-${{ matrix.shard }}
+          name: postgres-test-timings-${{ strategy.job-index }}
           path: ${{ runner.temp }}/postgres-test-timings/*.json
           retention-days: 1
           if-no-files-found: warn
