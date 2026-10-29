@@ -1,7 +1,11 @@
-import type { Page, Route } from "@playwright/test";
+import type { Page, Request, Response, Route } from "@playwright/test";
 import { panic } from "better-result";
 
 import { apiStatus, apiUploadDocx } from "../helpers/api";
+import {
+  isNon2xxStatus,
+  networkRequestLabel,
+} from "../helpers/scenario-diagnostics";
 import { expect, test } from "../helpers/test";
 import {
   createTestWorkspace,
@@ -20,6 +24,17 @@ type HandoffBody = {
   fieldId: string;
   propertyId: string;
 };
+
+type ScenarioDiagnostics = {
+  failedRequests: string[];
+  non2xxResponses: string[];
+};
+
+const requestLabel = (request: Request): string =>
+  networkRequestLabel(request.method(), request.url());
+
+const responseLabel = (response: Response): string =>
+  `${String(response.status())} ${requestLabel(response.request())}`;
 
 const buildMultiPagePdf = (): Buffer => {
   const pageOne = "BT /F1 18 Tf 72 720 Td (First page) Tj ET";
@@ -91,12 +106,40 @@ const organizerSignControl = (page: Page) =>
 
 test.describe("PDF save and sign on the document route", () => {
   let workspace: TestWorkspace | null = null;
+  let diagnostics: ScenarioDiagnostics = {
+    failedRequests: [],
+    non2xxResponses: [],
+  };
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
+    diagnostics = { failedRequests: [], non2xxResponses: [] };
+    page.on("requestfailed", (failedRequest) => {
+      diagnostics.failedRequests.push(
+        `${requestLabel(failedRequest)}: ${failedRequest.failure()?.errorText ?? "unknown failure"}`,
+      );
+    });
+    page.on("response", (response) => {
+      if (isNon2xxStatus(response.status())) {
+        diagnostics.non2xxResponses.push(responseLabel(response));
+      }
+    });
     workspace = await createTestWorkspace(request, "pdf-save-and-sign");
   });
 
-  test.afterEach(async ({ page, request }, testInfo) => {
+  test.afterEach(async ({ browserErrors, page, request }, testInfo) => {
+    await testInfo.attach("save-and-sign-browser-diagnostics.json", {
+      body: Buffer.from(
+        JSON.stringify(
+          {
+            consoleErrors: browserErrors.entries(),
+            ...diagnostics,
+          },
+          null,
+          2,
+        ),
+      ),
+      contentType: "application/json",
+    });
     if (workspace === null) {
       return;
     }
@@ -187,6 +230,29 @@ test.describe("PDF save and sign on the document route", () => {
     expect(page.url()).toContain(
       `field=${handoffs.requests[0]?.fieldId ?? ""}`,
     );
+  });
+
+  test("saving page edits creates and opens a new current version", async ({
+    page,
+    request,
+  }) => {
+    const { originalFieldId } = await openDocument(page, request);
+
+    await openOrganizer(page);
+    await rotateFirstPage(page);
+    await page.getByRole("button", { name: "Save version" }).click();
+
+    await expect(
+      page.getByText("Version saved", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("list", { name: "PDF pages" })).toBeHidden();
+    await expect(page).not.toHaveURL(
+      new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),
+    );
+    await page.getByRole("button", { name: "Version history" }).click();
+    await expect(
+      page.getByRole("button", { name: /v2\s+Current/u }),
+    ).toBeVisible();
   });
 
   test("switching versions revokes a held handoff", async ({
