@@ -3,10 +3,10 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import {
   buildInvoiceExportFile,
   INVOICE_EXPORT_FORMATS,

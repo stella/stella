@@ -1618,6 +1618,12 @@
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
     "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
+      "dismiss": "Verbindungshinweis ausblenden",
+      "stoppedWorking": "Ihre Verbindung zu <name>{server}</name> funktioniert nicht mehr.",
+      "waitingApproval": "Ihre Verbindung zu <name>{server}</name> wartet auf Genehmigung."
+    },
     "mention": {
       "category": {
         "entities": "In dieser Akte",

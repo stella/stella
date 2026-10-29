@@ -1618,6 +1618,12 @@
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# további} other {+# további}}",
+      "dismiss": "Kapcsolódási értesítés elrejtése",
+      "stoppedWorking": "A(z) <name>{server}</name> szolgáltatáshoz való kapcsolódás nem működik.",
+      "waitingApproval": "A(z) <name>{server}</name> szolgáltatáshoz való kapcsolódás jóváhagyásra vár."
+    },
     "mention": {
       "category": {
         "entities": "Ebben az ügyben",

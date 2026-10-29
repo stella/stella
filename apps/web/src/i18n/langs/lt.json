@@ -1618,6 +1618,12 @@
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kitas} few {+# kiti} many {+# kito} other {+# kitų}}",
+      "dismiss": "Slėpti pranešimą apie ryšį",
+      "stoppedWorking": "Jūsų ryšys su <name>{server}</name> nustojo veikti.",
+      "waitingApproval": "Jūsų ryšys su <name>{server}</name> laukia patvirtinimo."
+    },
     "mention": {
       "category": {
         "entities": "Šioje byloje",

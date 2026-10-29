@@ -1039,6 +1039,15 @@ checks:
       bash scripts/create-release-manifest.test.sh
       bash scripts/promote-desktop-release.test.sh
 
+  - name: Test staging proof readiness
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: staging_proof
+    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test staging proof readiness')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_staging_proof != 'true') }}
+    run: |
+      bun test scripts/staging-proof-readiness.test.ts scripts/staging-proof-readiness-cli.test.ts scripts/staging-proof-workflow.test.ts scripts/staging-ecs-readiness.test.ts
+
   - name: Test documentation and landing CI scope
     env:
       CI_CHECK_KIND: STATIC

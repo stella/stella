@@ -2,11 +2,11 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import {
   invoiceDocumentError,
   invoicePdfFileName,

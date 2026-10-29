@@ -1618,6 +1618,12 @@
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# další} few {+# další} other {+# dalších}}",
+      "dismiss": "Skrýt upozornění na připojení",
+      "stoppedWorking": "Vaše připojení ke službě <name>{server}</name> přestalo fungovat.",
+      "waitingApproval": "Vaše připojení ke službě <name>{server}</name> čeká na schválení."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spisu",
