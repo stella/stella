@@ -46,8 +46,7 @@ export const planDecisionReviews = ({
   }
   const holding = sections
     .filter((section) => section.type === "ruling")
-    .map((section) => section.text)
-    .join("\n");
+    .map((section) => section.text);
   return planCzechAppealReviews({ header, holding, metadata }).map((review) => {
     const reference = readDecisionDocketReference(review.reviewedCaseNumber, {
       grammar: decisionDocketGrammarForJurisdiction("CZE"),

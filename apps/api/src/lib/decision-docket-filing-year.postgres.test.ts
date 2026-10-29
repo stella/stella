@@ -21,7 +21,7 @@ test("the committed SQL function is derived from the registered filing-year rule
   const migration = readFileSync(
     path.resolve(
       import.meta.dir,
-      "../../drizzle/20261028173100_czech_docket_long_sheets/migration.sql",
+      "../../drizzle/20261029094425_czech_docket_long_sheets/migration.sql",
     ),
     "utf-8",
   );

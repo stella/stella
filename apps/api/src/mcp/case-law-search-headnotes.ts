@@ -23,6 +23,41 @@ const omitHeadnotes = (page: SearchPage) => {
 /** Spend the page's text budget fairly, keeping shorter headnotes whole. */
 export const boundCaseLawSearchHeadnotes = (page: SearchPage) => {
   const { results: rows } = page;
+  // Review links share the page budget. Trim each direction in rounds across the page
+  // before allocating prose; truncation must not leave a firm incoming status.
+  const withoutHeadnotesSize = () =>
+    JSON.stringify({
+      ...page,
+      headnotes: "omitted",
+      results: rows.map((row) => ({ ...row, headnote: null })),
+    }).length;
+  while (withoutHeadnotesSize() > LIMITS.mcpCaseLawSearchPageMaxChars) {
+    let removed = false;
+    for (const row of rows) {
+      const evidence = row.appealReviews;
+      if (evidence.reviews.length > 0) {
+        evidence.reviews.pop();
+        evidence.reviewsTruncated = true;
+        removed = true;
+      }
+      if (evidence.reviewedBy.length === 0) {
+        continue;
+      }
+      evidence.reviewedBy.pop();
+      row.appealReviews = {
+        status: "unknown",
+        basis: evidence.basis,
+        reviewedBy: evidence.reviewedBy,
+        reviews: evidence.reviews,
+        reviewedByTruncated: true,
+        reviewsTruncated: evidence.reviewsTruncated,
+      };
+      removed = true;
+    }
+    if (!removed) {
+      break;
+    }
+  }
   const baseline = JSON.stringify({
     ...page,
     headnotes: "omitted",

@@ -279,6 +279,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
         readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
         readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readDecisionReviews: async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
         readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
         searchLegislationHandler: searchLegislationHandlerMock,
         resolveStatuteExpression: resolveStatuteExpressionMock,
@@ -1906,6 +1908,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         readGatedDecisionCitationsMock.mockResolvedValue({
           type: "page",
+          decisionId: toSafeId<"caseLawDecision">(uid(54)),
           page: {
             doctrineAvailability: "available",
             items: [

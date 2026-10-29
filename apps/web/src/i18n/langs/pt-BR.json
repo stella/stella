@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Resumo",
       "appealReviews": {
-        "conflict": "Os metadados do editor e o parágrafo inicial são conflitantes. O resultado da revisão precisa ser verificado.",
-        "corpusOnly": "Nenhum vínculo de revisão foi encontrado no corpus disponível. Isso não comprova a inexistência de recurso.",
-        "noneFound": "Nenhuma encontrada",
+        "conflict": "As informações sobre a revisão estão incompletas ou são contraditórias. O resultado precisa ser verificado.",
+        "corpusOnly": "Nenhuma decisão que revise esta decisão foi encontrada no acervo disponível. Isso não comprova que não exista recurso.",
+        "noneFound": "Nenhuma decisão de revisão encontrada",
         "overturned": "Anulada ou reformada",
         "partly": "Parcialmente anulada",
         "reviewedBy": "Decisões revisoras",

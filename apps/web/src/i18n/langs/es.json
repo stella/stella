@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Resumen",
       "appealReviews": {
-        "conflict": "Los metadatos del editor y el párrafo inicial se contradicen. Es necesario verificar el resultado de la revisión.",
-        "corpusOnly": "No se encontró ningún vínculo de revisión en el corpus disponible. Esto no demuestra que no exista un recurso.",
-        "noneFound": "No se encontró",
+        "conflict": "La información sobre la revisión es incompleta o contradictoria. Es necesario verificar el resultado.",
+        "corpusOnly": "No se encontró en el corpus disponible ninguna resolución que revise esta resolución. Esto no demuestra que no exista un recurso.",
+        "noneFound": "No se encontró una resolución revisora",
         "overturned": "Revocada o modificada",
         "partly": "Revocada parcialmente",
         "reviewedBy": "Resoluciones revisoras",

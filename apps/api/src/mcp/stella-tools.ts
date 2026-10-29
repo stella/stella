@@ -2550,6 +2550,9 @@ const reviewedCaseLawSearchResults = async (
   merged: ReturnType<typeof mergeCaseLawSearchHits>,
   context: AuthorizedMcpRequestContext,
 ) => {
+  if (merged.length === 0) {
+    return [];
+  }
   const ids = merged.map(({ hit }) =>
     brandPersistedCaseLawDecisionId(hit.decisionId),
   );
@@ -3836,15 +3839,15 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         await (
           context.testDependencies?.readDecisionReviews ?? readDecisionReviews
         )({
-          decisionIds: [brandPersistedCaseLawDecisionId(decisionId)],
+          decisionIds: [read.decisionId],
           caseLawDb: caseLawPublicReadDb,
         }),
-        brandPersistedCaseLawDecisionId(decisionId),
+        read.decisionId,
       ),
       doctrineAvailability: read.page.doctrineAvailability,
       ...(doctrine === undefined ? {} : { doctrine }),
       ...(polarity === undefined ? {} : { polarity }),
-      decisionId,
+      decisionId: read.decisionId,
       direction,
       nextCursor: read.page.nextCursor,
       citations: read.page.items.map((item) => ({

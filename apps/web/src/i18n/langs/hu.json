@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Kivonat",
       "appealReviews": {
-        "conflict": "A kiadói metaadatok és a bevezető bekezdés ellentmondanak egymásnak. A felülvizsgálat eredményét ellenőrizni kell.",
-        "corpusOnly": "Az elérhető korpuszban nem található felülvizsgálati kapcsolat. Ez nem jelenti azt, hogy nincs jogorvoslat.",
-        "noneFound": "Nem található",
+        "conflict": "A felülvizsgálatra vonatkozó adatok hiányosak vagy ellentmondásosak. A felülvizsgálat eredményét ellenőrizni kell.",
+        "corpusOnly": "A rendelkezésre álló korpuszban nem található ezt a határozatot felülvizsgáló határozat. Ez nem bizonyítja, hogy nem nyújtottak be jogorvoslatot.",
+        "noneFound": "Nem található felülvizsgáló határozat",
         "overturned": "Hatályon kívül helyezve vagy megváltoztatva",
         "partly": "Részben hatályon kívül helyezve",
         "reviewedBy": "Felülvizsgáló határozatok",

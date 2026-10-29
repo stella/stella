@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Streszczenie",
       "appealReviews": {
-        "conflict": "Metadane wydawcy i akapit wstępny są sprzeczne. Wynik kontroli wymaga weryfikacji.",
-        "corpusOnly": "W dostępnym korpusie nie znaleziono powiązania z kontrolą odwoławczą. Nie oznacza to, że nie wniesiono środka zaskarżenia.",
-        "noneFound": "Nie znaleziono",
+        "conflict": "Informacje o kontroli orzeczenia są niepełne lub sprzeczne. Wynik kontroli wymaga weryfikacji.",
+        "corpusOnly": "W dostępnym korpusie nie znaleziono orzeczenia kontrolującego to orzeczenie. Nie oznacza to, że nie wniesiono środka zaskarżenia.",
+        "noneFound": "Nie znaleziono orzeczenia kontrolnego",
         "overturned": "Uchylone lub zmienione",
         "partly": "Częściowo uchylone",
         "reviewedBy": "Orzeczenia kontrolujące",

@@ -13,7 +13,9 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { formatDecisionDate } from "@/lib/decision-date";
 
 const STATUS_LABEL = {
   upheld: "caseLaw.viewer.appealReviews.upheld",
@@ -58,6 +60,7 @@ export const DecisionAppealReviews = ({
   country,
 }: DecisionAppealReviewsProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   type ReviewLinkOptions = { id: string; caseNumber: string; court: string };
   const link = ({ id, caseNumber, court }: ReviewLinkOptions) =>
     createCaseLawDecisionPath(
@@ -160,7 +163,18 @@ export const DecisionAppealReviews = ({
                 className="flex flex-wrap items-center gap-2"
               >
                 {review.reviewedDecisionId === null ? (
-                  <BidiText>{review.reviewedCaseNumber}</BidiText>
+                  <span className="inline-flex flex-wrap items-baseline gap-2">
+                    <BidiText>{review.reviewedCourt}</BidiText>
+                    <BidiText>{review.reviewedCaseNumber}</BidiText>
+                    {review.reviewedDecisionDate !== null && (
+                      <time dateTime={review.reviewedDecisionDate}>
+                        {formatDecisionDate(
+                          review.reviewedDecisionDate,
+                          format,
+                        )}
+                      </time>
+                    )}
+                  </span>
                 ) : (
                   <a
                     href={sanitizeHref(

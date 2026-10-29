@@ -83,7 +83,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.UK_FCL]: 3,
   [ADAPTER_KEYS.PL_KIS]: 10,
   [ADAPTER_KEYS.PL_UODO]: 14,
-  [ADAPTER_KEYS.PL_UOKIK]: 11,
+  [ADAPTER_KEYS.PL_UOKIK]: 12,
 } as const satisfies Record<AdapterKey, number>;
 
 // parser-output-unchanged: adds the source fingerprint versions; no parser reads them, so parser output is unchanged.

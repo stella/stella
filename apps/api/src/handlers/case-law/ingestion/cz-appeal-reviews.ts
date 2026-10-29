@@ -5,12 +5,10 @@ import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 import type { DecisionReviewLink } from "@stll/api-contract/case-law-reviews";
 import { DECISION_REVIEW_OUTCOMES } from "@stll/api-contract/case-law-reviews";
 import {
-  canonicalDecisionIdentifierKey,
   CZE_SHEET_NUMBER_SOURCE,
   DECISION_DASH_CLASS_SOURCE,
   decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,
-  parseDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
 import { readDecisionDocketReference } from "@stll/api-contract/decision-docket-reference";
 import { collapseSpacedLetters } from "@stll/text-normalize";
@@ -105,7 +103,7 @@ const reversal = /(?<!\p{L})(?:zrušuje|zrušují|ruší|mění)(?!\p{L})/iu;
 const dispositionVerb =
   /(?<!\p{L})(?:zrušuje|zrušují|ruší|mění|zamítá|odmítá|zamítají|odmítají|přerušuje)(?!\p{L})/giu;
 const dispositionScopeSuffix =
-  /^\s+(?:zčásti|částečně|v\s+části|v\s+celém\s+rozsahu|ve\s+všech\s+výrocích|ve?\s+výrok(?:u|y|ů|ích)?\s+(?:[IVX]+|\d+|o\s))/iu;
+  /^\s+(?:(?:pouze|jen|toliko)\s+)?(?:zčásti|částečně|v\s+části|v\s+celém\s+rozsahu|ve\s+všech\s+výrocích|ve?\s+výrok(?:u|y|ů|ích)?\s+(?:[IVX]+|\d+|o\s))/iu;
 
 const holdingDispositions = (item: string): string[] => {
   const dispositions: string[] = [];
@@ -116,7 +114,9 @@ const holdingDispositions = (item: string): string[] => {
     const end = verbEnd + (scope?.[0].length ?? 0);
     // A coordinated subject can name several judgments before one verb.
     // A later verb starts a new disposition, even inside one numbered item.
-    dispositions.push(item.slice(start, end));
+    dispositions.push(
+      item.slice(start, end).replace(/^[\s.;]*(?:[IVX]+\.\s+)?/u, ""),
+    );
     start = end;
   }
   return dispositions;
@@ -131,9 +131,8 @@ const ancillaryOrder =
 
 type ReviewTarget = Omit<CzechAppealReview, "outcome"> & {
   documentType: string;
+  docketFamily: string;
 };
-
-const docketKey = canonicalDecisionIdentifierKey;
 
 type ReviewOutcomeOptions = {
   target: ReviewTarget;
@@ -148,7 +147,6 @@ const reviewOutcome = ({
   targetCount,
   sameFileTargets,
 }: ReviewOutcomeOptions): CzechAppealReview["outcome"] => {
-  const key = docketKey(target.reviewedCaseNumber);
   const namesTarget = (
     item: string,
   ): "target" | "other" | "ambiguous" | "unnamed" => {
@@ -178,7 +176,10 @@ const reviewOutcome = ({
     for (const match of dockets) {
       const context = item.slice(previousDocketEnd, match.index);
       previousDocketEnd = match.index + match[0].length;
-      if (docketKey(match[0]) !== key) {
+      const docket = readDecisionDocketReference(match[0], {
+        grammar: decisionDocketGrammarForJurisdiction("CZE"),
+      });
+      if (docket === null || docket.family.canonical !== target.docketFamily) {
         continue;
       }
       const identity = new RegExp(
@@ -253,7 +254,20 @@ const reviewOutcome = ({
       return "unknown";
     }
     if (rejection) {
-      return "upheld";
+      const partialRejection = dispositions.some(
+        ({ item, match }) =>
+          (match === "target" || match === "unnamed") &&
+          remedyRejected.test(item) &&
+          partial.test(item),
+      );
+      if (!partialRejection) {
+        return "upheld";
+      }
+      return items.some((item) =>
+        /řízení[^.!?]{0,120}přerušuje(?!\p{L})/iu.test(item),
+      )
+        ? "pending"
+        : "unknown";
     }
     return items.some((item) => appealProceedingInterrupted.test(item))
       ? "pending"
@@ -270,8 +284,8 @@ const reviewOutcome = ({
 type ExtractCzechAppealReviewsOptions = {
   /** The opening section only; reasoning must never be supplied here. */
   header: string;
-  /** The holding only; quoted outcomes in the reasoning are not evidence. */
-  holding: string;
+  /** Publisher holding paragraphs; a string represents one paragraph. */
+  holding: string | readonly string[];
 };
 
 /** A reviewed judgment is identified by the opening formula, never proximity. */
@@ -301,7 +315,7 @@ export const extractCzechAppealReviews = ({
       continue;
     }
     const reviewedCaseNumber = foldDecisionIdentifierInput(docket);
-    const parsed = parseDecisionDocket(reviewedCaseNumber, {
+    const parsed = readDecisionDocketReference(reviewedCaseNumber, {
       grammar: decisionDocketGrammarForJurisdiction("CZE"),
     });
     if (parsed === null) {
@@ -324,16 +338,20 @@ export const extractCzechAppealReviews = ({
       reviewedCourt,
       reviewedDecisionDate: dateOf(date),
       documentType,
+      docketFamily: parsed.family.canonical,
     });
   }
 
-  const normalizedHolding =
-    foldDecisionIdentifierInput(collapseSpacedLetters(holding))
-      .split(/odůvodnění\s*:/iu)
-      .at(0) ?? "";
-  const items = normalizedHolding
-    .split(/(?:^|\s)[IVX]+\.\s+/u)
-    .flatMap(holdingDispositions);
+  const paragraphs = typeof holding === "string" ? [holding] : holding;
+  // Roman numerals also name operative parts inside a disposition. Preserve
+  // publisher paragraphs and keep those references with their subject.
+  const items = paragraphs.flatMap((paragraph) => {
+    const normalized =
+      foldDecisionIdentifierInput(collapseSpacedLetters(paragraph))
+        .split(/odůvodnění\s*:/iu)
+        .at(0) ?? "";
+    return holdingDispositions(normalized);
+  });
   return targets.map((target) => ({
     reviewedCaseNumber: target.reviewedCaseNumber,
     reviewedCourt: target.reviewedCourt,
@@ -343,9 +361,7 @@ export const extractCzechAppealReviews = ({
       items,
       targetCount: targets.length,
       sameFileTargets: targets.filter(
-        (candidate) =>
-          docketKey(candidate.reviewedCaseNumber) ===
-          docketKey(target.reviewedCaseNumber),
+        (candidate) => candidate.docketFamily === target.docketFamily,
       ),
     }),
   }));
@@ -435,10 +451,16 @@ export const planCzechAppealReviews = ({
       openingEvidence: [review],
     }));
   }
+  const publisherRows = parsed.output;
   const consistent =
     !incompletePublisherTarget &&
-    parsed.output.length === opening.length &&
-    parsed.output.every(
+    publisherRows.length === opening.length &&
+    opening.every((candidate) =>
+      publisherRows.some((review) =>
+        sameReviewedDecision({ publisher: review, opening: candidate }),
+      ),
+    ) &&
+    publisherRows.every(
       (review) =>
         opening.filter((candidate) =>
           sameReviewedDecision({ publisher: review, opening: candidate }),
@@ -461,7 +483,30 @@ export const planCzechAppealReviews = ({
   } else {
     evidenceStatus = "conflict";
   }
-  return parsed.output.map((review) => {
+  const publisherIdentities = new Map<string, typeof publisherRows>();
+  for (const review of publisherRows) {
+    const key = JSON.stringify([
+      review.reviewedCourt,
+      review.reviewedCaseNumber,
+      review.reviewedDecisionDate,
+    ]);
+    const group = publisherIdentities.get(key);
+    if (group === undefined) {
+      publisherIdentities.set(key, [review]);
+    } else {
+      group.push(review);
+    }
+  }
+  return [...publisherIdentities.values()].map((group) => {
+    const review =
+      group.at(0) ?? panic("Publisher review identity has no evidence");
+    const knownOutcomes = new Set(
+      group
+        .map(({ outcome }) => outcome)
+        .filter((outcome) => outcome !== "unknown"),
+    );
+    const officialConflict = knownOutcomes.size > 1;
+    const officialOutcome = knownOutcomes.values().next().value;
     const sameTargets = opening.filter(
       (candidate) =>
         sameReviewedDecision({ publisher: review, opening: candidate }) &&
@@ -471,12 +516,11 @@ export const planCzechAppealReviews = ({
     const sameTarget = sameTargets.length === 1 ? sameTargets.at(0) : undefined;
     return {
       ...review,
-      outcome:
-        review.outcome === "unknown" && sameTarget !== undefined
-          ? sameTarget.outcome
-          : review.outcome,
+      outcome: officialConflict
+        ? "unknown"
+        : (officialOutcome ?? sameTarget?.outcome ?? "unknown"),
       source: "metadata",
-      evidenceStatus,
+      evidenceStatus: officialConflict ? "conflict" : evidenceStatus,
       openingEvidence: opening,
     };
   });

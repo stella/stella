@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Résumé",
       "appealReviews": {
-        "conflict": "Les métadonnées de l’éditeur et le paragraphe introductif se contredisent. L’issue du recours doit être vérifiée.",
-        "corpusOnly": "Aucun lien vers un examen sur recours n’a été trouvé dans le corpus disponible. Cela ne signifie pas qu’aucun recours n’existe.",
-        "noneFound": "Aucun trouvé",
+        "conflict": "Les informations sur le recours sont incomplètes ou contradictoires. Son issue doit être vérifiée.",
+        "corpusOnly": "Aucune décision statuant sur un recours contre cette décision n’a été trouvée dans le corpus disponible. Cela ne prouve pas qu’aucun recours n’existe.",
+        "noneFound": "Aucune décision de recours trouvée",
         "overturned": "Annulée ou réformée",
         "partly": "Partiellement annulée",
         "reviewedBy": "Décisions de réexamen",

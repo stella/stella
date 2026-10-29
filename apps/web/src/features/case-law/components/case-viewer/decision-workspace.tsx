@@ -84,7 +84,6 @@ import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-vie
 import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
-import { DecisionAppealReviews } from "@/features/case-law/components/case-viewer/decision-appeal-reviews";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
 import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
@@ -1193,12 +1192,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                         onRequest={props.onRequestAnalysis}
                       />
                     )}
-                  <div className="mb-4 px-4">
-                    <DecisionAppealReviews
-                      reviews={decision.appealReviews}
-                      country={decision.country}
-                    />
-                  </div>
                   <DecisionText
                     surface="full-reader"
                     aiHeadnotes={aiHeadnotes}

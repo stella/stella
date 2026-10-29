@@ -92,10 +92,12 @@ const decisionAst = (texts = ["Text"], numbered = false) =>
     })),
   }) satisfies DocumentAst;
 
-const readableDecision: typeof readDecisionReaderSource = async () => ({
+const readableDecision: typeof readDecisionReaderSource = async ({
+  decisionId,
+}) => ({
   status: "read",
   decision: {
-    id: row().id,
+    id: decisionId,
     appealReviews: noDecisionReviewFound(),
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,
@@ -119,9 +121,9 @@ const readableDecision: typeof readDecisionReaderSource = async () => ({
 
 const readableDecisionWith =
   (ast: DocumentAst): typeof readDecisionReaderSource =>
-  async () => {
+  async ({ decisionId }) => {
     const base = await readableDecision({
-      decisionId: row().id,
+      decisionId,
       phase: "blocks",
       audience: "model",
       surface: "search",
@@ -155,9 +157,11 @@ const readableResult = (
 
 const missingDecision: typeof readDecisionReaderSource = async () => null;
 
-const licensedDecision: typeof readDecisionReaderSource = async () => {
+const licensedDecision: typeof readDecisionReaderSource = async ({
+  decisionId,
+}) => {
   const readable = await readableDecision({
-    decisionId: row().id,
+    decisionId,
     phase: "blocks",
     audience: "model",
     surface: "search",
@@ -569,6 +573,50 @@ describe("decision legal resolution", () => {
     ).toEqual({ status: "not_found", reason: "no_exact_identity" });
   });
 
+  test("an absorbed reader's reviews do not replace the requested identity's reviews", async () => {
+    const requested = row();
+    const expected = noDecisionReviewFound();
+    let reviewedIds: readonly string[] = [];
+    const result = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: requested.caseNumber,
+      dependencies: {
+        lookup: lookupRows([requested]),
+        read: async (options) => {
+          const content = await readableDecision(options);
+          if (content?.status !== "read") {
+            return panic("Expected readable fixture");
+          }
+          return {
+            ...content,
+            decision: {
+              ...content.decision,
+              id: createSafeId<"caseLawDecision">(),
+              appealReviews: {
+                status: "unknown",
+                basis: "available_corpus",
+                reviewedBy: [],
+                reviews: [],
+                reviewedByTruncated: false,
+                reviewsTruncated: false,
+              },
+            },
+          };
+        },
+        readReviews: async ({ decisionIds }) => {
+          reviewedIds = decisionIds;
+          return new Map(decisionIds.map((id) => [id, expected]));
+        },
+      },
+    });
+    expect(reviewedIds).toEqual([requested.id]);
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { decisionId: requested.id, appealReviews: expected },
+    });
+  });
+
   test("marks a missing read as unavailable, not licensed", async () => {
     const result = await resolveDecision({
       admission,
@@ -588,9 +636,11 @@ describe("decision legal resolution", () => {
   });
 
   test("marks a readable decision without a body as unavailable", async () => {
-    const bodyless: typeof readDecisionReaderSource = async () => {
+    const bodyless: typeof readDecisionReaderSource = async ({
+      decisionId,
+    }) => {
       const readable = await readableDecision({
-        decisionId: row().id,
+        decisionId,
         phase: "blocks",
         audience: "model",
         surface: "search",

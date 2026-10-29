@@ -51,7 +51,8 @@ const reviewEvidence = {
   reviewsTruncated: v.boolean(),
 };
 
-/** No link in the corpus is evidence of absence only within this corpus. */
+/** Status describes incoming reviews of this decision; `reviews` names lower targets.
+ * No incoming link is evidence of absence only within the available corpus. */
 export const decisionReviewsSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("none_found"),

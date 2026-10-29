@@ -120,6 +120,22 @@ describe("Czech appeal history", () => {
     ).toBe("unknown");
   });
 
+  test("keeps declaratory publisher paragraphs separate from a later annulment", () => {
+    const reviews = extractCzechAppealReviews({
+      header:
+        "proti usnesení Nejvyššího soudu ze dne 6. srpna 2024 č. j. 27 Cdo 541/2024-681, usnesení Krajského soudu v Ústí nad Labem - pobočky v Liberci ze dne 20. září 2023 č. j. 35 Co 56/2022-652",
+      holding: [
+        "I. Usnesením Nejvyššího soudu ze dne 6. srpna 2024 č. j. 27 Cdo 541/2024-681 byla porušena základní práva.",
+        "II. Usnesení Krajského soudu v Ústí nad Labem - pobočky v Liberci ze dne 20. září 2023 č. j. 35 Co 56/2022-652 se ruší.",
+        "III. Ve zbývajícím rozsahu se ústavní stížnost odmítá.",
+      ],
+    });
+    expect(reviews.map(({ outcome }) => outcome)).toEqual([
+      "upheld",
+      "overturned",
+    ]);
+  });
+
   test.each([false, true])(
     "binds opposite dispositions to their own targets in one holding item (reverse order: %s)",
     (reverseOrder) => {
@@ -359,6 +375,82 @@ describe("Czech appeal history", () => {
       }).at(0)?.evidenceStatus,
     ).toBe("conflict");
   });
+  test.each([
+    ["upheld", "unknown"],
+    ["unknown", "upheld"],
+    ["upheld", "upheld"],
+    ["upheld", "overturned"],
+    ["overturned", "upheld"],
+  ] as const)(
+    "combines duplicate official outcomes before filling from opening: %s, %s",
+    (first, second) => {
+      const official = extractCzechAppealReviews(nssPair).at(0);
+      expect(official).toBeDefined();
+      if (official === undefined) {
+        return;
+      }
+      const metadata = {
+        publisherReviews: [
+          { ...official, outcome: first },
+          { ...official, outcome: second },
+        ],
+      };
+      const planned = planCzechAppealReviews({
+        ...nssPair,
+        holding: "Rozsudek se ruší.",
+        metadata,
+      });
+      expect(planned).toHaveLength(1);
+      expect(planned.at(0)?.outcome).toBe(
+        first === "overturned" || second === "overturned"
+          ? "unknown"
+          : "upheld",
+      );
+      expect(planned.at(0)?.evidenceStatus).toBe("conflict");
+      expect(metadata.publisherReviews.map(({ outcome }) => outcome)).toEqual([
+        first,
+        second,
+      ]);
+    },
+  );
+
+  test("duplicate publisher rows cannot conceal an unmatched opening target", () => {
+    const opening = extractCzechAppealReviews(constitutionalPair);
+    const first = opening.at(0);
+    expect(first).toBeDefined();
+    if (first === undefined) {
+      return;
+    }
+    const planned = planCzechAppealReviews({
+      ...constitutionalPair,
+      metadata: { publisherReviews: opening.map(() => first) },
+    });
+    expect(
+      planned.every(({ evidenceStatus }) => evidenceStatus === "conflict"),
+    ).toBe(true);
+    expect(
+      planned.every(
+        ({ openingEvidence }) => openingEvidence.length === opening.length,
+      ),
+    ).toBe(true);
+  });
+
+  test.each(["14274", "1427"])(
+    "matches a bare holding docket to its published sheet %s",
+    (sheet) => {
+      const reviews = extractCzechAppealReviews({
+        header: constitutionalPair.header.replace("14274", () => sheet),
+        holding:
+          "Usnesení Nejvyššího soudu č. j. 5 Tdo 1125/2023 se ruší. Ve zbývajícím rozsahu se ústavní stížnost odmítá.",
+      });
+      expect(reviews.map(({ outcome }) => outcome)).toEqual([
+        "overturned",
+        "upheld",
+        "upheld",
+      ]);
+    },
+  );
+
   test("links the Ostrava judgment reviewed by NSS 7 As 32/2025-30 with its outcome", () => {
     expect(extractCzechAppealReviews(nssPair)).toEqual([
       {
@@ -427,6 +519,14 @@ describe("Czech appeal history", () => {
     ],
     ["Rozsudek se ve výroku o nákladech řízení zrušuje.", "partly"],
     ["Rozsudek se zrušuje ve výroku II.", "partly"],
+    ["Rozsudek se ve výroku II. zrušuje.", "partly"],
+    ["Rozsudek se zrušuje pouze ve výroku I.", "partly"],
+    ["Rozsudek se zrušuje jen v části.", "partly"],
+    ["Kasační stížnost se zčásti zamítá.", "unknown"],
+    [
+      "Kasační stížnost se zčásti zamítá; ve zbývající části se řízení přerušuje.",
+      "pending",
+    ],
     [
       "Rozsudek se zrušuje v části a ve zbytku se kasační stížnost zamítá.",
       "partly",
@@ -527,6 +627,37 @@ describe("Czech appeal history", () => {
         holding: "Usnesení se ruší.",
       }).at(0)?.reviewedCourt,
     ).toBe("Nejvyšší soud");
+  });
+
+  test("Czech review extraction retains evidence across long adversarial court spacing and separators", () => {
+    assertProperty(
+      "Czech review extraction retains evidence across long adversarial court spacing and separators",
+      fc.property(
+        fc.integer({ min: 1024, max: 8192 }),
+        fc.constantFrom(" ", "\n", "\u00a0"),
+        fc.constantFrom("-", "–", "‑"),
+        (length, gap, dash) => {
+          const spacing = gap.repeat(length);
+          expect(
+            canonicalCzechReviewCourt(
+              `Krajského soudu${spacing}České republiky`,
+            ),
+          ).toBe("Krajský soud");
+          expect(
+            canonicalCzechReviewCourt(
+              `Okresního soudu Praha${spacing}${dash}${spacing}východ`,
+            ),
+          ).toBe("Okresní soud Praha-východ");
+          const noise = dash.repeat(length);
+          const reviews = extractCzechAppealReviews({
+            header: `${noise}${spacing}${nssPair.header}`,
+            holding: `${nssPair.holding}${spacing}${noise}`,
+          });
+          expect(reviews).toEqual(extractCzechAppealReviews(nssPair));
+        },
+      ),
+      { numRuns: 20 },
+    );
   });
 
   test("Czech review extraction preserves links across publisher whitespace and Unicode forms", () => {

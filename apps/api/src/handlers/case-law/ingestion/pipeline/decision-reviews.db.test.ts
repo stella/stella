@@ -19,7 +19,7 @@ import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const MIGRATION =
-  "../../../../../drizzle/20261028173000_case_law_decision_reviews/migration.sql";
+  "../../../../../drizzle/20261029094325_case_law_decision_reviews/migration.sql";
 const REVIEWING = toSafeId<"caseLawDecision">(
   "019dd78d-2e0c-7000-955a-63d713b246ba",
 );
@@ -79,7 +79,7 @@ const prepare = async () => {
   await client.exec(
     await Bun.file(
       new URL(
-        "../../../../../drizzle/20261028200000_review_reconciliation_audit/migration.sql",
+        "../../../../../drizzle/20261029094525_review_reconciliation_audit/migration.sql",
         import.meta.url,
       ),
     ).text(),
@@ -541,5 +541,41 @@ test("ingestion may append review reconciliation audits but cannot impersonate a
         )
       ).rows,
     ).toEqual([{ allowed: false }]);
+  }
+});
+
+test("duplicate publisher identities converge without electing conflicting official outcomes", async () => {
+  await using client = await prepare();
+  const db = drizzle({ client });
+  await insertDecision(db, { id: REVIEWING, court: "Nejvyšší správní soud" });
+  const official = reviews()?.at(0) ?? panic("Review fixture has no target");
+  for (const outcomes of [
+    ["upheld", "upheld"],
+    ["upheld", "overturned"],
+    ["overturned", "upheld"],
+  ] as const) {
+    const plan = planDecisionReviews({
+      country: "CZE",
+      sections: [],
+      metadata: {
+        publisherReviews: outcomes.map((outcome) => ({
+          reviewedCaseNumber: official.reviewedCaseNumber,
+          reviewedCourt: official.reviewedCourt,
+          reviewedDecisionDate: official.reviewedDecisionDate,
+          outcome,
+        })),
+      },
+    });
+    expect(plan).toHaveLength(1);
+    await apply({ db, id: REVIEWING, plan });
+    const stored = await links(client);
+    expect(stored).toHaveLength(1);
+    expect(stored.at(0)).toMatchObject(
+      outcomes[0] === outcomes[1]
+        ? { outcome: "upheld", evidence_classification: "metadata_only" }
+        : { outcome: "unknown", evidence_classification: "conflict" },
+    );
+    await apply({ db, id: REVIEWING, plan });
+    expect(await links(client)).toEqual(stored);
   }
 });

@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Santrauka",
       "appealReviews": {
-        "conflict": "Leidėjo metaduomenys ir įvadinė pastraipa prieštarauja vieni kitiems. Peržiūros rezultatą reikia patikrinti.",
-        "corpusOnly": "Turimame tekstyne nerasta sąsajos su peržiūra pagal skundą. Tai neįrodo, kad skundo nėra.",
-        "noneFound": "Nerasta",
+        "conflict": "Duomenys apie peržiūrą yra neišsamūs arba prieštaringi. Peržiūros rezultatą reikia patikrinti.",
+        "corpusOnly": "Turimame rinkinyje nerasta sprendimo, kuriuo peržiūrimas šis sprendimas. Tai neįrodo, kad skundas nepateiktas.",
+        "noneFound": "Peržiūrinčio sprendimo nerasta",
         "overturned": "Panaikinta arba pakeista",
         "partly": "Iš dalies panaikinta",
         "reviewedBy": "Peržiūrintys sprendimai",

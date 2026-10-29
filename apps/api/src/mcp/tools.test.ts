@@ -87,6 +87,7 @@ import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
+import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
@@ -4113,6 +4114,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("an empty precedent citator still reports the decision's cassation review", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: "01a03050-4387-76b6-aae3-4b05db9a0238",
       page: {
         items: [],
         nextCursor: null,
@@ -4163,6 +4165,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations maps the direction and returns treatment, decision and passage", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "available",
         items: [
@@ -4280,9 +4283,36 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_case_law_citations hydrates the composing judgment after absorption", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      decisionId: CITING_DECISION_ID,
+      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+    });
+    const readReviews = mock(
+      async ({ decisionIds }: Parameters<typeof readDecisionReviews>[0]) =>
+        new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
+    );
+    const result = await handleMcpToolCall({
+      args: { decision_id: DECISION_ID, direction: "cites" },
+      context: createContext({
+        testDependencies: { readDecisionReviews: readReviews },
+      }),
+      toolName: "read_case_law_citations",
+    });
+    expect(readReviews).toHaveBeenCalledWith({
+      decisionIds: [CITING_DECISION_ID],
+      caseLawDb: caseLawPublicReadDb,
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      decisionId: CITING_DECISION_ID,
+    });
+  });
+
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         items: [],
         nextCursor: null,

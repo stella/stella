@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Kokkuvõte",
       "appealReviews": {
-        "conflict": "Avaldaja metaandmed ja sissejuhatav lõik on vastuolus. Läbivaatamise tulemus vajab kontrollimist.",
-        "corpusOnly": "Olemasolevast korpusest ei leitud seost edasikaebuse läbivaatamisega. See ei tõenda, et edasikaebust ei ole.",
-        "noneFound": "Ei leitud",
+        "conflict": "Läbivaatamise andmed on puudulikud või vastuolulised. Läbivaatamise tulemust tuleb kontrollida.",
+        "corpusOnly": "Olemasolevast korpusest ei leitud seda lahendit läbivaatavat lahendit. See ei tõenda, et edasikaebust ei ole esitatud.",
+        "noneFound": "Läbivaatavat lahendit ei leitud",
         "overturned": "Tühistatud või muudetud",
         "partly": "Osaliselt tühistatud",
         "reviewedBy": "Läbivaatavad lahendid",

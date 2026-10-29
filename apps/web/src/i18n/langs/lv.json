@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Kopsavilkums",
       "appealReviews": {
-        "conflict": "Izdevēja metadati un ievada rindkopa ir pretrunīgi. Pārskatīšanas iznākums ir jāpārbauda.",
-        "corpusOnly": "Pieejamajā korpusā nav atrasta saite uz pārskatīšanu. Tas nepierāda, ka pārsūdzība nepastāv.",
-        "noneFound": "Nav atrasta",
+        "conflict": "Dati par pārskatīšanu ir nepilnīgi vai pretrunīgi. Pārskatīšanas rezultāts ir jāpārbauda.",
+        "corpusOnly": "Pieejamajā korpusā nav atrasts nolēmums, ar kuru pārskatīts šis nolēmums. Tas nepierāda, ka sūdzība nav iesniegta.",
+        "noneFound": "Pārskatīšanas nolēmums nav atrasts",
         "overturned": "Atcelts vai grozīts",
         "partly": "Daļēji atcelts",
         "reviewedBy": "Pārskatīšanas nolēmumi",

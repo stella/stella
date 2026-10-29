@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Abstrakt",
       "appealReviews": {
-        "conflict": "Metadata vydavatele a úvodní odstavec si odporují. Výsledek přezkumu je nutné ověřit.",
-        "corpusOnly": "V dostupném korpusu nebyla nalezena vazba na přezkum. To neznamená, že opravný prostředek neexistuje.",
-        "noneFound": "Nenalezen",
+        "conflict": "Podklady k přezkumu jsou neúplné nebo rozporné. Výsledek přezkumu je třeba ověřit.",
+        "corpusOnly": "V dostupném korpusu nebylo nalezeno rozhodnutí přezkoumávající toto rozhodnutí. To neznamená, že opravný prostředek neexistuje.",
+        "noneFound": "Přezkumné rozhodnutí nenalezeno",
         "overturned": "Zrušeno nebo změněno",
         "partly": "Částečně zrušeno",
         "reviewedBy": "Přezkoumávající rozhodnutí",

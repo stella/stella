@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Abstrakt",
       "appealReviews": {
-        "conflict": "Metadáta vydavateľa a úvodný odsek si odporujú. Výsledok preskúmania treba overiť.",
-        "corpusOnly": "V dostupnom korpuse sa nenašla väzba na preskúmanie. To neznamená, že opravný prostriedok neexistuje.",
-        "noneFound": "Nenájdené",
+        "conflict": "Podklady k preskúmaniu sú neúplné alebo rozporné. Výsledok preskúmania treba overiť.",
+        "corpusOnly": "V dostupnom korpuse sa nenašlo rozhodnutie preskúmavajúce toto rozhodnutie. To neznamená, že opravný prostriedok neexistuje.",
+        "noneFound": "Preskúmavajúce rozhodnutie nenájdené",
         "overturned": "Zrušené alebo zmenené",
         "partly": "Čiastočne zrušené",
         "reviewedBy": "Preskúmavajúce rozhodnutia",

@@ -210,7 +210,7 @@ const resolvedDecision = async ({
       readerUrl,
       text: decisionText(content),
       appealReviews:
-        content?.status === "read"
+        content?.status === "read" && content.decision.id === row.id
           ? content.decision.appealReviews
           : requireDecisionReviews(
               await readReviews({

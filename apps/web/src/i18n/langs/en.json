@@ -1236,9 +1236,9 @@
     "viewer": {
       "abstract": "Abstract",
       "appealReviews": {
-        "conflict": "The publisher metadata and opening paragraph disagree. The review outcome requires verification.",
-        "corpusOnly": "No review link was found in the available corpus. This does not establish that no appeal exists.",
-        "noneFound": "None found",
+        "conflict": "The review evidence is incomplete or conflicting. The review outcome requires verification.",
+        "corpusOnly": "No decision reviewing this decision was found in the available corpus. This does not establish that no appeal exists.",
+        "noneFound": "No reviewing decision found",
         "overturned": "Overturned",
         "partly": "Partly overturned",
         "reviewedBy": "Reviewing decisions",

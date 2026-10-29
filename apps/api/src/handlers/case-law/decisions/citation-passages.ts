@@ -81,7 +81,11 @@ export type DecisionCitationsPage = {
 
 /** An invalid cursor, told apart from "no such public decision" (null). */
 export type DecisionCitationsRead =
-  | { type: "page"; page: DecisionCitationsPage }
+  | {
+      type: "page";
+      decisionId: SafeId<"caseLawDecision">;
+      page: DecisionCitationsPage;
+    }
   | { type: "invalid_cursor" }
   | { type: "doctrine_unavailable" };
 
@@ -394,7 +398,7 @@ export const readGatedDecisionCitations = async ({
       // citations, the citing decision for every incoming one.
       const citingIds =
         direction === "cites"
-          ? [decisionId]
+          ? [subject.id]
           : [
               ...new Map(
                 page.items.flatMap((item) =>
@@ -406,6 +410,7 @@ export const readGatedDecisionCitations = async ({
             ];
       return {
         page,
+        decisionId: subject.id,
         sources: await readPassageSourcePointers(subject.tx, citingIds),
         type: "page" as const,
       };
@@ -434,7 +439,9 @@ export const readGatedDecisionCitations = async ({
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const citingId =
-      direction === "cites" ? String(decisionId) : String(item.decision?.id);
+      direction === "cites"
+        ? String(gated.decisionId)
+        : String(item.decision?.id);
     const text = textByDecision.get(citingId);
     const textWithheldReason = withholdingByDecision.get(citingId);
     if (textWithheldReason === undefined) {
@@ -461,6 +468,7 @@ export const readGatedDecisionCitations = async ({
   });
 
   return {
+    decisionId: gated.decisionId,
     page: {
       items,
       nextCursor: gated.page.nextCursor,
