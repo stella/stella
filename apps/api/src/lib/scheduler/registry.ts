@@ -316,6 +316,7 @@ const SCHEDULER_TASKS = {
 
 type SchedulerTaskRegistryOptions = {
   resetReviewOrganization?: SchedulerTask;
+  onlineWork?: SchedulerTask;
 };
 
 const schedulerTasks = (
@@ -348,10 +349,11 @@ export const createSchedulerTaskRegistry = (
     Object.entries(
       schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
     ).map(([name, registered]) => {
-      const entry =
-        name === RESET_REVIEW_ORGANIZATION_TASK
-          ? (options.resetReviewOrganization ?? registered)
-          : registered;
+      const overrides: Readonly<Record<string, SchedulerTask | undefined>> = {
+        [RESET_REVIEW_ORGANIZATION_TASK]: options.resetReviewOrganization,
+        [ONLINE_WORK_RUNNER_TASK]: options.onlineWork,
+      };
+      const entry = overrides[name] ?? registered;
       return [
         name,
         async (context: SchedulerTaskContext) =>

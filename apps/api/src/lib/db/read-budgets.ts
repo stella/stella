@@ -1,3 +1,5 @@
+import { ONLINE_WORK_NAMES } from "../../db/online-migrations";
+
 /**
  * Read budgets: how many shared buffers (8 KiB pages, hit or read) one call
  * of a hot statement, or one run of a scheduled job, may touch.
@@ -31,6 +33,12 @@ type ReadBudget = {
 };
 
 export const READ_BUDGETS = {
+  "scheduled.onlineWork.runPending": {
+    surface: "scheduled-job",
+    pages: 2 * (4 * ONLINE_WORK_NAMES.length + 8),
+    reason:
+      "At most two registry-filtered state snapshots per tick: three primary-key index pages plus one heap page per registered unit, and eight catalog pages per snapshot for the table-owner policy. The registry is in memory and the advisory lock reads no relation pages. Build catalog probes run in the detached unit under the online-work database pressure governor, outside the scheduler tick.",
+  },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
     pages: 256,

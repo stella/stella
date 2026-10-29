@@ -2,9 +2,11 @@ import { panic, Result } from "better-result";
 import { type Logger, type SQL, sql } from "drizzle-orm";
 
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import { createPendingOnlineWorkTask } from "@/api/lib/scheduler/tasks/online-work-runner";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
@@ -94,6 +96,7 @@ export const measureScheduledJobRun = async ({
       createCaseLawCoverageRefreshTask({
         compute: computeCaseLawCoverageAnswer,
       }),
+      { onlineWork: createPendingOnlineWorkTask() },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const captured: CapturedStatement[] = [];
   const logger: Logger = {
@@ -108,6 +111,7 @@ export const measureScheduledJobRun = async ({
   const outcome = await task(
     asTestRaw<SchedulerTaskContext>({
       db,
+      dueAt: DueSlot.of({ nextRunAt: new Date("2026-10-23T10:00:00.000Z") }),
       job: { id: job.id, task: job.task },
       payload: null,
       signal: new AbortController().signal,

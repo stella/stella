@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { corpusIndexGenerations } from "@/api/db/schema";
+import { corpusIndexGenerations, onlineWorkState } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -10,6 +10,8 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+
+import { ONLINE_WORK_NAMES } from "../../db/online-migrations";
 
 /**
  * The corpus profile: public corpus tables seeded in the shape production
@@ -343,6 +345,13 @@ export const serveCaseLaw = async (
 };
 
 export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
+  // The registered task measures the converged tick without starting a
+  // detached build against the fixture. Corpus growth must not change it.
+  await database
+    .insert(onlineWorkState)
+    .values(
+      ONLINE_WORK_NAMES.map((name) => ({ name, state: "finalized" as const })),
+    );
   await database.insert(corpusIndexGenerations).values([
     ...SCENARIO_GENERATIONS.map(({ generation }) => ({
       family: "case_law" as const,

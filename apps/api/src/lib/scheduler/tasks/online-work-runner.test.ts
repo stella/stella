@@ -1,7 +1,12 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import type {
+  SchedulerTaskContext,
+  SchedulerTaskFailure,
+} from "@/api/lib/scheduler/types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import type { OnlineMigrationOutcome } from "../../../db/online-migration-connection";
 import {
@@ -13,6 +18,7 @@ import { PENDING } from "../../../db/online-work-lifecycle";
 import { allFinalizedOnlineWork } from "../../../tests/helpers/online-work-lifecycle";
 import {
   createOnlineWorkRunner,
+  createPendingOnlineWorkTask,
   type OnlineWorkStateSnapshot,
   type OnlineWorkStateStore,
 } from "./online-work-runner";
@@ -41,6 +47,7 @@ type StoredRow = {
 
 const createMemoryStore = () => {
   const rows = new Map<string, StoredRow>();
+  let snapshots = 0;
   const update = (name: string, change: Partial<StoredRow>) => {
     const row = rows.get(name);
     if (row === undefined) {
@@ -49,13 +56,15 @@ const createMemoryStore = () => {
     rows.set(name, { ...row, ...change });
   };
   const store: OnlineWorkStateStore = {
-    readStates: async () =>
-      [...rows].map(([name, { state, attempts, finishedAt }]) => ({
+    readStates: async () => {
+      snapshots += 1;
+      return [...rows].map(([name, { state, attempts, finishedAt }]) => ({
         name,
         state,
         attempts,
         finishedAt,
-      })),
+      }));
+    },
     markBuilding: async ({ name, attempts }) => {
       rows.set(name, {
         state: "building",
@@ -71,7 +80,7 @@ const createMemoryStore = () => {
       update(name, { state: "failed", lastError: error, finishedAt: START });
     },
   };
-  return { rows, store };
+  return { rows, store, snapshots: () => snapshots };
 };
 
 type HarnessOptions = {
@@ -83,7 +92,7 @@ const createHarness = ({
   pending = [FIRST, SECOND],
   lockHeld = false,
 }: HarnessOptions = {}) => {
-  const { rows, store } = createMemoryStore();
+  const { rows, store, snapshots } = createMemoryStore();
   const claims: OnlineWorkName[] = [];
   const releases: OnlineWorkName[] = [];
   /** The unit's checkpoint at each release: a finished walk records first. */
@@ -144,6 +153,7 @@ const createHarness = ({
   };
   return {
     rows,
+    snapshots,
     claims,
     releases,
     statesAtRelease,
@@ -159,6 +169,7 @@ describe("online work runner", () => {
 
     expect(await harness.tick()).toEqual({ type: "started", name: FIRST });
     expect(harness.claims).toEqual([FIRST]);
+    expect(harness.snapshots()).toBe(2);
     expect(harness.rows.get(FIRST)).toMatchObject({
       state: "building",
       attempts: 1,
@@ -378,4 +389,41 @@ describe("online work runner", () => {
     expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
     expect(harness.claims).toEqual([SECOND]);
   });
+});
+
+test("isolated online work tasks retain their own database across ticks", async () => {
+  const fixture = () => {
+    let reads = 0;
+    const context = asTestRaw<SchedulerTaskContext>({
+      dueAt: DueSlot.of({ nextRunAt: START }),
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => {
+                reads += 1;
+                return ONLINE_WORK_NAMES.map((name) => ({
+                  name,
+                  state: "finalized" as const,
+                  attempts: 0,
+                  finishedAt: START,
+                }));
+              },
+            }),
+          }),
+        }),
+      },
+    });
+    return { context, reads: () => reads };
+  };
+  const first = fixture();
+  const second = fixture();
+  const firstTask = createPendingOnlineWorkTask();
+  const secondTask = createPendingOnlineWorkTask();
+
+  await firstTask(first.context);
+  await secondTask(second.context);
+  await firstTask(first.context);
+
+  expect([first.reads(), second.reads()]).toEqual([2, 1]);
 });

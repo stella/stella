@@ -553,6 +553,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: ONLINE_WORK_RUNNER_TASK,
+    reads: { budget: "scheduled.onlineWork.runPending" },
   },
   {
     description: "Check data-correctness invariants over pipeline outputs",

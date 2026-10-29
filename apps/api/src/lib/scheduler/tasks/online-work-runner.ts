@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import { type ONLINE_WORK_STATES, onlineWorkState } from "@/api/db/schema";
@@ -269,7 +269,9 @@ export const createDrizzleOnlineWorkStateStore = (
         attempts: onlineWorkState.attempts,
         finishedAt: onlineWorkState.finishedAt,
       })
-      .from(onlineWorkState),
+      .from(onlineWorkState)
+      .where(inArray(onlineWorkState.name, ONLINE_WORK_NAMES))
+      .limit(ONLINE_WORK_NAMES.length),
   markBuilding: async ({ name, attempts, at }) => {
     const building = {
       state: "building",
@@ -403,9 +405,13 @@ const processRunner = (): RunnerByDb => {
   };
 };
 
-const runnerFor = processRunner();
+/** Owns one build lifetime; fixtures create one per isolated database. */
+export const createPendingOnlineWorkTask = () => {
+  const runnerFor = processRunner();
+  return (async ({ db, dueAt }) =>
+    (await runnerFor(db)(dueAt.claimedAtDate())).map(
+      () => undefined,
+    )) satisfies SchedulerTask;
+};
 
-export const runPendingOnlineWork = (async ({ db, dueAt }) =>
-  (await runnerFor(db)(dueAt.claimedAtDate())).map(
-    () => undefined,
-  )) satisfies SchedulerTask;
+export const runPendingOnlineWork = createPendingOnlineWorkTask();

@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { ONLINE_WORK_RUNNER_TASK } from "@/api/lib/scheduler/tasks/online-work-runner";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -75,6 +76,10 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  "onlineWork.runPending.minutely": {
+    task: ONLINE_WORK_RUNNER_TASK,
+    scenarios: Object.values(CASE_LAW_SCENARIOS),
+  },
   "caseLaw.reportFreshness.fiveMinute": {
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
@@ -124,6 +129,7 @@ export const scheduledJobMeasurementViolations = (
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
   "scheduled.caseLaw.reportFreshness": "corpus",
+  "scheduled.onlineWork.runPending": "corpus",
   "statement.caseLaw.coverageSources": "coverage",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
