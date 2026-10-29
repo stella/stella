@@ -104,6 +104,42 @@ test("rejects a JSON body in a pre-built request options object", async () => {
   await rm(directory, { recursive: true });
 });
 
+test("resolves pre-built request bodies where their options are declared", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "raw-json-api-census-"));
+  const fixture = path.join(directory, "options-scope.ts");
+  await writeFile(
+    fixture,
+    `const formBody = new FormData();
+    const formInit = { body: formBody };
+    const sendForm = () => {
+      const formBody = JSON.stringify({ unsafe: true });
+      fetch(apiUrl("/form"), formInit);
+    };
+
+    const jsonBody = JSON.stringify({ unsafe: true });
+    const jsonInit = { body: jsonBody };
+    const sendJson = () => {
+      const jsonBody = new FormData();
+      fetch(apiUrl("/json"), jsonInit);
+    };
+
+    function createSender() {
+      const outerBody = JSON.stringify({ unsafe: true });
+      const outerInit = { body: outerBody };
+      return () => fetch(apiUrl("/outer"), outerInit);
+    }
+
+    void sendForm;
+    void sendJson;
+    void createSender;`,
+  );
+  expect(await findRawJsonApiCalls([fixture], directory)).toEqual([
+    'options-scope.ts#"/json"',
+    'options-scope.ts#"/outer"',
+  ]);
+  await rm(directory, { recursive: true });
+});
+
 test("reports an allowlisted call that no longer exists", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "raw-json-api-census-"));
   const fixture = path.join(directory, "empty.ts");

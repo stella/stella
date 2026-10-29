@@ -64,7 +64,9 @@ const resolvesToJsonStringify = (
 ): boolean =>
   isJsonStringify(expression) ||
   (expression?.type === "Identifier" &&
-    isJsonStringify(resolveLexicalBinding(expression.name, ancestors)));
+    isJsonStringify(
+      resolveLexicalBinding(expression.name, ancestors)?.expression,
+    ));
 
 const bindingNames = (
   binding:
@@ -100,8 +102,12 @@ const bindingNames = (
 const resolveLexicalBinding = (
   name: string,
   ancestors: readonly Node[],
-): Expression | undefined => {
-  for (const scope of ancestors.toReversed()) {
+): { expression: Expression; ancestors: readonly Node[] } | undefined => {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const scope = ancestors[index];
+    if (scope === undefined) {
+      continue;
+    }
     if (
       (scope.type === "FunctionDeclaration" ||
         scope.type === "FunctionExpression" ||
@@ -123,7 +129,12 @@ const resolveLexicalBinding = (
           declaration.id.type === "Identifier" &&
           declaration.id.name === name
         ) {
-          return declaration.init ?? undefined;
+          return declaration.init === null
+            ? undefined
+            : {
+                expression: declaration.init,
+                ancestors: ancestors.slice(0, index + 1),
+              };
         }
       }
     }
@@ -160,10 +171,13 @@ export const censusRawJsonApiCalls = async (
       }
       const optionsArgument = node.arguments[1];
       let options: Expression | undefined;
+      let optionsAncestors = ancestors;
       if (optionsArgument?.type === "ObjectExpression") {
         options = optionsArgument;
       } else if (optionsArgument?.type === "Identifier") {
-        options = resolveLexicalBinding(optionsArgument.name, ancestors);
+        const binding = resolveLexicalBinding(optionsArgument.name, ancestors);
+        options = binding?.expression;
+        optionsAncestors = binding?.ancestors ?? ancestors;
       }
       if (options?.type !== "ObjectExpression") {
         return;
@@ -175,7 +189,7 @@ export const censusRawJsonApiCalls = async (
       );
       if (
         body?.type !== "Property" ||
-        !resolvesToJsonStringify(body.value, ancestors)
+        !resolvesToJsonStringify(body.value, optionsAncestors)
       ) {
         return;
       }
