@@ -582,7 +582,7 @@ const config = {
     "Email an issued invoice to the given addresses as a secure stella link to view and download it. Replies go to the seller email when it belongs to a verified current organization member, otherwise the sender's verified email. A finalized invoice becomes sent. Refused for drafts and void invoices. Each send makes a new link; see invoices.sends.list.",
   permissions: { invoice: ["update"] },
   // It emails people outside stella, so demo and review accounts cannot.
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   featureAccess: { featureId: "time-billing", type: "required" },
   realtime: invoiceRealtimeUpdates,
   mcp: {

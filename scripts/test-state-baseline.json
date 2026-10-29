@@ -259,11 +259,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/auth/demo-account-catalog-policy.test.ts": {
-    "count": 2,
-    "owner": "security",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/auth/review-account-inert.test.ts": {
     "count": 6,
     "owner": "security",

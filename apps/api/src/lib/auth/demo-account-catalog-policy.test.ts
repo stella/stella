@@ -11,9 +11,12 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const configSchema = v.object({
   permissions: v.optional(v.record(v.string(), v.array(v.string()))),
@@ -199,6 +202,7 @@ const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
   "apps/api/src/handlers/api-keys/personal/rotate.ts",
   "apps/api/src/handlers/api-keys/revoke.ts",
   "apps/api/src/handlers/api-keys/rotate.ts",
+  "apps/api/src/handlers/invoices/sends/create.ts",
   "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
   "apps/api/src/handlers/mcp-connectors/connect.ts",
   "apps/api/src/handlers/mcp-connectors/create-connection.ts",
@@ -277,13 +281,34 @@ describe("handler account policy census", () => {
     );
   });
 
-  test("standard operations apply account access before their implementation", async () => {
-    const previousEmail = env.DEMO_ACCOUNT_EMAIL;
-    env.DEMO_ACCOUNT_EMAIL = "account@example.test";
-    const definitionSchema = v.object({ handler: v.function() });
-    try {
+  test.each([
+    {
+      account: "demo",
+      email: "demo@example.test",
+      operations: REVIEWED_STANDARD_OPERATIONS,
+    },
+    {
+      account: "review",
+      email: "review@example.test",
+      operations: REVIEWED_ACCOUNT_CONTROL_OPERATIONS,
+    },
+  ])(
+    "$account operations apply account access before their implementation",
+    async ({ email, operations }) => {
+      const context = createTestHandlerContext({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        user: { email },
+      });
+      testState.patchConfig({
+        DEMO_ACCOUNT_EMAIL: "demo@example.test",
+        APP_REVIEW_ACCOUNT_EMAIL: "review@example.test",
+        APP_REVIEW_ORGANIZATION_ID: context.session.activeOrganizationId,
+      });
+      const definitionSchema = v.object({ handler: v.function() });
       for (const endpoint of (await discoverSafeHandlers()).endpoints) {
-        if (!REVIEWED_STANDARD_OPERATIONS.some((id) => id === endpoint.id)) {
+        if (!operations.some((id) => id === endpoint.id)) {
           continue;
         }
         const module = v.parse(
@@ -296,12 +321,6 @@ describe("handler account policy census", () => {
           definitionSchema,
           module[endpoint.exportName ?? "default"],
         );
-        const context = createTestHandlerContext({
-          audit: NO_AUDIT,
-          safeDb: NO_DB,
-          scopedDb: NO_DB,
-          user: { email: "account@example.test" },
-        });
         // Feature-gated operations admit the enrolled caller, so the account
         // check is what refuses them.
         const response = await handler({
@@ -316,8 +335,6 @@ describe("handler account policy census", () => {
           response: { code: "account_access_unavailable" },
         });
       }
-    } finally {
-      env.DEMO_ACCOUNT_EMAIL = previousEmail;
-    }
-  });
+    },
+  );
 });
