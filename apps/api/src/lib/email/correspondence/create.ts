@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type {
   CorrespondenceScanVerdict,
@@ -9,7 +9,6 @@ import {
   CORRESPONDENCE_MAX_ATTACHMENTS,
   CORRESPONDENCE_MAX_BODY_CHARACTERS,
 } from "@stll/api-contract/correspondence";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -29,8 +28,12 @@ import {
   assertCorrespondenceAccess,
   type CorrespondenceActor,
 } from "@/api/lib/email/correspondence/access";
-import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
+import {
+  persistCorrespondenceContent,
+  prepareCorrespondenceContent,
+} from "./uploaded-content";
 
 type RetireCorrespondenceSourceOptions = {
   safeDb: SafeDb;
@@ -41,7 +44,7 @@ type RetireCorrespondenceSourceOptions = {
   recordAuditEvent: AuditRecorder;
 };
 
-/** Withdraws a classified file generation through the upload source protocol. */
+/** Fences a retired generation without discarding its correspondence history. */
 export const retireCorrespondenceSource = async ({
   safeDb,
   organizationId,
@@ -146,9 +149,6 @@ export const retireCorrespondenceSource = async ({
         ),
       )
       .limit(1);
-    await tx.execute(
-      sql`select public.transition_correspondence_source(${organizationId}, ${workspaceId}::uuid, ${sourceEntityId}::uuid, NULL, NULL)`,
-    );
     const id = associated?.id ?? previous?.id;
     if (id !== undefined) {
       await recordAuditEvent(tx, {
@@ -156,7 +156,7 @@ export const retireCorrespondenceSource = async ({
         resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
         resourceId: id,
         workspaceId,
-        metadata: { sourceRemoved: true },
+        metadata: { sourceRetired: true },
       });
     }
     return Result.ok({ type: "ok" as const });
@@ -284,69 +284,6 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   return null;
 };
 
-// The system issues a data-box message ID once, so every file of one message
-// converges on one record in the matter.
-//
-// For email, the source is part of the key: a delivered message and an
-// uploaded file of the same message stay separate records. Each email file is
-// its own record, so deleting one copy never removes another file's record.
-const correspondenceDedupKey = (parsed: ParsedCorrespondence) => {
-  if (parsed.channel === "data_box") {
-    return hashSha256Hex(
-      JSON.stringify([parsed.channel, parsed.dataBox.messageId]),
-    );
-  }
-  switch (parsed.source) {
-    case "delivery":
-      return hashSha256Hex(
-        JSON.stringify([
-          parsed.intake,
-          parsed.messageId?.trim() ?? null,
-          parsed.contentHash,
-        ]),
-      );
-    case "upload":
-      return hashSha256Hex(
-        JSON.stringify([parsed.source, parsed.sourceEntityId]),
-      );
-    default:
-      parsed satisfies never;
-      return panic("Unhandled correspondence source");
-  }
-};
-
-const provenanceColumns = (parsed: ParsedCorrespondence) => {
-  switch (parsed.source) {
-    case "delivery":
-      return {
-        source: parsed.source,
-        sourceEntityId: null,
-        intake: parsed.intake,
-        authenticatedSenderAddress: parsed.authenticatedSender.address,
-        originalSignature: parsed.originalSignature,
-        spf: parsed.authenticatedSender.spf,
-        dkim: parsed.authenticatedSender.dkim,
-        dmarc: parsed.authenticatedSender.dmarc,
-        alignedIdentifier: parsed.authenticatedSender.alignedIdentifier,
-      };
-    case "upload":
-      return {
-        source: parsed.source,
-        sourceEntityId: parsed.sourceEntityId,
-        intake: null,
-        authenticatedSenderAddress: null,
-        originalSignature: parsed.originalSignature,
-        spf: null,
-        dkim: null,
-        dmarc: null,
-        alignedIdentifier: null,
-      };
-    default:
-      parsed satisfies never;
-      return panic("Unhandled correspondence source");
-  }
-};
-
 /** Converges concurrent deliveries on one record and one row per filer. */
 export const createCorrespondence = async ({
   expectedSourceVersionId = null,
@@ -408,55 +345,19 @@ export const createCorrespondence = async ({
         return Result.ok({ type: "source_changed" as const });
       }
     }
-    const dedupKey = correspondenceDedupKey(parsed);
-    const inserted = await tx
-      .insert(correspondence)
-      .values({
-        organizationId,
-        workspaceId,
-        direction: parsed.direction,
-        channel: parsed.channel,
-        ...provenanceColumns(parsed),
-        messageId: parsed.messageId,
-        dataBox: parsed.dataBox,
-        contentHash: parsed.contentHash,
-        dedupKey,
-        from: parsed.from,
-        to: parsed.to,
-        cc: parsed.cc,
-        subject: parsed.subject,
-        sentAt: parsed.sentAt === null ? null : new Date(parsed.sentAt),
-        receivedAt: new Date(parsed.receivedAt),
-        inReplyTo: parsed.inReplyTo,
-        references: parsed.references,
-        bodyText: parsed.bodyText,
-        bodyHtml:
-          parsed.bodyHtml === null
-            ? null
-            : sanitizeEmailBodyHtml(parsed.bodyHtml),
-      })
-      .onConflictDoNothing({
-        target: [correspondence.workspaceId, correspondence.dedupKey],
-      })
-      .returning({ id: correspondence.id });
-    const created = inserted.at(0);
-    const existing =
-      created === undefined
-        ? await tx
-            .select({ id: correspondence.id })
-            .from(correspondence)
-            .where(
-              and(
-                eq(correspondence.workspaceId, workspaceId),
-                eq(correspondence.dedupKey, dedupKey),
-              ),
-            )
-            .limit(1)
-        : [];
-    const correspondenceId = created?.id ?? existing.at(0)?.id;
-    if (correspondenceId === undefined) {
-      return tx.rollback();
+    const persisted = await persistCorrespondenceContent({
+      tx,
+      organizationId,
+      workspaceId,
+      content: prepareCorrespondenceContent(parsed),
+      recordAuditEvent,
+    });
+    if (persisted.isErr()) {
+      return persisted;
     }
+    const { id: correspondenceId, status } = persisted.value;
+    const created = status === "created";
+    const refreshed = status === "refreshed";
 
     const sources =
       parsed.source === "upload"
@@ -486,7 +387,7 @@ export const createCorrespondence = async ({
       .onConflictDoNothing()
       .returning({ id: correspondenceFilers.id });
 
-    if (created !== undefined) {
+    if (created || refreshed) {
       await linkAttachments({
         tx,
         organizationId,
@@ -496,10 +397,9 @@ export const createCorrespondence = async ({
       });
     }
 
-    if (created !== undefined || filers.length > 0 || sources.length > 0) {
+    if (!created && !refreshed && (filers.length > 0 || sources.length > 0)) {
       await recordAuditEvent(tx, {
-        action:
-          created !== undefined ? AUDIT_ACTION.CREATE : AUDIT_ACTION.UPDATE,
+        action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
         resourceId: correspondenceId,
         workspaceId,
@@ -509,7 +409,7 @@ export const createCorrespondence = async ({
     return Result.ok({
       type: "ok" as const,
       id: correspondenceId,
-      created: created !== undefined,
+      created,
       filerAdded: filers.length > 0,
     });
   });

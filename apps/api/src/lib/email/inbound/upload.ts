@@ -214,7 +214,7 @@ type RetireUploadedMailSourceOptions = ReadUploadedSourceOptions & {
   scopedDbForSource?: (scope: UploadedMailScope) => ScopedDb;
 };
 
-/** Remove a former correspondence projection only while this file is current. */
+/** Retire extraction for this generation while retaining filed user history. */
 export const retireUploadedMailSource = async ({
   database,
   scope,

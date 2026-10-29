@@ -12,6 +12,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
   correspondenceAttachments,
+  correspondenceFilers,
   correspondenceSources,
   entities,
   entityVersions,
@@ -33,6 +34,7 @@ import {
 } from "@/api/lib/email/inbound/upload";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
@@ -150,6 +152,10 @@ if (!databaseUrl || !runPostgresTests) {
         slug: `upload-source-${ids.orgA}`,
         createdAt: new Date(),
       });
+      await recordNewOrganizationAccessState(testDb, {
+        organizationId: ids.orgA,
+        now: new Date(),
+      });
       await testDb.insert(member).values([
         {
           id: mintAuthProviderIdValue(),
@@ -259,6 +265,27 @@ if (!databaseUrl || !runPostgresTests) {
           );
         }
         const oldId = initial.value.correspondenceId;
+        const initialSources = await fixtureScopedDb(
+          async (tx) =>
+            await tx
+              .select()
+              .from(correspondenceSources)
+              .where(eq(correspondenceSources.entityId, entityId)),
+        );
+        const initialFilers = await fixtureScopedDb(
+          async (tx) =>
+            await tx
+              .select()
+              .from(correspondenceFilers)
+              .where(eq(correspondenceFilers.correspondenceId, oldId)),
+        );
+        const initialAttachments = await fixtureScopedDb(
+          async (tx) =>
+            await tx
+              .select()
+              .from(correspondenceAttachments)
+              .where(eq(correspondenceAttachments.correspondenceId, oldId)),
+        );
         const mimeType =
           "mimeType" in scenario ? scenario.mimeType : EML_MIME_TYPE;
         const change = "change" in scenario ? scenario.change : undefined;
@@ -385,7 +412,7 @@ if (!databaseUrl || !runPostgresTests) {
             scopedDbForUploader,
             scopedDbForSource,
           });
-          expect(newest.isOk() && newest.value.status).toBe("filed");
+          expect(newest.isOk() && newest.value.status).toBe("duplicate");
           return Result.ok({ status: "unverified" });
         };
         try {
@@ -435,6 +462,8 @@ if (!databaseUrl || !runPostgresTests) {
               attempt,
               outcome: { status: "skipped", reason: scenario.reason },
             });
+            const expectedRecords =
+              "deleted" in scenario ? [] : [{ id: oldId }];
             expect(
               await fixtureScopedDb(
                 async (tx) =>
@@ -443,16 +472,38 @@ if (!databaseUrl || !runPostgresTests) {
                     .from(correspondence)
                     .where(eq(correspondence.id, oldId)),
               ),
-            ).toEqual([]);
+            ).toEqual(expectedRecords);
             expect(
               await fixtureScopedDb(
                 async (tx) =>
                   await tx
-                    .select({ id: correspondenceSources.entityId })
+                    .select()
                     .from(correspondenceSources)
                     .where(eq(correspondenceSources.entityId, entityId)),
               ),
-            ).toHaveLength("superseded" in scenario ? 1 : 0);
+            ).toEqual("deleted" in scenario ? [] : initialSources);
+            expect(
+              await fixtureScopedDb(
+                async (tx) =>
+                  await tx
+                    .select()
+                    .from(correspondenceFilers)
+                    .where(eq(correspondenceFilers.correspondenceId, oldId)),
+              ),
+            ).toEqual("deleted" in scenario ? [] : initialFilers);
+            if (!("superseded" in scenario)) {
+              expect(
+                await fixtureScopedDb(
+                  async (tx) =>
+                    await tx
+                      .select()
+                      .from(correspondenceAttachments)
+                      .where(
+                        eq(correspondenceAttachments.correspondenceId, oldId),
+                      ),
+                ),
+              ).toEqual("deleted" in scenario ? [] : initialAttachments);
+            }
             if ("superseded" in scenario) {
               expect(
                 await fixtureScopedDb(
@@ -651,7 +702,7 @@ if (!databaseUrl || !runPostgresTests) {
         status: "skipped",
         reason: "not_email",
       });
-      expect(await records()).toEqual([]);
+      expect(await records()).toHaveLength(1);
     });
   });
 }

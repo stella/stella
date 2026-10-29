@@ -95,11 +95,7 @@ BEGIN
   FOR UPDATE;
   IF FOUND THEN
     next_source := public.next_correspondence_source(OLD);
-    IF next_source IS NULL THEN
-      DELETE FROM public.correspondence
-      WHERE organization_id = OLD.organization_id
-        AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id;
-    ELSE
+    IF next_source IS NOT NULL THEN
       UPDATE public.correspondence
       SET source_entity_id = next_source, updated_at = now()
       WHERE organization_id = OLD.organization_id
@@ -135,7 +131,8 @@ BEGIN
   DELETE FROM public.correspondence_sources
   WHERE workspace_id = OLD.workspace_id AND entity_id = OLD.id;
   -- Surviving copies have already repointed their record in the nested trigger.
-  -- Only an unenrolled legacy pointer can still name this deleted entity.
+  -- A final source (including an unenrolled legacy pointer) still names this
+  -- deleted document. This entity trigger exclusively owns record deletion.
   DELETE FROM public.correspondence
   WHERE workspace_id = OLD.workspace_id AND source_entity_id = OLD.id;
   PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization_id, ''), true),

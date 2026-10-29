@@ -118,10 +118,10 @@ permanent refusal is a logged skip, an unavailable database retries with
 backoff, and only an exhausted job or a failed hand-off is captured.
 
 The public filing boundary reconciles every terminal skip through the system
-source-retirement protocol, including access denial, parse refusals and files
-that are no longer correspondence. Cleanup uses the version captured before
-the filing attempt, so even a refusal that races a replacement cannot retire
-the newer version. Missing or initially stale sources leave current records
+generation-fenced retirement protocol, including access denial, parse refusals
+and files that are no longer correspondence. Retirement preserves the record,
+its source associations and user state. It uses the version captured before
+the filing attempt, so a refusal cannot affect a newer version. Missing or initially stale sources leave current records
 alone. A cleanup failure remains retryable; it cannot acknowledge a refusal.
 Retryable filing errors also remain errors, preserving any record already
 created while attachment completion retries.
@@ -138,20 +138,22 @@ created while attachment completion retries.
   logged with its reason and the file is unaffected.
 - Attachments stay inside the file and are not stored again; the record links
   the file. Uploaded files of both channels are registered in
-  `correspondence_sources`; deleting or reclassifying the last source removes its
-  record. The attachment policy is per
+  `correspondence_sources`; only explicitly deleting the last source document
+  removes its record. The attachment policy is per
   source: a delivery stores each attachment, so a blocked type refuses it; an
   upload retains them in the already scanned file, so only count and size
   limits apply.
 - Each file has at most one record, keyed by the file. A delivered message and
   an uploaded file of it remain separate records, as do two copies of an email
-  file. A replacement email version uses its content hash to retire the old
-  record even when its file identity is unchanged.
+  file. A content-changing replacement updates the derived message columns in
+  place, preserving the record identity, handling state, assignee and filer history.
 
-A single source transition removes associations whose message identity changed,
-or whose email content hash changed. A classification that files nothing retires
-the previous association through the same transition. Existing uploaded email
-records are enrolled from their indexed source pointer when first transitioned;
+A changed source generation refreshes its derived attachment links without
+removing the underlying matter documents or their user-authored metadata and
+annotations. Retirement, deduplication and source-link maintenance never delete
+correspondence. A replacement that would collide with another record is refused
+with a conflict, preserving both records and their independent user state.
+Existing uploaded email records are found through their indexed source pointer;
 no full-table backfill is needed.
 
 ## Uploaded data-box messages
@@ -181,9 +183,9 @@ over the message XML, takes the same path and files a `data_box` record.
 - The message ID keys the record in the matter: another file of the same
   message, in a batch or later, adds its uploader as a filer and stores no
   second set of documents. `correspondence_sources` retains every source copy.
-  Deleting or reclassifying the current `.zfo` source switches the record to a
-  surviving copy;
-  only deleting its last source removes the record and attachment links. Each
+  Explicit deletion of the current `.zfo` source switches the record to a
+  surviving copy; only deleting its last source document removes the record
+  and attachment links. Reclassification preserves the record and its history. Each
   matter owns its record and sources independently. Any copy can resume missing
   attachment ordinals, including when the initial source was deleted.
 - The detail read lists the organization's contacts whose data boxes include
