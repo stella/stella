@@ -45,6 +45,7 @@ import {
   SCHEDULED_JOB_MEASUREMENTS,
 } from "./registry";
 import {
+  isTransactionControl,
   measureScheduledJobRun,
   measureScheduledStatementsInOrder,
   statementsForMeasurement,
@@ -126,6 +127,28 @@ test("a measured fixture job cannot hide DDL", () => {
   ).toThrow(
     "fixture.alter issued unmeasurable DDL: ALTER TABLE fixture_table VALIDATE CONSTRAINT fixture_check",
   );
+});
+
+test("every transaction control form the capture maps is left out of measurement", () => {
+  const forms = [
+    "BEGIN",
+    "START TRANSACTION",
+    "COMMIT",
+    "END",
+    "ROLLBACK",
+    "SAVEPOINT job_step",
+    "RELEASE job_step",
+    "RELEASE SAVEPOINT job_step",
+    "ROLLBACK TO job_step",
+    "ROLLBACK TO SAVEPOINT job_step",
+  ];
+  expect(forms.filter((text) => !isTransactionControl(text))).toEqual([]);
+  expect(
+    statementsForMeasurement(
+      "fixture.transaction-control",
+      forms.map((text) => ({ text, params: [] })),
+    ),
+  ).toEqual([]);
 });
 
 test("query-perf table size declarations name real schema tables", () => {

@@ -54,13 +54,24 @@ const leadingKeyword = (text: string) =>
     ?.toLowerCase() ?? "";
 
 const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
+/**
+ * Leading keywords of transaction control. The capture maps these to
+ * savepoints and the measurement leaves them out, so both read this one set.
+ */
 const TRANSACTION_KEYWORDS: ReadonlySet<string> = new Set([
+  "abort",
   "begin",
   "commit",
+  "end",
   "lock",
+  "release",
   "rollback",
   "savepoint",
+  "start",
 ]);
+
+export const isTransactionControl = (text: string) =>
+  TRANSACTION_KEYWORDS.has(leadingKeyword(text));
 
 const DDL_KEYWORDS: ReadonlySet<string> = new Set([
   "alter",
@@ -78,7 +89,7 @@ export const statementsForMeasurement = (
 ): CapturedStatement[] =>
   captured.filter(({ text }) => {
     const keyword = leadingKeyword(text);
-    if (SESSION_KEYWORDS.has(keyword) || TRANSACTION_KEYWORDS.has(keyword)) {
+    if (SESSION_KEYWORDS.has(keyword) || isTransactionControl(text)) {
       return false;
     }
     if (DDL_KEYWORDS.has(keyword)) {
@@ -141,6 +152,14 @@ const captureConnection = (
     };
   };
   const mapTransactionControl = (statement: string) => {
+    const keyword = leadingKeyword(statement);
+    if (
+      !isTransactionControl(statement) &&
+      keyword !== "prepare" &&
+      keyword !== "set"
+    ) {
+      return statement;
+    }
     const normalized = statement
       .replaceAll(/^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/gu, "")
       .replaceAll(/;\s*$/gu, "")
