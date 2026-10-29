@@ -1453,6 +1453,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_TEAM_ID",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
+  "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
