@@ -1122,6 +1122,7 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
@@ -1176,7 +1177,6 @@
         "**",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
