@@ -157,7 +157,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
@@ -165,7 +165,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 10,
+    version: 11,
     scope: {
       type: "all",
       reason:
@@ -173,7 +173,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:
@@ -197,7 +197,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
@@ -338,7 +338,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 5,
+    version: 6,
     scope: {
       type: "all",
       reason:
