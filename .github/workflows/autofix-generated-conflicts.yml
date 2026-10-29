@@ -42,6 +42,7 @@ jobs:
       # reading their state and artifacts.
       actions: write
       contents: read
+      checks: read
       pull-requests: read
     steps:
       # API calls only; nothing from a pull request runs here.
@@ -207,7 +208,7 @@ jobs:
             const summary = [
               ...deferred,
               ...outcomes,
-              `resolved: ${started.length}; deferred-active: ${deferred.length}; other-skipped: ${nodes.length - started.length - deferred.length}`,
+              `dispatched: ${started.length}; deferred-active: ${deferred.length}; other-skipped: ${nodes.length - started.length - deferred.length}`,
             ].join('\n');
             core.info(summary.split('\n').at(-1));
             await core.summary.addRaw(`${summary}\n`).write();

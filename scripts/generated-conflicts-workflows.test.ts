@@ -288,7 +288,7 @@ describe("dispatch", () => {
     expect(result.dispatched).toEqual([]);
     expect(result.info).toContain("deferred #1: head-active (14 min < 15)");
     expect(result.summaries).toEqual([
-      "deferred #1: head-active (14 min < 15)\nresolved: 0; deferred-active: 1; other-skipped: 0\n",
+      "deferred #1: head-active (14 min < 15)\ndispatched: 0; deferred-active: 1; other-skipped: 0\n",
     ]);
   });
 
@@ -494,6 +494,9 @@ describe("dispatch", () => {
   test("capacity tracking uses the actual generated merge headline", () => {
     for (const file of [DISPATCH, PUBLISH]) {
       expect(read(file)).toContain(`=== '${GENERATED_MERGE_HEADLINE}'`);
+      const workflow = v.parse(workflowSchema, parse(file));
+      const job = Object.values(workflow.jobs).at(0);
+      expect(job?.permissions?.["checks"]).toBe("read");
     }
   });
 

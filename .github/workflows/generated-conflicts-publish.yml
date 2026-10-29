@@ -42,6 +42,7 @@ jobs:
       # Reading the resolve run's artifact and fetching the branch.
       actions: read
       contents: read
+      checks: read
       pull-requests: read
     # The push key lives in this environment (main and v* tags only).
     environment: release-app
