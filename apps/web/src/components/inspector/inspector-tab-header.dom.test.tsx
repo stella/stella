@@ -23,7 +23,8 @@ const { IntlProvider } = await import("use-intl");
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { InspectorTabHeader } = await import("./inspector-tab-header");
-const { getFileTabHeaderProps } = await import("./file-tab-header");
+const { fileTabHeaderActions, getFileTabHeaderProps } =
+  await import("./file-tab-header");
 const { useFileTabRename } = await import("./use-file-tab-rename");
 const { useInspectorTabsStore } = await import("./inspector-tabs-store");
 const { AuthenticatedUserProvider } =
@@ -258,4 +259,32 @@ test("legal tab headers preserve an identity while clamping only the subject", a
   expect(
     screen.getByRole("button", { name: englishMessages.common.close }),
   ).toBeDefined();
+});
+
+describe("file actions in the inspector header", () => {
+  const actionIds = (mainViewHasFileActions: boolean) =>
+    fileTabHeaderActions({
+      desktopEditTarget: { fileType: "docx", propertyId: "file" },
+      downloadRenditions: [],
+      mainViewHasFileActions,
+      pdfSignTarget: {
+        entityId: letter.entityId,
+        fieldId: letter.id,
+        propertyId: "file",
+        workspaceId: letter.workspaceId,
+      },
+      tab: letter,
+    }).map((action) => action.id);
+
+  test("the peek header offers download, desktop open and sign", () => {
+    expect(actionIds(false)).toEqual([
+      "download",
+      "open-in-desktop-app",
+      "sign",
+    ]);
+  });
+
+  test("leaves download and sign to a main view that already shows them", () => {
+    expect(actionIds(true)).toEqual(["open-in-desktop-app"]);
+  });
 });
