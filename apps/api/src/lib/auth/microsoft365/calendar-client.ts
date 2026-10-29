@@ -89,34 +89,35 @@ const eventsSchema = v.object({
   value: v.pipe(v.array(eventSchema), v.maxLength(CALENDAR_PAGE_SIZE)),
   "@odata.nextLink": v.optional(v.string()),
 });
+const attendeeScheduleFields = v.object({
+  scheduleId: v.pipe(v.string(), v.maxLength(254)),
+  availabilityView: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(CALENDAR_RANGE_DAYS * CALENDAR_AVAILABILITY_SLOTS_PER_DAY),
+    ),
+  ),
+  error: v.optional(
+    v.object({
+      responseCode: v.pipe(v.string(), v.maxLength(64)),
+      message: v.pipe(v.string(), v.maxLength(512)),
+    }),
+  ),
+  scheduleItems: v.optional(
+    v.pipe(
+      v.array(
+        v.object({
+          status: v.pipe(v.string(), v.maxLength(32)),
+          start: graphDateTime,
+          end: graphDateTime,
+        }),
+      ),
+      v.maxLength(CALENDAR_TOTAL_CAP),
+    ),
+  ),
+});
 const attendeeScheduleSchema = v.pipe(
-  v.object({
-    scheduleId: v.pipe(v.string(), v.maxLength(254)),
-    availabilityView: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(CALENDAR_RANGE_DAYS * CALENDAR_AVAILABILITY_SLOTS_PER_DAY),
-      ),
-    ),
-    error: v.optional(
-      v.object({
-        responseCode: v.pipe(v.string(), v.maxLength(64)),
-        message: v.pipe(v.string(), v.maxLength(512)),
-      }),
-    ),
-    scheduleItems: v.optional(
-      v.pipe(
-        v.array(
-          v.object({
-            status: v.pipe(v.string(), v.maxLength(32)),
-            start: graphDateTime,
-            end: graphDateTime,
-          }),
-        ),
-        v.maxLength(CALENDAR_TOTAL_CAP),
-      ),
-    ),
-  }),
+  attendeeScheduleFields,
   v.check(
     ({ error, availabilityView, scheduleItems }) =>
       error !== undefined ||
@@ -124,6 +125,14 @@ const attendeeScheduleSchema = v.pipe(
       scheduleItems !== undefined,
     "Expected availability evidence or an attendee error",
   ),
+  // Keep provider field presence through validation before applying defaults.
+  v.object({
+    ...attendeeScheduleFields.entries,
+    scheduleItems: v.optional(
+      v.unwrap(attendeeScheduleFields.entries.scheduleItems),
+      [],
+    ),
+  }),
   v.transform(({ scheduleId, error, availabilityView, scheduleItems }) => {
     if (error !== undefined) {
       return { type: "error" as const, scheduleId, error };
@@ -132,7 +141,7 @@ const attendeeScheduleSchema = v.pipe(
       type: "availability" as const,
       scheduleId,
       availabilityView,
-      scheduleItems: scheduleItems ?? [],
+      scheduleItems,
     };
   }),
 );
