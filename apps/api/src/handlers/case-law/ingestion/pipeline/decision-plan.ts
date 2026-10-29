@@ -153,6 +153,11 @@ const verifyStoredCitationScopes = async ({
   signal,
   s3Policy,
 }: VerifyStoredCitationScopesOptions) => {
+  // Opinion scopes address the structure being discarded; the row CAS below
+  // still protects a concurrently replaced envelope.
+  if (pendingMirrorPayload?.astStatus === "text-only") {
+    return Result.ok(false);
+  }
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
     return Result.ok(false);
   }
@@ -196,9 +201,11 @@ type ReportStoredDocumentQualityOptions = {
  * Report a stored decision with no text, text without structure, or markup
  * that survived into its text.
  *
- * Parsers report their own quality through `validateAndLog`, but a
- * source whose parser never runs reports nothing at all. Emit the
- * same signal here so every stored decision is accounted for, and
+ * The retention check (`retention/retention-check.ts`) reports the
+ * quality of every parsed document against its source's projection,
+ * but a source whose parser never runs builds no document for it to
+ * check. Emit the same signal here so every stored decision is
+ * accounted for, and
  * split the severity the same way: no text is an error, text without
  * structure is a warning. A refresh that preserves the stored document
  * reports nothing: it did not store an empty decision, it left a full
@@ -235,8 +242,8 @@ const reportStoredDocumentQuality = ({
     }
   }
 
-  // Same reasoning for markup that survived into the text: a parser
-  // reports its own blocks through `validateAndLog`, so this covers the
+  // Same reasoning for markup that survived into the text: the retention
+  // check reports a parsed document's blocks, so this covers the
   // decisions no parser produced — the source's payload stored verbatim
   // as the document. Skipped where a stored document is being preserved,
   // which stores no text of its own.
@@ -414,14 +421,18 @@ const planCorpusPayload = ({
   // replays it is fenced on the observation that stored it, so the row
   // already holds exactly this payload. Writing it back would copy the
   // whole document into a new row version to say the same thing.
-  const postgresPayload =
-    pendingMirrorPayload === null
-      ? {
-          fulltext: corpusPayload.text,
-          sections: corpusPayload.sections,
-          documentAst: corpusPayload.ast,
-        }
+  const postgresPayload = (() => {
+    if (pendingMirrorPayload === null) {
+      return {
+        fulltext: corpusPayload.text,
+        sections: corpusPayload.sections,
+        documentAst: corpusPayload.ast,
+      };
+    }
+    return pendingMirrorPayload.astStatus === "text-only"
+      ? { documentAst: pendingMirrorPayload.ast }
       : {};
+  })();
 
   const payloadColumns = (() => {
     switch (corpusPlan.type) {

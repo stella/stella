@@ -75,12 +75,7 @@ runs:
       # the `web-build` job in ci.yml produces, flags included, so a capture
       # renders the feature-complete surface on every caller.
       if: inputs.web-build-artifact == ''
-      shell: bash
-      env:
-        VITE_PUBLIC_LAW_ENABLED: "true"
-        VITE_PUBLIC_TOOLS_ENABLED: "true"
-        VITE_WORKFLOWS_ENABLED: "true"
-      run: bun --filter @stll/web build
+      uses: ./.github/actions/build-e2e-web
 
     - name: Start docker stack and API server
       id: e2e-stack
@@ -112,16 +107,25 @@ runs:
             exit 0
           fi
           if (( attempt % 5 == 0 )); then
-            conclusion=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate \
+            # Either build job publishes the artifact: web-build, or
+            # heavy-web-build on heavy runs, which skip web-build. Stop early
+            # only once every one of them has ended without succeeding.
+            conclusions=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
-              --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
-              | head -n 1)
-            case "$conclusion" in
-              failure|cancelled|skipped|timed_out)
-                echo "::error::web-build ended with status '$conclusion' without publishing the $ARTIFACT_NAME artifact"
-                exit 1
-                ;;
-            esac
+              --jq '.jobs[] | select(.name == "web-build" or .name == "heavy-web-build") | .conclusion // "in_progress"')
+            producing=0
+            ended=()
+            while IFS= read -r conclusion; do
+              case "$conclusion" in
+                "") ;;
+                failure|cancelled|skipped|timed_out) ended+=("$conclusion") ;;
+                *) producing=1 ;;
+              esac
+            done <<< "$conclusions"
+            if (( producing == 0 && ${#ended[@]} > 0 )); then
+              echo "::error::Every web build job ended (${ended[*]}) without publishing the $ARTIFACT_NAME artifact"
+              exit 1
+            fi
           fi
           sleep 2
         done
@@ -197,7 +201,13 @@ runs:
         if [[ "$MODE" == "update" ]]; then
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing:update
         else
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing
+          # A baseline difference is a report, not a failure: the verdict
+          # passes a screenshot-only failure with a warning (the diff images
+          # stay in the artifact) and fails on anything else.
+          status=0
+          export PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/apps/web/.cache/marketing-report.json"
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing || status=$?
+          bun "$GITHUB_WORKSPACE/scripts/marketing-screenshot-verdict.ts" "$PLAYWRIGHT_JSON_OUTPUT_FILE" "$status"
         fi
 
     - name: Stop production web server

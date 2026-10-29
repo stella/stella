@@ -42,6 +42,8 @@ import {
   patternKeyFor,
   repoRelativeFilename,
   type ResolvedImport,
+  stableInitializer,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -56,10 +58,15 @@ type TypeOnlyImports =
   (typeof TYPE_ONLY_IMPORTS)[keyof typeof TYPE_ONLY_IMPORTS];
 
 // Whether `import("m")` counts: a lazy boundary is the sanctioned shape for
-// some modules, so only their static imports are restricted.
+// some modules, so only their static imports are restricted. `readableOnly`
+// restricts dynamic imports too and also reports one whose specifier the
+// rule cannot read (a parameter, a call result, a computed string): where a
+// scope must be provably free of a module, an unreadable load cannot be
+// admitted on trust.
 const DYNAMIC_IMPORTS = {
   allowed: "allowed",
   restricted: "restricted",
+  readableOnly: "readable-only",
 } as const;
 type DynamicImports = (typeof DYNAMIC_IMPORTS)[keyof typeof DYNAMIC_IMPORTS];
 
@@ -99,6 +106,26 @@ const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
 // reachable from production modules.
 const isTestSupportModule = (moduleId: string): boolean =>
   moduleId.startsWith("apps/api/src/tests/");
+
+// Parser code and the AST it builds, which a retention projection must not
+// reach: the parser directories, the adapters that call them, and the
+// legal-ast package.
+const PARSER_OR_AST_ROOTS = [
+  "apps/api/src/handlers/case-law/ingestion/parsers/",
+  "apps/api/src/handlers/case-law/ingestion/adapters/",
+  "apps/api/src/lib/legal-search/parsers/",
+  "packages/legal-ast/",
+] as const;
+const LEGAL_AST = packageWithSubpaths("@stll/legal-ast");
+const isParserOrAstModule = (moduleId: string): boolean =>
+  LEGAL_AST(moduleId) ||
+  PARSER_OR_AST_ROOTS.some((root) => moduleId.startsWith(root));
+
+const RETENTION_ORACLE_MODULE =
+  "apps/api/src/lib/legal-search/parsers/validate-ast";
+const RETENTION_ORACLE_MODULE_FILE = `${RETENTION_ORACLE_MODULE}.ts`;
+const RETENTION_CHECK_MODULE_FILE =
+  "apps/api/src/handlers/case-law/ingestion/retention/retention-check.ts";
 
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
@@ -353,6 +380,52 @@ const RESTRICTED_IMPORT_RULES = {
       owners: ["apps/web/src/hooks/use-effect.ts"],
     },
   ],
+  // A retention projection reads the publisher's stored raw and nothing a
+  // parser produced, so the oracle compares two independent readings. The
+  // scope (the projection modules) is set by the rule's override in
+  // oxlint.config.ts; types stay importable, since a stored envelope's shape
+  // is shared data rather than parsing.
+  "retention-source-independence": [
+    {
+      messageId: "retentionSourceIndependence",
+      message:
+        "A retention projection must not use parser code or AST builders: it " +
+        "reads the stored sourceRaw on its own, so the retention check " +
+        "compares against what the publisher served rather than against the " +
+        "parser's own reading. Select the text from sourceRaw directly, and " +
+        "load modules by a name the rule can read (a literal or a constant).",
+      modules: [isParserOrAstModule],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.readableOnly,
+      },
+      owners: [],
+    },
+  ],
+  // The pipeline checks every parsed decision against its source's retention
+  // projection and is the only place that logs the retention signal: a parser
+  // or adapter logging it would compare against its own intermediate text and
+  // report the same decision twice. The pure measurement, `validateAst`, stays
+  // importable everywhere, because parsers legitimately use its verdict to
+  // choose between two parses.
+  "retention-oracle-owner": [
+    {
+      messageId: "retentionOracleOwner",
+      message:
+        "Only the pipeline's retention check logs the text-retention signal. " +
+        "Declare the source's projection in ingestion/retention/sources and " +
+        "the pipeline checks every parsed decision against it; to choose " +
+        "between parses, call validateAst and use its verdict without logging.",
+      modules: [RETENTION_ORACLE_MODULE],
+      restriction: {
+        type: "exports",
+        names: new Set(["validateAndLog"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [RETENTION_ORACLE_MODULE_FILE, RETENTION_CHECK_MODULE_FILE],
+    },
+  ],
   "tooltip-provider-owner": [
     {
       messageId: "tooltipProviderOwner",
@@ -402,6 +475,47 @@ const variableAt = (
     scope = scope.upper;
   }
   return null;
+};
+
+// The text of a module specifier: a string literal, a template without
+// expressions, or a binding assigned once from one of those, followed
+// through aliases (`const PARSER = "m"; await import(PARSER)`). Null when
+// the rule cannot read it.
+const specifierText = (
+  context: Context,
+  node: unknown,
+  seen = new Set<unknown>(),
+): string | null => {
+  const literal = staticStringValue(node);
+  if (literal !== null) {
+    return literal;
+  }
+  const expression = unwrapExpression(node);
+  if (!isIdentifierReference(expression) || seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+  const variable = variableAt(context, expression, expression.name);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  return initializer === null
+    ? null
+    : specifierText(context, initializer, seen);
+};
+
+// The module an expression loads: `import(specifier)` with a readable
+// specifier, awaited or not, or a `require` the shared resolver recognizes.
+const loadedModuleSource = (context: Context, node: unknown): string | null => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression)) {
+    return null;
+  }
+  if (expression.type === "AwaitExpression") {
+    return loadedModuleSource(context, expression.argument);
+  }
+  if (expression.type === "ImportExpression") {
+    return specifierText(context, expression.source);
+  }
+  return dynamicModuleSourceForEnforcement(expression, context);
 };
 
 const exportOfVariable = (
@@ -469,7 +583,7 @@ const exportOfExpression = (
     return null;
   }
   seen.add(expression);
-  const loaded = dynamicModuleSourceForEnforcement(expression, context);
+  const loaded = loadedModuleSource(context, expression);
   if (loaded !== null) {
     return { moduleId: canonical(context, loaded), imported: NAMESPACE_IMPORT };
   }
@@ -598,7 +712,7 @@ export const restrictedImportVisitors = (
         restriction.type === "module" &&
         moduleIn(entry, moduleId) &&
         (loading === MODULE_LOADING.static ||
-          restriction.dynamicImports === DYNAMIC_IMPORTS.restricted)
+          restriction.dynamicImports !== DYNAMIC_IMPORTS.allowed)
       ) {
         report(node, entry, moduleId);
       }
@@ -682,8 +796,18 @@ export const restrictedImportVisitors = (
       }
     },
     ImportExpression(node) {
-      if (isStringLiteral(node.source)) {
-        reportModuleLoad(node, node.source.value, MODULE_LOADING.dynamic);
+      const source = specifierText(context, node.source);
+      if (source !== null) {
+        reportModuleLoad(node, source, MODULE_LOADING.dynamic);
+        return;
+      }
+      for (const entry of active) {
+        if (
+          entry.restriction.type === "module" &&
+          entry.restriction.dynamicImports === DYNAMIC_IMPORTS.readableOnly
+        ) {
+          report(node, entry, "an unreadable dynamic import");
+        }
       }
     },
     CallExpression(node) {

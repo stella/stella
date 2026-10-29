@@ -3,43 +3,157 @@
 export type RegisteredCourt = {
   name: string;
   shortCode: string;
+  citationAliases?: readonly string[];
 };
 
 export const CZ_ECLI_COURT_REGISTRY = {
-  KSBR: { name: "Krajský soud v Brně", shortCode: "KS" },
-  KSBRZL: { name: "Krajský soud v Brně – pobočka ve Zlíně", shortCode: "KS" },
-  KSCB: { name: "Krajský soud v Českých Budějovicích", shortCode: "KS" },
+  KSBR: {
+    name: "Krajský soud v Brně",
+    shortCode: "KS",
+    citationAliases: ["KS Brno", "Krajského soudu v Brně", "KS v Brně"],
+  },
+  KSBRZL: {
+    name: "Krajský soud v Brně – pobočka ve Zlíně",
+    shortCode: "KS",
+    citationAliases: [
+      "Krajského soudu v Brně – pobočky ve Zlíně",
+      "KS v Brně – pobočka ve Zlíně",
+    ],
+  },
+  KSCB: {
+    name: "Krajský soud v Českých Budějovicích",
+    shortCode: "KS",
+    citationAliases: [
+      "KS České Budějovice",
+      "Krajského soudu v Českých Budějovicích",
+      "KS v Českých Budějovicích",
+    ],
+  },
   KSCBTA: {
     name: "Krajský soud v Českých Budějovicích – pobočka v Táboře",
     shortCode: "KS",
+    citationAliases: [
+      "Krajského soudu v Českých Budějovicích – pobočky v Táboře",
+      "KS v Českých Budějovicích – pobočka v Táboře",
+    ],
   },
-  KSHK: { name: "Krajský soud v Hradci Králové", shortCode: "KS" },
+  KSHK: {
+    name: "Krajský soud v Hradci Králové",
+    shortCode: "KS",
+    citationAliases: [
+      "KS Hradec Králové",
+      "Krajského soudu v Hradci Králové",
+      "KS v Hradci Králové",
+    ],
+  },
   KSHKPA: {
     name: "Krajský soud v Hradci Králové – pobočka v Pardubicích",
     shortCode: "KS",
+    citationAliases: [
+      "Krajského soudu v Hradci Králové – pobočky v Pardubicích",
+      "KS v Hradci Králové – pobočka v Pardubicích",
+    ],
   },
-  KSOS: { name: "Krajský soud v Ostravě", shortCode: "KS" },
+  KSOS: {
+    name: "Krajský soud v Ostravě",
+    shortCode: "KS",
+    citationAliases: [
+      "KS Ostrava",
+      "Krajského soudu v Ostravě",
+      "KS v Ostravě",
+    ],
+  },
   KSOSOL: {
     name: "Krajský soud v Ostravě – pobočka v Olomouci",
     shortCode: "KS",
+    citationAliases: [
+      "Krajského soudu v Ostravě – pobočky v Olomouci",
+      "KS v Ostravě – pobočka v Olomouci",
+    ],
   },
-  KSPH: { name: "Krajský soud v Praze", shortCode: "KS" },
-  KSPL: { name: "Krajský soud v Plzni", shortCode: "KS" },
-  KSUL: { name: "Krajský soud v Ústí nad Labem", shortCode: "KS" },
+  KSPH: {
+    name: "Krajský soud v Praze",
+    shortCode: "KS",
+    citationAliases: ["KS Praha", "Krajského soudu v Praze", "KS v Praze"],
+  },
+  KSPL: {
+    name: "Krajský soud v Plzni",
+    shortCode: "KS",
+    citationAliases: ["KS Plzeň", "Krajského soudu v Plzni", "KS v Plzni"],
+  },
+  KSUL: {
+    name: "Krajský soud v Ústí nad Labem",
+    shortCode: "KS",
+    citationAliases: [
+      "KS Ústí nad Labem",
+      "Krajského soudu v Ústí nad Labem",
+      "KS v Ústí nad Labem",
+    ],
+  },
   KSULLI: {
     name: "Krajský soud v Ústí nad Labem – pobočka v Liberci",
     shortCode: "KS",
+    citationAliases: [
+      "Krajského soudu v Ústí nad Labem – pobočky v Liberci",
+      "KS v Ústí nad Labem – pobočka v Liberci",
+    ],
   },
-  MSBR: { name: "Městský soud v Brně", shortCode: "MS" },
-  MSPH: { name: "Městský soud v Praze", shortCode: "MS" },
-  NS: { name: "Nejvyšší soud", shortCode: "NS" },
-  NSS: { name: "Nejvyšší správní soud", shortCode: "NSS" },
-  OSCK: { name: "Okresní soud v Českém Krumlově", shortCode: "OS" },
-  OSOV: { name: "Okresní soud v Ostravě", shortCode: "OS" },
-  OSZR: { name: "Okresní soud ve Žďáru nad Sázavou", shortCode: "OS" },
-  US: { name: "Ústavní soud", shortCode: "ÚS" },
-  VSOL: { name: "Vrchní soud v Olomouci", shortCode: "VS" },
-  VSPH: { name: "Vrchní soud v Praze", shortCode: "VS" },
+  MSBR: {
+    name: "Městský soud v Brně",
+    shortCode: "MS",
+    citationAliases: ["Městského soudu v Brně", "MS v Brně"],
+  },
+  MSPH: {
+    name: "Městský soud v Praze",
+    shortCode: "MS",
+    citationAliases: ["MS Praha", "Městského soudu v Praze", "MS v Praze"],
+  },
+  NS: {
+    name: "Nejvyšší soud",
+    shortCode: "NS",
+    citationAliases: ["Nejvyššího soudu"],
+  },
+  NSS: {
+    name: "Nejvyšší správní soud",
+    shortCode: "NSS",
+    citationAliases: ["Nejvyššího správního soudu"],
+  },
+  OSCK: {
+    name: "Okresní soud v Českém Krumlově",
+    shortCode: "OS",
+    citationAliases: [
+      "Okresního soudu v Českém Krumlově",
+      "OS v Českém Krumlově",
+    ],
+  },
+  OSOV: {
+    name: "Okresní soud v Ostravě",
+    shortCode: "OS",
+    citationAliases: ["Okresního soudu v Ostravě", "OS v Ostravě"],
+  },
+  OSZR: {
+    name: "Okresní soud ve Žďáru nad Sázavou",
+    shortCode: "OS",
+    citationAliases: [
+      "Okresního soudu ve Žďáru nad Sázavou",
+      "OS ve Žďáru nad Sázavou",
+    ],
+  },
+  US: {
+    name: "Ústavní soud",
+    shortCode: "ÚS",
+    citationAliases: ["Ústavního soudu"],
+  },
+  VSOL: {
+    name: "Vrchní soud v Olomouci",
+    shortCode: "VS",
+    citationAliases: ["Vrchního soudu v Olomouci", "VS v Olomouci"],
+  },
+  VSPH: {
+    name: "Vrchní soud v Praze",
+    shortCode: "VS",
+    citationAliases: ["Vrchního soudu v Praze", "VS v Praze"],
+  },
 } as const satisfies Readonly<Record<string, RegisteredCourt>>;
 
 export const SK_ECLI_COURT_REGISTRY = {

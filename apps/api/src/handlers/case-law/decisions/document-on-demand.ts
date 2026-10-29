@@ -49,6 +49,7 @@ import {
   type DeferredDocumentAdapterKey,
   isDeferredDocumentAdapterKey,
 } from "@/api/lib/legal-search/adapter-manifest";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import type {
   BackfilledDocument,
   DecisionDocumentOutcome,
@@ -345,10 +346,14 @@ export const readThroughDeferredDocument = async ({
   // failure, so it is the one error this does not report.
   const outcome = await Result.tryPromise(
     async () =>
-      await withTimeout(async () => await attempt(), {
-        label: READ_BUDGET_LABEL,
-        timeoutMs: READ_BUDGET_MS,
-      }),
+      await withTimeout(
+        async () =>
+          await withPublicReadIo("hydration", async () => await attempt()),
+        {
+          label: READ_BUDGET_LABEL,
+          timeoutMs: READ_BUDGET_MS,
+        },
+      ),
   );
   if (Result.isError(outcome)) {
     if (!isReadBudgetExpiry(outcome.error)) {

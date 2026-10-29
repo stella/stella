@@ -73,6 +73,13 @@ export type ApiError<TResponses> = [ErrorKey<TResponses>] extends [never]
       };
     }[ErrorKey<TResponses>];
 
+export type ApiTransportError = {
+  readonly kind: "network" | "timeout" | "aborted";
+  readonly cause: unknown;
+  readonly status: 0;
+  readonly value: null;
+};
+
 /** What every request resolves to: the decoded answer, or the refusal. */
 export type ApiResult<TResponses> =
   | {
@@ -84,7 +91,7 @@ export type ApiResult<TResponses> =
     }
   | {
       readonly data: null;
-      readonly error: ApiError<TResponses>;
+      readonly error: ApiError<TResponses> | ApiTransportError;
       readonly status: number;
       readonly response: Response;
       readonly headers: Headers;
@@ -110,7 +117,9 @@ type HeadersOption<THeaders> = unknown extends THeaders
 export type RequestOptions<TRoute extends RouteShape> = QueryOption<
   TRoute["query"]
 > &
-  HeadersOption<TRoute["headers"]> & { readonly fetch?: RequestInit };
+  HeadersOption<TRoute["headers"]> & {
+    readonly fetch?: RequestInit & { readonly timeoutMs?: number };
+  };
 
 type OptionsArgs<TRoute extends RouteShape> =
   NoOptions extends RequestOptions<TRoute>
@@ -170,7 +179,10 @@ export type ApiClientOptions = {
   /** Fetch settings every request starts from; credentials default to `include`. */
   readonly fetch?: RequestInit;
   /** Sends the request; `globalThis.fetch` when absent. */
-  readonly fetcher?: (url: string, init: RequestInit) => Promise<Response>;
+  readonly fetcher?: (
+    url: string,
+    init: RequestInit & { readonly timeoutMs?: number },
+  ) => Promise<Response>;
   /** Headers every request carries, or a function computing them per request. */
   readonly headers?:
     | HeaderValues
@@ -199,14 +211,16 @@ type ClientPath = {
 type CallOptions = {
   readonly query: unknown;
   readonly headers: unknown;
-  readonly fetch: RequestInit | undefined;
+  readonly fetch: (RequestInit & { readonly timeoutMs?: number }) | undefined;
 };
 
-const readRequestInit = (value: unknown): RequestInit | undefined => {
+const readRequestInit = (
+  value: unknown,
+): (RequestInit & { readonly timeoutMs?: number }) | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
-  const init: RequestInit = value;
+  const init: RequestInit & { readonly timeoutMs?: number } = value;
   return init;
 };
 
@@ -404,7 +418,7 @@ const send = async (
 
   const headers = new Headers(clientFetch?.headers);
   setHeaders(headers, options.fetch?.headers);
-  const init: RequestInit = {
+  const init: RequestInit & { readonly timeoutMs?: number } = {
     ...clientFetch,
     ...options.fetch,
     credentials:
@@ -426,9 +440,32 @@ const send = async (
 
   await config.options.onRequest?.(path, init);
   const url = `${config.origin}${path}${queryString(options.query)}`;
-  const response = await (config.options.fetcher === undefined
-    ? globalThis.fetch(url, init)
-    : config.options.fetcher(url, init));
+  const request = await Result.tryPromise({
+    try: async () =>
+      config.options.fetcher === undefined
+        ? globalThis.fetch(url, init)
+        : config.options.fetcher(url, init),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(request)) {
+    const cause = request.error;
+    const name = cause instanceof Error ? cause.name : undefined;
+    let kind: "network" | "timeout" | "aborted" = "network";
+    if (name === "AbortError") {
+      kind = "aborted";
+    } else if (name === "TimeoutError") {
+      kind = "timeout";
+    }
+    const response = Response.error();
+    return {
+      data: null,
+      error: { kind, cause, status: 0, value: null },
+      status: 0,
+      response,
+      headers: response.headers,
+    };
+  }
+  const response = request.value;
   await config.options.onScopedResponse?.({
     response,
     scope: {

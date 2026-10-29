@@ -24,7 +24,7 @@ import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 
 /** Per-member conditions that hide a navigation item. */
-type SettingsNavGate = "memory" | "beta" | "timeBilling" | "billing";
+type SettingsNavGate = "memory" | "beta" | "timeBilling" | "billing" | "usage";
 
 export type SettingsNavAccess = {
   role: Role | undefined;
@@ -34,6 +34,8 @@ export type SettingsNavAccess = {
   beta: boolean;
   /** Time and billing is on for the organization. */
   timeBilling: boolean;
+  /** Plan and usage is available on this deployment. */
+  usage: boolean;
 };
 
 // Literal keys keep t() from demanding ICU values a widened
@@ -81,7 +83,12 @@ const ORGANIZATION_SECTIONS = [
     items: [
       { to: "/admin/general", labelKey: "admin.general", icon: BuildingIcon },
       { to: "/admin/members", labelKey: "common.members", icon: UsersIcon },
-      { to: "/admin/usage", labelKey: "admin.planAndUsage", icon: GaugeIcon },
+      {
+        to: "/admin/usage",
+        labelKey: "admin.planAndUsage",
+        icon: GaugeIcon,
+        gate: "usage",
+      },
       {
         to: "/admin/audit-logs",
         labelKey: "settings.organization.auditLogs",
@@ -161,11 +168,13 @@ export const settingsNavSections = ({
   memory,
   beta,
   timeBilling,
+  usage,
 }: SettingsNavAccess) => {
   const open: Record<SettingsNavGate, boolean> = {
     memory,
     beta,
     timeBilling,
+    usage,
     billing: isBillingSettingsAccessible({ previewEnabled: timeBilling, role }),
   };
   const sections: readonly SettingsNavSectionSource[] =

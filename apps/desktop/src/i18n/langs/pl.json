@@ -299,7 +299,7 @@
     "moreOptions": "Więcej opcji",
     "moreItemActions": "Więcej działań dla elementu {number}",
     "noResults": "Brak pasujących wycinków",
-    "noResultsDescription": "Czy zamiast tego wyszukać „{query}” w rejestrach?",
+    "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "noGroup": "Bez grupy",
     "newGroupOption": "Nowa grupa…",
     "copyItem": "Kopiuj element {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Naciśnij {shortcut}, aby przejrzeć historię i wybrać wycinek.",
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
-    "welcomeTitle": "Poznaj swój schowek"
+    "welcomeTitle": "Poznaj swój schowek",
+    "registryIdentifierSearchHint": "Wprowadź {identifiers}."
   },
   "activity": {
     "title": "Aktywność",
@@ -618,5 +619,46 @@
       "fullDiskAccess": "Pełny dostęp do dysku",
       "administrator": "Uprawnienia administratora"
     }
+  },
+  "agentSubscriptions": {
+    "title": "Subskrypcje AI",
+    "chatGpt": "ChatGPT",
+    "description": "Korzystaj ze swojego planu ChatGPT przy zapytaniach do AI w stelli. Wykorzystanie jest liczone w ramach planu ChatGPT, niezależnie od subskrypcji stelli.",
+    "continueWithChatGpt": "Kontynuuj z ChatGPT",
+    "continueAs": "Kontynuuj jako {email}",
+    "useDifferentAccount": "Użyj innego konta",
+    "signingIn": "Dokończ logowanie w przeglądarce.",
+    "cancel": "Anuluj",
+    "pasteDescription": "Jeśli po zalogowaniu przeglądarka pokaże stronę błędu, skopiuj jej adres i wklej go tutaj.",
+    "pasteSubmit": "Dokończ logowanie",
+    "connected": "ChatGPT połączony",
+    "connectedAs": "ChatGPT połączony · {email}",
+    "manageUsage": "Zarządzaj wykorzystaniem",
+    "disconnect": "Odłącz",
+    "needsReconnect": "Połączenie z ChatGPT wygasło. Zaloguj się ponownie, aby dalej korzystać z planu.",
+    "notice": {
+      "actionFailed": "Nie udało się. Spróbuj ponownie.",
+      "pasteRejected": "Ten adres nie pochodzi z bieżącego logowania. Skopiuj pełny adres z karty przeglądarki, która się otworzyła.",
+      "revocationUnconfirmed": "Odłączono na tym komputerze, ale ChatGPT tego nie potwierdził. Stellę możesz też usunąć w ustawieniach ChatGPT."
+    },
+    "failure": {
+      "declined": "Logowanie zostało odrzucone w przeglądarce.",
+      "planUsageNotGranted": "Stella nie otrzymała zgody na korzystanie z Twojego planu ChatGPT. Zaloguj się ponownie i wyraź zgodę.",
+      "differentAccount": "Zalogowano się innym kontem ChatGPT. Zapisane połączenie pozostało bez zmian.",
+      "stateMismatch": "Nie udało się zweryfikować logowania. Spróbuj ponownie.",
+      "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
+      "browserUnavailable": "Nie udało się otworzyć przeglądarki. Spróbuj ponownie.",
+      "callbackUnavailable": "Nie udało się przygotować logowania na tym komputerze. Spróbuj ponownie.",
+      "registrationIncomplete": "ChatGPT nie dokończył łączenia ze stellą. Spróbuj ponownie.",
+      "codeExpired": "Logowanie wygasło, zanim się zakończyło. Spróbuj ponownie.",
+      "verification": "Nie udało się zweryfikować odpowiedzi ChatGPT. Spróbuj ponownie.",
+      "clientRejected": "ChatGPT nie akceptuje już tego połączenia. Połącz się ponownie innym kontem.",
+      "unreachable": "Logowanie do ChatGPT jest niedostępne. Sprawdź połączenie z internetem i spróbuj ponownie.",
+      "storage": "Nie udało się odczytać ani zapisać połączenia na tym komputerze."
+    },
+    "callbackConnectedTitle": "ChatGPT jest połączony",
+    "callbackConnectedBody": "Możesz zamknąć tę kartę i wrócić do stelli.",
+    "callbackNotConnectedTitle": "Nie połączono z ChatGPT",
+    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie."
   }
 }

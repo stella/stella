@@ -1,6 +1,6 @@
 {
   "name": "@stll/auth-model",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "description": "Portable Better Auth core contract and parity checks.",
   "keywords": [
     "authentication",
@@ -46,6 +46,7 @@
     "@stll/typescript-config": "workspace:*",
     "better-auth": "catalog:",
     "bun-types": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }
