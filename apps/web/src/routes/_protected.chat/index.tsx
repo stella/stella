@@ -62,6 +62,7 @@ import {
   useOpenChatThreadDecision,
 } from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -614,6 +615,7 @@ function ChatIndex() {
               ownerKey={getChatThreadKey(threadRef)}
               workspaceId={draftThreadId}
             />
+            <McpReconnectNotice editor={controller.editor} />
             <ChatInputSurface
               sendDisabled={availability !== "available"}
               anonymized={anonymized}

@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -48,7 +49,6 @@ import {
   type FlowStepKind,
   type FlowTriggerType,
 } from "@/components/flows/flow-meta";
-import { FlowSwitch } from "@/components/flows/flow-switch";
 import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -579,7 +579,7 @@ const FlowEditorForm = ({
               {t("flows.enabledDescription")}
             </p>
           </div>
-          <FlowSwitch
+          <Switch
             aria-label={
               enabled ? t("flows.disableFlow") : t("flows.enableFlow")
             }

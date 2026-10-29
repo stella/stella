@@ -58,10 +58,8 @@ import {
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import {
-  SITEMAP_REFRESH_PAGE_SIZE,
-  sitemapRefreshPageSql,
-} from "@/api/lib/case-law/sitemap-shard-refresh";
+import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
+import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
@@ -84,7 +82,10 @@ import type {
   AccessPath,
   HeapFetchMitigation,
 } from "@/api/tests/query-plans/plan-walker";
-import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
+import {
+  QUERY_PLAN_PROVISION_SUBTREE_ROWS,
+  QUERY_PLAN_SAMPLE,
+} from "@/api/tests/query-plans/seed";
 
 type QueryPlanEntry = {
   id: string;
@@ -271,29 +272,24 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.docket-family-key-identity"],
   },
   {
-    id: "case-law.sitemap-refresh",
-    class: "page",
+    id: "case-law.sitemap-month-count",
+    class: "aggregate",
     role: "root",
-    // A resumed page, so the plan covers the row comparison on the index keys.
     build: () =>
-      sitemapRefreshPageSql({
+      sitemapMonthCountSql({
         country: QUERY_PLAN_SAMPLE.caseLaw.country,
-        cursor: {
-          decisionDate: "2010-02-01",
-          id: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
-          sourceId: "00000000-0000-0000-0000-000000000000",
-          updatedAt: "2020-01-01T00:00:00Z",
-        },
-        pageSize: SITEMAP_REFRESH_PAGE_SIZE,
-        phase: "dated",
+        year: "2010",
+        month: "02",
       }),
     seed: "case-law",
     planMode: "covering-index",
     heapFetchMitigation: {
-      type: "batched",
-      pageSize: SITEMAP_REFRESH_PAGE_SIZE,
+      type: "heapFetchBudget",
+      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      reason:
+        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
     },
-    contract: planContracts["case-law.sitemap-refresh"],
+    contract: planContracts["case-law.sitemap-month-count"],
   },
   {
     // A resumed page. Its generic plan is checked in the backfill's own test.
@@ -558,10 +554,14 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.top-citing-decisions"],
   },
   {
-    // A provision's cited-by page: its whole subtree of link rows, one range
-    // of the byte-ordered anchor index, never a walk of the work's links.
+    // A provision's cited-by page: its subtree of link rows is one
+    // index-only range of the byte-ordered anchor index, never a walk of the
+    // work's links, grouped per decision before any decision is read. The
+    // seed concentrates thousands of link rows on this one subtree.
+    // `citing-decisions-plan.db.test.ts` holds the decision and heap reads
+    // to the page at two subtree sizes.
     id: "case-law.provision-citing-decisions",
-    class: "aggregate",
+    class: "page",
     role: "public-law-reader",
     build: (tx) =>
       citingDecisionsPageQuery({
@@ -570,8 +570,8 @@ export const QUERY_PLAN_REGISTRY = [
           citingDecisionConditions(
             {
               jurisdiction: QUERY_PLAN_SAMPLE.caseLaw.country,
-              work: "/eli/cz/sb/2024/1",
-              anchor: "section-1",
+              work: QUERY_PLAN_SAMPLE.caseLaw.provisionWork,
+              anchor: QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor,
             },
             citingJurisdictionScope(QUERY_PLAN_SAMPLE.caseLaw.country) ??
               panic("The query-plan country must be public"),
@@ -581,6 +581,15 @@ export const QUERY_PLAN_REGISTRY = [
         limit: citationPageSize,
       }),
     seed: "case-law",
+    // The seeded subtree is two thirds of a small table, where a sequential
+    // scan would win; the corpus table is many times the subtree.
+    planMode: "covering-index",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: QUERY_PLAN_PROVISION_SUBTREE_ROWS,
+      reason:
+        "The subtree range visits at most one heap page per link row under the provision, and none on an all-visible page; it reads no decision.",
+    },
     contract: planContracts["case-law.provision-citing-decisions"],
   },
   {

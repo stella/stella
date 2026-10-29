@@ -547,6 +547,14 @@
     },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
+    "arrangement": {
+      "alertThreshold": "Limite de alerta (%)",
+      "amountCap": "Limite de honorários",
+      "flatFee": "Honorários fixos",
+      "invalidCap": "Informe limites positivos e um limite de alerta entre 0,01% e 100%.",
+      "minuteCap": "Limite de tempo (minutos)",
+      "title": "Contrato de honorários"
+    },
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
@@ -933,12 +941,16 @@
         "reasoning": "Fundamentação"
       },
       "errors": {
+        "analysisDisabled": "A geração de análises por IA está desativada neste servidor. Leia o texto da decisão ou tente novamente mais tarde.",
         "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
+        "decisionNotFound": "Esta decisão não foi encontrada. Abra-a novamente pela busca.",
+        "documentUnparseable": "O texto da decisão não está pronto para análise. Consulte a fonte original.",
+        "languageUnsupported": "A análise por IA ainda não oferece suporte ao idioma desta decisão. Leia o texto da decisão ou consulte a fonte original.",
         "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
         "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
         "retryAfter": "Você poderá tentar novamente a partir de {time}.",
-        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}",
-        "unavailable": "A análise por IA não está disponível para esta decisão."
+        "sourceRestricted": "A fonte não permite análise por IA. Leia o texto da decisão ou consulte a fonte original.",
+        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}"
       },
       "generate": "Gerar ementas com IA",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
@@ -1143,7 +1155,7 @@
     "reader": {
       "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
-      "headMatter": "Cabeçalho",
+      "headMatter": "Informações do processo",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
     "research": {
@@ -1275,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Versão na data da decisão (inferida)",
       "versionBasisInferredCompact": "Data da decisão · inferida",
       "versionBasisInferredExplanation": "A versão é inferida da data da decisão. A decisão não informa qual redação se aplica."
-    }
+    },
+    "withdrawnByPublisher": "Retirado pelo publicador"
   },
   "catalogue": {
     "addCustom": "Adicionar personalizado",
@@ -1572,6 +1585,12 @@
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# mais} many {+# mais} other {+# mais}}",
+      "dismiss": "Ocultar aviso de conexão",
+      "stoppedWorking": "Sua conexão com <name>{server}</name> parou de funcionar.",
+      "waitingApproval": "Sua conexão com <name>{server}</name> está aguardando aprovação."
+    },
     "mention": {
       "category": {
         "entities": "Neste caso",
@@ -4872,7 +4891,9 @@
     "viewOnGithub": "Ver no GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Idioma da resposta",
     "budgetError": "O orçamento para respostas foi esgotado.",
+    "documentLanguage": "Idioma do documento ({language})",
     "expand": "Expandir resposta",
     "explain": "Explicar",
     "followUp": "Fazer uma pergunta de acompanhamento",
@@ -5059,6 +5080,16 @@
       "preferredNamePlaceholder": "Seu nome",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
+      "signInMethods": {
+        "confirmDescription": "Digite um novo código enviado para seu e-mail para desconectar este método de login.",
+        "confirmTitle": "Desconectar {provider}?",
+        "description": "Conecte contas que usam o mesmo endereço de e-mail verificado.",
+        "emailCode": "Código por e-mail",
+        "emailCodeDescription": "Você sempre pode entrar com um código enviado para seu e-mail.",
+        "lastMethod": "Conecte outra conta antes de desconectar esta.",
+        "title": "Métodos de login",
+        "unavailable": "O envio de e-mails precisa estar configurado para desconectar métodos de login."
+      },
       "timezone": "Fuso horário",
       "timezoneDescription": "Usado para carimbos de data/hora em notificações e e-mails",
       "timezoneSaved": "Fuso horário atualizado",

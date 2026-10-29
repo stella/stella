@@ -547,6 +547,14 @@
     },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
+    "arrangement": {
+      "alertThreshold": "Próg powiadomienia (%)",
+      "amountCap": "Limit wynagrodzenia",
+      "flatFee": "Wynagrodzenie ryczałtowe",
+      "invalidCap": "Podaj dodatnie limity i próg powiadomienia od 0,01% do 100%.",
+      "minuteCap": "Limit czasu (minuty)",
+      "title": "Umowa o wynagrodzenie"
+    },
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
@@ -933,12 +941,16 @@
         "reasoning": "Rozumowanie"
       },
       "errors": {
+        "analysisDisabled": "Generowanie analiz AI jest wyłączone na tym serwerze. Przeczytaj tekst orzeczenia lub spróbuj ponownie później.",
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia. Otwórz je ponownie z wyników wyszukiwania.",
+        "documentUnparseable": "Tekst orzeczenia nie jest gotowy do analizy. Przeczytaj materiał źródłowy.",
+        "languageUnsupported": "Analiza AI nie obsługuje jeszcze języka tego orzeczenia. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
         "retryAfter": "Możesz spróbować ponownie po {time}.",
-        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
-        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+        "sourceRestricted": "Źródło nie zezwala na analizę AI. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}"
       },
       "generate": "Ułóż tezy w AI",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
@@ -1143,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
-      "headMatter": "Część wstępna",
+      "headMatter": "Informacje o sprawie",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
     "research": {
@@ -1275,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
       "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
       "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
-    }
+    },
+    "withdrawnByPublisher": "Wycofane przez wydawcę"
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
@@ -1572,6 +1585,12 @@
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
+      "dismiss": "Ukryj powiadomienie o połączeniu",
+      "stoppedWorking": "Twoje połączenie z <name>{server}</name> przestało działać.",
+      "waitingApproval": "Twoje połączenie z <name>{server}</name> oczekuje na zatwierdzenie."
+    },
     "mention": {
       "category": {
         "entities": "W tej sprawie",
@@ -4872,7 +4891,9 @@
     "viewOnGithub": "Zobacz na GitHubie"
   },
   "readerAnswers": {
+    "answerLanguage": "Język odpowiedzi",
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "documentLanguage": "Język dokumentu ({language})",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
     "followUp": "Zadaj dodatkowe pytanie",
@@ -5059,6 +5080,16 @@
       "preferredNamePlaceholder": "Twoje imię",
       "profileDescription": "Zarządzaj swoimi preferencjami osobistymi",
       "sendOtpCode": "Wyślij kod weryfikacyjny",
+      "signInMethods": {
+        "confirmDescription": "Aby odłączyć tę metodę logowania, wpisz nowy kod wysłany na Twój adres e-mail.",
+        "confirmTitle": "Odłączyć {provider}?",
+        "description": "Połącz konta, które używają tego samego zweryfikowanego adresu e-mail.",
+        "emailCode": "Kod e-mail",
+        "emailCodeDescription": "Zawsze możesz zalogować się za pomocą kodu wysłanego na Twój adres e-mail.",
+        "lastMethod": "Połącz inne konto, zanim odłączysz to.",
+        "title": "Metody logowania",
+        "unavailable": "Aby odłączyć metody logowania, należy skonfigurować wysyłanie poczty e-mail."
+      },
       "timezone": "Strefa czasowa",
       "timezoneDescription": "Używana w datach i godzinach w powiadomieniach i e-mailach",
       "timezoneSaved": "Zaktualizowano strefę czasową",

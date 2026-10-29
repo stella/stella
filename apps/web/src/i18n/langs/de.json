@@ -547,6 +547,14 @@
     },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
+    "arrangement": {
+      "alertThreshold": "Warnschwelle (%)",
+      "amountCap": "Honorarobergrenze",
+      "flatFee": "Pauschalhonorar",
+      "invalidCap": "Geben Sie positive Obergrenzen und eine Warnschwelle zwischen 0,01 % und 100 % ein.",
+      "minuteCap": "Zeitlimit (Minuten)",
+      "title": "Honorarvereinbarung"
+    },
     "batchActions": "Massenaktionen",
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
@@ -933,12 +941,16 @@
         "reasoning": "Argumentation"
       },
       "errors": {
+        "analysisDisabled": "Die KI-Analyse ist auf diesem Server deaktiviert. Lesen Sie den Entscheidungstext oder versuchen Sie es später erneut.",
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
+        "decisionNotFound": "Diese Entscheidung wurde nicht gefunden. Öffnen Sie sie erneut über die Suche.",
+        "documentUnparseable": "Der Entscheidungstext ist noch nicht für die Analyse bereit. Lesen Sie die Originalquelle.",
+        "languageUnsupported": "Die KI-Analyse unterstützt die Sprache dieser Entscheidung noch nicht. Lesen Sie den Entscheidungstext oder die Originalquelle.",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
         "retryAfter": "Sie können es ab {time} erneut versuchen.",
-        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
-        "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
+        "sourceRestricted": "Die Quelle erlaubt keine KI-Analyse. Lesen Sie den Entscheidungstext oder die Originalquelle.",
+        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}"
       },
       "generate": "KI-Leitsätze erzeugen",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
@@ -1143,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
-      "headMatter": "Rubrum",
+      "headMatter": "Angaben zum Verfahren",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
     "research": {
@@ -1275,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
       "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
       "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
-    }
+    },
+    "withdrawnByPublisher": "Vom Herausgeber zurückgezogen"
   },
   "catalogue": {
     "addCustom": "Eigenes hinzufügen",
@@ -1572,6 +1585,12 @@
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
     "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
+      "dismiss": "Verbindungshinweis ausblenden",
+      "stoppedWorking": "Ihre Verbindung zu <name>{server}</name> funktioniert nicht mehr.",
+      "waitingApproval": "Ihre Verbindung zu <name>{server}</name> wartet auf Genehmigung."
+    },
     "mention": {
       "category": {
         "entities": "In dieser Akte",
@@ -4872,7 +4891,9 @@
     "viewOnGithub": "Auf GitHub ansehen"
   },
   "readerAnswers": {
+    "answerLanguage": "Antwortsprache",
     "budgetError": "Das Budget für Antworten ist aufgebraucht.",
+    "documentLanguage": "Dokumentsprache ({language})",
     "expand": "Antwort aufklappen",
     "explain": "Erklären",
     "followUp": "Rückfrage stellen",
@@ -5059,6 +5080,16 @@
       "preferredNamePlaceholder": "Ihr Name",
       "profileDescription": "Verwalten Sie Ihre persönlichen Einstellungen",
       "sendOtpCode": "Bestätigungscode senden",
+      "signInMethods": {
+        "confirmDescription": "Geben Sie einen neuen Code ein, den wir an Ihre E-Mail-Adresse gesendet haben, um diese Anmeldemethode zu trennen.",
+        "confirmTitle": "{provider} trennen?",
+        "description": "Verbinden Sie Konten, die dieselbe bestätigte E-Mail-Adresse verwenden.",
+        "emailCode": "E-Mail-Code",
+        "emailCodeDescription": "Sie können sich jederzeit mit einem Code anmelden, den wir an Ihre E-Mail-Adresse senden.",
+        "lastMethod": "Verbinden Sie ein weiteres Konto, bevor Sie dieses trennen.",
+        "title": "Anmeldemethoden",
+        "unavailable": "Der E-Mail-Versand muss eingerichtet sein, damit Anmeldemethoden getrennt werden können."
+      },
       "timezone": "Zeitzone",
       "timezoneDescription": "Wird für Zeitstempel in Benachrichtigungen und E-Mails verwendet",
       "timezoneSaved": "Zeitzone aktualisiert",

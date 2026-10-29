@@ -1,12 +1,14 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Tarefas",
+    "close": "Fechar",
+    "law": "Jurisprudência",
     "matters": "Casos",
-    "settings": "Configurações"
+    "more": "Mais",
+    "settings": "Configurações",
+    "tasks": "Tarefas"
   },
   "chat": {
-    "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
     "emptyTitle": "Ainda não há conversas",
     "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui.",
     "noMatchesTitle": "Nenhuma conversa correspondente",
@@ -35,19 +37,62 @@
     "answerWorking": "Trabalhando…",
     "answerStopped": "Interrompido.",
     "answerNeedsInput": "Esta resposta precisa da sua ação. Continue-a na stella pela web.",
-    "answerFailed": "Não foi possível concluir a resposta."
+    "answerFailed": "Não foi possível concluir a resposta.",
+    "composerMenu": "Abrir o menu de anexos e ferramentas",
+    "pickTitle": "Escolha uma conversa",
+    "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +."
   },
   "tasks": {
-    "description": "Veja o que precisa de atenção sem abrir todo o espaço de trabalho.",
     "emptyTitle": "Nenhuma tarefa em aberto",
-    "emptyDescription": "Tarefas atribuídas e futuras aparecerão aqui."
+    "emptyDescription": "As tarefas abertas atribuídas a você aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar suas tarefas.",
+    "retry": "Tentar novamente",
+    "newTask": "Nova tarefa",
+    "add": "Adicionar",
+    "name": "Nome da tarefa",
+    "dueTitle": "Prazo",
+    "matterTitle": "Caso",
+    "findMatter": "Encontrar um caso",
+    "addFailed": "Não foi possível adicionar a tarefa. Tente novamente.",
+    "mattersFailed": "Não foi possível carregar seus casos.",
+    "dueOn": "prazo {day}",
+    "dueChoice": {
+      "none": "Sem data",
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "nextWeek": "Em uma semana"
+    },
+    "due": {
+      "overdue": "Atrasadas",
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "week": "Esta semana",
+      "later": "Mais tarde",
+      "none": "Sem prazo"
+    },
+    "markDone": "Marcar como concluída",
+    "reopen": "Reabrir",
+    "statusFailed": "Não foi possível alterar a tarefa. Tente novamente.",
+    "pickTitle": "Escolha uma tarefa",
+    "pickDescription": "Escolha uma tarefa da lista para vê-la aqui.",
+    "openMatter": "Abrir caso"
   },
   "matters": {
-    "description": "Encontre um caso e obtenha rapidamente o contexto essencial.",
     "emptyTitle": "Ainda não há casos",
     "emptyDescription": "Seus casos recentes aparecerão aqui.",
     "loadFailed": "Não foi possível carregar seus casos.",
-    "retry": "Tente novamente"
+    "retry": "Tente novamente",
+    "groupBy": "Agrupar por",
+    "noGrouping": "Sem agrupamento",
+    "groupClient": "Cliente",
+    "personal": "Pessoal",
+    "newMatter": "Novo caso",
+    "create": "Criar",
+    "name": "Nome do caso",
+    "personalHint": "Ele é criado como caso pessoal, visível só para você. Adicione um cliente e membros na web.",
+    "createFailed": "Não foi possível criar o caso. Tente novamente.",
+    "pickTitle": "Escolha um caso",
+    "pickDescription": "Escolha um caso da lista para ver seus documentos e tarefas."
   },
   "matter": {
     "documents": "Documentos",
@@ -71,7 +116,10 @@
       "in_review": "Em revisão",
       "done": "Concluída",
       "cancelled": "Cancelada"
-    }
+    },
+    "add": "Adicionar",
+    "scanDocument": "Digitalizar um documento",
+    "newTask": "Nova tarefa"
   },
   "entity": {
     "type": "Tipo",
@@ -80,11 +128,18 @@
     "loadFailed": "Não foi possível carregar este item."
   },
   "signIn": {
-    "title": "Entre no stella",
-    "description": "Informe o endereço do seu servidor stella. Você aprova o login no navegador.",
+    "beta": "Beta",
+    "headline": "Clareza para cada caso.",
+    "subtitle": "Documentos, jurisprudência e revisão sob controle. Com tecnologia de IA.",
+    "submit": "Faça login",
+    "terms": "Ao continuar, você concorda com nossos <terms>Termos de Serviço</terms>.",
+    "options": "Opções de login",
+    "serverTitle": "Servidor",
+    "serverDescription": "O app entra no stella. Informe outro servidor apenas se sua organização mantiver um próprio.",
+    "useStella": "Usar o stella",
+    "done": "Concluído",
     "serverLabel": "Endereço do servidor",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continuar",
     "sessionEnded": "Sua sessão terminou. Entre novamente.",
     "errors": {
       "address": "Informe um endereço https, como stella.example.com.",
@@ -96,6 +151,83 @@
   "settings": {
     "accountTitle": "Conta",
     "server": "Servidor",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "deleteAccount": "Excluir conta",
+    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu."
+  },
+  "header": {
+    "search": "Pesquisar"
+  },
+  "law": {
+    "title": "Jurisprudência",
+    "newest": "Decisões mais recentes",
+    "noResults": "Nada corresponde às palavras exigidas por esta pesquisa.",
+    "noResultsHint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
+    "unavailable": "A pesquisa está temporariamente indisponível",
+    "retry": "Tente novamente",
+    "headnote": "Ementa",
+    "textUnavailable": "Não há texto disponível para esta decisão",
+    "openSource": "Abrir fonte original",
+    "loadFailed": "Não foi possível carregar a jurisprudência.",
+    "share": "Compartilhar"
+  },
+  "more": {
+    "soon": "Em breve",
+    "timers": "Cronômetros",
+    "voiceInput": "Entrada por voz"
+  },
+  "writes": {
+    "consentNeeded": "Para fazer alterações pelo app, a stella precisa da sua permissão. Entre novamente para concedê-la.",
+    "signInAgain": "Entrar novamente"
+  },
+  "timers": {
+    "title": "Cronômetros",
+    "start": "Iniciar",
+    "startTimer": "Iniciar um cronômetro",
+    "newTimer": "Novo cronômetro",
+    "description": "No que você está trabalhando?",
+    "matterTitle": "Caso",
+    "noMatter": "Sem caso",
+    "noDescription": "Sem descrição",
+    "running": "Em andamento",
+    "paused": "Pausado",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "save": "Salvar",
+    "discard": "Descartar",
+    "emptyTitle": "Nenhum cronômetro",
+    "emptyDescription": "Inicie um cronômetro com + e salve-o como lançamento de horas ao terminar.",
+    "loadFailed": "Não foi possível carregar seus cronômetros.",
+    "retry": "Tentar novamente",
+    "unavailable": "O controle de horas não está ativado na sua organização.",
+    "startFailed": "Não foi possível iniciar o cronômetro. Tente novamente.",
+    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente.",
+    "more": "{count, plural, one {mais # cronômetro} other {mais # cronômetros}}"
+  },
+  "scan": {
+    "title": "Digitalizar um documento",
+    "upload": "Enviar",
+    "name": "Nome do documento",
+    "defaultName": "Digitalização {day}",
+    "pages": "{count, plural, one {# página} other {# páginas}}",
+    "matterTitle": "Caso",
+    "uploadFailed": "Não foi possível enviar a digitalização. Tente novamente.",
+    "failedTitle": "Falha na digitalização",
+    "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente."
+  },
+  "shortcuts": {
+    "search": "Pesquisar",
+    "palette": "Paleta de comandos",
+    "next": "Próximo resultado",
+    "previous": "Resultado anterior",
+    "toggleList": "Mostrar ou ocultar a lista"
+  },
+  "palette": {
+    "placeholder": "Pesquise casos e conversas ou execute um comando",
+    "noResults": "Nada corresponde a “{query}”"
+  },
+  "pane": {
+    "showList": "Mostrar a lista",
+    "hideList": "Ocultar a lista"
   }
 }

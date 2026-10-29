@@ -871,10 +871,16 @@ type ResolveRepoPathOptions = {
   readonly checkouts: readonly CheckoutSource[];
 };
 
+const PRESERVED_TOOLING_FILES = new Map([
+  ["$RUNNER_TEMP/ci-pr-jobs-cli.ts", "scripts/ci-pr-jobs-cli.ts"],
+  [
+    "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts",
+    "scripts/staging-proof-readiness-cli.ts",
+  ],
+]);
+
 const preservedToolingFile = (target: string) =>
-  target === "$RUNNER_TEMP/ci-pr-jobs-cli.ts"
-    ? "scripts/ci-pr-jobs-cli.ts"
-    : undefined;
+  PRESERVED_TOOLING_FILES.get(target);
 
 const resolveRepoPath = ({
   cwd,
