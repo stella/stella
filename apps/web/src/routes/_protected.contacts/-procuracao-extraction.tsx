@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex } from "@stll/sha256/browser";
+import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { AlertTriangleIcon, FileTextIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -289,33 +290,41 @@ export const ProcuracaoDropZone = ({
 
   return (
     <div ref={ref}>
-      <button
+      {/* Not `disabled` while extracting: the zone keeps its colour behind
+          the loader (a disabled Button dims) and shows a busy cursor;
+          `openPicker` already ignores the click. */}
+      <Button
         aria-busy={isExtracting}
-        className={cn(
-          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center focus-visible:ring-2 focus-visible:outline-none",
-          isDropTarget && "border-primary bg-primary/5",
-          isExtracting && "cursor-progress",
-        )}
-        disabled={isExtracting}
+        aria-disabled={isExtracting || undefined}
+        className="w-full items-stretch"
         onClick={openPicker}
-        type="button"
+        variant="plain"
       >
-        {isExtracting ? (
-          <Loader className="size-5" size="sm" variant="decorative" />
-        ) : (
-          <FileTextIcon className="text-muted-foreground size-5" />
-        )}
-        <span className="text-sm font-medium">
-          {t(
-            isExtracting
-              ? "contacts.extractProcuracao.extracting"
-              : "contacts.extractProcuracao.dropZone",
+        {/* The drop surface, lit while a file is dragged over it. */}
+        <span
+          className={cn(
+            "bg-muted/20 hover:bg-muted/40 flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center",
+            isDropTarget && "border-primary bg-primary/5",
+            isExtracting && "cursor-progress",
           )}
+        >
+          {isExtracting ? (
+            <Loader className="size-5" size="sm" variant="decorative" />
+          ) : (
+            <FileTextIcon className="text-muted-foreground size-5" />
+          )}
+          <span className="text-sm font-medium">
+            {t(
+              isExtracting
+                ? "contacts.extractProcuracao.extracting"
+                : "contacts.extractProcuracao.dropZone",
+            )}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {t("contacts.extractProcuracao.fileHint")}
+          </span>
         </span>
-        <span className="text-muted-foreground text-xs">
-          {t("contacts.extractProcuracao.fileHint")}
-        </span>
-      </button>
+      </Button>
     </div>
   );
 };

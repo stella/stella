@@ -17,6 +17,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { Form } from "@stll/ui/form";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -434,91 +435,94 @@ export const AnonymizationDenyListCard = () => {
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
           <QueryViewFeedback view={blacklistView} />
-          <form
-            action={submitTerm}
-            className="flex flex-col gap-2 rounded-md border p-3"
-          >
-            <Input
-              autoComplete="off"
-              disabled={updateMutation.isPending}
-              onChange={(event) => setPendingCanonical(event.target.value)}
-              placeholder={t(
-                "settings.organization.anonymization.addPlaceholder",
-              )}
-              value={pendingCanonical}
-            />
-            <div className="flex items-center gap-2">
-              <Combobox<LabelOption>
-                autoHighlight
+          <div className="rounded-md border p-3">
+            <Form action={submitTerm} density="compact">
+              <Input
+                autoComplete="off"
                 disabled={updateMutation.isPending}
-                filter={matchesComboboxItem}
-                items={[...LABEL_OPTIONS]}
-                itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
-                onValueChange={(next) => {
-                  if (next) {
-                    setPendingLabel(next);
-                  }
-                }}
-                value={pendingLabel}
-              >
-                <ComboboxInput
-                  aria-label={t(
-                    "settings.organization.anonymization.labelPickerAriaLabel",
-                  )}
-                  className="h-9 min-w-0 flex-1 text-xs"
-                  placeholder={t(
-                    "settings.organization.anonymization.labelPickerPlaceholder",
-                  )}
-                />
-                <ComboboxPopup>
-                  <ComboboxList>
-                    {(option: LabelOption) => (
-                      <ComboboxItem key={option} value={option}>
-                        {t(LABEL_TRANSLATION_KEY[option])}
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                  <ComboboxEmpty>
-                    {t("settings.organization.anonymization.labelPickerEmpty")}
-                  </ComboboxEmpty>
-                </ComboboxPopup>
-              </Combobox>
-              <AddTermSubmitButton
-                disabled={
-                  pendingCanonical.trim().length === 0 ||
-                  entries === undefined ||
-                  updateMutation.isPending
-                }
-                label={t("common.add")}
+                onChange={(event) => setPendingCanonical(event.target.value)}
+                placeholder={t(
+                  "settings.organization.anonymization.addPlaceholder",
+                )}
+                value={pendingCanonical}
               />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                disabled={entries === undefined || updateMutation.isPending}
-                onClick={() => {
-                  openFilePicker({
-                    accept:
-                      ".csv,.txt,.json,text/csv,text/plain,application/json",
-                    onPick: ([file]) => {
-                      detached(
-                        handleImportFile(file),
-                        "anonymization-deny-list-card.import-file",
-                      );
-                    },
-                  });
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <UploadIcon className="size-3.5" />
-                {t("common.import")}
-              </Button>
-              <span className="text-muted-foreground text-xs">
-                {t("settings.organization.anonymization.importHint")}
-              </span>
-            </div>
-          </form>
+              <div className="flex items-center gap-2">
+                <Combobox<LabelOption>
+                  autoHighlight
+                  disabled={updateMutation.isPending}
+                  filter={matchesComboboxItem}
+                  items={[...LABEL_OPTIONS]}
+                  itemToStringLabel={(option) =>
+                    t(LABEL_TRANSLATION_KEY[option])
+                  }
+                  onValueChange={(next) => {
+                    if (next) {
+                      setPendingLabel(next);
+                    }
+                  }}
+                  value={pendingLabel}
+                >
+                  <ComboboxInput
+                    aria-label={t(
+                      "settings.organization.anonymization.labelPickerAriaLabel",
+                    )}
+                    className="h-9 min-w-0 flex-1 text-xs"
+                    placeholder={t(
+                      "settings.organization.anonymization.labelPickerPlaceholder",
+                    )}
+                  />
+                  <ComboboxPopup>
+                    <ComboboxList>
+                      {(option: LabelOption) => (
+                        <ComboboxItem key={option} value={option}>
+                          {t(LABEL_TRANSLATION_KEY[option])}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                    <ComboboxEmpty>
+                      {t(
+                        "settings.organization.anonymization.labelPickerEmpty",
+                      )}
+                    </ComboboxEmpty>
+                  </ComboboxPopup>
+                </Combobox>
+                <AddTermSubmitButton
+                  disabled={
+                    pendingCanonical.trim().length === 0 ||
+                    entries === undefined ||
+                    updateMutation.isPending
+                  }
+                  label={t("common.add")}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  disabled={entries === undefined || updateMutation.isPending}
+                  onClick={() => {
+                    openFilePicker({
+                      accept:
+                        ".csv,.txt,.json,text/csv,text/plain,application/json",
+                      onPick: ([file]) => {
+                        detached(
+                          handleImportFile(file),
+                          "anonymization-deny-list-card.import-file",
+                        );
+                      },
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <UploadIcon className="size-3.5" />
+                  {t("common.import")}
+                </Button>
+                <span className="text-muted-foreground text-xs">
+                  {t("settings.organization.anonymization.importHint")}
+                </span>
+              </div>
+            </Form>
+          </div>
 
           <div className="flex flex-col gap-1">
             <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

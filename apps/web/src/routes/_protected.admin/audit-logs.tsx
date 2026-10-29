@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -235,12 +236,9 @@ function AuditLogsPage() {
             {/* Filters Row */}
             <div className="bg-muted/30 grid grid-cols-1 items-end gap-2 rounded-lg border p-4 md:grid-cols-3">
               <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="userId-input"
-                >
+                <Label htmlFor="userId-input" variant="muted">
                   {t("settings.organization.auditLogsUserId")}
-                </label>
+                </Label>
                 <Input
                   id="userId-input"
                   placeholder={t(
@@ -254,12 +252,9 @@ function AuditLogsPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="action-select"
-                >
+                <Label htmlFor="action-select" variant="muted">
                   {t("common.action")}
-                </label>
+                </Label>
                 <Select
                   id="action-select"
                   value={filterAction || "all"}
@@ -304,12 +299,9 @@ function AuditLogsPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="resourceType-input"
-                >
+                <Label htmlFor="resourceType-input" variant="muted">
                   {t("settings.organization.auditLogsResourceType")}
-                </label>
+                </Label>
                 <Input
                   id="resourceType-input"
                   placeholder={t(

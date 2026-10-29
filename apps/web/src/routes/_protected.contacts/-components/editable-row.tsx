@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -159,20 +160,23 @@ export const EditableRow = ({
       {label && (
         <span className="text-muted-foreground w-32 shrink-0">{label}</span>
       )}
-      <button
-        className="hover:text-foreground min-w-0 cursor-text overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
-        disabled={rateNeedsCurrency}
-        onClick={() => rename.startEditing()}
-        type="button"
-      >
-        {rateNeedsCurrency ? (
-          <span className="text-foreground-subtle">
-            {t("contacts.billing.selectCurrencyForRate")}
+      {/* Without a currency there is nothing to edit yet: the hint stands as
+          plain text (a disabled Button would dim the already subtle hint). */}
+      {rateNeedsCurrency ? (
+        <span className="text-foreground-subtle min-w-0 truncate text-sm">
+          {t("contacts.billing.selectCurrencyForRate")}
+        </span>
+      ) : (
+        <Button
+          className="min-w-0 overflow-hidden"
+          onClick={() => rename.startEditing()}
+          variant="plain"
+        >
+          <span className="hover:text-foreground block cursor-text overflow-hidden text-sm text-ellipsis whitespace-pre">
+            {displayValue || <span className="text-foreground-subtle">—</span>}
           </span>
-        ) : (
-          displayValue || <span className="text-foreground-subtle">—</span>
-        )}
-      </button>
+        </Button>
+      )}
     </div>
   );
 };

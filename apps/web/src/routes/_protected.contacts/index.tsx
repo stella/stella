@@ -62,6 +62,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ContactReadError } from "@/components/contact-read-error";
@@ -459,11 +460,10 @@ const useContactColumns = () => {
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground block max-w-xs truncate hover:underline"
+                className="text-muted-foreground hover:text-foreground block max-w-xs hover:underline"
                 href={`mailto:${primaryEmail.address}`}
-                title={primaryEmail.address}
               >
-                {primaryEmail.address}
+                <TruncatedText>{primaryEmail.address}</TruncatedText>
               </a>
             );
           },

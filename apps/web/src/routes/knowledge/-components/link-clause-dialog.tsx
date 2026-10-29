@@ -324,18 +324,27 @@ export const LinkClauseDialog = ({
                 value={search}
               />
             </div>
-            <select
-              className="flex h-9 rounded-md border bg-transparent px-3 py-1 text-sm"
-              onChange={(e) => setSelectedCategory(e.target.value)}
+            <Select
+              onValueChange={(value: string | null) =>
+                setSelectedCategory(value ?? "")
+              }
               value={selectedCategory}
             >
-              <option value="">{t("clauses.allClauses")}</option>
-              {categories.map((cat) => (
-                <option dir="auto" key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                aria-label={t("common.category")}
+                className="w-auto"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="">{t("clauses.allClauses")}</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem dir="auto" key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
 
           <div className="max-h-64 overflow-y-auto rounded-lg border">
@@ -357,32 +366,38 @@ export const LinkClauseDialog = ({
             <ul className="divide-y">
               {filtered.map((clause) => (
                 <li key={clause.id}>
-                  <button
-                    className={cn(
-                      "flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm",
-                      selectedClauseId === clause.id
-                        ? "bg-muted"
-                        : "hover:bg-muted/50",
-                    )}
+                  <Button
+                    aria-pressed={selectedClauseId === clause.id}
                     onClick={() => {
                       setSelectedClauseId(clause.id);
                       setSelectedVariantId(null);
                     }}
-                    type="button"
+                    className="w-full"
+                    selected={selectedClauseId === clause.id}
+                    variant="plain"
                   >
-                    <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
                     <span
-                      className="min-w-0 flex-1 truncate font-medium"
-                      dir="auto"
+                      className={cn(
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm",
+                        selectedClauseId === clause.id
+                          ? "bg-muted"
+                          : "hover:bg-muted/50",
+                      )}
                     >
-                      {clause.title}
+                      <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
+                      <span
+                        className="min-w-0 flex-1 truncate font-medium"
+                        dir="auto"
+                      >
+                        {clause.title}
+                      </span>
+                      <span className="text-muted-foreground shrink-0 text-xs">
+                        {t("common.versionLabel", {
+                          version: String(clause.currentVersion),
+                        })}
+                      </span>
                     </span>
-                    <span className="text-muted-foreground shrink-0 text-xs">
-                      {t("common.versionLabel", {
-                        version: String(clause.currentVersion),
-                      })}
-                    </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

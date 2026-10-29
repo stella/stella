@@ -22,6 +22,7 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { TextSeparator } from "@stll/ui/separator";
@@ -339,8 +340,8 @@ export const LoopBoundsInputs = ({
     });
   };
 
-  const onMin = (raw: string) => {
-    const value = parseBoundInput(raw);
+  const onMin = (raw: number | null) => {
+    const value = toRepeatBound(raw);
     if (value === undefined) {
       writeBounds({ maxItems });
       return;
@@ -351,8 +352,8 @@ export const LoopBoundsInputs = ({
     writeBounds({ minItems: value, maxItems: max });
   };
 
-  const onMax = (raw: string) => {
-    const value = parseBoundInput(raw);
+  const onMax = (raw: number | null) => {
+    const value = toRepeatBound(raw);
     if (value === undefined) {
       writeBounds({ minItems });
       return;
@@ -372,48 +373,42 @@ export const LoopBoundsInputs = ({
         <Label className="text-sm" htmlFor="loop-min-repeats">
           {t("templates.studio.minRepeats")}
         </Label>
-        <Input
+        <NumberInput
           className="h-8"
           id="loop-min-repeats"
-          inputMode="numeric"
+          inputProps={{ placeholder: "0" }}
           min={0}
-          onChange={(e) => onMin(e.target.value)}
-          placeholder="0"
-          type="number"
-          value={minItems === undefined ? "" : String(minItems)}
+          onValueChange={onMin}
+          value={minItems ?? null}
         />
       </div>
       <div className="flex flex-1 flex-col gap-1.5">
         <Label className="text-sm" htmlFor="loop-max-repeats">
           {t("templates.studio.maxRepeats")}
         </Label>
-        <Input
+        <NumberInput
           className="h-8"
           id="loop-max-repeats"
-          inputMode="numeric"
-          min={(minItems ?? 0) + 1}
-          onChange={(e) => onMax(e.target.value)}
-          placeholder={t("templates.studio.repeatsUnlimited")}
-          type="number"
-          value={maxItems === undefined ? "" : String(maxItems)}
+          inputProps={{ placeholder: t("templates.studio.repeatsUnlimited") }}
+          // Only the absolute floor: the field clamps to its min while the
+          // value is typed, so tying it to the current min would stop the max
+          // from going below it. `onMax` pulls the min down instead.
+          min={1}
+          onValueChange={onMax}
+          value={maxItems ?? null}
         />
       </div>
     </div>
   );
 };
 
-/** Parse a repeat-bound input: a non-negative integer, or undefined when the
- *  input is empty/invalid (which unsets the bound). */
-const parseBoundInput = (raw: string): number | undefined => {
-  const trimmed = raw.trim();
-  if (trimmed === "") {
+/** Read a repeat-bound field: a non-negative whole number, or undefined when
+ *  the field is empty or invalid (which unsets the bound). */
+const toRepeatBound = (raw: number | null): number | undefined => {
+  if (raw === null || !Number.isFinite(raw) || raw < 0) {
     return undefined;
   }
-  const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return undefined;
-  }
-  return parsed;
+  return Math.trunc(raw);
 };
 
 /** Edit a boolean condition-field's SOURCE — how its yes/no value arises —
@@ -752,8 +747,7 @@ const ConditionReusePicker = ({
       <ul className="flex flex-col">
         {options.map((option) => (
           <li key={option.ref}>
-            <button
-              className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-start text-sm"
+            <Button
               onClick={() => {
                 if (!onRewrite(option.ref)) {
                   notifyUserProblem(t("templates.studio.invalidExpression"));
@@ -761,13 +755,14 @@ const ConditionReusePicker = ({
                 }
                 setOpen(false);
               }}
-              type="button"
+              size="row"
+              variant="ghost"
             >
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
               <code className="text-muted-foreground text-3xs shrink-0">
                 {option.ref}
               </code>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

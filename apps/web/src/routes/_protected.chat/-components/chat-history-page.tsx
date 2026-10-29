@@ -25,6 +25,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { NewChatIcon, TrashIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   List,
   ListGroup,
@@ -227,9 +228,9 @@ export const ChatHistoryPage = ({
             value={syncedSearchField.value}
           />
           <div className="flex min-w-0 flex-col gap-1 sm:w-64">
-            <label className="sr-only" htmlFor={matterFieldId}>
+            <Label className="sr-only" htmlFor={matterFieldId}>
               {t("common.matter")}
-            </label>
+            </Label>
             <MatterCombobox
               activeOrganizationId={activeOrganizationId}
               id={matterFieldId}
@@ -470,13 +471,20 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
               </BidiText>
               {contextLine}
             </Tooltip>
-            <time
-              className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
-              dateTime={updatedAt.toISOString()}
-              title={format.dateTime(updatedAt, MEDIUM_DATE_SHORT_TIME_FORMAT)}
+            <Tooltip
+              content={format.dateTime(
+                updatedAt,
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              )}
+              render={
+                <time
+                  className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
+                  dateTime={updatedAt.toISOString()}
+                />
+              }
             >
               {relativeTime(updatedAt)}
-            </time>
+            </Tooltip>
             <ChatTitleSuggestButton
               className={revealClass}
               hasMessages

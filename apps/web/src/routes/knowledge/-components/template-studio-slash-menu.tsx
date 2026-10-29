@@ -20,6 +20,7 @@ import {
   getTemplateSlashMenu,
   resetTemplateSlashQuery,
 } from "@stll/folio-react";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
@@ -31,7 +32,6 @@ import {
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
-import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
@@ -105,6 +105,7 @@ export const TemplateStudioSlashMenu = ({
   return (
     <div
       className="bg-popover text-popover-foreground absolute z-50 flex flex-col rounded-md border text-sm shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      // oxlint-disable-next-line no-native-ui/no-native-select -- a caret-anchored slash menu the editor drives with arrow keys while the document keeps focus and selection; Select and Combobox move focus into their own popup, which would end the typed query
       role="listbox"
       style={{
         left: slash.left,
@@ -707,18 +708,20 @@ const SlashMenuHeader = ({
       ? t("templates.studio.existingField")
       : t("common.clauses");
   return (
-    <button
-      className="text-muted-foreground hover:text-foreground text-2xs flex items-center gap-1 border-b px-3 py-1.5 text-start leading-snug"
+    <Button
+      className="w-full"
       onClick={onBack}
       onMouseDown={keepEditorFocus}
-      type="button"
+      variant="plain"
     >
-      <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
-      <span className="truncate">
-        {label}
-        {query === "" ? "" : ` · ${query}`}
+      <span className="text-muted-foreground hover:text-foreground text-2xs flex w-full items-center gap-1 border-b px-3 py-1.5 leading-snug">
+        <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
+        <span className="truncate">
+          {label}
+          {query === "" ? "" : ` · ${query}`}
+        </span>
       </span>
-    </button>
+    </Button>
   );
 };
 
@@ -865,21 +868,20 @@ const SlashMenuRow = ({
     }
   }, [selected]);
   return (
-    <button
+    <Button
       aria-selected={selected}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-start",
-        selected ? "bg-accent text-accent-foreground" : "text-foreground",
-      )}
       onClick={containedEventHandler(onSelect)}
       onMouseDown={containedEventHandler((event: ReactMouseEvent) =>
         event.preventDefault(),
       )}
       onMouseEnter={onHighlight}
       ref={rowRef}
+      // oxlint-disable-next-line no-native-ui/no-native-select -- one option of the editor-driven slash listbox above; it never takes focus (the caret stays in the document), so it cannot be a Select or Combobox item
       role="option"
+      selected={selected}
+      size="row"
       tabIndex={-1}
-      type="button"
+      variant="ghost"
     >
       <Icon className="text-muted-foreground size-3.5 shrink-0" />
       <span className="flex-1 truncate" dir="auto">
@@ -896,7 +898,7 @@ const SlashMenuRow = ({
           icon={ChevronRightIcon}
         />
       )}
-    </button>
+    </Button>
   );
 };
 

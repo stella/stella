@@ -297,11 +297,11 @@ export const CatalogueStep = ({
                   can quickly reset to the unfiltered view. */}
                 {filterQuery.trim() === "" && (
                   <>
-                    <button
+                    <Button
                       aria-pressed={jurisdictionFilter.size === 0}
-                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                       onClick={() => setJurisdictionFilter(new Set())}
-                      type="button"
+                      size="row"
+                      variant="ghost"
                     >
                       <span
                         className={cn(
@@ -317,7 +317,7 @@ export const CatalogueStep = ({
                       <span className="text-foreground font-medium">
                         {t("common.all")}
                       </span>
-                    </button>
+                    </Button>
                     <div className="bg-border my-1 h-px" />
                   </>
                 )}
@@ -337,9 +337,8 @@ export const CatalogueStep = ({
                   return filtered.map((code) => {
                     const active = jurisdictionFilter.has(code);
                     return (
-                      <button
+                      <Button
                         aria-pressed={active}
-                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                         key={code}
                         onClick={() =>
                           setJurisdictionFilter((prev) => {
@@ -352,7 +351,8 @@ export const CatalogueStep = ({
                             return next;
                           })
                         }
-                        type="button"
+                        size="row"
+                        variant="ghost"
                       >
                         <span
                           className={cn(
@@ -365,7 +365,7 @@ export const CatalogueStep = ({
                           )}
                         </span>
                         <span className="text-foreground">{code}</span>
-                      </button>
+                      </Button>
                     );
                   });
                 })()}

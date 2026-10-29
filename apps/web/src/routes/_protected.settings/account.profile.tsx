@@ -25,6 +25,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -460,48 +461,49 @@ function ProfilePageBody() {
           </FrameDescription>
         </FrameHeader>
         <FramePanel>
-          <form
-            action={async () => {
-              // The column must never go blank: it is the label every
-              // identity surface renders. Stop the empty submit here rather
-              // than letting the server silently keep the previous value.
-              if (displayName.trim().length === 0) {
-                notifyUserProblem(t("settings.account.displayNameRequired"));
-                return;
-              }
-              // Awaited, not detached: `ProfileSubmitButton` disables itself
-              // from `useFormStatus().pending`, so returning before the save
-              // settles re-enables it mid-flight and lets a second submit
-              // race the first. The mutation's `onError` renders the toast;
-              // this catch keeps the rejection off the unhandled channel and
-              // records it.
-              try {
-                await updateDisplayName.mutateAsync();
-              } catch (error) {
-                getAnalytics().captureError(error, {
-                  fingerprintKey: "ProfilePageBody:failure",
-                  scope: {
-                    type: "handler",
-                    handlerId: "ProfilePageBody:failure",
-                  },
-                });
-              }
-            }}
-            className="flex flex-col gap-4 p-4"
-          >
-            <div className="flex max-w-lg flex-col gap-2">
-              <Label className="sr-only" htmlFor="display-name-input">
-                {t("common.displayName")}
-              </Label>
-              <Input
-                id="display-name-input"
-                maxLength={120}
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-              />
-            </div>
-            <ProfileSubmitButton label={t("common.save")} />
-          </form>
+          <div className="p-4">
+            <Form
+              action={async () => {
+                // The column must never go blank: it is the label every
+                // identity surface renders. Stop the empty submit here rather
+                // than letting the server silently keep the previous value.
+                if (displayName.trim().length === 0) {
+                  notifyUserProblem(t("settings.account.displayNameRequired"));
+                  return;
+                }
+                // Awaited, not detached: `ProfileSubmitButton` disables itself
+                // from `useFormStatus().pending`, so returning before the save
+                // settles re-enables it mid-flight and lets a second submit
+                // race the first. The mutation's `onError` renders the toast;
+                // this catch keeps the rejection off the unhandled channel and
+                // records it.
+                try {
+                  await updateDisplayName.mutateAsync();
+                } catch (error) {
+                  getAnalytics().captureError(error, {
+                    fingerprintKey: "ProfilePageBody:failure",
+                    scope: {
+                      type: "handler",
+                      handlerId: "ProfilePageBody:failure",
+                    },
+                  });
+                }
+              }}
+            >
+              <div className="flex max-w-lg flex-col gap-2">
+                <Label className="sr-only" htmlFor="display-name-input">
+                  {t("common.displayName")}
+                </Label>
+                <Input
+                  id="display-name-input"
+                  maxLength={120}
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                />
+              </div>
+              <ProfileSubmitButton label={t("common.save")} />
+            </Form>
+          </div>
         </FramePanel>
       </Frame>
 
@@ -540,56 +542,59 @@ function ProfilePageBody() {
               </SelectPopup>
             </Select>
           </div>
-          <form
-            action={async () => {
-              // Awaited for the same reason as the display-name form above.
-              try {
-                await updateWordEditIdentity.mutateAsync();
-              } catch (error) {
-                getAnalytics().captureError(error, {
-                  fingerprintKey: "ProfilePageBody:failure-2",
-                  scope: {
-                    type: "handler",
-                    handlerId: "ProfilePageBody:failure-2",
-                  },
-                });
-              }
-            }}
-            className="border-border flex flex-col gap-4 border-t p-4"
-          >
-            <div className="flex max-w-lg flex-col gap-2">
-              <Label htmlFor="preferred-name-input">
-                {t("settings.account.preferredName")}
-              </Label>
-              <p className="text-muted-foreground text-sm">
-                {t("settings.account.preferredNameDescription")}
-              </p>
-              <Input
-                id="preferred-name-input"
-                maxLength={120}
-                placeholder={t("settings.account.preferredNamePlaceholder")}
-                value={preferredName}
-                onChange={(event) => setPreferredName(event.target.value)}
-              />
-            </div>
-            <div className="flex max-w-xs flex-col gap-2">
-              <Label htmlFor="word-edit-shortcut-input">
-                {t("settings.account.wordEditShortcut")}
-              </Label>
-              <p className="text-muted-foreground text-sm">
-                {t("settings.account.wordEditShortcutDescription")}
-              </p>
-              <Input
-                dir="ltr"
-                id="word-edit-shortcut-input"
-                maxLength={16}
-                placeholder={t("settings.account.wordEditShortcutPlaceholder")}
-                value={wordEditShortcut}
-                onChange={(event) => setWordEditShortcut(event.target.value)}
-              />
-            </div>
-            <ProfileSubmitButton label={t("common.save")} />
-          </form>
+          <div className="border-border border-t p-4">
+            <Form
+              action={async () => {
+                // Awaited for the same reason as the display-name form above.
+                try {
+                  await updateWordEditIdentity.mutateAsync();
+                } catch (error) {
+                  getAnalytics().captureError(error, {
+                    fingerprintKey: "ProfilePageBody:failure-2",
+                    scope: {
+                      type: "handler",
+                      handlerId: "ProfilePageBody:failure-2",
+                    },
+                  });
+                }
+              }}
+            >
+              <div className="flex max-w-lg flex-col gap-2">
+                <Label htmlFor="preferred-name-input">
+                  {t("settings.account.preferredName")}
+                </Label>
+                <p className="text-muted-foreground text-sm">
+                  {t("settings.account.preferredNameDescription")}
+                </p>
+                <Input
+                  id="preferred-name-input"
+                  maxLength={120}
+                  placeholder={t("settings.account.preferredNamePlaceholder")}
+                  value={preferredName}
+                  onChange={(event) => setPreferredName(event.target.value)}
+                />
+              </div>
+              <div className="flex max-w-xs flex-col gap-2">
+                <Label htmlFor="word-edit-shortcut-input">
+                  {t("settings.account.wordEditShortcut")}
+                </Label>
+                <p className="text-muted-foreground text-sm">
+                  {t("settings.account.wordEditShortcutDescription")}
+                </p>
+                <Input
+                  dir="ltr"
+                  id="word-edit-shortcut-input"
+                  maxLength={16}
+                  placeholder={t(
+                    "settings.account.wordEditShortcutPlaceholder",
+                  )}
+                  value={wordEditShortcut}
+                  onChange={(event) => setWordEditShortcut(event.target.value)}
+                />
+              </div>
+              <ProfileSubmitButton label={t("common.save")} />
+            </Form>
+          </div>
         </FramePanel>
       </Frame>
 

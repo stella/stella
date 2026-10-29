@@ -5,8 +5,10 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { KeyRoundIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   Sheet,
@@ -231,16 +233,14 @@ export const AddMcpServerSheet = ({
         </SheetHeader>
         <SheetPanel>
           {wizard.step === "url" && (
-            <form
-              className="flex flex-col gap-3"
+            <Form
+              density="snug"
               onSubmit={(event) => {
                 event.preventDefault();
                 submitUrl();
               }}
             >
-              <label className="text-sm font-medium" htmlFor="mcp-url">
-                {t("knowledge.mcp.urlLabel")}
-              </label>
+              <Label htmlFor="mcp-url">{t("knowledge.mcp.urlLabel")}</Label>
               <Input
                 autoComplete="url"
                 autoFocus
@@ -257,7 +257,7 @@ export const AddMcpServerSheet = ({
               <p className="text-muted-foreground text-xs">
                 {t("knowledge.mcp.bearerTokenDescription")}
               </p>
-            </form>
+            </Form>
           )}
           {wizard.step === "confirmation" && (
             <McpAuthorizationReview
@@ -266,16 +266,14 @@ export const AddMcpServerSheet = ({
             />
           )}
           {wizard.step === "token" && (
-            <form
-              className="flex flex-col gap-3"
+            <Form
+              density="snug"
               onSubmit={(event) => {
                 event.preventDefault();
                 submitToken();
               }}
             >
-              <label className="text-sm font-medium" htmlFor="mcp-token">
-                {t("knowledge.mcp.tokenLabel")}
-              </label>
+              <Label htmlFor="mcp-token">{t("knowledge.mcp.tokenLabel")}</Label>
               <SecretInput
                 autoComplete="off"
                 autoFocus
@@ -294,7 +292,7 @@ export const AddMcpServerSheet = ({
               <p className="text-muted-foreground text-xs">
                 {t("knowledge.mcp.bearerTokenDescription")}
               </p>
-            </form>
+            </Form>
           )}
         </SheetPanel>
         <SheetFooter>

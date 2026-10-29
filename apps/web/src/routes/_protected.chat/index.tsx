@@ -944,16 +944,20 @@ type SuggestedSkillRowProps = {
  * the data cannot name (a former member, a system write) shows nothing.
  */
 const SuggestedSkillRow = ({ onSelect, skill }: SuggestedSkillRowProps) => (
-  <button
-    className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+  <Button
+    className="group/row group flex w-full"
     onClick={onSelect}
-    type="button"
+    variant="plain"
   >
-    <span className="min-w-0 flex-1">
-      <LandingItemText meta={skill.body} title={skill.name} />
+    {/* The landing row's inset, gap and hover tint, so the row lines up and
+        lights like the matter and thread links beside it. */}
+    <span className="group-hover/row:bg-accent/50 flex w-full items-center gap-3 rounded-md px-2 py-1.5">
+      <span className="min-w-0 flex-1">
+        <LandingItemText meta={skill.body} title={skill.name} />
+      </span>
+      <SkillAuthorAvatar author={skillAuthor(skill)} />
     </span>
-    <SkillAuthorAvatar author={skillAuthor(skill)} />
-  </button>
+  </Button>
 );
 
 type SkillAuthor =

@@ -20,6 +20,7 @@ import {
   type LucideIcon,
   PencilLineIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   Select,
@@ -28,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { api } from "@/lib/api";
@@ -198,12 +200,11 @@ const BlueprintGallerySheetBody = ({
         {/* Members may share with the team too, bound to one matter. */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-end gap-2">
-            <label
-              className="text-muted-foreground text-xs"
-              htmlFor="blueprint-scope"
-            >
-              {t("knowledge.skills.form.scope")}
-            </label>
+            <Label htmlFor="blueprint-scope" variant="muted">
+              <span className="font-normal">
+                {t("knowledge.skills.form.scope")}
+              </span>
+            </Label>
             <Select
               onValueChange={(value) => {
                 if (value === "team" || value === "private") {
@@ -240,59 +241,71 @@ const BlueprintGallerySheetBody = ({
         {CARDS.map((card) => {
           const text = cardText(card.id);
           return (
-            <button
-              className="border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start disabled:opacity-60"
+            <Button
               disabled={cannotCreate}
               key={card.id}
               onClick={() => createFrom(card.id)}
-              type="button"
+              variant="plain"
             >
-              <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-md">
-                {pendingId === card.id ? (
-                  <Loader
-                    className="size-4"
-                    label={t("common.loading")}
-                    size="sm"
-                  />
-                ) : (
-                  <card.Icon className="size-4" />
+              <span
+                className={cn(
+                  "border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start",
+                  cannotCreate && "opacity-60",
                 )}
+              >
+                <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-md">
+                  {pendingId === card.id ? (
+                    <Loader
+                      className="size-4"
+                      label={t("common.loading")}
+                      size="sm"
+                    />
+                  ) : (
+                    <card.Icon className="size-4" />
+                  )}
+                </span>
+                <span className="flex flex-col gap-1">
+                  <span className="text-foreground text-sm font-medium">
+                    {text.title}
+                  </span>
+                  <span className="text-muted-foreground text-sm">
+                    {text.blurb}
+                  </span>
+                  <span className="text-muted-foreground mt-1 text-xs">
+                    {tGallery("insideLabel")}: {text.inside}
+                  </span>
+                </span>
               </span>
-              <span className="flex flex-col gap-1">
-                <span className="text-foreground text-sm font-medium">
-                  {text.title}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {text.blurb}
-                </span>
-                <span className="text-muted-foreground mt-1 text-xs">
-                  {tGallery("insideLabel")}: {text.inside}
-                </span>
-              </span>
-            </button>
+            </Button>
           );
         })}
 
         {/* The blank scaffold is a blueprint too — no form, the user lands
             straight in the editor and fills the skill in there. */}
-        <button
-          className="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm disabled:opacity-60"
+        <Button
           disabled={cannotCreate}
           onClick={() => createFrom("blank")}
-          type="button"
+          variant="plain"
         >
-          {pendingId === "blank" && (
-            <Loader
-              className="me-2 size-4 shrink-0"
-              label={t("common.loading")}
-              size="sm"
-            />
-          )}
-          <span className="text-foreground font-medium">
-            {tGallery("startBlank")}
+          <span
+            className={cn(
+              "text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm",
+              cannotCreate && "opacity-60",
+            )}
+          >
+            {pendingId === "blank" && (
+              <Loader
+                className="me-2 size-4 shrink-0"
+                label={t("common.loading")}
+                size="sm"
+              />
+            )}
+            <span className="text-foreground font-medium">
+              {tGallery("startBlank")}
+            </span>
+            <span className="ms-2">{tGallery("startBlankHint")}</span>
           </span>
-          <span className="ms-2">{tGallery("startBlankHint")}</span>
-        </button>
+        </Button>
       </DialogPanel>
 
       <DialogFooter>

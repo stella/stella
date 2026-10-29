@@ -33,6 +33,7 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -369,28 +370,36 @@ const CategoryMobileFilterButton = ({
   label,
   active,
   icon,
-  variant,
+  variant = "default",
 }: CategoryMobileFilterButtonProps) => {
-  const resolvedVariant = variant ?? "default";
+  // An inactive extra filter (a view, not a category) reads apart from the
+  // categories by a dashed outline, drawn over a borderless button.
+  const dashed = variant === "extra" && !active;
+  let buttonVariant: "default" | "ghost" | "outline" = "outline";
+  if (active) {
+    buttonVariant = "default";
+  } else if (dashed) {
+    buttonVariant = "ghost";
+  }
 
   return (
-    <button
+    <Button
       aria-pressed={active}
-      className={cn(
-        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
-        resolvedVariant === "extra" && "border-dashed",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : "hover:bg-muted",
-      )}
+      className="shrink-0"
       onClick={onSelect}
-      type="button"
+      variant={buttonVariant}
     >
+      {dashed && (
+        <span
+          aria-hidden="true"
+          className="border-input pointer-events-none absolute inset-0 rounded-[inherit] border border-dashed"
+        />
+      )}
       {icon ?? null}
       <span className="max-w-40 truncate" dir="auto">
         {label}
       </span>
-    </button>
+    </Button>
   );
 };
 
@@ -476,20 +485,31 @@ const CategoryNavButton = ({
   const drop = useCategoryDropTarget(dragAndDrop, targetCategoryId);
 
   return (
-    <button
+    <div
       className={cn(
-        "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
-        isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
+        "rounded-md",
+        isSelected && "bg-muted",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
-      onClick={onSelect}
       onDragLeave={drop.onDragLeave}
       onDragOver={drop.onDragOver}
       onDrop={drop.onDrop}
-      type="button"
     >
-      {label}
-    </button>
+      {/* The selected fill sits on the row, as for a category row below, so
+          "all" and a category read selected the same way. */}
+      <Button
+        aria-pressed={isSelected}
+        onClick={onSelect}
+        size="row"
+        variant="ghost"
+      >
+        <span
+          className={cn("truncate", isSelected ? "font-medium" : "font-normal")}
+        >
+          {label}
+        </span>
+      </Button>
+    </div>
   );
 };
 
@@ -539,24 +559,27 @@ const CategoryRow = ({
     <div
       className={cn(
         "group flex items-center rounded-md",
-        isSelected ? "bg-muted" : "hover:bg-muted/50",
+        isSelected && "bg-muted",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
       onDragLeave={drop.onDragLeave}
       onDragOver={drop.onDragOver}
       onDrop={drop.onDrop}
     >
-      <button
-        className={cn(
-          "min-w-0 flex-1 truncate px-3 py-1.5 text-start text-sm",
-          isSelected && "font-medium",
-        )}
+      <Button
+        aria-pressed={isSelected}
+        className="flex-1"
         dir="auto"
         onClick={onSelect}
-        type="button"
+        size="row"
+        variant="ghost"
       >
-        {category.name}
-      </button>
+        <span
+          className={cn("truncate", isSelected ? "font-medium" : "font-normal")}
+        >
+          {category.name}
+        </span>
+      </Button>
 
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
         {(permissions.canUpdate || permissions.canDelete) && (
@@ -734,9 +757,7 @@ const CategoryFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="category-name">
-            {labels.nameLabel}
-          </label>
+          <Label htmlFor="category-name">{labels.nameLabel}</Label>
           <Input
             id="category-name"
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
