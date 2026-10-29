@@ -1,3 +1,4 @@
+// parser-output-unchanged: Census listing identity and court evidence only; parsed decisions, stored source payloads and reconciliation keys are unchanged.
 import type {
   CensusCourtEvidence,
   CensusListingIdentity,

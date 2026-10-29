@@ -75,7 +75,10 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
@@ -1510,6 +1513,8 @@ export const buildPlDecision = ({
         keywords,
         statutes,
         documentId: upstreamId ?? String(saosId ?? caseNumber),
+        superscripts: true,
+        markup: PL_DECISION_MARKUP.COMMON_COURT,
       });
 
       documentAst = parserResult.documentAst;
