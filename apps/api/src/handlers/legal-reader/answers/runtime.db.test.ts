@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -25,11 +25,12 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
 import { listReaderAnswersHandler } from "@/api/handlers/legal-reader/answers/list";
 import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import type { ReaderAnswerCommand } from "@/api/handlers/legal-reader/answers/operation";
+import { readerAnswerRequest } from "@/api/handlers/legal-reader/answers/request";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answers/stream";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -70,6 +71,7 @@ beforeAll(async () => {
   await database.insert(user).values({
     id: userId,
     name: "Reader",
+    readerAnswerLanguage: "en",
     email: `${userId}@example.test`,
     emailVerified: true,
     createdAt: new Date(),
@@ -1464,5 +1466,62 @@ describe("reader answer turn lifecycle", () => {
       status: "complete",
       model: "requested-model",
     });
+  });
+  test("an omitted request locale uses the saved account preference before the document language", async () => {
+    const prepared = await prepare({
+      type: "create",
+      body: { kind: "explain", decisionId, anchor },
+    });
+    const slovakPrepared = {
+      ...prepared,
+      decision: { ...prepared.decision, language: "sk" },
+    };
+    const reader =
+      (
+        await database
+          .select({
+            id: user.id,
+            readerAnswerLanguage: user.readerAnswerLanguage,
+          })
+          .from(user)
+          .where(eq(user.id, userId))
+          .limit(1)
+      ).at(0) ?? panic("Reader language fixture is missing");
+    expect(reader.readerAnswerLanguage).toBe("en");
+    expect(slovakPrepared.locale).toBeUndefined();
+    expect(slovakPrepared.decision.language).not.toBe(
+      reader.readerAnswerLanguage,
+    );
+    const streams: ReaderAnswerStreamOptions[] = [];
+    const { safeDb, recordAuditEvent } = scope();
+    const request = readerAnswerRequest(
+      {
+        session: { activeOrganizationId: organizationId },
+        user: reader,
+        safeDb,
+        recordAuditEvent,
+        scopedDb: createScopedDb(
+          markRlsDatabase(database),
+          [],
+          organizationId,
+          userId,
+        ),
+        orgAIConfig: {
+          providers: [{ provider: "openai", apiKey: "fixture-key" }],
+          overrideModels: null,
+          decision: null,
+        },
+        orgAIConfigStatus: "ok",
+        managedAIResidency: "eu",
+        request: new Request("http://localhost/reader-answer"),
+      },
+      (options) => {
+        streams.push(options);
+        return new Response(null);
+      },
+    ).unwrap();
+    request.stream(slovakPrepared);
+    expect(streams).toHaveLength(1);
+    expect(streams.at(0)?.prepared.locale).toBe("en");
   });
 });
