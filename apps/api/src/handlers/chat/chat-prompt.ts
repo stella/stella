@@ -114,6 +114,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   chatCacheStablePrefixSchema,
   chatOrganizationPromptLayerSchema,
@@ -2369,6 +2370,22 @@ export const buildActiveDecisionSection = async ({
       }),
     );
 
+    const withdrawal = yield* Result.await(
+      Result.tryPromise(async () =>
+        readWithdrawnCopyProjection({
+          values: null,
+          decisionIds: [activeDecision.decisionId],
+          caseLawDb,
+        }),
+      ),
+    );
+    const marker = withdrawal.marker(null, activeDecision.decisionId);
+    if (marker !== null) {
+      return Result.ok({
+        prompt: marker,
+        passageNumbers: NO_DECISION_PASSAGE_NUMBERS,
+      });
+    }
     if (decision === null) {
       return Result.ok(NO_ACTIVE_DECISION_SECTION);
     }
