@@ -107,6 +107,7 @@ const prepare = async (
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
+        language: "cs",
         paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
       }),
   });
@@ -294,6 +295,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs: [{ paragraphId: "p-1", text }],
           }),
       });
@@ -346,6 +348,7 @@ describe("reader answer turn lifecycle", () => {
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
+          language: "cs",
           paragraphs,
         }),
     });
@@ -390,6 +393,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs,
           }),
       });
@@ -518,6 +522,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
           }),
       });
@@ -575,6 +580,7 @@ describe("reader answer turn lifecycle", () => {
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
+          language: "cs",
           paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
         }),
     });

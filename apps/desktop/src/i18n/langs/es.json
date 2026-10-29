@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Pulsa {shortcut} para consultar el historial y elegir un recorte.",
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
-    "welcomeTitle": "Conoce tu portapapeles"
+    "welcomeTitle": "Conoce tu portapapeles",
+    "registryIdentifierSearchHint": "Introduce {identifiers}."
   },
   "activity": {
     "title": "Actividad",
