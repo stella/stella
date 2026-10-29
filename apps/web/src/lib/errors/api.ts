@@ -28,6 +28,7 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -248,6 +249,7 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  [GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE]: "caseLaw.pagination.refineForMore",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:

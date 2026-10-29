@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 22,
+    version: 23,
     scope: {
       type: "all",
       reason:
-        "page furniture, page-break cuts, letter-spaced words, layout tables, list numbers, subsection headings, separate opinions and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {

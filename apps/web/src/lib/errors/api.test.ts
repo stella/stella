@@ -172,3 +172,15 @@ test("API response results preserve malformed refusal errors without throwing", 
     });
   }
 });
+
+test("search work limits provide the translated refinement action", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: "global_search_rank_work_limit",
+      message: "Search work limit",
+    },
+  });
+  expect(error.message).toBe(messages.caseLaw.pagination.refineForMore);
+  expect(isDisplayableAPIError(error)).toBe(true);
+});

@@ -1283,7 +1283,8 @@
       "versionAtDecisionDateInferred": "Version at decision date (inferred)",
       "versionBasisInferredCompact": "Decision date · inferred",
       "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies."
-    }
+    },
+    "withdrawnByPublisher": "Withdrawn by publisher"
   },
   "catalogue": {
     "addCustom": "Add custom",

@@ -46,6 +46,7 @@ export const FAILURE_TAGS = [
   "CaseLawServingFlipNotAttestedError",
   "CaseLawServingFlipNotBuildingError",
   "CaseLawServingFlipUndeclaredError",
+  "CaseLawWithdrawalReadError",
   "CatalogSnapshotError",
   "CatalogSnapshotRefreshTimeoutError",
   "ChatAnonInputLimitError",

@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.1.3
+
+### Patch Changes
+
+- [#7373](https://github.com/stella/stella/pull/7373) [`a29ecf8`](https://github.com/stella/stella/commit/a29ecf87046217f6dfe2d2778271fffeb5c53be1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose other-court docket candidates and court mismatch results in case-law resolution.
+
 ## 6.1.2
 
 ### Patch Changes
