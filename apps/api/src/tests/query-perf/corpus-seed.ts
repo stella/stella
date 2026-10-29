@@ -444,11 +444,12 @@ export const seedSitemapReadBudget = async ({
   );
   for (let first = 1; first <= scenario.rows; first += SEED_CHUNK_ROWS) {
     const last = Math.min(first + SEED_CHUNK_ROWS - 1, scenario.rows);
+    // Synthetic seed rows form no case files.
     await database.execute(sql`INSERT INTO case_law_decisions
-      (id, source_id, country, court, language, case_number, decision_date)
+      (id, source_id, country, court, language, case_number, docket_family_key, decision_date)
       SELECT ('01990000-00c1-7000-8000-' || lpad(to_hex(i), 12, '0'))::uuid,
         ${sourceId}::uuid, CASE WHEN i = 1 THEN 'XQT' ELSE 'XQN' END,
-        'Fixture court', 'xx', i::text, DATE '2024-01-01'
+        'Fixture court', 'xx', i::text, NULL, DATE '2024-01-01'
       FROM generate_series(${first}, ${last}) i`);
   }
   // Existing shards represent the unrelated, previously refreshed months.
