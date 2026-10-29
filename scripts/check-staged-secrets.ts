@@ -28,13 +28,9 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { resolveGitleaks } from "./gitleaks";
 
 const SCANNER = "gitleaks";
-const SCANNER_SETUP = "scripts/cloud-env-secret-scanner-setup.sh";
-export const CLAUDE_CODE_REMOTE_ENV = "CLAUDE_CODE_REMOTE";
-export const CODEX_CLOUD_TASK_ENV = "CODEX_CI";
-const HOSTED_ENV_VALUE = "true";
-const CODEX_CLOUD_TASK_VALUE = "1";
 const STAGED_SCAN = [
   "git",
   "--staged",
@@ -44,20 +40,6 @@ const STAGED_SCAN = [
 ];
 /** Exit status the scanner uses for findings; anything else but 0 is an error. */
 const FINDINGS_EXIT = 42;
-
-// Hosted sessions run on Linux, and the setup script installs a Linux
-// binary. A marker alone is not enough: local agent tools can set the same
-// variables on a developer machine.
-export const hostedAgentEnvironment = (
-  env: Readonly<Record<string, string | undefined>>,
-  platform: string,
-): boolean =>
-  platform === "linux" &&
-  (env[CLAUDE_CODE_REMOTE_ENV] === HOSTED_ENV_VALUE ||
-    env[CODEX_CLOUD_TASK_ENV] === CODEX_CLOUD_TASK_VALUE);
-
-export const isHostedAgentEnvironment = (): boolean =>
-  hostedAgentEnvironment(process.env, process.platform);
 
 const LINE = v.pipe(v.number(), v.integer(), v.minValue(1));
 // Only the fields the merge check reads; the redacted match and secret are
@@ -149,8 +131,9 @@ const stagedLines = (commit: string, file: string): LineRange[] => {
   return ranges;
 };
 
-const runStagedScan = (report: string): Finding[] => {
-  const scanner = Bun.which(SCANNER) ?? "/usr/local/bin/gitleaks";
+type StagedScanOptions = { report: string; scanner: string };
+
+const runStagedScan = ({ report, scanner }: StagedScanOptions): Finding[] => {
   const result = Bun.spawnSync(
     [
       scanner,
@@ -183,11 +166,14 @@ const runStagedScan = (report: string): Finding[] => {
   return findings.output;
 };
 
-const scanMerge = (heads: string[]): number => {
+const scanMerge = (heads: string[], scanner: string): number => {
   const reports = mkdtempSync(path.join(tmpdir(), "staged-secrets-"));
   let findings: Finding[];
   try {
-    findings = runStagedScan(path.join(reports, "report.json"));
+    findings = runStagedScan({
+      report: path.join(reports, "report.json"),
+      scanner,
+    });
   } finally {
     rmSync(reports, { force: true, recursive: true });
   }
@@ -223,48 +209,24 @@ const scanMerge = (heads: string[]): number => {
   return 1;
 };
 
-let scanner = Bun.which(SCANNER);
-if (scanner === null && isHostedAgentEnvironment()) {
-  const setup = Bun.spawnSync(["bash", SCANNER_SETUP], {
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  process.stdout.write(setup.stdout);
-  process.stderr.write(setup.stderr);
-  scanner = Bun.which(SCANNER);
-  const setupFailed = setup.stderr
-    .toString()
-    .split("\n")
-    .some((line) => line.startsWith("gitleaks NOT installed: "));
-  if (
-    scanner === null &&
-    !setupFailed &&
-    existsSync("/usr/local/bin/gitleaks")
-  ) {
-    scanner = "/usr/local/bin/gitleaks";
+export const checkStagedSecrets = (scanner: string): number => {
+  const heads = mergeHeads();
+  if (heads !== undefined) {
+    return scanMerge(heads, scanner);
   }
-}
-
-if (scanner === null) {
-  console.error(
-    `error: ${SCANNER} is required for pre-commit secret scanning.`,
-  );
-  console.error(
-    "Install it from https://github.com/gitleaks/gitleaks/releases",
-  );
-  console.error("  macOS (Homebrew): brew install gitleaks");
-  console.error("  Other platforms: use the releases page above");
-  process.exit(1);
-}
-
-const heads = mergeHeads();
-if (heads === undefined) {
   const scan = Bun.spawnSync([scanner, ...STAGED_SCAN, "."], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
   });
-  process.exit(childExitStatus(scan));
+  return childExitStatus(scan);
+};
+
+if (import.meta.main) {
+  const resolved = await resolveGitleaks();
+  if (resolved.isOk()) {
+    process.exit(checkStagedSecrets(resolved.value));
+  } else {
+    fail(resolved.error.message);
+  }
 }
-process.exit(scanMerge(heads));
