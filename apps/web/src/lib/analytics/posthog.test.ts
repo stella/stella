@@ -1087,6 +1087,30 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
+  test("captureError ignores aborted transport failures", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new APIError({
+        status: 0,
+        message: "Request aborted",
+        transportKind: "aborted",
+      }),
+      {
+        fingerprintKey: "posthog:aborted-transport",
+        scope: { type: "handler", handlerId: "posthog:aborted-transport" },
+      },
+    );
+    analytics.captureError(new DOMException("Cancelled", "AbortError"), {
+      fingerprintKey: "posthog:abort-error",
+      scope: { type: "handler", handlerId: "posthog:abort-error" },
+    });
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
   test("captureError sends the error type and a message-free stack", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
