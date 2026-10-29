@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 
 import { createApiClient } from "@stll/api-client";
-import type { FetchWithTimeoutInit } from "@stll/fetch";
+import type { FetchTimeout } from "@stll/fetch";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
 import { createWebApiFetcher } from "@/lib/api";
@@ -59,9 +59,11 @@ test("an empty document properties answer is a bad gateway", async () => {
 });
 
 test("file writes keep their 60 second request bound", async () => {
-  const policies: FetchWithTimeoutInit["timeoutMs"][] = [];
+  const policies: FetchTimeout[] = [];
   const fetcher = createWebApiFetcher(async (_url, init) => {
-    policies.push(init.timeoutMs);
+    if (init.timeout !== undefined) {
+      policies.push(init.timeout);
+    }
     return Response.json({});
   });
   const client = createApiClient<WebRoutes>("https://example.test", {
@@ -85,7 +87,10 @@ test("file writes keep their 60 second request bound", async () => {
     value: "Draft agreement",
     workspaceId: "00000000-0000-4000-8000-000000000001",
   });
-  expect(policies).toEqual([60_000, 60_000]);
+  expect(policies).toEqual([
+    { type: "total", ms: 60_000 },
+    { type: "total", ms: 60_000 },
+  ]);
 });
 
 test("an empty email attachment save answer is a bad gateway", async () => {

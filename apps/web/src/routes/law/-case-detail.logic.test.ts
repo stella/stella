@@ -383,13 +383,16 @@ describe("pre-transliteration path redirect", () => {
   });
 
   test("serves the new path without a redirect", async () => {
+    const queryClient = bySlugClient();
     const decision = await loadPublicCaseLawDecisionRoute({
       hash: "",
       params: { country: "pol", court: NEW_COURT, slug: LODZ_DECISION.slug },
-      queryClient: bySlugClient(),
+      queryClient,
       search: {},
     });
     expect(decision.id).toBe(DECISION_ID);
+    await queryClient.cancelQueries();
+    queryClient.clear();
   });
 });
 
