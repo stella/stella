@@ -132,6 +132,7 @@
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
     "codeSentAgain": "Saatsime uue koodi.",
+    "continueWithApple": "Jätka Apple'iga",
     "continueWithEmail": "Jätka",
     "continueWithGoogle": "Jätka Google'iga",
     "continueWithMicrosoft": "Jätka Microsoftiga",
@@ -546,6 +547,14 @@
     },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
+    "arrangement": {
+      "alertThreshold": "Hoiatuse lävend (%)",
+      "amountCap": "Tasu ülempiir",
+      "flatFee": "Kindel tasu",
+      "invalidCap": "Sisestage positiivsed ülempiirid ja hoiatuse lävend vahemikus 0,01% kuni 100%.",
+      "minuteCap": "Ajalimiit (minutites)",
+      "title": "Tasustamise kokkulepe"
+    },
     "batchActions": "Partiiaktsioonid",
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
-      "markPaid": "Märgi makstuks",
       "noEntries": "Selle arvega pole kirjeid seotud",
       "noInvoices": "Arveid pole veel",
       "paidAt": "Tasutud",
+      "payments": {
+        "amountTooHigh": "Summa ületab tasumata jäägi {amount}.",
+        "confirmVoid": "Makse jääb arvele tühistatuna ega lähe enam selle arve tasumise arvestusse.",
+        "empty": "Makseid pole veel registreeritud",
+        "method": "Makseviis",
+        "methods": {
+          "bank_transfer": "Pangaülekanne",
+          "card": "Kaart",
+          "cash": "Sularaha",
+          "other": "Muu viis"
+        },
+        "outstandingAmount": "Tasumata {amount}",
+        "paidOn": "Makse kuupäev",
+        "partiallyPaid": "Osaliselt makstud",
+        "record": "Registreeri makse",
+        "summary": "Makstud {paid}, tasumata {outstanding}",
+        "title": "Maksed",
+        "void": "Tühista makse",
+        "voided": "Tühistatud"
+      },
       "removeEntries": "Eemalda kirjed",
       "send": "Saada",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "Tehisintellekt pole seadistatud.",
     "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
     "deeplMissing": "DeepL pole seadistatud.",
+    "deeplPdfRequired": "PDF-failide tõlkimiseks on vaja DeepL-i.",
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",
@@ -912,12 +941,16 @@
         "reasoning": "Arutlus"
       },
       "errors": {
+        "analysisDisabled": "Tehisintellekti analüüside loomine on selles serveris välja lülitatud. Lugege kohtulahendi teksti või proovige hiljem uuesti.",
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
+        "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
+        "languageUnsupported": "Tehisintellekti analüüs ei toeta veel selle kohtulahendi keelt. Lugege kohtulahendi teksti või algallikat.",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",
-        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
-        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
+        "sourceRestricted": "Allikas ei luba tehisintellekti analüüsi. Lugege kohtulahendi teksti või algallikat.",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -1122,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
-      "headMatter": "Päis",
+      "headMatter": "Kohtuasja andmed",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
       "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
       "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
-    }
+    },
+    "withdrawnByPublisher": "Avaldaja on tagasi võtnud"
   },
   "catalogue": {
     "addCustom": "Lisa kohandatud",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# veel} other {+# veel}}",
+      "dismiss": "Peida ühenduse teade",
+      "stoppedWorking": "Teie ühendus teenusega <name>{server}</name> lakkas töötamast.",
+      "waitingApproval": "Teie ühendus teenusega <name>{server}</name> ootab kinnitamist."
+    },
     "mention": {
       "category": {
         "entities": "Selles toimikus",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "Selle IČO järgi ettevõtet ei leitud.",
       "aresTitle": "Tšehhi register (ARES)",
       "contactName": "Kontakti nimi",
+      "displayNameOrganizationHint": "Valikuline asendus; muul juhul luuakse organisatsiooni nimest.",
+      "displayNamePersonHint": "Valikuline asendus; muul juhul luuakse ees- ja perekonnanimest.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Sisesta 8-kohaline IČO."
     },
@@ -4852,7 +4894,9 @@
     "viewOnGithub": "Vaata GitHubis"
   },
   "readerAnswers": {
+    "answerLanguage": "Vastuse keel",
     "budgetError": "Vastuste eelarve on ammendatud.",
+    "documentLanguage": "Dokumendi keel ({language})",
     "expand": "Laienda vastust",
     "explain": "Selgita",
     "followUp": "Esita täpsustav küsimus",
@@ -5039,6 +5083,16 @@
       "preferredNamePlaceholder": "Teie nimi",
       "profileDescription": "Hallake oma isiklikke eelistusi",
       "sendOtpCode": "Saada kinnituskood",
+      "signInMethods": {
+        "confirmDescription": "Selle sisselogimisviisi ühenduse katkestamiseks sisesta uus e-postiga saadetud kood.",
+        "confirmTitle": "Kas katkestada {provider} ühendus?",
+        "description": "Ühenda kontod, mis kasutavad sama kinnitatud e-posti aadressi.",
+        "emailCode": "E-posti kood",
+        "emailCodeDescription": "Saad alati sisse logida e-postiga saadetud koodi abil.",
+        "lastMethod": "Enne selle konto lahtiühendamist ühenda teine konto.",
+        "title": "Sisselogimisviisid",
+        "unavailable": "Sisselogimisviiside ühenduse katkestamiseks peab e-posti saatmine olema seadistatud."
+      },
       "timezone": "Ajavöönd",
       "timezoneDescription": "Kasutatakse teadete ja e-kirjade ajatemplite jaoks",
       "timezoneSaved": "Ajavöönd uuendatud",

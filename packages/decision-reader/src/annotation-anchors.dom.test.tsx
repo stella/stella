@@ -62,7 +62,9 @@ test("overlapping answered selections keep the original highlight and activate e
         >
           {anchors.map((anchor) => (
             <span key={anchor.key}>
-              {anchor.render(text.slice(anchor.start, anchor.end))}
+              {anchor.render(text.slice(anchor.start, anchor.end), {
+                isRangeStart: true,
+              })}
             </span>
           ))}
         </div>,
@@ -120,7 +122,9 @@ test("overlapping answered selections keep the original highlight and activate e
         <>
           {commentAnchors.map((anchor) => (
             <span key={anchor.key}>
-              {anchor.render(text.slice(anchor.start, anchor.end))}
+              {anchor.render(text.slice(anchor.start, anchor.end), {
+                isRangeStart: true,
+              })}
             </span>
           ))}
         </>,

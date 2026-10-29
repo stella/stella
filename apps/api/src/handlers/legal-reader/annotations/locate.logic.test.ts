@@ -86,6 +86,52 @@ describe("locatePassages", () => {
     ]);
   });
 
+  test("a quote copied with its served footnote mark marks that note's words", () => {
+    // The served text prints a note's mark before it; the reader's text
+    // holds the mark as the note's label, not as its words.
+    const note: Block = {
+      anchorId: "p-3",
+      id: "id-p-3",
+      inlines: [{ text: "Zob.: pkt 2 wyjaśnień.", type: "text" }],
+      note: { type: "footnote", label: "[2]" },
+      plainText: "Zob.: pkt 2 wyjaśnień.",
+      type: "paragraph",
+    };
+    const blocks = [
+      paragraph("p-1", "Spółka wyjaśniła[2], że Zob.: pkt 2 wyjaśnień."),
+      paragraph("p-2", "Zob.: pkt 2 wyjaśnień."),
+      note,
+    ];
+    const served = servedBlockText(note, blocks[1]);
+    expect(served).toBe("[2] Zob.: pkt 2 wyjaśnień.");
+    const span = {
+      blockAnchorId: "p-3",
+      startOffset: 0,
+      endOffset: "Zob.: pkt 2".length,
+      quote: "Zob.: pkt 2",
+    };
+
+    expect(
+      locatePassages(blocks, [
+        { quote: "[2] Zob.: pkt 2" },
+        { anchor: "p-3", quote: "[2] Zob.: pkt 2" },
+      ]),
+    ).toEqual({ status: "located", spans: [span, span] });
+    // The mark names one note, and the words open it.
+    expect(
+      locatePassages(blocks, [
+        { quote: "[1] Zob.: pkt 2" },
+        { quote: "[2] pkt 2 wyjaśnień" },
+      ]),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 0 },
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 1 },
+      ],
+    });
+  });
+
   test("a quote copied with its served paragraph number marks that paragraph's words", () => {
     // The served text prints a court's number before its paragraph; the
     // reader's text does not hold it, so it names the paragraph instead.

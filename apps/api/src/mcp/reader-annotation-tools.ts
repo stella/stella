@@ -291,6 +291,7 @@ const handleListTool: TypedMcpToolHandler<
         ...(limit === undefined ? {} : { limit }),
       },
       safeDb: context.safeDb,
+      readCopies: context.testDependencies?.readWithdrawnCopies,
       userId: context.userId,
     }),
   );

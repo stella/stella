@@ -25,7 +25,7 @@ import type {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
-  isApparatusRole,
+  isHeadMatterBlock,
   parseDocumentAst,
   PUBLISHER_SUMMARY_ROLES,
 } from "@stll/legal-ast/document-ast";
@@ -325,6 +325,7 @@ const paragraphsWithRole = (
   return blocks.filter(
     (block): block is ParagraphBlock =>
       block.type === "paragraph" &&
+      isHeadMatterBlock(block) &&
       block.role !== undefined &&
       wanted.has(block.role),
   );
@@ -455,7 +456,7 @@ export const apparatusBlockIds = (
 ): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const block of blocks) {
-    if (block.type === "paragraph" && isApparatusRole(block.role)) {
+    if (isHeadMatterBlock(block)) {
       ids.add(block.id);
     }
   }

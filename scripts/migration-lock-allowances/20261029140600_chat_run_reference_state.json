@@ -1,0 +1,4 @@
+{
+  "add-column": "The small constant JSONB default is a metadata-only addition to the transient log header on supported PostgreSQL; it rewrites no existing rows. The statement holds ACCESS EXCLUSIVE under 3s lock_timeout and 30s statement_timeout.",
+  "add-constraint": "The size check is added NOT VALID, so existing log rows are not scanned. New writes are checked immediately; ACCESS EXCLUSIVE covers catalog work only under 3s lock_timeout and 30s statement_timeout."
+}

@@ -19,7 +19,10 @@ import {
   readerTextQuoteOccurrences,
 } from "@stll/legal-ast/reader-text-quote";
 
-import { servedParagraphQuoteOf } from "@/api/lib/case-law/served-paragraph-number";
+import {
+  servedNoteLabel,
+  servedParagraphQuoteOf,
+} from "@/api/lib/case-law/served-paragraph-number";
 
 type AnnotationPassage = {
   /**
@@ -65,6 +68,8 @@ type LocatePassagesResult =
 type LocateContext = {
   blocks: readonly Block[];
   blocksByAnchor: ReadonlyMap<string, Block>;
+  /** The note mark the served text prints before a block, by its anchor. */
+  noteLabelsByAnchor: ReadonlyMap<string, string>;
 };
 
 type LocateOneResult =
@@ -121,8 +126,55 @@ const servedParagraphMatches = (blocks: readonly Block[], rawQuote: string) => {
   );
 };
 
+/**
+ * A quote copied with the mark the served text prints in front of a
+ * footnote (`[3] Zob.…`). The mark is the note's label, not its text, so the
+ * words are matched at the start of the note printed with that mark.
+ */
+const servedNoteMatches = (
+  blocks: readonly Block[],
+  noteLabelsByAnchor: ReadonlyMap<string, string>,
+  rawQuote: string,
+) => {
+  const quote = rawQuote.trimStart();
+  return blocks.flatMap((block) => {
+    const label = noteLabelsByAnchor.get(block.anchorId);
+    if (
+      label === undefined ||
+      !quote.startsWith(label) ||
+      !/^\s/u.test(quote.slice(label.length))
+    ) {
+      return [];
+    }
+    return matchesIn([block], quote.slice(label.length).trimStart()).filter(
+      ({ occurrence, piece }) =>
+        piece.text.slice(0, occurrence.startOffset).trim() === "",
+    );
+  });
+};
+
+/**
+ * The quote as the reader's text holds it, else as the served text prints it
+ * with a paragraph number or a note mark in front.
+ */
+const quoteMatches = (
+  candidates: readonly Block[],
+  noteLabelsByAnchor: ReadonlyMap<string, string>,
+  quote: string,
+) => {
+  const literal = matchesIn(candidates, quote);
+  if (literal.length > 0) {
+    return literal;
+  }
+  const paragraph = servedParagraphMatches(candidates, quote);
+  if (paragraph.length > 0) {
+    return paragraph;
+  }
+  return servedNoteMatches(candidates, noteLabelsByAnchor, quote);
+};
+
 const locateOne = (
-  { blocks, blocksByAnchor }: LocateContext,
+  { blocks, blocksByAnchor, noteLabelsByAnchor }: LocateContext,
   { anchor, quote }: AnnotationPassage,
   passageIndex: number,
 ): LocateOneResult => {
@@ -144,9 +196,7 @@ const locateOne = (
     });
   }
   const candidates = block === undefined ? blocks : [block];
-  const literal = matchesIn(candidates, quote);
-  const matches =
-    literal.length > 0 ? literal : servedParagraphMatches(candidates, quote);
+  const matches = quoteMatches(candidates, noteLabelsByAnchor, quote);
   const [match, ...others] = matches;
   if (match === undefined) {
     return issue({
@@ -211,6 +261,12 @@ export const locatePassages = (
     blocks,
     blocksByAnchor: new Map(
       blocks.map((block) => [block.anchorId, block] as const),
+    ),
+    noteLabelsByAnchor: new Map(
+      blocks.flatMap((block, index) => {
+        const label = servedNoteLabel(block, blocks[index - 1]);
+        return label === null ? [] : [[block.anchorId, label] as const];
+      }),
     ),
   };
   const spans: LocatedSpan[] = [];

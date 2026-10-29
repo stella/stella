@@ -132,6 +132,7 @@
     "checkSpamHint": "Ha nem látja, ellenőrizze a levélszemét mappát.",
     "chooseOrganization": "Válassza ki a szervezetet, amelyben dolgozni szeretne",
     "codeSentAgain": "Új kódot küldtünk.",
+    "continueWithApple": "Folytatás Apple-lel",
     "continueWithEmail": "Tovább",
     "continueWithGoogle": "Folytatás Google-lel",
     "continueWithMicrosoft": "Folytatás Microsofttal",
@@ -546,6 +547,14 @@
     },
     "approve": "Jóváhagy",
     "approveSelected": "Kijelöltek jóváhagyása",
+    "arrangement": {
+      "alertThreshold": "Értesítési küszöb (%)",
+      "amountCap": "Díjkorlát",
+      "flatFee": "Átalánydíj",
+      "invalidCap": "Adjon meg pozitív korlátokat és 0,01% és 100% közötti értesítési küszöböt.",
+      "minuteCap": "Időkorlát (perc)",
+      "title": "Díjmegállapodás"
+    },
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
-      "markPaid": "Fizetettnek jelöl",
       "noEntries": "Nincs ehhez a számlához kapcsolt tétel",
       "noInvoices": "Még nincsenek számlák",
       "paidAt": "Fizetve",
+      "payments": {
+        "amountTooHigh": "Az összeg meghaladja a(z) {amount} hátralékot.",
+        "confirmVoid": "A kifizetés sztornózottként nyilvántartásban marad, és többé nem számít bele ennek a számlának a kiegyenlítésébe.",
+        "empty": "Még nincs rögzített kifizetés",
+        "method": "Fizetési mód",
+        "methods": {
+          "bank_transfer": "Banki átutalás",
+          "card": "Kártya",
+          "cash": "Készpénz",
+          "other": "Egyéb mód"
+        },
+        "outstandingAmount": "Hátralék: {amount}",
+        "paidOn": "Fizetés dátuma",
+        "partiallyPaid": "Részben kifizetve",
+        "record": "Kifizetés rögzítése",
+        "summary": "Kifizetve {paid}, hátralék {outstanding}",
+        "title": "Kifizetések",
+        "void": "Kifizetés sztornózása",
+        "voided": "Sztornózva"
+      },
       "removeEntries": "Tételek eltávolítása",
       "send": "Küldés",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "Az AI nincs beállítva.",
     "availabilityUnknown": "Az elérhetőséget nem sikerült megerősíteni.",
     "deeplMissing": "A DeepL nincs beállítva.",
+    "deeplPdfRequired": "A PDF-fájlok fordításához DeepL szükséges.",
     "desktopUnavailable": "Csatlakoztassa vagy frissítse a stella desktop alkalmazást.",
     "featureUnavailable": "Ez a funkció nem érhető el.",
     "ocrUnavailable": "Az OCR nem érhető el.",
@@ -912,12 +941,16 @@
         "reasoning": "Érvelés"
       },
       "errors": {
+        "analysisDisabled": "Az AI-elemzés készítése ezen a szerveren ki van kapcsolva. Olvassa el a határozat szövegét, vagy próbálja újra később.",
         "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
+        "decisionNotFound": "Ez a határozat nem található. Nyissa meg újra a keresésből.",
+        "documentUnparseable": "A határozat szövege még nem áll készen az elemzésre. Olvassa el az eredeti forrást.",
+        "languageUnsupported": "Az AI-elemzés még nem támogatja a határozat nyelvét. Olvassa el a határozat szövegét vagy az eredeti forrást.",
         "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
         "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
         "retryAfter": "{time} után újra megpróbálhatja.",
-        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}",
-        "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
+        "sourceRestricted": "A forrás nem engedélyezi az AI-elemzést. Olvassa el a határozat szövegét vagy az eredeti forrást.",
+        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}"
       },
       "generate": "AI jogi tételek elkészítése",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
@@ -1122,7 +1155,7 @@
     "reader": {
       "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
-      "headMatter": "Fejrész",
+      "headMatter": "Az ügy adatai",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)",
       "versionBasisInferredCompact": "Határozat dátuma · következtetett",
       "versionBasisInferredExplanation": "A változatot a határozat dátumából következtettük ki. A határozat nem jelöli meg az alkalmazandó szövegváltozatot."
-    }
+    },
+    "withdrawnByPublisher": "A közzétevő visszavonta"
   },
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# további} other {+# további}}",
+      "dismiss": "Kapcsolódási értesítés elrejtése",
+      "stoppedWorking": "A(z) <name>{server}</name> szolgáltatáshoz való kapcsolódás nem működik.",
+      "waitingApproval": "A(z) <name>{server}</name> szolgáltatáshoz való kapcsolódás jóváhagyásra vár."
+    },
     "mention": {
       "category": {
         "entities": "Ebben az ügyben",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "Ehhez az IČO-hoz nem található cég.",
       "aresTitle": "Cseh nyilvántartás (ARES)",
       "contactName": "Kapcsolat neve",
+      "displayNameOrganizationHint": "Opcionális felülírás; egyébként a szervezet nevéből jön létre.",
+      "displayNamePersonHint": "Opcionális felülírás; egyébként az utó- és vezetéknévből jön létre.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Adjon meg egy 8 számjegyű IČO-t."
     },
@@ -4852,7 +4894,9 @@
     "viewOnGithub": "Megtekintés GitHubon"
   },
   "readerAnswers": {
+    "answerLanguage": "Válasz nyelve",
     "budgetError": "A válaszokra szánt keret kimerült.",
+    "documentLanguage": "Dokumentum nyelve ({language})",
     "expand": "Válasz kibontása",
     "explain": "Magyarázat",
     "followUp": "Kiegészítő kérdés feltevése",
@@ -5039,6 +5083,16 @@
       "preferredNamePlaceholder": "Az Ön neve",
       "profileDescription": "Személyes beállítások kezelése",
       "sendOtpCode": "Ellenőrző kód küldése",
+      "signInMethods": {
+        "confirmDescription": "A bejelentkezési mód leválasztásához add meg az e-mail-címedre küldött új kódot.",
+        "confirmTitle": "Leválasztod ezt: {provider}?",
+        "description": "Kapcsold össze azokat a fiókokat, amelyek ugyanazt az ellenőrzött e-mail-címet használják.",
+        "emailCode": "E-mailben küldött kód",
+        "emailCodeDescription": "Mindig bejelentkezhetsz az e-mail-címedre küldött kóddal.",
+        "lastMethod": "Mielőtt leválasztod ezt a fiókot, kapcsolj hozzá egy másikat.",
+        "title": "Bejelentkezési módok",
+        "unavailable": "A bejelentkezési módok leválasztásához be kell állítani az e-mail-küldést."
+      },
       "timezone": "Időzóna",
       "timezoneDescription": "Az értesítések és e-mailek időbélyegeihez használjuk",
       "timezoneSaved": "Időzóna frissítve",

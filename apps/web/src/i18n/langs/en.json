@@ -132,6 +132,7 @@
     "checkSpamHint": "If you don't see it, check your spam folder.",
     "chooseOrganization": "Choose which organization to work in",
     "codeSentAgain": "We sent a new code.",
+    "continueWithApple": "Continue with Apple",
     "continueWithEmail": "Continue",
     "continueWithGoogle": "Continue with Google",
     "continueWithMicrosoft": "Continue with Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Approve",
     "approveSelected": "Approve selected",
+    "arrangement": {
+      "alertThreshold": "Alert threshold (%)",
+      "amountCap": "Amount cap",
+      "flatFee": "Flat fee",
+      "invalidCap": "Enter positive caps and an alert threshold between 0.01% and 100%.",
+      "minuteCap": "Time cap (minutes)",
+      "title": "Billing arrangement"
+    },
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
-      "markPaid": "Mark paid",
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
+      "payments": {
+        "amountTooHigh": "The amount is more than the outstanding {amount}.",
+        "confirmVoid": "The payment stays on record as voided and no longer counts towards this invoice.",
+        "empty": "No payments recorded yet",
+        "method": "Payment method",
+        "methods": {
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "cash": "Cash",
+          "other": "Other method"
+        },
+        "outstandingAmount": "Outstanding {amount}",
+        "paidOn": "Payment date",
+        "partiallyPaid": "Partially paid",
+        "record": "Record payment",
+        "summary": "Paid {paid}, outstanding {outstanding}",
+        "title": "Payments",
+        "void": "Void payment",
+        "voided": "Voided"
+      },
       "removeEntries": "Remove entries",
       "send": "Send",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "AI is not configured.",
     "availabilityUnknown": "Availability could not be confirmed.",
     "deeplMissing": "DeepL is not configured.",
+    "deeplPdfRequired": "Translating PDFs requires DeepL.",
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
@@ -912,12 +941,16 @@
         "reasoning": "Reasoning"
       },
       "errors": {
+        "analysisDisabled": "AI analysis generation is disabled on this server. Read the decision text or try again later.",
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "decisionNotFound": "This decision could not be found. Reopen it from search.",
+        "documentUnparseable": "The decision text is not ready for analysis. Read the original source.",
+        "languageUnsupported": "AI analysis does not yet support this decision’s language. Read the decision text or original source.",
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
         "retryAfter": "You can try again after {time}.",
-        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}",
-        "unavailable": "AI analysis is not available for this decision."
+        "sourceRestricted": "The source does not permit AI analysis. Read the decision text or original source.",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}"
       },
       "generate": "Generate AI headnotes",
       "invitation": "With a free account, AI drafts working notes on this decision.",
@@ -1122,7 +1155,7 @@
     "reader": {
       "documentUpdated": "The document was updated.",
       "expandProvisions": "Expand provisions",
-      "headMatter": "Head matter",
+      "headMatter": "Case information",
       "sourceAttribution": "The source data is freely available at <link>{source}</link>."
     },
     "research": {
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Version at decision date (inferred)",
       "versionBasisInferredCompact": "Decision date · inferred",
       "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies."
-    }
+    },
+    "withdrawnByPublisher": "Withdrawn by publisher"
   },
   "catalogue": {
     "addCustom": "Add custom",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
     "maxAttachmentsReached": "Maximum {count} files per message",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# more} other {+# more}}",
+      "dismiss": "Dismiss connection notice",
+      "stoppedWorking": "Your connection to <name>{server}</name> stopped working.",
+      "waitingApproval": "Your connection to <name>{server}</name> is waiting for approval."
+    },
     "mention": {
       "category": {
         "entities": "In this matter",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "No company found for this IČO.",
       "aresTitle": "Czech registry (ARES)",
       "contactName": "Contact name",
+      "displayNameOrganizationHint": "Optional override; otherwise generated from the organization name.",
+      "displayNamePersonHint": "Optional override; otherwise generated from the first and last name.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Enter an 8-digit IČO."
     },
@@ -4852,7 +4894,9 @@
     "viewOnGithub": "View on GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Answer language",
     "budgetError": "The answer budget is exhausted.",
+    "documentLanguage": "Document language ({language})",
     "expand": "Expand answer",
     "explain": "Explain",
     "followUp": "Ask a follow-up",
@@ -5039,6 +5083,16 @@
       "preferredNamePlaceholder": "Your name",
       "profileDescription": "Manage your personal preferences",
       "sendOtpCode": "Send verification code",
+      "signInMethods": {
+        "confirmDescription": "Enter a fresh code sent to your email to disconnect this sign-in method.",
+        "confirmTitle": "Disconnect {provider}?",
+        "description": "Connect accounts that use the same verified email address.",
+        "emailCode": "Email code",
+        "emailCodeDescription": "You can always sign in with a code sent to your email.",
+        "lastMethod": "Connect another account before disconnecting this one.",
+        "title": "Sign-in methods",
+        "unavailable": "Email delivery must be configured to disconnect sign-in methods."
+      },
       "timezone": "Timezone",
       "timezoneDescription": "Used for timestamps in notifications and emails",
       "timezoneSaved": "Timezone updated",

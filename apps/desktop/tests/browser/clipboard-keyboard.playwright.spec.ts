@@ -450,7 +450,7 @@ for (const {
       await openClipboard(page, { language });
       await page.getByRole("searchbox").fill(query);
       const searchRegistries = page.getByRole("button", {
-        name: messages.clipboard.noResultsDescription.replace(
+        name: messages.clipboard.noResultsSearchRegistries.replace(
           "{query}",
           () => query,
         ),
