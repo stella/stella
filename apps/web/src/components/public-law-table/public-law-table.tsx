@@ -110,6 +110,10 @@ export const PublicLawTable = <
   sorting,
 }: PublicLawTableProps<TRow, TLayout>) => {
   const t = useTranslations();
+  // "No results" is an answer, so only a settled search may give it. Rows
+  // held from the previous search that hold nothing (or that the find hid)
+  // say nothing about the search in flight: that table waits instead.
+  const isWaiting = isLoading || (isRefreshing && rows.length === 0);
   const selectedIds = selection?.selectedIds;
   const rowSelection: RowSelectionState = useMemo(() => {
     if (selectedIds === undefined) {
@@ -194,12 +198,12 @@ export const PublicLawTable = <
             firstRowNumber={firstRowNumber}
             rowHost={rowHost}
             skeletonRowCount={
-              isLoading ? tableSkeletonRowCount(expectedRowCount) : 0
+              isWaiting ? tableSkeletonRowCount(expectedRowCount) : 0
             }
             table={table}
           />
         </FindHighlightScope>
-        {rows.length === 0 && !isLoading && (
+        {rows.length === 0 && !isWaiting && (
           // The table stays a table when nothing matched: a few blurred rows
           // where results would be, and what to do next over them, rather
           // than a header above a blank box with a line of text far below.
