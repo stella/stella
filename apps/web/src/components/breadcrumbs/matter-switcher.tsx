@@ -19,11 +19,13 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 import {
   filterMattersByQuery,
   selectSiblingMatters,
 } from "@/components/breadcrumbs/matter-switcher.logic";
+import { CRUMB_SWITCHER_REVEAL_CLASS_NAME } from "@/components/breadcrumbs/shared";
 import { MatterOptionLabel } from "@/components/matter-option-label";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -39,6 +41,8 @@ type MatterSwitcherProps = {
     client: { displayName: string; id: string } | null;
     id: string;
   };
+  /** More crumbs follow, so the caret waits for a hover over its crumb. */
+  revealOnHover?: boolean;
 };
 
 /**
@@ -47,7 +51,10 @@ type MatterSwitcherProps = {
  * checked, so people move between a client's matters without going back to
  * the matter list. The list loads only once the popover opens.
  */
-export const MatterSwitcher = ({ matter }: MatterSwitcherProps) => {
+export const MatterSwitcher = ({
+  matter,
+  revealOnHover = false,
+}: MatterSwitcherProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const { activeOrganizationId } = useAuthenticatedUser();
@@ -122,7 +129,14 @@ export const MatterSwitcher = ({ matter }: MatterSwitcherProps) => {
           render={
             <TooltipTrigger
               render={
-                <Button aria-label={label} size="icon-xs" variant="ghost" />
+                <Button
+                  aria-label={label}
+                  className={cn(
+                    revealOnHover && CRUMB_SWITCHER_REVEAL_CLASS_NAME,
+                  )}
+                  size="icon-xs"
+                  variant="ghost"
+                />
               }
             />
           }

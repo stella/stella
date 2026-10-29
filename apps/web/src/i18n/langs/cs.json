@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Opravdu chcete smazat tento spis? Tuto akci nelze vrátit.",
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
+    "documentSwitcher": {
+      "searchPlaceholder": "Najít dokument…",
+      "trigger": "Přepnout dokument"
+    },
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentů}}",
     "dropToUploadFiles": "Přetáhněte soubory pro nahrání",
     "duplicateMatter": "Duplikovat spis",

@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
+    "documentSwitcher": {
+      "searchPlaceholder": "Find a document…",
+      "trigger": "Switch document"
+    },
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Drop to upload files",
     "duplicateMatter": "Duplicate matter",

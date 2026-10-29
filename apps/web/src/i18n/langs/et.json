@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Kas olete kindel, et soovite selle toimiku kustutada? Seda toimingut ei saa tagasi võtta.",
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
+    "documentSwitcher": {
+      "searchPlaceholder": "Otsi dokumenti…",
+      "trigger": "Vaheta dokumenti"
+    },
     "documentsCount": "{count, plural, one {# dokument} other {# dokumenti}}",
     "dropToUploadFiles": "Lohistage failid üleslaadimiseks siia",
     "duplicateMatter": "Dubleeri toimik",

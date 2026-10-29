@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "¿Está seguro de que desea eliminar este asunto? Esta acción no se puede deshacer.",
     "deletedItem": "Eliminado: {name}",
     "deletingWorkspace": "Eliminando asunto",
+    "documentSwitcher": {
+      "searchPlaceholder": "Buscar un documento…",
+      "trigger": "Cambiar de documento"
+    },
     "documentsCount": "{count, plural, one {# documento} other {# documentos}}",
     "dropToUploadFiles": "Suelte para subir archivos",
     "duplicateMatter": "Duplicar asunto",

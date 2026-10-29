@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Ar tikrai norite ištrinti šią bylą? Šio veiksmo negalima atšaukti.",
     "deletedItem": "Ištrinta: {name}",
     "deletingWorkspace": "Byla trinama",
+    "documentSwitcher": {
+      "searchPlaceholder": "Rasti dokumentą…",
+      "trigger": "Perjungti dokumentą"
+    },
     "documentsCount": "{count, plural, one {# dokumentas} few {# dokumentai} many {# dokumento} other {# dokumentų}}",
     "dropToUploadFiles": "Vilkite failus norėdami įkelti",
     "duplicateMatter": "Dubliuoti bylą",

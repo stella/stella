@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Naozaj chcete vymazať tento spis? Túto akciu nemožno vrátiť.",
     "deletedItem": "Odstránené: {name}",
     "deletingWorkspace": "Mazanie spisu",
+    "documentSwitcher": {
+      "searchPlaceholder": "Nájsť dokument…",
+      "trigger": "Prepnúť dokument"
+    },
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentov}}",
     "dropToUploadFiles": "Presuňte súbory pre nahranie",
     "duplicateMatter": "Duplikovať spis",

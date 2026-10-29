@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Biztosan törölni szeretné ezt az ügyet? Ez a művelet nem vonható vissza.",
     "deletedItem": "Törölve: {name}",
     "deletingWorkspace": "Ügy törlése folyamatban",
+    "documentSwitcher": {
+      "searchPlaceholder": "Dokumentum keresése…",
+      "trigger": "Dokumentum váltása"
+    },
     "documentsCount": "{count, plural, one {# dokumentum} other {# dokumentum}}",
     "dropToUploadFiles": "Húzza ide a fájlokat a feltöltéshez",
     "duplicateMatter": "Ügy másolása",

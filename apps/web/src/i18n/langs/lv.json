@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Vai tiešām vēlaties dzēst šo lietu? Šo darbību nevar atsaukt.",
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
+    "documentSwitcher": {
+      "searchPlaceholder": "Atrast dokumentu…",
+      "trigger": "Pārslēgt dokumentu"
+    },
     "documentsCount": "{count, plural, zero {# dokumentu} one {# dokuments} other {# dokumenti}}",
     "dropToUploadFiles": "Nometiet, lai augšupielādētu failus",
     "duplicateMatter": "Dublēt lietu",

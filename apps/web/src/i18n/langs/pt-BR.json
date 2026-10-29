@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Tem certeza de que deseja excluir este caso? Esta ação não pode ser desfeita.",
     "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
+    "documentSwitcher": {
+      "searchPlaceholder": "Encontrar um documento…",
+      "trigger": "Trocar de documento"
+    },
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",
     "duplicateMatter": "Duplicar caso",

@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Czy na pewno chcesz usunąć tę sprawę? Tej operacji nie można cofnąć.",
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
+    "documentSwitcher": {
+      "searchPlaceholder": "Znajdź dokument…",
+      "trigger": "Przełącz dokument"
+    },
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} many {# dokumentów} other {# dokumentu}}",
     "dropToUploadFiles": "Upuść pliki, aby je przesłać",
     "duplicateMatter": "Duplikuj sprawę",

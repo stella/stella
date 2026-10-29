@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "هل أنت متأكد من رغبتك في حذف هذا الملف القانوني؟ لا يمكن التراجع عن هذا الإجراء.",
     "deletedItem": "تم الحذف: {name}",
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
+    "documentSwitcher": {
+      "searchPlaceholder": "ابحث عن مستند…",
+      "trigger": "تبديل المستند"
+    },
     "documentsCount": "{count, plural, zero {لا مستندات} one {مستند واحد} two {مستندان} few {# مستندات} many {# مستندًا} other {# مستند}}",
     "dropToUploadFiles": "أفلِت الملفات هنا لرفعها",
     "duplicateMatter": "تكرار الملف القانوني",

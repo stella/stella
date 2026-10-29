@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Möchten Sie diese Akte wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
+    "documentSwitcher": {
+      "searchPlaceholder": "Dokument suchen…",
+      "trigger": "Dokument wechseln"
+    },
     "documentsCount": "{count, plural, one {# Dokument} other {# Dokumente}}",
     "dropToUploadFiles": "Dateien zum Hochladen ablegen",
     "duplicateMatter": "Akte duplizieren",

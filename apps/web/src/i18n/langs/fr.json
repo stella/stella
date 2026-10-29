@@ -6107,6 +6107,10 @@
     "deleteWorkspaceConfirmDescription": "Voulez-vous vraiment supprimer ce dossier ? Cette action est irréversible.",
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
+    "documentSwitcher": {
+      "searchPlaceholder": "Rechercher un document…",
+      "trigger": "Changer de document"
+    },
     "documentsCount": "{count, plural, one {# document} many {# documents} other {# documents}}",
     "dropToUploadFiles": "Déposez pour importer des fichiers",
     "duplicateMatter": "Dupliquer le dossier",
