@@ -364,7 +364,7 @@ const readMatterEntities = async (
   return { entityRows, documentRows, exportedVersions, fileRows };
 };
 
-/** Contact links, task assignees, time entries and invoices with lines. */
+/** Contact links, task assignees and time entries for one matter. */
 const readMatterRecords = async (
   { db, organizationId, readAll, readForParents }: PagedReader,
   workspaceId: SafeId<"workspace">,
