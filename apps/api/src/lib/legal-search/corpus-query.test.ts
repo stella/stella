@@ -14,6 +14,7 @@ import {
   corpusDecisionTypeClause,
   corpusFreeTextClause,
   type CorpusFreeTextOptions,
+  type CorpusQueryToken,
   type CorpusStemming,
   type CorpusTermExpander,
   partitionCorpusQueryTokens,
@@ -1308,7 +1309,7 @@ test("corpus-query/numeric-superscript-index-roundtrip", () => {
         const expected = [
           { type: "term", value: number },
           { type: "term", value: index },
-        ];
+        ] satisfies CorpusQueryToken[];
         for (const printed of [
           projected,
           `${number}${superscript}`,
