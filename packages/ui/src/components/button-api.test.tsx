@@ -79,6 +79,34 @@ describe("Button size inline", () => {
     expect(classes.some((cls) => cls.includes("active:scale"))).toBe(false);
   });
 
+  test("sits in the line as an inline box whose text can be copied and wraps", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(
+        <Button size="inline" tooltip="Open the cited provision" variant="link">
+          § 2 odst. 1 zákona č. 89/2012 Sb., občanský zákoník
+        </Button>,
+      ),
+    );
+
+    expect(classes).toContain("inline");
+    expect(classes).not.toContain("inline-flex");
+    expect(classes).toContain("select-text");
+    expect(classes).not.toContain("select-none");
+    expect(classes).toContain("whitespace-normal");
+    expect(classes).not.toContain("whitespace-nowrap");
+    expect(classes).toContain("focus-visible:ring-2");
+  });
+
+  test("keeps its tooltip", () => {
+    const markup = renderToStaticMarkup(
+      <Button size="inline" tooltip="Open the cited provision" variant="link">
+        § 2
+      </Button>,
+    );
+
+    expect(markup).toContain("data-base-ui-tooltip-trigger");
+  });
+
   test("a quiet inline button paints no hover fill", () => {
     const classes = classesOf(
       renderToStaticMarkup(

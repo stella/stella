@@ -225,8 +225,18 @@ type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
 `icon-2xs` (a 16px glyph action in a dense row; the touch target
 still grows to 44px under a coarse pointer), `row` (a menu-list row),
 `inline` (an action inside a line of text: no height, padding or type
-of its own, wraps with the line; quiet variants drop their hover fill,
-and with no variant it is an underlined link).
+of its own, an inline box that wraps with the line and whose text stays
+selectable; quiet variants drop their hover fill, and with no variant
+it is an underlined link).
+
+**Text selection.** Buttons are `select-none`: a label is not text to
+copy. Two exceptions: `size="inline"` is `select-text`, because a
+citation or reference inside prose is copied with the passage; and
+`plain` leaves selection to the browser, which in practice does not
+drag-select inside a button. So a plain row or card is fine as is, but
+if a reader needs to select or copy its text (a quoted passage, an
+identifier), the text is not the button: make a heading, an inline
+`Button` or a `CopyButton` the target and leave the text beside it.
 
 These are the only variants and sizes. A screen that seems to need
 another (a card button, a tile, a hint) composes `plain` with the

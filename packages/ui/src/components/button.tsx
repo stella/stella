@@ -99,8 +99,11 @@ const buttonVariants = cva(
         // swapping a word for an action leaves the line as it was. Its
         // variant still owns colour, focus and the selected treatment; see
         // compoundVariants for the hover fill it does not paint.
+        // It is an inline box, not a flex one, so a long label breaks across
+        // lines with the sentence, and its text stays selectable so a
+        // citation or a reference can be copied with the passage around it.
         inline:
-          "h-auto gap-1 rounded-sm border-0 p-0 text-start text-[length:inherit] leading-[inherit] font-normal whitespace-normal before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[length:inherit] [&_svg]:mx-0",
+          "inline h-auto rounded-sm border-0 p-0 text-start text-[length:inherit] leading-[inherit] font-normal whitespace-normal select-text before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[length:inherit] [&_svg]:mx-0 [&_svg]:inline [&_svg]:align-[-0.125em] [&_svg:not(:last-child)]:me-1",
         lg: "h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9",
         // One row of a menu list. The metric is shared with `CommandItem`; the
         // rest undoes the base button's centred content and its icon inset, so
