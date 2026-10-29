@@ -42,17 +42,20 @@ const TimerActivityRefresh = ({ source }: { source: AccessTokenSource }) => {
   useEffect(() => {
     // Unmounting aborts, so a refresh that outlives it changes nothing.
     const unmounted = new AbortController();
+    // Read afresh after each await: a property read once would narrow to
+    // the value it had before the await, though unmounting can change it.
+    const gone = () => unmounted.signal.aborted;
     void (async () => {
       const timers = await listTimers({ fetch, source });
       // Time tracking off, or offline: the activity stays as it was.
-      if (unmounted.signal.aborted || timers.isErr()) {
+      if (gone() || timers.isErr()) {
         return;
       }
       const named = timers.value.some(
         (timer) => timer.matterId !== null && timer.matterId !== undefined,
       );
       const matters = named ? await listMatters({ fetch, source }) : null;
-      if (unmounted.signal.aborted) {
+      if (gone()) {
         return;
       }
       await showTimerActivity(
