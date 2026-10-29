@@ -1701,7 +1701,7 @@
     "@expo/router-server": "58.0.16",
     "@expo/ui": "58.0.22",
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@stll/folio-core": "0.64.0",
+    "@stll/folio-core": "0.66.0",
     "adm-zip": "0.6.1",
     "body-parser": "2.4.0",
     "brace-expansion": "5.0.11",
@@ -1714,7 +1714,7 @@
     "ioredis": "6.0.0",
     "ip-address": "10.7.2",
     "launch-editor": "2.14.2",
-    "lucide-react": "1.60.0",
+    "lucide-react": "1.61.0",
     "lucide-react-native": "1.41.0",
     "lucide-static": "1.41.0",
     "mailauth": {
@@ -1751,10 +1751,10 @@
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
-    "@stll/docx-core": "0.39.1",
-    "@stll/folio-agents": "0.16.6",
-    "@stll/folio-core": "0.64.0",
-    "@stll/folio-react": "0.32.0",
+    "@stll/docx-core": "0.41.0",
+    "@stll/folio-agents": "0.16.8",
+    "@stll/folio-core": "0.66.0",
+    "@stll/folio-react": "0.32.2",
     "@stll/fuzzy-search": "1.4.0",
     "@stll/regex-set": "1.0.5",
     "@stll/regex-set-wasm": "1.0.5",
@@ -1797,7 +1797,7 @@
     "fast-check": "^4.10.2",
     "franc": "6.2.0",
     "jszip": "3.10.2",
-    "lucide-react": "1.60.0",
+    "lucide-react": "1.61.0",
     "lucide-react-native": "1.41.0",
     "lucide-static": "1.41.0",
     "lzma1": "0.4.0",
@@ -3288,7 +3288,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.39.1", "", { "dependencies": { "@nodable/entities": "^3.0.0", "@stll/docx-utils": "^0.2.0", "@stll/utf8-boundaries": "0.1.2", "better-result": "3.0.1", "fast-xml-parser": "^5.11.2", "jszip": "3.10.2", "marked": "^18.1.1" } }, "sha512-3vd7bJbLDsoObptDTyg+MER9ujQ96/F8JeAd1PtPdNm245mrppozOZ4l/MinaHKSuf2fDzuVsgLgWIDTGPqLGA=="],
+    "@stll/docx-core": ["@stll/docx-core@0.41.0", "", { "dependencies": { "@stll/docx-utils": "^0.2.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "marked": "^18.1.1" } }, "sha512-it8ZGPqPS86L+MJlO0eihrKVSJnyQtqYLL/07LK5ebk50J5sQI4RPHKFXKKrhrz5+xTCMQCcUx9Drc9ir+fZGg=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -3298,11 +3298,11 @@
 
     "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 
-    "@stll/folio-agents": ["@stll/folio-agents@0.16.6", "", { "dependencies": { "@stll/folio-core": "^0.64.0", "@stll/utf8-boundaries": "0.1.2", "better-result": "3.0.1" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-lajvHZM90bb1OOO2reDzYVemyVy7V0CwuOCPIVv2kn8z6Jf7E6MAPNc6q1rkryCNcE/Q4eBVX7WA4C5SwD8KNA=="],
+    "@stll/folio-agents": ["@stll/folio-agents@0.16.8", "", { "dependencies": { "@stll/folio-core": "^0.66.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-u6pwa66GZwwRYdyqg0lFi+iW4iLF6PKONZeyl3gQeJRqYp0/f+cdwsEiE0edD1muLkk64j/zV0hEgJjxsNfp0w=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.64.0", "", { "dependencies": { "@stll/docx-core": "^0.39.1", "@stll/docx-utils": "^0.2.0", "@stll/template-conditions": "^0.6.2", "@stll/utf8-boundaries": "0.1.2", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.17", "fast-xml-parser": "^5.11.2", "hyphen": "1.14.1", "jszip": "3.10.2", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.2", "prosemirror-dropcursor": "^1.8.4", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.2", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-oEK5Qrjy7vFRaTJ+9O5m/sIfm27fSTobo8F4XGBtLdTtmq70DExLwNQc/ViekmVowWZd18KaxSB8NSdZtJY1sQ=="],
+    "@stll/folio-core": ["@stll/folio-core@0.66.0", "", { "dependencies": { "@stll/docx-core": "^0.41.0", "@stll/docx-utils": "^0.2.0", "@stll/template-conditions": "^0.6.2", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.17", "hyphen": "1.14.1", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.2", "prosemirror-dropcursor": "^1.8.4", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.2", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-k1dRtJcJPmf6BRmTsWMngvhdDSgSmZeC76lC8D/CrUSTb7syx76WH4PGhrByWhZpxPFn731IA0OfK3ei4XJPKA=="],
 
-    "@stll/folio-react": ["@stll/folio-react@0.32.0", "", { "dependencies": { "@base-ui/react": "1.9.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.3.1", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.64.0", "@stll/utf8-boundaries": "0.1.2", "@types/react": "^19.3.0", "@types/react-dom": "^19.3.0", "better-result": "3.0.1", "lucide-react": "1.59.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-fZSKqI5yLYmd0vuhW2pOioy2mDaUtJnA8qcZaw8P/d9xSmLkOlprkb9oY2CrTunKosJUlvrGX4K9MV5+6iZXTQ=="],
+    "@stll/folio-react": ["@stll/folio-react@0.32.2", "", { "dependencies": { "@base-ui/react": "1.9.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.3.1", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.66.0", "@stll/utf8-boundaries": "0.2.0", "@types/react": "^19.3.0", "@types/react-dom": "^19.3.0", "better-result": "3.0.1", "lucide-react": "1.61.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-TfY/Px0TLjncxVofpojChAnZf7hzxkM4cwIEXEzGaEjV+nPsCsQwX3C9me5pPzlKmoaQv6c11RjKT3bKzDo8jw=="],
 
     "@stll/fuzzy-search": ["@stll/fuzzy-search@1.4.0", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.4.0", "@stll/fuzzy-search-darwin-x64": "1.4.0", "@stll/fuzzy-search-linux-arm64-gnu": "1.4.0", "@stll/fuzzy-search-linux-x64-gnu": "1.4.0", "@stll/fuzzy-search-wasm32-wasi": "1.4.0", "@stll/fuzzy-search-win32-x64-msvc": "1.4.0" } }, "sha512-fTe1dG94ElC8P9hLCNj46Hdc87GqKrsZx+MPJQBQgyKj8v44tT44aP/bWCdNtd3RYGIEVf/Mbw0Jh2C6JHNe0Q=="],
 
@@ -3430,7 +3430,7 @@
 
     "@stll/user-agent": ["@stll/user-agent@workspace:packages/user-agent"],
 
-    "@stll/utf8-boundaries": ["@stll/utf8-boundaries@0.1.2", "", { "dependencies": { "better-result": "3.0.1" }, "peerDependencies": { "fast-check": "^4.9.0", "jszip": "^3.10.2" }, "optionalPeers": ["fast-check", "jszip"] }, "sha512-6DS2IZbgpzFhfpmHlTUrB9i2MyTWUDyd3ytutp1Q0PSdebv/AiGRcjMaKf1jrDC5P/u0XTtABxaFQTBXcTu92A=="],
+    "@stll/utf8-boundaries": ["@stll/utf8-boundaries@0.2.0", "", { "dependencies": { "better-result": "3.0.1" }, "peerDependencies": { "fast-check": "^4.9.0" }, "optionalPeers": ["fast-check"] }, "sha512-UPXi0NVuOwXUZbv9n3EHROsYeVGkbwiU9VZjPetA1ShTuMKwgpdQNX+dAzhL/P/3pMziK9Gxa+HMZCgnmWHhPg=="],
 
     "@stll/uuid-codec": ["@stll/uuid-codec@workspace:packages/uuid-codec"],
 
@@ -4974,7 +4974,7 @@
 
     "lru-cache": ["lru-cache@11.5.2", "", {}, "sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g=="],
 
-    "lucide-react": ["lucide-react@1.60.0", "", { "peerDependencies": { "@types/react": "*", "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["@types/react"] }, "sha512-UqxOW0FgAfDyb9VmjKb6/BkOzW6yfhf/QNboKtS2NDsscnNRW2CDzlyhbMKBQ1ontmcxuIDqHJ2AVgFR3NI+GA=="],
+    "lucide-react": ["lucide-react@1.61.0", "", { "peerDependencies": { "@types/react": "*", "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["@types/react"] }, "sha512-v2SQPPPNjnr+BlhL9Spuzmo5yR+hLkftfuE4E3jaxdNPgSH0hJKPcLJBP7yAta87jQNPsSERS59PJjCJ/CorBA=="],
 
     "lucide-react-native": ["lucide-react-native@1.41.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-native": "*", "react-native-svg": "^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0" } }, "sha512-iQk/8xRzd5BscNwTRGtiUkTfUfbq9+UT0zkgbLnmWco+T0Diw95TVgntM4j53oB+HBL5oenUFxIWm9TmCxKU7A=="],
 
