@@ -7,6 +7,7 @@ import { cents } from "@stll/money";
 
 import { BILLING_STATUS, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -256,6 +257,8 @@ const buildContext = ({
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
     testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       // The canary is about tenant text leaving the pipeline. `search` also
       // asks the public corpus, whose hits carry no tenant text at all, so

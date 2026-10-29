@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Vajuta {shortcut}, et sirvida ajalugu ja valida lõige.",
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
-    "welcomeTitle": "Sinu uus lõikelaud"
+    "welcomeTitle": "Sinu uus lõikelaud",
+    "registryIdentifierSearchHint": "Sisestage {identifiers}."
   },
   "activity": {
     "title": "Tegevus",

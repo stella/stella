@@ -68,6 +68,7 @@ type AnnotationToolbarProps = {
    * no notes margin, where the bar offers no comment at all rather than an
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
+  explainLanguagePicker?: ReactNode;
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
   /** Why Explain cannot take these spans, or `undefined` when it can. */
   explainRefusal?:
@@ -125,6 +126,7 @@ export const AnnotationToolbar = ({
   onClearActive,
   onCompose,
   onExplain,
+  explainLanguagePicker,
   explainRefusal,
   onSelectedSpansChange,
   scrollContainerRef,
@@ -679,6 +681,7 @@ export const AnnotationToolbar = ({
         {mode === "authenticated" && spans.length > 0 && (
           <SelectionAIActions
             explainRefusal={explainRefusal?.(spans)}
+            explainLanguagePicker={explainLanguagePicker}
             onAsk={() => {
               askAboutPassage(
                 spans.map(({ quote }) => quote).join(" "),
@@ -737,7 +740,9 @@ export const AnnotationToolbar = ({
       doc={doc}
       onAttach={attachBar}
     >
-      {content}
+      <div onMouseDown={(event) => event.preventDefault()} role="presentation">
+        {content}
+      </div>
     </SelectionToolbar>
   );
 };
