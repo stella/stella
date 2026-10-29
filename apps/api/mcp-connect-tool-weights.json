@@ -448,10 +448,10 @@
     {
       "name": "resolve_rate",
       "nameChars": 12,
-      "descriptionChars": 337,
+      "descriptionChars": 222,
       "inputSchemaChars": 495,
-      "totalChars": 844,
-      "estimatedTokens": 323
+      "totalChars": 729,
+      "estimatedTokens": 285
     },
     {
       "name": "run_playbook",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127517,
-    "estimatedTokens": 50547
+    "characters": 127402,
+    "estimatedTokens": 50509
   }
 }

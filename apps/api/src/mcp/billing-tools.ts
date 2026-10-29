@@ -1836,11 +1836,9 @@ export const BILLING_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve the effective hourly rate for a user on a given date in a " +
-      "matter, using its default rate table: user plus activity, role plus activity, " +
-      "activity, user, role, then table default. Effective dates apply throughout. Returns the hourly rate in integer " +
-      "minor currency units (e.g. cents) and the currency, or nulls when no " +
-      "rate applies.",
+      "Resolve an effective hourly rate from the matter's default table for the date: " +
+      "user+activity > role+activity > activity > user > role > table default. " +
+      "Returns integer minor-unit rate and currency, or nulls if none applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
     permissions: { type: "all", permissions: { rate: ["read"] } },
