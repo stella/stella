@@ -134,3 +134,76 @@ test("transcript snapshots record every wire role and preserve labels they do no
     }).type,
   ).toBe("authored");
 });
+
+test.each(["assistant", "user"] as const)(
+  "implicit text follows the current identity after relabeling %s",
+  (initialRole) => {
+    const role = initialRole === "assistant" ? "user" : "assistant";
+    const expected = role === "user" ? "authored" : "generated";
+    const identity = "current";
+    for (const mode of ["live", "restored"] as const) {
+      const roles = createRunMessageRoles();
+      if (mode === "live") {
+        roles.classify({
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: identity,
+          role: initialRole,
+        });
+        roles.classify({
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [{ id: identity, role, content: "prior" }],
+        });
+      } else {
+        roles.restore([
+          { messageId: identity, role: initialRole, current: true },
+          { messageId: identity, role, current: false },
+        ]);
+      }
+      roles.classify({ type: EventType.MESSAGES_SNAPSHOT, messages: [] });
+      roles.classify({
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [{ id: "other", role: initialRole, content: "prior" }],
+      });
+      expect(
+        roles.classify({ type: EventType.TEXT_MESSAGE_CHUNK, delta: "text" }),
+      ).toEqual({
+        type: expected,
+        identity: { type: "known", messageId: identity },
+      });
+    }
+  },
+);
+
+test.each(["assistant", "user"] as const)(
+  "anonymous %s attribution is unchanged by identified snapshot messages",
+  (role) => {
+    for (const mode of ["live", "restored"] as const) {
+      const roles = createRunMessageRoles();
+      if (mode === "live") {
+        roles.classify({
+          type: EventType.TEXT_MESSAGE_CHUNK,
+          role,
+          delta: "first",
+        });
+      } else {
+        roles.restore([{ messageId: null, role, current: true }]);
+      }
+      roles.classify({
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          {
+            id: "other",
+            role: role === "user" ? "assistant" : "user",
+            content: "prior",
+          },
+        ],
+      });
+      expect(
+        roles.classify({ type: EventType.TEXT_MESSAGE_CHUNK, delta: "text" }),
+      ).toEqual({
+        type: role === "user" ? "authored" : "generated",
+        identity: { type: "unknown" },
+      });
+    }
+  },
+);

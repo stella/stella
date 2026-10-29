@@ -9,6 +9,8 @@ export type OpenRunMessage = {
   current: boolean;
 };
 type Identity = { type: "known"; messageId: string } | { type: "unknown" };
+type CurrentMessage =
+  Extract<Identity, { type: "known" }> | { type: "unknown"; role: TextRole };
 type Attribution =
   { type: TextRole; identity: Identity } | { type: "protocol" };
 const snapshotRoleEvents = {
@@ -40,10 +42,8 @@ const roleOf = (role: string | null | undefined): TextRole =>
     : (roleKinds.get(role) ?? "unknown");
 export const createRunMessageRoles = () => {
   const messages = new Map<string, TextRole>();
-  let current: { role: TextRole; identity: Identity } = {
-    role: "unknown",
-    identity: { type: "unknown" },
-  };
+  // Identified messages keep their role only in the map, including the current message.
+  let current: CurrentMessage = { type: "unknown", role: "unknown" };
   const restore = (open: OpenRunMessage[]) => {
     for (const message of open) {
       const role = roleOf(message.role);
@@ -55,7 +55,8 @@ export const createRunMessageRoles = () => {
         messages.set(identity.messageId, role);
       }
       if (message.current) {
-        current = { role, identity };
+        current =
+          identity.type === "known" ? identity : { type: "unknown", role };
       }
     }
   };
@@ -67,22 +68,25 @@ export const createRunMessageRoles = () => {
         if (chunk.messageId !== undefined) {
           identity = { type: "known", messageId: chunk.messageId };
         } else if (chunk.role === undefined) {
-          identity = current.identity;
+          identity = current.type === "known" ? current : { type: "unknown" };
         }
         let role: TextRole = "unknown";
         if (chunk.role !== undefined) {
           role = roleOf(chunk.role);
         } else if (chunk.type === EventType.TEXT_MESSAGE_CHUNK) {
+          const anonymousRole =
+            current.type === "unknown" ? current.role : "unknown";
           role =
             identity.type === "known"
               ? (messages.get(identity.messageId) ?? "unknown")
-              : current.role;
+              : anonymousRole;
         }
         if (
           chunk.type === EventType.TEXT_MESSAGE_START ||
           chunk.role !== undefined
         ) {
-          current = { role, identity };
+          current =
+            identity.type === "known" ? identity : { type: "unknown", role };
         }
         if (identity.type === "known") {
           messages.set(identity.messageId, role);
@@ -96,10 +100,10 @@ export const createRunMessageRoles = () => {
         if (chunk.type === EventType.TEXT_MESSAGE_END) {
           messages.delete(chunk.messageId);
           if (
-            current.identity.type === "known" &&
-            current.identity.messageId === chunk.messageId
+            current.type === "known" &&
+            current.messageId === chunk.messageId
           ) {
-            current = { role: "unknown", identity: { type: "unknown" } };
+            current = { type: "unknown", role: "unknown" };
           }
         }
         return { type: role, identity };

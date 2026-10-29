@@ -2774,6 +2774,71 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     },
   );
 
+  test.each(
+    (["assistant", "user"] as const).flatMap((initialRole) =>
+      (["snapshot", "cursor", "after-relabel"] as const).map((mode) => ({
+        initialRole,
+        mode,
+      })),
+    ),
+  )(
+    "$mode replay follows the current snapshot role for implicit chunks ($initialRole first)",
+    async ({ initialRole, mode }) => {
+      const {
+        writer,
+        options,
+        threadId: snapshotThread,
+      } = await liveLogFixture("generic");
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .update(chatThreads)
+            .set({ subjectDecisionId: decisionId })
+            .where(eq(chatThreads.id, snapshotThread)),
+      );
+      const identity = createSafeId<"chatMessage">();
+      const laterRole = initialRole === "user" ? "assistant" : "user";
+      const delta = laterRole === "user" ? own : secret;
+      await writer.append([
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: identity,
+          role: initialRole,
+        },
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [{ id: identity, role: laterRole, content: "prior" }],
+        },
+        { type: EventType.TEXT_MESSAGE_CHUNK, delta },
+        { type: EventType.TEXT_MESSAGE_END, messageId: identity },
+      ]);
+      await writer.close();
+      const received = await request(async () => {
+        if (mode === "snapshot") {
+          return await writer.snapshot();
+        }
+        const viewer = createChatRunLog({ ...options, db: scopedDb });
+        const entries = [];
+        const cursor = mode === "after-relabel" ? "2" : "1";
+        for await (const entry of viewer.read(
+          cursor,
+          new AbortController().signal,
+        )) {
+          entries.push(entry);
+        }
+        return entries;
+      });
+      expect(
+        received.find(
+          ({ chunk }) => chunk.type === EventType.TEXT_MESSAGE_CHUNK,
+        )?.chunk,
+      ).toEqual({
+        type: EventType.TEXT_MESSAGE_CHUNK,
+        delta: laterRole === "user" ? own : marker,
+      });
+    },
+  );
+
   test.each(["now", "cursor"] as const)(
     "%s restores every open message role before interleaved deltas",
     async (mode) => {
