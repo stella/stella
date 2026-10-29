@@ -405,6 +405,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/workspaces/:workspaceId/reports/:exportId": "crud",
   "GET /v1/workspaces/:workspaceId/reports/templates": "crud",
   "GET /v1/workspaces/:workspaceId/search-preview": "crud",
+  "GET /v1/workspaces/:workspaceId/vocabulary": "crud",
   "GET /v1/workspaces/:workspaceId/workflow": "crud",
   "GET /v1/workspaces/active": "crud",
   "GET /v1/workspaces/member-previews": "crud",

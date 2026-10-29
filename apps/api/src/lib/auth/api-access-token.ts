@@ -55,6 +55,10 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
   },
+  "GET /v1/workspaces/:workspaceId/vocabulary": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
+  },
   "GET /v1/workspaces": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/list.ts",
