@@ -563,7 +563,7 @@ export const readSearchPreview = async (
     const titleMarker =
       row.titleSource === "user"
         ? null
-        : withdrawal.marker(row.messages, subject);
+        : withdrawal.marker([row.title, row.messages], subject);
     if (titleMarker !== null) {
       return { type: "plain-text", content: titleMarker };
     }

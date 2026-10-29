@@ -912,6 +912,121 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
   });
 
   test.each([
+    { retained: "contract", query: "contract NOT negligence", matches: true },
+    {
+      retained: "contract negligence",
+      query: "contract NOT negligence",
+      matches: false,
+    },
+    { retained: "contract", query: "negligence", matches: false },
+  ])(
+    "chat search evaluates $query on retained text $retained",
+    async ({ retained, query, matches }) => {
+      const id = createSafeId<"chatThread">();
+      seededThreads.push(id);
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title: "Search fixture",
+          titleSource: "user",
+        });
+        await tx.insert(chatMessages).values([
+          {
+            id: createSafeId<"chatMessage">(),
+            threadId: id,
+            userId,
+            workspaceId,
+            role: "user",
+            content: proveTextOnlyPersistedChatMessageContent({
+              version: 3,
+              data: [{ type: "text", content: retained }],
+            }),
+          },
+          {
+            id: createSafeId<"chatMessage">(),
+            threadId: id,
+            userId,
+            workspaceId,
+            role: "assistant",
+            content: proveTextOnlyPersistedChatMessageContent({
+              version: 3,
+              data: [
+                {
+                  type: "text",
+                  content: `negligence [decision](#stella-decision=${decisionId})`,
+                },
+              ],
+            }),
+          },
+        ]);
+        await upsertChatThreadSearchDocument(id, tx);
+      });
+      const result = await request(async () =>
+        searchGlobal(
+          {
+            organizationId,
+            userId,
+            accessibleWorkspaceIds: [workspaceId],
+            selectedWorkspaceIds: [],
+            types: ["chat"],
+            editedByUserIds: [],
+            mimeTypes: [],
+            query,
+            limit: 10,
+          },
+          { scopedDb },
+        ),
+      );
+      expect(result.hits.some((hit) => hit.id === `chat:${id}`)).toBe(matches);
+    },
+  );
+
+  test.each([
+    { status: "withdrawn", titleSource: "ai", masked: true },
+    { status: "active", titleSource: "ai", masked: false },
+    { status: "withdrawn", titleSource: "user", masked: false },
+  ] as const)(
+    "generic $titleSource title preview follows its $status reference",
+    async ({ status, titleSource, masked }) => {
+      const id = createSafeId<"chatThread">();
+      const reference = status === "withdrawn" ? decisionId : activeId;
+      const title = `titleprobe [decision](#stella-decision=${reference})`;
+      seededThreads.push(id);
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title,
+          titleSource,
+        });
+        await upsertChatThreadSearchDocument(id, tx);
+      });
+      const preview = await request(async () =>
+        readSearchPreview(
+          {
+            organizationId,
+            userId,
+            accessibleWorkspaceIds: [workspaceId],
+            type: "chat",
+            resultId: id,
+            query: "titleprobe",
+          },
+          scopedDb,
+        ),
+      );
+      expect(preview).toEqual({
+        type: "plain-text",
+        content: masked ? marker : title,
+      });
+    },
+  );
+
+  test.each([
     {
       placement: "title and message",
       title: "titlequartz",

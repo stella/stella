@@ -64,7 +64,10 @@ import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
-import { buildSearchTsQuery } from "@/api/lib/search/query";
+import {
+  buildSearchCandidateTsQuery,
+  buildSearchTsQuery,
+} from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
 import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
@@ -622,10 +625,11 @@ const buildSearchFilterFragments = ({
     hasSearchQuery,
     () => sql`AND clsd.tsv @@ ${tsQuery}`,
   );
-  const chatTextSearchFilter = sqlWhen(
-    hasSearchQuery,
-    () => sql`AND cst.tsv @@ ${tsQuery}`,
-  );
+  const chatCandidateTsQuery = buildSearchCandidateTsQuery(query);
+  const chatTextSearchFilter =
+    hasSearchQuery && chatCandidateTsQuery !== null
+      ? sql`AND cst.tsv @@ ${chatCandidateTsQuery}`
+      : sql``;
   // The truncation belongs here, not at the call sites: `ts_headline` cost
   // grows with the document it is handed, and a per-branch `left(...)` is a
   // bound each new branch has to remember. Snippets come from the head of the
