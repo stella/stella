@@ -90,7 +90,10 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { resolveAnalysisInput } from "./analysis-input";
+import {
+  type AnalysisInputResolution,
+  resolveAnalysisInput,
+} from "./analysis-input";
 import {
   type AnalysisOutput,
   analysisOutputSchema,
@@ -695,6 +698,33 @@ const analysisStartFailure = (cause: unknown) =>
     cause,
   });
 
+type UnavailableAnalysisInput = Exclude<
+  AnalysisInputResolution,
+  { kind: "resolved" }
+>;
+
+const unavailableAnalysisInputResponse = (
+  resolution: UnavailableAnalysisInput,
+) => {
+  switch (resolution.kind) {
+    case "decision-not-found":
+      return unavailable("decision_not_found", "Decision not found");
+    case "unparseable-document":
+      return unavailable(
+        "document_unparseable",
+        "Decision has no parseable AST",
+      );
+    case "unsupported-language":
+      return unavailable(
+        "language_unsupported",
+        `Analysis is not available for decisions in language "${resolution.language}"`,
+      );
+    default:
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
+  }
+};
+
 export const generateAnalysis = async ({
   admitModelAction,
   startModelAction,
@@ -714,27 +744,19 @@ export const generateAnalysis = async ({
   Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
 > => {
   // audit: skip — background AI analysis output
-  const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
-  switch (resolution.kind) {
-    case "decision-not-found":
-      return Result.ok(unavailable("decision_not_found", "Decision not found"));
-    case "unparseable-document":
-      return Result.ok(
-        unavailable("document_unparseable", "Decision has no parseable AST"),
-      );
-    case "unsupported-language":
-      return Result.ok(
-        unavailable(
-          "language_unsupported",
-          `Analysis is not available for decisions in language "${resolution.language}"`,
-        ),
-      );
-    case "resolved":
-      break;
-    default: {
-      resolution satisfies never;
-      return panic(`Unhandled resolution: ${String(resolution)}`);
-    }
+  const resolved = await resolveAnalysisInput({ decisionId, scopedDb });
+  if (Result.isError(resolved)) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: resolved.error.message,
+        cause: resolved.error,
+      }),
+    );
+  }
+  const resolution = resolved.value;
+  if (resolution.kind !== "resolved") {
+    return Result.ok(unavailableAnalysisInputResponse(resolution));
   }
   const { anchorIds, decision, input } = resolution;
   const reader = readerKeyOf({ orgAIConfig, organizationId });

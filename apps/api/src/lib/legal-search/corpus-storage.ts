@@ -60,6 +60,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -161,6 +162,7 @@ export const parsePersistedCorpusAst = (
   value: unknown,
   documentId?: string,
 ): DocumentAst | EmptyAst | null => {
+  recordReadWork("astParses");
   const parsed = v.safeParse(persistedCorpusAstSchema, value);
   if (!parsed.success) {
     const paths = new Set(issueDotPaths(parsed.issues, []));
@@ -752,34 +754,20 @@ type ReadPackedMemberOptions = {
   readTombstones: CorpusTombstoneReader;
 };
 
-/**
- * The three ways a packed member can be refused, answered before the caller
- * sees any bytes: past the transfer ceiling, erased, or not the bytes the
- * address records. Returned rather than thrown so the read path keeps one
- * failure site.
- */
-const readPackedMember = async ({
+type ReadableCorpusMemberOptions<T> = {
+  location: PackedCorpusLocation;
+  readTombstones: CorpusTombstoneReader;
+  read: () => Promise<T>;
+};
+
+/** Revalidate erasure before serving either stored bytes or an immutable cache entry. */
+export const withReadableCorpusMember = async <T>({
   location,
-  maxBytes,
-  signal,
-  s3Policy,
-  readRange,
   readTombstones,
-}: ReadPackedMemberOptions): Promise<
-  Result<
-    Uint8Array,
-    | PayloadBudgetError
-    | CorpusMemberTombstonedError
-    | CorpusMemberDigestMismatchError
-  >
+  read,
+}: ReadableCorpusMemberOptions<T>): Promise<
+  Result<T, CorpusMemberTombstonedError>
 > => {
-  if (location.length > maxBytes) {
-    return Result.err(
-      new PayloadBudgetError({
-        message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
-      }),
-    );
-  }
   const address = formatCorpusLocation(location);
   const tombstoned = await readTombstones([address]);
   if (tombstoned.has(address)) {
@@ -790,23 +778,74 @@ const readPackedMember = async ({
       }),
     );
   }
-  const bytes = await readRange({
-    key: location.packKey,
-    offset: location.offset,
-    length: location.length,
-    signal,
-    ...(s3Policy === undefined ? {} : { s3Policy }),
+  return Result.ok(await read());
+};
+
+type PackedMemberRefusal =
+  | PayloadBudgetError
+  | CorpusMemberTombstonedError
+  | CorpusMemberDigestMismatchError;
+
+/**
+ * Transfer and integrity failures are returned to the storage boundary.
+ * Erasure is enforced by the shared admission gate before the range read.
+ */
+const readPackedMember = async ({
+  location,
+  maxBytes,
+  signal,
+  s3Policy,
+  readRange,
+  readTombstones,
+}: ReadPackedMemberOptions): Promise<
+  Result<Uint8Array, PackedMemberRefusal>
+> => {
+  if (location.length > maxBytes) {
+    return Result.err(
+      new PayloadBudgetError({
+        message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
+      }),
+    );
+  }
+  const address = formatCorpusLocation(location);
+  const admitted = await withReadableCorpusMember({
+    location,
+    readTombstones,
+    read: async () => {
+      const bytes = await readRange({
+        key: location.packKey,
+        offset: location.offset,
+        length: location.length,
+        signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      });
+      const digest = corpusMemberDigest(bytes);
+      return digest === location.sha256
+        ? Result.ok(bytes)
+        : Result.err(
+            new CorpusMemberDigestMismatchError({
+              message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
+              location: address,
+              digest,
+            }),
+          );
+    },
   });
-  const digest = corpusMemberDigest(bytes);
-  return digest === location.sha256
-    ? Result.ok(bytes)
-    : Result.err(
-        new CorpusMemberDigestMismatchError({
-          message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
-          location: address,
-          digest,
-        }),
-      );
+  return admitted.andThen((member) => member);
+};
+
+/**
+ * The packed read path's one failure site, shared by storage reads and cache
+ * hits: a refused member rejects with its typed error unchanged, which is what
+ * every corpus reader handles.
+ */
+export const unwrapPackedMemberRead = <T>(
+  read: Result<T, PackedMemberRefusal>,
+): T => {
+  if (Result.isError(read)) {
+    throw read.error;
+  }
+  return read.value;
 };
 
 export const readCorpusBytesAt = async ({
@@ -835,10 +874,7 @@ export const readCorpusBytesAt = async ({
         readRange,
         readTombstones,
       });
-      if (Result.isError(member)) {
-        throw member.error;
-      }
-      return member.value;
+      return unwrapPackedMemberRead(member);
     }
     default: {
       location satisfies never;
