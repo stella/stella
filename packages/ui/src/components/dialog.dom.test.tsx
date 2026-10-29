@@ -1,30 +1,20 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type * as TestingLibrary from "@testing-library/react";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { Dialog, DialogPopup, type DialogSize, DialogTitle } from "./dialog";
+import type { DialogSize } from "./dialog";
 
-// Registered for this file only, and the testing library loaded after it,
-// so the shared test process keeps one happy-dom at a time.
-let library: typeof TestingLibrary;
-
-beforeAll(async () => {
-  GlobalRegistrator.register();
-  library = await import("@testing-library/react");
-});
+// The same order as the other DOM tests here: register, then load the
+// libraries that read the document, and unregister when the file is done.
+GlobalRegistrator.register();
+const library = await import("@testing-library/react");
+const { Dialog, DialogPopup, DialogTitle } = await import("./dialog");
 
 afterEach(() => {
   library.cleanup();
 });
 
 afterAll(async () => {
+  library.cleanup();
   await GlobalRegistrator.unregister();
 });
 
