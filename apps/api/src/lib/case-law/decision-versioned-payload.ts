@@ -21,11 +21,10 @@ export const decisionPayloadKey = (version: DecisionPayloadVersion): string =>
   ]);
 
 export type DecisionPayloadColumn = "documentAst" | "fulltext" | "sections";
-type DecisionPayloadValue = {
-  documentAst: unknown;
-  fulltext: string | null;
-  sections: (typeof publishedCaseLawDecisions.$inferSelect)["sections"];
-};
+type DecisionPayloadValue = Pick<
+  typeof publishedCaseLawDecisions.$inferSelect,
+  DecisionPayloadColumn
+>;
 
 export type DecisionPayloadRead<K extends DecisionPayloadColumn> =
   | { kind: "found"; value: DecisionPayloadValue[K] }
@@ -71,11 +70,7 @@ export const readDecisionVersionedPayloads = async <
   if (versions.length === 0) {
     return new Map();
   }
-  const selection = {
-    documentAst: { value: publishedCaseLawDecisions.documentAst },
-    fulltext: { value: publishedCaseLawDecisions.fulltext },
-    sections: { value: publishedCaseLawDecisions.sections },
-  }[column];
+  const selection = { value: publishedCaseLawDecisions[column] };
   const rows = await tx
     .select({ id: publishedCaseLawDecisions.id, ...selection })
     .from(publishedCaseLawDecisions)
