@@ -30,9 +30,9 @@ await withIsolatedPostgresCluster(
           ebs: { type: "disabled" },
         });
       } finally {
-        await connection.release();
+        void connection.release();
       }
-      await writeRolePrivilegeCensus(await readRolePrivilegeCensus(database));
+      writeRolePrivilegeCensus(await readRolePrivilegeCensus(database));
     });
   },
 );

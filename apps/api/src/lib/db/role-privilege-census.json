@@ -3,8 +3,10 @@
     "role": "stella",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -3308,8 +3310,10 @@
     "role": "stella_case_law_analysis_reader",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -4188,8 +4192,10 @@
     "role": "stella_case_law_analysis_writer",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -5036,8 +5042,10 @@
     "role": "stella_caselaw_reader",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -5884,8 +5892,10 @@
     "role": "stella_corpus_sample_reader",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -6770,8 +6780,10 @@
     "role": "stella_entity_gate",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -8301,8 +8313,10 @@
     "role": "stella_ingestion",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -9778,8 +9792,10 @@
     "role": "stella_public_law_reader",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],
@@ -11143,8 +11159,10 @@
     "role": "stella_public_sanctions_reader",
     "attributes": [
       "BYPASSRLS:false",
+      "CREATEDB:false",
       "CREATEROLE:false",
       "LOGIN:false",
+      "REPLICATION:false",
       "SUPERUSER:false"
     ],
     "memberships": [],

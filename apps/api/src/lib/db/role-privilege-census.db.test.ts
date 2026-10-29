@@ -107,6 +107,76 @@ describePostgres("database role privilege census", () => {
   }, 120_000);
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a role granted CREATEDB", async () => {
+    const expected = readExpectedCensus();
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCompleteCensus(expected, baseline);
+      const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      try {
+        await database.unsafe(`CREATE ROLE "${role}" CREATEDB NOLOGIN`);
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
+          `${role} attribute:CREATEDB:true`,
+        );
+      } finally {
+        await database.unsafe(`DROP ROLE IF EXISTS "${role}"`);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a role granted REPLICATION", async () => {
+    const expected = readExpectedCensus();
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCompleteCensus(expected, baseline);
+      const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      try {
+        await database.unsafe(`CREATE ROLE "${role}" REPLICATION NOLOGIN`);
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
+          `${role} attribute:REPLICATION:true`,
+        );
+      } finally {
+        await database.unsafe(`DROP ROLE IF EXISTS "${role}"`);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a membership changed to WITH ADMIN OPTION", async () => {
+    const expected = readExpectedCensus();
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCompleteCensus(expected, baseline);
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `stella_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      try {
+        await database.unsafe(`
+          CREATE ROLE "${parent}" NOLOGIN;
+          CREATE ROLE "${member}" NOLOGIN;
+          GRANT "${parent}" TO "${member}";
+        `);
+        const withoutAdminOption = await readRolePrivilegeCensus(database);
+        await database.unsafe(
+          `GRANT "${parent}" TO "${member}" WITH ADMIN OPTION`,
+        );
+        const withAdminOption = await readRolePrivilegeCensus(database);
+        expect(() =>
+          assertCompleteCensus(withoutAdminOption, withAdminOption),
+        ).toThrow(
+          `${member} membership:${parent}:ADMIN_OPTION:true:INHERIT_OPTION:true:SET_OPTION:true`,
+        );
+      } finally {
+        await database.unsafe(`
+          REVOKE "${parent}" FROM "${member}";
+          DROP ROLE IF EXISTS "${member}";
+          DROP ROLE IF EXISTS "${parent}";
+        `);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a column-level grant", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {

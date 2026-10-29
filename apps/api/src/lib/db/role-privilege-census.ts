@@ -44,16 +44,18 @@ export const readRolePrivilegeCensus = async (
   const rows = await database.unsafe<CensusRow[]>(`
     WITH RECURSIVE
     application_roles AS (
-      SELECT oid, rolname, rolsuper, rolcreaterole, rolcanlogin, rolbypassrls
+      SELECT oid, rolname, rolsuper, rolcreatedb, rolcreaterole, rolcanlogin, rolreplication, rolbypassrls
       FROM pg_catalog.pg_roles
       WHERE rolname !~ '^pg_' AND rolname <> current_user
     ),
+    direct_memberships(member, parent, admin_option, inherit_option, set_option) AS (
+      SELECT member, roleid, admin_option, inherit_option, set_option FROM pg_catalog.pg_auth_members
+    ),
     memberships(member, parent) AS (
-      SELECT member, roleid FROM pg_catalog.pg_auth_members
-      UNION
-      SELECT memberships.member, auth.roleid
+      SELECT member, parent FROM direct_memberships UNION
+      SELECT memberships.member, auth.parent
       FROM memberships
-      JOIN pg_catalog.pg_auth_members auth ON auth.member = memberships.parent
+      JOIN direct_memberships auth ON auth.member = memberships.parent
     ),
     application_schemas AS (
       SELECT oid, nspname, nspowner, nspacl
@@ -154,14 +156,16 @@ export const readRolePrivilegeCensus = async (
              attribute.name || ':' || attribute.enabled AS value
       FROM application_roles role
       CROSS JOIN LATERAL (VALUES
-        ('BYPASSRLS', role.rolbypassrls::text),
+        ('BYPASSRLS', role.rolbypassrls::text), ('CREATEDB', role.rolcreatedb::text),
         ('CREATEROLE', role.rolcreaterole::text),
-        ('LOGIN', role.rolcanlogin::text),
+        ('LOGIN', role.rolcanlogin::text), ('REPLICATION', role.rolreplication::text),
         ('SUPERUSER', role.rolsuper::text)
       ) attribute(name, enabled)
       UNION ALL
-      SELECT member.rolname, 'membership', parent.rolname
-      FROM memberships membership
+      SELECT member.rolname, 'membership',
+             parent.rolname || ':ADMIN_OPTION:' || membership.admin_option || ':INHERIT_OPTION:' || membership.inherit_option ||
+             ':SET_OPTION:' || membership.set_option
+      FROM direct_memberships membership
       JOIN application_roles member ON member.oid = membership.member
       JOIN pg_catalog.pg_roles parent ON parent.oid = membership.parent
       UNION ALL
