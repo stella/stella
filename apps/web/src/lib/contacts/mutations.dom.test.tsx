@@ -20,9 +20,17 @@ Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
   value: "abc123",
 });
 const originalFetch = globalThis.fetch;
-let transportFailure: Error = new DOMException("Cancelled", "AbortError");
+let contactResponse: Error | Response = new DOMException(
+  "Cancelled",
+  "AbortError",
+);
 globalThis.fetch = Object.assign(
-  async () => await Promise.reject(transportFailure),
+  async () => {
+    if (contactResponse instanceof Response) {
+      return contactResponse;
+    }
+    return await Promise.reject(contactResponse);
+  },
   { preconnect: originalFetch.preconnect },
 );
 
@@ -89,7 +97,7 @@ afterAll(async () => {
 });
 
 test("an aborted contact creation reaches neither analytics nor toast", async () => {
-  transportFailure = new DOMException("Cancelled", "AbortError");
+  contactResponse = new DOMException("Cancelled", "AbortError");
   const captureException = spyOn(posthog, "captureException");
   const addToast = spyOn(stellaToast, "add");
   const hook = renderCreateContact();
@@ -100,14 +108,40 @@ test("an aborted contact creation reaches neither analytics nor toast", async ()
   expect(addToast).not.toHaveBeenCalled();
 });
 
-test("a contact creation network failure is captured and shown", async () => {
-  transportFailure = new TypeError("Failed to fetch");
+test("a contact creation network failure is signaled and shown", async () => {
+  contactResponse = new TypeError("Failed to fetch");
   const captureException = spyOn(posthog, "captureException");
+  const capture = spyOn(posthog, "capture");
+  const addToast = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+  const hook = renderCreateContact();
+
+  await createContact(hook);
+
+  expect(captureException).not.toHaveBeenCalled();
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(capture).toHaveBeenCalledWith("client_transient", {
+    query_owner: "useCreateContact:failure",
+    transport_kind: "network",
+  });
+  expect(addToast).toHaveBeenCalledTimes(1);
+});
+
+test("a contact creation HTTP 500 is captured and shown", async () => {
+  contactResponse = Response.json(
+    { message: "Contact creation failed" },
+    { status: 500 },
+  );
+  const captureException = spyOn(posthog, "captureException");
+  const capture = spyOn(posthog, "capture");
   const addToast = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
   const hook = renderCreateContact();
 
   await createContact(hook);
 
   expect(captureException).toHaveBeenCalledTimes(1);
+  expect(capture).not.toHaveBeenCalledWith(
+    "client_transient",
+    expect.anything(),
+  );
   expect(addToast).toHaveBeenCalledTimes(1);
 });

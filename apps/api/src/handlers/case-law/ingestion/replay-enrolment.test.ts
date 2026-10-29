@@ -13,6 +13,7 @@ test("the committed registry previews approved parser sources with bounded daily
     Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
   ).toEqual(
     [
+      ADAPTER_KEYS.CZ_NSS,
       ADAPTER_KEYS.CZ_US,
       ADAPTER_KEYS.PL_COURTS,
       ADAPTER_KEYS.PL_SN,

@@ -1274,13 +1274,20 @@ type GuardedEndpoint =
  * mapped to a structured `internal_error` envelope instead of escaping as an
  * unhandled rejection. Shared by `describe_capability` and the capability executors.
  */
-const loadEndpointGuarded = async (
-  id: string,
-  toolName: "describe_capability" | McpCapabilityExecutor,
-): Promise<GuardedEndpoint> => {
+type LoadEndpointGuardedOptions = {
+  id: string;
+  toolName: "describe_capability" | McpCapabilityExecutor;
+  loadEndpoint?: typeof loadCapabilityEndpoint | undefined;
+};
+
+const loadEndpointGuarded = async ({
+  id,
+  toolName,
+  loadEndpoint = loadCapabilityEndpoint,
+}: LoadEndpointGuardedOptions): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadCapabilityEndpoint(id);
+    endpoint = await loadEndpoint(id);
   } catch (error) {
     captureError(
       error,
@@ -1335,7 +1342,11 @@ const describeCapabilityHandler: McpToolHandler<
     return featureDisabledResult(entry.feature);
   }
 
-  const loaded = await loadEndpointGuarded(id, "describe_capability");
+  const loaded = await loadEndpointGuarded({
+    id,
+    toolName: "describe_capability",
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return loaded.result;
   }
@@ -1847,10 +1858,11 @@ export const invokedCapabilityConsumesServices = async ({
   if (typeof entry.consumesServices === "boolean") {
     return Result.ok(entry.consumesServices);
   }
-  const loaded = await loadEndpointGuarded(
-    entry.id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
+  const loaded = await loadEndpointGuarded({
+    id: entry.id,
+    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return Result.err(loaded.result);
   }
@@ -2286,10 +2298,11 @@ const executeInvoke = async ({
   validateOnly: boolean;
   confirm: boolean | undefined;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(
+  const loaded = await loadEndpointGuarded({
     id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
+    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return loaded.result;
   }
