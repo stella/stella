@@ -448,6 +448,10 @@ export const TRANSITIONS = {
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: INVOICE_TRANSITIONS,
+  invoiceSends: {
+    unmanaged:
+      "Email delivery state is finalized by the invoice send handler after its external transport completes.",
+  },
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

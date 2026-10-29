@@ -1368,68 +1368,77 @@ export const invoiceSends = p.pgTable(
     firstViewedAt: timestamptz("first_viewed_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
-  (table) => [
-    p.uniqueIndex("invoice_sends_token_hash_uidx").on(table.tokenHash),
-    p
-      .index("invoice_sends_invoice_created_idx")
-      .on(table.invoiceId, table.createdAt),
-    p
-      .index("invoice_sends_org_created_idx")
-      .on(table.organizationId, table.createdAt),
-    p
-      .index("invoice_sends_sent_by_idx")
-      .on(table.sentByUserId)
-      .where(sql`${table.sentByUserId} IS NOT NULL`),
-    p
-      .index("invoice_sends_revoked_by_idx")
-      .on(table.revokedByUserId)
-      .where(sql`${table.revokedByUserId} IS NOT NULL`),
-    p.check(
-      "invoice_sends_delivery_status_check",
-      sql`${table.deliveryStatus} in (${sql.join(INVOICE_SEND_DELIVERY_STATUS_SQL_VALUES, sql`, `)})`,
-    ),
-    p.check(
-      "invoice_sends_language_check",
-      sql`${table.language} IN (${sql.join(
-        INVOICE_LANGUAGES.map((value) => sql`${value}`),
-        sql`, `,
-      )})`,
-    ),
-    p.check(
-      "invoice_sends_recipients_check",
-      sql`cardinality(${table.recipients}) BETWEEN ${sql.raw(String(INVOICE_SEND_LIMITS.minRecipients))} AND ${sql.raw(String(INVOICE_SEND_LIMITS.maxRecipients))} AND ${table.failedRecipients} <@ ${table.recipients}`,
-    ),
-    p.check(
-      "invoice_sends_message_check",
-      sql`${table.message} IS NULL OR length(${table.message}) BETWEEN 1 AND ${sql.raw(String(INVOICE_SEND_LIMITS.messageMaxChars))}`,
-    ),
-    p.check(
-      "invoice_sends_revoked_check",
-      sql`${table.revokedByUserId} IS NULL OR ${table.revokedAt} IS NOT NULL`,
-    ),
-    p.pgPolicy("invoice_sends_organization_select", {
-      for: "select",
-      to: stella,
-      using: organizationCheck,
-    }),
-    p.pgPolicy("invoice_sends_organization_insert", {
-      for: "insert",
-      to: stella,
-      withCheck: organizationCheck,
-    }),
-    p.pgPolicy("invoice_sends_organization_update", {
-      for: "update",
-      to: stella,
-      using: organizationCheck,
-      withCheck: organizationCheck,
-    }),
-    completeInvoiceVisibilityPolicy("invoice_sends", table),
-    p.pgPolicy("invoice_sends_owner_select", {
-      for: "select",
-      to: "public",
-      using: currentUserOwnsInvoiceSends,
-    }),
-  ],
+  (table) => {
+    const ownerViewedCheck = sql`${currentUserOwnsInvoiceSends} AND ${table.tokenHash} = NULLIF(pg_catalog.current_setting('app.invoice_link_hash', true), '')`;
+    return [
+      p.uniqueIndex("invoice_sends_token_hash_uidx").on(table.tokenHash),
+      p
+        .index("invoice_sends_invoice_created_idx")
+        .on(table.invoiceId, table.createdAt),
+      p
+        .index("invoice_sends_org_created_idx")
+        .on(table.organizationId, table.createdAt),
+      p
+        .index("invoice_sends_sent_by_idx")
+        .on(table.sentByUserId)
+        .where(sql`${table.sentByUserId} IS NOT NULL`),
+      p
+        .index("invoice_sends_revoked_by_idx")
+        .on(table.revokedByUserId)
+        .where(sql`${table.revokedByUserId} IS NOT NULL`),
+      p.check(
+        "invoice_sends_delivery_status_check",
+        sql`${table.deliveryStatus} in (${sql.join(INVOICE_SEND_DELIVERY_STATUS_SQL_VALUES, sql`, `)})`,
+      ),
+      p.check(
+        "invoice_sends_language_check",
+        sql`${table.language} IN (${sql.join(
+          INVOICE_LANGUAGES.map((value) => sql`${value}`),
+          sql`, `,
+        )})`,
+      ),
+      p.check(
+        "invoice_sends_recipients_check",
+        sql`cardinality(${table.recipients}) BETWEEN ${sql.raw(String(INVOICE_SEND_LIMITS.minRecipients))} AND ${sql.raw(String(INVOICE_SEND_LIMITS.maxRecipients))} AND ${table.failedRecipients} <@ ${table.recipients}`,
+      ),
+      p.check(
+        "invoice_sends_message_check",
+        sql`${table.message} IS NULL OR length(${table.message}) BETWEEN 1 AND ${sql.raw(String(INVOICE_SEND_LIMITS.messageMaxChars))}`,
+      ),
+      p.check(
+        "invoice_sends_revoked_check",
+        sql`${table.revokedByUserId} IS NULL OR ${table.revokedAt} IS NOT NULL`,
+      ),
+      p.pgPolicy("invoice_sends_organization_select", {
+        for: "select",
+        to: stella,
+        using: organizationCheck,
+      }),
+      p.pgPolicy("invoice_sends_organization_insert", {
+        for: "insert",
+        to: stella,
+        withCheck: organizationCheck,
+      }),
+      p.pgPolicy("invoice_sends_organization_update", {
+        for: "update",
+        to: stella,
+        using: organizationCheck,
+        withCheck: organizationCheck,
+      }),
+      completeInvoiceVisibilityPolicy("invoice_sends", table),
+      p.pgPolicy("invoice_sends_owner_select", {
+        for: "select",
+        to: "public",
+        using: currentUserOwnsInvoiceSends,
+      }),
+      p.pgPolicy("invoice_sends_owner_viewed", {
+        for: "update",
+        to: "public",
+        using: ownerViewedCheck,
+        withCheck: ownerViewedCheck,
+      }),
+    ];
+  },
 );
 
 export const INVOICE_PAYMENT_ORIGIN = {
