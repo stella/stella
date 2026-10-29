@@ -13,7 +13,8 @@
 // `opacity-0! group-hover/row:opacity-100!`, `invisible hover:visible`.
 //
 // Accepted:
-//   a matching touch reveal or an explicit touch hide under `pointer-coarse:`.
+//   a matching touch reveal or an explicit touch hide under `pointer-coarse:`,
+//   with conditions that cover every scope in which the hide applies.
 //   a reveal that is not a hover (`focus-visible:opacity-100`,
 //   `data-[state=open]:opacity-100`) with no hover reveal beside it.
 //   a hover reveal next to one through a state a tap can set
@@ -30,6 +31,7 @@
 // class string held in a constant is judged as a control.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import {
   classBaseName,
@@ -41,6 +43,9 @@ import {
 
 const HIDDEN = new Set(["opacity-0", "opacity-0!", "invisible", "invisible!"]);
 const SHOWN = new Set(["opacity-100", "opacity-100!", "visible", "visible!"]);
+const TOUCH_HIDDEN = new Set([...HIDDEN, "hidden", "hidden!"]);
+const POINTER_INERT = new Set(["pointer-events-none", "pointer-events-none!"]);
+const POINTER_ACTIVE = new Set(["pointer-events-auto", "pointer-events-auto!"]);
 
 const isHoverVariant = (variant: string): boolean =>
   variant === "hover" ||
@@ -81,8 +86,8 @@ const dependsOnHover = (token: string): boolean =>
   variantsOf(token).some(isHoverVariant) ||
   /:hover\b/u.test(classVariants(token));
 
-// The opening element whose attribute holds this string, through any `cn()`
-// call or expression container between them.
+// The attribute whose value holds this string, through any `cn()` call or
+// expression container between them.
 const owningAttribute = (node: unknown): Record<string, unknown> | null => {
   let current: unknown = isAstNode(node) ? node.parent : null;
   while (isAstNode(current)) {
@@ -205,13 +210,47 @@ const isClassNamePart = (node: unknown): boolean => {
 const isHide = (token: string): boolean =>
   HIDDEN.has(classBaseName(token)) && !dependsOnHover(token);
 
-const hidesUntilHover = (value: string): boolean => {
-  const tokens = classTokens(value);
-  const bases = new Set(tokens.map(classBaseName));
-  // An overlay that never takes a pointer is decoration, not a control.
-  if (bases.has("pointer-events-none") && !bases.has("pointer-events-auto")) {
+type Exemption =
+  | { type: "decoration" }
+  | { type: "pointer-inert"; token: string }
+  | { type: "touch"; token: string }
+  | { type: "state"; token: string; activation: string };
+
+export type HoverRevealExemptionKind = Exemption["type"];
+
+// Each exemption removes only its own activation condition. Every remaining
+// condition must already hold wherever the hidden utility applies.
+const coversHideScope = (hide: string, exemption: Exemption): boolean => {
+  const scope =
+    exemption.type === "decoration" ? [] : variantsOf(exemption.token);
+  if (exemption.type !== "decoration" && dependsOnHover(exemption.token)) {
     return false;
   }
+  const hideScope = new Set(variantsOf(hide));
+  return scope.every((variant) => {
+    if (hideScope.has(variant)) {
+      return true;
+    }
+    switch (exemption.type) {
+      case "touch":
+        return isCoarsePointerVariant(variant);
+      case "state":
+        return variant === exemption.activation;
+      case "decoration":
+      case "pointer-inert":
+        return false;
+      default:
+        exemption satisfies never;
+        return panic("Unknown hover-reveal exemption");
+    }
+  });
+};
+
+const hidesUntilHover = (
+  value: string,
+  elementDecoration: boolean,
+): boolean => {
+  const tokens = classTokens(value);
   const hidesAtRest = tokens.some(isHide);
   if (!hidesAtRest) {
     return false;
@@ -222,46 +261,58 @@ const hidesUntilHover = (value: string): boolean => {
   if (!revealsOnHover) {
     return false;
   }
-  const tappableStateReveals = tokens.filter(
-    (token) =>
-      SHOWN.has(classBaseName(token)) &&
-      variantsOf(token).some(isTappableStateVariant) &&
-      !dependsOnHover(token),
-  );
-  const touchDecisions = tokens.filter((token) => {
-    const variants = variantsOf(token);
-    return variants.length > 0 && variants.every(isCoarsePointerVariant);
-  });
-  const touchBases = new Set(touchDecisions.map(classBaseName));
-  if (
-    touchBases.has("hidden") ||
-    touchBases.has("hidden!") ||
-    [...HIDDEN].some((hidden) => touchBases.has(hidden))
-  ) {
-    return false;
+  const exemptions: Exemption[] = [];
+  if (elementDecoration) {
+    exemptions.push({ type: "decoration" });
   }
-  return tokens.some((token) => {
+  const takesPointer = tokens.some((token) =>
+    POINTER_ACTIVE.has(classBaseName(token)),
+  );
+  for (const token of tokens) {
     const base = classBaseName(token);
-    if (!isHide(token)) {
+    const variants = variantsOf(token);
+    if (POINTER_INERT.has(base) && !takesPointer) {
+      exemptions.push({ type: "pointer-inert", token });
+    }
+    if (variants.some(isCoarsePointerVariant)) {
+      exemptions.push({ type: "touch", token });
+    }
+    if (!SHOWN.has(base)) {
+      continue;
+    }
+    for (const activation of variants.filter(isTappableStateVariant)) {
+      exemptions.push({ type: "state", token, activation });
+    }
+  }
+  return tokens.some((hide) => {
+    if (!isHide(hide)) {
       return false;
     }
-    const hideScope = new Set(variantsOf(token));
-    const revealBases = new Set([
-      ...touchBases,
-      ...tappableStateReveals
-        .filter((reveal) =>
-          variantsOf(reveal).every(
-            (variant) =>
-              isTappableStateVariant(variant) || hideScope.has(variant),
-          ),
-        )
-        .map(classBaseName),
-    ]);
+    const base = classBaseName(hide);
     const shown = base.startsWith("opacity-") ? "opacity-100" : "visible";
-    return (
-      !revealBases.has(`${shown}!`) &&
-      (base.endsWith("!") || !revealBases.has(shown))
-    );
+    return !exemptions.some((exemption) => {
+      if (!coversHideScope(hide, exemption)) {
+        return false;
+      }
+      switch (exemption.type) {
+        case "decoration":
+        case "pointer-inert":
+          return true;
+        case "touch":
+        case "state": {
+          const reveal = classBaseName(exemption.token);
+          if (exemption.type === "touch" && TOUCH_HIDDEN.has(reveal)) {
+            return true;
+          }
+          return (
+            reveal === `${shown}!` || (!base.endsWith("!") && reveal === shown)
+          );
+        }
+        default:
+          exemption satisfies never;
+          return panic("Unknown hover-reveal exemption");
+      }
+    });
   });
 };
 
@@ -282,15 +333,12 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           JSXAttribute(node) {
-            if (
-              jsxName(node.name) !== "className" ||
-              isDecoration(node.value)
-            ) {
+            if (jsxName(node.name) !== "className") {
               return;
             }
             const parts: string[] = [];
             staticClassParts(node.value, parts);
-            if (hidesUntilHover(parts.join(" "))) {
+            if (hidesUntilHover(parts.join(" "), isDecoration(node.value))) {
               context.report({ node, messageId: "hoverOnlyReveal" });
             }
           },
@@ -298,8 +346,7 @@ export default eslintCompatPlugin({
             if (
               typeof node.value === "string" &&
               !isClassNamePart(node) &&
-              hidesUntilHover(node.value) &&
-              !isDecoration(node)
+              hidesUntilHover(node.value, isDecoration(node))
             ) {
               context.report({ node, messageId: "hoverOnlyReveal" });
             }
@@ -309,8 +356,7 @@ export default eslintCompatPlugin({
             staticClassParts(node, parts);
             if (
               !isClassNamePart(node) &&
-              hidesUntilHover(parts.join(" ")) &&
-              !isDecoration(node)
+              hidesUntilHover(parts.join(" "), isDecoration(node))
             ) {
               context.report({ node, messageId: "hoverOnlyReveal" });
             }
