@@ -277,12 +277,23 @@ const spawnInstallAttempt = (
 ) => {
   const child = spawn(command);
   const completion = new AbortController();
+  let stallTermination: "none" | "requested" = "none";
   let cancelTimer: (() => void) | undefined;
   let sampling: Promise<void> | undefined;
-  let inspection: Promise<void> | undefined;
+  let inspection:
+    | Promise<{ status: "completed" } | { status: "failed"; error: unknown }>
+    | undefined;
   return {
     child,
     completion,
+    terminateStalledChild: () => {
+      if (child.exitCode !== null) {
+        return;
+      }
+      stallTermination = "requested";
+      child.kill("SIGKILL");
+    },
+    wasTerminatedForStall: () => stallTermination === "requested",
     get sampling() {
       return sampling;
     },
@@ -290,7 +301,10 @@ const spawnInstallAttempt = (
       sampling = probe;
     },
     setInspection: (capture: Promise<void>) => {
-      inspection = capture;
+      inspection = capture.then(
+        () => ({ status: "completed" }) as const,
+        (error: unknown) => ({ status: "failed", error }) as const,
+      );
     },
     setCancelTimer: (cancel: () => void) => {
       cancelTimer = cancel;
@@ -298,11 +312,17 @@ const spawnInstallAttempt = (
     dispose: async () => {
       completion.abort();
       cancelTimer?.();
-      await sampling;
-      await inspection;
-      if (child.exitCode === null) {
-        child.kill("SIGKILL");
-        await child.exited;
+      try {
+        await sampling;
+        const outcome = await inspection;
+        if (outcome?.status === "failed") {
+          throw outcome.error;
+        }
+      } finally {
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+          await child.exited;
+        }
       }
     },
   };
@@ -380,10 +400,13 @@ export const runLoggedInstall = async ({
               } catch (error) {
                 evidence = `Process inspection failed: ${String(error)}\n`;
               }
-              summary(
-                `::group::Stalled install process evidence\n${evidence}::endgroup::\n`,
-              );
-              child.kill("SIGKILL");
+              try {
+                summary(
+                  `::group::Stalled install process evidence\n${evidence}::endgroup::\n`,
+                );
+              } finally {
+                attemptScope.terminateStalledChild();
+              }
             })();
             attemptScope.setInspection(inspection);
           },
@@ -472,7 +495,8 @@ export const runLoggedInstall = async ({
           report(`Installer log tail:\n${tail.toString()}\n`);
         }
         const signal = installTerminationSignal(child.signalCode);
-        if (signal !== undefined && !watchdog.wasStalled()) {
+        const stalled = attemptScope.wasTerminatedForStall() && exitCode !== 0;
+        if (signal !== undefined && !stalled) {
           summary(
             `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${signal}\n`,
           );
@@ -480,7 +504,7 @@ export const runLoggedInstall = async ({
         summary(
           `Install finished; exit ${exitCode}; signal ${signal ?? "none"}; ${telemetry()}\n`,
         );
-        return { exitCode, stalled: watchdog.wasStalled() };
+        return { exitCode, stalled };
       } finally {
         await attemptScope.dispose();
       }

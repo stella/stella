@@ -412,6 +412,133 @@ test.each([
   },
 );
 
+test.each(["record-failure", "report-failure", "completed"] as const)(
+  "stall inspection preserves cleanup and the installer outcome: %s",
+  async (scenario) => {
+    const root = mkdtempSync(path.join(tmpdir(), "ci-install-inspection-"));
+    roots.push(root);
+    const loggingError = new Error("stall evidence cannot be written");
+    const evidenceReported = Promise.withResolvers<undefined>();
+    const inspected = Promise.withResolvers<string>();
+    const inspectionStarted = Promise.withResolvers<undefined>();
+    const exited = Promise.withResolvers<number>();
+    let exitCode: number | null = null;
+    let kills = 0;
+    let attempts = 0;
+    let now = 100;
+    let tick: () => void = () => undefined;
+    const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const stdout = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        streams.push(controller);
+      },
+    });
+    const stderr = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        streams.push(controller);
+      },
+    });
+    const finish = (code: number) => {
+      if (exitCode !== null) {
+        return;
+      }
+      exitCode = code;
+      for (const controller of streams) {
+        controller.close();
+      }
+      exited.resolve(code);
+    };
+    const failEvidence = (message: string) => {
+      if (!message.startsWith("::group::Stalled install")) {
+        return;
+      }
+      evidenceReported.resolve(undefined);
+      throw loggingError;
+    };
+    const install = runLoggedInstall({
+      command: ["fake-install"],
+      logFile: path.join(root, "install.log"),
+      budgetMs: 1000,
+      stallMs: 10,
+      now: () => now,
+      progressRoots: [],
+      record: (descriptor, chunk) => {
+        if (scenario === "record-failure") {
+          failEvidence(Buffer.from(chunk).toString());
+        }
+        writeFileSync(descriptor, chunk);
+      },
+      report: scenario === "report-failure" ? failEvidence : () => undefined,
+      sampleStore: async () => ({ signature: "unchanged", newest: 0 }),
+      inspectProcess: () => {
+        inspectionStarted.resolve(undefined);
+        return inspected.promise;
+      },
+      scheduleInterval: (callback) => {
+        tick = callback;
+        return () => undefined;
+      },
+      spawn: () => {
+        attempts += 1;
+        if (attempts > 1) {
+          return {
+            pid: 124,
+            stdout: new ReadableStream<Uint8Array>({
+              start: (controller) => controller.close(),
+            }),
+            stderr: new ReadableStream<Uint8Array>({
+              start: (controller) => controller.close(),
+            }),
+            exited: Promise.resolve(7),
+            exitCode: 7,
+            signalCode: null,
+            kill: () => undefined,
+          };
+        }
+        return {
+          pid: 123,
+          stdout,
+          stderr,
+          exited: exited.promise,
+          get exitCode() {
+            return exitCode;
+          },
+          signalCode: null,
+          kill: () => {
+            kills += 1;
+            finish(137);
+          },
+        };
+      },
+    });
+    const outcome = install.then(
+      (code) => ({ status: "completed", code }) as const,
+      (error: unknown) => ({ status: "failed", error }) as const,
+    );
+    now = 110;
+    tick();
+    await inspectionStarted.promise;
+    if (scenario === "completed") {
+      finish(0);
+    }
+    inspected.resolve("process evidence\n");
+    if (scenario !== "completed") {
+      await evidenceReported.promise;
+      try {
+        expect(kills).toBe(1);
+      } finally {
+        finish(137);
+      }
+      expect(await outcome).toEqual({ status: "failed", error: loggingError });
+      expect(attempts).toBe(1);
+      return;
+    }
+    expect(await outcome).toEqual({ status: "completed", code: 0 });
+    expect(kills).toBe(0);
+    expect(attempts).toBe(1);
+  },
+);
+
 test("silent hangs warn then emit exactly one stall kill (fake clock)", () => {
   let now = 0;
   const events: string[] = [];
