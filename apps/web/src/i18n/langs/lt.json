@@ -1235,6 +1235,23 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "appealReviews": {
+        "conflict": "Duomenys apie peržiūrą yra neišsamūs arba prieštaringi. Peržiūros rezultatą reikia patikrinti.",
+        "corpusOnly": "Turimame rinkinyje nerasta sprendimo, kuriuo peržiūrimas šis sprendimas. Tai neįrodo, kad skundas nepateiktas.",
+        "noneFound": "Peržiūrinčio sprendimo nerasta",
+        "overturned": "Panaikinta arba pakeista",
+        "partly": "Iš dalies panaikinta",
+        "reviewedBy": "Peržiūrintys sprendimai",
+        "reviews": "Peržiūrėti sprendimai",
+        "sourceHistory": "Proceso istorija",
+        "sourceMetadata": "Leidėjo metaduomenys",
+        "sourceOpening": "Įvadinė pastraipa",
+        "title": "Peržiūra pagal skundą",
+        "truncated": "Rodoma tik dalis peržiūros istorijos.",
+        "underReview": "Peržiūrima",
+        "unknown": "Rezultatas nežinomas",
+        "upheld": "Palikta galioti"
+      },
       "appliedVersionNotStated": "Taikyta redakcija nenurodyta",
       "appliedVersionNotStatedCompact": "Redakcija nenurodyta",
       "appliedVersionStatedAmendment": "Redakcija su <reference>{amendment}</reference> pakeitimais",

@@ -1,3 +1,4 @@
+import { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
@@ -20,13 +21,16 @@ test("the committed SQL function is derived from the registered filing-year rule
   const migration = readFileSync(
     path.resolve(
       import.meta.dir,
-      "../../drizzle/20261027160700_decision_docket_filing_year/migration.sql",
+      "../../drizzle/20261029094425_czech_docket_long_sheets/migration.sql",
     ),
     "utf-8",
   );
-  expect(migration.slice(migration.indexOf("CREATE FUNCTION")).trim()).toBe(
-    decisionDocketFilingYearFunctionSql(),
-  );
+  expect(
+    migration
+      .slice(migration.indexOf("CREATE OR REPLACE FUNCTION"))
+      .trim()
+      .replace("CREATE OR REPLACE FUNCTION", "CREATE FUNCTION"),
+  ).toBe(decisionDocketFilingYearFunctionSql());
 });
 
 describe.skipIf(!enabled)("docket filing-year parity (postgres)", () => {
@@ -88,4 +92,26 @@ describe.skipIf(!enabled)("docket filing-year parity (postgres)", () => {
       ]);
     });
   });
+});
+
+test("the generated filing-year function agrees with the grammar on Czech long sheets", async () => {
+  await using db = await PGlite.create();
+  await db.exec(decisionDocketFilingYearFunctionSql());
+  const fixtures = DECISION_DOCKET_FILING_YEAR_FIXTURES.filter(
+    ({ jurisdiction }) => jurisdiction === "CZE",
+  );
+  const results = await db.query<{ result: unknown }>(
+    `
+    SELECT public.decision_docket_filing_year("caseNumber", jurisdiction) AS result
+    FROM jsonb_to_recordset($1::text::jsonb) AS input("caseNumber" text, jurisdiction text)
+  `,
+    [JSON.stringify(fixtures)],
+  );
+  expect(results.rows.map(({ result }) => result)).toEqual(
+    fixtures.map(({ caseNumber, expected }) => {
+      const parsed = DECISION_DOCKET_GRAMMARS.CZE.filingYear(caseNumber);
+      expect(parsed).toEqual(expected);
+      return parsed;
+    }),
+  );
 });

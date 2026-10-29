@@ -1235,6 +1235,23 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "appealReviews": {
+        "conflict": "Die Angaben zur Überprüfung sind unvollständig oder widersprüchlich. Das Ergebnis muss überprüft werden.",
+        "corpusOnly": "Im verfügbaren Korpus wurde keine Entscheidung gefunden, die diese Entscheidung überprüft. Dies belegt nicht, dass kein Rechtsmittel vorliegt.",
+        "noneFound": "Keine überprüfende Entscheidung gefunden",
+        "overturned": "Aufgehoben oder abgeändert",
+        "partly": "Teilweise aufgehoben",
+        "reviewedBy": "Überprüfende Entscheidungen",
+        "reviews": "Überprüfte Entscheidungen",
+        "sourceHistory": "Verfahrensverlauf",
+        "sourceMetadata": "Metadaten des Herausgebers",
+        "sourceOpening": "Einleitender Absatz",
+        "title": "Rechtsmittelprüfung",
+        "truncated": "Es wird nur ein Teil des Rechtsmittelverlaufs angezeigt.",
+        "underReview": "Prüfung läuft",
+        "unknown": "Ausgang unbekannt",
+        "upheld": "Unverändert bestehen geblieben"
+      },
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
       "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",

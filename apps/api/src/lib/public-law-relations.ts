@@ -22,6 +22,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
+  caseLawDecisionReviews: "case_law_decision_reviews",
   publishedCaseLawDecisions: "case_law_published_decisions",
   unredactedCaseLawDecisions: "case_law_unredacted_decisions",
   caseLawDecisionCitationStats: "case_law_decision_citation_stats",
@@ -288,6 +289,20 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   case_law_citation_doctrine_reviews:
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
+  case_law_decision_reviews: {
+    reviewing_decision_id: "required",
+    reviewed_decision_id: "required",
+    reviewed_case_number: "required",
+    reviewed_citation_key: "required",
+    reviewed_docket_family_key: "required",
+    reviewed_court: "required",
+    reviewed_decision_date: "required",
+    reviewed_sheet_number: "required",
+    outcome: "required",
+    source: "required",
+    evidence_classification: "required",
+    parser_version: "required",
+  },
   case_law_citations: {
     ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",

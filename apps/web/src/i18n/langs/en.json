@@ -1235,6 +1235,23 @@
     },
     "viewer": {
       "abstract": "Abstract",
+      "appealReviews": {
+        "conflict": "The review evidence is incomplete or conflicting. The review outcome requires verification.",
+        "corpusOnly": "No decision reviewing this decision was found in the available corpus. This does not establish that no appeal exists.",
+        "noneFound": "No reviewing decision found",
+        "overturned": "Overturned",
+        "partly": "Partly overturned",
+        "reviewedBy": "Reviewing decisions",
+        "reviews": "Reviewed decisions",
+        "sourceHistory": "Case history",
+        "sourceMetadata": "Publisher metadata",
+        "sourceOpening": "Opening paragraph",
+        "title": "Appeal review",
+        "truncated": "Only part of the review history is shown.",
+        "underReview": "Under review",
+        "unknown": "Outcome unknown",
+        "upheld": "Left standing"
+      },
       "appliedVersionNotStated": "Applied version not stated",
       "appliedVersionNotStatedCompact": "Version not stated",
       "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>",

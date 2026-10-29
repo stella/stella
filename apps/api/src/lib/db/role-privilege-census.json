@@ -246,6 +246,7 @@
       "table:public.case_law_decision_identifier_backfills:SELECT",
       "table:public.case_law_decision_identifiers:SELECT",
       "table:public.case_law_decision_judges:SELECT",
+      "table:public.case_law_decision_reviews:SELECT",
       "table:public.case_law_decisions:SELECT",
       "table:public.case_law_fts_configs:SELECT",
       "table:public.case_law_index_jobs:SELECT",
@@ -1571,6 +1572,7 @@
       "function:public.word_similarity_op(text, text):EXECUTE",
       "schema:public:USAGE",
       "table:public.case_law_citations:SELECT",
+      "table:public.case_law_decision_reviews:SELECT",
       "table:public.case_law_decisions:SELECT",
       "table:public.case_law_provision_citations:SELECT",
       "table:public.case_law_published_decisions:SELECT",
@@ -2122,6 +2124,11 @@
       "table:public.case_law_decision_judges:RLS_FORCED:false",
       "table:public.case_law_decision_judges:SELECT",
       "table:public.case_law_decision_judges:UPDATE",
+      "table:public.case_law_decision_reviews:DELETE",
+      "table:public.case_law_decision_reviews:INSERT",
+      "table:public.case_law_decision_reviews:RLS_FORCED:true",
+      "table:public.case_law_decision_reviews:SELECT",
+      "table:public.case_law_decision_reviews:UPDATE",
       "table:public.case_law_decision_source_identities:DELETE",
       "table:public.case_law_decision_source_identities:INSERT",
       "table:public.case_law_decision_source_identities:RLS_FORCED:false",
@@ -2332,7 +2339,9 @@
       "table:public.soft_law_ingestion_attempts:RLS_FORCED:true",
       "table:public.soft_law_ingestion_attempts:SELECT",
       "table:public.soft_law_ingestion_attempts:UPDATE",
-      "table:public.soft_law_sources:SELECT"
+      "table:public.soft_law_sources:SELECT",
+      "table:public.system_audit_runs:INSERT",
+      "table:public.system_audit_runs:RLS_FORCED:true"
     ]
   },
   {

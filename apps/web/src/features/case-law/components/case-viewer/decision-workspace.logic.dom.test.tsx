@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { plugin } from "bun";
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -224,6 +225,7 @@ const absent = {
   type: TEXT_FIELD_TYPE.ABSENT,
 } as const;
 const rangeDecision = {
+  appealReviews: noDecisionReviewFound(),
   id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000102"),
   caseNumber: "1 As 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,

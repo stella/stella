@@ -69,6 +69,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
   chatEntityRef,
@@ -1666,6 +1667,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  appealReviews: v.optional(DECISION_REVIEWS_PROJECTION),
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only
   // when `url` is the reader's.

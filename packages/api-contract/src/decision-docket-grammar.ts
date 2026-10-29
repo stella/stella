@@ -36,7 +36,7 @@ const filingYearOf = (
       if (!rule.patterns.some((pattern) => pattern.test(folded))) {
         return { type: "unparseable" };
       }
-      const year = /\/(\d{4})$/u.exec(folded)?.at(1);
+      const year = /\/(\d{4})(?:-\d+)?$/u.exec(folded)?.at(1);
       if (year === undefined) {
         return { type: "unparseable" };
       }
@@ -513,8 +513,12 @@ export const polishConstitutionalDocketKey = (
  * registry mark is written all-caps (`NSČR`, `ÚS`) and title-case (`Cdo`,
  * `As`) by different courts and lowercase by a reader typing a query.
  */
-const CZE_SENATE_DOCKET_RE =
-  /^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/iu;
+export const CZE_SHEET_NUMBER_SOURCE = String.raw`\d{1,5}`;
+const CZE_SHEET_SUFFIX_RE = new RegExp(`-${CZE_SHEET_NUMBER_SOURCE}$`, "u");
+const CZE_SENATE_DOCKET_RE = new RegExp(
+  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
+  "iu",
+);
 
 /**
  * A Czech docket whose registry mark stands alone, with no senate number in
@@ -529,8 +533,10 @@ const CZE_SENATE_DOCKET_RE =
  * a docket all-lowercase reaches full-text search instead of the exact-docket
  * branch.
  */
-const CZE_LETTER_FIRST_DOCKET_RE =
-  /^\p{Lu}\p{Ll}{0,6}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/u;
+const CZE_LETTER_FIRST_DOCKET_RE = new RegExp(
+  String.raw`^\p{Lu}\p{Ll}{0,6}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
+  "u",
+);
 
 const CZE_DOCKET_PATTERNS = [
   CZE_SENATE_DOCKET_RE,
@@ -936,7 +942,10 @@ export const DECISION_DOCKET_GRAMMARS = {
   }),
   CZE: createDecisionDocketGrammar({
     filingYearRule: { type: "encoded", patterns: CZE_DOCKET_PATTERNS },
-    canonicalize: (folded) => canonicalDocketKey(folded.replaceAll(".", "")),
+    canonicalize: (folded) =>
+      canonicalDocketKey(
+        folded.replace(CZE_SHEET_SUFFIX_RE, "").replaceAll(".", ""),
+      ),
     format: formatCzechDocket,
     jurisdiction: "CZE",
     patterns: CZE_DOCKET_PATTERNS,

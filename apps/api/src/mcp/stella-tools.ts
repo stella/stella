@@ -88,6 +88,10 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import {
+  readDecisionReviews,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
@@ -1254,14 +1258,15 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
-      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
+      "Read precedent citations. `cited_by` reads citers; `cites` reads citations. " +
+      "`appealReviews` is separate review evidence; none_found means no link in the available corpus. " +
+      "`doctrine` and `polarity` combine with AND. `polarity`: " +
       "'unclassified' means unread; 'mixed' means mentions disagreed. " +
-      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
+      "`doctrine`: reviewed 'distinguishes' or 'limits'; unavailable rejects. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
-      "`passage.evidenceQuote` is the verbatim evidence when text is " +
-      `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
+      "`passage.evidenceQuote` is verbatim evidence. " +
+      `\`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
       "characters, cut when `passage.truncated`; `passage.mention` is " +
       "'sole', 'classified_section' (the mention polarity came from) or " +
       "'latest_of_several' (it may not be). Pass nextCursor as cursor. Use " +
@@ -2541,6 +2546,31 @@ const caseLawSearchResult = ({
   };
 };
 
+const reviewedCaseLawSearchResults = async (
+  merged: ReturnType<typeof mergeCaseLawSearchHits>,
+  context: AuthorizedMcpRequestContext,
+) => {
+  if (merged.length === 0) {
+    return [];
+  }
+  const ids = merged.map(({ hit }) =>
+    brandPersistedCaseLawDecisionId(hit.decisionId),
+  );
+  const reviews = await (
+    context.testDependencies?.readDecisionReviews ?? readDecisionReviews
+  )({
+    decisionIds: ids,
+    caseLawDb: caseLawPublicReadDb,
+  });
+  return merged.map((entry) => ({
+    ...caseLawSearchResult(entry),
+    appealReviews: requireDecisionReviews(
+      reviews,
+      brandPersistedCaseLawDecisionId(entry.hit.decisionId),
+    ),
+  }));
+};
+
 /**
  * The merged page's continuation: null when every query is exhausted, which
  * makes the merged page the last one; otherwise each query's own cursor.
@@ -2721,7 +2751,7 @@ const listSearchCaseLawProvision = async ({
     ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
-    results: merged.map(caseLawSearchResult),
+    results: await reviewedCaseLawSearchResults(merged, context),
     total: page.total,
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
@@ -2984,7 +3014,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     )
       ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
       : SEARCH_PAGINATION_COMPLETE,
-    results: merged.map(caseLawSearchResult),
+    results: await reviewedCaseLawSearchResults(merged, context),
     total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
@@ -3272,6 +3302,9 @@ const decisionStaticFields = ({
     }
   }
   return {
+    ...(includedFields.has("details")
+      ? { appealReviews: read.appealReviews }
+      : {}),
     ...(includedFields.has("details")
       ? {
           url: links.url,
@@ -3802,10 +3835,19 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
+      appealReviews: requireDecisionReviews(
+        await (
+          context.testDependencies?.readDecisionReviews ?? readDecisionReviews
+        )({
+          decisionIds: [read.decisionId],
+          caseLawDb: caseLawPublicReadDb,
+        }),
+        read.decisionId,
+      ),
       doctrineAvailability: read.page.doctrineAvailability,
       ...(doctrine === undefined ? {} : { doctrine }),
       ...(polarity === undefined ? {} : { polarity }),
-      decisionId,
+      decisionId: read.decisionId,
       direction,
       nextCursor: read.page.nextCursor,
       citations: read.page.items.map((item) => ({

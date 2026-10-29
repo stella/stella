@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -64,6 +65,7 @@ const sourceOf = (
   ({
     status: "read",
     decision: {
+      appealReviews: noDecisionReviewFound(),
       id: brandPersistedCaseLawDecisionId(id),
       caseNumberType: "case-number",
       courtAbbreviation: "ÚS",

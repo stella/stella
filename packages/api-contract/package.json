@@ -65,6 +65,7 @@
     "./law-year": "./src/law-year.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-court-tier-locales": "./src/case-law-court-tier-locales.ts",
+    "./case-law-reviews": "./src/case-law-reviews.ts",
     "./case-law-doctrine": "./src/case-law-doctrine.ts",
     "./case-law-decision-types": "./src/case-law-decision-types.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",

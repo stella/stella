@@ -1235,6 +1235,23 @@
     },
     "viewer": {
       "abstract": "Resumen",
+      "appealReviews": {
+        "conflict": "La información sobre la revisión es incompleta o contradictoria. Es necesario verificar el resultado.",
+        "corpusOnly": "No se encontró en el corpus disponible ninguna resolución que revise esta resolución. Esto no demuestra que no exista un recurso.",
+        "noneFound": "No se encontró una resolución revisora",
+        "overturned": "Revocada o modificada",
+        "partly": "Revocada parcialmente",
+        "reviewedBy": "Resoluciones revisoras",
+        "reviews": "Resoluciones revisadas",
+        "sourceHistory": "Historial procesal",
+        "sourceMetadata": "Metadatos del editor",
+        "sourceOpening": "Párrafo inicial",
+        "title": "Revisión por recurso",
+        "truncated": "Solo se muestra parte del historial de revisión.",
+        "underReview": "En revisión",
+        "unknown": "Resultado desconocido",
+        "upheld": "Se mantiene"
+      },
       "appliedVersionNotStated": "Versión aplicada no indicada",
       "appliedVersionNotStatedCompact": "Versión no indicada",
       "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",

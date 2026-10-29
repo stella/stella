@@ -1235,6 +1235,23 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "appealReviews": {
+        "conflict": "Podklady k preskúmaniu sú neúplné alebo rozporné. Výsledok preskúmania treba overiť.",
+        "corpusOnly": "V dostupnom korpuse sa nenašlo rozhodnutie preskúmavajúce toto rozhodnutie. To neznamená, že opravný prostriedok neexistuje.",
+        "noneFound": "Preskúmavajúce rozhodnutie nenájdené",
+        "overturned": "Zrušené alebo zmenené",
+        "partly": "Čiastočne zrušené",
+        "reviewedBy": "Preskúmavajúce rozhodnutia",
+        "reviews": "Preskúmavané rozhodnutia",
+        "sourceHistory": "Procesná história",
+        "sourceMetadata": "Metadáta vydavateľa",
+        "sourceOpening": "Úvodný odsek",
+        "title": "Preskúmanie rozhodnutia",
+        "truncated": "Zobrazuje sa iba časť histórie preskúmania.",
+        "underReview": "Prebieha preskúmanie",
+        "unknown": "Výsledok neznámy",
+        "upheld": "Ponechané v platnosti"
+      },
       "appliedVersionNotStated": "Použité znenie neuvedené",
       "appliedVersionNotStatedCompact": "Znenie neuvedené",
       "appliedVersionStatedAmendment": "Znenie podľa novely <reference>{amendment}</reference>",

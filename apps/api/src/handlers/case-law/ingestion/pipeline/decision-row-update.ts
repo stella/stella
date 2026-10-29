@@ -26,6 +26,7 @@ import {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { DecisionWritePlan } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import { sweepRawWriteLostToErasureTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
+import { writeDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
@@ -42,6 +43,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
@@ -56,6 +58,8 @@ const replacedDecisionState = async (
 ): Promise<{
   citationKey: string | null;
   country: string;
+  court: string;
+  docketFamilyKey: string | null;
   language: string;
   decisionDate: string | null;
   holdsDocument: boolean;
@@ -66,19 +70,11 @@ const replacedDecisionState = async (
     value: string;
   }[];
 } | null> => {
-  const rows = await tx
-    .select({
-      citationKey: caseLawDecisions.citationKey,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
-      holdsDocument: sql<boolean>`${rowHoldsDocumentFor(caseLawDecisions)}`,
-      metadata: caseLawDecisions.metadata,
-    })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, id))
-    .for("update")
-    .limit(1);
+  const rows = await lockCaseLawDecisionSnapshot({
+    tx,
+    decisionId: id,
+    holdsDocument: rowHoldsDocumentFor(caseLawDecisions),
+  });
   const row = rows.at(0);
   if (!row) {
     return null;
@@ -557,6 +553,13 @@ export const finishRefreshedRowTx = async (
   ) {
     await reopenMovedIdentityTx(tx, write, existing, replacedState);
   }
+
+  await writeDecisionReviews(tx, {
+    decisionId: existing.id,
+    country: write.result.country,
+    previousIdentity: replacedState,
+    reviews: write.plan.reviews,
+  });
 
   // Citations are read out of the document, so a refresh that
   // carries no document has nothing to say about them either.

@@ -1235,6 +1235,23 @@
     },
     "viewer": {
       "abstract": "Kivonat",
+      "appealReviews": {
+        "conflict": "A felülvizsgálatra vonatkozó adatok hiányosak vagy ellentmondásosak. A felülvizsgálat eredményét ellenőrizni kell.",
+        "corpusOnly": "A rendelkezésre álló korpuszban nem található ezt a határozatot felülvizsgáló határozat. Ez nem bizonyítja, hogy nem nyújtottak be jogorvoslatot.",
+        "noneFound": "Nem található felülvizsgáló határozat",
+        "overturned": "Hatályon kívül helyezve vagy megváltoztatva",
+        "partly": "Részben hatályon kívül helyezve",
+        "reviewedBy": "Felülvizsgáló határozatok",
+        "reviews": "Felülvizsgált határozatok",
+        "sourceHistory": "Eljárási előzmények",
+        "sourceMetadata": "Kiadói metaadatok",
+        "sourceOpening": "Bevezető bekezdés",
+        "title": "Jogorvoslati felülvizsgálat",
+        "truncated": "A felülvizsgálati előzményeknek csak egy része látható.",
+        "underReview": "Felülvizsgálat alatt",
+        "unknown": "Ismeretlen eredmény",
+        "upheld": "Hatályban maradt"
+      },
       "appliedVersionNotStated": "Az alkalmazott változat nincs megadva",
       "appliedVersionNotStatedCompact": "A változat nincs megadva",
       "appliedVersionStatedAmendment": "A <reference>{amendment}</reference> szerinti módosított szöveg",

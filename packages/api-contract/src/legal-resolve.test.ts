@@ -9,6 +9,15 @@ describe("legal resolve response", () => {
       status: "resolved",
       document: {
         kind: "decision",
+        appealReviews: {
+          status: "none_found",
+          basis: "available_corpus",
+          reason: "no_link_in_corpus",
+          reviewedBy: [],
+          reviews: [],
+          reviewedByTruncated: false,
+          reviewsTruncated: false,
+        },
         decisionId: "decision-id",
         identifier: "x",
         country: "CZE",
@@ -30,6 +39,15 @@ describe("legal resolve response", () => {
       status: "resolved",
       document: {
         kind: "decision",
+        appealReviews: {
+          status: "none_found",
+          basis: "available_corpus",
+          reason: "no_link_in_corpus",
+          reviewedBy: [],
+          reviews: [],
+          reviewedByTruncated: false,
+          reviewsTruncated: false,
+        },
         decisionId: "decision-id",
         identifier: "x",
         country: "CZE",
@@ -51,6 +69,15 @@ describe("legal resolve response", () => {
       status: "resolved",
       document: {
         kind: "decision",
+        appealReviews: {
+          status: "none_found",
+          basis: "available_corpus",
+          reason: "no_link_in_corpus",
+          reviewedBy: [],
+          reviews: [],
+          reviewedByTruncated: false,
+          reviewsTruncated: false,
+        },
         decisionId: "decision-id",
         identifier: "x",
         country: "CZE",
@@ -128,6 +155,15 @@ describe("legal resolve response", () => {
         status: "resolved",
         document: {
           kind: "decision",
+          appealReviews: {
+            status: "none_found",
+            basis: "available_corpus",
+            reason: "no_link_in_corpus",
+            reviewedBy: [],
+            reviews: [],
+            reviewedByTruncated: false,
+            reviewsTruncated: false,
+          },
           decisionId: "decision-id",
           identifier: "x",
           country: "CZE",

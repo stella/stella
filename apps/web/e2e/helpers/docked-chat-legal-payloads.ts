@@ -1,3 +1,4 @@
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { toSafeId } from "@stll/api-contract/safe-id";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
@@ -13,6 +14,7 @@ const decision = {
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   caseFile: { items: [], nextCursor: null, limit: 50 },
+  appealReviews: noDecisionReviewFound(),
   citationCount: 0,
   citationsFrom: [],
   citationsNextCursor: null,

@@ -54,9 +54,9 @@ export type ImportSourceKey =
  */
 export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: 15,
-  [ADAPTER_KEYS.CZ_NS]: 20,
-  [ADAPTER_KEYS.CZ_NSS]: 22,
-  [ADAPTER_KEYS.CZ_US]: 31,
+  [ADAPTER_KEYS.CZ_NS]: 21,
+  [ADAPTER_KEYS.CZ_NSS]: 23,
+  [ADAPTER_KEYS.CZ_US]: 32,
   [ADAPTER_KEYS.CZ_UOHS]: 4,
   [ADAPTER_KEYS.SK_COURTS]: 19,
   [ADAPTER_KEYS.SK_US]: 16,
@@ -83,7 +83,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.UK_FCL]: 3,
   [ADAPTER_KEYS.PL_KIS]: 10,
   [ADAPTER_KEYS.PL_UODO]: 14,
-  [ADAPTER_KEYS.PL_UOKIK]: 11,
+  [ADAPTER_KEYS.PL_UOKIK]: 12,
 } as const satisfies Record<AdapterKey, number>;
 
 // parser-output-unchanged: adds the source fingerprint versions; no parser reads them, so parser output is unchanged.

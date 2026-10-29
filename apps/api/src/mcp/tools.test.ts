@@ -24,6 +24,7 @@ import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { PUBLIC_COUNTRY_CAPABILITIES } from "@stll/api-contract/public-country-capability";
 import {
@@ -86,6 +87,7 @@ import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
+import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
@@ -636,6 +638,7 @@ const createReadDecisionResult = () => ({
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationCount: 2,
+  appealReviews: noDecisionReviewFound(),
   identifiers: [
     { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
   ],
@@ -1299,6 +1302,10 @@ const createContext = ({
         loadAllowlistByWorkspaceMock,
       loadAnonymizationGazetteerEntriesByWorkspace:
         loadGazetteerByWorkspaceMock,
+      readDecisionReviews:
+        testDependencies.readDecisionReviews ??
+        (async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()]))),
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
       readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
       readGatedDecisionWithDocument: readGatedDecisionMock,
@@ -2331,7 +2338,10 @@ describe("OpenAI-compatible MCP tools", () => {
       test("passes the check's own next step with a subject it refuses", async () => {
         const result = await callSanctions(
           async () => panic("The lists must not be screened"),
-          { type: "tax-id", tax_id: "CZ45274649" },
+          {
+            type: "tax-id",
+            tax_id: "CZ45274649",
+          },
         );
         const error = validationEnvelope(result);
         expect(error["code"]).toBe("validation_error");
@@ -2922,6 +2932,7 @@ describe("OpenAI-compatible MCP tools", () => {
           caseNumber: "29 Cdo 123/2024",
           citationAuthority: 1.75,
           citationCount: 7,
+          appealReviews: noDecisionReviewFound(),
           country: "CZE",
           court: "Nejvyšší soud",
           courtAbbreviation: "NS",
@@ -3247,6 +3258,7 @@ describe("OpenAI-compatible MCP tools", () => {
           caseNumber: "29 Cdo 123/2024",
           citationAuthority: 1.75,
           citationCount: 7,
+          appealReviews: noDecisionReviewFound(),
           country: "CZE",
           court: "Nejvyšší soud",
           courtAbbreviation: "NS",
@@ -4099,9 +4111,61 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("an empty precedent citator still reports the decision's cassation review", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      decisionId: "01a03050-4387-76b6-aae3-4b05db9a0238",
+      page: {
+        items: [],
+        nextCursor: null,
+        limit: 5,
+        doctrineAvailability: "available",
+      },
+    });
+    const evidence = {
+      status: "upheld" as const,
+      basis: "available_corpus" as const,
+      reviewedBy: [
+        {
+          reviewingDecisionId: "019dd78d-2e0c-7000-955a-63d713b246ba",
+          reviewingCaseNumber: "7 As 32/2025-30",
+          reviewingCourt: "Nejvyšší správní soud",
+          reviewedDecisionId: "01a03050-4387-76b6-aae3-4b05db9a0238",
+          reviewedCaseNumber: "25 A 20/2024-35",
+          reviewedCourt: "Krajský soud v Ostravě",
+          reviewedDecisionDate: "2025-01-16",
+          outcome: "upheld" as const,
+          source: "opening" as const,
+          evidenceStatus: "opening_only" as const,
+        },
+      ],
+      reviews: [],
+      reviewedByTruncated: false,
+      reviewsTruncated: false,
+    };
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: "01a03050-4387-76b6-aae3-4b05db9a0238",
+        direction: "cited_by",
+      },
+      context: createContext({
+        testDependencies: {
+          readDecisionReviews: async ({ decisionIds }) =>
+            new Map(decisionIds.map((id) => [id, evidence])),
+        },
+      }),
+      toolName: "read_case_law_citations",
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      citations: [],
+      appealReviews: evidence,
+    });
+  });
+
   test("read_case_law_citations maps the direction and returns treatment, decision and passage", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "available",
         items: [
@@ -4176,6 +4240,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
+      appealReviews: noDecisionReviewFound(),
       direction: "cited_by",
       doctrineAvailability: "available",
       doctrine: "limits",
@@ -4218,9 +4283,36 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_case_law_citations hydrates the composing judgment after absorption", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      decisionId: CITING_DECISION_ID,
+      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+    });
+    const readReviews = mock(
+      async ({ decisionIds }: Parameters<typeof readDecisionReviews>[0]) =>
+        new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
+    );
+    const result = await handleMcpToolCall({
+      args: { decision_id: DECISION_ID, direction: "cites" },
+      context: createContext({
+        testDependencies: { readDecisionReviews: readReviews },
+      }),
+      toolName: "read_case_law_citations",
+    });
+    expect(readReviews).toHaveBeenCalledWith({
+      decisionIds: [CITING_DECISION_ID],
+      caseLawDb: caseLawPublicReadDb,
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      decisionId: CITING_DECISION_ID,
+    });
+  });
+
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         items: [],
         nextCursor: null,
@@ -4940,7 +5032,10 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(resolveStatuteExpressionMock).toHaveBeenCalledTimes(3);
     expect(
       readLegislationProvisionVersionsMock.mock.calls.at(0)?.at(0),
-    ).toMatchObject({ documentIds: [STATUTE_ID], surface: "search" });
+    ).toMatchObject({
+      documentIds: [STATUTE_ID],
+      surface: "search",
+    });
     expect(readVersionBlocksMock).toHaveBeenCalledTimes(1);
     expect(readVersionBlocksMock.mock.calls.at(0)?.at(0)).toMatchObject({
       purpose: "derived-ai",
@@ -6676,6 +6771,7 @@ describe("OpenAI-compatible MCP tools", () => {
             // and so absent, and the publisher's name is the court's, so
             // `source` would restate it.
             metadata: { panel: "29 Cdo" },
+            appealReviews: noDecisionReviewFound(),
             citations: {
               citedBy: {
                 doctrineCounts: { status: "unavailable" },
@@ -7674,9 +7770,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("read_case_law_decision gives outline entries pages and deep links", async () => {
-    const fulltext = `I. Průběh řízení\n${"Facts. ".repeat(
-      40,
-    )}\nIV. Důvodnost dovolání\nReasons.`;
+    const fulltext = `I. Průběh řízení\n${"Facts. ".repeat(40)}\nIV. Důvodnost dovolání\nReasons.`;
     serveFulltext(fulltext);
 
     const first = await readOne({ max_chars: 50 });

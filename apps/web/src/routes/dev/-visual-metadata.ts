@@ -35,6 +35,10 @@ export const composerReferenceStates = Object.keys(composerReferenceVariants);
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "appeal-reviews": {
+    label: "Synthetic appeal review evidence",
+    layout: "plain",
+  },
   "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "column-composer": { label: "Column composer alignment", layout: "plain" },

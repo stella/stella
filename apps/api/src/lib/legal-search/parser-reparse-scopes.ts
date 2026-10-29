@@ -117,27 +117,27 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
+        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own. Procedural review links are also recomputed from retained publisher metadata and opening/holding evidence",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 22,
+    version: 23,
     scope: {
       type: "all",
       reason:
-        "page furniture, page-break cuts, letter-spaced words, layout tables, list numbers, subsection headings, separate opinions and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "page furniture, page-break cuts, letter-spaced words, layout tables, list numbers, subsection headings, separate opinions and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own. Procedural review links are also recomputed from retained publisher metadata and opening/holding evidence",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 31,
+    version: 32,
     scope: {
       type: "all",
       reason:
-        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own. Procedural review links are also recomputed from retained publisher metadata and opening/holding evidence",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -330,7 +330,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:

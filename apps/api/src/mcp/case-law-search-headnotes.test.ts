@@ -163,3 +163,48 @@ describe("expanded case-law headnotes", () => {
     expect(result.results.at(2)?.headnote?.truncated).toBe(true);
   });
 });
+
+test("review evidence shares the page budget and truncated incoming evidence stays unknown", () => {
+  const link = {
+    reviewingDecisionId: "019dd78d-2e0c-7000-955a-63d713b246ba",
+    reviewingCaseNumber: "7 As 32/2025-30",
+    reviewingCourt: "Nejvyšší správní soud",
+    reviewedDecisionId: null,
+    reviewedCaseNumber: "25 A 20/2024-35",
+    reviewedCourt: "Krajský soud v Ostravě",
+    reviewedDecisionDate: "2025-01-16",
+    outcome: "upheld" as const,
+    source: "opening" as const,
+    evidenceStatus: "opening_only" as const,
+  };
+  const page = {
+    ...APP_SEARCH_FIXTURE,
+    results: Array.from({ length: 20 }, () => ({
+      ...first,
+      headnote: null,
+      appealReviews: {
+        status: "upheld" as const,
+        basis: "available_corpus" as const,
+        reviewedBy: Array.from({ length: 32 }, () => ({ ...link })),
+        reviews: Array.from({ length: 32 }, () => ({ ...link })),
+        reviewedByTruncated: false,
+        reviewsTruncated: false,
+      },
+    })),
+  };
+  expect(JSON.stringify(page).length).toBeGreaterThan(
+    LIMITS.mcpCaseLawSearchPageMaxChars,
+  );
+  const result = boundCaseLawSearchHeadnotes(page);
+  expect(JSON.stringify(result).length).toBeLessThanOrEqual(
+    LIMITS.mcpCaseLawSearchPageMaxChars,
+  );
+  expect(
+    result.results.every(
+      ({ appealReviews }) =>
+        appealReviews.status === "unknown" &&
+        appealReviews.reviewedByTruncated &&
+        appealReviews.reviewsTruncated,
+    ),
+  ).toBe(true);
+});
