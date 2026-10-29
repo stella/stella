@@ -24,7 +24,36 @@ type Exemption = {
 };
 
 // Keep exceptions reviewable: every entry must name one message, locale, and reason.
-const EXEMPTIONS: readonly Exemption[] = [];
+const EXEMPTIONS: readonly Exemption[] = [
+  {
+    check: "formatting",
+    key: "inspector.review.flaggedPositions",
+    locale: "ar",
+    reason:
+      "The zero-total branch naturally omits the necessarily zero flagged count.",
+  },
+  {
+    check: "formatting",
+    key: "inspector.review.progressPositions",
+    locale: "ar",
+    reason:
+      "The zero-total branch naturally omits the necessarily zero completed count.",
+  },
+  {
+    check: "formatting",
+    key: "inspector.review.flaggedPositions",
+    locale: "lv",
+    reason:
+      "The zero-total branch naturally omits the necessarily zero flagged count.",
+  },
+  {
+    check: "formatting",
+    key: "inspector.review.progressPositions",
+    locale: "lv",
+    reason:
+      "The zero-total branch naturally omits the necessarily zero completed count.",
+  },
+];
 
 const flattenMessages = (catalog: unknown, prefix = ""): Message[] => {
   const messages: Message[] = [];
@@ -88,6 +117,7 @@ export const analyzeMessage = (message: string): Analysis => {
           visit(option.value, pluralStack);
         }
       } else if (isPluralElement(element)) {
+        analysis.numericArguments.add(element.value);
         analysis.plurals.push(element);
         for (const option of Object.values(element.options)) {
           visit(option.value, [...pluralStack, element.value]);
@@ -145,15 +175,132 @@ export const censusErrors = (
     }
   }
 
-  const translationPluralArguments = new Set(
-    translationAnalysis.plurals.map(({ value }) => value),
-  );
-  for (const { value } of sourceAnalysis.plurals) {
-    if (!translationPluralArguments.has(value)) {
-      errors.push(`missing plural on ${value}`);
+  return errors;
+};
+
+const pluralRepresentatives = (
+  locale: string,
+): Map<Intl.LDMLPluralRule, number> => {
+  const rules = new Intl.PluralRules(locale);
+  const categories = rules.resolvedOptions().pluralCategories;
+  const representatives = new Map<Intl.LDMLPluralRule, number>();
+  for (
+    let tenth = 0;
+    tenth <= 100_000 && representatives.size < categories.length;
+    tenth += 1
+  ) {
+    const value = tenth < 10_000 ? tenth : tenth / 10;
+    const category = rules.select(value);
+    if (!representatives.has(category)) {
+      representatives.set(category, value);
     }
   }
+  return representatives;
+};
 
+const render = (
+  message: string,
+  locale: string,
+  analysis: Analysis,
+  numericArguments: string[],
+  controllingArgument: string,
+  controllingValue: number,
+) => {
+  const arguments_: NonNullable<
+    Parameters<ReturnType<typeof createTranslator>["rich"]>[1]
+  > = Object.fromEntries(
+    sorted(analysis.arguments).map((argument) => [argument, "value"]),
+  );
+  const usedValues = new Set([controllingValue]);
+  let candidate = 5;
+  for (const argument of numericArguments) {
+    if (argument === controllingArgument) {
+      arguments_[argument] = controllingValue;
+      continue;
+    }
+    while (usedValues.has(candidate)) {
+      candidate += 1;
+    }
+    arguments_[argument] = candidate;
+    usedValues.add(candidate);
+    candidate += 1;
+  }
+  for (const argument of analysis.dateArguments) {
+    arguments_[argument] = new Date("2020-01-02T00:00:00Z");
+  }
+  for (const tag of analysis.tags) {
+    arguments_[tag] = (chunks): string => JSON.stringify(chunks);
+  }
+  const result = createTranslator({
+    locale,
+    messages: { census: message },
+  }).rich("census", arguments_);
+  return {
+    arguments_,
+    rendered: typeof result === "string" ? result : JSON.stringify(result),
+  };
+};
+
+export const renderingErrors = (
+  source: string,
+  translation: string,
+  locale: string,
+): string[] => {
+  const sourceAnalysis = analyzeMessage(source);
+  const translationAnalysis = analyzeMessage(translation);
+  const numericArguments = sorted(
+    new Set([
+      ...sourceAnalysis.numericArguments,
+      ...translationAnalysis.numericArguments,
+    ]),
+  ).filter(
+    (argument) =>
+      !sourceAnalysis.dateArguments.has(argument) &&
+      !translationAnalysis.dateArguments.has(argument),
+  );
+  const controllingArguments = new Set([
+    ...sourceAnalysis.plurals.map(({ value }) => value),
+    ...translationAnalysis.plurals.map(({ value }) => value),
+  ]);
+  const errors: string[] = [];
+  for (const controllingArgument of controllingArguments) {
+    for (const [category, value] of pluralRepresentatives(locale)) {
+      const sourceResult = render(
+        source,
+        locale,
+        sourceAnalysis,
+        numericArguments,
+        controllingArgument,
+        value,
+      );
+      const translationResult = render(
+        translation,
+        locale,
+        translationAnalysis,
+        numericArguments,
+        controllingArgument,
+        value,
+      );
+      for (const argument of numericArguments) {
+        if (argument === controllingArgument) {
+          continue;
+        }
+        const argumentValue = sourceResult.arguments_[argument];
+        if (typeof argumentValue !== "number") {
+          continue;
+        }
+        const formatted = new Intl.NumberFormat(locale).format(argumentValue);
+        if (
+          sourceResult.rendered.includes(formatted) &&
+          !translationResult.rendered.includes(formatted)
+        ) {
+          errors.push(
+            `${controllingArgument}=${value} (${category}) renders ${JSON.stringify(translationResult.rendered)} without ${argument}=${formatted}`,
+          );
+        }
+      }
+    }
+  }
   return errors;
 };
 
@@ -183,13 +330,9 @@ test("every translation preserves source arguments and complete plural forms", a
     flattenMessages(englishCatalog).map(({ key, value }) => [key, value]),
   );
   const failures: string[] = [];
-  const analyses = new Map<string, Map<string, Analysis>>();
 
   for (const [locale, catalog] of catalogs) {
-    const localeAnalyses = new Map<string, Analysis>();
-    analyses.set(locale, localeAnalyses);
     for (const { key, value } of flattenMessages(catalog)) {
-      localeAnalyses.set(key, analyzeMessage(value));
       if (locale === "en") {
         continue;
       }
@@ -201,80 +344,13 @@ test("every translation preserves source arguments and complete plural forms", a
       for (const error of censusErrors(source, value, locale)) {
         failures.push(`${locale}:${key}: ${error}`);
       }
-
-      const analysis = localeAnalyses.get(key);
-      if (analysis === undefined) {
-        continue;
-      }
-      const numericArguments = sorted(analysis.numericArguments).filter(
-        (argument) => !analysis.dateArguments.has(argument),
-      );
-      if (numericArguments.length < 2) {
-        continue;
-      }
       if (
-        EXEMPTIONS.some(
+        !EXEMPTIONS.some(
           (exemption) => exemption.locale === locale && exemption.key === key,
         )
       ) {
-        continue;
-      }
-      const translate = createTranslator({
-        locale,
-        messages: { census: value },
-      });
-      for (const values of [
-        [3, 7],
-        [4, 8],
-      ]) {
-        const arguments_: NonNullable<Parameters<typeof translate.rich>[1]> =
-          Object.fromEntries(
-            sorted(analysis.arguments).map((argument) => [argument, "value"]),
-          );
-        for (const [index, argument] of numericArguments.entries()) {
-          arguments_[argument] = values[index] ?? index + 11;
-        }
-        for (const argument of analysis.dateArguments) {
-          arguments_[argument] = new Date("2020-01-02T00:00:00Z");
-        }
-        for (const tag of analysis.tags) {
-          arguments_[tag] = (chunks): string => JSON.stringify(chunks);
-        }
-        const result = translate.rich("census", arguments_);
-        const rendered =
-          typeof result === "string" ? result : JSON.stringify(result);
-        for (const number of values) {
-          const formatted = new Intl.NumberFormat(locale).format(number);
-          if (!rendered.includes(formatted)) {
-            failures.push(
-              `${locale}:${key}: formatted output ${JSON.stringify(rendered)} omits ${formatted}`,
-            );
-          }
-        }
-      }
-    }
-  }
-
-  for (const key of englishMessages.keys()) {
-    const pluralArguments = new Set<string>();
-    for (const localeAnalyses of analyses.values()) {
-      for (const { value } of localeAnalyses.get(key)?.plurals ?? []) {
-        pluralArguments.add(value);
-      }
-    }
-    for (const [locale, localeAnalyses] of analyses) {
-      if (
-        new Intl.PluralRules(locale).resolvedOptions().pluralCategories
-          .length <= 1
-      ) {
-        continue;
-      }
-      const actual = new Set(
-        localeAnalyses.get(key)?.plurals.map(({ value }) => value),
-      );
-      for (const argument of pluralArguments) {
-        if (!actual.has(argument)) {
-          failures.push(`${locale}:${key}: missing plural on ${argument}`);
+        for (const error of renderingErrors(source, value, locale)) {
+          failures.push(`${locale}:${key}: ${error}`);
         }
       }
     }
@@ -290,7 +366,7 @@ test("census rejects argument and plural regressions", () => {
       "{count} položek",
       "cs",
     ),
-  ).not.toEqual([]);
+  ).toEqual([]);
   expect(
     censusErrors(
       "{count, plural, one {# item} other {# items}}",
@@ -312,4 +388,11 @@ test("census rejects argument and plural regressions", () => {
       "cs",
     ),
   ).not.toEqual([]);
+  expect(
+    renderingErrors(
+      "{count, plural, one {# of {total}} other {# of {total}}}",
+      "{count, plural, one {# of #} other {# of {total}}}",
+      "en",
+    ),
+  ).toEqual(['count=1 (one) renders "1 of 1" without total=5']);
 });

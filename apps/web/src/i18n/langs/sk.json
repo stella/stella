@@ -6695,8 +6695,8 @@
       "bulk": {
         "addAnother": "Pridať ďalší stĺpec",
         "createFailed": "Stĺpce sa nepodarilo vytvoriť",
-        "createMany": "Vytvoriť {count} stĺpcov",
-        "createdMany": "Vytvorených {count} stĺpcov",
+        "createMany": "Vytvoriť {count, plural, one {# stĺpec} few {# stĺpce} many {# stĺpcov} other {# stĺpcov}}",
+        "createdMany": "Vytvorené {count, plural, one {# stĺpec} few {# stĺpce} many {# stĺpcov} other {# stĺpcov}}",
         "createdOne": "Stĺpec vytvorený",
         "promptPlaceholder": "Čo má tento stĺpec extrahovať? Ak chcete použiť / a @, upresnite ho v dialógovom okne stĺpca.",
         "title": "Pridať stĺpce"

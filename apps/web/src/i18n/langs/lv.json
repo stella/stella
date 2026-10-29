@@ -6695,8 +6695,8 @@
       "bulk": {
         "addAnother": "Pievienot vēl vienu kolonnu",
         "createFailed": "Neizdevās izveidot kolonnas",
-        "createMany": "Izveidot {count} kolonnas",
-        "createdMany": "Izveidotas {count} kolonnas",
+        "createMany": "{count, plural, zero {Izveidot # kolonnu} one {Izveidot # kolonnu} other {Izveidot # kolonnas}}",
+        "createdMany": "{count, plural, zero {Izveidotas # kolonnas} one {Izveidota # kolonna} other {Izveidotas # kolonnas}}",
         "createdOne": "Kolonna izveidota",
         "promptPlaceholder": "Ko šai kolonnai jāizgūst? Lai izmantotu / un @, precizējiet to kolonnas dialoglodziņā.",
         "title": "Pievienot kolonnas"
