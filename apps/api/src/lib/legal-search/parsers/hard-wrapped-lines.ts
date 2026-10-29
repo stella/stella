@@ -463,8 +463,14 @@ const PDF_PARAGRAPH = {
   shortLineGapHeightShare: 2,
 } as const;
 
+export const PDF_LINE_KIND = {
+  BODY: "body",
+  PARAGRAPH_START: "paragraph-start",
+} as const;
+
 /** PDF geometry is in points; page coordinates restart on each page. */
 export type PdfPrintedLine = {
+  readonly kind: (typeof PDF_LINE_KIND)[keyof typeof PDF_LINE_KIND];
   readonly text: string;
   readonly layout?: {
     readonly x: number;
@@ -526,6 +532,43 @@ const pdfPageLayouts = (lines: readonly (PdfPrintedLine | null)[]) => {
   return pages;
 };
 
+type PdfParagraphLayout =
+  | { type: "first-line"; pageIndex: number; firstX: number }
+  | {
+      type: "continuation";
+      pageIndex: number;
+      firstX: number;
+      continuationX: number;
+    };
+
+type PdfParagraphMarginsOptions = {
+  paragraph: PdfParagraphLayout;
+  layout: NonNullable<PdfPrintedLine["layout"]>;
+  tolerance: number;
+};
+
+const pdfParagraphMargins = ({
+  paragraph,
+  layout,
+  tolerance,
+}: PdfParagraphMarginsOptions) => {
+  switch (paragraph.type) {
+    case "first-line":
+      return { continuationX: paragraph.firstX, returnsToFirstLine: false };
+    case "continuation":
+      return {
+        continuationX: paragraph.continuationX,
+        returnsToFirstLine:
+          paragraph.pageIndex === layout.pageIndex &&
+          Math.abs(paragraph.firstX - paragraph.continuationX) > tolerance &&
+          Math.abs(layout.x - paragraph.firstX) <= tolerance,
+      };
+    default:
+      paragraph satisfies never;
+      return panic("Unhandled PDF paragraph layout");
+  }
+};
+
 /**
  * PDF geometry, rather than punctuation, decides where printed paragraphs end.
  * The right margin and ordinary line pitch come from the page's running prose;
@@ -537,14 +580,31 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
     lines.map((line) => line?.text ?? null),
   );
   const pages = pdfPageLayouts(lines);
+  let paragraph: PdfParagraphLayout | null = null;
   return lines.map((line, index) => {
     const above = index > 0 ? lines.at(index - 1) : null;
     if (above === undefined || above === null || line === null) {
+      paragraph =
+        line?.layout === undefined
+          ? null
+          : {
+              type: "first-line",
+              pageIndex: line.layout.pageIndex,
+              firstX: line.layout.x,
+            };
       return LINE_JOIN.BREAK;
     }
     const previousLayout = above.layout;
     const layout = line.layout;
     if (previousLayout === undefined || layout === undefined) {
+      paragraph =
+        layout === undefined
+          ? null
+          : {
+              type: "first-line",
+              pageIndex: layout.pageIndex,
+              firstX: layout.x,
+            };
       if (
         SENTENCE_END_RE.test(above.text) &&
         OPENS_SENTENCE_RE.test(line.text) &&
@@ -558,34 +618,79 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
       pages.get(previousLayout.pageIndex) ??
       panic("PDF line has no page layout");
     const height = Math.max(previousLayout.height, layout.height);
-    if (previousLayout.pageIndex === layout.pageIndex) {
-      const pitchObservations = page.pitches.get(page.pitch) ?? 0;
-      const pitch =
-        pitchObservations >= PDF_PARAGRAPH.minPitchObservations
-          ? page.pitch
-          : Math.min(
-              page.pitch,
-              page.height * PDF_PARAGRAPH.maxPitchHeightShare,
-            );
-      const indented =
-        layout.x - previousLayout.x > height * PDF_PARAGRAPH.indentHeightShare;
-      const verticalGap = Math.abs(layout.y - previousLayout.y);
-      if (
-        indented ||
-        verticalGap > pitch + height * PDF_PARAGRAPH.gapToleranceHeightShare
-      ) {
-        return LINE_JOIN.BREAK;
-      }
+    if (
+      paragraph === null ||
+      paragraph.pageIndex !== previousLayout.pageIndex
+    ) {
+      paragraph = {
+        type: "first-line",
+        pageIndex: previousLayout.pageIndex,
+        firstX: previousLayout.x,
+      };
     }
-    // A short name line can still continue into a lowercase signature role.
+    const indentTolerance = height * PDF_PARAGRAPH.indentHeightShare;
+    const { continuationX, returnsToFirstLine } = pdfParagraphMargins({
+      paragraph,
+      layout,
+      tolerance: indentTolerance,
+    });
+    const samePage = previousLayout.pageIndex === layout.pageIndex;
+    const pitchObservations = page.pitches.get(page.pitch) ?? 0;
+    const pitch =
+      pitchObservations >= PDF_PARAGRAPH.minPitchObservations
+        ? page.pitch
+        : Math.min(page.pitch, page.height * PDF_PARAGRAPH.maxPitchHeightShare);
+    const paragraphGap =
+      samePage &&
+      Math.abs(layout.y - previousLayout.y) >
+        pitch + height * PDF_PARAGRAPH.gapToleranceHeightShare;
+    const indented = samePage && layout.x - continuationX > indentTolerance;
     const shortFinalLine =
-      OPENS_SENTENCE_RE.test(line.text) &&
       previousLayout.width <
         (page.right - page.left) * PDF_PARAGRAPH.shortLineWidthShare &&
       page.right - previousLayout.x - previousLayout.width >
         height * PDF_PARAGRAPH.shortLineGapHeightShare;
-    return shortFinalLine && !PRENOMINAL_TITLE_END_RE.test(above.text)
-      ? LINE_JOIN.BREAK
-      : LINE_JOIN.SPACE;
+    // Indentation alone is ambiguous: the first continuation can hang right
+    // of a marker or return left from an ordinary paragraph's first-line indent.
+    const startsAfterShortLine =
+      shortFinalLine &&
+      !PRENOMINAL_TITLE_END_RE.test(above.text) &&
+      (indented || returnsToFirstLine || OPENS_SENTENCE_RE.test(line.text));
+    if (
+      line.kind === PDF_LINE_KIND.PARAGRAPH_START ||
+      paragraphGap ||
+      startsAfterShortLine
+    ) {
+      paragraph = {
+        type: "first-line",
+        pageIndex: layout.pageIndex,
+        firstX: layout.x,
+      };
+      return LINE_JOIN.BREAK;
+    }
+    if (!samePage) {
+      paragraph = {
+        type: "first-line",
+        pageIndex: layout.pageIndex,
+        firstX: layout.x,
+      };
+      return LINE_JOIN.SPACE;
+    }
+    switch (paragraph.type) {
+      case "first-line":
+        paragraph = {
+          type: "continuation",
+          pageIndex: layout.pageIndex,
+          firstX: paragraph.firstX,
+          continuationX: layout.x,
+        };
+        break;
+      case "continuation":
+        break;
+      default:
+        paragraph satisfies never;
+        return panic("Unhandled PDF paragraph layout");
+    }
+    return LINE_JOIN.SPACE;
   });
 };

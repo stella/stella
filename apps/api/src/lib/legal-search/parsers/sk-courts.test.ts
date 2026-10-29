@@ -612,9 +612,9 @@ describe("unnumbered PDF paragraph boundaries", () => {
       y: 686,
     },
     {
-      signal: "indent",
+      signal: "indent after a short final line",
       first: "The first paragraph ends here",
-      next: "another paragraph starts here",
+      next: "another paragraph starts here and explains the decision of the court",
       x: 90,
       y: 686,
     },
@@ -645,6 +645,82 @@ describe("unnumbered PDF paragraph boundaries", () => {
           .filter((block) => block.type === "paragraph")
           .map((block) => block.plainText),
       ).toEqual([first, next]);
+    },
+  );
+
+  test.each([
+    {
+      followingX: 90,
+      followingBodyX: 70,
+      marker: "",
+      opening: "The",
+      tail: ["and explains how the court assessed the amounts claimed."],
+    },
+    {
+      followingX: 110,
+      followingBodyX: 70,
+      marker: "",
+      opening: "The",
+      tail: ["and explains how the court assessed the amounts claimed."],
+    },
+    {
+      followingX: 70,
+      followingBodyX: 100,
+      marker: "2. ",
+      opening: "The",
+      tail: [
+        "and the costs",
+        "claimed by the parties in their written submissions.",
+      ],
+    },
+    {
+      followingX: 70,
+      followingBodyX: 70,
+      marker: "",
+      opening: "the",
+      tail: ["and explains how the court assessed the amounts claimed."],
+    },
+  ])(
+    "hanging continuation lines stay together before the next paragraph at $followingX",
+    async ({ followingX, followingBodyX, marker, opening, tail }) => {
+      const first = [
+        "1. The court considered the application and examined all the evidence",
+        "before reaching its conclusion and explaining the applicable rules",
+        "to the parties before it made its final decision on the application.",
+        "The court dismissed the claim.",
+      ];
+      const following = [
+        `${marker}${opening} following paragraph addresses the costs of these proceedings`,
+        ...tail,
+      ];
+      const pdf = PDF.create();
+      const page = pdf.addPage({ size: "letter" });
+      for (const [index, text] of first.entries()) {
+        page.drawText(text, {
+          x: index === 0 ? 70 : 90,
+          y: 700 - index * 14,
+          size: 10,
+        });
+      }
+      for (const [index, text] of following.entries()) {
+        page.drawText(text, {
+          x: index === 0 ? followingX : followingBodyX,
+          y: 644 - index * 14,
+          size: 10,
+        });
+      }
+      const { documentAst } = await parseSkDecisionPdf({
+        pdfBytes: await pdf.save(),
+        caseNumber: "1/2026",
+        court: "Court",
+        ecli: undefined,
+        decisionDate: undefined,
+        decisionType: undefined,
+      });
+      expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+        first.join(" "),
+        following.join(" "),
+      ]);
     },
   );
 

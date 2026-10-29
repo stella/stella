@@ -31,3 +31,17 @@ test("namespace imports and a local function named guardParser cannot bypass the
     ),
   ).toEqual([3, 4]);
 });
+
+test("allows parser fixtures routed through the imported reader schema guard", async () => {
+  expect(
+    await lintSingleRule(
+      "parser-fixture-reader-guard",
+      [
+        'import { guardParser } from "@/api/tests/helpers/parser-reader-guard";',
+        'import { parseSkUsDocumentXhtml as rawParse } from "./sk-us";',
+        "const parse = guardParser(rawParse);",
+        "parse(input);",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});

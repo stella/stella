@@ -54,6 +54,7 @@ import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
 import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import {
+  PDF_LINE_KIND,
   type PdfPrintedLine,
   readPdfLineJoins,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
@@ -87,7 +88,7 @@ type ParseSkDecisionOutput = {
   fulltext: string;
 };
 
-type PdfLine = PdfPrintedLine & {
+type PdfLine = Omit<PdfPrintedLine, "kind"> & {
   text: string;
   segments: PdfSegment[];
   /** True when the PRIMARY (first) span is bold. Used for
@@ -429,14 +430,25 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
  */
 const sentenceContinuations = (lines: readonly PdfLine[]) =>
   readPdfLineJoins(
-    lines.map((line) =>
-      line.fontSize > TITLE_FONT_SIZE ||
-      isSkHoldingMarker(line.text) ||
-      isSkReasoningMarker(line.text) ||
-      isSkInstructionMarker(line.text)
-        ? null
-        : line,
-    ),
+    lines.map((line, index) => {
+      if (
+        line.fontSize > TITLE_FONT_SIZE ||
+        isSkHoldingMarker(line.text) ||
+        isSkReasoningMarker(line.text) ||
+        isSkInstructionMarker(line.text)
+      ) {
+        return null;
+      }
+      const above = index > 0 ? (lines.at(index - 1)?.text ?? "") : "";
+      return {
+        ...line,
+        kind:
+          STARTS_NEW_PARAGRAPH_RE.test(line.text) &&
+          !splitsDate(above, line.text)
+            ? PDF_LINE_KIND.PARAGRAPH_START
+            : PDF_LINE_KIND.BODY,
+      };
+    }),
   );
 
 /**
