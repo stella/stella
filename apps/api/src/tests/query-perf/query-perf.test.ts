@@ -13,6 +13,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import {
   CASE_LAW_SCENARIOS,
@@ -78,6 +80,39 @@ const backfillFixture = (jobId: string) => {
     };
   }
   return undefined;
+};
+
+const provisionBackfillFixtureBytes = async (database: GatedTestDb) => {
+  const result = await database.execute(sql`SELECT jsonb_build_object(
+    'decisions', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.id), '[]'::jsonb)
+      FROM case_law_decisions row
+      WHERE row.source_id = '01990000-00c0-7000-8000-000000000001'::uuid),
+    'units', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.decision_id), '[]'::jsonb)
+      FROM case_law_provision_extractions row
+      JOIN case_law_decisions decision ON decision.id = row.decision_id
+      WHERE decision.source_id = '01990000-00c0-7000-8000-000000000001'::uuid),
+    'scopes', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.country, row.language), '[]'::jsonb)
+      FROM case_law_provision_extraction_scopes row),
+    'transitions', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.country, row.language, row.generation), '[]'::jsonb)
+      FROM case_law_provision_scope_transitions row),
+    'admission', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.key), '[]'::jsonb)
+      FROM case_law_provision_admission row),
+    'repairCursors', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.name), '[]'::jsonb)
+      FROM case_law_provision_repair_cursors row),
+    'checkpoint', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.name), '[]'::jsonb)
+      FROM database_backfill_states row
+      WHERE row.name = 'caseLaw.backfillProvisionState.minutely')
+  )::text AS bytes`);
+  const row = executedRows(result).at(0);
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    !("bytes" in row) ||
+    typeof row.bytes !== "string"
+  ) {
+    return panic("Provision backfill fixture snapshot is missing");
+  }
+  return row.bytes;
 };
 
 test("a measured fixture job cannot hide DDL", () => {
@@ -150,6 +185,41 @@ test("over-budget markers require every measured surface to exceed its page budg
 });
 
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
+  test("measuring the provision-state backfill preserves its fixture and fresh-run pages", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async (db, _deadline, openClient) => {
+        await seedCorpusReadBudgets(db);
+        const before = await provisionBackfillFixtureBytes(db);
+        const first = await measureScheduledJobRun({
+          database: db,
+          openClient,
+          jobId: SCHEDULER_BACKFILL_IDS.provisionState,
+          task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+        });
+        expect(await provisionBackfillFixtureBytes(db)).toBe(before);
+        const second = await measureScheduledJobRun({
+          database: db,
+          openClient,
+          jobId: SCHEDULER_BACKFILL_IDS.provisionState,
+          task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+        });
+        const measuredPages = (run: typeof first) =>
+          run.statements.filter(({ statement }) =>
+            statement.startsWith(
+              "SELECT id::text AS id FROM case_law_decisions",
+            ),
+          ).length;
+        expect(measuredPages(second)).toBe(measuredPages(first));
+      },
+    });
+  }, 420_000); // timeout: the corpus profile seeds about a million rows before the integration assertion.
+
   test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??

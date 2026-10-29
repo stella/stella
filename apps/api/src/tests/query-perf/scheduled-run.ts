@@ -109,6 +109,116 @@ class CapturedRunRollbackError extends Error {
   override readonly name = "CapturedRunRollbackError";
 }
 
+type CaptureSavepoint = { harnessName: string; jobName: string | undefined };
+
+/** Keeps transaction control issued by a captured job inside the capture transaction. */
+const captureConnection = (
+  transactionClient: { unsafe: (query: string, params?: unknown[]) => unknown },
+  captured: CapturedStatement[],
+) => {
+  const savepoints: CaptureSavepoint[] = [];
+  let nextSavepoint = 0;
+  const createSavepoint = (jobName?: string) => {
+    const harnessName = `query_perf_capture_${String(nextSavepoint)}`;
+    nextSavepoint += 1;
+    savepoints.push({ harnessName, jobName });
+    return `SAVEPOINT ${harnessName}`;
+  };
+  const topSavepoint = (statement: string) =>
+    savepoints.at(-1) ??
+    panic(`Captured job ended a transaction it did not begin: ${statement}`);
+  const namedSavepoint = (name: string, statement: string) => {
+    const index = savepoints.findLastIndex(
+      ({ jobName }) => jobName?.toLowerCase() === name.toLowerCase(),
+    );
+    if (index === -1) {
+      return panic(`Captured job named an unknown savepoint: ${statement}`);
+    }
+    return {
+      index,
+      savepoint:
+        savepoints.at(index) ?? panic("Captured savepoint stack is invalid"),
+    };
+  };
+  const mapTransactionControl = (statement: string) => {
+    const normalized = statement
+      .replaceAll(/^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/gu, "")
+      .replaceAll(/;\s*$/gu, "")
+      .trim();
+    if (
+      /^(?:begin|start\s+transaction)(?:\s+(?:work|transaction))?$/iu.test(
+        normalized,
+      )
+    ) {
+      return createSavepoint();
+    }
+    if (/^(?:commit|end)(?:\s+(?:work|transaction))?$/iu.test(normalized)) {
+      const { harnessName } = topSavepoint(statement);
+      savepoints.pop();
+      return `RELEASE SAVEPOINT ${harnessName}`;
+    }
+    if (/^rollback(?:\s+(?:work|transaction))?$/iu.test(normalized)) {
+      const { harnessName } = topSavepoint(statement);
+      savepoints.pop();
+      return `ROLLBACK TO SAVEPOINT ${harnessName}`;
+    }
+    const savepoint = /^savepoint\s+([^\s]+)$/iu.exec(normalized);
+    if (savepoint !== null) {
+      return createSavepoint(
+        savepoint.at(1) ??
+          panic(`Captured SAVEPOINT has no name: ${statement}`),
+      );
+    }
+    const release = /^release(?:\s+savepoint)?\s+([^\s]+)$/iu.exec(normalized);
+    if (release !== null) {
+      const { index, savepoint: target } = namedSavepoint(
+        release.at(1) ?? panic(`Captured RELEASE has no name: ${statement}`),
+        statement,
+      );
+      savepoints.splice(index);
+      return `RELEASE SAVEPOINT ${target.harnessName}`;
+    }
+    const rollbackTo =
+      /^rollback(?:\s+(?:work|transaction))?\s+to(?:\s+savepoint)?\s+([^\s]+)$/iu.exec(
+        normalized,
+      );
+    if (rollbackTo !== null) {
+      const { index, savepoint: target } = namedSavepoint(
+        rollbackTo.at(1) ??
+          panic(`Captured ROLLBACK TO has no name: ${statement}`),
+        statement,
+      );
+      savepoints.splice(index + 1);
+      return `ROLLBACK TO SAVEPOINT ${target.harnessName}`;
+    }
+    if (
+      /^(?:abort|prepare\s+transaction|commit\s+prepared|rollback\s+prepared|set\s+transaction|set\s+session\s+characteristics\s+as\s+transaction)\b/iu.test(
+        normalized,
+      )
+    ) {
+      return panic(
+        `Captured job issued unsupported transaction control: ${statement}`,
+      );
+    }
+    return statement;
+  };
+  return {
+    assertBalanced: () => {
+      if (savepoints.length !== 0) {
+        panic("Captured job left a transaction or savepoint open");
+      }
+    },
+    unsafe: async (query: string, params: readonly unknown[] = []) => {
+      captured.push({ text: query, params });
+      const result: unknown = await transactionClient.unsafe(
+        mapTransactionControl(query),
+        [...params],
+      );
+      return result;
+    },
+  };
+};
+
 export const measureScheduledStatementsInOrder = async ({
   database,
   jobId,
@@ -208,6 +318,7 @@ export const measureScheduledJobRun = async ({
   const runId = Bun.randomUUIDv7();
   await rawClient
     .begin(async (transactionClient) => {
+      const capturedConnection = captureConnection(transactionClient, captured);
       const db = createDatabase({
         client: transactionClient,
         relations: databaseRelations,
@@ -225,33 +336,16 @@ export const measureScheduledJobRun = async ({
               withConnection: async (_options, work) =>
                 await work({
                   connection: {
-                    unsafe: async (query, params = []) => {
-                      captured.push({ text: query, params });
-                      const result: unknown = await transactionClient.unsafe(
-                        query,
-                        [...params],
-                      );
-                      return result;
-                    },
+                    unsafe: capturedConnection.unsafe,
                   },
                   setTransactionBudget: async ({
                     lockTimeout,
                     statementTimeout,
                   }) => {
-                    await setSharedQueryTimeouts(
-                      async (query, params = []) => {
-                        captured.push({ text: query, params });
-                        const result: unknown = await transactionClient.unsafe(
-                          query,
-                          [...params],
-                        );
-                        return result;
-                      },
-                      {
-                        lockTimeoutMs: lockTimeout,
-                        statementTimeoutMs: statementTimeout,
-                      },
-                    );
+                    await setSharedQueryTimeouts(capturedConnection.unsafe, {
+                      lockTimeoutMs: lockTimeout,
+                      statementTimeoutMs: statementTimeout,
+                    });
                   },
                 }),
               readVerdict: async () =>
@@ -290,6 +384,7 @@ export const measureScheduledJobRun = async ({
           `${jobId} failed on the fixture: ${outcome.error.message}`,
         );
       }
+      capturedConnection.assertBalanced();
       throw new CapturedRunRollbackError();
     })
     .then(
