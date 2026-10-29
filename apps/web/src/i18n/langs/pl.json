@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
-      "headMatter": "Część wstępna",
+      "headMatter": "Informacje o sprawie",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
     "research": {

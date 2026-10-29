@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
-      "headMatter": "الديباجة",
+      "headMatter": "معلومات القضية",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
     "research": {

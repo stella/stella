@@ -1155,7 +1155,7 @@
     "reader": {
       "documentUpdated": "The document was updated.",
       "expandProvisions": "Expand provisions",
-      "headMatter": "Head matter",
+      "headMatter": "Case information",
       "sourceAttribution": "The source data is freely available at <link>{source}</link>."
     },
     "research": {
