@@ -15,7 +15,7 @@ import { Label } from "@stll/ui/label";
 import { cn } from "@stll/ui/utils";
 
 import { MatterCombobox } from "@/components/billing/matter-combobox";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { useSplitTimeEntry } from "@/lib/workspaces/mutations/time-entries";
 
 type SplitLine = {
@@ -52,13 +52,13 @@ export const SplitEntryDialog = ({
 
   const handleSubmit = () => {
     if (totalPercentage !== 100) {
-      notifyUserError(undefined, t("billing.split.totalMustBe100"));
+      notifyUserProblem(t("billing.split.totalMustBe100"));
       return;
     }
 
     const invalidMatter = splits.some((s) => !s.matterId);
     if (invalidMatter) {
-      notifyUserError(undefined, t("billing.matterRequired"));
+      notifyUserProblem(t("billing.matterRequired"));
       return;
     }
 

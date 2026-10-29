@@ -1058,13 +1058,6 @@
   },
   {
     "file": "apps/api/src/lib/chat/run-log.ts",
-    "function": "module/createRunLogReader",
-    "kind": "fixed-page-size",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/chat/run-log.ts",
     "function": "module/sweepClosedChatRunLogs",
     "kind": "constant-limit",
     "count": 3,
@@ -1488,20 +1481,6 @@
     "function": "module/putPresignedUpload",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/s3.ts",
-    "function": "module/fetchCredentialJson",
-    "kind": "total-timeout-body",
-    "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/s3.ts",
-    "function": "module/fetchImdsCredentials",
-    "kind": "total-timeout-body",
-    "count": 6,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {

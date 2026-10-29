@@ -30,7 +30,7 @@ type ServedAst = {
 type ReadServedAstOptions = {
   astS3Key: string | null;
   contentHash: string | null;
-  pgAst: DocumentAst | EmptyAst | null;
+  pgAst: unknown;
   decisionId: SafeId<"caseLawDecision">;
   corpusReadEnabled: boolean;
   readStore: () => Promise<DocumentAst | EmptyAst | null>;
@@ -45,7 +45,8 @@ export const readServedDecisionAst = async ({
   corpusReadEnabled,
   readStore,
 }: ReadServedAstOptions): Promise<ServedAst> => {
-  const rowAst = () => astFrom("row", parsePersistedCorpusAst(pgAst));
+  const rowAst = () =>
+    astFrom("row", parsePersistedCorpusAst(pgAst, decisionId));
   const resolved =
     !corpusReadEnabled || astS3Key === null || contentHash === null
       ? rowAst()

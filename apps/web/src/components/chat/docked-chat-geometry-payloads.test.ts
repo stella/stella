@@ -10,8 +10,8 @@ type ApiRoutes = WebRoutes["v1"];
 type DecisionReads = ApiRoutes["case"]["decisions"][":decisionId"];
 type StatuteReads = ApiRoutes["law"]["statutes"][":documentId"];
 
-// Check the exact payloads installed by E2E in the application's type graph;
-// the Playwright project imports only their small inferred leaf modules.
+// Check the exact payloads installed by E2E against their HTTP contracts;
+// shared fixture factories also validate their defaults at the producer.
 const legalContracts = {
   decision:
     dockedChatLegalPayloads.decision satisfies DecisionReads["get"]["response"][200],

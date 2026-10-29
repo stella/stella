@@ -242,6 +242,7 @@ test("every bundle resolves its file assets from its runner directory", () => {
 const STANDALONE_BUNDLES = [
   "/app/bundles/collab.js",
   "/app/bundles/document-processing-worker.js",
+  "/app/bundles/file-derivative-worker.js",
   "/app/bundles/server.js",
 ];
 
@@ -273,6 +274,7 @@ test("long-running API builds map frames to source without embedded source text"
   for (const output of [
     "/app/server.js",
     "/app/document-processing-worker.js",
+    "/app/file-derivative-worker.js",
   ]) {
     const bundle = buildForOutput(output);
     expect(bundle, output).toContain("--sourcemap=linked");

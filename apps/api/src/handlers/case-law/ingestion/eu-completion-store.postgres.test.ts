@@ -1182,9 +1182,11 @@ if (!databaseUrl || !enabled) {
     // index jobs over per-candidate index probes, so the scale is the point.
     test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
       const sourceId = createSafeId<"caseLawSource">();
-      // Keep the scale rows transaction-owned: rolling them back avoids a
-      // second, row-triggered deletion of the same 100000-row fixture.
-      const rolledBack = await Result.tryPromise({
+      sourceIds.push(sourceId);
+      // Bulk fixtures roll back as one unit instead of leaving foreign-key
+      // cleanup for the suite hook after every performance assertion finishes.
+      const rollback = new TransactionRollbackError();
+      const outcome = await Result.tryPromise({
         try: async () =>
           await db.transaction(async (tx) => {
             await tx.insert(caseLawSources).values({
@@ -1193,20 +1195,20 @@ if (!databaseUrl || !enabled) {
               name: "completion scale fixture",
             });
             await tx.execute(sql`
-            INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
-            SELECT md5(${sourceId}::text || '-' || n::text)::uuid, ${sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
-            FROM generate_series(1, 100000) AS n
-          `);
+              INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
+              SELECT md5(${sourceId}::text || '-' || n::text)::uuid, ${sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
+              FROM generate_series(1, 100000) AS n
+            `);
             await tx.execute(sql`
-            INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
-            SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
-            FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
-          `);
+              INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
+              SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
+              FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
+            `);
             await tx.execute(sql`
-            INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
-            SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
-            FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
-          `);
+              INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
+              SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
+              FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
+            `);
             await tx.execute(sql`ANALYZE case_law_index_jobs`);
             await tx.execute(sql`ANALYZE case_law_decisions`);
             await tx.execute(sql`ANALYZE eu_completion_receipts`);
@@ -1254,22 +1256,20 @@ if (!databaseUrl || !enabled) {
               throw new TypeError("Expected EXPLAIN buffer count");
             }
             expect(blocks).toBeLessThan(5000);
-            tx.rollback();
+            throw rollback;
           }),
-        catch: (error) => error,
+        catch: (cause) => cause,
       });
-      if (rolledBack.isOk()) {
-        throw new TypeError("Expected scale fixture transaction to roll back");
+      if (outcome.isErr() && outcome.error !== rollback) {
+        throw outcome.error;
       }
-      if (!(rolledBack.error instanceof TransactionRollbackError)) {
-        throw rolledBack.error;
-      }
+      expect(outcome.isErr()).toBe(true);
       expect(
         await db
           .select({ id: caseLawSources.id })
           .from(caseLawSources)
           .where(eq(caseLawSources.id, sourceId)),
-      ).toEqual([]);
+      ).toHaveLength(0);
     }, 60_000);
     test("compaction preserves latest and approval evidence forever", async () => {
       const state = await fixture();

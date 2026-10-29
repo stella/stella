@@ -95,7 +95,9 @@ export const getOrganizationRegistryDispatch = async ({
       limit: BUSINESS_REGISTRY_CREDENTIAL_SLUGS.length,
     }),
   );
-  const dispatch = { ...BUSINESS_REGISTRY_DISPATCH };
+  const dispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
+    ...BUSINESS_REGISTRY_DISPATCH,
+  };
   const configured = await Promise.all(
     rows.map(async (row) => ({
       registry: row.registry,

@@ -33,6 +33,7 @@ import {
 import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
 import { searchFold } from "@/api/lib/search/search-fold";
 import { typedPgArray } from "@/api/lib/search/sql";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 // -- Types --
 
@@ -662,7 +663,16 @@ const compileKindPredicate = (node: PredicateNode): SQL | null => {
   if (expanded.length === 0) {
     return null;
   }
-  return inArray(entities.kind, expanded);
+  if (!expanded.includes("task")) {
+    return inArray(entities.kind, expanded);
+  }
+  const otherKinds = expanded.filter((kind) => kind !== "task");
+  return (
+    or(
+      workTask(entities),
+      otherKinds.length === 0 ? undefined : inArray(entities.kind, otherKinds),
+    ) ?? null
+  );
 };
 
 const compilePredicate = (node: PredicateNode): SQL | null => {

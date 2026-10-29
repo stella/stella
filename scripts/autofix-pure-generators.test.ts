@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  "withdrawn-decision-labels":
+    "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
   "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
@@ -57,6 +59,9 @@ const PURE_AUTOFIX = {
   // Resolves the committed web theme against the lockfile-pinned Tailwind
   // palette with lightningcss; no network, clock or environment.
   "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
+  // Rewrites the web's icon module and wordmark for lucide's native build;
+  // reads only those committed files.
+  "mobile-icons": "scripts/generate-mobile-icons.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
@@ -91,6 +96,8 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "playwright-devices":
+    "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":
     "Protected workflow metadata is refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
@@ -101,6 +108,7 @@ const EXCLUDED_AUTOFIX = {
     "Model catalogs are explicitly excluded from automatic repair",
   "model-benchmarks": "Fetches upstream benchmark data",
   "catalogue-pinned-facts": "Fetches upstream content facts",
+  "harness-releases": "Fetches upstream release metadata",
   "us-courts": "Upstream court data refresh is excluded",
   "us-reporters": "Fetches pinned upstream reporter data",
   snowball: "Fetches/builds upstream Snowball sources",
