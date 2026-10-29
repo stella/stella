@@ -914,6 +914,7 @@
     "aiMissing": "لم يتم إعداد الذكاء الاصطناعي.",
     "availabilityUnknown": "تعذر التأكد من التوفر.",
     "deeplMissing": "لم يتم إعداد DeepL.",
+    "deeplPdfRequired": "تتطلب ترجمة ملفات PDF استخدام DeepL.",
     "desktopUnavailable": "اربط تطبيق stella desktop أو حدّثه.",
     "featureUnavailable": "هذه الميزة غير متاحة.",
     "ocrUnavailable": "التعرف الضوئي على الحروف غير متاح.",

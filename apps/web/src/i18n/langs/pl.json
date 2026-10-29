@@ -914,6 +914,7 @@
     "aiMissing": "AI nie jest skonfigurowana.",
     "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
     "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "deeplPdfRequired": "Tłumaczenie plików PDF wymaga DeepL.",
     "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
     "featureUnavailable": "Ta funkcja jest niedostępna.",
     "ocrUnavailable": "OCR jest niedostępne.",

@@ -914,6 +914,7 @@
     "aiMissing": "Tehisintellekt pole seadistatud.",
     "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
     "deeplMissing": "DeepL pole seadistatud.",
+    "deeplPdfRequired": "PDF-failide tõlkimiseks on vaja DeepL-i.",
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",

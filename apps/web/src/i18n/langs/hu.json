@@ -914,6 +914,7 @@
     "aiMissing": "Az AI nincs beállítva.",
     "availabilityUnknown": "Az elérhetőséget nem sikerült megerősíteni.",
     "deeplMissing": "A DeepL nincs beállítva.",
+    "deeplPdfRequired": "A PDF-fájlok fordításához DeepL szükséges.",
     "desktopUnavailable": "Csatlakoztassa vagy frissítse a stella desktop alkalmazást.",
     "featureUnavailable": "Ez a funkció nem érhető el.",
     "ocrUnavailable": "Az OCR nem érhető el.",

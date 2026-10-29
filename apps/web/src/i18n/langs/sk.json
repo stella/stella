@@ -914,6 +914,7 @@
     "aiMissing": "AI nie je nakonfigurovaná.",
     "availabilityUnknown": "Dostupnosť sa nepodarilo overiť.",
     "deeplMissing": "DeepL nie je nakonfigurovaný.",
+    "deeplPdfRequired": "Preklad súborov PDF vyžaduje DeepL.",
     "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
     "featureUnavailable": "Táto funkcia nie je k dispozícii.",
     "ocrUnavailable": "OCR nie je k dispozícii.",
