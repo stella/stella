@@ -152,7 +152,7 @@ export const SavedSearches = ({
               ...(time !== undefined && { time }),
             },
           },
-          send: (creationPayload) =>
+          send: async (creationPayload) =>
             api["saved-searches"].post(creationPayload),
         }),
       );
