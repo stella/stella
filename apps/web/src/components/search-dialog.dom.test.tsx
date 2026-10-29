@@ -6,9 +6,15 @@ import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import {
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+} from "@stll/api-contract/search";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
+import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
+import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -70,12 +76,55 @@ const folderHit = {
   mimeType: null,
 } as const satisfies GlobalSearchHit;
 
+const citationResponse = {
+  hits: [
+    {
+      decisionId: "00000000-0000-4000-8000-000000000049",
+      caseNumber: "22 As 40/2025",
+      caseNumberType: "case-number",
+      slug: "22-as-40-2025",
+      ecli: "ECLI:CZ:NSS:2026:22.AS.40.2025.49",
+      identifiers: [{ type: "case-number", value: "22 As 40/2025 - 49" }],
+      court: "Nejvyšší správní soud",
+      courtAbbreviation: "NSS",
+      courtTier: "supreme",
+      country: "CZE",
+      language: "cs",
+      languageAlternates: [],
+      decisionDate: "2026-01-29",
+      decisionType: "judgment",
+      sourceUrl: null,
+      headnote: null,
+      keywords: null,
+      textWithheldReason: null,
+      headline: null,
+      anchorId: null,
+      citationCount: 0,
+      citationAuthority: 0,
+      matchingPassages: 1,
+      match: "all_terms",
+      createdAt: "2026-01-29T00:00:00.000Z",
+    },
+  ],
+  facets: null,
+  nextCursor: null,
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+  pageReach: SEARCH_PAGE_REACH.REACHED,
+  total: { type: "exact", count: 1 },
+  relaxedHitCount: 0,
+  queryUsed: "22 As 40/2025 - 49",
+  warnings: [],
+} satisfies PublicLawData<typeof api.case.decisions.search.post>;
+
 const searchRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
+    if (url.pathname.endsWith("/case/decisions/search")) {
+      return Response.json(citationResponse);
+    }
     if (url.pathname.endsWith("/search")) {
       searchRequestBodies.push(await request.json());
       return Response.json({
@@ -198,7 +247,10 @@ const mount = async (
   return appRouter;
 };
 
-const typeQuery = async (expectedTitle: string = hit.title) => {
+const typeQuery = async (
+  expectedTitle: string = hit.title,
+  value = "engagement",
+) => {
   const input = testing.screen.getByRole("combobox", {
     name: messages.common.search,
   });
@@ -207,7 +259,7 @@ const typeQuery = async (expectedTitle: string = hit.title) => {
   }
   jest.useFakeTimers();
   await testing.act(async () => {
-    testing.fireEvent.input(input, { target: { value: "engagement" } });
+    testing.fireEvent.input(input, { target: { value } });
     jest.advanceTimersByTime(301);
     restoreRealTimers();
   });
@@ -225,6 +277,56 @@ test("actions stay on the blank screen and never sit above results", async () =>
 
   await typeQuery();
   expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
+});
+
+test("a resolved citation is the first keyboard result above matter hits", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  const appRouter = await mount(async () => {
+    const root = router.createRootRoute({ component: SearchDialogHarness });
+    const decision = router.createRoute({
+      getParentRoute: () => root,
+      path: "/law/$country/cases/$court/$slug",
+      component: () => null,
+    });
+    const citationRouter = router.createRouter({
+      routeTree: root.addChildren([decision]),
+      history: router.createMemoryHistory({ initialEntries: ["/"] }),
+      isServer: false,
+    });
+    await citationRouter.load();
+    return citationRouter;
+  });
+  const input = await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  const options = testing.screen.getAllByRole("option");
+  expect(options.at(0)?.textContent).toContain("22 As 40/2025");
+  expect(
+    options.some((option) => option.textContent?.includes(hit.title)),
+  ).toBe(true);
+  await testing.act(async () => {
+    testing.fireEvent.keyDown(input, { key: "Home", code: "Home" });
+    testing.fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+  });
+  const highlightedId = input.getAttribute("aria-activedescendant");
+  expect(
+    highlightedId &&
+      document.querySelector(`[id="${highlightedId}"]`)?.textContent,
+  ).toContain(hit.title);
+  await testing.act(async () => {
+    testing.fireEvent.keyDown(input, { key: "ArrowUp", code: "ArrowUp" });
+  });
+  const citationId = input.getAttribute("aria-activedescendant");
+  expect(
+    citationId && document.querySelector(`[id="${citationId}"]`)?.textContent,
+  ).toContain("22 As 40/2025");
+  await testing.act(async () => {
+    testing.fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  });
+  await testing.waitFor(() => {
+    expect(appRouter.state.location.pathname).toBe(
+      "/law/cze/cases/nejvyssi-spravni-soud/22-as-40-2025",
+    );
+  });
+  expect(testing.screen.getByTestId("dialog-state").textContent).toBe("closed");
 });
 
 test("Case law scope searches only case law and drops matter recents and actions", async () => {

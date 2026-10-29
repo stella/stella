@@ -11,6 +11,7 @@ import type {
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
@@ -62,6 +63,11 @@ import {
   toSearchFilters,
 } from "@/components/saved-searches.logic";
 import { SearchCaseLawGroup } from "@/components/search-case-law-group";
+import {
+  citationCommandHits,
+  citationCommandRoute,
+  SearchCitationResults,
+} from "@/components/search-citation-results";
 import {
   SearchCompanyResult,
   useCompanyRegistrySearch,
@@ -154,6 +160,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
@@ -162,9 +169,14 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
+  isLegalCitationSearch,
+  legalCitationSearchOptions,
+} from "@/lib/legal-citation-search";
+import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
   hasSearchQueryOrSelectiveFilter,
@@ -189,6 +201,7 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
 import {
   getCurrentWorkspaceDocument,
@@ -582,6 +595,49 @@ const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
     ? `${scope.organizationId}:${scope.userId}`
     : null;
 
+type CitationSearchOptions = {
+  open: boolean;
+  mode: SearchDialogMode;
+  publicLawPreviewEnabled: boolean;
+  searchScope: SearchScope;
+  query: string;
+  debouncedQuery: string;
+  locale: Parameters<typeof defaultCaseLawCountryForLocale>[0];
+};
+
+const useCitationSearch = ({
+  open,
+  mode,
+  publicLawPreviewEnabled,
+  searchScope,
+  query,
+  debouncedQuery,
+  locale,
+}: CitationSearchOptions) => {
+  const citationCountry = defaultCaseLawCountryForLocale(locale);
+  const citationEnabled =
+    open &&
+    mode.type === "browse" &&
+    publicLawPreviewEnabled &&
+    searchScope === "all" &&
+    citationCountry !== null &&
+    query === debouncedQuery &&
+    isLegalCitationSearch({ country: citationCountry, query: debouncedQuery });
+  const citationQuery = useQuery({
+    ...legalCitationSearchOptions({
+      country: citationCountry ?? "",
+      query: debouncedQuery,
+    }),
+    enabled: citationEnabled,
+  });
+  useQueryViewError(queryView(citationQuery), "SearchDialog:legalCitation");
+  const hits = citationCommandHits(
+    citationEnabled ? citationQuery.data : undefined,
+  );
+
+  return { hits, query: citationQuery, enabled: citationEnabled };
+};
+
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -816,6 +872,20 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
+  const {
+    hits: citationHits,
+    query: citationQuery,
+    enabled: citationEnabled,
+  } = useCitationSearch({
+    open,
+    mode,
+    publicLawPreviewEnabled,
+    searchScope,
+    query,
+    debouncedQuery,
+    locale: apiLocale,
+  });
+
   const isBlockingSearchError = isSearchError && !isFetchNextPageError;
 
   // Keyed by value: the caller rebuilds the mode object every render, and the
@@ -847,7 +917,9 @@ export const SearchDialog = ({
   });
   const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
   const displayedPreviewHit = selectDisplayedSearchPreviewHit({
-    hit: previewHit,
+    hit: citationHits.some((hit) => hit.id === highlightedHitId)
+      ? null
+      : previewHit,
     showPreview,
   });
   const supplementalDisplay = resolveSupplementalPreview({
@@ -1562,7 +1634,7 @@ export const SearchDialog = ({
     !hasUnavailableSelectedType &&
     !isBlockingSearchError &&
     hasResults;
-  const commandHits = shouldShowResults ? allHits : [];
+  const commandHits = [...citationHits, ...(shouldShowResults ? allHits : [])];
   const resultsStatus = resolveSearchResultsStatus({
     hasActiveSearch,
     hasQuery,
@@ -1787,6 +1859,14 @@ export const SearchDialog = ({
                   return;
                 }
                 const highlightedHit = commandHits.at(eventDetails.index);
+                if (highlightedHit?.type === "legal-citation") {
+                  debouncedSetHighlightedHitId.cancel();
+                  setHighlightedHitId(highlightedHit.id);
+                  if (eventDetails.reason === "keyboard" && resultsElement) {
+                    resultsElement.scrollTop = 0;
+                  }
+                  return;
+                }
                 if (highlightedHit) {
                   setSupplementalPreview({ type: "internal" });
                   if (eventDetails.reason === "keyboard") {
@@ -1797,9 +1877,12 @@ export const SearchDialog = ({
                   }
                 }
                 if (eventDetails.reason === "keyboard") {
-                  hitVirtualizer.scrollToIndex(eventDetails.index, {
-                    align: "auto",
-                  });
+                  hitVirtualizer.scrollToIndex(
+                    eventDetails.index - citationHits.length,
+                    {
+                      align: "auto",
+                    },
+                  );
                 }
               }}
               onValueChange={(value, eventDetails) => {
@@ -2041,6 +2124,18 @@ export const SearchDialog = ({
                             ))}
                           </MenuSection>
                         )}
+                      <SearchCitationResults
+                        enabled={citationEnabled}
+                        query={citationQuery}
+                        hits={citationHits}
+                        onOpen={(hit) => {
+                          onOpenChange(false);
+                          detached(
+                            navigate(citationCommandRoute(hit, apiLocale)),
+                            "search-citation.open",
+                          );
+                        }}
+                      />
                       <SearchResultsContent
                         onRetry={() => {
                           detached(
@@ -2062,6 +2157,7 @@ export const SearchDialog = ({
                             }
                           }}
                           hits={allHits}
+                          indexOffset={citationHits.length}
                           onOpenResult={openSearchResult}
                           pagination={{
                             fetchNextPage,
@@ -2642,6 +2738,7 @@ const SearchResultsContent = ({
 type SearchHitResultsProps = {
   measureContainer: (element: HTMLDivElement | null) => void;
   hits: readonly GlobalSearchHit[];
+  indexOffset: number;
   onOpenResult: ComponentProps<typeof SearchResultItem>["onClick"];
   pagination: {
     fetchNextPage: () => Promise<unknown>;
@@ -2671,6 +2768,7 @@ type SearchHitResultsProps = {
 const SearchHitResults = ({
   measureContainer,
   hits,
+  indexOffset,
   onOpenResult,
   pagination,
   summary,
@@ -2719,7 +2817,7 @@ const SearchHitResults = ({
             >
               <SearchResultItem
                 hit={hit}
-                index={virtualHit.index}
+                index={indexOffset + virtualHit.index}
                 onClick={onOpenResult}
                 resultNumber={virtualHit.index + 1}
               />
