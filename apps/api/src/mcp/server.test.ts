@@ -16,6 +16,7 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
+import { RedisClient } from "bun";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
@@ -427,7 +428,7 @@ describe("handleMcpHttpRequest", () => {
     expect(clone).not.toHaveBeenCalled();
   });
 
-  test("native admission refusals keep their code and capture only infrastructure failure", async () => {
+  test("native admission refusals keep their canonical recovery contract", async () => {
     const previousEnabled = env.FEATURE_ACTION_ADMISSION;
     const previousContact = env.ACTION_LIMIT_CONTACT_URL;
     env.FEATURE_ACTION_ADMISSION = true;
@@ -437,7 +438,10 @@ describe("handleMcpHttpRequest", () => {
         "busy",
         "period_exhausted",
         "not_enabled",
-        "unavailable",
+        "store_unavailable",
+        "configuration_incomplete",
+        "organization_state_unreadable",
+        "lease_lost",
       ] as const) {
         captureErrorMock.mockClear();
         const refusalError =
@@ -506,14 +510,79 @@ describe("handleMcpHttpRequest", () => {
             : refusal.hint,
           requestId: "req_admission",
         });
-        expect(captureErrorMock.mock.calls.length).toBe(
-          reason === "unavailable" ? 1 : 0,
-        );
+        expect(captureErrorMock).not.toHaveBeenCalled();
         expect(handleMcpToolCallMock).not.toHaveBeenCalled();
       }
     } finally {
       env.FEATURE_ACTION_ADMISSION = previousEnabled;
       env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
+  test("an unreachable admission store returns a retryable MCP refusal", async () => {
+    const redis = new RedisClient("redis://127.0.0.1:1", {
+      connectionTimeout: 50,
+      enableOfflineQueue: false,
+      maxRetries: 0,
+    });
+    try {
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId: "org_1",
+        userId: "user_1",
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        name: "search_case_law",
+        scope: "stella:read",
+        access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
+        description: "Search case law",
+        inputSchema: { type: "object", properties: {} },
+      });
+      const handler = createMcpHttpRequestHandler({
+        ...mcpHandlerDependencies,
+        admitAction: async (options) =>
+          await withActionAdmission({
+            ...options,
+            enabled: true,
+            serviceBudgetsEnabled: false,
+            policy: {
+              organizationConcurrency: 2,
+              userConcurrency: 1,
+              leaseMs: 1000,
+            },
+            redis: {
+              send: async (command, args) => await redis.send(command, args),
+            },
+          }),
+      });
+      const response = await handler(
+        createMcpRequest({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "search_case_law", arguments: {} },
+        }),
+      );
+      const body =
+        await readTestJson<McpJsonResponse<CallToolResult>>(response);
+      const item = body.result.content.at(0);
+      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      expect(body.result.isError).toBe(true);
+      expect(payload?.error).toMatchObject({
+        code: "limiter_store_unavailable",
+        message: ACTION_ADMISSION_REFUSALS.limiter_store_unavailable.message,
+        retryable: true,
+      });
+      expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    } finally {
+      redis.close();
     }
   });
 

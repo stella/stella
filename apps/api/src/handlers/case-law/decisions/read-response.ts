@@ -217,7 +217,7 @@ export const readDecisionSuccessResponseSchema = v.object({
         index: v.number(),
         type: v.picklist([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        text: v.string(),
+        blockIndices: v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
       }),
     ),
   ),
@@ -451,7 +451,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         index: section.index,
         type: section.type,
         title: nullableText(section.title, LABEL_BYTES),
-        text: section.text,
+        blockIndices: section.blockIndices,
       })) ?? null,
     sourceUrl: nullableText(decision.sourceUrl, text.sourceUrl),
     sourceAttributionUrl: nullableText(

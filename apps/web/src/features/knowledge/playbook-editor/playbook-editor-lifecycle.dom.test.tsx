@@ -5,7 +5,7 @@ import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
@@ -1575,474 +1575,460 @@ const lifecycleCommandArbitraries = [
     ),
 ];
 
-test(
-  "real editor lifecycle preserves user intent and rejects stale writes across generated commands",
-  async () => {
-    await assertProperty(
-      "real editor lifecycle preserves user intent and rejects stale writes across generated commands",
-      fc.asyncProperty(
-        lifecycleText,
-        lifecycleText,
-        fc.commands(lifecycleCommandArbitraries, { maxCommands: 20 }),
-        async (localName, remoteName, commands) => {
-          const backend: PropertyBackend = {
-            clock: 0,
-            rows: new Map([[PLAYBOOK_ID, detail("approved")]]),
-            pending: [],
-            putCount: 0,
-            missingMethods: [],
-            writes: [],
-            reads: [],
-          };
-          propertyBackend = backend;
-          const mounted = await mountEditor("approved");
-          const real: LifecycleReal = { ...mounted, backend };
-          const initial = {
-            name: detail("approved").name,
-            description: detail("approved").description,
-          };
-          const model: LifecycleModel = {
-            mode: "open",
-            status: "approved",
-            draft: { ...initial },
-            baseline: { ...initial },
-            baselineVersion: 0,
-            server: { ...initial },
-            serverVersion: 0,
-            observedServer: { ...initial },
-            observedVersion: 0,
-            clock: 0,
-            saveFailed: false,
-            confirmation: "none",
-            pending: [],
-            unacknowledged: [],
-            steps: 0,
-          };
-          jest.useFakeTimers();
-          try {
-            // Every trial reaches the saved-hidden-baseline race with generated content.
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `local ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "other-playbook" }).run(
-              model,
-              real,
-            );
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({ type: "commit" }).run(model, real);
-            await new LifecycleCommand({ type: "refetch" }).run(model, real);
+test("real editor lifecycle preserves user intent and rejects stale writes across generated commands", async () => {
+  await assertProperty(
+    "real editor lifecycle preserves user intent and rejects stale writes across generated commands",
+    fc.asyncProperty(
+      lifecycleText,
+      lifecycleText,
+      fc.commands(lifecycleCommandArbitraries, { maxCommands: 20 }),
+      async (localName, remoteName, commands) => {
+        const backend: PropertyBackend = {
+          clock: 0,
+          rows: new Map([[PLAYBOOK_ID, detail("approved")]]),
+          pending: [],
+          putCount: 0,
+          missingMethods: [],
+          writes: [],
+          reads: [],
+        };
+        propertyBackend = backend;
+        const mounted = await mountEditor("approved");
+        const real: LifecycleReal = { ...mounted, backend };
+        const initial = {
+          name: detail("approved").name,
+          description: detail("approved").description,
+        };
+        const model: LifecycleModel = {
+          mode: "open",
+          status: "approved",
+          draft: { ...initial },
+          baseline: { ...initial },
+          baselineVersion: 0,
+          server: { ...initial },
+          serverVersion: 0,
+          observedServer: { ...initial },
+          observedVersion: 0,
+          clock: 0,
+          saveFailed: false,
+          confirmation: "none",
+          pending: [],
+          unacknowledged: [],
+          steps: 0,
+        };
+        jest.useFakeTimers();
+        try {
+          // Every trial reaches the saved-hidden-baseline race with generated content.
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `local ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "other-playbook" }).run(
+            model,
+            real,
+          );
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({ type: "commit" }).run(model, real);
+          await new LifecycleCommand({ type: "refetch" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          expect(hasUnsavedWork()).toBe(false);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `parked ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await serverEditLifecycle(model, real, {
+            name: `remote ${remoteName}`,
+            description: `remote description ${remoteName}`,
+          });
+          await assertLifecycleOracle(model, real);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          expect(backend.writes).toHaveLength(2);
+          // The read observes an accepted older edit before its response arrives.
+          const beforeCommittedRead = model.baseline.name;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `committed ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "commit" }).run(model, real);
+          await new LifecycleCommand({ type: "refetch" }).run(model, real);
+          expect(
+            real.view.getByDisplayValue(beforeCommittedRead),
+          ).toBeDefined();
+          expect(hasUnsavedWork()).toBe(true);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          expect(
+            real.view.getByDisplayValue(beforeCommittedRead),
+          ).toBeDefined();
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          // A confirmed read preserves the revert even when the committed response fails.
+          const beforeFailedCommittedRead = model.baseline.name;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `uncertain ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "commit" }).run(model, real);
+          await new LifecycleCommand({ type: "refetch" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          expect(
+            real.view.getByDisplayValue(beforeFailedCommittedRead),
+          ).toBeDefined();
+          expect(hasUnsavedWork()).toBe(true);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(
+            beforeFailedCommittedRead,
+          );
+          // An unchanged fresh read clears stale submission masks before a later clean follow.
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `verified unchanged ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          const writesBeforeExternalFollow = backend.writes.length;
+          const externalFollowName = `remote after verified ${remoteName}`;
+          await new LifecycleCommand({
+            type: "server-edit",
+            field: "name",
+            value: externalFollowName,
+          }).run(model, real);
+          expect(real.view.getByDisplayValue(externalFollowName)).toBeDefined();
+          await act(async () => {
+            jest.advanceTimersByTime(2100);
+          });
+          await assertLifecycleOracle(model, real);
+          expect(backend.pending).toHaveLength(0);
+          expect(backend.writes).toHaveLength(writesBeforeExternalFollow);
+          // A rejected transport request must leave the real queue recoverable by Retry.
+          const rejectedDraftName = `rejected ${localName}`;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: rejectedDraftName,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "rejected",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "persistent-failure",
+            intervals: 2,
+          }).run(model, real);
+          expect(real.view.getByDisplayValue(rejectedDraftName)).toBeDefined();
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(rejectedDraftName);
+          // A rejected response can follow a committed write that a fresh read already sees.
+          const beforeRejectedCommittedRead = model.baseline.name;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `rejected committed ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "commit" }).run(model, real);
+          await new LifecycleCommand({ type: "refetch" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "rejected",
+          }).run(model, real);
+          expect(
+            real.view.getByDisplayValue(beforeRejectedCommittedRead),
+          ).toBeDefined();
+          expect(hasUnsavedWork()).toBe(true);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(
+            beforeRejectedCommittedRead,
+          );
+          // Hidden history survives both a committed-but-failed reply and the queued conflict.
+          const hiddenFinalName = model.baseline.name;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `hidden uncertain ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({ type: "commit" }).run(model, real);
+          await new LifecycleCommand({ type: "refetch" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          expect(
+            readParkedPlaybookPane(real.tabId, PLAYBOOK_ID)?.draft.name,
+          ).toBe(hiddenFinalName);
+          expect(hasUnsavedWork()).toBe(true);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          expect(real.view.getByDisplayValue(hiddenFinalName)).toBeDefined();
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(hiddenFinalName);
+          // Failure keeps the real pane recoverable even after a confirmed retry fails.
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `recoverable ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "persistent-failure",
+            intervals: 4,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "close" }).run(model, real);
+          await new LifecycleCommand({
+            type: "answer",
+            answer: "confirm",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "answer",
+            answer: "cancel",
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          // Reverting while the old edit is in flight must queue the final snapshot on hide.
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `in flight ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          // A failed final flush must keep a revert dirty against the intermediate accepted write.
+          const revertedName = model.baseline.name;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `partially saved ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          expect(real.view.getByDisplayValue(revertedName)).toBeDefined();
+          expect(hasUnsavedWork()).toBe(true);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          // Reopening during the old queue must retain the final intent until its owner settles.
+          const earlyReopenName = model.baseline.name;
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `early reopen ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          expect(real.view.getByDisplayValue(earlyReopenName)).toBeDefined();
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          // Failed writes cannot leave an unload guard when a reverted draft equals the server.
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `not persisted ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({ type: "revert" }).run(model, real);
+          await new LifecycleCommand({ type: "hide" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "failed",
+          }).run(model, real);
+          await new LifecycleCommand({ type: "open" }).run(model, real);
+          // A newer server token rejects an already-issued request; retry preserves both fields.
+          await new LifecycleCommand({
+            type: "edit",
+            field: "name",
+            value: `conflict ${localName}`,
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "server-edit",
+            field: "description",
+            value: `new description ${remoteName}`,
+          }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await new LifecycleCommand({ type: "save" }).run(model, real);
+          await new LifecycleCommand({
+            type: "complete",
+            result: "saved",
+          }).run(model, real);
+          await fc.asyncModelRun(() => ({ model, real }), commands);
+          // Surviving trials finish with a dirty deletion; generated deletes are dirty too.
+          while (model.pending.length > 0) {
             await new LifecycleCommand({
               type: "complete",
               result: "saved",
             }).run(model, real);
-            expect(hasUnsavedWork()).toBe(false);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `parked ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await serverEditLifecycle(model, real, {
-              name: `remote ${remoteName}`,
-              description: `remote description ${remoteName}`,
-            });
-            await assertLifecycleOracle(model, real);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            expect(backend.writes).toHaveLength(2);
-            // The read observes an accepted older edit before its response arrives.
-            const beforeCommittedRead = model.baseline.name;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `committed ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "commit" }).run(model, real);
-            await new LifecycleCommand({ type: "refetch" }).run(model, real);
-            expect(
-              real.view.getByDisplayValue(beforeCommittedRead),
-            ).toBeDefined();
-            expect(hasUnsavedWork()).toBe(true);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            expect(
-              real.view.getByDisplayValue(beforeCommittedRead),
-            ).toBeDefined();
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            // A confirmed read preserves the revert even when the committed response fails.
-            const beforeFailedCommittedRead = model.baseline.name;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `uncertain ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "commit" }).run(model, real);
-            await new LifecycleCommand({ type: "refetch" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            expect(
-              real.view.getByDisplayValue(beforeFailedCommittedRead),
-            ).toBeDefined();
-            expect(hasUnsavedWork()).toBe(true);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(
-              beforeFailedCommittedRead,
-            );
-            // An unchanged fresh read clears stale submission masks before a later clean follow.
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `verified unchanged ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            const writesBeforeExternalFollow = backend.writes.length;
-            const externalFollowName = `remote after verified ${remoteName}`;
-            await new LifecycleCommand({
-              type: "server-edit",
-              field: "name",
-              value: externalFollowName,
-            }).run(model, real);
-            expect(
-              real.view.getByDisplayValue(externalFollowName),
-            ).toBeDefined();
-            await act(async () => {
-              jest.advanceTimersByTime(2100);
-            });
-            await assertLifecycleOracle(model, real);
-            expect(backend.pending).toHaveLength(0);
-            expect(backend.writes).toHaveLength(writesBeforeExternalFollow);
-            // A rejected transport request must leave the real queue recoverable by Retry.
-            const rejectedDraftName = `rejected ${localName}`;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: rejectedDraftName,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "rejected",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "persistent-failure",
-              intervals: 2,
-            }).run(model, real);
-            expect(
-              real.view.getByDisplayValue(rejectedDraftName),
-            ).toBeDefined();
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(rejectedDraftName);
-            // A rejected response can follow a committed write that a fresh read already sees.
-            const beforeRejectedCommittedRead = model.baseline.name;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `rejected committed ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "commit" }).run(model, real);
-            await new LifecycleCommand({ type: "refetch" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "rejected",
-            }).run(model, real);
-            expect(
-              real.view.getByDisplayValue(beforeRejectedCommittedRead),
-            ).toBeDefined();
-            expect(hasUnsavedWork()).toBe(true);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(
-              beforeRejectedCommittedRead,
-            );
-            // Hidden history survives both a committed-but-failed reply and the queued conflict.
-            const hiddenFinalName = model.baseline.name;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `hidden uncertain ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({ type: "commit" }).run(model, real);
-            await new LifecycleCommand({ type: "refetch" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            expect(
-              readParkedPlaybookPane(real.tabId, PLAYBOOK_ID)?.draft.name,
-            ).toBe(hiddenFinalName);
-            expect(hasUnsavedWork()).toBe(true);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            expect(real.view.getByDisplayValue(hiddenFinalName)).toBeDefined();
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(hiddenFinalName);
-            // Failure keeps the real pane recoverable even after a confirmed retry fails.
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `recoverable ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "persistent-failure",
-              intervals: 4,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "close" }).run(model, real);
-            await new LifecycleCommand({
-              type: "answer",
-              answer: "confirm",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
+          }
+          if (
+            model.confirmation === "discard" ||
+            model.confirmation === "retry"
+          ) {
             await new LifecycleCommand({
               type: "answer",
               answer: "cancel",
             }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            // Reverting while the old edit is in flight must queue the final snapshot on hide.
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `in flight ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            // A failed final flush must keep a revert dirty against the intermediate accepted write.
-            const revertedName = model.baseline.name;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `partially saved ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            expect(real.view.getByDisplayValue(revertedName)).toBeDefined();
-            expect(hasUnsavedWork()).toBe(true);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            // Reopening during the old queue must retain the final intent until its owner settles.
-            const earlyReopenName = model.baseline.name;
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `early reopen ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            expect(real.view.getByDisplayValue(earlyReopenName)).toBeDefined();
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            // Failed writes cannot leave an unload guard when a reverted draft equals the server.
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `not persisted ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({ type: "revert" }).run(model, real);
-            await new LifecycleCommand({ type: "hide" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "failed",
-            }).run(model, real);
-            await new LifecycleCommand({ type: "open" }).run(model, real);
-            // A newer server token rejects an already-issued request; retry preserves both fields.
-            await new LifecycleCommand({
-              type: "edit",
-              field: "name",
-              value: `conflict ${localName}`,
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "server-edit",
-              field: "description",
-              value: `new description ${remoteName}`,
-            }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await new LifecycleCommand({ type: "save" }).run(model, real);
-            await new LifecycleCommand({
-              type: "complete",
-              result: "saved",
-            }).run(model, real);
-            await fc.asyncModelRun(() => ({ model, real }), commands);
-            // Surviving trials finish with a dirty deletion; generated deletes are dirty too.
-            while (model.pending.length > 0) {
-              await new LifecycleCommand({
-                type: "complete",
-                result: "saved",
-              }).run(model, real);
-            }
-            if (
-              model.confirmation === "discard" ||
-              model.confirmation === "retry"
-            ) {
-              await new LifecycleCommand({
-                type: "answer",
-                answer: "cancel",
-              }).run(model, real);
-            }
-            if (model.mode !== "deleted") {
-              if (model.mode !== "open") {
-                await new LifecycleCommand({ type: "open" }).run(model, real);
-              }
-              await new LifecycleCommand({
-                type: "edit",
-                field: "name",
-                value: `delete ${localName}`,
-              }).run(model, real);
-              await new LifecycleCommand({ type: "delete" }).run(model, real);
-            }
-            for (const [index, write] of backend.writes.entries()) {
-              expect(write.updatedAt > write.expectedUpdatedAt).toBe(true);
-              const previous = backend.writes.at(index - 1);
-              if (index > 0 && previous !== undefined) {
-                expect(write.updatedAt > previous.updatedAt).toBe(true);
-              }
-            }
-          } finally {
-            cancelPlaybookPaneLeave();
-            // Settle transport before removing the real owner, including a queued flush.
-            while (backend.pending.length > 0) {
-              const pending = backend.pending.splice(0);
-              await act(async () => {
-                for (const request of pending) {
-                  request.response.resolve(
-                    Response.json(
-                      { message: "Trial disposed" },
-                      { status: 503 },
-                    ),
-                  );
-                }
-              });
-              await settleLifecycle();
-            }
-            await act(async () => {
-              mounted.view.unmount();
-            });
-            while (backend.pending.length > 0) {
-              const pending = backend.pending.splice(0);
-              await act(async () => {
-                for (const request of pending) {
-                  request.response.resolve(
-                    Response.json(
-                      { message: "Trial disposed" },
-                      { status: 503 },
-                    ),
-                  );
-                }
-              });
-              await settleLifecycle();
-            }
-            for (const dispose of cleanups.splice(0)) {
-              dispose();
-            }
-            propertyBackend = null;
-            restoreRealTimers();
           }
-        },
-      ),
-      { numRuns: 12 },
-    );
-  },
-  propertyTestTimeout(30_000),
-);
+          if (model.mode !== "deleted") {
+            if (model.mode !== "open") {
+              await new LifecycleCommand({ type: "open" }).run(model, real);
+            }
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: `delete ${localName}`,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "delete" }).run(model, real);
+          }
+          for (const [index, write] of backend.writes.entries()) {
+            expect(write.updatedAt > write.expectedUpdatedAt).toBe(true);
+            const previous = backend.writes.at(index - 1);
+            if (index > 0 && previous !== undefined) {
+              expect(write.updatedAt > previous.updatedAt).toBe(true);
+            }
+          }
+        } finally {
+          cancelPlaybookPaneLeave();
+          // Settle transport before removing the real owner, including a queued flush.
+          while (backend.pending.length > 0) {
+            const pending = backend.pending.splice(0);
+            await act(async () => {
+              for (const request of pending) {
+                request.response.resolve(
+                  Response.json({ message: "Trial disposed" }, { status: 503 }),
+                );
+              }
+            });
+            await settleLifecycle();
+          }
+          await act(async () => {
+            mounted.view.unmount();
+          });
+          while (backend.pending.length > 0) {
+            const pending = backend.pending.splice(0);
+            await act(async () => {
+              for (const request of pending) {
+                request.response.resolve(
+                  Response.json({ message: "Trial disposed" }, { status: 503 }),
+                );
+              }
+            });
+            await settleLifecycle();
+          }
+          for (const dispose of cleanups.splice(0)) {
+            dispose();
+          }
+          propertyBackend = null;
+          restoreRealTimers();
+        }
+      },
+    ),
+    { numRuns: 12 },
+  );
+});

@@ -132,6 +132,7 @@
     "checkSpamHint": "Jeśli go nie widzisz, sprawdź folder spam.",
     "chooseOrganization": "Wybierz organizację, w której chcesz pracować",
     "codeSentAgain": "Wysłaliśmy nowy kod.",
+    "continueWithApple": "Kontynuuj przez Apple",
     "continueWithEmail": "Kontynuuj",
     "continueWithGoogle": "Kontynuuj przez Google",
     "continueWithMicrosoft": "Kontynuuj przez Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
+    "arrangement": {
+      "alertThreshold": "Próg powiadomienia (%)",
+      "amountCap": "Limit wynagrodzenia",
+      "flatFee": "Wynagrodzenie ryczałtowe",
+      "invalidCap": "Podaj dodatnie limity i próg powiadomienia od 0,01% do 100%.",
+      "minuteCap": "Limit czasu (minuty)",
+      "title": "Umowa o wynagrodzenie"
+    },
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
-      "markPaid": "Oznacz jako zapłaconą",
       "noEntries": "Brak wpisów powiązanych z tą fakturą",
       "noInvoices": "Brak faktur",
       "paidAt": "Zapłacono",
+      "payments": {
+        "amountTooHigh": "Kwota przekracza pozostałą do zapłaty kwotę {amount}.",
+        "confirmVoid": "Płatność pozostanie w ewidencji jako anulowana i nie będzie już zaliczana na poczet tej faktury.",
+        "empty": "Nie zarejestrowano jeszcze żadnych płatności",
+        "method": "Forma płatności",
+        "methods": {
+          "bank_transfer": "Przelew bankowy",
+          "card": "Karta",
+          "cash": "Gotówka",
+          "other": "Inna forma"
+        },
+        "outstandingAmount": "Pozostało do zapłaty {amount}",
+        "paidOn": "Data płatności",
+        "partiallyPaid": "Częściowo zapłacona",
+        "record": "Zarejestruj płatność",
+        "summary": "Zapłacono {paid}, pozostało {outstanding}",
+        "title": "Płatności",
+        "void": "Anuluj płatność",
+        "voided": "Anulowana"
+      },
       "removeEntries": "Usuń wpisy",
       "send": "Wyślij",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "AI nie jest skonfigurowana.",
     "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
     "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "deeplPdfRequired": "Tłumaczenie plików PDF wymaga DeepL.",
     "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
     "featureUnavailable": "Ta funkcja jest niedostępna.",
     "ocrUnavailable": "OCR jest niedostępne.",
@@ -912,12 +941,16 @@
         "reasoning": "Rozumowanie"
       },
       "errors": {
+        "analysisDisabled": "Generowanie analiz AI jest wyłączone na tym serwerze. Przeczytaj tekst orzeczenia lub spróbuj ponownie później.",
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia. Otwórz je ponownie z wyników wyszukiwania.",
+        "documentUnparseable": "Tekst orzeczenia nie jest gotowy do analizy. Przeczytaj materiał źródłowy.",
+        "languageUnsupported": "Analiza AI nie obsługuje jeszcze języka tego orzeczenia. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
         "retryAfter": "Możesz spróbować ponownie po {time}.",
-        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
-        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+        "sourceRestricted": "Źródło nie zezwala na analizę AI. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}"
       },
       "generate": "Ułóż tezy w AI",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
@@ -1254,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
       "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
       "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
-    }
+    },
+    "withdrawnByPublisher": "Wycofane przez wydawcę"
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
@@ -1551,6 +1585,12 @@
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
+      "dismiss": "Ukryj powiadomienie o połączeniu",
+      "stoppedWorking": "Twoje połączenie z <name>{server}</name> przestało działać.",
+      "waitingApproval": "Twoje połączenie z <name>{server}</name> oczekuje na zatwierdzenie."
+    },
     "mention": {
       "category": {
         "entities": "W tej sprawie",
@@ -2457,6 +2497,8 @@
       "aresNotFound": "Nie znaleziono firmy dla tego IČO.",
       "aresTitle": "Czeski rejestr (ARES)",
       "contactName": "Nazwa kontaktu",
+      "displayNameOrganizationHint": "Opcjonalne zastąpienie; w przeciwnym razie tworzone z nazwy organizacji.",
+      "displayNamePersonHint": "Opcjonalne zastąpienie; w przeciwnym razie tworzone z imienia i nazwiska.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Wpisz 8-cyfrowe IČO."
     },
@@ -2769,12 +2811,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "configurationIncomplete": "Ta czynność nie jest w pełni skonfigurowana. Skontaktuj się z administratorem.",
       "contact": "Skontaktuj się z nami",
       "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
+      "leaseLost": "Rezerwacja czynności wygasła. Spróbuj ponownie.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
-      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+      "organizationStateUnreadable": "Nie udało się sprawdzić dostępu organizacji. Spróbuj ponownie za chwilę.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji.",
+      "storeUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie za chwilę."
     },
     "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
@@ -4845,7 +4890,9 @@
     "viewOnGithub": "Zobacz na GitHubie"
   },
   "readerAnswers": {
+    "answerLanguage": "Język odpowiedzi",
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "documentLanguage": "Język dokumentu ({language})",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
     "followUp": "Zadaj dodatkowe pytanie",
@@ -5032,6 +5079,16 @@
       "preferredNamePlaceholder": "Twoje imię",
       "profileDescription": "Zarządzaj swoimi preferencjami osobistymi",
       "sendOtpCode": "Wyślij kod weryfikacyjny",
+      "signInMethods": {
+        "confirmDescription": "Aby odłączyć tę metodę logowania, wpisz nowy kod wysłany na Twój adres e-mail.",
+        "confirmTitle": "Odłączyć {provider}?",
+        "description": "Połącz konta, które używają tego samego zweryfikowanego adresu e-mail.",
+        "emailCode": "Kod e-mail",
+        "emailCodeDescription": "Zawsze możesz zalogować się za pomocą kodu wysłanego na Twój adres e-mail.",
+        "lastMethod": "Połącz inne konto, zanim odłączysz to.",
+        "title": "Metody logowania",
+        "unavailable": "Aby odłączyć metody logowania, należy skonfigurować wysyłanie poczty e-mail."
+      },
       "timezone": "Strefa czasowa",
       "timezoneDescription": "Używana w datach i godzinach w powiadomieniach i e-mailach",
       "timezoneSaved": "Zaktualizowano strefę czasową",

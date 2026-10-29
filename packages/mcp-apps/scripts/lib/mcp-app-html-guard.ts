@@ -1,6 +1,8 @@
 import { load } from "cheerio";
 import { isTag } from "domhandler";
 
+import type { McpAppDocumentParts } from "../../src/app-document";
+
 const URL_ATTRIBUTES = new Set([
   "src",
   "href",
@@ -71,6 +73,41 @@ const hasScriptBearingCss = (css: string): boolean => {
     /(?:^|[^-\w])(?:behaviou?r|-moz-binding)\s*:/iu.test(decoded) ||
     /(?:java|vb)script:/iu.test(decoded)
   );
+};
+
+/**
+ * An assembled app parses back into exactly its parts: no style or script
+ * text ended its element early, and the runtime runs before the app.
+ */
+export const inspectMcpAppDocument = (
+  html: string,
+  parts: McpAppDocumentParts,
+): string[] => {
+  const document = load(html);
+  const issues: string[] = [];
+  const styles = document("style")
+    .toArray()
+    .map((element) => document(element).text());
+  if (
+    styles.length !== parts.styles.length ||
+    styles.some((style, index) => style !== parts.styles[index])
+  ) {
+    issues.push("Styles do not parse back as assembled");
+  }
+  const scripts = document("script").toArray();
+  const expected = [...parts.scripts, parts.module];
+  if (
+    scripts.length !== expected.length ||
+    scripts.some(
+      (script, index) =>
+        document(script).text() !== expected[index] ||
+        (script.attribs["type"] === "module") !==
+          (index === expected.length - 1),
+    )
+  ) {
+    issues.push("Scripts do not parse back as assembled");
+  }
+  return issues;
 };
 
 export const inspectMcpAppHtml = (html: string): string[] => {

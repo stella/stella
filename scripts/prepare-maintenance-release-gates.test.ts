@@ -245,6 +245,19 @@ const runCut = async (
   };
 };
 
+test("deployment environment contract blocks a cut without an override", () => {
+  expect(preCutGates()).toContainEqual({
+    name: "deploy-env-contract",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  });
+});
+
 const PRE_CUT_NAMES = preCutGates().map(({ name }) => name);
 
 describe("the maintenance cut checks the tag gates first", () => {
@@ -392,6 +405,7 @@ describe("every release-tag gate is classified for the cut", () => {
     expect(tagPreCut.map(({ name }) => name)).toEqual([
       "dependency-audit",
       "npm-publish-lag",
+      "npm-publish-readiness",
     ]);
     for (const gate of tagPreCut) {
       switch (gate.check.kind) {
