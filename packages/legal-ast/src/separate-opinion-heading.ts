@@ -182,7 +182,7 @@ const AUTHOR_LINE_RE = new RegExp(`^(?:${authorPattern})(?=$|[\\s,.:])`, "iu");
 
 /** Capture the original tail before folding, including decomposed diacritics. */
 const HEADING_WORDS_RE =
-  /^(?<first>[\p{L}\p{M}]+)\s+(?<second>[\p{L}\p{M}]+)(?<tail>.*)$/u;
+  /^(?<first>[\p{L}\p{M}]+)\s+(?<second>[\p{L}\p{M}]+)(?<tail>(?:[^\p{L}\p{M}\r\n].*)?)$/u;
 
 /** Whether a validated heading tail explicitly names an opinion's author. */
 export const separateOpinionHeadingNamesAuthor = (tail: string): boolean =>
