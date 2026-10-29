@@ -640,7 +640,7 @@ const SocialButton = ({
       <Button
         aria-describedby={describedBy}
         layout="wrap"
-        className="w-full min-w-0 shrink max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
+        className="w-full min-w-0 shrink items-center justify-center text-center max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
         disabled={disabled}
         loading={loading}
         onClick={onClick}

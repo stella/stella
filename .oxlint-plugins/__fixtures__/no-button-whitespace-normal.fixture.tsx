@@ -5,7 +5,6 @@ import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 import { MenuItem as OtherButton } from "@stll/ui/menu";
 
-const wide = true;
 const label = "wrapped";
 
 export const _literal = () => (
@@ -16,11 +15,11 @@ export const _cn = () => (
   // oxlint-disable-next-line no-button-whitespace-normal/no-button-whitespace-normal
   <Button className={cn("px-2", "whitespace-normal")} />
 );
-export const _conditional = () => (
+export const _conditional = ({ wide }: { wide: boolean }) => (
   // oxlint-disable-next-line no-button-whitespace-normal/no-button-whitespace-normal
   <Button className={wide ? "sm:whitespace-normal" : "whitespace-nowrap"} />
 );
-export const _template = () => (
+export const _template = ({ wide }: { wide: boolean }) => (
   // oxlint-disable-next-line no-button-whitespace-normal/no-button-whitespace-normal
   <Button className={`flex ${wide ? "!whitespace-normal" : ""}`} />
 );
