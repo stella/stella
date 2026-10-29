@@ -388,6 +388,14 @@ for (const fixture of surfaces) {
               }),
             ).toBeNull();
             fireEvent.click(control);
+            if (fixture.name === "document toolbar") {
+              expect(
+                await screen.findByText(
+                  messages.capabilityActions.deeplPdfRequired,
+                  { selector: "[data-slot='popover-popup'] span" },
+                ),
+              ).toBeTruthy();
+            }
           }
           const settingsItems = await screen.findAllByRole(
             fixture.surface === "menu" ? "menuitem" : "link",
@@ -434,6 +442,79 @@ for (const fixture of surfaces) {
     }
   });
 }
+
+test("document toolbar preserves an unknown DeepL availability explanation", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  const root = router.createRootRoute({ component: router.Outlet });
+  const protectedRoute = router.createRoute({
+    getParentRoute: () => root,
+    id: "_protected",
+    beforeLoad: () => ({
+      user: { activeOrganizationId: "organization-a" },
+    }),
+    component: router.Outlet,
+  });
+  const route = router.createRoute({
+    getParentRoute: () => protectedRoute,
+    path: "/",
+    component: () => (
+      <TranslateDocumentDialog
+        workspaceId="matter"
+        viewId="view"
+        entityId="entity"
+        fieldId="field"
+        entityVersionKey="1"
+        isDocx={false}
+      />
+    ),
+  });
+  const appRouter = router.createRouter({
+    history: router.createMemoryHistory({ initialEntries: ["/"] }),
+    routeTree: root.addChildren([protectedRoute.addChildren([route])]),
+    isServer: false,
+  });
+  await appRouter.load();
+  const value = resolveActionCapabilities({
+    role: "admin",
+    ai: false,
+    deepl: { status: "error" },
+    ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
+    desktop: "none",
+    settings: undefined,
+  });
+  expect(value.capabilities.deepl).toMatchObject({
+    type: "unavailable",
+    reason: "availabilityUnknown",
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ActionCapabilitiesProvider value={value}>
+          <FormattingProvider locale="en" timeZone="UTC">
+            <router.RouterProvider router={appRouter} />
+          </FormattingProvider>
+        </ActionCapabilitiesProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  const control = await screen.findByRole("button", {
+    name: messages.common.translate,
+  });
+  fireEvent.click(control);
+  expect(
+    await screen.findByText(messages.capabilityActions.availabilityUnknown, {
+      selector: "[data-slot='popover-popup'] span",
+    }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText(messages.capabilityActions.deeplPdfRequired, {
+      selector: "[data-slot='popover-popup'] span",
+    }),
+  ).toBeNull();
+});
 
 describe("OCR batch help", () => {
   // An administrator sees the action in every status, so the absence of

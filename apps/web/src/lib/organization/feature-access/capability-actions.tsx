@@ -226,7 +226,9 @@ export const CapabilityAction = ({
     return null;
   }
   const reason = t(
-    surface === "control" && action.capability === "deepl"
+    surface === "control" &&
+      action.capability === "deepl" &&
+      state.reason === "deeplMissing"
       ? "capabilityActions.deeplPdfRequired"
       : CAPABILITY_REASON_KEYS[state.reason],
   );
