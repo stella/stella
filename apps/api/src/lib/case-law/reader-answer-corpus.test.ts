@@ -91,6 +91,7 @@ describe("private reader answer corpus excerpts", () => {
       decisionId,
       decisionDate: "2026-01-01",
       court: "Test court",
+      language: "cs",
       paragraphs: [{ paragraphId: "paragraph-0", text: "Civil liability" }],
     });
   });
