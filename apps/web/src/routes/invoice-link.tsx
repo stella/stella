@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
   Frame,
   FrameDescription,
@@ -15,7 +16,6 @@ import {
 } from "@stll/ui/frame";
 import { DownloadIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
@@ -195,28 +195,18 @@ const InvoiceSummary = ({
           {invoice.buyer === null ? null : (
             <p className="text-sm">{invoice.buyer}</p>
           )}
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <DetailsGrid>
             {invoice.meta.map((field) => (
-              <div className="contents" key={field.label}>
-                <dt className="text-muted-foreground">{field.label}</dt>
-                <dd className="tabular-nums">{field.value}</dd>
-              </div>
+              <DetailsItem key={field.label} label={field.label}>
+                <span className="tabular-nums">{field.value}</span>
+              </DetailsItem>
             ))}
-            {invoice.totals.map((field, index) => (
-              <div className="contents" key={field.label}>
-                <dt
-                  className={cn(
-                    index === invoice.totals.length - 1
-                      ? "font-medium"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {field.label}
-                </dt>
-                <dd className="tabular-nums">{field.value}</dd>
-              </div>
+            {invoice.totals.map((field) => (
+              <DetailsItem key={field.label} label={field.label}>
+                <span className="tabular-nums">{field.value}</span>
+              </DetailsItem>
             ))}
-          </dl>
+          </DetailsGrid>
           {invoice.paid ? (
             <p className="text-sm font-medium">{t("paid")}</p>
           ) : null}
@@ -224,16 +214,15 @@ const InvoiceSummary = ({
             <section className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-2">
                 <h2 className="text-sm font-medium">{invoice.payment.label}</h2>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <DetailsGrid>
                   {invoice.payment.fields.map((field) => (
-                    <div className="contents" key={field.label}>
-                      <dt className="text-muted-foreground">{field.label}</dt>
-                      <dd className="tabular-nums" dir="ltr">
+                    <DetailsItem key={field.label} label={field.label}>
+                      <span className="tabular-nums" dir="ltr">
                         {field.value}
-                      </dd>
-                    </div>
+                      </span>
+                    </DetailsItem>
                   ))}
-                </dl>
+                </DetailsGrid>
                 {invoice.payment.accountNumber === null ? null : (
                   <p className="text-sm tabular-nums" dir="ltr">
                     {invoice.payment.accountNumber}
