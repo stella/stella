@@ -244,16 +244,25 @@ const whitespaceEdits = (
   const source = before.split("");
   for (const [index, char] of source.entries()) {
     const target = after[next];
-    const laterExactWhitespace =
+    const sourceWhitespaceLeft = source
+      .slice(index)
+      .findIndex((sourceChar) => !isWhitespace(sourceChar));
+    const targetWhitespaceLeft = after
+      .slice(next)
+      .split("")
+      .findIndex((targetChar) => !isWhitespace(targetChar));
+    const canSkipWhitespace =
       isWhitespace(char) &&
       isWhitespace(target) &&
-      char !== target &&
-      source
-        .slice(index + 1)
-        .find((later) => !isWhitespace(later) || later === target) === target;
+      (sourceWhitespaceLeft === -1
+        ? source.length - index
+        : sourceWhitespaceLeft) >
+        (targetWhitespaceLeft === -1
+          ? after.length - next
+          : targetWhitespaceLeft);
     if (
       char === target ||
-      (isWhitespace(char) && isWhitespace(target) && !laterExactWhitespace)
+      (isWhitespace(char) && isWhitespace(target) && !canSkipWhitespace)
     ) {
       kept.push(target ?? "");
       next += 1;

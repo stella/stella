@@ -100,6 +100,52 @@ describe("cutting a line's end", () => {
     ]);
   });
 
+  test("a collapsed line break before indented text joins with one space", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: " second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n ", " ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: " second" },
+    ]);
+  });
+
+  test("mixed whitespace collapses to one space", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first  " },
+      { type: "line-break" },
+      { type: "text", text: " \n second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace(/\s+/u, " ")),
+    ).toEqual([
+      { type: "text", text: "first " },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("equal whitespace runs consume rather than skip a source character", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: " second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n ", "  ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: " " },
+      { type: "text", text: " second" },
+    ]);
+  });
+
   test("an untouched newline stays a line break", () => {
     const inlines: Inline[] = [
       { type: "text", text: "first" },
