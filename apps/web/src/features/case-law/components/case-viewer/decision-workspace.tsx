@@ -124,6 +124,7 @@ import {
   citedDecisionRead,
   resolveReaderAnswerCitation,
 } from "./reader-answer-citation.logic";
+import { ReaderAnswerLanguagePicker } from "./reader-answer-language-picker";
 import {
   attachReaderAnswerMarkers,
   jumpReaderAnswerCitation,
@@ -449,6 +450,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const answers = useReaderAnswers({
     decisionId,
     generationMode: props.aiMode,
+    documentLanguage: decision.language,
   });
   const visibleAnswers = annotationsForMarksFilter(
     answers.answers,
@@ -547,6 +549,23 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     id: answer.id,
     startAnchorId: answer.anchor.spans[0].paragraphId,
     answer,
+    languagePicker: answer.mine ? (
+      <ReaderAnswerLanguagePicker
+        documentLanguage={decision.language}
+        value={answers.languagePreference}
+        disabled={
+          props.aiMode !== "enabled" ||
+          answers.isSavingLanguage ||
+          answers.busyAnswerIds.has(answer.id)
+        }
+        onChange={(language) =>
+          detachedUserAction(answers.setAnswerLanguage(language, answer.id), {
+            context: "reader-answer.regenerate",
+            failureMessage: t("errors.actionFailed"),
+          })
+        }
+      />
+    ) : undefined,
     generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
     openRevision: answers.openRevision,
@@ -626,6 +645,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const explain = async (spans: SelectionAnchor[]) => {
     const selection = explainableSpans(spans);
     if (
+      answers.isSavingLanguage ||
       selection === undefined ||
       props.aiMode !== "enabled" ||
       !(await props.ensureAIAvailable())
@@ -1102,6 +1122,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   {showAiNotes && analysisState.status === "error" && (
                     <AnalysisErrorNotice
                       error={analysisState.error}
+                      sourceUrl={decision.sourceAttributionUrl}
                       onRetry={() => {
                         detached(generate(), "decision-workspace.generate");
                       }}
@@ -1251,11 +1272,28 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               ? (spans) => detached(explain(spans), "reader-answer.explain")
               : undefined
           }
-          explainRefusal={(spans) =>
-            explainableSpans(spans) === undefined
-              ? t("readerAnswers.selectionError")
-              : undefined
+          explainLanguagePicker={
+            <ReaderAnswerLanguagePicker
+              documentLanguage={decision.language}
+              value={answers.languagePreference}
+              disabled={answers.isLanguagePending}
+              onChange={(language) =>
+                detachedUserAction(answers.setAnswerLanguage(language), {
+                  context: "reader-answer.explain",
+                  failureMessage: t("errors.actionFailed"),
+                })
+              }
+            />
           }
+          explainRefusal={(spans) => {
+            if (answers.isSavingLanguage) {
+              return t("common.saving");
+            }
+            if (explainableSpans(spans) === undefined) {
+              return t("readerAnswers.selectionError");
+            }
+            return undefined;
+          }}
           onSelectedSpansChange={marginCitations.selectSpans}
           scrollContainerRef={mainRef}
           target={annotationTarget}
