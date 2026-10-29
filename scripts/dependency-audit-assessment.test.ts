@@ -561,14 +561,14 @@ describe("installable versions honour the release-age quarantine", () => {
     const accepted = [
       { id: audit.id, package: audit.package, untilPatched: true },
     ];
-    const latest = () => releases.at(-1);
+    const releasesForPackage = () => releases;
     expect(
       lapsedAcceptances({
         accepted,
         current: [audit],
         today: "2026-11-01",
         now: afterOneHour,
-        latestVersion: latest,
+        releasesForPackage,
       }),
     ).toEqual([]);
     expect(
@@ -577,7 +577,7 @@ describe("installable versions honour the release-age quarantine", () => {
         current: [audit],
         today: "2026-11-02",
         now: new Date(installableAt.getTime() + 24 * 60 * 60 * 1000 + 1000),
-        latestVersion: latest,
+        releasesForPackage,
       }),
     ).toHaveLength(1);
   });
