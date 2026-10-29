@@ -10,6 +10,10 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
+import {
+  MCP_APP_DIRECTORY_OUTPUTS,
+  MCP_APP_GENERATED_OUTPUTS,
+} from "../packages/scripts/src/generated-files";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   CHECK_POOL_JOBS,
@@ -760,6 +764,55 @@ const withoutPreparedGeneration = (step: Step): Step => {
       }
     : step;
 };
+// The owning inventory guard replaces the old shell list, whose CSS partitions
+// may be empty. Other commands and step metadata still compare unchanged.
+const legacyMcpOutputGuard = [
+  "outputs=(",
+  ...[
+    ...MCP_APP_GENERATED_OUTPUTS.contracts,
+    ...MCP_APP_GENERATED_OUTPUTS.bundles.filter(
+      (file) => !/\/runtime\.(?:js|css)\.txt$/u.test(file),
+    ),
+    "packages/mcp-apps/src/*/generated/app.html.txt",
+  ].map((file) => `  ${file}`),
+  ")",
+  `for output in "\${outputs[@]}"; do`,
+  '  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }',
+  "done",
+  "bun scripts/check-mcp-generated-tracking.ts",
+].join("\n");
+// The prior branch head expanded the same shell guard to every split asset;
+// preserve comparison against either concrete base until this transition lands.
+const expandedMcpOutputGuard = legacyMcpOutputGuard.replace("\n)\n", () =>
+  [
+    "",
+    ...MCP_APP_DIRECTORY_OUTPUTS.filter((file) => file !== "app.html.txt").map(
+      (file) => `  packages/mcp-apps/src/*/generated/${file}`,
+    ),
+    ...MCP_APP_GENERATED_OUTPUTS.bundles
+      .filter((file) => /\/runtime\.(?:js|css)\.txt$/u.test(file))
+      .map((file) => `  ${file}`),
+    ")",
+    "",
+  ].join("\n"),
+);
+const withOwnedMcpOutputGuard = (step: Step): Step => {
+  if (
+    step.name !== "MCP app derived outputs guard" ||
+    typeof step["run"] !== "string"
+  ) {
+    return step;
+  }
+  let run = step["run"];
+  for (const guard of [legacyMcpOutputGuard, expandedMcpOutputGuard]) {
+    run = run.replace(
+      guard,
+      "bun scripts/check-mcp-generated-tracking.ts --outputs",
+    );
+  }
+  return { ...step, run };
+};
+
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
@@ -929,6 +982,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withOwnedMcpOutputGuard)
     .map(withoutTestTimeout)
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
@@ -3133,5 +3187,36 @@ test("a merge base with a separate producer job maps to the plan that now produc
     { ...current, needs: ["ci-plan", "ci-generated-sources"] },
   ]) {
     expect(() => expectScope({ current: changed, base })).toThrow("toEqual");
+  }
+});
+
+test("the MCP output guard transition preserves all other check commands", () => {
+  const owned = "bun scripts/check-mcp-generated-tracking.ts --outputs";
+  for (const guard of [legacyMcpOutputGuard, expandedMcpOutputGuard]) {
+    const legacy = {
+      name: "MCP app derived outputs guard",
+      run: `build\n${guard}\n`,
+    };
+    expect(withOwnedMcpOutputGuard(legacy)).toEqual({
+      ...legacy,
+      run: `build\n${owned}\n`,
+    });
+    expect(
+      withOwnedMcpOutputGuard({
+        ...legacy,
+        run: `different build\n${owned}\n`,
+      }),
+    ).not.toEqual(withOwnedMcpOutputGuard(legacy));
+    const changedGuard = {
+      ...legacy,
+      run: legacy.run.replace('test -s "$output"', 'test -e "$output"'),
+    };
+    expect(withOwnedMcpOutputGuard(changedGuard)).toEqual(changedGuard);
+    expect(withOwnedMcpOutputGuard({ ...legacy, name: "Other guard" })).toEqual(
+      {
+        ...legacy,
+        name: "Other guard",
+      },
+    );
   }
 });

@@ -2,10 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
-import type {
-  SchedulerTaskContext,
-  SchedulerTaskFailure,
-} from "@/api/lib/scheduler/types";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import type { OnlineMigrationOutcome } from "../../../db/online-migration-connection";
@@ -19,6 +16,7 @@ import { allFinalizedOnlineWork } from "../../../tests/helpers/online-work-lifec
 import {
   createOnlineWorkRunner,
   createPendingOnlineWorkTask,
+  type OnlineWorkCheckpointOutcome,
   type OnlineWorkStateSnapshot,
   type OnlineWorkStateStore,
 } from "./online-work-runner";
@@ -55,6 +53,24 @@ const createMemoryStore = () => {
     }
     rows.set(name, { ...row, ...change });
   };
+  const finish = ({
+    name,
+    attempt,
+    state,
+    lastError,
+  }: {
+    name: OnlineWorkName;
+    attempt: number;
+    state: Extract<StoredRow["state"], "failed" | "finalized">;
+    lastError: string | null;
+  }): OnlineWorkCheckpointOutcome => {
+    const row = rows.get(name);
+    if (row?.state !== "building" || row.attempts !== attempt) {
+      return { type: "stale-attempt", name, attempt };
+    }
+    update(name, { state, lastError, finishedAt: START });
+    return { type: "updated" };
+  };
   const store: OnlineWorkStateStore = {
     readStates: async () => {
       snapshots += 1;
@@ -72,16 +88,19 @@ const createMemoryStore = () => {
         lastError: null,
         finishedAt: null,
       });
+      return attempts;
     },
-    markFinalized: async (name) => {
-      update(name, { state: "finalized", lastError: null, finishedAt: START });
-    },
-    markFailed: async ({ name, error }) => {
-      update(name, { state: "failed", lastError: error, finishedAt: START });
-    },
+    markFinalized: async ({ name, attempt }) =>
+      finish({ name, attempt, state: "finalized", lastError: null }),
+    markFailed: async ({ name, attempt, error }) =>
+      finish({ name, attempt, state: "failed", lastError: error }),
   };
   return { rows, store, snapshots: () => snapshots };
 };
+
+type DetachedOnlineWork = Parameters<
+  Parameters<typeof createOnlineWorkRunner>[0]["detach"]
+>[0];
 
 type HarnessOptions = {
   pending?: readonly OnlineWorkName[];
@@ -101,7 +120,7 @@ const createHarness = ({
     OnlineWorkName,
     PromiseWithResolvers<OnlineMigrationOutcome>
   >();
-  const detachedWork: Promise<Result<void, SchedulerTaskFailure>>[] = [];
+  const detachedWork: DetachedOnlineWork[] = [];
   const runner = createOnlineWorkRunner({
     names: ONLINE_WORK_NAMES,
     lifecycle: lifecycleWithPending(pending),
@@ -296,7 +315,11 @@ describe("online work runner", () => {
       claim: async ({ name }) => {
         claims.push(name);
         if (claims.length === 1) {
-          await store.markFailed({ name, error: "another process failed" });
+          await store.markFailed({
+            name,
+            attempt: 2,
+            error: "another process failed",
+          });
         }
         const release = async () => {
           releases.push(name);
@@ -345,6 +368,102 @@ describe("online work runner", () => {
     expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 3 });
     expect(releases).toEqual([FIRST, FIRST]);
   });
+
+  test.each(["failed", "complete"] as const)(
+    "a superseded attempt delivering %s cannot checkpoint its successor",
+    async (outcome) => {
+      const { rows, store } = createMemoryStore();
+      let holder: "old" | "new" | null = null;
+      const currentHolder = () => holder;
+      const createProcess = (session: "old" | "new") => {
+        const walk = Promise.withResolvers<OnlineMigrationOutcome>();
+        const work: DetachedOnlineWork[] = [];
+        const runner = createOnlineWorkRunner({
+          names: ONLINE_WORK_NAMES,
+          lifecycle: lifecycleWithPending([FIRST]),
+          store,
+          claim: async (): Promise<OnlineWorkUnitClaim> => {
+            if (holder !== null) {
+              return { type: "lock_held" };
+            }
+            holder = session;
+            const release = async () => {
+              if (holder === session) {
+                holder = null;
+              }
+            };
+            return {
+              type: "claimed",
+              release,
+              run: async (record) => {
+                try {
+                  return await record(
+                    await Result.tryPromise({
+                      try: async () => await walk.promise,
+                      catch: (cause: unknown) => cause,
+                    }),
+                  );
+                } finally {
+                  await release();
+                }
+              },
+            };
+          },
+          detach: (unit) => {
+            work.push(unit);
+          },
+        });
+        return { runner, walk, work };
+      };
+      const oldProcess = createProcess("old");
+      const newProcess = createProcess("new");
+
+      expect((await oldProcess.runner(START)).unwrap()).toEqual({
+        type: "started",
+        name: FIRST,
+      });
+      expect(rows.get(FIRST)).toMatchObject({ state: "building", attempts: 1 });
+      // Session termination drops the lock before its delayed checkpoint arrives.
+      holder = null;
+      expect((await newProcess.runner(START)).unwrap()).toEqual({
+        type: "started",
+        name: FIRST,
+      });
+      expect(rows.get(FIRST)).toMatchObject({ state: "building", attempts: 2 });
+
+      switch (outcome) {
+        case "failed":
+          oldProcess.walk.reject(new Error("terminated session"));
+          break;
+        case "complete":
+          oldProcess.walk.resolve({ type: "complete" });
+          break;
+        default:
+          outcome satisfies never;
+          panic("Unknown old attempt outcome");
+      }
+      expect(await Promise.all(oldProcess.work)).toEqual([
+        Result.ok({ type: "stale-attempt", name: FIRST, attempt: 1 }),
+      ]);
+      expect(rows.get(FIRST)).toMatchObject({
+        state: "building",
+        attempts: 2,
+        lastError: null,
+        finishedAt: null,
+      });
+      expect(currentHolder()).toBe("new");
+
+      newProcess.walk.resolve({ type: "complete" });
+      expect(await Promise.all(newProcess.work)).toEqual([
+        Result.ok(undefined),
+      ]);
+      expect(rows.get(FIRST)).toMatchObject({
+        state: "finalized",
+        attempts: 2,
+      });
+      expect(currentHolder()).toBeNull();
+    },
+  );
 
   test("a failed unit waits for its retry delay, then is claimed again", async () => {
     const harness = createHarness({ pending: [FIRST] });

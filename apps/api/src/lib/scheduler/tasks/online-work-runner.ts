@@ -9,12 +9,14 @@ import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { resolveEbsConfiguration } from "@/api/lib/db/ebs-signal-reader";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { ONLINE_WORK_STATE_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
-  transitionScopedBatch,
+  transitionScopedCount,
   transitionUpsertBatch,
 } from "@/api/lib/db/transitions";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   type SchedulerDb,
@@ -86,6 +88,11 @@ const isEligibleForAttempt = (
   }
 };
 
+type OnlineWorkAttempt = { name: OnlineWorkName; attempt: number };
+
+export type OnlineWorkCheckpointOutcome =
+  { type: "updated" } | ({ type: "stale-attempt" } & OnlineWorkAttempt);
+
 /**
  * The runner's only access to `online_work_state`. A unit finishes hours
  * after the tick that claimed it, so finish times are the database's clock.
@@ -96,12 +103,13 @@ export type OnlineWorkStateStore = {
     name: OnlineWorkName;
     attempts: number;
     at: Date;
-  }) => Promise<void>;
-  markFinalized: (name: OnlineWorkName) => Promise<void>;
-  markFailed: (options: {
-    name: OnlineWorkName;
-    error: string;
-  }) => Promise<void>;
+  }) => Promise<number>;
+  markFinalized: (
+    attempt: OnlineWorkAttempt,
+  ) => Promise<OnlineWorkCheckpointOutcome>;
+  markFailed: (
+    options: OnlineWorkAttempt & { error: string },
+  ) => Promise<OnlineWorkCheckpointOutcome>;
 };
 
 type ClaimedUnit = Extract<OnlineWorkUnitClaim, { type: "claimed" }>;
@@ -118,8 +126,11 @@ type OnlineWorkRunnerDependencies = {
   detach: (work: Promise<UnitResult>) => void;
 };
 
-/** How a detached unit ended: recorded, or failed with its checkpoint written. */
-type UnitResult = Result<void, SchedulerTaskFailure>;
+/** A detached unit records its checkpoint, fails, or reports a stale attempt. */
+type UnitResult = Result<
+  undefined | Extract<OnlineWorkCheckpointOutcome, { type: "stale-attempt" }>,
+  SchedulerTaskFailure
+>;
 
 type OnlineWorkRunnerTick = (
   now: Date,
@@ -169,13 +180,26 @@ export const createOnlineWorkRunner = ({
   });
 
   const finishUnit = async (
-    name: OnlineWorkName,
+    { name, attempt }: OnlineWorkAttempt,
     run: ClaimedUnit["run"],
   ): Promise<UnitResult> => {
     try {
       return await run(async (outcome): Promise<UnitResult> => {
         if (Result.isError(outcome)) {
-          await store.markFailed({ name, error: redactedError(outcome.error) });
+          const checkpoint = await store.markFailed({
+            name,
+            attempt,
+            error: redactedError(outcome.error),
+          });
+          switch (checkpoint.type) {
+            case "stale-attempt":
+              return Result.ok(checkpoint);
+            case "updated":
+              break;
+            default:
+              checkpoint satisfies never;
+              return panic("Unknown online work checkpoint outcome");
+          }
           return Result.err(
             new SchedulerTaskFailure({
               message: `Online work ${name} failed`,
@@ -184,9 +208,18 @@ export const createOnlineWorkRunner = ({
           );
         }
         switch (outcome.value.type) {
-          case "complete":
-            await store.markFinalized(name);
-            return Result.ok(undefined);
+          case "complete": {
+            const checkpoint = await store.markFinalized({ name, attempt });
+            switch (checkpoint.type) {
+              case "updated":
+                return Result.ok(undefined);
+              case "stale-attempt":
+                return Result.ok(checkpoint);
+              default:
+                checkpoint satisfies never;
+                return panic("Unknown online work checkpoint outcome");
+            }
+          }
           case "deferred":
             // The gate held the unit; it stays building and the next tick
             // claims it again.
@@ -236,14 +269,14 @@ export const createOnlineWorkRunner = ({
           (state) => state.name === name,
         );
         if (!isEligibleForAttempt(current, now)) {
-          return "ineligible" as const;
+          return { type: "ineligible" } as const;
         }
-        await store.markBuilding({
+        const attempt = await store.markBuilding({
           name,
           attempts: (current?.attempts ?? 0) + 1,
           at: now,
         });
-        return "building" as const;
+        return { type: "building", attempt } as const;
       },
       catch: (cause: unknown) => cause,
     });
@@ -256,12 +289,12 @@ export const createOnlineWorkRunner = ({
         }),
       );
     }
-    if (marked.value === "ineligible") {
+    if (marked.value.type === "ineligible") {
       await claimed.release();
       return Result.ok(IDLE);
     }
     build = { type: "building", name };
-    detach(finishUnit(name, claimed.run));
+    detach(finishUnit({ name, attempt: marked.value.attempt }, claimed.run));
     return Result.ok({ type: "started", name });
   };
   return tick;
@@ -273,17 +306,29 @@ export const createDrizzleOnlineWorkStateStore = (
     | SafeId<"schedulerJobRun">
     | SafeId<"systemScriptRun"> = createSafeId<"systemScriptRun">(),
 ): OnlineWorkStateStore => ({
-  readStates: async () =>
-    await db
-      .select({
-        name: onlineWorkState.name,
-        state: onlineWorkState.state,
-        attempts: onlineWorkState.attempts,
-        finishedAt: onlineWorkState.finishedAt,
-      })
-      .from(onlineWorkState)
-      .where(inArray(onlineWorkState.name, ONLINE_WORK_NAMES))
-      .limit(ONLINE_WORK_NAMES.length),
+  readStates: async () => {
+    const snapshot = await readBounded(
+      db
+        .select({
+          name: onlineWorkState.name,
+          state: onlineWorkState.state,
+          attempts: onlineWorkState.attempts,
+          finishedAt: onlineWorkState.finishedAt,
+        })
+        .from(onlineWorkState)
+        .where(inArray(onlineWorkState.name, ONLINE_WORK_NAMES)),
+      ONLINE_WORK_NAMES.length,
+    );
+    switch (snapshot.type) {
+      case "complete":
+        return snapshot.rows;
+      case "overflow":
+        return panic("Online work state exceeded the registered names");
+      default:
+        snapshot satisfies never;
+        return panic("Unknown online work snapshot outcome");
+    }
+  },
   markBuilding: async ({ name, attempts, at }) => {
     const building = {
       state: "building",
@@ -306,25 +351,25 @@ export const createDrizzleOnlineWorkStateStore = (
         },
       });
     });
+    return attempts;
   },
-  markFinalized: async (name) => {
+  markFinalized: async ({ name, attempt }) =>
     await finishOnlineWork(db, auditSubject, {
       name,
+      attempt,
       state: "finalized",
       lastError: null,
-    });
-  },
-  markFailed: async ({ name, error }) => {
+    }),
+  markFailed: async ({ name, attempt, error }) =>
     await finishOnlineWork(db, auditSubject, {
       name,
+      attempt,
       state: "failed",
       lastError: error,
-    });
-  },
+    }),
 });
 
-type FinishOnlineWorkOptions = {
-  name: OnlineWorkName;
+type FinishOnlineWorkOptions = OnlineWorkAttempt & {
   state: Extract<(typeof ONLINE_WORK_STATES)[number], "finalized" | "failed">;
   lastError: string | null;
 };
@@ -333,26 +378,31 @@ type FinishOnlineWorkOptions = {
 const finishOnlineWork = async (
   db: SchedulerDb,
   auditSubject: SafeId<"schedulerJobRun"> | SafeId<"systemScriptRun">,
-  { name, state, lastError }: FinishOnlineWorkOptions,
-): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
-    await transitionScopedBatch({
-      tx,
-      spec: ONLINE_WORK_STATE_TRANSITIONS,
-      identities: [{ name }],
-      options: {
-        from: ["building"],
-        to: state,
-        set: { lastError, finishedAt: sql`now()`, updatedAt: sql`now()` },
-      },
-      recordTransitionAuditEvent: async (auditTx, rows) => {
-        await recordSystemAudit(auditTx, "system:online-work", {
-          subject: auditSubject,
-          counts: { transitions: rows.length },
-        });
-      },
-    });
-  });
+  { name, attempt, state, lastError }: FinishOnlineWorkOptions,
+): Promise<OnlineWorkCheckpointOutcome> => {
+  const changed = await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await transitionScopedCount({
+        tx,
+        spec: ONLINE_WORK_STATE_TRANSITIONS,
+        where: sql`${onlineWorkState.name} = ${name} AND ${onlineWorkState.attempts} = ${attempt}`,
+        options: {
+          from: ["building"],
+          to: state,
+          set: { lastError, finishedAt: sql`now()`, updatedAt: sql`now()` },
+        },
+        recordTransitionAuditEvent: async (auditTx, count) => {
+          await recordSystemAudit(auditTx, "system:online-work", {
+            subject: auditSubject,
+            counts: { transitions: count },
+          });
+        },
+      }),
+  );
+  return changed === 0
+    ? { type: "stale-attempt", name, attempt }
+    : { type: "updated" };
 };
 
 const maintenancePool = (): OnlineBuildPool => ({
@@ -377,12 +427,20 @@ const unitFailed = failureSink({
   expected: [],
 });
 
-/** A unit that failed after writing its checkpoint is observed as a failure. */
-const reportUnitFailure = async (work: Promise<UnitResult>): Promise<void> => {
+/** Reports detached failures and stale checkpoint outcomes. */
+const reportUnitOutcome = async (work: Promise<UnitResult>): Promise<void> => {
   const result = await work;
   if (Result.isError(result)) {
     observeFailure(result.error, { sink: unitFailed });
+    return;
   }
+  if (result.value === undefined) {
+    return;
+  }
+  logger.info("scheduler.online_work_stale_attempt", {
+    "online_work.step": result.value.name,
+    "online_work.attempt": result.value.attempt,
+  });
 };
 
 /**
@@ -410,7 +468,7 @@ const processRunner = (): RunnerByDb => {
             await openOnlineIndexObserver(envBase.DATABASE_URL),
         }),
       detach: (work) => {
-        detached(reportUnitFailure(work), "online-work.build-unit");
+        detached(reportUnitOutcome(work), "online-work.build-unit");
       },
     });
     return runner;

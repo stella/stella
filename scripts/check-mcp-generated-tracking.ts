@@ -1,4 +1,12 @@
 import { panic } from "better-result";
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
+
+import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
+import {
+  MCP_APP_DIRECTORY_OUTPUTS,
+  MCP_APP_GENERATED_OUTPUTS,
+} from "../packages/scripts/src/generated-files";
 
 export const trackedMcpGeneratedFiles = (files: readonly string[]) =>
   files.filter(
@@ -26,6 +34,34 @@ export const checkMcpGeneratedTracking = (root: string) => {
   console.log("MCP generated outputs are untracked");
 };
 
+export const missingMcpGeneratedOutputs = (root: string) => {
+  const outputs = [
+    ...MCP_APP_GENERATED_OUTPUTS.contracts,
+    ...MCP_APP_GENERATED_OUTPUTS.bundles,
+    ...MCP_APPS.flatMap(({ directory }) =>
+      MCP_APP_DIRECTORY_OUTPUTS.map(
+        (file) => `packages/mcp-apps/src/${directory}/generated/${file}`,
+      ),
+    ),
+  ];
+  return outputs.filter((file) => {
+    const absolute = path.join(root, file);
+    if (!existsSync(absolute)) {
+      return true;
+    }
+    // A style partition is empty when all its CSS belongs to the shared runtime.
+    return !file.endsWith(".css.txt") && statSync(absolute).size === 0;
+  });
+};
+
 if (import.meta.main) {
-  checkMcpGeneratedTracking(new URL("..", import.meta.url).pathname);
+  const root = new URL("..", import.meta.url).pathname;
+  checkMcpGeneratedTracking(root);
+  if (Bun.argv.includes("--outputs")) {
+    const missing = missingMcpGeneratedOutputs(root);
+    if (missing.length > 0) {
+      panic(`MCP generated outputs missing or empty:\n${missing.join("\n")}`);
+    }
+    console.log("MCP generated outputs match their owning inventories");
+  }
 }

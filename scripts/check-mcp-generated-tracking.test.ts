@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { trackedMcpGeneratedFiles } from "./check-mcp-generated-tracking";
+import {
+  missingMcpGeneratedOutputs,
+  trackedMcpGeneratedFiles,
+} from "./check-mcp-generated-tracking";
 
 test("MCP generated outputs stay outside the Git index", () => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
@@ -29,4 +35,30 @@ test("the tracking guard detects every MCP generated tree", () => {
       "packages/mcp-apps/src/shared/generated/tsconfig.json",
     ]),
   ).toEqual(artifacts);
+});
+
+test("every generated output must exist, while shared CSS may leave empty style parts", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mcp-generated-outputs-"));
+  try {
+    const outputs = missingMcpGeneratedOutputs(root);
+    expect(outputs.length).toBeGreaterThan(0);
+    for (const file of outputs) {
+      const absolute = path.join(root, file);
+      mkdirSync(path.dirname(absolute), { recursive: true });
+      writeFileSync(absolute, "generated");
+    }
+    expect(missingMcpGeneratedOutputs(root)).toEqual([]);
+    for (const file of outputs) {
+      const absolute = path.join(root, file);
+      writeFileSync(absolute, "");
+      expect(missingMcpGeneratedOutputs(root)).toEqual(
+        file.endsWith(".css.txt") ? [] : [file],
+      );
+      rmSync(absolute);
+      expect(missingMcpGeneratedOutputs(root)).toEqual([file]);
+      writeFileSync(absolute, "generated");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

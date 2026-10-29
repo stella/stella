@@ -2128,30 +2128,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The contracts and single-file bundles are derived before use, never
         # committed. Build them from source, check the bundle budgets, and fail
-        # when an output is missing, empty, or tracked again.
+        # when an output is missing, required content is empty, or tracked again.
         run: |
           (cd apps/api && bun run generate:mcp-app-contracts)
           (cd packages/mcp-apps && bun run build)
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --mcp-apps --check
-          outputs=(
-            packages/mcp-apps/src/shared/generated/schemas.json
-            packages/mcp-apps/src/shared/generated/contracts.js
-            packages/mcp-apps/src/shared/generated/contracts.d.ts
-            packages/mcp-apps/src/shared/generated/messages.json
-            packages/mcp-apps/src/shared/generated/reader-messages.json
-            packages/mcp-apps/src/shared/generated/reader-inputs.json
-            packages/mcp-apps/src/shared/generated/style.css
-            packages/mcp-apps/src/generated/bundles.ts
-            packages/mcp-apps/src/*/generated/app.html.txt
-            packages/mcp-apps/src/*/generated/app.js.txt
-            packages/mcp-apps/src/*/generated/app.css.txt
-            packages/mcp-apps/src/generated/runtime.js.txt
-            packages/mcp-apps/src/generated/runtime.css.txt
-          )
-          for output in "${outputs[@]}"; do
-            test -s "$output" || { echo "::error::$output was not generated"; exit 1; }
-          done
-          bun scripts/check-mcp-generated-tracking.ts
+          bun scripts/check-mcp-generated-tracking.ts --outputs
 
       - name: Visual sandbox document tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

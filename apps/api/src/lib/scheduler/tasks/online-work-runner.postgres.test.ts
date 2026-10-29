@@ -172,6 +172,130 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
     );
   });
 
+  test.each(["failed", "finalized"] as const)(
+    "a stale %s checkpoint cannot change a newer attempt after its session terminates",
+    async (checkpoint) => {
+      if (databaseUrl === undefined) {
+        panic("DATABASE_URL is required");
+      }
+      const index = pendingIndex();
+      await withGatedTestClients(
+        databaseUrl,
+        async ({ openClient }) => {
+          const main = openClient({ max: 2 });
+          const firstSession = await openClient().sql.reserve();
+          const secondSession = await openClient().sql.reserve();
+          const firstConnection = adapter(firstSession);
+          const secondConnection = adapter(secondSession);
+          const lifecycle = {
+            ...allFinalizedOnlineWork(),
+            [index.name]: PENDING,
+          };
+          const claimOn = async (connection: OnlineBuildConnection) =>
+            await claimOnlineWorkUnit(
+              { reserve: async () => connection },
+              {
+                name: index.name,
+                lifecycle,
+                indexGate: healthyGate(),
+                reserveObserver: async () => connection,
+              },
+            );
+          const store = createDrizzleOnlineWorkStateStore(
+            asTestRaw<SchedulerDb>(main.db),
+          );
+          const first = await claimOn(firstConnection);
+          try {
+            expect(first.type).toBe("claimed");
+            const firstAttempt = await store.markBuilding({
+              name: index.name,
+              attempts: 1,
+              at: TICK,
+            });
+            expect(firstAttempt).toBe(1);
+            const backend = await firstSession.unsafe<{ pid: number }[]>(
+              "SELECT pg_backend_pid() AS pid",
+            );
+            const pid =
+              backend.at(0)?.pid ?? panic("Expected a builder backend");
+            // Waiting for backend exit also waits for its advisory locks to go.
+            const terminated = await main.sql.unsafe<{ terminated: boolean }[]>(
+              "SELECT pg_terminate_backend($1, 5000) AS terminated",
+              [pid],
+            );
+            expect(terminated.at(0)?.terminated).toBe(true);
+            await firstConnection.terminate?.();
+
+            const second = await claimOn(secondConnection);
+            try {
+              expect(second.type).toBe("claimed");
+              const secondAttempt = await store.markBuilding({
+                name: index.name,
+                attempts: 2,
+                at: new Date(TICK.getTime() + 1),
+              });
+              expect(secondAttempt).toBe(2);
+              const readCheckpoint = async () =>
+                await main.sql.unsafe(
+                  "SELECT state, attempts, last_error, started_at, finished_at, updated_at FROM online_work_state WHERE name = $1",
+                  [index.name],
+                );
+              const building = [...(await readCheckpoint())];
+              expect(building).toMatchObject([
+                {
+                  state: "building",
+                  attempts: 2,
+                  last_error: null,
+                  finished_at: null,
+                },
+              ]);
+              const stale =
+                checkpoint === "failed"
+                  ? await store.markFailed({
+                      name: index.name,
+                      attempt: firstAttempt,
+                      error: "the terminated attempt failed",
+                    })
+                  : await store.markFinalized({
+                      name: index.name,
+                      attempt: firstAttempt,
+                    });
+              expect([...(await readCheckpoint())]).toEqual(building);
+              expect(stale).toEqual({
+                type: "stale-attempt",
+                name: index.name,
+                attempt: 1,
+              });
+              expect(
+                await store.markFinalized({
+                  name: index.name,
+                  attempt: secondAttempt,
+                }),
+              ).toEqual({ type: "updated" });
+              expect([...(await readCheckpoint())]).toMatchObject([
+                { state: "finalized", attempts: 2, last_error: null },
+              ]);
+            } finally {
+              if (second.type === "claimed") {
+                await second.release();
+              }
+            }
+          } finally {
+            if (first.type === "claimed") {
+              await first.release();
+            }
+            await main.sql.unsafe(
+              "DELETE FROM online_work_state WHERE name = $1",
+              [index.name],
+            );
+            await secondSession.release();
+          }
+        },
+        { closeMode: "force" },
+      );
+    },
+  );
+
   test("a tick skips while another session holds the online lock", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL is required");
