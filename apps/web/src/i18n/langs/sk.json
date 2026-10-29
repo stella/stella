@@ -547,6 +547,14 @@
     },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
+    "arrangement": {
+      "alertThreshold": "Prah upozornenia (%)",
+      "amountCap": "Limit odmeny",
+      "flatFee": "Paušálna odmena",
+      "invalidCap": "Zadajte kladné limity a prah upozornenia od 0,01 % do 100 %.",
+      "minuteCap": "Časový limit (minúty)",
+      "title": "Dohoda o odmene"
+    },
     "batchActions": "Hromadné akcie",
     "billable": "Fakturovateľné",
     "billedAmount": "Fakturovaná čiastka",

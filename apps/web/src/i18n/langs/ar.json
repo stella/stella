@@ -547,6 +547,14 @@
     },
     "approve": "اعتماد",
     "approveSelected": "اعتماد المحدد",
+    "arrangement": {
+      "alertThreshold": "حد التنبيه (%)",
+      "amountCap": "الحد الأقصى للأتعاب",
+      "flatFee": "أتعاب ثابتة",
+      "invalidCap": "أدخل حدودًا موجبة وحد تنبيه بين 0.01% و100%.",
+      "minuteCap": "الحد الزمني (بالدقائق)",
+      "title": "اتفاق الأتعاب"
+    },
     "batchActions": "إجراءات جماعية",
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",

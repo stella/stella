@@ -345,6 +345,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
+  - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
 - `stella task delete`
