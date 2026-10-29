@@ -97,7 +97,7 @@ describe("queueing push alerts", () => {
         configured: () => true,
         enqueue: async () => {
           attempted();
-          return await Promise.reject(new TypeError("connection refused"));
+          await Promise.reject(new TypeError("connection refused"));
         },
       }),
     ).not.toThrow();
