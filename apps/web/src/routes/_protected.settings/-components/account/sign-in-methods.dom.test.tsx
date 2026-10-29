@@ -50,7 +50,7 @@ const capabilities = {
   localPassword: false,
   reviewPasswordSignIn: false,
   bootstrap: false,
-  social: { google: true, microsoft: false },
+  social: { apple: false, google: true, microsoft: false },
   transactionalEmail: true,
 };
 

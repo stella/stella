@@ -45,7 +45,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type SelectedAccount = { id: string; provider: string };
 const CONFIRMATION_CODE_LENGTH = 6;
@@ -57,8 +57,8 @@ export const SignInMethods = () => {
   const queryClient = useQueryClient();
   const accountsQuery = useQuery(linkedAccountsOptions(id));
   const capabilitiesQuery = useQuery(authCapabilitiesOptions);
-  const accountsView = useQueryView(accountsQuery, { isEmpty: () => false });
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const accountsView = queryView(accountsQuery, { isEmpty: () => false });
+  const capabilitiesView = queryView(capabilitiesQuery);
   const [selected, setSelected] = useState<SelectedAccount | null>(null);
   const [code, setCode] = useState("");
   const [confirmation, setConfirmation] = useState<"request" | "code">(
