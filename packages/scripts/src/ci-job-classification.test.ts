@@ -26,6 +26,7 @@ import {
   generateClassification,
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
+import type { ClassificationDecisionsInput } from "../../../scripts/ci-job-classification/generate";
 import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_PATHS,
@@ -995,7 +996,9 @@ test("candidate reader always observes HEAD even when config names an older revi
   }
 });
 
-const fixtureDecisions = (manifest: PublicMetadata) =>
+const fixtureDecisions = (
+  manifest: PublicMetadata,
+): ClassificationDecisionsInput =>
   Object.fromEntries(
     manifest.nodes.flatMap((node) =>
       node.type === "metadata"
@@ -1004,7 +1007,7 @@ const fixtureDecisions = (manifest: PublicMetadata) =>
             {
               kind: job.kind,
               qualifier: job.qualifier,
-              reviewedDigest: job.digest,
+              approvedDigests: [job.digest],
             },
           ])
         : [],
@@ -1059,35 +1062,38 @@ const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
           {
             kind: ORDINARY,
             qualifier: "Reviewed checks",
-            reviewedDigest: (() => {
-              const dependencies = Object.fromEntries(
-                Object.keys(job.dependencies)
-                  .toSorted()
-                  .flatMap((reference) => {
-                    let target = node.edges[reference];
-                    const local =
-                      reference.startsWith("./") || reference.startsWith("$/");
-                    if (
-                      !target &&
-                      local &&
-                      job.dependencies[reference] === "action"
-                    ) {
-                      target = "action";
-                    } else if (
-                      !target &&
-                      job.dependencies[reference] === "reusable-workflow"
-                    ) {
-                      target = "callee";
-                    }
-                    return target && nodes.get(target)?.type === "metadata"
-                      ? [[reference, documentDigest(target)]]
-                      : [];
-                  }),
-              );
-              return Object.keys(dependencies).length
-                ? sha256(JSON.stringify({ digest: job.digest, dependencies }))
-                : job.digest;
-            })(),
+            approvedDigests: [
+              (() => {
+                const dependencies = Object.fromEntries(
+                  Object.keys(job.dependencies)
+                    .toSorted()
+                    .flatMap((reference) => {
+                      let target = node.edges[reference];
+                      const local =
+                        reference.startsWith("./") ||
+                        reference.startsWith("$/");
+                      if (
+                        !target &&
+                        local &&
+                        job.dependencies[reference] === "action"
+                      ) {
+                        target = "action";
+                      } else if (
+                        !target &&
+                        job.dependencies[reference] === "reusable-workflow"
+                      ) {
+                        target = "callee";
+                      }
+                      return target && nodes.get(target)?.type === "metadata"
+                        ? [[reference, documentDigest(target)]]
+                        : [];
+                    }),
+                );
+                return Object.keys(dependencies).length
+                  ? sha256(JSON.stringify({ digest: job.digest, dependencies }))
+                  : job.digest;
+              })(),
+            ],
           },
         ]);
       }),
@@ -1799,9 +1805,13 @@ for (const job of [
     if (!definition) {
       throw new AdmissionError({ message: "privileged fixture job missing" });
     }
-    expect(isPrivilegedJob({ kind: ORDINARY, shape: definition.shape })).toBe(
-      true,
-    );
+    expect(
+      isPrivilegedJob({
+        kind: ORDINARY,
+        privileged: definition.privileged,
+        shape: definition.shape,
+      }),
+    ).toBe(true);
   });
 }
 
@@ -1811,12 +1821,20 @@ test("priority decisions are sensitive even for an unprivileged derived shape", 
   if (!definition) {
     throw new AdmissionError({ message: "priority fixture job missing" });
   }
-  expect(isPrivilegedJob({ kind: "priority", shape: definition.shape })).toBe(
-    true,
-  );
-  expect(isPrivilegedJob({ kind: ORDINARY, shape: definition.shape })).toBe(
-    false,
-  );
+  expect(
+    isPrivilegedJob({
+      kind: "priority",
+      privileged: definition.privileged,
+      shape: definition.shape,
+    }),
+  ).toBe(true);
+  expect(
+    isPrivilegedJob({
+      kind: ORDINARY,
+      privileged: definition.privileged,
+      shape: definition.shape,
+    }),
+  ).toBe(false);
 });
 
 for (const review of ["missing", "stale"] as const) {
@@ -1848,7 +1866,7 @@ for (const review of ["missing", "stale"] as const) {
     if (!current) {
       throw new AdmissionError({ message: "review fixture job missing" });
     }
-    expect(current.digest).not.toBe(decision.reviewedDigest);
+    expect(current.digest).not.toBe(decision.approvedDigests[0]);
     const action = parseDocument(
       f.reader.read("candidate", ".github/actions/local/action.yml"),
     );
@@ -2417,7 +2435,7 @@ test("decisions for removed jobs fail without changing sibling job digests", () 
   if (!reusableDecision) {
     throw new AdmissionError({ message: "reusable decision missing" });
   }
-  expect(
+  expect([
     sha256(
       JSON.stringify({
         digest: parsed.value.jobs["reusable"]?.digest,
@@ -2427,7 +2445,7 @@ test("decisions for removed jobs fail without changing sibling job digests", () 
         },
       }),
     ),
-  ).toBe(reusableDecision.reviewedDigest);
+  ]).toEqual(reusableDecision.approvedDigests);
   const result = generateClassification(options);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
