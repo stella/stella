@@ -19,7 +19,7 @@ export type Fetcher = (
 export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
   signal?: AbortSignal | undefined;
 } & (
-    | { timeout: FetchTimeout; timeoutMs?: never }
+    | { timeout: FetchTimeout; timeoutMs?: number }
     // Existing numeric callers are enumerated by the transfer-window guard.
     | {
         /** Use an explicit timeout policy for new callers. */
@@ -67,7 +67,15 @@ const executeFetchWithTimeout = async (
   };
   reset();
   const response = await Promise.resolve()
-    .then(async () => await activeFetcher(input, { ...init, signal: combined }))
+    .then(
+      async () =>
+        await activeFetcher(input, {
+          ...init,
+          signal: combined,
+          ...(timeout === undefined ? {} : { timeout }),
+          timeoutMs: duration,
+        }),
+    )
     .catch((error: unknown) => {
       clear();
       throw error;

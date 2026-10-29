@@ -48,6 +48,60 @@ afterEach(() => {
 });
 
 describe("response timeout policies", () => {
+  test("passes the effective timeout value to the owned transport", async () => {
+    let observed: number | undefined;
+    const request = createFetchWithTimeout(async (_input, init) => {
+      observed = init?.timeoutMs;
+      return new Response(null);
+    });
+    await request("https://example.com", {
+      timeout: { type: "total", ms: 1234 },
+    });
+    expect(observed).toBe(1234);
+  });
+
+  test("reports a caller abort as the caller's typed abort reason", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Caller aborted", "AbortError");
+    const request = createFetchWithTimeout(async (_input, init) => {
+      await new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(init.signal?.reason),
+          { once: true },
+        );
+      });
+      throw new Error("unreachable");
+    });
+    const result = request("https://example.com", {
+      signal: controller.signal,
+      timeout: { type: "total", ms: 1000 },
+    }).catch((error: unknown) => error);
+    await flush();
+    controller.abort(reason);
+    expect(await result).toBe(reason);
+  });
+
+  test("reports a deadline as a typed timeout reason", async () => {
+    jest.useFakeTimers();
+    const request = createFetchWithTimeout(async (_input, init) => {
+      await new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(init.signal?.reason),
+          { once: true },
+        );
+      });
+      throw new Error("unreachable");
+    });
+    const result = request("https://example.com", {
+      timeout: { type: "total", ms: 20 },
+    }).catch((error: unknown) => error);
+    await flush();
+    await advance(20);
+    expect(await result).toMatchObject({ name: "TimeoutError" });
+  });
+
   test("abort after an ignoring fetcher resolves cancels the response body", async () => {
     for (const type of ["headers", "idle"] as const) {
       const controller = new AbortController();
