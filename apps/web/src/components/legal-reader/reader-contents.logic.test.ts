@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { withDashSubheadingLevels } from "@stll/legal-ast/dash-subheadings";
 import type { Block, HeadingLevel } from "@stll/legal-ast/document-ast";
 import { comparableHeadingTitle } from "@stll/legal-ast/source-contents";
 import { assertProperty } from "@stll/property-testing";
@@ -395,6 +396,64 @@ describe("reader contents", () => {
         disclosure: "caseLaw",
       },
       { type: "heading", anchorId: "b5", title: "Výrok" },
+    ]);
+  });
+
+  // The shape the published corpus holds for a Court of Justice appeal: the
+  // same dash-led pair under every ground, stored at the ground's own level.
+  const appeal = () =>
+    withDashSubheadingLevels(
+      documentBlocks([
+        { type: "heading", level: 2, title: "The appeal" },
+        { type: "heading", level: 3, title: "Substance" },
+        { type: "heading", level: 4, title: "The first ground of appeal" },
+        { type: "heading", level: 4, title: "– Arguments of the parties" },
+        { type: "paragraph" },
+        { type: "heading", level: 4, title: "– Findings of the Court" },
+        { type: "paragraph" },
+        { type: "heading", level: 4, title: "The second ground of appeal" },
+        { type: "heading", level: 4, title: "– Arguments of the parties" },
+        { type: "paragraph" },
+      ]),
+    );
+
+  test("a subheading repeated under each ground is indented under the ground it answers", () => {
+    const { rows, trails, depths } = contentsOf({
+      blocks: appeal(),
+      sections: undefined,
+    });
+    expect(
+      rows.map(({ anchorId, title }) => [title, depths.get(anchorId)]),
+    ).toEqual([
+      ["The appeal", 0],
+      ["Substance", 1],
+      ["The first ground of appeal", 2],
+      ["– Arguments of the parties", 3],
+      ["– Findings of the Court", 3],
+      ["The second ground of appeal", 2],
+      ["– Arguments of the parties", 3],
+    ]);
+    // No two rows read the same once the heading each sits under is named.
+    const placed = rows.map(
+      ({ anchorId, title }) =>
+        `${trails.get(anchorId)?.segments.at(-2)?.title ?? ""} › ${title}`,
+    );
+    expect(new Set(placed).size).toBe(rows.length);
+  });
+
+  test("a section titled without the dash merges into the subheading it starts under", () => {
+    const { rows } = contentsOf({
+      blocks: appeal(),
+      sections: [{ anchorId: "b9", title: "Arguments of the parties" }],
+    });
+    expect(rows.filter(({ type }) => type !== "heading")).toEqual([
+      {
+        type: "headingWithAnalysis",
+        anchorId: "b8",
+        title: "– Arguments of the parties",
+        analysisTitle: "Arguments of the parties",
+        disclosure: "caseLaw",
+      },
     ]);
   });
 });

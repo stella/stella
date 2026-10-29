@@ -46,6 +46,8 @@ const middleAfterHover = (state: MiddleState): MiddleState =>
 type ReaderBreadcrumbProps = {
   trail: ReaderTrail;
   rows: readonly ReaderContentsRow[];
+  /** How far each row is indented (`ReaderContents.depths`); flat when absent. */
+  depths?: ReadonlyMap<string, number> | undefined;
   /** The row being read, which Contents marks as the current location. */
   activeAnchorId: string | null;
   onJump: (anchorId: string) => void;
@@ -61,12 +63,31 @@ const revealCurrentRow = (node: HTMLDivElement | null) => {
 
 type ReaderContentsListProps = {
   rows: readonly ReaderContentsRow[];
+  depths: ReadonlyMap<string, number>;
   activeAnchorId: string | null;
   onSelect: (anchorId: string) => void;
 };
 
+const NO_DEPTHS: ReadonlyMap<string, number> = new Map();
+
+/**
+ * The indent of a Contents row, deep enough to tell a subheading from the
+ * heading above it and shallow enough that a deep outline still fits the
+ * popover.
+ */
+const contentsRowIndent = (depth: number): string => {
+  if (depth <= 0) {
+    return "";
+  }
+  if (depth === 1) {
+    return "ps-3";
+  }
+  return depth === 2 ? "ps-6" : "ps-9";
+};
+
 const ReaderContentsList = ({
   rows,
+  depths,
   activeAnchorId,
   onSelect,
 }: ReaderContentsListProps) => {
@@ -165,7 +186,14 @@ const ReaderContentsList = ({
         {rows.map((entry) => (
           // The AI mark is a control of its own, so it sits beside the jump
           // rather than inside it.
-          <li className="flex items-center gap-1" key={entry.anchorId}>
+          <li
+            className={cn(
+              "flex items-center gap-1",
+              contentsRowIndent(depths.get(entry.anchorId) ?? 0),
+            )}
+            data-contents-depth={depths.get(entry.anchorId) ?? 0}
+            key={entry.anchorId}
+          >
             {row(entry)}
           </li>
         ))}
@@ -177,6 +205,7 @@ const ReaderContentsList = ({
 export const ReaderBreadcrumb = ({
   trail,
   rows,
+  depths = NO_DEPTHS,
   activeAnchorId,
   onJump,
 }: ReaderBreadcrumbProps) => {
@@ -319,6 +348,7 @@ export const ReaderBreadcrumb = ({
             onJump(anchorId);
             setContentsOpen(false);
           }}
+          depths={depths}
           rows={rows}
         />
       </PopoverPopup>

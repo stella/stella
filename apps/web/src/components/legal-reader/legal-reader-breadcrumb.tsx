@@ -82,6 +82,7 @@ export const LegalReaderBreadcrumb = ({
     <ReaderBreadcrumb
       activeAnchorId={position?.anchorId ?? null}
       trail={position?.trail ?? NO_TRAIL}
+      depths={contents.depths}
       rows={contents.rows}
       onJump={(anchorId) => {
         if (content === null || viewport === null) {

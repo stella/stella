@@ -42,6 +42,14 @@ export type ReaderContents = {
   rows: readonly ReaderContentsRow[];
   /** The breadcrumb trail while each row's anchor is the one being read. */
   trails: ReadonlyMap<string, ReaderTrail>;
+  /**
+   * How far each row is indented: a heading by the headings enclosing it, a
+   * model's section one step inside the heading it sits under, the shallowest
+   * row at zero. A judgment repeats a subheading under each ground it answers
+   * (`– Arguments of the parties`), and the indent is what tells the copies
+   * apart in one list.
+   */
+  depths: ReadonlyMap<string, number>;
 };
 
 type ReaderContentsOptions = {
@@ -185,6 +193,7 @@ export const readerContents = ({
   const analysisTrails =
     headings.headings.length === 0 ? analysis?.sections.paths : undefined;
   const trails = new Map<string, ReaderTrail>();
+  const nesting = new Map<string, number>();
   let enclosing: ReaderTrail = { type: "document", segments: [] };
   for (const row of ordered) {
     switch (row.type) {
@@ -197,9 +206,12 @@ export const readerContents = ({
             panic("Document heading has no breadcrumb path"),
         };
         trails.set(row.anchorId, enclosing);
+        // A heading's path ends with the heading itself.
+        nesting.set(row.anchorId, enclosing.segments.length - 1);
         break;
       }
       case "analysis": {
+        nesting.set(row.anchorId, enclosing.segments.length);
         trails.set(
           row.anchorId,
           analysisTrails === undefined
@@ -220,5 +232,9 @@ export const readerContents = ({
       }
     }
   }
-  return { rows: ordered, trails };
+  const shallowest = Math.min(...nesting.values());
+  const depths = new Map(
+    [...nesting].map(([anchorId, depth]) => [anchorId, depth - shallowest]),
+  );
+  return { rows: ordered, trails, depths };
 };

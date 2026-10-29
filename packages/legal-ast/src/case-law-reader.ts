@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { normalizeCaseLawDecisionAst } from "./case-law-normalize.js";
+import { withDashSubheadingLevels } from "./dash-subheadings.js";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionPrimaryReferenceType,
@@ -69,8 +70,9 @@ export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
  * case-number header is the reference line only for a docket primary; under
  * any other primary it is the docket, which nothing else shows, so it stays.
  * A publisher's leading table of contents is navigation the reader draws from
- * the headings itself, so its lines are left out of the view; storage keeps
- * them.
+ * the headings itself, so its lines are left out of the view, and a heading
+ * the publisher marks as subordinate with a leading dash is nested under the
+ * heading it belongs to; storage keeps both as the source gave them.
  */
 export const visibleDecisionBlocks = (
   ast: DocumentAst | null,
@@ -94,7 +96,7 @@ export const visibleDecisionBlocks = (
     visible.push(block);
   }
   if (visible.length > 0 || !fulltext) {
-    return visible;
+    return withDashSubheadingLevels(visible);
   }
   return buildFulltextParagraphBlocks(fulltext);
 };
