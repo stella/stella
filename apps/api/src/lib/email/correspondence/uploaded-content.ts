@@ -124,8 +124,8 @@ type PersistContentOptions = {
 
 type FindSourceContentOptions = Pick<
   PersistContentOptions,
-  "tx" | "organizationId" | "workspaceId" | "content"
->;
+  "organizationId" | "workspaceId" | "content"
+> & { tx: Pick<Transaction, "select"> };
 
 const findSourceContent = async ({
   tx,
@@ -178,6 +178,71 @@ const findSourceContent = async ({
         )
         .limit(1);
 
+/** Only reads are available until the entire filing target is admitted. */
+const planCorrespondenceContent = async (options: FindSourceContentOptions) => {
+  const { tx, organizationId, workspaceId, content } = options;
+  const [previous] = await findSourceContent(options);
+  const [target] = await tx
+    .select({ id: correspondence.id, contentHash: correspondence.contentHash })
+    .from(correspondence)
+    .where(
+      and(
+        eq(correspondence.organizationId, organizationId),
+        eq(correspondence.workspaceId, workspaceId),
+        eq(correspondence.dedupKey, content.dedupKey),
+      ),
+    )
+    .limit(1);
+  if (
+    target !== undefined &&
+    target.id !== previous?.id &&
+    target.contentHash !== content.contentHash
+  ) {
+    return Result.ok({ type: "invalid_content" as const });
+  }
+  const [survivor] =
+    previous !== undefined &&
+    content.sourceEntityId !== null &&
+    (previous.contentHash !== content.contentHash ||
+      previous.dedupKey !== content.dedupKey)
+      ? await tx
+          .select({ entityId: correspondenceSources.entityId })
+          .from(correspondenceSources)
+          .where(
+            and(
+              eq(correspondenceSources.organizationId, organizationId),
+              eq(correspondenceSources.workspaceId, workspaceId),
+              eq(correspondenceSources.correspondenceId, previous.id),
+              ne(correspondenceSources.entityId, content.sourceEntityId),
+            ),
+          )
+          .limit(1)
+      : [];
+  if (
+    previous !== undefined &&
+    survivor !== undefined &&
+    previous.dedupKey === content.dedupKey &&
+    previous.contentHash !== content.contentHash
+  ) {
+    return Result.ok({ type: "invalid_content" as const });
+  }
+  if (
+    previous !== undefined &&
+    survivor === undefined &&
+    target !== undefined &&
+    target.id !== previous.id
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message:
+          "The source update conflicts with another correspondence record",
+      }),
+    );
+  }
+  return Result.ok({ type: "ready" as const, previous, target, survivor });
+};
+
 /** The caller holds the matter and current source generation through this write. */
 export const persistCorrespondenceContent = async ({
   tx,
@@ -186,87 +251,51 @@ export const persistCorrespondenceContent = async ({
   content,
   recordAuditEvent,
 }: PersistContentOptions) => {
-  let [previous] = await findSourceContent({
+  const planned = await planCorrespondenceContent({
     tx,
     organizationId,
     workspaceId,
     content,
   });
+  if (planned.isErr()) {
+    return Result.err(planned.error);
+  }
+  const plan = planned.value;
+  if (plan.type === "invalid_content") {
+    return Result.ok({ status: "invalid_content" as const });
+  }
+  let previous = plan.previous;
   if (
     previous !== undefined &&
-    content.sourceEntityId !== null &&
-    (previous.contentHash !== content.contentHash ||
-      previous.dedupKey !== content.dedupKey)
+    plan.survivor !== undefined &&
+    content.sourceEntityId !== null
   ) {
-    const [survivor] = await tx
-      .select({ entityId: correspondenceSources.entityId })
-      .from(correspondenceSources)
+    // The remaining copies still own their original message and workflow.
+    // Admission above also checked a matching target before this unlink.
+    await tx
+      .delete(correspondenceSources)
       .where(
         and(
           eq(correspondenceSources.organizationId, organizationId),
           eq(correspondenceSources.workspaceId, workspaceId),
           eq(correspondenceSources.correspondenceId, previous.id),
-          ne(correspondenceSources.entityId, content.sourceEntityId),
+          eq(correspondenceSources.entityId, content.sourceEntityId),
         ),
-      )
-      .limit(1);
-    if (survivor !== undefined) {
-      if (previous.dedupKey === content.dedupKey) {
-        // Export bytes can differ for the same system-issued message ID.
-        // Surviving copies retain the record's established content generation.
-        return Result.ok({
-          id: previous.id,
-          contentHash: previous.contentHash,
-          status: "existing" as const,
-        });
-      }
-      // The remaining copies still own their original message and workflow.
-      // The deletion trigger repoints the primary source without deleting it.
-      await tx
-        .delete(correspondenceSources)
-        .where(
-          and(
-            eq(correspondenceSources.organizationId, organizationId),
-            eq(correspondenceSources.workspaceId, workspaceId),
-            eq(correspondenceSources.correspondenceId, previous.id),
-            eq(correspondenceSources.entityId, content.sourceEntityId),
-          ),
-        );
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
-        resourceId: previous.id,
-        workspaceId,
-        metadata: { sourceRemoved: true },
-      });
-      previous = undefined;
-    }
+      );
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
+      resourceId: previous.id,
+      workspaceId,
+      metadata: { sourceRemoved: true },
+    });
+    previous = undefined;
   }
   if (previous !== undefined) {
     const refreshed =
       previous.contentHash !== content.contentHash ||
       previous.dedupKey !== content.dedupKey;
     if (refreshed) {
-      const [collision] = await tx
-        .select({ id: correspondence.id })
-        .from(correspondence)
-        .where(
-          and(
-            eq(correspondence.workspaceId, workspaceId),
-            eq(correspondence.dedupKey, content.dedupKey),
-            ne(correspondence.id, previous.id),
-          ),
-        )
-        .limit(1);
-      if (collision !== undefined) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message:
-              "The source update conflicts with another correspondence record",
-          }),
-        );
-      }
       await tx
         .update(correspondence)
         .set({
@@ -329,6 +358,13 @@ export const persistCorrespondenceContent = async ({
       status: refreshed ? ("refreshed" as const) : ("existing" as const),
     });
   }
+  if (plan.target !== undefined) {
+    return Result.ok({
+      id: plan.target.id,
+      contentHash: plan.target.contentHash,
+      status: "existing" as const,
+    });
+  }
   const [inserted] = await tx
     .insert(correspondence)
     .values({ ...content, organizationId, workspaceId })
@@ -350,22 +386,5 @@ export const persistCorrespondenceContent = async ({
       status: "created" as const,
     });
   }
-  const [existing] = await tx
-    .select({ id: correspondence.id, contentHash: correspondence.contentHash })
-    .from(correspondence)
-    .where(
-      and(
-        eq(correspondence.workspaceId, workspaceId),
-        eq(correspondence.dedupKey, content.dedupKey),
-      ),
-    )
-    .limit(1);
-  if (existing === undefined) {
-    return panic("Correspondence insert has no conflicting record");
-  }
-  return Result.ok({
-    id: existing.id,
-    contentHash: existing.contentHash,
-    status: "existing" as const,
-  });
+  return panic("Correspondence insert returned no record");
 };

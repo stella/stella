@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -410,6 +410,173 @@ const parsedDataBoxFixture = async ({
     bodyHtml: null,
   } satisfies ParsedCorrespondence;
 };
+
+test("a conflicting target preserves a split source and both correspondence records", async () => {
+  const sourceId = createSafeId<"entity">();
+  const retainedSourceId = createSafeId<"entity">();
+  const targetSourceId = createSafeId<"entity">();
+  const oldAttachmentId = createSafeId<"entity">();
+  const targetAttachmentId = createSafeId<"entity">();
+  const attemptedAttachmentId = createSafeId<"entity">();
+  await testDb.insert(entities).values(
+    [
+      sourceId,
+      retainedSourceId,
+      targetSourceId,
+      oldAttachmentId,
+      targetAttachmentId,
+      attemptedAttachmentId,
+    ].map((id) => ({
+      id,
+      workspaceId: ids.wsA1,
+      name: "Conflicting split source fixture",
+      createdBy: ids.userA1,
+    })),
+  );
+
+  const oldParsed = await parsedDataBoxFixture({
+    entityId: sourceId,
+    messageId: "95000000002",
+  });
+  const old = await fileCopy({
+    workspaceId: ids.wsA1,
+    entityId: sourceId,
+    parsed: oldParsed,
+    attachmentId: oldAttachmentId,
+  });
+  expect(
+    (
+      await fileCopy({
+        workspaceId: ids.wsA1,
+        entityId: retainedSourceId,
+        parsed: oldParsed,
+        attachmentId: oldAttachmentId,
+      })
+    ).id,
+  ).toBe(old.id);
+
+  const incoming = await parsedDataBoxFixture({
+    entityId: sourceId,
+    messageId: "95000000003",
+  });
+  const targetParsed = { ...incoming, contentHash: "c".repeat(64) };
+  const attempted = { ...incoming, contentHash: "b".repeat(64) };
+  expect(targetParsed.contentHash).not.toBe(attempted.contentHash);
+  const target = await fileCopy({
+    workspaceId: ids.wsA1,
+    entityId: targetSourceId,
+    parsed: targetParsed,
+    attachmentId: targetAttachmentId,
+  });
+
+  const recordIds = [old.id, target.id];
+  const beforeRecords = await testDb
+    .select()
+    .from(correspondence)
+    .where(inArray(correspondence.id, recordIds))
+    .orderBy(asc(correspondence.id));
+  const beforeSources = await testDb
+    .select()
+    .from(correspondenceSources)
+    .where(inArray(correspondenceSources.correspondenceId, recordIds))
+    .orderBy(
+      asc(correspondenceSources.correspondenceId),
+      asc(correspondenceSources.entityId),
+    );
+  const beforeFilers = await testDb
+    .select()
+    .from(correspondenceFilers)
+    .where(inArray(correspondenceFilers.correspondenceId, recordIds))
+    .orderBy(
+      asc(correspondenceFilers.correspondenceId),
+      asc(correspondenceFilers.id),
+    );
+  const beforeAttachments = await testDb
+    .select()
+    .from(correspondenceAttachments)
+    .where(inArray(correspondenceAttachments.correspondenceId, recordIds))
+    .orderBy(
+      asc(correspondenceAttachments.correspondenceId),
+      asc(correspondenceAttachments.ordinal),
+    );
+  expect(
+    beforeRecords.map(({ id, contentHash }) => ({ id, contentHash })),
+  ).toEqual([
+    { id: old.id, contentHash: oldParsed.contentHash },
+    { id: target.id, contentHash: targetParsed.contentHash },
+  ]);
+  expect(
+    beforeSources
+      .filter(({ correspondenceId }) => correspondenceId === old.id)
+      .map(({ entityId }) => entityId)
+      .toSorted(),
+  ).toEqual([sourceId, retainedSourceId].toSorted());
+
+  const attemptedResult = await createCorrespondence({
+    safeDb: asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    ),
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    filer: { type: "user", userId: ids.userA1 },
+    parsed: attempted,
+    attachments: [
+      {
+        entityId: attemptedAttachmentId,
+        filename: "evidence.pdf",
+        mediaType: "application/pdf",
+        byteSize: 128,
+        scanVerdict: "clean",
+      },
+    ],
+    recordAuditEvent: createAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      request: new Request("https://api.example.test/v1/correspondence"),
+      server: null,
+    }),
+  });
+  expect(attemptedResult).toEqual({ type: "invalid_content" });
+
+  expect(
+    await testDb
+      .select()
+      .from(correspondence)
+      .where(inArray(correspondence.id, recordIds))
+      .orderBy(asc(correspondence.id)),
+  ).toEqual(beforeRecords);
+  expect(
+    await testDb
+      .select()
+      .from(correspondenceSources)
+      .where(inArray(correspondenceSources.correspondenceId, recordIds))
+      .orderBy(
+        asc(correspondenceSources.correspondenceId),
+        asc(correspondenceSources.entityId),
+      ),
+  ).toEqual(beforeSources);
+  expect(
+    await testDb
+      .select()
+      .from(correspondenceFilers)
+      .where(inArray(correspondenceFilers.correspondenceId, recordIds))
+      .orderBy(
+        asc(correspondenceFilers.correspondenceId),
+        asc(correspondenceFilers.id),
+      ),
+  ).toEqual(beforeFilers);
+  expect(
+    await testDb
+      .select()
+      .from(correspondenceAttachments)
+      .where(inArray(correspondenceAttachments.correspondenceId, recordIds))
+      .orderBy(
+        asc(correspondenceAttachments.correspondenceId),
+        asc(correspondenceAttachments.ordinal),
+      ),
+  ).toEqual(beforeAttachments);
+});
 
 test("correspondence retains its remaining source across feature visibility changes", async () => {
   const firstSource = createSafeId<"entity">();

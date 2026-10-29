@@ -514,9 +514,6 @@ const fileUploadedDataBoxMessage = async ({
   if (created.type !== "ok") {
     return outcome;
   }
-  if (created.contentHash !== content.contentHash) {
-    return skipped("invalid_content");
-  }
   const correspondenceId = created.id;
   const parentId = await Result.tryPromise({
     try: async () => await readSourceFolder(filing),

@@ -11,6 +11,7 @@ import {
   correspondence,
   correspondenceAttachments,
   correspondenceFilers,
+  correspondenceSources,
   entities,
   organizationSettings,
   workspaceMembers,
@@ -299,6 +300,9 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     beforeEach(async () => {
+      await db
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.userId, outsiderId));
       await fixtureScoped()(
         async (tx) =>
           await tx
@@ -562,7 +566,12 @@ if (!databaseUrl || !runPostgresTests) {
         const conflictingExport = await zfoFile({ files: changedFiles });
         expect(sha256Hex(firstExport)).not.toBe(sha256Hex(conflictingExport));
         const first = await storeZfoFile({ createdBy: uploaderId });
-        const copy = await storeZfoFile({ createdBy: uploaderId });
+        const copy = await storeZfoFile({ createdBy: outsiderId });
+        await db.insert(workspaceMembers).values({
+          id: createSafeId<"workspaceMember">(),
+          workspaceId,
+          userId: outsiderId,
+        });
         const failed = await processUpload({
           entityId: first,
           bytes: firstExport,
@@ -575,6 +584,29 @@ if (!databaseUrl || !runPostgresTests) {
         }
         const originalAttachments = await attachmentsOf(record.id);
         expect(originalAttachments.map(({ ordinal }) => ordinal)).toEqual([0]);
+        const originalRecords = await records();
+        const originalSources = await fixtureScoped()(
+          async (tx) =>
+            await tx
+              .select()
+              .from(correspondenceSources)
+              .where(eq(correspondenceSources.correspondenceId, record.id))
+              .orderBy(asc(correspondenceSources.entityId)),
+        );
+        const originalFilers = await fixtureScoped()(
+          async (tx) =>
+            await tx
+              .select()
+              .from(correspondenceFilers)
+              .where(eq(correspondenceFilers.correspondenceId, record.id))
+              .orderBy(asc(correspondenceFilers.id)),
+        );
+        expect(originalSources.map(({ entityId }) => entityId)).toEqual([
+          first,
+        ]);
+        expect(
+          originalFilers.map(({ filedByUserId }) => filedByUserId),
+        ).toEqual([uploaderId]);
         const writes = { failAfter: null, written: 0 };
         const refused = await processUpload({
           entityId: copy,
@@ -586,6 +618,27 @@ if (!databaseUrl || !runPostgresTests) {
           reason: "invalid_content",
         });
         expect(writes.written).toBe(0);
+        expect(await records()).toEqual(originalRecords);
+        expect(
+          await fixtureScoped()(
+            async (tx) =>
+              await tx
+                .select()
+                .from(correspondenceSources)
+                .where(eq(correspondenceSources.correspondenceId, record.id))
+                .orderBy(asc(correspondenceSources.entityId)),
+          ),
+        ).toEqual(originalSources);
+        expect(
+          await fixtureScoped()(
+            async (tx) =>
+              await tx
+                .select()
+                .from(correspondenceFilers)
+                .where(eq(correspondenceFilers.correspondenceId, record.id))
+                .orderBy(asc(correspondenceFilers.id)),
+          ),
+        ).toEqual(originalFilers);
         expect(await attachmentsOf(record.id)).toEqual(originalAttachments);
         const resumed = await processUpload({
           entityId: first,
@@ -595,6 +648,34 @@ if (!databaseUrl || !runPostgresTests) {
         expect(
           (await attachmentsOf(record.id)).map(({ ordinal }) => ordinal),
         ).toEqual([0, 1]);
+
+        await db.delete(entities).where(eq(entities.id, first));
+        expect(await records()).toEqual([]);
+        expect(
+          await fixtureScoped()(
+            async (tx) =>
+              await tx
+                .select()
+                .from(correspondenceSources)
+                .where(eq(correspondenceSources.correspondenceId, record.id)),
+          ),
+        ).toEqual([]);
+        expect(
+          await fixtureScoped()(
+            async (tx) =>
+              await tx
+                .select()
+                .from(correspondenceFilers)
+                .where(eq(correspondenceFilers.correspondenceId, record.id)),
+          ),
+        ).toEqual([]);
+        expect(await attachmentsOf(record.id)).toEqual([]);
+        expect(
+          await db
+            .select({ id: entities.id })
+            .from(entities)
+            .where(eq(entities.id, copy)),
+        ).toEqual([{ id: copy }]);
       },
     );
 

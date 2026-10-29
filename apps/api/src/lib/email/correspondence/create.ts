@@ -355,6 +355,9 @@ export const createCorrespondence = async ({
     if (persisted.isErr()) {
       return persisted;
     }
+    if (persisted.value.status === "invalid_content") {
+      return Result.ok({ type: "invalid_content" as const });
+    }
     const { id: correspondenceId, status } = persisted.value;
     const created = status === "created";
     const refreshed = status === "refreshed";

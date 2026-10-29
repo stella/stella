@@ -185,6 +185,8 @@ over the message XML, takes the same path and files a `data_box` record.
   A parsed payload fingerprint binds the envelope and each attachment ordinal
   to its file name, media type and content hash. Another export can resume only
   when that fingerprint matches; an asserted message ID alone is insufficient.
+  Filing checks the target fingerprint under the matter lock before writing any
+  record, source association or filer, so a refused export cannot become a source.
   Each attachment write rechecks the source version and record content hash
   inside the document transaction, so an older completion cannot claim ordinals
   after a source refresh.
