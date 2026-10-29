@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { printError } from "@stll/errors";
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
-import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+import { runOwnedTestProcess } from "@stll/scripts/src/run-owned-test-process";
 
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
@@ -159,16 +159,16 @@ writeFileSync(
 
 const runSnapshotBuilder = async (snapshotPath: string): Promise<void> => {
   console.log("Building the PGlite test-database snapshot ...");
-  const builder = Bun.spawn(
-    [
+  const exitCode = await runOwnedTestProcess({
+    command: [
       process.execPath,
       path.join(apiRoot, "scripts/build-pglite-snapshot.ts"),
       snapshotPath,
     ],
-    { cwd: apiRoot, stdout: "inherit", stderr: "inherit" },
-  );
-  await builder.exited;
-  const exitCode = childExitStatus(builder);
+    cwd: apiRoot,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
   if (exitCode !== 0) {
     throw new SnapshotBuildError({
       message: "PGlite snapshot build failed; aborting the test run.",
@@ -190,12 +190,12 @@ const validateSnapshot = async (snapshotPath: string): Promise<boolean> => {
   ) {
     return false;
   }
-  const listing = Bun.spawn(["tar", "-tf", snapshotPath], {
+  const exitCode = await runOwnedTestProcess({
+    command: ["tar", "-tf", snapshotPath],
     stdout: "ignore",
     stderr: "ignore",
   });
-  await listing.exited;
-  return childExitStatus(listing) === 0;
+  return exitCode === 0;
 };
 
 const buildTestDbSnapshot = async (): Promise<string> => {
@@ -255,8 +255,8 @@ const reportArguments =
         "--reporter=junit",
         `--reporter-outfile=${path.join(artifactDirectory, "junit.xml")}`,
       ];
-const child = Bun.spawn(
-  buildApiTestCommand({
+process.exitCode = await runOwnedTestProcess({
+  command: buildApiTestCommand({
     bunExecutable: process.execPath,
     // `--no-orphans` takes the workers down when this runner is stopped.
     bunRuntimeArguments: ["--smol", "--no-orphans"],
@@ -275,12 +275,8 @@ const child = Bun.spawn(
     ],
     testFiles: testPaths,
   }),
-  {
-    cwd: apiRoot,
-    env: testProcessEnv,
-    stdout: "inherit",
-    stderr: "inherit",
-  },
-);
-await child.exited;
-process.exitCode = childExitStatus(child);
+  cwd: apiRoot,
+  env: testProcessEnv,
+  stdout: "inherit",
+  stderr: "inherit",
+});
