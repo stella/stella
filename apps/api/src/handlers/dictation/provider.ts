@@ -401,12 +401,14 @@ export const transcribeAudio = async ({
             },
           );
           if (!response.ok) {
-            await response.body?.cancel();
-            return Result.err(
-              providerFailure(
-                response.status === 429 || response.status >= 500,
-              ),
+            const failure = providerFailure(
+              response.status === 429 || response.status >= 500,
             );
+            const cancelled = await Result.tryPromise({
+              try: async () => await response.body?.cancel(),
+              catch: () => failure,
+            });
+            return Result.err(cancelled.isErr() ? cancelled.error : failure);
           }
           if (response.body === null) {
             return Result.err(invalidResponse());

@@ -584,27 +584,32 @@ describe("transcription failure isolation", () => {
     }
   });
 
-  test("failed error-body cleanup returns a redacted typed transport failure", async () => {
-    const result = await transcribeAudio({
-      ...input(),
-      fetch: async () =>
-        new Response(
-          new ReadableStream({
-            cancel: () => {
-              throw new TypeError(TEXT);
-            },
-          }),
-          { status: 400 },
-        ),
-    });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error).toMatchObject({
-        code: AI_FAILURE_CODES.provider_unavailable,
-        retryable: true,
+  test("failed error-body cleanup preserves HTTP retryability and redacts diagnostics", async () => {
+    for (const status of [400, 401, 403, 422, 429, 500, 503]) {
+      let cancellations = 0;
+      const result = await transcribeAudio({
+        ...input(),
+        fetch: async () =>
+          new Response(
+            new ReadableStream({
+              cancel: () => {
+                cancellations += 1;
+                throw new TypeError(TEXT);
+              },
+            }),
+            { status },
+          ),
       });
-      expect(result.error.cause).toBeUndefined();
-      expect(JSON.stringify(result.error)).not.toContain(TEXT);
+      expect(cancellations).toBe(1);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toMatchObject({
+          code: AI_FAILURE_CODES.provider_unavailable,
+          retryable: status === 429 || status >= 500,
+        });
+        expect(result.error.cause).toBeUndefined();
+        expect(JSON.stringify(result.error)).not.toContain(TEXT);
+      }
     }
   });
 

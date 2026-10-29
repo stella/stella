@@ -24,7 +24,7 @@ const getContext = () =>
 type DictationLimitOptions = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
-  context?: Pick<RateLimitContext, "increment" | "complete">;
+  context?: Pick<RateLimitContext, "increment" | "decrement" | "complete">;
 };
 
 export const consumeDictationLimit = async ({
@@ -32,44 +32,59 @@ export const consumeDictationLimit = async ({
   organizationId,
   context = getContext(),
 }: DictationLimitOptions): Promise<Result<void, HandlerError<429 | 503>>> => {
-  const counters = await Result.tryPromise({
+  const budgets = (
+    [
+      {
+        counterKey: `dictation:user:${userId}`,
+        maximum: USER_REQUESTS,
+        name: "dictation.user",
+        keyKind: "user",
+      },
+      {
+        counterKey: `dictation:organization:${organizationId}`,
+        maximum: ORGANIZATION_REQUESTS,
+        name: "dictation.organization",
+        keyKind: "organization",
+      },
+    ] as const
+  ).map((budget) => ({
+    ...budget,
+    key: createRedisRateLimitRequestKey({
+      counterKey: budget.counterKey,
+      requestId: Bun.randomUUIDv7(),
+    }),
+  }));
+  const counters = await Promise.allSettled(
+    budgets.map(async ({ key, maximum, name, keyKind }) => {
+      const counter = await context.increment(key, WINDOW_MS);
+      if (counter.count <= maximum) {
+        return true;
+      }
+      recordBudgetRejection({ name, keyKind, windowMs: WINDOW_MS });
+      return false;
+    }),
+  );
+  if (counters.some(({ status }) => status === "rejected")) {
+    // Wait for both attempts before refunding; a rejected increment may also
+    // have reached the store, whose request identity makes the refund safe.
+    await Promise.allSettled(
+      budgets.map(async ({ key }) => await context.decrement(key)),
+    );
+    return Result.err(new HandlerError(LIMITER_STORE_UNAVAILABLE));
+  }
+  const completed = await Result.tryPromise({
     try: async () =>
       await Promise.all(
-        (
-          [
-            {
-              counterKey: `dictation:user:${userId}`,
-              maximum: USER_REQUESTS,
-              name: "dictation.user",
-              keyKind: "user",
-            },
-            {
-              counterKey: `dictation:organization:${organizationId}`,
-              maximum: ORGANIZATION_REQUESTS,
-              name: "dictation.organization",
-              keyKind: "organization",
-            },
-          ] as const
-        ).map(async ({ counterKey, maximum, name, keyKind }) => {
-          const key = createRedisRateLimitRequestKey({
-            counterKey,
-            requestId: Bun.randomUUIDv7(),
-          });
-          const counter = await context.increment(key, WINDOW_MS);
-          await context.complete(key);
-          if (counter.count <= maximum) {
-            return true;
-          }
-          recordBudgetRejection({ name, keyKind, windowMs: WINDOW_MS });
-          return false;
-        }),
+        budgets.map(async ({ key }) => await context.complete(key)),
       ),
     catch: () => new HandlerError(LIMITER_STORE_UNAVAILABLE),
   });
-  if (counters.isErr()) {
-    return Result.err(counters.error);
+  if (completed.isErr()) {
+    return Result.err(completed.error);
   }
-  return counters.value.every(Boolean)
+  return counters.every(
+    (counter) => counter.status === "fulfilled" && counter.value,
+  )
     ? Result.ok(undefined)
     : Result.err(
         new HandlerError({
