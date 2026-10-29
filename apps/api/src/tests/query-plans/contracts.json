@@ -539,16 +539,22 @@
   "case-law.provision-citing-decisions": {
     "scans": [
       {
-        "position": "root/0/0/0/0/0/0/0/0",
+        "position": "root/0/0/0/0/0/0/0",
         "relation": "case_law_provision_citations",
-        "nodeType": "Index Scan",
-        "index": "case_law_provision_citations_work_subtree_idx"
+        "nodeType": "Index Only Scan",
+        "index": "case_law_provision_citations_work_citing_idx"
       },
       {
-        "position": "root/0/0/0/0/0/0/0/1",
+        "position": "root/0/0/0/1/0/0",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
         "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/1/0",
+        "relation": "case_law_provision_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_provision_citations_decision_span_idx"
       }
     ]
   },

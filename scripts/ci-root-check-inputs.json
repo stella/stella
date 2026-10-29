@@ -460,6 +460,14 @@
       "docs/changelog/**",
       "VERSION"
     ],
+    "Test staging proof readiness": [
+      "@stll/portable-path",
+      "apps/api/src/deploy-env-contract.ts",
+      "scripts/**",
+      ".github/workflows/**",
+      ".github/actions/setup-playwright/**",
+      ".github/actions/promote-dispatch/**"
+    ],
     "Generated files manifest guard": ["**"],
     "Playwright config scope": ["**"],
     "Test documentation and landing CI scope": ["**"],
