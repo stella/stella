@@ -269,6 +269,9 @@ const writeDecisionRow = async (
       }
 
       if (updated.length === 0) {
+        if (inputProvenance.type === "stored-replay") {
+          return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
+        }
         // A newer observation owns the row. Its durable mirror state
         // decides whether this page may advance: a pending winner still
         // needs the source page as its replay path.
@@ -277,7 +280,7 @@ const writeDecisionRow = async (
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
           payloadFenced:
-            storedPayloadUnchanged || inputProvenance.type === "stored",
+            storedPayloadUnchanged || inputProvenance.type !== "observation",
         });
       }
 
@@ -304,7 +307,10 @@ const writeDecisionRow = async (
         }
       }
 
-      if (!preservesExistingDetail) {
+      if (
+        !preservesExistingDetail &&
+        inputProvenance.type !== "stored-replay"
+      ) {
         // Observed identifiers are re-derived; declared aliases stay, and an
         // observed identifier equal to one is already held by it.
         await tx
@@ -345,7 +351,7 @@ const writeDecisionRow = async (
       );
     }
 
-    if (inputProvenance.type === "stored") {
+    if (inputProvenance.type !== "observation") {
       // A reparse must never recreate a removed decision under a new identity.
       return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
     }

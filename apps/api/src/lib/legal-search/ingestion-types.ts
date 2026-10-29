@@ -1,3 +1,4 @@
+// parser-output-unchanged: Replay admission distinguishes metadata-only payloads; parsed publisher fields and document parsing are unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
@@ -884,6 +885,8 @@ export const STORED_RAW_REPARSE_REJECTION = {
   UNSUPPORTED_CONTENT: "unsupported-content",
   /** The payload parsed to nothing that could be stored as a decision. */
   NO_DOCUMENT: "no-document",
+  /** The retained payload reconstructs metadata, but carries no document input. */
+  METADATA_ONLY: "metadata-only",
   /** The payload is a supplement to another decision, not one of its own. */
   SUPPLEMENT: "supplement",
 } as const;

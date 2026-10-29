@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, type SQLWrapper } from "drizzle-orm";
 
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -9,6 +9,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 import { DECLARED_SCHEDULER_JOBS, upsertSchedulerJob } from "./jobs";
+import { readSchedulerJobPause } from "./pauses";
 import { acquireNextDueJob, runJob } from "./runner";
 import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
@@ -75,6 +76,32 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("scheduler operator pauses (postgres)", () => {
+    test("long tasks observe a pause and resume through the scheduler's durable row", async () => {
+      await withJob(async ({ db, jobId }) => {
+        const pauseDb = {
+          execute: async <TRow extends Record<string, unknown>>(
+            query: SQLWrapper | string,
+          ) => await db.execute<TRow>(query),
+        };
+        expect(await readSchedulerJobPause(pauseDb, jobId)).toBe(false);
+        await db
+          .update(schedulerJobs)
+          .set({
+            pausedUntil: new Date(Date.now() + 60_000),
+            pausedBy: PAUSED_BY,
+            pausedSince: new Date(),
+            pauseReason: PAUSE_REASON,
+          })
+          .where(eq(schedulerJobs.id, jobId));
+        expect(await readSchedulerJobPause(pauseDb, jobId)).toBe(true);
+        await db
+          .update(schedulerJobs)
+          .set({ pausedUntil: null })
+          .where(eq(schedulerJobs.id, jobId));
+        expect(await readSchedulerJobPause(pauseDb, jobId)).toBe(false);
+      });
+    });
+
     test("the database bounds pauses and preserves their original start", async () => {
       await withJob(async ({ client, db, jobId }) => {
         const rejectedInfinity = await client`UPDATE scheduler_jobs

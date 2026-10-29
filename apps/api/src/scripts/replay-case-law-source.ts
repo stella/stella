@@ -26,6 +26,10 @@ import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter"
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --celex 62022CJ0123 --apply
  *
+ *   # exactly one stored decision, using its decision id
+ *   bun run src/scripts/replay-case-law-source.ts --adapter pl-sn \
+ *     --decision-id <decisionId> --apply
+ *
  *   # one court after deploying a parser improvement for that court
  *   bun run src/scripts/replay-case-law-source.ts --adapter cz-nss \
  *     --court "Nejvyšší správní soud" --apply
@@ -220,6 +224,9 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   }
   if (scope.type === "court") {
     console.log(`targeting court:     ${scope.court}`);
+  }
+  if (scope.type === "decision") {
+    console.log(`targeting decision:  ${scope.decisionId}`);
   }
 
   // `null` only where the store confirmed it holds no such object, which is a

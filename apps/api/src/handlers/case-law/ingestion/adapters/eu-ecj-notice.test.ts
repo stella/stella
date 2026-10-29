@@ -520,6 +520,7 @@ describe("notice publication outcomes", () => {
         await work(asTestRaw<Transaction>(tx));
       const observedAt = new Date("2026-10-03T00:00:00Z");
       const outcome = await resolveExistingDecisionPolicy({
+        inputProvenance: { type: "observation" },
         scopedDb,
         existing,
         result: refused,
@@ -584,6 +585,7 @@ describe("notice publication outcomes", () => {
       expect(enrichmentShape.preservesExistingDetail).toBe(false);
       expect(
         await resolveExistingDecisionPolicy({
+          inputProvenance: { type: "observation" },
           scopedDb,
           existing: partialExisting,
           result: enriched,
@@ -615,6 +617,7 @@ describe("notice publication outcomes", () => {
         // metadata and raw, removing the notice or Formex content that is gone.
         expect(
           await resolveExistingDecisionPolicy({
+            inputProvenance: { type: "observation" },
             scopedDb,
             existing,
             result: gone,

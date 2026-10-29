@@ -20,7 +20,7 @@ import {
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
-import { createSha256 } from "@stll/sha256/node";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -36,7 +36,6 @@ import {
   corpusIndexProjectionStates,
   relations,
 } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
 import {
   EMPTY_AST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -51,6 +50,7 @@ import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import type { BackgroundReplayBatch } from "@/api/handlers/case-law/ingestion/background-replay";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import {
   CASE_LAW_REPLAY_SCOPE,
@@ -65,6 +65,7 @@ import type {
   ReplayRowReport,
   ReplayRowResult,
 } from "@/api/handlers/case-law/ingestion/replay";
+import { saveReplayDiffSample } from "@/api/handlers/case-law/ingestion/replay-diff-sample";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -83,15 +84,20 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
+import {
+  approveMetadataUrls,
+  META_URL_DIAGNOSTICS,
+} from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
+  rawDocumentPrefix,
   rawSourcePayloadKey,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // A writing replay, through the same `processDecision` a crawl feeds.
@@ -136,7 +142,6 @@ let db: ReturnType<typeof connect>;
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 const STORED_PAYLOAD =
@@ -259,24 +264,9 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   }
   expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
 
-  // The payload the replay read landed under its own content hash, in the
-  // decision's own prefix, byte for byte, and under the media type the row
-  // recorded. A re-parse that returned no payload would otherwise clear the
-  // row's pointer to it.
-  const hasher = createSha256();
-  hasher.update(STORED_PAYLOAD);
-  const contentAddressedKey = `case-law/raw/${sourceId}/documents/${id}/payloads/${hasher.digest("hex")}`;
-  const stored = fake.objects.get(
-    `${envBase.S3_BUCKET}/${contentAddressedKey}`,
-  );
-  expect(new TextDecoder().decode(stored?.bytes)).toBe(STORED_PAYLOAD);
-  // The charset parameter is the client's; the media type is the row's, and
-  // it is what a later read of this object reports.
-  expect(stored?.contentType).toMatch(/^application\/xhtml\+xml\b/u);
-  expect(fake.objects.size).toBe(1);
+  // Stored replay never rehomes immutable publisher raw or allocates an observation.
+  expect(fake.objects.size).toBe(0);
 
-  // The pipeline's own write: payload, source hash, the raw-payload pointer
-  // and the observation watermark.
   const [applied] = await db
     .select({
       fulltext: caseLawDecisions.fulltext,
@@ -288,9 +278,9 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     .where(eq(caseLawDecisions.id, id));
   expect(applied).toEqual({
     fulltext: NEW_PARSER_TEXT,
-    sourceHash: "hash-from-the-new-parser",
-    sourceRawS3Key: contentAddressedKey,
-    observationOrder: 1n,
+    sourceHash: "hash-before-the-parser-changed",
+    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    observationOrder: null,
   });
 
   await db
@@ -339,13 +329,13 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     contentHash: beforeUnchanged.contentHash,
     fulltext: NEW_PARSER_TEXT,
     parserVersion: 5,
-    parsedSourceHash: "hash-from-the-new-parser",
+    parsedSourceHash: "hash-before-the-parser-changed",
     parsedSourceHashVersion: 0,
-    parsedSourceRawS3Key: contentAddressedKey,
+    parsedSourceRawS3Key: STORED_KEY_PLACEHOLDER,
     projectionEpoch: beforeUnchanged.projectionEpoch,
-    sourceHash: "hash-from-the-new-parser",
-    sourceRawS3Key: contentAddressedKey,
-    observationOrder: 2n,
+    sourceHash: "hash-before-the-parser-changed",
+    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    observationOrder: null,
   });
   const beforeThird = await db
     .select()
@@ -370,7 +360,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   // A converged replay re-reads the payload but has nothing to store: the
   // key the row already records names an object with these exact bytes.
   expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
-    1,
+    0,
   );
 
   // Citation extraction ran on the re-parsed text: the reason a replay goes
@@ -895,13 +885,189 @@ const replayConvergenceFixture = async (text: string) => {
   return { sourceId, id, result, sanitized, payload, replay };
 };
 
+test("a dry-run saves exact before and after derived output under its reviewed wave reference", async () => {
+  const fixture = await replayConvergenceFixture("Original derived body.");
+  const targetParserVersion = 5;
+  const changed = plainTextIngestionResult({
+    ...fixture.result,
+    fulltext: "New derived body.",
+    sections: [
+      { index: 0, type: "unknown", title: null, text: "New derived body." },
+    ],
+    documentAst: astWithBlocks([paragraph("after", "New derived body.")]),
+    parserVersion: targetParserVersion,
+  });
+  const selected =
+    (
+      await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, fixture.id))
+    ).at(0) ?? panic("Missing dry-run fixture");
+  const batch = {
+    id: `sample-${fixture.id}`,
+    source: {
+      id: fixture.sourceId,
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      currentParserVersion: targetParserVersion,
+      mode: "dry-run",
+      rowsBehind: 1,
+    },
+    decisionId: fixture.id,
+    parserVersionFrom: selected.parserVersion,
+    targetParserVersion,
+    sourceRawS3Key: selected.sourceRawS3Key,
+    claimReadmission: 0,
+  } as const satisfies BackgroundReplayBatch;
+  const owner = {
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+    sourceId: fixture.sourceId,
+    documentId: fixture.id,
+  } as const;
+  const keyPrefix = rawDocumentPrefix(owner);
+  const manifest = new Map<string, string>();
+  let callbackCount = 0;
+  let recordCount = 0;
+  const storedArtifact = (objectKey: string) =>
+    [...fake.objects.entries()].find(([key]) =>
+      key.endsWith(`/${objectKey}`),
+    )?.[1] ?? panic("Replay diff object was not durable");
+  const store = {
+    needsDryRunDiffSample: async (_source, decisionId) =>
+      !manifest.has(decisionId),
+    recordDryRunDiffSample: async (source, sample) => {
+      // A discoverable reference may only be recorded after its object landed.
+      expect(source.id).toBe(fixture.sourceId);
+      expect(sample.decisionId).toBe(fixture.id);
+      expect(sample.key.startsWith(keyPrefix)).toBe(true);
+      expect(storedArtifact(sample.key).contentType).toMatch(
+        /^application\/json\b/u,
+      );
+      manifest.set(sample.decisionId, sample.key);
+      recordCount += 1;
+    },
+  } satisfies Parameters<typeof saveReplayDiffSample>[0]["store"];
+  const preview = async (result: IngestionResult) =>
+    await replayCaseLawSource({
+      adapter: stubAdapter(() => ({ type: "parsed", result })),
+      scopedDb,
+      sourceId: fixture.sourceId,
+      sourceLease: null,
+      scope: { type: "decision", decisionId: fixture.id },
+      bound: { type: "at-most", limit: 1 },
+      pageSize: 1,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+      onDerivedOutput: async (after) => {
+        callbackCount += 1;
+        await saveReplayDiffSample({
+          batch,
+          after,
+          scopedDb,
+          store,
+          signal: AbortSignal.timeout(5000),
+        });
+      },
+    });
+  const first = await preview(changed);
+  if (first.type !== "ran") {
+    panic("Expected dry-run replay");
+  }
+  expect(first.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+  const firstKey =
+    manifest.get(fixture.id) ?? panic("Missing discoverable diff reference");
+  const firstBytes = storedArtifact(firstKey).bytes.slice();
+  expect(firstKey).toBe(rawSourcePayloadKey({ owner, data: firstBytes }));
+  const artifact: unknown = JSON.parse(new TextDecoder().decode(firstBytes));
+  expect(artifact).toEqual({
+    decisionId: fixture.id,
+    sourceRawS3Key: selected.sourceRawS3Key,
+    parserVersionFrom: selected.parserVersion,
+    parserVersionTo: targetParserVersion,
+    before: fixture.payload,
+    after: caseLawCanonicalPayload(sanitizeResult(changed)),
+  });
+  await preview(changed);
+  expect(storedArtifact(firstKey).bytes).toEqual(firstBytes);
+  expect(manifest).toEqual(new Map([[fixture.id, firstKey]]));
+  expect(recordCount).toBe(1);
+  const unchangedResult = plainTextIngestionResult({
+    ...fixture.result,
+    parserVersion: targetParserVersion,
+  });
+  const unchanged = await preview(unchangedResult);
+  if (unchanged.type !== "ran") {
+    panic("Expected unchanged dry-run replay");
+  }
+  expect(unchanged.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(callbackCount).toBe(3);
+  expect(
+    (
+      await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, fixture.id))
+    ).at(0),
+  ).toEqual(selected);
+  expect(fake.objects.size).toBe(1);
+  expect(storedArtifact(firstKey).bytes).toEqual(firstBytes);
+  // An explicit same-version reset may sample again, but the reviewed object stays immutable.
+  manifest.clear();
+  await preview(unchangedResult);
+  const resetKey =
+    manifest.get(fixture.id) ?? panic("Missing reset-wave diff reference");
+  expect(resetKey).not.toBe(firstKey);
+  expect(storedArtifact(firstKey).bytes).toEqual(firstBytes);
+  const resetArtifact: unknown = JSON.parse(
+    new TextDecoder().decode(storedArtifact(resetKey).bytes),
+  );
+  expect(resetArtifact).toEqual({
+    decisionId: fixture.id,
+    sourceRawS3Key: selected.sourceRawS3Key,
+    parserVersionFrom: selected.parserVersion,
+    parserVersionTo: targetParserVersion,
+    before: fixture.payload,
+    after: fixture.payload,
+  });
+  expect(fake.objects.size).toBe(2);
+  expect(recordCount).toBe(2);
+  expect(resetKey).toBe(
+    rawSourcePayloadKey({ owner, data: storedArtifact(resetKey).bytes }),
+  );
+  manifest.clear();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      redactedAt: new Date(),
+      fulltext: null,
+      sections: null,
+      documentAst: null,
+      contentHash: null,
+    })
+    .where(eq(caseLawDecisions.id, fixture.id));
+  const requestsBeforeRedaction = fake.requests.length;
+  expect(
+    await rejectionOf(
+      saveReplayDiffSample({
+        batch,
+        after: fixture.payload,
+        scopedDb,
+        store,
+        signal: AbortSignal.timeout(5000),
+      }),
+    ),
+  ).toMatchObject({ message: "Replay diff input changed while sampling" });
+  expect(fake.requests).toHaveLength(requestsBeforeRedaction);
+  expect(recordCount).toBe(2);
+});
+
 test.each(TEXT_ABSENCE_REASONS)(
-  "explicit %s absence writes survive a partial replay and resume at a fixed point",
+  "publisher text metadata with %s absence survives a partial replay and resume",
   async (reason) => {
     const fixture = await replayConvergenceFixture("Unchanged body text.");
     const secondId = createSafeId<"caseLawDecision">();
     const legacyMetadata = {
       celex: "62026CJ0010",
+      headnote: "Original publisher headnote",
       ...(reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
         ? {}
         : {
@@ -941,7 +1107,6 @@ test.each(TEXT_ABSENCE_REASONS)(
     };
     const expectedMetadata = {
       ...legacyMetadata,
-      headnote: "Published headnote",
       [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
         DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
       [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
@@ -1248,7 +1413,7 @@ test.each(["row-columns", "content-hash"])(
       .select({ order: caseLawSources.observationOrder })
       .from(caseLawSources)
       .where(eq(caseLawSources.id, fixture.sourceId));
-    expect(source?.order).toBe(1n);
+    expect(source?.order).toBe(0n);
     const second = await fixture.replay(null);
     if (second.type !== "ran") {
       throw new TypeError("Expected replay to run");
@@ -1297,7 +1462,21 @@ test.each(["unchanged", "rejected", "missing-payload", "changed"] as const)(
                 type: "parsed",
                 result:
                   outcome === "changed"
-                    ? { ...fixture.result, rawHash: "changed-source-hash" }
+                    ? {
+                        ...fixture.result,
+                        fulltext: "Changed derived body.",
+                        sections: [
+                          {
+                            index: 0,
+                            type: "unknown",
+                            title: null,
+                            text: "Changed derived body.",
+                          },
+                        ],
+                        documentAst: astWithBlocks([
+                          paragraph("b1", "Changed derived body."),
+                        ]),
+                      }
                     : fixture.result,
               },
         ),
@@ -1395,7 +1574,7 @@ test("an unchanged replay preserves a version written after the row was selected
   await lease.release();
 });
 
-test("a version bump that changes only a described column goes through the pipeline", async () => {
+test("a version bump preserves publisher descriptions while establishing parser proof", async () => {
   const fixture = await replayConvergenceFixture("Unchanged body text.");
   await db
     .update(caseLawDecisions)
@@ -1427,7 +1606,7 @@ test("a version bump that changes only a described column goes through the pipel
   if (run.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
-  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   const [row] = await db
     .select({
       decisionType: caseLawDecisions.decisionType,
@@ -1435,16 +1614,16 @@ test("a version bump that changes only a described column goes through the pipel
     })
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.id, fixture.id));
-  expect(row).toEqual({ decisionType: "judgment", version: 4 });
+  expect(row).toEqual({ decisionType: "order", version: 4 });
   const [source] = await db
     .select({ order: caseLawSources.observationOrder })
     .from(caseLawSources)
     .where(eq(caseLawSources.id, fixture.sourceId));
-  expect(source?.order).toBe(1n);
+  expect(source?.order).toBe(0n);
   await lease.release();
 });
 
-test("a row stored under an encoded docket replays to the decoded docket in place", async () => {
+test("a row stored under an encoded docket keeps its publisher identity during replay", async () => {
   const sourceId = createSafeId<"caseLawSource">();
   await db.insert(caseLawSources).values({
     id: sourceId,
@@ -1463,8 +1642,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
     [keyedId, legacyPayloadFor("sk-guid-legacy")],
     [docketKeyedId, legacyPayloadFor(null)],
   ]);
-  // The legacy key, or the content-addressed one the applied write moves the
-  // row to; both name the decision.
+  // The retained raw key names the decision whose official identity stays fixed.
   const payloadAt = (key: string) =>
     [...payloads].find(([id]) => key.includes(id))?.[1] ?? panic(key);
   const legacyVersion = PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS] - 1;
@@ -1529,30 +1707,126 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   if (first.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
-  expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
-  // The docket-keyed row has no publisher id the write could find it by, so
-  // it is refused rather than inserted again under the new spelling.
-  expect(first.report.rejections["identity-mismatch"]).toBe(1);
+  expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+  expect(
+    first.report.rejections[STORED_RAW_REPARSE_REJECTION.METADATA_ONLY],
+  ).toBe(1);
+  expect(
+    first.report.rejections[STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH],
+  ).toBe(1);
   expect(await readRows()).toEqual({
     [docketKeyedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
     [keyedId]: {
-      caseNumber: "7C/221/1991",
-      version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      caseNumber: "7C&#x2F;221/1991",
+      version: legacyVersion,
     },
   });
 
-  // The migrated row now matches its payload exactly: a second run converges.
+  // Metadata-only payloads establish no document parse proof on a repeated run.
   const second = await replay();
   if (second.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
   expect(second.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
-  expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
-  expect(second.report.rejections["identity-mismatch"]).toBe(1);
+  expect(
+    second.report.rejections[STORED_RAW_REPARSE_REJECTION.METADATA_ONLY],
+  ).toBe(1);
+  expect(
+    second.report.rejections[STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH],
+  ).toBe(1);
   await lease.release();
 });
 
-test("registered replay and its pipeline write preserve URLs and cloned diagnostic snapshots", async () => {
+test.each([
+  REPLAY_REJECTION_POLICY.REPORT,
+  REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT,
+])(
+  "metadata-only Slovak raw preserves its retained document under %s policy",
+  async (rejectionPolicy) => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const id = createSafeId<"caseLawDecision">();
+    const assembled =
+      assembleSkCourtsDecision({
+        item: {
+          guid: "stored-metadata-only",
+          spisovaZnacka: "7C/221/1991",
+          sud: { nazov: "Okresný súd Bratislava I" },
+        },
+        detail: null,
+      }) ?? panic("Expected a keyable Slovak metadata fixture");
+    const raw =
+      assembled.sourceRaw ?? panic("Slovak fixture retained no raw envelope");
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: `replay-sk-metadata-${sourceId}`,
+      name: "Stored metadata-only fixture",
+    });
+    await db.insert(caseLawDecisions).values({
+      id,
+      sourceId,
+      caseNumber: assembled.caseNumber,
+      court: assembled.court,
+      country: assembled.country,
+      language: assembled.language,
+      sourceDocumentId: assembled.sourceDocumentId,
+      sourceRawS3Key: `case-law/raw/legacy/${id}`,
+      sourceRawContentType: assembled.sourceRawContentType,
+      sourceHash: "retained-publisher-hash",
+      parserVersion: 1,
+      fulltext: RESTRUCTURED_TEXT,
+      documentAst: STRUCTURED_AST,
+      sections: STORED_SECTIONS,
+      metadata: { publisherField: "retained" },
+    });
+    const snapshot = async () =>
+      await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id));
+    const before = await snapshot();
+    const updatesBefore = decisionUpdates.length;
+    const sourceLease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId,
+    });
+    if (sourceLease === null) {
+      panic("Expected metadata-only replay lease");
+    }
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = asFetchMock(() =>
+      panic("Metadata-only replay must not fetch remotely"),
+    );
+    try {
+      const replay = await replayCaseLawSource({
+        adapter: skCourtsAdapter,
+        scopedDb,
+        sourceId,
+        sourceLease,
+        rejectionPolicy,
+        scope: { type: "decision", decisionId: id },
+        bound: { type: "at-most", limit: 1 },
+        pageSize: 1,
+        readStoredRaw: async () => new TextEncoder().encode(raw),
+      });
+      if (replay.type !== "ran") {
+        panic("Expected registered Slovak replay to inspect raw");
+      }
+      expect(replay.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+      expect(
+        replay.report.rejections[STORED_RAW_REPARSE_REJECTION.METADATA_ONLY],
+      ).toBe(1);
+      expect(replay.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
+      expect(await snapshot()).toEqual(before);
+      expect(decisionUpdates.slice(updatesBefore)).toEqual([]);
+      expect(fake.requests).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+      await sourceLease.release();
+    }
+  },
+);
+
+test("registered replay preserves official URLs and metadata despite richer parser output", async () => {
   const fixture = await replayConvergenceFixture("Replay URL schema fixture.");
   await db
     .update(caseLawSources)
@@ -1607,15 +1881,13 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
         .where(eq(caseLawDecisions.id, fixture.id))
         .limit(1)
     ).at(0);
-    expect(row?.metadata).toMatchObject({
-      manifestationUri: href,
-      manifestations: [{ uri: href }],
-      metadataUrlDiagnostics: {
+    expect(row?.metadata).toEqual({
+      ...fixture.sanitized.metadata,
+      [META_URL_DIAGNOSTICS]: {
         entries: [{ address: "languageUri", reason: "unsafe-protocol" }],
         overflowCount: 0,
       },
     });
-    expect(row?.metadata).not.toHaveProperty("languageUri");
     const second = await replay();
     if (second.type !== "ran") {
       panic("Expected repeated replay to run");
@@ -1685,7 +1957,7 @@ test("replay updates exactly changed rows and produces content-free terminal res
             court: result.court,
             country: result.country,
             language: result.language,
-            metadata: result.metadata,
+            metadata: sanitizeResult(result).metadata,
             sourceHash: result.rawHash,
             fulltext:
               outcome === "changed" ? "Old body." : fixture.payload.text,

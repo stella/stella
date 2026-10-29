@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type {
   AttemptStep,
+  DecisionInputProvenance,
   DecisionRefresh,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
@@ -360,6 +361,7 @@ const watermarkMissOutcome = async ({
 };
 
 type ResolveExistingDecisionPolicyOptions = {
+  inputProvenance: DecisionInputProvenance;
   scopedDb: ScopedDb;
   existing: ExistingDecision | undefined;
   result: IngestionResult;
@@ -377,6 +379,7 @@ type ResolveExistingDecisionPolicyOptions = {
  * Null when the observation goes on to write the row.
  */
 export const resolveExistingDecisionPolicy = async ({
+  inputProvenance,
   scopedDb,
   existing,
   result,
@@ -393,6 +396,9 @@ export const resolveExistingDecisionPolicy = async ({
   sourceFingerprintVersion,
   sourceFingerprintFromStoredRaw,
 }: ResolveExistingDecisionPolicyOptions): Promise<AttemptStep | null> => {
+  if (inputProvenance.type === "stored-replay") {
+    return null;
+  }
   if (
     preservesExistingDetail &&
     existing !== undefined &&

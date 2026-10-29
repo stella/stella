@@ -19,15 +19,15 @@ export const REPLAY_HEALTH_CONFIG = {
 
 export type ReplayEnrolment =
   | { mode: "off" }
-  | { mode: "dry-run"; dailyBudget: number }
-  | { mode: "enrolled"; dailyBudget: number; reviewedDryRun: string };
+  | { mode: "dry-run" }
+  | { mode: "enrolled"; reviewedDryRun: string };
 
 // Enrolment is a reviewed code change, never an environment override.
 export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "off" },
   [ADAPTER_KEYS.CZ_NS]: { mode: "off" },
   [ADAPTER_KEYS.CZ_NSS]: { mode: "off" },
-  [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 10_000 },
+  [ADAPTER_KEYS.CZ_US]: { mode: "dry-run" },
   [ADAPTER_KEYS.SK_COURTS]: { mode: "off" },
   [ADAPTER_KEYS.SK_US]: { mode: "off" },
   [ADAPTER_KEYS.PL_COURTS]: { mode: "off" },
@@ -57,10 +57,8 @@ export const REPLAY_ENROLMENT = {
 } as const satisfies Record<AdapterKey, ReplayEnrolment>;
 
 export const BACKGROUND_REPLAY_LIMITS = {
-  maxRows: 100,
   maxDurationMs: 4 * 60_000,
   hardDurationMs: 5 * 60_000,
-  maxDailyBudget: 10_000,
   storedRawReadTimeoutMs: 30_000,
   maxRowAttempts: 5,
   maxRowReadmissions: MAX_REPLAY_ROW_READMISSIONS,
@@ -74,13 +72,6 @@ export const BACKGROUND_REPLAY_LIMITS = {
 export const validateReplayEnrolment = (policy: ReplayEnrolment): void => {
   if (policy.mode === "off") {
     return;
-  }
-  if (
-    !Number.isSafeInteger(policy.dailyBudget) ||
-    policy.dailyBudget <= 0 ||
-    policy.dailyBudget > BACKGROUND_REPLAY_LIMITS.maxDailyBudget
-  ) {
-    panic("Replay daily budget must be a positive bounded integer");
   }
   if (policy.mode === "enrolled" && policy.reviewedDryRun.trim().length === 0) {
     panic("Replay enrolment requires a reviewed dry run");

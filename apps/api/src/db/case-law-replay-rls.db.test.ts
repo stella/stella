@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { getTableName, isTable } from "drizzle-orm";
 
 import { withGatedTestClients } from "../tests/gated-test-database";
+import * as replaySchema from "./schema/case-law-replay";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -35,6 +37,13 @@ const receipts = [
     insert: `INSERT INTO case_law_replay_source_progress (source_id) VALUES ('${sourceId}')`,
     update:
       "UPDATE case_law_replay_source_progress SET ticks_without_progress = 1 RETURNING source_id",
+  },
+  {
+    prepare: null,
+    table: "case_law_replay_reported_decisions",
+    insert: `INSERT INTO case_law_replay_reported_decisions (source_id, decision_id, target_parser_version) VALUES ('${sourceId}', '${decisionId}', 2)`,
+    update:
+      "UPDATE case_law_replay_reported_decisions SET completed_at = now() RETURNING decision_id",
   },
   {
     prepare: null,
@@ -73,6 +82,19 @@ const receipts = [
   },
 ] as const;
 
+test("replay owner-only role coverage includes every declared replay table", () => {
+  const declared = Object.values(replaySchema)
+    .filter(isTable)
+    .map(getTableName)
+    .toSorted();
+  expect(
+    receipts
+      .map(({ table }) => table)
+      .filter((name) => name.startsWith("case_law_replay_"))
+      .toSorted(),
+  ).toEqual(declared);
+});
+
 describe.skipIf(!enabled)("replay receipt row security", () => {
   test("forced RLS admits only the plain owner even when another role is granted every table privilege", async () => {
     if (databaseUrl === undefined) {
@@ -96,6 +118,19 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
           import.meta.url,
         ),
       ).text();
+      const reportedMigration = (
+        await Bun.file(
+          new URL(
+            "../../drizzle/20261029000000_reported_decision_replay/migration.sql",
+            import.meta.url,
+          ),
+        ).text()
+      )
+        .split("--> statement-breakpoint")
+        .filter((statement) =>
+          statement.includes("public.case_law_replay_reported_decisions"),
+        )
+        .join("--> statement-breakpoint");
       await client.unsafe("BEGIN");
       try {
         const version = await client.unsafe<{ version: number }[]>(
@@ -120,7 +155,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
         await client.unsafe(
           `INSERT INTO case_law_sources VALUES ('${sourceId}')`,
         );
-        for (const statement of `${migration}--> statement-breakpoint${completionMigration}`
+        for (const statement of `${migration}--> statement-breakpoint${completionMigration}--> statement-breakpoint${reportedMigration}`
           .replaceAll(
             '"public"."case_law_sources"',
             () => `"${schema}"."case_law_sources"`,
@@ -128,6 +163,10 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
           .replaceAll(
             "public.case_law_replay_",
             () => `${schema}.case_law_replay_`,
+          )
+          .replaceAll(
+            "public.case_law_sources",
+            () => `${schema}.case_law_sources`,
           )
           .replaceAll("public.eu_completion_", () => `${schema}.eu_completion_`)
           .split("--> statement-breakpoint")) {

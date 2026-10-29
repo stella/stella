@@ -5,6 +5,7 @@ import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
+import { getApiLatencyAdmission } from "@/api/lib/observability/api-latency-admission";
 import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
 import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
 /**
@@ -601,6 +602,7 @@ export const buildRequestDurationRecord = ({
 export const emitRequestDurationMetric = (
   input: EmitRequestDurationMetricInput,
 ): void => {
+  getApiLatencyAdmission().observe(input.requestClass, input.durationMs);
   writeMetricLine(
     buildRequestDurationRecord({
       ...input,

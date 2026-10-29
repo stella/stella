@@ -128,6 +128,13 @@ export type DecisionInputProvenance =
       type: "stored";
       sourceRawS3Key: string;
       decisionId: SafeId<"caseLawDecision">;
+    }
+  | {
+      type: "stored-replay";
+      sourceRawS3Key: string;
+      decisionId: SafeId<"caseLawDecision">;
+      updateToken: string;
+      observationOrder: bigint | null;
     };
 
 export type ProcessDecisionAttemptOptions = {

@@ -1,10 +1,12 @@
+// parser-output-unchanged: Export the existing stored metadata key for the replay classification owner; identifier values and serialization are unchanged.
 import {
   type DecisionIdentifier,
   type DecisionIdentifiers,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 
-const STORED_DECISION_IDENTIFIERS_METADATA_KEY = "_stellaDecisionIdentifiers";
+export const STORED_DECISION_IDENTIFIERS_METADATA_KEY =
+  "_stellaDecisionIdentifiers";
 
 export const storeDecisionIdentifiersInMetadata = (
   metadata: Record<string, unknown>,

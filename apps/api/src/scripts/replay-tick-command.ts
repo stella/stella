@@ -49,6 +49,12 @@ import {
   type AdapterKey,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  type ApiLatencyAdmission,
+  readApiLatencyAdmission,
+} from "@/api/lib/observability/api-latency-admission";
+import { readSchedulerJobPause } from "@/api/lib/scheduler/pauses";
+import { REPLAY_CASE_LAW_STORED_JOB } from "@/api/lib/scheduler/tasks/case-law-stored-replay";
 import { isLocalTestRun } from "@/api/runtime-mode";
 
 const now = () => Temporal.Now.instant().epochMilliseconds;
@@ -298,11 +304,30 @@ const createReplayLeaseOwner = ({
   };
 };
 
+const replayAdmissionHoldReason = (
+  paused: boolean,
+  latency: ApiLatencyAdmission,
+) => {
+  if (paused) {
+    return "operator-pause" as const;
+  }
+  switch (latency.status) {
+    case "hold":
+      return latency.reason;
+    case "admit":
+      return null;
+    default:
+      latency satisfies never;
+      return panic("Unknown API latency admission status");
+  }
+};
+
 type ReplayTickRuntimeOptions = {
   enrolment?: Readonly<Record<AdapterKey, ReplayEnrolment>>;
   adapterFor?: (key: string) => SourceAdapter | undefined;
   readStoredRaw?: StoredRawReader;
   gate?: () => Promise<Verdict>;
+  latencyAdmission?: () => ApiLatencyAdmission;
   healthConfig?: Pick<HealthConfig, "busyWindows">;
   maxRows?: number;
   onIngestionTransaction?: (tx: Transaction) => Promise<void>;
@@ -419,10 +444,6 @@ const runReplayOnSlotSession = async ({
       ? {}
       : { enrolment: fixture.enrolment }),
     sourceEnabled: (key) => !replayKillRequested(key),
-    onBudgetExhausted: (source) =>
-      metric(source, "case_law.replay.tick", {
-        "case_law.replay.tick.budget_exhausted": 1,
-      }),
     onHeld: (source, state) =>
       metric(source, "case_law.replay.tick", {
         "case_law.replay.tick.held": 1,
@@ -461,11 +482,28 @@ const runReplayOnSlotSession = async ({
     source: BackgroundReplaySource | null;
     report: BackgroundReplayTickReport | null;
   } = { source: null, report: null };
+  const latencyAdmission = fixture.latencyAdmission ?? readApiLatencyAdmission;
   const preflight = createReplayPreflightGate({
-    readVerdict: async () =>
-      fixture.gate === undefined
-        ? await readReplayGate(health)
-        : await fixture.gate(),
+    readVerdict: async () => {
+      const [verdict, paused] = await Promise.all([
+        fixture.gate === undefined ? readReplayGate(health) : fixture.gate(),
+        readSchedulerJobPause(
+          {
+            execute: async <TRow extends Record<string, unknown>>(
+              query: SQLWrapper | string,
+            ) => await rootDb.execute<TRow>(query),
+          },
+          REPLAY_CASE_LAW_STORED_JOB,
+        ),
+      ]);
+      const latency = latencyAdmission();
+      const reason = replayAdmissionHoldReason(paused, latency);
+      if (reason !== null) {
+        log({ event: "case_law.replay.admission_held", reason, latency });
+        return { kind: "unknown", signals: [] };
+      }
+      return verdict;
+    },
     loadState: cleanupStore.loadPreflightGateState,
     saveState: cleanupStore.savePreflightGateState,
     clock: now,
@@ -479,6 +517,7 @@ const runReplayOnSlotSession = async ({
         signal,
         dependencies: {
           ...store,
+          latencyAdmission,
           chooseSource: async () => {
             observation.source = await store.chooseSource();
             return observation.source;
@@ -591,8 +630,16 @@ const runReplayTickWithOptions = async (
   return report;
 };
 
-export const runEnabledReplayTick = async (signal: AbortSignal) =>
-  await runReplayTickWithOptions(signal, {});
+export const runEnabledReplayTick = async (signal: AbortSignal) => {
+  const environment = readReplayTickEnvironment();
+  if (
+    !environment.CASE_LAW_REPLAY_ENABLED ||
+    environment.CASE_LAW_REPLAY_KILL_SWITCH
+  ) {
+    return null;
+  }
+  return await runReplayTickWithOptions(signal, {});
+};
 
 /** Refuse fixture access before loading any database or storage runtime. */
 export const getReplayTickFixtureRunner = () => {
@@ -603,7 +650,12 @@ export const getReplayTickFixtureRunner = () => {
     if (!isLocalTestRun()) {
       return panic("Replay tick fixtures require a local test run");
     }
-    return await runReplayTickWithOptions(signal, options);
+    return await runReplayTickWithOptions(signal, {
+      ...options,
+      latencyAdmission:
+        options.latencyAdmission ??
+        (() => ({ status: "admit", p95Ms: 0, samples: 20 })),
+    });
   };
 };
 
@@ -616,7 +668,6 @@ type ResetReplayDryRunOptions = {
 /** Reset owns only preview progress, under the same maintenance/schema lanes. */
 const resetReplayDryRun = async ({
   adapterKey,
-  policy,
   signal,
 }: ResetReplayDryRunOptions): Promise<boolean> => {
   signal.throwIfAborted();
@@ -662,7 +713,6 @@ const resetReplayDryRun = async ({
         id: source.id,
         adapterKey,
         currentParserVersion: PARSER_VERSIONS[adapterKey],
-        dailyBudget: policy.dailyBudget,
         mode: "dry-run",
         rowsBehind: 0,
       });

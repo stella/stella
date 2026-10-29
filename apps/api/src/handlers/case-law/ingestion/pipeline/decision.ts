@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisions } from "@/api/db/schema";
 import {
   absorbComposedSupplementRows,
   SUPPLEMENT_ABSORB_FAILED,
@@ -58,6 +60,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+
+import { STORED_REPLAY_INPUT_TOKEN } from "./stored-replay-write";
 
 type SettleRowWriteStatusOptions = {
   scopedDb: ScopedDb;
@@ -132,7 +136,7 @@ const storedInputMatchesDecision = (
   input: ProcessDecisionAttemptOptions["inputProvenance"],
   existing: DecisionRowWrite["existing"],
 ) =>
-  input.type !== "stored" ||
+  input.type === "observation" ||
   (existing !== undefined &&
     existing.id === input.decisionId &&
     existing.sourceRawS3Key === input.sourceRawS3Key);
@@ -164,7 +168,6 @@ const runDecisionAttempt = async ({
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
   signal?.throwIfAborted();
   const observation = observeDecision({ input, sourceId, metadataUrlSchema });
-  const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
   // every raw write this attempt makes starts within the window of that
@@ -180,7 +183,7 @@ const runDecisionAttempt = async ({
         ...observation,
         sourceId,
         statedEcliIdentity,
-        proposedDecisionId,
+        proposedDecisionId: createSafeId<"caseLawDecision">(),
       }),
   );
   const { existing, decisionId, composition } = identity;
@@ -193,8 +196,7 @@ const runDecisionAttempt = async ({
     };
   }
 
-  const composedSupplements =
-    composition === null ? [] : composition.supplements;
+  const composedSupplements = composition?.supplements ?? [];
   const result = composeDecisionWithSupplements({
     judgment: observation.observed,
     supplements: composedSupplements,
@@ -206,6 +208,7 @@ const runDecisionAttempt = async ({
   }
 
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
+    inputProvenance,
     scopedDb,
     existing,
     result,
@@ -222,6 +225,7 @@ const runDecisionAttempt = async ({
 
   signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
+    inputProvenance,
     ...(signal === undefined ? {} : { signal }),
     ...(s3Policy === undefined ? {} : { s3Policy }),
     result,
@@ -333,7 +337,8 @@ const runDecisionAttempt = async ({
     scopedDb,
     sourceId,
     decisionId,
-    composedSupplements,
+    composedSupplements:
+      inputProvenance.type === "stored-replay" ? [] : composedSupplements,
     observationOrder,
     writeStatus,
   });
@@ -351,11 +356,6 @@ const runDecisionAttempt = async ({
   if (flushed !== null) {
     return flushed;
   }
-
-  // Search indexing (tsvector) is handled by a background
-  // backfill loop so the slow to_tsvector + unaccent computation
-  // doesn't block cursor advancement. New decisions become
-  // searchable within ~30s of insertion.
 
   return withSourceRawRetry(rawArtifact.s3UploadFailed, {
     status: PROCESS_DECISION_STATUS.COMPLETE,
@@ -434,11 +434,11 @@ export const processDecision = async (
   );
 
 type ProcessStoredDecisionOptions = Omit<ProcessDecisionOptions, "refresh"> & {
-  /** The immutable raw object actually read, not a later decision pointer. */
   sourceRawS3Key: string;
   decisionId: SafeId<"caseLawDecision">;
 };
 
+/** Recomposition is a source observation, with its own order and stated description. */
 export const processStoredDecision = async (
   { sourceRawS3Key, decisionId, ...options }: ProcessStoredDecisionOptions,
   resolveSourceContract?: SourceContractResolver,
@@ -451,3 +451,62 @@ export const processStoredDecision = async (
     },
     resolveSourceContract,
   );
+
+type ProcessStoredReplayDecisionOptions = Omit<
+  ProcessStoredDecisionOptions,
+  "observedAt" | "observationOrder"
+> & {
+  updateToken: string;
+};
+
+/** A replay binds the snapshot selected before parsing, without announcing an observation. */
+export const processStoredReplayDecision = async (
+  {
+    sourceRawS3Key,
+    decisionId,
+    updateToken,
+    ...options
+  }: ProcessStoredReplayDecisionOptions,
+  resolveSourceContract?: SourceContractResolver,
+): Promise<ProcessResult> => {
+  const stored = await options.scopedDb(async (tx) =>
+    (
+      await tx
+        .select({ observationOrder: caseLawDecisions.sourceObservationOrder })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            eq(caseLawDecisions.sourceId, options.sourceId),
+            eq(caseLawDecisions.sourceRawS3Key, sourceRawS3Key),
+            sql`${STORED_REPLAY_INPUT_TOKEN} = ${updateToken}`,
+            isNull(caseLawDecisions.redactedAt),
+          ),
+        )
+        .limit(1)
+    ).at(0),
+  );
+  if (stored === undefined) {
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+    };
+  }
+  return await processDecisionFromInput(
+    {
+      ...options,
+      observedAt: new Date(),
+      observationOrder: stored.observationOrder ?? 0n,
+      refresh: DECISION_REFRESH.ALWAYS,
+      inputProvenance: {
+        type: "stored-replay",
+        sourceRawS3Key,
+        decisionId,
+        updateToken,
+        observationOrder: stored.observationOrder,
+      },
+    },
+    resolveSourceContract,
+  );
+};

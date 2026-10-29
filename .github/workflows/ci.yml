@@ -1634,7 +1634,7 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
-          bun test scripts/check-parser-versions.test.ts
+          bun test scripts/check-parser-versions.test.ts scripts/check-case-law-metadata-policy.test.ts
           bun scripts/check-parser-versions.ts
 
       # The Markdown checks and the dated waiver guard share this install.
@@ -4250,6 +4250,13 @@ jobs:
         # Exercises the shipped migrate path (Bun SQL + drizzle migrator),
         # the same entrypoint the deploy runs, not the drizzle-kit CLI.
         run: bun run src/db/migrate.ts
+
+      - name: Measure stored replay writes
+        timeout-minutes: 3
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        run: bun run test:postgres --workers=1 --bail src/handlers/case-law/ingestion/stored-replay.postgres.test.ts
 
       - name: Verify schema parity with schema.ts
         working-directory: apps/api

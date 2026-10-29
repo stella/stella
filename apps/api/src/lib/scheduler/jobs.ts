@@ -44,6 +44,10 @@ import {
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import {
+  REPLAY_CASE_LAW_STORED_JOB,
+  REPLAY_CASE_LAW_STORED_TASK,
+} from "@/api/lib/scheduler/tasks/case-law-stored-replay";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
 import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-retention";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
@@ -536,6 +540,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_HEARTBEAT_TASK,
     reads: "unmeasured",
+  },
+  {
+    description:
+      "Replay stored case-law rows under database and request-latency admission",
+    id: REPLAY_CASE_LAW_STORED_JOB,
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: REPLAY_CASE_LAW_STORED_TASK,
+    reads: "load-governed",
   },
   {
     description: "Build one pending online database work unit",

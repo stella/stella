@@ -228,6 +228,8 @@ export const caseLawReplayDailyRows = p.pgTable.withRLS(
   ],
 );
 
+export type ReplayDryRunDiffSample = { decisionId: string; key: string };
+
 export const caseLawReplaySourceProgress = p.pgTable.withRLS(
   "case_law_replay_source_progress",
   {
@@ -237,6 +239,14 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
       .default(0)
       .notNull(),
     lastCompletedAt: timestamptz("last_completed_at"),
+    /** Parser version at the last exhausted full source walk; row completions never advance it. */
+    lastFullReplayParserVersion: p.integer("last_full_replay_parser_version"),
+    lastFullReplayAt: timestamptz("last_full_replay_at"),
+    dryRunParserVersion: p.integer("dry_run_parser_version"),
+    dryRunDiffSamples: jsonb("dry_run_diff_samples")
+      .$type<ReplayDryRunDiffSample[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     completedRows: p
       .bigint("completed_rows", { mode: "number" })
       .default(0)
@@ -255,6 +265,10 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
       })
       .onDelete("restrict"),
     p.check(
+      "case_law_replay_diff_samples_check",
+      sql`jsonb_typeof(${t.dryRunDiffSamples}) = 'array' AND jsonb_array_length(${t.dryRunDiffSamples}) <= 20`,
+    ),
+    p.check(
       "case_law_replay_source_progress_ticks_check",
       sql`${t.ticksWithoutProgress} >= 0 AND ${t.completedRows} >= 0`,
     ),
@@ -269,6 +283,7 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
 
 export const REPLAY_MAINTENANCE_AUDIT_ACTIONS = [
   "source-scheduled",
+  "reported-decision-queued",
   "daily-row-charged",
   "receipt-superseded",
   "checkpoint-created",
@@ -350,6 +365,46 @@ export const caseLawReplayAuditEvents = p.pgTable.withRLS(
       to: "public",
       using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
       withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
+    }),
+  ],
+);
+
+/** Explicit reported rows share the ordinary replay reservation and receipt lifecycle. */
+export const caseLawReplayReportedDecisions = p.pgTable.withRLS(
+  "case_law_replay_reported_decisions",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    targetParserVersion: p.integer("target_parser_version").notNull(),
+    queuedAt: timestamptz("queued_at").defaultNow().notNull(),
+    previewedAt: timestamptz("previewed_at"),
+    completedAt: timestamptz("completed_at"),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_replay_reported_decisions_pkey",
+      columns: [t.sourceId, t.decisionId, t.targetParserVersion],
+    }),
+    p
+      .foreignKey({
+        name: "case_law_replay_reported_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("restrict"),
+    p
+      .index("case_law_replay_reported_pending_idx")
+      .on(t.sourceId, t.targetParserVersion, t.queuedAt, t.decisionId)
+      .where(sql`${t.completedAt} IS NULL`),
+    p.check(
+      "case_law_replay_reported_version_check",
+      sql`${t.targetParserVersion} > 0`,
+    ),
+    p.pgPolicy("case_law_replay_reported_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_reported_decisions'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_reported_decisions'::regclass)`,
     }),
   ],
 );

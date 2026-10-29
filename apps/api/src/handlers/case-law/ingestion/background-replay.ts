@@ -12,6 +12,7 @@ import {
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type { ApiLatencyAdmission } from "@/api/lib/observability/api-latency-admission";
 
 import { REPLAY_HEALTH_CONFIG } from "./replay-enrolment";
 import {
@@ -24,7 +25,6 @@ export type BackgroundReplaySource = {
   id: SafeId<"caseLawSource">;
   adapterKey: AdapterKey;
   currentParserVersion: number;
-  dailyBudget: number;
   mode: "enrolled" | "dry-run";
   rowsBehind: number;
 };
@@ -92,6 +92,7 @@ export type BackgroundReplayDependencies = {
     state: BatchState,
   ) => Promise<void>;
   gate: () => Promise<Verdict>;
+  latencyAdmission: () => ApiLatencyAdmission;
   pendingBatch: (
     source: BackgroundReplaySource,
     utcDay: string,
@@ -147,9 +148,18 @@ export type BackgroundReplayDependencies = {
   sleep: (milliseconds: number) => Promise<void>;
 };
 
+const readReplayAdmission = async (
+  dependencies: BackgroundReplayDependencies,
+) => {
+  const verdict = await dependencies.gate();
+  return dependencies.latencyAdmission().status === "admit"
+    ? verdict
+    : { kind: "unknown" as const, signals: [] };
+};
+
 type BackgroundReplayTickOptions = {
   dependencies: BackgroundReplayDependencies;
-  maxRows: number;
+  maxRows?: number;
   maxDurationMs: number;
   healthConfig?: HealthConfig;
   signal?: AbortSignal;
@@ -207,7 +217,6 @@ type ReplayLoopOptions = {
   finish: (status: BackgroundReplayTickStatus) => BackgroundReplayTickReport;
   start: number;
   rowLimit: number;
-  maxRows: number;
   maxDurationMs: number;
   healthConfig: HealthConfig;
   signal: AbortSignal | undefined;
@@ -439,7 +448,6 @@ const runReplayLoop = async ({
   finish,
   start,
   rowLimit,
-  maxRows,
   maxDurationMs,
   healthConfig,
   signal,
@@ -474,7 +482,9 @@ const runReplayLoop = async ({
         );
         return finish("held");
       }
-      const readVerdict = await Result.tryPromise(dependencies.gate);
+      const readVerdict = await Result.tryPromise(
+        async () => await readReplayAdmission(dependencies),
+      );
       const verdict = readVerdict.isOk()
         ? readVerdict.value
         : ({ kind: "unknown", signals: [] } satisfies Verdict);
@@ -573,11 +583,7 @@ const runReplayLoop = async ({
         return finish(afterReplay);
       }
       if (report.attempted >= rowLimit) {
-        return finish(
-          source.mode === "enrolled" && source.dailyBudget < maxRows
-            ? "budget-exhausted"
-            : "row-limit",
-        );
+        return finish("row-limit");
       }
       if (plan.sleepMs > 0) {
         if (dependencies.now() - start + plan.sleepMs >= maxDurationMs) {
@@ -601,8 +607,8 @@ export const runBackgroundReplayTick = async ({
   signal,
 }: BackgroundReplayTickOptions): Promise<BackgroundReplayTickReport> => {
   if (
-    !Number.isSafeInteger(maxRows) ||
-    maxRows < 1 ||
+    (maxRows !== undefined &&
+      (!Number.isSafeInteger(maxRows) || maxRows < 1)) ||
     !Number.isFinite(maxDurationMs) ||
     maxDurationMs <= 0
   ) {
@@ -611,7 +617,9 @@ export const runBackgroundReplayTick = async ({
   const start = dependencies.now();
   const admission = signal?.aborted
     ? Result.err(signal.reason)
-    : await Result.tryPromise(dependencies.gate);
+    : await Result.tryPromise(
+        async () => await readReplayAdmission(dependencies),
+      );
   if (signal?.aborted) {
     const report: BackgroundReplayTickReport = {
       status: "time-limit",
@@ -668,10 +676,7 @@ export const runBackgroundReplayTick = async ({
   if (source === null) {
     return finish("empty");
   }
-  const rowLimit = Math.min(maxRows, source.dailyBudget);
-  if (!Number.isSafeInteger(source.dailyBudget) || source.dailyBudget < 1) {
-    panic("Replay source daily budget must be a positive integer");
-  }
+  const rowLimit = maxRows ?? Number.POSITIVE_INFINITY;
   if (await dependencies.killRequested(source)) {
     return finish("killed");
   }
@@ -700,7 +705,6 @@ export const runBackgroundReplayTick = async ({
       finish,
       start,
       rowLimit,
-      maxRows,
       maxDurationMs,
       healthConfig,
       signal,

@@ -64,25 +64,42 @@ case_law_replay_daily_rows.budget_day  date      not null     case-law-replay.ts
 case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts:206
 ```
 
-## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:231 · rls
+## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:233 · rls
 
 ```text
-case_law_replay_source_progress.source_id               safeUuid     not null          case-law-replay.ts:234
-case_law_replay_source_progress.ticks_without_progress  integer      default,not null  case-law-replay.ts:235
-case_law_replay_source_progress.last_completed_at       timestamptz  null              case-law-replay.ts:239
-case_law_replay_source_progress.completed_rows          bigint       default,not null  case-law-replay.ts:240
+case_law_replay_source_progress.source_id                        safeUuid     not null          case-law-replay.ts:236
+case_law_replay_source_progress.ticks_without_progress           integer      default,not null  case-law-replay.ts:237
+case_law_replay_source_progress.last_completed_at                timestamptz  null              case-law-replay.ts:241
+case_law_replay_source_progress.last_full_replay_parser_version  integer      null              case-law-replay.ts:243  Parser version at the last exhausted full source walk; row completions never advance it.
+case_law_replay_source_progress.last_full_replay_at              timestamptz  null              case-law-replay.ts:244
+case_law_replay_source_progress.dry_run_parser_version           integer      null              case-law-replay.ts:245
+case_law_replay_source_progress.dry_run_diff_samples             jsonb        default,not null  case-law-replay.ts:246
+case_law_replay_source_progress.completed_rows                   bigint       default,not null  case-law-replay.ts:250
 ```
 
-## case_law_replay_audit_events · `caseLawReplayAuditEvents` · case-law-replay.ts:304 · rls
+## case_law_replay_audit_events · `caseLawReplayAuditEvents` · case-law-replay.ts:319 · rls
 
 Independent of receipt FKs: audit history survives bounded receipt compaction.
 
 ```text
-case_law_replay_audit_events.id           text         not null          case-law-replay.ts:307
-case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:308
-case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:309
-case_law_replay_audit_events.action       text         not null          case-law-replay.ts:310
-case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:311
-case_law_replay_audit_events.details      jsonb        not null          case-law-replay.ts:312
-case_law_replay_audit_events.created_at   timestamptz  default,not null  case-law-replay.ts:313
+case_law_replay_audit_events.id           text         not null          case-law-replay.ts:322
+case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:323
+case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:324
+case_law_replay_audit_events.action       text         not null          case-law-replay.ts:325
+case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:326
+case_law_replay_audit_events.details      jsonb        not null          case-law-replay.ts:327
+case_law_replay_audit_events.created_at   timestamptz  default,not null  case-law-replay.ts:328
+```
+
+## case_law_replay_reported_decisions · `caseLawReplayReportedDecisions` · case-law-replay.ts:373 · rls
+
+Explicit reported rows share the ordinary replay reservation and receipt lifecycle.
+
+```text
+case_law_replay_reported_decisions.source_id              safeUuid     not null          case-law-replay.ts:376
+case_law_replay_reported_decisions.decision_id            safeUuid     not null          case-law-replay.ts:377
+case_law_replay_reported_decisions.target_parser_version  integer      not null          case-law-replay.ts:378
+case_law_replay_reported_decisions.queued_at              timestamptz  default,not null  case-law-replay.ts:379
+case_law_replay_reported_decisions.previewed_at           timestamptz  null              case-law-replay.ts:380
+case_law_replay_reported_decisions.completed_at           timestamptz  null              case-law-replay.ts:381
 ```

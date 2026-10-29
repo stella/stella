@@ -68,6 +68,7 @@ import {
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
 } from "@/api/lib/legal-search/raw-source-storage";
+import type { ApiLatencyAdmission } from "@/api/lib/observability/api-latency-admission";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   openGatedTestDatabase,
@@ -117,6 +118,7 @@ const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
     "raw-fidelity-lost": 0,
     "unsupported-content": 0,
     "no-document": 0,
+    "metadata-only": 0,
     supplement: 0,
   },
   problems: [],
@@ -175,14 +177,12 @@ if (!databaseUrl || !enabled) {
       }
     });
     const fixture = async (
-      dailyBudget: number,
       mode: BackgroundReplaySource["mode"] = "enrolled",
     ) => {
       const source = {
         id: createSafeId<"caseLawSource">(),
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         currentParserVersion: 2,
-        dailyBudget,
         mode,
         rowsBehind: 3,
       } as const satisfies BackgroundReplaySource;
@@ -265,6 +265,7 @@ if (!databaseUrl || !enabled) {
       slot: ReturnType<typeof createHeavyWorkSlot>;
       beforeReplay?: () => Promise<void>;
       gate?: () => Promise<Verdict>;
+      latencyAdmission?: () => ApiLatencyAdmission;
       maxRows?: number;
       signal?: AbortSignal;
       canonical?: {
@@ -278,6 +279,11 @@ if (!databaseUrl || !enabled) {
       slot,
       beforeReplay,
       gate = async () => healthy(),
+      latencyAdmission = () => ({
+        status: "admit" as const,
+        p95Ms: 0,
+        samples: 20,
+      }),
       maxRows = 10,
       canonical,
       signal,
@@ -344,6 +350,7 @@ if (!databaseUrl || !enabled) {
             return result.value ? slot.release : null;
           },
           gate,
+          latencyAdmission,
           replay: async (batch) => {
             await beforeReplay?.();
             if (lease === null) {
@@ -464,7 +471,7 @@ if (!databaseUrl || !enabled) {
     };
 
     test("canonical watermark-only work stays retryable without a terminal row receipt", async () => {
-      const state = await fixture(10);
+      const state = await fixture();
       const fake = startReplayFixtureStorage();
       try {
         await withSlots({
@@ -523,7 +530,7 @@ if (!databaseUrl || !enabled) {
 
     test("canonical winner-settled and winner-redacted rows cannot receive a completed receipt without their parser stamp", async () => {
       for (const winner of ["settled", "redacted"] as const) {
-        const state = await fixture(3);
+        const state = await fixture();
         const id = state.ids.at(0);
         if (id === undefined) {
           panic("Expected first fixture decision");
@@ -536,20 +543,27 @@ if (!databaseUrl || !enabled) {
         try {
           await withSlots({
             run: async ([slot]) => {
-              const held = fake.holdNext({
-                method: "PUT",
-                keyIncludes: "case-law/raw/",
-              });
+              const reachedRead = Promise.withResolvers<undefined>();
+              const releaseRead = Promise.withResolvers<undefined>();
               const running = tick({
                 fixture: state,
                 slot,
                 maxRows: 1,
-                canonical: canonicalReplay(),
+                canonical: {
+                  ...canonicalReplay(),
+                  readStoredRaw: async () => {
+                    reachedRead.resolve(undefined);
+                    await releaseRead.promise;
+                    return new TextEncoder().encode(
+                      "<html>stored fixture judgment</html>",
+                    );
+                  },
+                },
                 signal: AbortSignal.timeout(10_000),
               });
               try {
                 const reached = await Promise.race([
-                  held.reached.then(() => "held" as const),
+                  reachedRead.promise.then(() => "held" as const),
                   running.then(() => "finished" as const),
                 ]);
                 expect(reached).toBe("held");
@@ -563,7 +577,7 @@ if (!databaseUrl || !enabled) {
                   })
                   .where(eq(caseLawDecisions.id, id));
               } finally {
-                held.release();
+                releaseRead.resolve(undefined);
                 await running;
               }
               expect(await running).toMatchObject({
@@ -607,7 +621,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("crash-recovered database stamps are recorded as applied without reading raw storage", async () => {
-      const state = await fixture(3);
+      const state = await fixture();
       const batch = await state.store.reserveBatch(
         state.source,
         "2026-10-01",
@@ -639,28 +653,13 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("homing a legacy input requires a separately charged parse of its canonical key", async () => {
-      const state = await fixture(1);
+    test("replaying a legacy raw key preserves that key and completes one receipt", async () => {
+      const state = await fixture();
       const id = state.ids.at(0);
       if (id === undefined) {
-        panic("Expected the homing fixture decision");
-      }
-      for (const otherId of state.ids.slice(1)) {
-        await db
-          .update(caseLawDecisions)
-          .set({ parserVersion: 3 })
-          .where(eq(caseLawDecisions.id, otherId));
+        panic("Expected the legacy replay fixture decision");
       }
       const legacyKey = `fixture/legacy/${id}`;
-      const canonicalKey = rawSourcePayloadKey({
-        owner: {
-          family: RAW_SOURCE_FAMILY.CASE_LAW,
-          sourceId: state.source.id,
-          documentId: id,
-        },
-        data: "<html>stored fixture judgment</html>",
-      });
-      expect(canonicalKey).not.toBe(legacyKey);
       await db
         .update(caseLawDecisions)
         .set({ sourceRawS3Key: legacyKey })
@@ -669,17 +668,14 @@ if (!databaseUrl || !enabled) {
       try {
         await withSlots({
           run: async ([slot]) => {
-            const first = await tick({
-              fixture: state,
-              slot,
-              maxRows: 1,
-              canonical: canonicalReplay(),
-            });
-            expect(first).toMatchObject({
-              attempted: 1,
-              applied: 0,
-              errors: 1,
-            });
+            expect(
+              await tick({
+                fixture: state,
+                slot,
+                maxRows: 1,
+                canonical: canonicalReplay(),
+              }),
+            ).toMatchObject({ attempted: 1, applied: 1, errors: 0 });
             expect(
               (
                 await db
@@ -689,103 +685,22 @@ if (!databaseUrl || !enabled) {
               ).at(0),
             ).toMatchObject({
               parserVersion: 2,
-              sourceRawS3Key: canonicalKey,
-              parsedSourceRawS3Key: null,
-            });
-            expect(
-              await db
-                .select()
-                .from(caseLawReplayBlocked)
-                .where(eq(caseLawReplayBlocked.sourceId, state.source.id)),
-            ).toHaveLength(0);
-            state.advanceTime(BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs);
-            expect(
-              await tick({
-                fixture: state,
-                slot,
-                maxRows: 1,
-                canonical: canonicalReplay(),
-              }),
-            ).toMatchObject({ status: "budget-exhausted", attempted: 0 });
-            const writesAfterHoming = fake.requests.filter(
-              ({ method }) => method === "PUT",
-            ).length;
-            expect(writesAfterHoming).toBeGreaterThan(0);
-            state.nextDay();
-            expect(
-              await tick({
-                fixture: state,
-                slot,
-                maxRows: 1,
-                canonical: canonicalReplay(),
-              }),
-            ).toMatchObject({
-              attempted: 1,
-              errors: 0,
-              applied: 0,
-              blocked: 0,
-            });
-            expect(
-              (
-                await db
-                  .select()
-                  .from(caseLawDecisions)
-                  .where(eq(caseLawDecisions.id, id))
-              ).at(0),
-            ).toMatchObject({
-              parserVersion: 2,
-              sourceRawS3Key: canonicalKey,
-              parsedSourceRawS3Key: canonicalKey,
+              sourceRawS3Key: legacyKey,
+              parsedSourceRawS3Key: legacyKey,
             });
             const reservations = await db
               .select()
               .from(caseLawReplayBatches)
               .where(eq(caseLawReplayBatches.sourceId, state.source.id));
-            expect(reservations).toHaveLength(2);
-            expect(
-              reservations.find((row) => row.sourceRawS3Key === legacyKey),
-            ).toMatchObject({ status: "superseded", applied: 0, blocked: 0 });
-            expect(
-              reservations.find((row) => row.sourceRawS3Key === canonicalKey),
-            ).toMatchObject({
+            expect(reservations).toHaveLength(1);
+            expect(reservations.at(0)).toMatchObject({
+              sourceRawS3Key: legacyKey,
               status: "completed",
-              outcome: REPLAY_ROW_OUTCOME.UNCHANGED,
-              applied: 0,
-            });
-            expect(
-              await db
-                .select()
-                .from(caseLawReplayDailyRows)
-                .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
-            ).toHaveLength(2);
-            expect(
-              (
-                await db
-                  .select()
-                  .from(caseLawReplayBlocked)
-                  .where(eq(caseLawReplayBlocked.sourceId, state.source.id))
-              ).at(0),
-            ).toMatchObject({
-              sourceRawS3Key: canonicalKey,
-              outcome: "unchanged",
-            });
-            expect(
-              await tick({
-                fixture: state,
-                slot,
-                maxRows: 1,
-                canonical: canonicalReplay(),
-              }),
-            ).toMatchObject({
-              status: "complete",
-              attempted: 0,
-              applied: 0,
-              blocked: 0,
-              errors: 0,
+              applied: 1,
             });
             expect(
               fake.requests.filter(({ method }) => method === "PUT"),
-            ).toHaveLength(writesAfterHoming);
+            ).toHaveLength(0);
           },
         });
       } finally {
@@ -794,7 +709,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("canonical dry-run persists budgeted preview receipts while leaving decisions untouched", async () => {
-      const state = await fixture(3, "dry-run");
+      const state = await fixture("dry-run");
       const before = await db
         .select()
         .from(caseLawDecisions)
@@ -848,7 +763,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a failed dry-run tick leaves its cursor before the row and retries after durable backoff", async () => {
-      const state = await fixture(3, "dry-run");
+      const state = await fixture("dry-run");
       const before = await db
         .select()
         .from(caseLawDecisions)
@@ -943,7 +858,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("lease cleanup uses a fresh schema-lane handle and survives a concurrent exclusive upgrade", async () => {
-      const state = await fixture(3);
+      const state = await fixture();
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const upgrade = openClient();
         const cleanup = openClient();
@@ -1010,7 +925,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a tick deadline cancels a held S3 read and releases the source lease and heavy slot after persisting failure", async () => {
-      const state = await fixture(3);
+      const state = await fixture();
       const id = state.ids.at(0);
       if (id === undefined) {
         panic("Expected first fixture decision");
@@ -1116,7 +1031,7 @@ if (!databaseUrl || !enabled) {
 
     test("the tick signal cancels a real blocked database query and releases its maintenance lane", async () => {
       expect(envBase.DATABASE_URL).toBe(databaseUrl);
-      const state = await fixture(3);
+      const state = await fixture();
       const id = state.ids.at(0);
       if (id === undefined) {
         panic("Expected first fixture decision");
@@ -1238,7 +1153,7 @@ if (!databaseUrl || !enabled) {
           envDbLoadGate.DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER,
         ).toBeUndefined();
         expect(envDbLoadGate.DB_LOAD_GATE_EBS_SIGNAL).toBe("disabled");
-        const state = await fixture(3);
+        const state = await fixture();
         const id = state.ids.at(0);
         if (id === undefined) {
           panic("Expected first fixture decision");
@@ -1279,7 +1194,7 @@ if (!databaseUrl || !enabled) {
             ...REPLAY_ENROLMENT,
             [ADAPTER_KEYS.EU_ECJ]: {
               mode: "enrolled",
-              dailyBudget: 3,
+
               reviewedDryRun: "fixture",
             },
           } as const;
@@ -1401,7 +1316,7 @@ if (!databaseUrl || !enabled) {
     );
 
     test("two ticks use real source leases and session slots to admit one writer", async () => {
-      const state = await fixture(3);
+      const state = await fixture();
       await withSlots({
         run: async ([firstSlot, secondSlot]) => {
           const entered = Promise.withResolvers<undefined>();
@@ -1446,7 +1361,7 @@ if (!databaseUrl || !enabled) {
 
     test("index build and repair intents let the current replay row finish and prevent another reservation", async () => {
       for (const contenderKind of ["index_build", "index_repair"] as const) {
-        const state = await fixture(3);
+        const state = await fixture();
         const firstId = state.ids.at(0);
         if (firstId === undefined) {
           throw new TypeError("Expected first replay decision");
@@ -1532,8 +1447,52 @@ if (!databaseUrl || !enabled) {
       }
     });
 
+    test("a latency brake commits one row, holds durably, and resumes the remaining rows", async () => {
+      const state = await fixture();
+      let completed = 0;
+      let held = false;
+      const latencyAdmission = (): ApiLatencyAdmission =>
+        held
+          ? { status: "hold", reason: "p95-exceeded", p95Ms: 501, samples: 20 }
+          : { status: "admit", p95Ms: 10, samples: 20 };
+      await withSlots({
+        run: async ([slot]) => {
+          const first = await tick({
+            fixture: state,
+            slot,
+            latencyAdmission,
+            beforeReplay: async () => {
+              completed += 1;
+              held = true;
+            },
+          });
+          expect(first).toMatchObject({
+            status: "held",
+            applied: 1,
+            attempted: 1,
+          });
+          const boundary = await state.checkpoint();
+          expect(boundary?.cursor).toBe(state.ids.at(0));
+          expect(
+            (await state.store.loadGateState(state.source)).holdUntil,
+          ).not.toBeNull();
+          held = false;
+          expect(
+            await tick({ fixture: state, slot, latencyAdmission }),
+          ).toMatchObject({ status: "held", attempted: 0 });
+          expect((await state.checkpoint())?.cursor).toBe(boundary?.cursor);
+          state.advanceTime(86_400_000);
+          expect(
+            await tick({ fixture: state, slot, latencyAdmission }),
+          ).toMatchObject({ status: "complete", applied: 2 });
+          expect((await state.checkpoint())?.cursor).toBe(state.ids.at(-1));
+          expect(completed).toBe(1);
+        },
+      });
+    });
+
     test("a gate trip preserves the committed cursor and creates no next reservation", async () => {
-      const state = await fixture(3);
+      const state = await fixture();
       let batches = 0;
       await withSlots({
         run: async ([slot]) => {
@@ -1561,24 +1520,31 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("daily exhaustion stops writes and a UTC rollover resumes after the durable cursor", async () => {
-      const state = await fixture(1);
+    test("daily accounting does not cap progress across scheduler ticks", async () => {
+      const state = await fixture();
       await withSlots({
         run: async ([slot]) => {
-          expect((await tick({ fixture: state, slot })).status).toBe(
-            "budget-exhausted",
-          );
-          expect((await tick({ fixture: state, slot })).applied).toBe(0);
+          expect(
+            await tick({ fixture: state, slot, maxRows: 1 }),
+          ).toMatchObject({ status: "row-limit", applied: 1 });
+          expect(
+            await tick({ fixture: state, slot, maxRows: 1 }),
+          ).toMatchObject({ status: "row-limit", applied: 1 });
           state.nextDay();
-          expect((await tick({ fixture: state, slot })).applied).toBe(1);
-          expect((await state.checkpoint())?.cursor).toBe(state.ids.at(1));
+          expect(await tick({ fixture: state, slot })).toMatchObject({
+            status: "complete",
+            applied: 1,
+          });
+          expect((await state.checkpoint())?.cursor).toBe(state.ids.at(-1));
           const charges = await db
             .select()
             .from(caseLawReplayDailyRows)
             .where(eq(caseLawReplayDailyRows.sourceId, state.source.id));
+          expect(charges).toHaveLength(3);
+          expect(new Set(charges.map((row) => row.batchId)).size).toBe(3);
           expect(
             charges.map((row) => row.budgetDay).toSorted(compareCodeUnit),
-          ).toEqual(["2026-10-01", "2026-10-02"]);
+          ).toEqual(["2026-10-01", "2026-10-01", "2026-10-02"]);
         },
       });
     });

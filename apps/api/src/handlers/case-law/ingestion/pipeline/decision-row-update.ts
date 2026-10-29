@@ -47,6 +47,14 @@ import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/co
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";
 
+import {
+  extractedReplayMetadata,
+  STORED_REPLAY_INPUT_TOKEN,
+  storedReplayMetadata,
+  storedReplayObservationPredicate,
+  storedReplayUpdate,
+} from "./stored-replay-write";
+
 type IdentifierType = DecisionWritePlan["identifierRows"][number]["type"];
 
 /** Decision state locked immediately before this transaction overwrites it. */
@@ -259,6 +267,87 @@ export const lostRowWriteStatus = async (
     : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
 };
 
+const rowWritePredicate = (
+  write: DecisionRowWrite,
+  existing: ExistingDecision,
+) => {
+  const {
+    result,
+    observationOrder,
+    plan: { corpusPlan, storedPayloadUnchanged, pendingMirrorPayload },
+  } = write;
+  return and(
+    eq(caseLawDecisions.id, existing.id),
+    write.inputProvenance.type === "stored-replay"
+      ? sql`${STORED_REPLAY_INPUT_TOKEN} = ${write.inputProvenance.updateToken}`
+      : undefined,
+    write.inputProvenance.type !== "observation"
+      ? and(
+          eq(
+            caseLawDecisions.sourceRawS3Key,
+            write.inputProvenance.sourceRawS3Key,
+          ),
+          or(
+            isNull(caseLawDecisions.parserVersion),
+            lte(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
+          ),
+        )
+      : undefined,
+    write.inputProvenance.type === "stored-replay"
+      ? storedReplayObservationPredicate(write)
+      : storedObservationPrecedes({ order: observationOrder }),
+    isNull(caseLawDecisions.redactedAt),
+    corpusPlan.type === "preserve-stored"
+      ? eq(
+          caseLawDecisions.corpusMirrorStatus,
+          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        )
+      : undefined,
+    storedPayloadUnchanged
+      ? and(
+          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
+          sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
+          sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
+          sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
+        )
+      : undefined,
+    pendingMirrorPayload === null
+      ? undefined
+      : and(
+          eq(
+            caseLawDecisions.corpusMirrorStatus,
+            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+          ),
+          sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${pendingMirrorPayload.sourceObservationOrder}`,
+          sql`${caseLawDecisions.sourceObservationHash} IS NOT DISTINCT FROM ${pendingMirrorPayload.sourceObservationHash}`,
+        ),
+  );
+};
+
+type StoredReplayColumnsOptions = {
+  write: DecisionRowWrite;
+  writtenPayload: DecisionWritePlan["payloadColumns"];
+  storedMetadata: Record<string, unknown> | null;
+  derivedMetadata: Record<string, unknown>;
+};
+const storedReplayColumns = ({
+  write,
+  writtenPayload,
+  storedMetadata,
+  derivedMetadata,
+}: StoredReplayColumnsOptions) => {
+  const metadata = storedReplayMetadata(
+    storedMetadata,
+    extractedReplayMetadata(derivedMetadata),
+  );
+  return storedReplayUpdate({
+    ...writtenPayload,
+    metadata,
+    parserVersion: write.result.parserVersion ?? 0,
+    updatedAt: sql`CASE WHEN ${payloadChangedSql(write.plan.corpusPlan, writtenPayload)} OR ${caseLawDecisions.metadata} IS DISTINCT FROM ${JSON.stringify(metadata)}::text::jsonb THEN now() ELSE ${caseLawDecisions.updatedAt} END`,
+  });
+};
+
 /**
  * The refresh's update of the row: its description, metadata, raw pointer
  * and (unless guarded) payload, fenced on this observation still owning the
@@ -288,7 +377,6 @@ export const describeRowUpdateTx = async (
       pendingMirrorPayload,
       preparedMetadata,
       reusedCitationScopeEnvelope,
-      storedPayloadUnchanged,
     },
     rawArtifact: { s3UploadFailed, sourceRawS3Key, sourceRawContentType },
   } = write;
@@ -370,81 +458,51 @@ export const describeRowUpdateTx = async (
     OR ${caseLawDecisions.metadata} IS DISTINCT FROM ${markedMetadata ?? describedMetadataSql}
   )`;
 
-  const set = {
-    ...describedColumns,
-    ...(preservesExistingDetail ? {} : { docketFamilyKey }),
-    ...(metadataWrite === undefined ? {} : { metadata: metadataWrite }),
-    ...(preservesExistingDetail
-      ? {}
+  const set =
+    write.inputProvenance.type === "stored-replay"
+      ? storedReplayColumns({
+          write,
+          writtenPayload,
+          storedMetadata: replacedState?.metadata ?? null,
+          derivedMetadata: describedMetadata ?? preparedMetadata,
+        })
       : {
-          sourceRaw: null,
-          // A failed upload writes no pointer at all: the one this
-          // attempt read may since have been moved, and writing it
-          // back would point the row at an object nothing else
-          // accounts for any more.
-          ...(s3UploadFailed ? {} : { sourceRawS3Key, sourceRawContentType }),
-        }),
-    ...writtenPayload,
-    // Partial observations preserve the authoritative detail hash.
-    // When S3 upload failed, keeping the old hash also makes the next
-    // cycle retry instead of permanently accepting a stale raw source.
-    sourceHash:
-      preservesExistingDetail || s3UploadFailed
-        ? existing.sourceHash
-        : result.rawHash,
-    sourceHashVersion:
-      preservesExistingDetail || s3UploadFailed
-        ? existing.sourceHashVersion
-        : write.sourceFingerprintVersion,
-    sourceObservedAt: observedAt,
-    sourceObservationOrder: observationOrder,
-    sourceObservationHash: result.rawHash,
-    // A new observation of the same decision is not a modification:
-    // the row moves in the recent-activity reads and the search
-    // refresh only when what it says changed.
-    updatedAt: sql`CASE WHEN ${contentChanged} THEN now() ELSE ${caseLawDecisions.updatedAt} END`,
-  };
-  const where = and(
-    eq(caseLawDecisions.id, existing.id),
-    write.inputProvenance.type === "stored"
-      ? and(
-          eq(
-            caseLawDecisions.sourceRawS3Key,
-            write.inputProvenance.sourceRawS3Key,
-          ),
-          or(
-            isNull(caseLawDecisions.parserVersion),
-            lte(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
-          ),
-        )
-      : undefined,
-    storedObservationPrecedes({ order: observationOrder }),
-    isNull(caseLawDecisions.redactedAt),
-    corpusPlan.type === "preserve-stored"
-      ? eq(
-          caseLawDecisions.corpusMirrorStatus,
-          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-        )
-      : undefined,
-    storedPayloadUnchanged
-      ? and(
-          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${existing.contentHash}`,
-          sql`${caseLawDecisions.textS3Key} IS NOT DISTINCT FROM ${existing.textS3Key}`,
-          sql`${caseLawDecisions.normalizedS3Key} IS NOT DISTINCT FROM ${existing.normalizedS3Key}`,
-          sql`${caseLawDecisions.astS3Key} IS NOT DISTINCT FROM ${existing.astS3Key}`,
-        )
-      : undefined,
-    pendingMirrorPayload === null
-      ? undefined
-      : and(
-          eq(
-            caseLawDecisions.corpusMirrorStatus,
-            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
-          ),
-          sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${pendingMirrorPayload.sourceObservationOrder}`,
-          sql`${caseLawDecisions.sourceObservationHash} IS NOT DISTINCT FROM ${pendingMirrorPayload.sourceObservationHash}`,
-        ),
-  );
+          ...describedColumns,
+          ...(preservesExistingDetail ? {} : { docketFamilyKey }),
+          ...(metadataWrite === undefined ? {} : { metadata: metadataWrite }),
+          ...(preservesExistingDetail
+            ? {}
+            : {
+                sourceRaw: null,
+                // A failed upload writes no pointer at all: the one this
+                // attempt read may since have been moved, and writing it
+                // back would point the row at an object nothing else
+                // accounts for any more.
+                ...(s3UploadFailed
+                  ? {}
+                  : { sourceRawS3Key, sourceRawContentType }),
+              }),
+          ...writtenPayload,
+          // Partial observations preserve the authoritative detail hash.
+          // When S3 upload failed, keeping the old hash also makes the next
+          // cycle retry instead of permanently accepting a stale raw source.
+          sourceHash:
+            preservesExistingDetail || s3UploadFailed
+              ? existing.sourceHash
+              : result.rawHash,
+          sourceHashVersion:
+            preservesExistingDetail || s3UploadFailed
+              ? existing.sourceHashVersion
+              : write.sourceFingerprintVersion,
+          sourceObservedAt: observedAt,
+          sourceObservationOrder: observationOrder,
+          sourceObservationHash: result.rawHash,
+          // A new observation of the same decision is not a modification:
+          // the row moves in the recent-activity reads and the search
+          // refresh only when what it says changed.
+          updatedAt: sql`CASE WHEN ${contentChanged} THEN now() ELSE ${caseLawDecisions.updatedAt} END`,
+        };
+  const where = rowWritePredicate(write, existing);
 
   return {
     replacedState,
@@ -552,6 +610,7 @@ export const finishRefreshedRowTx = async (
     plan: { citations },
   } = write;
   if (
+    write.inputProvenance.type !== "stored-replay" &&
     replacedState !== null &&
     resolutionIdentityChanged(write, replacedState)
   ) {
