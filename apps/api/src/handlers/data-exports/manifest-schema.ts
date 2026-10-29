@@ -140,6 +140,9 @@ const templateFileSchema = v.strictObject({
 });
 
 const organizationRecordsSchema = v.strictObject({
+  sellerProfiles: recordFileSchema,
+  clauseCategories: recordFileSchema,
+  templateCategories: recordFileSchema,
   contacts: recordFileSchema,
   contactRelationships: recordFileSchema,
   clauses: recordFileSchema,

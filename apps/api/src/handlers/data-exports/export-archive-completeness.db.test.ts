@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   and,
+  asc,
   eq,
   getColumns,
   inArray,
@@ -18,6 +19,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import type { Transaction } from "@/api/db/root";
 import * as schema from "@/api/db/schema";
@@ -246,6 +249,9 @@ type ArchiveRows = {
   templateVersionIds: string[];
   documentFileIds: string[];
   documentVersionCount: number;
+  sellerProfiles: JsonRow[];
+  clauseCategories: JsonRow[];
+  templateCategories: JsonRow[];
 };
 
 const readArchiveRows = async (
@@ -269,6 +275,12 @@ const readArchiveRows = async (
       organization.unassignedTimeEntries,
     ),
     invoices: await readRecordTable(zip, organization.invoices),
+    sellerProfiles: await readRecordTable(zip, organization.sellerProfiles),
+    clauseCategories: await readRecordTable(zip, organization.clauseCategories),
+    templateCategories: await readRecordTable(
+      zip,
+      organization.templateCategories,
+    ),
   };
   const matters: ArchiveMatterRows[] = await Promise.all(
     part.matters.map(async (matter) => ({
@@ -330,6 +342,9 @@ const readArchiveRows = async (
     contactRelationships: rowIds(organizationRows.contactRelationships),
     clauses: rowIds(clauses),
     templates: rowIds(templates),
+    sellerProfiles: rowIds(organizationRows.sellerProfiles),
+    clauseCategories: rowIds(organizationRows.clauseCategories),
+    templateCategories: rowIds(organizationRows.templateCategories),
     clauseVersions: rowIds(nestedRows(clauses, "versions")),
     clauseVariants: rowIds(nestedRows(clauses, "variants")),
     templateVersions: rowIds(nestedRows(templates, "versions")),
@@ -342,6 +357,9 @@ const readArchiveRows = async (
     ),
     documentFileIds: fileRefs.map((file) => file.fileId),
     documentVersionCount: versions.length,
+    sellerProfiles: organizationRows.sellerProfiles,
+    clauseCategories: organizationRows.clauseCategories,
+    templateCategories: organizationRows.templateCategories,
   };
 };
 
@@ -388,6 +406,28 @@ const readDocumentDatabaseRows = async (
   return { entityVersionRows, fileFieldRows };
 };
 
+const readOrganizationCategoryRows = async (
+  db: TestDatabase,
+  organizationId: SafeId<"organization">,
+) => {
+  const [sellerProfiles, clauseCategories, templateCategories] =
+    await Promise.all([
+      db
+        .select({ id: schema.sellerProfiles.id })
+        .from(schema.sellerProfiles)
+        .where(eq(schema.sellerProfiles.organizationId, organizationId)),
+      db
+        .select({ id: schema.clauseCategories.id })
+        .from(schema.clauseCategories)
+        .where(eq(schema.clauseCategories.organizationId, organizationId)),
+      db
+        .select({ id: schema.templateCategories.id })
+        .from(schema.templateCategories)
+        .where(eq(schema.templateCategories.organizationId, organizationId)),
+    ]);
+  return { sellerProfiles, clauseCategories, templateCategories };
+};
+
 const readDatabaseRows = async (
   db: TestDatabase,
   fixture: DataExportCompletenessFixture,
@@ -426,6 +466,8 @@ const readDatabaseRows = async (
     ...organizationInvoices.map((row) => row.id),
     ...matterInvoices.map((row) => row.id),
   ];
+  const { sellerProfiles, clauseCategories, templateCategories } =
+    await readOrganizationCategoryRows(db, fixture.organizationId);
   const [
     invoiceLineRows,
     invoicePaymentRows,
@@ -566,6 +608,9 @@ const readDatabaseRows = async (
     contactRelationships: relationshipRows.map((row) => row.id),
     clauses: clauseRows.map((row) => row.id),
     templates: templateRows.map((row) => row.id),
+    sellerProfiles: sellerProfiles.map((row) => row.id),
+    clauseCategories: clauseCategories.map((row) => row.id),
+    templateCategories: templateCategories.map((row) => row.id),
     clauseVersions: clauseVersionRows.map((row) => row.id),
     clauseVariants: clauseVariantRows.map((row) => row.id),
     templateVersions: templateVersionRows.map((row) => row.id),
@@ -712,6 +757,15 @@ const assertArchiveCompleteness = ({
     database.documentFileIds.toSorted(),
   );
   expect(archive.documentVersionCount).toBe(database.documentVersionCount);
+  expect(archive.sellerProfiles).toContainEqual(
+    expect.objectContaining({ legalName: "Export Seller" }),
+  );
+  expect(archive.clauseCategories).toContainEqual(
+    expect.objectContaining({ name: "Export clause category" }),
+  );
+  expect(archive.templateCategories).toContainEqual(
+    expect.objectContaining({ name: "Export template category" }),
+  );
   expect(archive.part.organizationRecords).not.toBeNull();
 };
 
@@ -767,5 +821,98 @@ describe("database-backed export archive completeness", () => {
       sourceTables,
       matterIds: databaseRows.eligibleMatterIds,
     });
+  });
+  test("seller and category references retain their stored IDs and values", async () => {
+    const activeFixture = required(fixture, "database fixture");
+    const { zip, part } = await buildArchive(activeFixture);
+    const organization = required(
+      part.organizationRecords,
+      "organization records",
+    );
+    const [
+      sellerRows,
+      clauseRows,
+      templateRows,
+      expectedSellers,
+      expectedClauses,
+      expectedTemplates,
+    ] = await Promise.all([
+      readRecordTable(zip, organization.sellerProfiles),
+      readRecordTable(zip, organization.clauseCategories),
+      readRecordTable(zip, organization.templateCategories),
+      testDb
+        .select({
+          id: schema.sellerProfiles.id,
+          legalName: schema.sellerProfiles.legalName,
+          defaultCurrency: schema.sellerProfiles.defaultCurrency,
+        })
+        .from(schema.sellerProfiles)
+        .where(
+          eq(
+            schema.sellerProfiles.organizationId,
+            activeFixture.organizationId,
+          ),
+        )
+        .orderBy(asc(schema.sellerProfiles.id)),
+      testDb
+        .select({
+          id: schema.clauseCategories.id,
+          name: schema.clauseCategories.name,
+          parentId: schema.clauseCategories.parentId,
+        })
+        .from(schema.clauseCategories)
+        .where(
+          eq(
+            schema.clauseCategories.organizationId,
+            activeFixture.organizationId,
+          ),
+        )
+        .orderBy(asc(schema.clauseCategories.id)),
+      testDb
+        .select({
+          id: schema.templateCategories.id,
+          name: schema.templateCategories.name,
+          parentId: schema.templateCategories.parentId,
+        })
+        .from(schema.templateCategories)
+        .where(
+          eq(
+            schema.templateCategories.organizationId,
+            activeFixture.organizationId,
+          ),
+        )
+        .orderBy(asc(schema.templateCategories.id)),
+    ]);
+    const sellers = v.parse(
+      v.array(
+        v.object({
+          id: v.string(),
+          legalName: v.string(),
+          defaultCurrency: v.string(),
+        }),
+      ),
+      sellerRows,
+    );
+    const categorySchema = v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        parentId: v.nullable(v.string()),
+      }),
+    );
+    const clauses = v.parse(categorySchema, clauseRows);
+    const templates = v.parse(categorySchema, templateRows);
+    expect(expectedSellers.length).toBeGreaterThan(0);
+    expect(expectedClauses.length).toBeGreaterThan(0);
+    expect(expectedTemplates.length).toBeGreaterThan(0);
+    expect(sellers.toSorted((a, b) => compareCodeUnit(a.id, b.id))).toEqual(
+      expectedSellers,
+    );
+    expect(clauses.toSorted((a, b) => compareCodeUnit(a.id, b.id))).toEqual(
+      expectedClauses,
+    );
+    expect(templates.toSorted((a, b) => compareCodeUnit(a.id, b.id))).toEqual(
+      expectedTemplates,
+    );
   });
 });

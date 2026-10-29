@@ -280,16 +280,32 @@ const seedOrganization = async (state: FixtureState): Promise<void> => {
     relatedContactId: clientId,
     relationshipType: "employee",
   });
-  await db.insert(clauseCategories).values({
-    id: clauseCategoryId,
-    organizationId,
-    name: "Export clause category",
-  });
-  await db.insert(templateCategories).values({
-    id: templateCategoryId,
-    organizationId,
-    name: "Export template category",
-  });
+  await db.insert(clauseCategories).values([
+    {
+      id: clauseCategoryId,
+      organizationId,
+      name: "Export clause category",
+    },
+    {
+      id: createSafeId<"clauseCategory">(),
+      organizationId,
+      parentId: clauseCategoryId,
+      name: "Export clause child category",
+    },
+  ]);
+  await db.insert(templateCategories).values([
+    {
+      id: templateCategoryId,
+      organizationId,
+      name: "Export template category",
+    },
+    {
+      id: createSafeId<"templateCategory">(),
+      organizationId,
+      parentId: templateCategoryId,
+      name: "Export template child category",
+    },
+  ]);
 };
 
 const seedClausesAndTemplates = async (state: FixtureState): Promise<void> => {

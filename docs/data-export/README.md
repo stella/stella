@@ -27,6 +27,9 @@ Inside each part:
 manifest.json                       kind: "part"; everything in this part
 README.txt
 organization/                       part 1 only
+  seller-profiles.json / .csv
+  clause-categories.json / .csv
+  template-categories.json / .csv
   contacts.json / .csv
   contact-relationships.json / .csv
   clauses.json / .csv               JSON carries versions and variants

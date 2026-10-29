@@ -26,6 +26,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  clauseCategories,
   clauses,
   clauseVariants,
   clauseVersions,
@@ -38,7 +39,9 @@ import {
   invoiceLines,
   invoicePayments,
   invoices,
+  sellerProfiles,
   taskAssignees,
+  templateCategories,
   templates,
   templateVersions,
   timeEntries,
@@ -62,6 +65,7 @@ import type {
 import type { DataExportVersionScope } from "@/api/handlers/data-exports/manifest-schema";
 import { dataExportRecordScope } from "@/api/handlers/data-exports/record-scopes";
 import {
+  CLAUSE_CATEGORY_COLUMNS,
   CLAUSE_COLUMNS,
   CLAUSE_VARIANT_COLUMNS,
   CLAUSE_VERSION_COLUMNS,
@@ -75,8 +79,10 @@ import {
   MATTER_COLUMNS,
   MATTER_CONTACT_COLUMNS,
   projectRecord,
+  SELLER_PROFILE_COLUMNS,
   TASK_ASSIGNEE_COLUMNS,
   TASK_COLUMNS,
+  TEMPLATE_CATEGORY_COLUMNS,
   TEMPLATE_COLUMNS,
   TEMPLATE_VERSION_COLUMNS,
   TIME_ENTRY_COLUMNS,
@@ -676,6 +682,56 @@ const readOrganizationTable = async <Row extends { id: string }>(
     async (afterId) => await db(async (tx) => await readPage(tx, afterId)),
   );
 
+const readOrganizationReferenceRows = async (reader: PagedReader) => {
+  const { organizationId } = reader;
+  const sellerProfilesRows = await readOrganizationTable(
+    reader,
+    async (tx, cursor) =>
+      await tx
+        .select()
+        .from(sellerProfiles)
+        .where(
+          and(
+            eq(sellerProfiles.organizationId, organizationId),
+            after(sellerProfiles.id, cursor),
+          ),
+        )
+        .orderBy(asc(sellerProfiles.id))
+        .limit(DATA_EXPORT_PAGE_SIZE),
+  );
+  const clauseCategoriesRows = await readOrganizationTable(
+    reader,
+    async (tx, cursor) =>
+      await tx
+        .select()
+        .from(clauseCategories)
+        .where(
+          and(
+            eq(clauseCategories.organizationId, organizationId),
+            after(clauseCategories.id, cursor),
+          ),
+        )
+        .orderBy(asc(clauseCategories.id))
+        .limit(DATA_EXPORT_PAGE_SIZE),
+  );
+  const templateCategoriesRows = await readOrganizationTable(
+    reader,
+    async (tx, cursor) =>
+      await tx
+        .select()
+        .from(templateCategories)
+        .where(
+          and(
+            eq(templateCategories.organizationId, organizationId),
+            after(templateCategories.id, cursor),
+          ),
+        )
+        .orderBy(asc(templateCategories.id))
+        .limit(DATA_EXPORT_PAGE_SIZE),
+  );
+  return { sellerProfilesRows, clauseCategoriesRows, templateCategoriesRows };
+};
+
 const readOrganizationRows = async (reader: PagedReader) => {
   const { organizationId } = reader;
   const readContactRowsPage = async (
@@ -878,6 +934,9 @@ const measureRecords = async (
           ),
         ] as const,
     ),
+    [sellerProfiles, eq(sellerProfiles.organizationId, organizationId)],
+    [clauseCategories, eq(clauseCategories.organizationId, organizationId)],
+    [templateCategories, eq(templateCategories.organizationId, organizationId)],
     [contacts, eq(contacts.organizationId, organizationId)],
     [
       contactRelationships,
@@ -963,6 +1022,7 @@ const loadOrganizationRecords = async (
   templateKeys: Map<string, string>,
 ): Promise<SourceOrganizationRecords> => {
   const rows = await readOrganizationRows(reader);
+  const referenceRows = await readOrganizationReferenceRows(reader);
   const children = await readOrganizationChildren(
     reader,
     rows.clauseRows.map((row) => row.id),
@@ -999,6 +1059,18 @@ const loadOrganizationRecords = async (
     });
   }
   return {
+    sellerProfiles: table(
+      SELLER_PROFILE_COLUMNS,
+      referenceRows.sellerProfilesRows,
+    ),
+    clauseCategories: table(
+      CLAUSE_CATEGORY_COLUMNS,
+      referenceRows.clauseCategoriesRows,
+    ),
+    templateCategories: table(
+      TEMPLATE_CATEGORY_COLUMNS,
+      referenceRows.templateCategoriesRows,
+    ),
     contacts: table(CONTACT_COLUMNS, rows.contactRows),
     contactRelationships: table(
       CONTACT_RELATIONSHIP_COLUMNS,

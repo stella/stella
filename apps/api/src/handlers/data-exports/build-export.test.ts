@@ -196,6 +196,9 @@ const matterFixture = ({
 };
 
 const organizationFixture = (): SourceOrganizationRecords => ({
+  sellerProfiles: emptyTable,
+  clauseCategories: emptyTable,
+  templateCategories: emptyTable,
   contacts: {
     columns: ["id", "displayName"],
     rows: [{ id: "contact-1", displayName: "Novák, s.r.o." }],

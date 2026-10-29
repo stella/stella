@@ -145,6 +145,9 @@ export type SourceTemplateFile = {
 };
 
 export type SourceOrganizationRecords = {
+  sellerProfiles: RecordTable;
+  clauseCategories: RecordTable;
+  templateCategories: RecordTable;
   contacts: RecordTable;
   contactRelationships: RecordTable;
   clauses: RecordTable;
@@ -683,6 +686,12 @@ const organizationEntries = async function* ({
       table: rows,
     });
   const tables = {
+    sellerProfiles: table("seller-profiles", records.sellerProfiles),
+    clauseCategories: table("clause-categories", records.clauseCategories),
+    templateCategories: table(
+      "template-categories",
+      records.templateCategories,
+    ),
     invoices: table("invoices-without-matter", records.invoices),
     contacts: table("contacts", records.contacts),
     contactRelationships: table(
@@ -743,6 +752,9 @@ const organizationEntries = async function* ({
   }
 
   return {
+    sellerProfiles: tables.sellerProfiles.ref,
+    clauseCategories: tables.clauseCategories.ref,
+    templateCategories: tables.templateCategories.ref,
     contacts: tables.contacts.ref,
     contactRelationships: tables.contactRelationships.ref,
     clauses: tables.clauses.ref,

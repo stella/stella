@@ -12,6 +12,7 @@ import { panic } from "better-result";
 import type { InferSelectModel, Table } from "drizzle-orm";
 
 import type {
+  clauseCategories,
   clauses,
   clauseVariants,
   clauseVersions,
@@ -22,7 +23,9 @@ import type {
   invoiceLines,
   invoicePayments,
   invoices,
+  sellerProfiles,
   taskAssignees,
+  templateCategories,
   templates,
   templateVersions,
   timeEntries,
@@ -40,6 +43,54 @@ type ColumnMap<T extends Table> = Record<
   keyof InferSelectModel<T>,
   Disposition
 >;
+
+export const SELLER_PROFILE_COLUMNS = {
+  id: "export",
+  legalName: "export",
+  registrationId: "export",
+  taxId: "export",
+  vatId: "export",
+  registerEntry: "export",
+  barRegistration: "export",
+  vatPayer: "export",
+  addressLine1: "export",
+  addressLine2: "export",
+  city: "export",
+  postalCode: "export",
+  country: "export",
+  iban: "export",
+  bic: "export",
+  accountNumber: "export",
+  defaultCurrency: "export",
+  footerNotes: "export",
+  isDefault: "export",
+  archivedAt: "export",
+  createdAt: "export",
+  updatedAt: "export",
+  organizationId: "omit",
+} as const satisfies ColumnMap<typeof sellerProfiles>;
+
+export const CLAUSE_CATEGORY_COLUMNS = {
+  id: "export",
+  parentId: "export",
+  name: "export",
+  description: "export",
+  sortOrder: "export",
+  createdAt: "export",
+  updatedAt: "export",
+  organizationId: "omit",
+} as const satisfies ColumnMap<typeof clauseCategories>;
+
+export const TEMPLATE_CATEGORY_COLUMNS = {
+  id: "export",
+  parentId: "export",
+  name: "export",
+  description: "export",
+  sortOrder: "export",
+  createdAt: "export",
+  updatedAt: "export",
+  organizationId: "omit",
+} as const satisfies ColumnMap<typeof templateCategories>;
 
 export const MATTER_COLUMNS = {
   id: "export",

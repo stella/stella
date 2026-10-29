@@ -72,6 +72,96 @@
             {
               "type": "object",
               "properties": {
+                "sellerProfiles": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "clauseCategories": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "templateCategories": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
                 "contacts": {
                   "type": "object",
                   "properties": {
@@ -304,6 +394,9 @@
                 }
               },
               "required": [
+                "sellerProfiles",
+                "clauseCategories",
+                "templateCategories",
                 "contacts",
                 "contactRelationships",
                 "clauses",
