@@ -162,6 +162,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
   "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
   "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-reviewed-boundaries.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,

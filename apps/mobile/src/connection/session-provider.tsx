@@ -17,7 +17,9 @@ import type { AccessTokenSource } from "@/connection/session";
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
-import { APP_VARIANT } from "@/env";
+import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
+import { currentPushDevice } from "@/native/push-device";
+import { unregisterPushDevice } from "@/state/push-devices";
 
 export type SessionState =
   | {
@@ -41,6 +43,25 @@ type SessionContextValue = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+/**
+ * Tells the server to stop sending to this phone, without asking the person
+ * anything. Best effort: should it fail, the server stops once Apple reports
+ * the token gone.
+ */
+const stopPushNotifications = async (source: AccessTokenSource) => {
+  if (!PUSH_NOTIFICATIONS) {
+    return;
+  }
+  const device = await currentPushDevice({ ask: false, locale: "" }).catch(
+    () => null,
+  );
+  if (device !== null) {
+    (
+      await unregisterPushDevice({ fetch, source, token: device.token })
+    ).unwrapOr(undefined);
+  }
+};
 
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
@@ -99,6 +120,8 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
     },
     signOut: async () => {
       if (state.status === "signed-in") {
+        // Stop the notifications first, while the token still opens the API.
+        await stopPushNotifications(state.source);
         const session = state.source.session();
         // Best effort: an unreachable server cannot keep the phone signed in.
         (
