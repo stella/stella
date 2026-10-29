@@ -2065,8 +2065,6 @@
     "clearFilters": "Effacer les filtres",
     "clearSearch": "Effacer la recherche",
     "close": "Fermer",
-    "closeAll": "Tout fermer",
-    "closeOthers": "Fermer les autres",
     "columns": "Colonnes",
     "comfortable": "Confortable",
     "comingSoon": "Bientôt disponible",
@@ -3653,6 +3651,9 @@
       "unsupportedVisualContent": "Ce fichier contient des images ou des graphiques vectoriels qui ne peuvent pas être vérifiés pour détecter du texte sensible. L’exportation n’est pas disponible.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
+    "closeAllTabs": "Fermer {count, plural, one {# onglet} other {les # onglets}}",
+    "closeOtherTabs": "Fermer {count, plural, one {l’autre onglet} other {les # autres onglets}}",
+    "closeTab": "Fermer <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Il s’agit d’un ancien fichier {format}. Enregistrez-le au format {replacementExtension} pour le convertir.",
       "unsupportedEncoding": "Ce document utilise l’encodage {encoding}, qui n’est pas pris en charge, et ne peut donc pas être converti.",

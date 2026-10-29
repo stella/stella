@@ -2065,8 +2065,6 @@
     "clearFilters": "Clear filters",
     "clearSearch": "Clear search",
     "close": "Close",
-    "closeAll": "Close all",
-    "closeOthers": "Close others",
     "columns": "Columns",
     "comfortable": "Comfortable",
     "comingSoon": "Coming soon",
@@ -3653,6 +3651,9 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
+    "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
+    "closeTab": "Close <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
       "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",

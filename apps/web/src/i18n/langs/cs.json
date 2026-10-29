@@ -2065,8 +2065,6 @@
     "clearFilters": "Vymazat filtry",
     "clearSearch": "Vymazat hledání",
     "close": "Zavřít",
-    "closeAll": "Zavřít vše",
-    "closeOthers": "Zavřít ostatní",
     "columns": "Sloupce",
     "comfortable": "Pohodlné",
     "comingSoon": "Již brzy",
@@ -3653,6 +3651,9 @@
       "unsupportedVisualContent": "Tento soubor obsahuje obrázky nebo vektorovou grafiku, u kterých nelze ověřit citlivý text. Export není k dispozici.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
+    "closeAllTabs": "Zavřít {count, plural, one {# kartu} few {všechny # karty} other {všech # karet}}",
+    "closeOtherTabs": "Zavřít {count, plural, one {# další kartu} few {# další karty} other {# dalších karet}}",
+    "closeTab": "Zavřít <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",
       "unsupportedEncoding": "Tento dokument používá nepodporované kódování {encoding}, takže jej nelze převést.",
