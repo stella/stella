@@ -44,6 +44,7 @@ describe("web API fetcher timeout policy", () => {
 
     expect(owner.calls).toHaveLength(1);
     expect(owner.calls[0]?.init.timeout).toEqual({ type: "total", ms: 30_000 });
+    expect(owner.calls[0]?.init.timeoutMs).toBeUndefined();
   });
 
   test("keeps the caller abort signal", async () => {
