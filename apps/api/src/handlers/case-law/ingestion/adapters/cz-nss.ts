@@ -1110,10 +1110,11 @@ const fetchRegistryDocument = async ({
   signal,
 }: FetchRegistryDocumentOptions): Promise<DecisionContentRead> => {
   const reference = row.publishedCaseNumber ?? row.caseNumber;
-  const documentId = czNssSourceDocumentId(row);
-  if (documentId === undefined) {
+  const identity = czNssRowIdentity(row);
+  if (identity?.type !== "document") {
     return { type: "read", content: EMPTY_CONTENT };
   }
+  const documentId = identity.sourceDocumentId;
   const listingTarget = publisherTarget(
     ADAPTER_KEYS.CZ_NSS,
     nssRegistryUrl(reference),

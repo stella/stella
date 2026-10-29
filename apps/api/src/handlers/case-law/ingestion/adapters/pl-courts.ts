@@ -2281,6 +2281,11 @@ const listPlCourtsSlicePage = async ({
       observations.push(observation);
       continue;
     }
+    if (!isRecord(record)) {
+      return panic(
+        "A non-object SAOS listing must be captured as an observation",
+      );
+    }
     const identity = plCourtsListingIdentity(normalizeSaosDumpItem(record));
     if (identity === undefined) {
       panic(
