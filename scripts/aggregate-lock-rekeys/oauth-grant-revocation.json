@@ -2,7 +2,7 @@
   {
     "file": "apps/api/src/lib/oauth-connections.ts",
     "from": "744b3e4b2d3bc4385fbfb13548b1d0f816179b492d141d72557d51d03e61ec30",
-    "to": "690963634577b440ab9ec1fd396fcbb176381fef33690067a1540ec30f41d82b",
+    "to": "16a4236269601417e93d408fbff5c35a12c84e8d1e2a1d6f3d1d979a2483325d",
     "reason": "Existing disconnect transaction; it now records and prunes the OAuth grant revocation in the same transaction."
   }
 ]

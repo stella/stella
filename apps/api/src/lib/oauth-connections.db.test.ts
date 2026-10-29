@@ -30,6 +30,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { resetLogSinkForTesting } from "@/api/lib/observability/logger";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
@@ -131,7 +132,9 @@ const disconnect = async (browser: HumanBrowser, consentId: string) =>
   );
 
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const authenticated = await authenticateMcpRequest(accessToken);
+  const authenticated = await authenticateMcpRequest(accessToken, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   if (authenticated.isErr()) {
     return false;
   }

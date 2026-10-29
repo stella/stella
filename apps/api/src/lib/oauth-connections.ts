@@ -26,6 +26,31 @@ import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
  * directly.
  */
 
+type FindOAuthGrantIdentityOptions = {
+  clientId: string;
+  userId: string;
+  referenceId: string;
+};
+
+/** Resolves the consent identity bound to the provider's user and organization. */
+export const findOAuthGrantIdentity = async ({
+  clientId,
+  userId,
+  referenceId,
+}: FindOAuthGrantIdentityOptions) =>
+  await rootDb
+    .select({ id: oauthConsent.id })
+    .from(oauthConsent)
+    .where(
+      and(
+        eq(oauthConsent.clientId, clientId),
+        eq(oauthConsent.userId, userId),
+        eq(oauthConsent.referenceId, referenceId),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows.at(0));
+
 export type OAuthConnectionSummary = {
   id: string;
   clientId: string;

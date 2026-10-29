@@ -1,8 +1,6 @@
 import type { OAuthClaimExtensionInput } from "@better-auth/oauth-provider";
-import { and, eq } from "drizzle-orm";
 
-import { oauthConsent } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import { findOAuthGrantIdentity } from "@/api/lib/oauth-connections";
 
 export const OAUTH_GRANT_ID_CLAIM = "stella_grant_id";
 
@@ -16,18 +14,11 @@ export const getOAuthGrantIdentityClaims = async ({
     return {};
   }
 
-  const grant = await rootDb
-    .select({ id: oauthConsent.id })
-    .from(oauthConsent)
-    .where(
-      and(
-        eq(oauthConsent.clientId, client.clientId),
-        eq(oauthConsent.userId, user.id),
-        eq(oauthConsent.referenceId, referenceId),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows.at(0));
+  const grant = await findOAuthGrantIdentity({
+    clientId: client.clientId,
+    userId: user.id,
+    referenceId,
+  });
 
   return grant ? { [OAUTH_GRANT_ID_CLAIM]: grant.id } : {};
 };
