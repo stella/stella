@@ -1,126 +1,126 @@
 {
   "at-asylgh": {
-    "version": 8,
-    "fingerprint": "a8b7ea0f4326033aeb01430d871eccd4dbd249dec80202539c852ca35cdcd59f"
+    "version": 10,
+    "fingerprint": "297ad8ef359139381e9f9cfa6b239f4761972966558cbb9bae172651d983dc79"
   },
   "at-bks": {
-    "version": 8,
-    "fingerprint": "a30b16d58bda47c2c6416e2d8561145e9b729112997c5a3ba51b4fdbcbac048b"
+    "version": 10,
+    "fingerprint": "af18379ea89fbda411315252827a7ba80af235f0f994f6e05630485ff05d20f2"
   },
   "at-bvwg": {
-    "version": 8,
-    "fingerprint": "c96d0b8121440081e3217c44a6690a462059d43c456a91cbd03263ef44449bdf"
+    "version": 10,
+    "fingerprint": "6254b6d6dda15037e1cd67ad8ea7ac410e247086dff6e1dbc76ac32ec4bc7900"
   },
   "at-courts": {
-    "version": 8,
-    "fingerprint": "765f2672973a90ac76e8d7fff3ee96aa551f6b26e72a07cdaa9d656cdd055fa3"
+    "version": 10,
+    "fingerprint": "1e428ad1af7d077717407e6363d96d2721ae7aa36868be33a024d9a9850356ae"
   },
   "at-findok": {
-    "version": 10,
-    "fingerprint": "8487d104b44a863a4f3d2350020f0d0eb8de637b4c8e56e1430f179c7266e24b"
+    "version": 12,
+    "fingerprint": "0e451fbfaf7b6f3240bb5d961124b941973efc0df2f553bc14296a4c78a47e36"
   },
   "at-lvwg": {
-    "version": 8,
-    "fingerprint": "6ea5ae671624efa635e88c80504929e2887ecd06d89f004d2642514280699ae7"
+    "version": 10,
+    "fingerprint": "5c547a2c71bd81a9300a71e2b6c4db3f061a898852a7aecc6114a861d012d2ea"
   },
   "at-ubas": {
-    "version": 8,
-    "fingerprint": "93ff3ce53c7bee8249b24a380ea534a77cc281d75fe7b843a8c1b73e265c7155"
+    "version": 10,
+    "fingerprint": "be4a416a91b93214b8602ddfc96e3794752f9c8ce04fb6e288aa7edb2c4b3a1f"
   },
   "at-umse": {
-    "version": 8,
-    "fingerprint": "e4b2b9d4c7ab4761815890849ebbd1e795bc14d00bd897440ba0f5d63685cb00"
+    "version": 10,
+    "fingerprint": "ada898d43318a44b7ec9909bb10c50faa0ae3e849ecb9837d2f420e237567fa8"
   },
   "at-uvs": {
-    "version": 8,
-    "fingerprint": "b3b2ce53ed269dfb3482c1ca9a069b2315fe0a83676a60f4c6685236c4eaf162"
+    "version": 10,
+    "fingerprint": "8d74150795660374875997d1997917f48bfb9c5ffe71856b62a8ab8489a6ad99"
   },
   "at-verg": {
-    "version": 8,
-    "fingerprint": "739c42d91fde424a7fea67e01a591e27b1f75030e1279eb5f5cfe531026a116b"
+    "version": 10,
+    "fingerprint": "1f403f3d601dc74f58d094201f2606d2037b7437b8ee2d0314dfd22f5dbb4b53"
   },
   "at-vfgh": {
-    "version": 8,
-    "fingerprint": "5a486def8a4123857a9d943c96f30e02eb0c90f8bf2309b1f1e57ae11b05376e"
+    "version": 10,
+    "fingerprint": "66c039f5a81a5c99fe8b3b3a7cc081d2ab0b3c4e86d8df13f7b4fad48d13ce06"
   },
   "at-vwgh": {
-    "version": 8,
-    "fingerprint": "a90a9f5ee054351283f7e8e0a6a45dd32a697c18c7f5b620a3974153f2325667"
+    "version": 10,
+    "fingerprint": "69313f2771ea3c7cccb21d18c6b23e4d29448a356cee96075144871e837696e1"
   },
   "cz-ns": {
-    "version": 20,
-    "fingerprint": "3a0f8470c2ac0d6956044da67c5c5ca3deb98666df4fee69629853915f4d0cb5"
+    "version": 21,
+    "fingerprint": "97f28c0697b8c5642c0b556edd8157c6be61848f1c4561cc61720035c4618815"
   },
   "cz-nss": {
-    "version": 23,
-    "fingerprint": "4003fabd735b92f7173ac3d0a70835f7b9370182a573e4e8aaf1d4d3641dd975"
+    "version": 24,
+    "fingerprint": "6d58be847311beef7bee3dfd43a50009bb214b6bc7bd4b0a65f72cb545d708b6"
   },
   "cz-regional": {
-    "version": 15,
-    "fingerprint": "9ed3dff7c014f4a0a97216bad76b46ad90ce56fc98355f35499e11cc72903b68"
+    "version": 17,
+    "fingerprint": "5afbc733adc88f12058c04f531ad87ae796575c82b3a74d86d265020cb61c5f2"
   },
   "cz-uohs": {
-    "version": 4,
-    "fingerprint": "18218613fe25278e29554625c39bfe32f382fbceed4debd1c50491aa3075a2ac"
+    "version": 6,
+    "fingerprint": "7632fa97355ae8379ff8596dd066b3622cfa4862b2cbedbd970e8b93c7df7512"
   },
   "cz-us": {
-    "version": 31,
-    "fingerprint": "a7b8080b873c91052b46eabc60b261de1a1ad80cd93f8e5badd25ea730fbcbd2"
+    "version": 33,
+    "fingerprint": "093a7d1bc0eee6543bd68d417f871701924565f17e57126a35f8ab15bde2f656"
   },
   "eu-ecj": {
     "version": 18,
     "fingerprint": "3c399313d8fa337f602c0d0e6923527a6888233aa04ff7100cf19b5fc7a46195"
   },
   "hu-bhgy": {
-    "version": 21,
-    "fingerprint": "5eb518c249e5f8b9882f2d83d706c4a2bf644bc4c7a346ac56e75baaa8802e14"
+    "version": 23,
+    "fingerprint": "119e8497fee46d335249485bcf68b805db97351e998c274b685a16e880763cea"
   },
   "pl-courts": {
-    "version": 16,
-    "fingerprint": "577e0a86bf2cf7bfaae5b8d33b941abf36d6bd2a76089badd57a768d44b91fbe"
+    "version": 18,
+    "fingerprint": "23471294b47dc7d59fbce3d0e92f5179180867058296d7d6dd2e5f64cdd3e7be"
   },
   "pl-kio": {
-    "version": 10,
-    "fingerprint": "3d4e28e6ade0577789214d60e39fc50229b623d9c5812defe7af3587bbe718ad"
+    "version": 12,
+    "fingerprint": "518e5b869f065351ec6deb48dc41dbadda8f89bc1b0d432d4cc2e54c3bba988f"
   },
   "pl-kis": {
-    "version": 10,
-    "fingerprint": "af057a5e881b143acd50b38c5f6c37fed4f9c6d650bd2aba141faed7b968a25e"
+    "version": 12,
+    "fingerprint": "16a409eedb1fd4fce1f95c2316fc84b2ad24a82e1862fb2d96584bfc6d428f72"
   },
   "pl-ncourt": {
-    "version": 15,
-    "fingerprint": "4a9a728301a2bd8ae327458be0ba5c6521b4ebc2b3f70b0468f4eaeb9e777e12"
+    "version": 17,
+    "fingerprint": "26715b03082a5c4d3da0e0429987b3f17e43008c374632a3e7260d4c22a987a8"
   },
   "pl-nsa": {
-    "version": 9,
-    "fingerprint": "8dcbef222593b25cbc1efd42df780568226b5d2aa44866e15d7302ae7c5a19cb"
+    "version": 11,
+    "fingerprint": "86af8577458984e5d5599c57de6195eacd4f568d71a19cb5fa0ecd893bb0569f"
   },
   "pl-sn": {
-    "version": 9,
-    "fingerprint": "1104a94fd1371b3f79764c462b0b1f572c3e1bb4bcbf0b9ae984d5d95b98e66c"
+    "version": 10,
+    "fingerprint": "8c0b53867c1cbac4eeee52896bb16ba0e74fa997a28fc16b965387e193564185"
   },
   "pl-tk": {
-    "version": 9,
-    "fingerprint": "6c298112b7c4f7d913e1f6f7d2827d580b67d2c2abbe4c7d2c8c209f291a593f"
+    "version": 10,
+    "fingerprint": "05b9cec8f825cdeace1605259ff98601d4dfb2aa08557553212fc86cd884fd9d"
   },
   "pl-uodo": {
-    "version": 14,
-    "fingerprint": "9d573a4efd65e07c3d5ca29351b4ffc60cab29d7851342510e2367597684c7f1"
+    "version": 16,
+    "fingerprint": "d96af5a964fa09880ec7ea4348e02246c74d8b1c7f95ed361ad995e5ceac37b1"
   },
   "pl-uokik": {
-    "version": 11,
-    "fingerprint": "1f5726d89fea76c103346ee3c1a3da9373b9e88f62f909d366319c1c02072cca"
+    "version": 13,
+    "fingerprint": "aa58f8774e5d82469a01ab33b44fe43b7ee5cf243fa1d78b5f8bb5b4c95858cc"
   },
   "sk-courts": {
-    "version": 19,
-    "fingerprint": "b188f8758d8f7b6f764168cba3122dd69cc8ede5fb0e477ed17fd84e77b7f1a8"
+    "version": 21,
+    "fingerprint": "9fcf7df9e3b16a89745fbd056d8ac607e897ad35c1066bba9ed1cb0a0a1de398"
   },
   "sk-us": {
-    "version": 16,
-    "fingerprint": "a88755563504455a15d314f7e35199ccadec3d6b53b84f6f6c15f64c1f2abc6c"
+    "version": 18,
+    "fingerprint": "761a440937dc842d6de32774d925182741be7c6e5b54f84e1fb62e165cc46e9e"
   },
   "uk-fcl": {
-    "version": 3,
-    "fingerprint": "a18c90b6cb13f4456e0b5addba6dbcc042e29b4a314212687e9114fa240354d5"
+    "version": 5,
+    "fingerprint": "3c949c4d7cdd7c5cd6133137f573c2b26dc2ebebedf7c1aca2d41a72c3f16736"
   }
 }

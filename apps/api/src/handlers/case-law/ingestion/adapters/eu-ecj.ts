@@ -778,7 +778,7 @@ export const ecjVariantIdentity = ({
     return {
       type: "keyed",
       sourceDocumentId,
-      repairAliases: quarantine?.repairAliases ?? [],
+      repairAliases: keyedRepairAliases(sourceDocumentId, quarantine),
     };
   }
   return quarantine === undefined

@@ -109,184 +109,195 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 15,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 23,
+    version: 24,
     scope: {
       type: "all",
       reason:
-        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 31,
+    version: 33,
     scope: {
       type: "all",
       reason:
-        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 19,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 16,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "paragraph text, paragraph numbers and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; letter-spaced words and section markers include uneven chunks witnessed by intact words in the decision; none has feature storage of its own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 16,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 10,
+    version: 12,
     scope: {
       type: "all",
       reason:
-        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 9,
-    scope: {
-      type: "all",
-      reason:
-        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
-    },
-  },
-  [ADAPTER_KEYS.PL_NSA]: {
-    version: 9,
-    scope: {
-      type: "all",
-      reason:
-        "Rejoin sentences split across paragraphs, drop page numbers after the closing rule and join marked superscript article numbers.",
-    },
-  },
-  [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 15,
-    scope: {
-      type: "all",
-      reason:
-        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
-    },
-  },
-  [ADAPTER_KEYS.AT_COURTS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VFGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VWGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_LVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_ASYLGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UBAS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UVS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VERG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UMSE]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BKS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_FINDOK]: {
     version: 10,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NSA]: {
+    version: 11,
+    scope: {
+      type: "all",
+      reason:
+        "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    version: 17,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_COURTS]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VFGH]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VWGH]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BVWG]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_LVWG]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_ASYLGH]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UBAS]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UVS]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VERG]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UMSE]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BKS]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
+    },
+  },
+  [ADAPTER_KEYS.AT_FINDOK]: {
+    version: 12,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
@@ -294,55 +305,55 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Preserve main’s document corrections and rebuild quarantined listing types from owned CDM mappings, treating inherited object names as unknown.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
-    version: 3,
+    version: 5,
     scope: {
       type: "all",
       reason:
-        "Read the stated judgment type and ECLI availability from the stored XML envelope.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Refresh the parser contract alongside required observations on every listing page; the existing publisher identity and text remain authoritative and no parser feature has separate storage.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 21,
+    version: 23,
     scope: {
       type: "all",
       reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+        "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 10,
+    version: 12,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    version: 14,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 11,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 4,
+    version: 6,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Recompute only document-qualified repair candidates from stored listing evidence; preserve quarantine keys and text. New listing evidence requires a re-crawl.",
     },
   },
 } as const satisfies ParserVersionScopes<

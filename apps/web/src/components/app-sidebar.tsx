@@ -1511,7 +1511,7 @@ export const MatterItem = ({
         ) : (
           <div
             className={cn(
-              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100",
+              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100 pointer-coarse:opacity-100",
               hasExpandableContent ? "end-7" : "end-1",
             )}
             data-pinned={isPinned || undefined}
