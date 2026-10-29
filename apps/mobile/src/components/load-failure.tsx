@@ -16,7 +16,7 @@ import type { ApiError } from "@/state/api-request";
  * at all, an answer this build cannot read, a sign-in that needs renewing,
  * or the server's own failure or refusal.
  */
-export type LoadFailure =
+type LoadFailure =
   | { readonly kind: "offline" }
   | { readonly kind: "outdated" }
   | { readonly kind: "consent" }
@@ -28,7 +28,7 @@ export type LoadFailure =
       readonly detail: string | undefined;
     };
 
-export const loadFailure = (error: ApiError): LoadFailure => {
+const loadFailure = (error: ApiError): LoadFailure => {
   if (error._tag === "SignedOutError") {
     return { kind: "session" };
   }
