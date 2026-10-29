@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { httpFailureAnswer } from "@/api/lib/errors/http-failure-answer";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -8,6 +12,7 @@ import {
   createInvoiceEmailAdmission,
   INVOICE_EMAIL_BUDGET,
 } from "@/api/lib/rate-limit/invoice-email-admission";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -203,7 +208,7 @@ test.each(exhaustedBudgets)(
         const refused = await admit({ ...request, recipientCount: 2 });
         expect(refused.isErr()).toBe(true);
         if (refused.isErr()) {
-          expect(refused.error.status).toBe(429);
+          expect(resolveHandlerError(refused.error)?.status).toBe(429);
           expect(refused.error.code).toBe("invoice_email_limit");
         }
         expect(counter.counts()).toEqual(before);
@@ -326,7 +331,8 @@ test("a lost counter reply fails closed and refunds even the increment whose ack
   const result = await admit({ ...request, recipientCount: 3 });
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
-    expect(result.error.status).toBe(503);
+    expect(result.error.cause).toBeInstanceOf(LimiterStoreUnavailableError);
+    expect(httpFailureAnswer(result.error)).toEqual(LIMITER_STORE_UNAVAILABLE);
   }
   expect(counter.counts()).toEqual([]);
   expect(counter.outstandingAttempts()).toBe(0);

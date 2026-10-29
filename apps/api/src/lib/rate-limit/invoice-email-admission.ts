@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
-import { classifyFailure } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
@@ -17,6 +16,7 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 
 export const INVOICE_EMAIL_BUDGET = {
   durationMs: DAY_IN_MS,
@@ -50,15 +50,14 @@ export type InvoiceEmailReservation = {
 };
 
 const counterUnavailable = (cause: unknown) =>
-  classifyFailure(
-    new HandlerError({
-      status: 503,
-      code: LIMITER_STORE_UNAVAILABLE.code,
-      message: "Invoice email delivery is temporarily unavailable.",
+  new HandlerError({
+    ...LIMITER_STORE_UNAVAILABLE,
+    cause: new LimiterStoreUnavailableError({
+      operation: "command",
+      message: LIMITER_STORE_UNAVAILABLE.message,
       cause,
     }),
-    "upstream_unavailable",
-  );
+  });
 
 /** Each slot has its own refund identity, including an ambiguous store reply. */
 export const createInvoiceEmailAdmission =

@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { httpFailureAnswer } from "@/api/lib/errors/http-failure-answer";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -11,7 +13,22 @@ import {
   INVOICE_LINK_TOKEN_BUDGET,
 } from "@/api/lib/rate-limit/invoice-link-admission";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+
+test("an unavailable token counter uses the shared store refusal", async () => {
+  const admission = createInvoiceLinkTokenAdmission({
+    increment: () => {
+      throw new TypeError("Counter unavailable");
+    },
+  });
+  const result = await admission(sha256Hex("invoice-link-store-failure"));
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.cause).toBeInstanceOf(LimiterStoreUnavailableError);
+    expect(httpFailureAnswer(result.error)).toEqual(LIMITER_STORE_UNAVAILABLE);
+  }
+});
 
 test("token attempts stay refused until the shared window expires, then admit again", async () => {
   let now = 1000;

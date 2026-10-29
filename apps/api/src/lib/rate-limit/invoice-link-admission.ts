@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
-import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 
 export const INVOICE_LINK_TOKEN_BUDGET = { max: 20, duration: 60_000 } as const;
 
@@ -21,15 +21,14 @@ export const createInvoiceLinkTokenAdmission =
           INVOICE_LINK_TOKEN_BUDGET.duration,
         ),
       catch: (cause) =>
-        classifyFailure(
-          new HandlerError({
-            status: 503,
-            code: LIMITER_STORE_UNAVAILABLE.code,
-            message: "Invoice link access is temporarily unavailable.",
+        new HandlerError({
+          ...LIMITER_STORE_UNAVAILABLE,
+          cause: new LimiterStoreUnavailableError({
+            operation: "increment",
+            message: LIMITER_STORE_UNAVAILABLE.message,
             cause,
           }),
-          "upstream_unavailable",
-        ),
+        }),
     });
     if (counter.isErr()) {
       return Result.err(counter.error);

@@ -7,7 +7,7 @@ export const directSuccess = createSafeTokenHandler(() => R.ok(response));
 
 export const asynchronousResponse = deliverInvoiceLink({
   // oxlint-disable-next-line require-invoice-link-delivery-gate/require-invoice-link-delivery-gate -- fixture rejects asynchronous work after the final delivery check
-  response: async () => response,
+  response: async () => await Promise.resolve(response),
 });
 
 // expect-clean: require-invoice-link-delivery-gate/require-invoice-link-delivery-gate

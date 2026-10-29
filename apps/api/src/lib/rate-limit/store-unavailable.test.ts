@@ -132,6 +132,8 @@ test.each([
 const FAIL_CLOSED_OWNERS = [
   "handlers/legal-resolve/routes.ts",
   "lib/auth/mcp-web-handoff-service.ts",
+  "lib/rate-limit/invoice-email-admission.ts",
+  "lib/rate-limit/invoice-link-admission.ts",
   "lib/rate-limit/public-corpus-rate-limits.ts",
   "lib/rate-limit/synthetic-session-budget.ts",
 ];

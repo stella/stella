@@ -1,6 +1,7 @@
 // Public invoice-link routes must finish through the delivery owner. This is
 // a syntactic bypass guard; it does not prove arbitrary alias/data flow.
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
 
 import { isAstNode, isIdentifier, isStringLiteral } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -9,16 +10,13 @@ const RULE_NAME = "require-invoice-link-delivery-gate";
 const API_HANDLERS = "@/api/lib/api-handlers";
 const DELIVERY_OWNER = "@/api/handlers/invoice-links/delivery";
 
-const importNames = (node: AstNode, source: string) => {
+const importNames = (node: ESTree.ImportDeclaration, source: string) => {
   const names = new Map<string, string>();
-  if (!isStringLiteral(node.source) || node.source.value !== source) {
-    return names;
-  }
-  if (!Array.isArray(node.specifiers)) {
+  if (node.source.value !== source) {
     return names;
   }
   for (const specifier of node.specifiers) {
-    if (!isAstNode(specifier) || specifier.type !== "ImportSpecifier") {
+    if (specifier.type !== "ImportSpecifier") {
       continue;
     }
     const imported = isIdentifier(specifier.imported)
@@ -26,7 +24,7 @@ const importNames = (node: AstNode, source: string) => {
       : isStringLiteral(specifier.imported)
         ? specifier.imported.value
         : "";
-    if (imported && isIdentifier(specifier.local)) {
+    if (imported) {
       names.set(imported, specifier.local.name);
     }
   }
@@ -179,7 +177,7 @@ export default eslintCompatPlugin({
             for (const success of directSuccesses) {
               context.report({ node: success, messageId: "directSuccess" });
             }
-            if (hasSafeHandlerImport && !hasDeliveryCall) {
+            if (!hasDeliveryCall) {
               context.report({ node, messageId: "missingDelivery" });
             }
           },
