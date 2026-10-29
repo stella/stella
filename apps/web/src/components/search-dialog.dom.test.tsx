@@ -104,6 +104,7 @@ const citationResponse = {
       },
       keywords: null,
       textWithheldReason: null,
+      textAvailability: "available",
       headline: null,
       anchorId: null,
       citationCount: 0,
@@ -324,9 +325,9 @@ test("a resolved citation is the first keyboard result above matter hits", async
   ).toBe("true");
   const options = testing.screen.getAllByRole("option");
   expect(options.at(0)?.textContent).toContain("22 As 40/2025");
-  expect(
-    options.some((option) => option.textContent?.includes(hit.title)),
-  ).toBe(true);
+  expect(options.some((option) => option.textContent.includes(hit.title))).toBe(
+    true,
+  );
   await testing.act(async () => {
     testing.fireEvent.keyDown(input, { key: "Home", code: "Home" });
     testing.fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });

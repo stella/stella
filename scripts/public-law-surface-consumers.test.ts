@@ -63,6 +63,8 @@ const CONSUMERS = {
   "apps/web/src/features/statutes/statute-route-resolution.ts": "pages",
   "apps/web/src/features/statutes/components/pending-statute-changes.logic.ts":
     "pages",
+  // The iOS app opens decisions as the web's decision pages do.
+  "apps/mobile/src/state/case-law.ts": "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",
@@ -99,7 +101,7 @@ const CONSUMERS = {
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
-  "apps/web/src/lib/legal-citation-search.ts": "search",
+  "apps/web/src/features/search/legal-citation-search.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",

@@ -1,4 +1,5 @@
 import type { UseQueryResult } from "@tanstack/react-query";
+import { linkOptions } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -13,8 +14,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
+import type { readLegalCitationSearch } from "@/features/search/legal-citation-search";
 import { detached } from "@/lib/detached";
-import type { readLegalCitationSearch } from "@/lib/legal-citation-search";
 
 type CitationSearchResult = Awaited<ReturnType<typeof readLegalCitationSearch>>;
 
@@ -87,7 +88,7 @@ export const citationCommandRoute = (
           } as const);
     }
     case "statute":
-      return {
+      return linkOptions({
         to: "/law/$country/statutes/$slug",
         params: createStatuteRouteParams({
           country: match.statute.country,
@@ -100,7 +101,7 @@ export const citationCommandRoute = (
           match.intent.provision === null
             ? {}
             : { jump: match.intent.provision },
-      } as const;
+      });
     default:
       match satisfies never;
       return panic("Unknown citation command target");

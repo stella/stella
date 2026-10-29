@@ -6,6 +6,7 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
 import { renderReaderFixture } from "./decision-text.test";
 import {
@@ -105,6 +106,11 @@ describe("running text alignment", () => {
           sources: 1,
         });
         expect(classes).not.toContain("text-justify");
+        expect(classes).toContain("hyphens-manual");
+        expect(classes).toContain("wrap-anywhere");
+        for (const token of LEGAL_TEXT_CLASS_NAME.split(" ")) {
+          expect(classes).toContain(token);
+        }
       }
     }
   });
@@ -130,6 +136,8 @@ describe("running text alignment", () => {
       ...paragraphClasses(fulltext),
     ]) {
       expect(classes).toContain(READER_PROSE_CLASS);
+      expect(classes).toContain("hyphens-manual");
+      expect(classes).toContain("wrap-anywhere");
     }
     expect(paragraphClasses(fulltext)).toHaveLength(2);
   });

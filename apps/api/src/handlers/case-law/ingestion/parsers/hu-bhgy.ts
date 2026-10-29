@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
 import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
@@ -68,15 +69,9 @@ import {
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
-
-const HU_BHGY_PARSER = "hu-bhgy";
 
 // ── The document as lines ────────────────────────────────
 
@@ -1400,17 +1395,6 @@ export const parseHuBhgyDecision = (
     .map(({ plainText }) => plainText.trim())
     .filter((text) => text.length > 0)
     .join("\n\n");
-
-  validateAndLog(
-    {
-      parser: HU_BHGY_PARSER,
-      caseNumber: input.listedCaseNumber,
-      language: "hu",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(lineTexts),
-    blocks,
-  );
 
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);

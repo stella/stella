@@ -299,7 +299,7 @@
     "moreOptions": "More options",
     "moreItemActions": "More actions for item {number}",
     "noResults": "No matching clips",
-    "noResultsDescription": "Search registries for “{query}” instead?",
+    "noResultsSearchRegistries": "Search registries for “{query}”",
     "noGroup": "No group",
     "newGroupOption": "New group…",
     "copyItem": "Copy item {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Press {shortcut} to browse your history and choose a clip.",
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
-    "welcomeTitle": "Meet your clipboard"
+    "welcomeTitle": "Meet your clipboard",
+    "registryIdentifierSearchHint": "Enter {identifiers}."
   },
   "activity": {
     "title": "Activity",

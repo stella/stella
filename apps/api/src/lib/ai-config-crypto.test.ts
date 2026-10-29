@@ -19,6 +19,8 @@ const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 const captureModule = await import("@/api/lib/analytics/capture");
 const { installRecordingAnalytics, installRecordingLogger } =
   await import("@/api/tests/helpers/recording-telemetry");
+const { assertSettingsFailureConfidential } =
+  await import("@/api/tests/helpers/settings-failure-confidentiality");
 
 const descriptorGraph = (value: unknown, seen = new Set<object>()): unknown => {
   if ((typeof value !== "object" && typeof value !== "function") || !value) {
@@ -148,6 +150,19 @@ describe("unreadable configuration boundary", () => {
       expect(analytics.events).toEqual([]);
       expect(capture).not.toHaveBeenCalled();
       expect(devErrors).not.toHaveBeenCalled();
+
+      assertSettingsFailureConfidential({
+        reason: fixture.reason,
+        organizationId,
+        outputs: {
+          analyticsEvents: analytics.events,
+          captureEntries: capture.mock.calls,
+          developmentEntries: devErrors.mock.calls,
+          groupIdentifies: analytics.groupIdentifies,
+          logRecords: logs.records,
+          returned: result.error,
+        },
+      });
 
       const recorded = JSON.stringify(
         descriptorGraph({
