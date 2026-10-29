@@ -5087,8 +5087,8 @@ test("the UI playground plan consumes the changed-files output and exposes its s
   const step = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Plan UI playground geometry specs",
   );
-  expect(step?.env?.["CHANGED_FILES"]).toBe(
-    ["$", "{{ steps.changed-files.outputs.changed_files }}"].join(""),
+  expect(step?.env?.["UI_PLAYGROUND_CHANGED_PATHS"]).toBe(
+    ["$", "{{ runner.temp }}/api-test-changed-paths"].join(""),
   );
   expect(step?.run).toContain("bun scripts/ui-playground-selection.ts");
 });

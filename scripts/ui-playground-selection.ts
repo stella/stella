@@ -243,14 +243,15 @@ const resolveImport = (
       }
       const workspacePackage = manifests.get(`@stll/${workspace[1] ?? ""}`);
       if (workspacePackage === undefined) {
-        const installedManifest = path.join(
+        const version = dependencyVersion(
           root,
-          "node_modules",
-          "@stll",
-          workspace[1] ?? "",
-          "package.json",
+          importer,
+          `@stll/${workspace[1] ?? ""}`,
         );
-        if (existsSync(installedManifest)) {
+        if (
+          version !== undefined &&
+          !/^(?:workspace:|file:|link:|\.{0,2}\/)/u.test(version)
+        ) {
           return { files: [], internal: false, complete: true };
         }
         return { files: [], internal: true, complete: false };
@@ -312,12 +313,12 @@ const resolveImport = (
   };
 };
 
-// Whether the package.json nearest to `file` declares `name` as a dependency.
-const declaresDependency = (
+// Planning precedes installation, so package ownership comes from declarations.
+const dependencyVersion = (
   root: string,
   file: string,
   name: string,
-): boolean => {
+): string | undefined => {
   for (
     let directory = path.posix.dirname(file);
     ;
@@ -327,17 +328,26 @@ const declaresDependency = (
     if (existsSync(manifestPath)) {
       const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
       if (typeof manifest !== "object" || manifest === null) {
-        return false;
+        return undefined;
       }
-      return ["dependencies", "devDependencies", "peerDependencies"].some(
-        (field) => {
-          const deps: unknown = Reflect.get(manifest, field);
-          return typeof deps === "object" && deps !== null && name in deps;
-        },
-      );
+      for (const field of [
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+      ]) {
+        const deps: unknown = Reflect.get(manifest, field);
+        if (typeof deps !== "object" || deps === null) {
+          continue;
+        }
+        const version: unknown = Reflect.get(deps, name);
+        if (typeof version === "string") {
+          return version;
+        }
+      }
+      return undefined;
     }
     if (directory === "." || directory === "") {
-      return false;
+      return undefined;
     }
   }
 };
@@ -371,7 +381,8 @@ const stylesheetImports = (
     // not installed: planning runs before any install.
     if (
       bare &&
-      !declaresDependency(root, file, imported.split("/", 1)[0] ?? imported)
+      dependencyVersion(root, file, imported.split("/", 1)[0] ?? imported) ===
+        undefined
     ) {
       complete = false;
       continue;
@@ -667,6 +678,11 @@ if (import.meta.main) {
       .filter((files) => files.length > 0);
     console.log(JSON.stringify(replaySelection(changeSets)));
   } else {
-    console.log(JSON.stringify(selectGeometrySpecs(process.argv.slice(2))));
+    const changedPaths = process.env["UI_PLAYGROUND_CHANGED_PATHS"];
+    const files =
+      changedPaths === undefined
+        ? process.argv.slice(2)
+        : readFileSync(changedPaths, "utf-8").split("\0").filter(Boolean);
+    console.log(JSON.stringify(selectGeometrySpecs(files)));
   }
 }

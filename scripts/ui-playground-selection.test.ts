@@ -139,6 +139,30 @@ test("selects loader, transitive, spec, and shared harness changes", () => {
   ).toEqual(inventory.specs);
 });
 
+test("the planner reads NUL-delimited changed paths from a file", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ui-playground-paths-"));
+  try {
+    const changedPaths = path.join(root, "changed-paths");
+    const spec = "apps/web/e2e/ui-playground/page-crop.geometry.spec.ts";
+    writeFileSync(changedPaths, `${spec}\0`);
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        "scripts/ui-playground-selection.ts",
+        "package.json",
+      ],
+      cwd: ROOT,
+      env: { ...process.env, UI_PLAYGROUND_CHANGED_PATHS: changedPaths },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(JSON.parse(result.stdout.toString())).toEqual([spec]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("an incomplete visual mapping fails closed", () => {
   const root = mkdtempSync(path.join(tmpdir(), "ui-playground-selection-"));
   try {
@@ -293,6 +317,38 @@ test("a missing workspace package selects the affected spec", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test.each([
+  { version: "0.4.1", complete: true },
+  { version: "catalog:", complete: true },
+  { version: "workspace:*", complete: false },
+  { version: "file:../../missing", complete: false },
+])(
+  "dependency tracing is independent of installed packages: $version",
+  ({ version, complete }) => {
+    const { root, write } = createSelectionFixture();
+    try {
+      write(
+        "packages/fixture/package.json",
+        JSON.stringify({ name: "@stll/fixture" }),
+      );
+      write(
+        "apps/web/package.json",
+        JSON.stringify({ dependencies: { "@stll/remote": version } }),
+      );
+      const entry = "apps/web/src/routes/dev/fixture.ts";
+      write(entry, 'import "@stll/remote";\n');
+      expect(staticImportClosure(entry, root).complete).toBe(complete);
+      write(
+        "node_modules/@stll/remote/package.json",
+        JSON.stringify({ name: "@stll/remote" }),
+      );
+      expect(staticImportClosure(entry, root).complete).toBe(complete);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test("a browser export change selects the importing spec", () => {
   const { root, spec, write } = createSelectionFixture();
