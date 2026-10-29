@@ -1,5 +1,5 @@
 import { stella, stellaIngestion } from "@/api/db/rls";
-import { LISTING_OBSERVATION_REASONS } from "@/api/lib/legal-search/quarantine-identity";
+import { LISTING_OBSERVATION_REASONS } from "@/api/lib/legal-search/listing-observation-reasons";
 
 import { caseLawSources } from "./case-law";
 import { jsonb, p, safeUuid, sql, timestamptz } from "./common";

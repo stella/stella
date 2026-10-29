@@ -23,7 +23,14 @@ import * as v from "valibot";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
+import type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
+
+export {
+  LISTING_OBSERVATION_REASON,
+  LISTING_OBSERVATION_REASONS,
+} from "@/api/lib/legal-search/listing-observation-reasons";
+export type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
 
 /**
  * Quarantine namespaces, one per adapter that builds the identity. The
@@ -239,17 +246,6 @@ const listingObservationIdentitySchema = v.pipe(
 export type ListingObservationIdentity = v.InferOutput<
   typeof listingObservationIdentitySchema
 >;
-
-export const LISTING_OBSERVATION_REASONS = [
-  "no-usable-id",
-  "unserved-listing-record",
-] as const;
-export const LISTING_OBSERVATION_REASON = {
-  NO_USABLE_ID: LISTING_OBSERVATION_REASONS[0],
-  UNSERVED_RECORD: LISTING_OBSERVATION_REASONS[1],
-} as const;
-export type ListingObservationReason =
-  (typeof LISTING_OBSERVATION_REASONS)[number];
 
 export type ListingObservation = {
   readonly identity: ListingObservationIdentity;
