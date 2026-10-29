@@ -2122,7 +2122,7 @@ const reparseStoredRaw = async (
   if (bytes === null) {
     return {
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
       detail: "Stored metadata has no document PDF object",
     };

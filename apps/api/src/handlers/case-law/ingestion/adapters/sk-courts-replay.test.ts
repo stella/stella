@@ -126,7 +126,7 @@ describe("SK courts stored document replay", () => {
     const result = await replay(storedInput(decision, raw));
     expect(result).toMatchObject({
       type: "rejected",
-      rejection: "no-document",
+      rejection: "incomplete-metadata",
       status: "metadata-only",
     });
     const legacy = encodeSourceRawEnvelope({
@@ -139,7 +139,7 @@ describe("SK courts stored document replay", () => {
     });
     expect(await replay(storedInput(decision, legacy))).toMatchObject({
       type: "rejected",
-      rejection: "no-document",
+      rejection: "incomplete-metadata",
       status: "metadata-only",
     });
   });

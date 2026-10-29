@@ -1801,7 +1801,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       const outcome = await skUsAdapter.reparseStoredRaw?.({ ...input, raw });
       expect(outcome).toMatchObject({
         type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
         status: "metadata-only",
       });
     }
@@ -1811,7 +1811,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     });
     expect(missingBody).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
   });

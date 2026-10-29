@@ -520,14 +520,14 @@ describe("every ingested category, as the service served it", () => {
         }),
       ).toMatchObject({
         type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
         status: "metadata-only",
       });
       expect(
         await reparse({ ...input, readObject: async () => Result.ok(null) }),
       ).toMatchObject({
         type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
         status: "metadata-only",
       });
     }

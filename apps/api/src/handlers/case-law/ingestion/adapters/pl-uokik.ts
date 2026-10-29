@@ -1864,7 +1864,7 @@ const isFileStatus = (value: unknown): value is PlUokikFileStatus =>
 
 const metadataOnlyPlUokikReplay = (): StoredRawReparseOutcome => ({
   type: "rejected",
-  rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+  rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
   status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
   detail: "the stored row has no complete document object set",
 });

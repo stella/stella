@@ -670,7 +670,7 @@ const reparseCzUohsStoredRaw = async (
     if (bytes === null) {
       return {
         type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
         status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
         detail: `the stored record has no document object for ${part}`,
       };
@@ -680,7 +680,7 @@ const reparseCzUohsStoredRaw = async (
   if (documents.size === 0) {
     return {
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
       detail: "the stored record names no document object",
     };

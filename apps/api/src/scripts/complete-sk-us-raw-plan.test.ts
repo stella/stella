@@ -565,7 +565,7 @@ test("legacy binary bytes survive storage and the old raw object is never delete
     });
     expect(replayed).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
     expect(

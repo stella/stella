@@ -1230,7 +1230,7 @@ describe("the court rulings a decision page attaches", () => {
     });
     expect(replayed).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
   });
@@ -1440,7 +1440,7 @@ describe("replaying a stored envelope", () => {
       await plUokikAdapter.reparseStoredRaw?.(fixture.stored),
     ).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
   });
@@ -1466,7 +1466,7 @@ describe("replaying a stored envelope", () => {
       await plUokikAdapter.reparseStoredRaw?.(fixture.stored),
     ).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
   });
@@ -1479,7 +1479,7 @@ describe("replaying a stored envelope", () => {
       await plUokikAdapter.reparseStoredRaw?.(storedOf(decision)),
     ).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
   });
@@ -1498,7 +1498,7 @@ describe("replaying a stored envelope", () => {
       await plUokikAdapter.reparseStoredRaw?.(storedOf(decision)),
     ).toMatchObject({
       type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       status: "metadata-only",
     });
   });

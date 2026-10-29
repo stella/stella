@@ -900,10 +900,10 @@ export const STORED_RAW_REPLAY_STATUS = {
   METADATA_ONLY: "metadata-only",
 } as const;
 
-/** Missing document input, distinguished without changing driver rejection counters. */
+/** Missing capture is incomplete metadata, never a parsed-document withdrawal. */
 export type StoredRawMetadataOnlyOutcome = {
   type: "rejected";
-  rejection: typeof STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT;
+  rejection: typeof STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA;
   status: typeof STORED_RAW_REPLAY_STATUS.METADATA_ONLY;
   detail: string;
 };
