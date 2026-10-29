@@ -79,19 +79,23 @@ const splitStatements = (sql: string) => {
   }
   return result;
 };
-const clean = (sql: string) =>
-  sql.replace(/^(?:\s*--[^\n]*(?:\n|$)|\s*\/\*[\s\S]*?\*\/\s*)+/u, "").trim();
-const id = '"?([a-z0-9_]+)"?';
-const tableId = `(?:(?:"?public"?)\\.)?${id}`;
-const moveTable = (map: Map<string, string>, from: string, to: string) => {
-  for (const [key, value] of [...map]) {
-    if (key.startsWith(`${from}.`)) {
-      map.delete(key);
-      map.set(`${to}.${key.slice(from.length + 1)}`, value);
+/** The statement without the line and block comments that lead it. */
+const clean = (sql: string) => {
+  let rest = sql.trimStart();
+  for (;;) {
+    if (rest.startsWith("--")) {
+      const end = rest.indexOf("\n");
+      rest = end === -1 ? "" : rest.slice(end + 1).trimStart();
+    } else if (rest.startsWith("/*")) {
+      const end = rest.indexOf("*/");
+      rest = end === -1 ? "" : rest.slice(end + 2).trimStart();
+    } else {
+      return rest.trim();
     }
   }
 };
-
+const id = '"?([a-z0-9_]+)"?';
+const tableId = `(?:(?:"?public"?)\\.)?${id}`;
 type FoldState = {
   functions: Map<string, string>;
   policies: Map<string, string>;
@@ -117,16 +121,64 @@ const ROUTINE_SIGNATURE =
 const pattern = (source: string) => new RegExp(source, "iu");
 const group = (match: RegExpExecArray, index: number) => match[index] ?? "";
 
-const deleteWhere = <T>(
-  collection: Map<string, T> | Set<string>,
-  predicate: (key: string) => boolean,
+type MapField =
+  | "functions"
+  | "policies"
+  | "knownTriggers"
+  | "triggers"
+  | "indexes"
+  | "grants";
+const TABLE_FIELDS = [
+  "policies",
+  "triggers",
+  "knownTriggers",
+  "indexes",
+] as const satisfies readonly MapField[];
+
+/** Drop the matching keys of one field; true when any was there. */
+const forget = (
+  state: FoldState,
+  field: MapField,
+  drop: (key: string) => boolean,
+): boolean => {
+  const entries = state[field];
+  const kept = [...entries].filter(([key]) => !drop(key));
+  const removed = kept.length < entries.size;
+  entries.clear();
+  for (const [key, value] of kept) {
+    entries.set(key, value);
+  }
+  return removed;
+};
+
+const forgetSignatures = (
+  state: FoldState,
+  drop: (signature: string) => boolean,
 ) => {
-  for (const key of [...collection.keys()]) {
-    if (predicate(key)) {
-      collection.delete(key);
-    }
+  state.revokes = new Set([...state.revokes].filter((value) => !drop(value)));
+};
+
+/** Re-key one field's entries from one table to another. */
+const moveTable = (
+  state: FoldState,
+  field: MapField,
+  from: string,
+  to: string,
+) => {
+  const entries = state[field];
+  const moved = [...entries].map(([key, value]): [string, string] =>
+    key.startsWith(`${from}.`)
+      ? [`${to}.${key.slice(from.length + 1)}`, value]
+      : [key, value],
+  );
+  entries.clear();
+  for (const [key, value] of moved) {
+    entries.set(key, value);
   }
 };
+
+const forgetRevokes = (state: FoldState, routine: string) =>
+  forgetSignatures(state, (signature) => signature.startsWith(`${routine}(`));
 
 const renameRoutine = (
   state: FoldState,
@@ -134,15 +186,16 @@ const renameRoutine = (
   to: string,
   sql: string,
 ) => {
-  if (state.functions.delete(from)) {
+  if (forget(state, "functions", (key) => key === from)) {
     state.functions.set(to, sql);
   }
-  for (const signature of [...state.revokes]) {
-    if (signature.startsWith(`${from}(`)) {
-      state.revokes.delete(signature);
-      state.revokes.add(`${to}${signature.slice(from.length)}`);
-    }
-  }
+  state.revokes = new Set(
+    [...state.revokes].map((signature) =>
+      signature.startsWith(`${from}(`)
+        ? `${to}${signature.slice(from.length)}`
+        : signature,
+    ),
+  );
 };
 
 const renameTrigger = (
@@ -151,8 +204,8 @@ const renameTrigger = (
   to: string,
   sql: string,
 ) => {
-  const enabled = state.triggers.delete(from);
-  if (state.knownTriggers.delete(from)) {
+  const enabled = forget(state, "triggers", (key) => key === from);
+  if (forget(state, "knownTriggers", (key) => key === from)) {
     state.knownTriggers.set(to, sql);
   }
   if (enabled) {
@@ -175,35 +228,25 @@ const toggleTriggers = (
       if (enable) {
         state.triggers.set(key, definition);
       } else {
-        state.triggers.delete(key);
+        forget(state, "triggers", (candidate) => candidate === key);
       }
     }
   }
 };
 
 const dropTable = (state: FoldState, table: string) => {
-  for (const map of [
-    state.policies,
-    state.triggers,
-    state.knownTriggers,
-    state.indexes,
-  ]) {
-    deleteWhere(map, (key) => key.startsWith(`${table}.`));
+  for (const field of TABLE_FIELDS) {
+    forget(state, field, (key) => key.startsWith(`${table}.`));
   }
-  state.grants.delete(table);
+  forget(state, "grants", (key) => key === table);
 };
 
 const renameTable = (state: FoldState, from: string, to: string) => {
-  for (const map of [
-    state.policies,
-    state.triggers,
-    state.knownTriggers,
-    state.indexes,
-  ]) {
-    moveTable(map, from, to);
+  for (const field of TABLE_FIELDS) {
+    moveTable(state, field, from, to);
   }
   const grant = state.grants.get(from);
-  if (grant !== undefined && state.grants.delete(from)) {
+  if (grant !== undefined && forget(state, "grants", (key) => key === from)) {
     state.grants.set(to, grant);
   }
 };
@@ -222,10 +265,8 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     ),
     apply: (state, match) => {
       const name = group(match, 1);
-      state.functions.delete(name);
-      deleteWhere(state.revokes, (signature) =>
-        signature.startsWith(`${name}(`),
-      );
+      forget(state, "functions", (key) => key === name);
+      forgetRevokes(state, name);
     },
   },
   {
@@ -247,7 +288,11 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
       `^DROP\\s+POLICY\\s+(?:IF\\s+EXISTS\\s+)?"?(${POLICY_NAMES})"?\\s+ON\\s+${tableId}`,
     ),
     apply: (state, match) =>
-      state.policies.delete(statementKey(group(match, 2), group(match, 1))),
+      forget(
+        state,
+        "policies",
+        (key) => key === statementKey(group(match, 2), group(match, 1)),
+      ),
   },
   {
     // A changed expression replaces the stored statement; a rename moves it.
@@ -256,7 +301,11 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     ),
     apply: (state, match, sql) => {
       const table = group(match, 2);
-      state.policies.delete(statementKey(table, group(match, 1)));
+      forget(
+        state,
+        "policies",
+        (key) => key === statementKey(table, group(match, 1)),
+      );
       state.policies.set(statementKey(table, match[3] ?? group(match, 1)), sql);
     },
   },
@@ -276,8 +325,8 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     ),
     apply: (state, match) => {
       const key = statementKey(group(match, 2), group(match, 1));
-      state.knownTriggers.delete(key);
-      state.triggers.delete(key);
+      forget(state, "knownTriggers", (candidate) => candidate === key);
+      forget(state, "triggers", (candidate) => candidate === key);
     },
   },
   {
@@ -319,22 +368,20 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
       `^DROP\\s+INDEX(?:\\s+CONCURRENTLY)?(?:\\s+IF\\s+EXISTS)?\\s+(?:"?public"?\\.)?"?(${GATE_INDEX})"?`,
     ),
     apply: (state, match) =>
-      deleteWhere(state.indexes, (key) => key.endsWith(`.${group(match, 1)}`)),
+      forget(state, "indexes", (key) => key.endsWith(`.${group(match, 1)}`)),
   },
   {
     pattern: pattern(
       `^ALTER\\s+INDEX\\s+(?:IF\\s+EXISTS\\s+)?(?:"?public"?\\.)?"?(${GATE_INDEX})"?\\s+RENAME\\s+TO\\s+"?([a-z0-9_]+)"?`,
     ),
     apply: (state, match, sql) => {
-      for (const key of [...state.indexes.keys()]) {
-        if (key.endsWith(`.${group(match, 1)}`)) {
-          state.indexes.delete(key);
-          state.indexes.set(
-            `${key.slice(0, key.lastIndexOf("."))}.${group(match, 2)}`,
-            sql,
-          );
-        }
-      }
+      state.indexes = new Map(
+        [...state.indexes].map(([key, value]) =>
+          key.endsWith(`.${group(match, 1)}`)
+            ? [`${key.slice(0, key.lastIndexOf("."))}.${group(match, 2)}`, sql]
+            : [key, value],
+        ),
+      );
     },
   },
   {
@@ -347,7 +394,8 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     pattern: pattern(
       `^REVOKE\\s+[\\s\\S]+?\\s+ON\\s+(?:TABLE\\s+)?${tableId}\\s+FROM\\s+stella_entity_gate\\b`,
     ),
-    apply: (state, match) => state.grants.delete(group(match, 1)),
+    apply: (state, match) =>
+      forget(state, "grants", (key) => key === group(match, 1)),
   },
   {
     pattern: pattern(
@@ -365,7 +413,7 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     ),
     apply: (state, _match, sql) => {
       for (const signature of sql.matchAll(ROUTINE_SIGNATURE)) {
-        state.revokes.delete(signature[1] ?? "");
+        forgetSignatures(state, (value) => value === (signature[1] ?? ""));
       }
     },
   },
@@ -383,13 +431,16 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
 ];
 
 /** Statements that name gated objects without creating, changing or removing one. */
-const NEUTRAL_STATEMENTS: readonly RegExp[] = [
-  /^GRANT\s+stella_entity_gate\s+TO/iu,
+const NEUTRAL_STATEMENTS: readonly ((sql: string) => boolean)[] = [
+  (sql) => /^GRANT\s+stella_entity_gate\s+TO/iu.test(sql),
+  (sql) => /\bON\s+SCHEMA\b/iu.test(sql),
   // Role switches inside a gate routine's body.
-  /^(?:SET|RESET)\s+(?:LOCAL\s+)?ROLE\b/iu,
-  /\bON\s+SCHEMA\b/iu,
+  (sql) => /^(?:SET|RESET)\s+(?:LOCAL\s+)?ROLE\b/iu.test(sql),
   // Routine execute grants to roles other than PUBLIC do not change revokes.
-  /^(?:GRANT|REVOKE)\s+[\s\S]+?\bON\s+FUNCTION\b(?![\s\S]*\b(?:FROM|TO)\s+PUBLIC\b)/iu,
+  (sql) =>
+    /^(?:GRANT|REVOKE)\b/iu.test(sql) &&
+    /\bON\s+FUNCTION\b/iu.test(sql) &&
+    !/\b(?:FROM|TO)\s+PUBLIC\b/iu.test(sql),
 ];
 
 const GATED_OBJECT =
@@ -425,14 +476,14 @@ const DO_BLOCK_PROTECTION_VERBS =
   /\b(?:DISABLE\s+TRIGGER|DROP\s+TRIGGER|DROP\s+POLICY|ALTER\s+POLICY|DISABLE\s+ROW\s+LEVEL\s+SECURITY|NO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY|REVOKE)\b/iu;
 
 /** A DO block's content digest, whitespace-insensitive. */
-export const doBlockDigest = (sql: string): string =>
+const doBlockDigest = (sql: string): string =>
   sha256Hex(sql.replace(/\s+/gu, " ").trim());
 
 const isReviewedGateDoBlock = (sql: string) =>
   GATE_CHECK_BLOCK.test(sql) ||
   REVIEWED_DO_BLOCK_DIGESTS.has(doBlockDigest(sql));
 
-/** Inline the policy DDL that `entity_feature_gate_finish()` runs when called. */
+/** Inline the policy DDL the gate migration's finish routine runs when called. */
 const withFinishBody = (statement: string): string[] => {
   if (
     !/^CREATE OR REPLACE FUNCTION public\.entity_feature_gate_finish\(/mu.test(
@@ -449,7 +500,7 @@ const withFinishBody = (statement: string): string[] => {
 };
 
 /** One migration's statements as the fold reads them, in order. */
-export const foldedStatements = (migration: string): string[] =>
+const foldedStatements = (migration: string): string[] =>
   splitStatements(migration)
     .flatMap(withFinishBody)
     .map((raw) =>
@@ -475,7 +526,7 @@ const foldStatement = (state: FoldState, sql: string, migration: number) => {
     }
     return;
   }
-  if (NEUTRAL_STATEMENTS.some((neutral) => neutral.test(sql))) {
+  if (NEUTRAL_STATEMENTS.some((neutral) => neutral(sql))) {
     return;
   }
   if (GATED_OBJECT.test(sql)) {

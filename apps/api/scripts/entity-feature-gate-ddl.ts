@@ -83,13 +83,24 @@ const GATE_ROLE_ROUTINES: ReadonlySet<string> = new Set([
   "entity_feature_gate_backfill",
 ]);
 
-/** A routine's replacement statements, run as the role that owns it. */
+/**
+ * A routine's replacement statements, run as the role that owns it. The
+ * gate migration leaves the migrator a member of the gate role WITH SET
+ * FALSE, so the switch is granted for the replacement and withdrawn after,
+ * exactly as that migration did.
+ */
 export const routineReplacementSql = (
   name: string,
   statements: readonly string[],
 ): string[] =>
   GATE_ROLE_ROUTINES.has(name)
-    ? ["SET LOCAL ROLE stella_entity_gate;", ...statements, "RESET ROLE;"]
+    ? [
+        "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+        "SET LOCAL ROLE stella_entity_gate;",
+        ...statements,
+        "RESET ROLE;",
+        "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+      ]
     : [...statements];
 
 /** The routines derived from the census, by name. */
@@ -133,10 +144,10 @@ const GATE_ROUTINE_SIGNATURES: ReadonlyMap<string, string> = new Map([
  * - `disabled`: a trigger that exists but does not fire, so it is enabled;
  * - `over-granted`: a routine PUBLIC may execute again, so it is revoked.
  */
-export type GatePieceState =
+type GatePieceState =
   "present" | "absent" | "stale" | "disabled" | "over-granted";
 
-export type GatePiece = {
+type GatePiece = {
   /** `kind:table.name` or `kind:name`, unique per piece. */
   id: string;
   state: GatePieceState;
