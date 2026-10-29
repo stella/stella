@@ -93,12 +93,29 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Organization data export (data portability) is available on every deployment",
   ],
   [
+    "/v1/chat/threads/:threadId/connectors/:toolCallId",
+    "Authenticated chat connector receipts are available on every deployment",
+  ],
+  [
     "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
   [
     "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "/v1/tasks",
+    "Tasks are part of every matter on every deployment; legal-list placement keeps its own feature access",
+  ],
+  [
+    "/v1/mcp/oauth/mobile-client-metadata.json",
+    "The mobile app's client identity is published by every deployment it can sign in to",
+  ],
+  ["/favicon.ico", "The API host's icon is served by every deployment"],
+  [
+    "/v1/mobile/updates",
+    "Mobile builds ask every deployment for updates; one with nothing published answers 404",
   ],
   [
     "/operator",

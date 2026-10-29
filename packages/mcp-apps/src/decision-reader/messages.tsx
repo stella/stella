@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 import { createTranslator } from "use-intl";
 
-import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
 
 import catalogues from "../shared/generated/reader-messages.json";
@@ -33,10 +32,7 @@ export const readerMessages = (hostLocale: string | undefined) => {
     provisionEffectiveFrom: (date) => t("provisionEffectiveFrom", { date }),
     provisionPartTextUnavailable: (provisionLabel) =>
       t("provisionPartTextUnavailable", { provisionLabel }),
-    provisionActText: ({ eli, statuteTitle }) => {
-      const act = statuteActLabel({ eli, title: statuteTitle });
-      return [act.number, act.name].filter((part) => part !== null).join(", ");
-    },
+    provisionActText: ({ statuteTitle }) => statuteTitle,
     formatLabelList: (labels) =>
       new Intl.ListFormat(formattingLocale, {
         style: "short",

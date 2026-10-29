@@ -43,6 +43,8 @@ type LapsedAcceptancesOptions = {
   current: readonly CurrentAdvisory[];
   /** Today's date as YYYY-MM-DD. */
   today: string;
+  /** Date expiry can be scoped to owner changes; defaults to enforcing it. */
+  enforceDateExpiry?: boolean;
   /** The package's latest published version, or undefined when the lookup failed. */
   latestVersion: (pkg: string) => string | undefined;
 };
@@ -89,7 +91,7 @@ export const expiringAcceptances = ({
     }
     const daysRemaining =
       (Date.parse(`${expiresOn}T00:00:00Z`) - todayTime) / 86_400_000;
-    if (daysRemaining < 0 || daysRemaining > ACCEPTANCE_WARNING_DAYS) {
+    if (daysRemaining > ACCEPTANCE_WARNING_DAYS) {
       return [];
     }
     return [{ id, package: pkg, expiresOn }];
@@ -100,6 +102,7 @@ export const lapsedAcceptances = ({
   accepted,
   current,
   today,
+  enforceDateExpiry = true,
   latestVersion,
 }: LapsedAcceptancesOptions): LapsedAcceptance[] => {
   const currentById = new Map(
@@ -127,7 +130,11 @@ export const lapsedAcceptances = ({
     if (advisory === undefined) {
       continue;
     }
-    if (entry.expiresOn !== undefined && today > entry.expiresOn) {
+    if (
+      enforceDateExpiry &&
+      entry.expiresOn !== undefined &&
+      today > entry.expiresOn
+    ) {
       lapse(`the acceptance expired on ${entry.expiresOn}`);
       continue;
     }

@@ -61,6 +61,15 @@ describe("workspace primary nav", () => {
     expect(navIds({ includeTimesheets: false })).not.toContain("timesheets");
   });
 
+  // The legal database home and its breadcrumb use this label; case law is
+  // one section inside it, so the entry must not borrow the section's name.
+  test("names the legal database destination after the legal database", () => {
+    const law = getWorkspacePrimaryNavItems(ALL_GATES_OPEN).find(
+      (item) => item.kind === "route" && item.to === "/law",
+    );
+    expect(law?.labelKey).toBe("common.legalDatabase");
+  });
+
   test("leaves the ungated entries alone when every gate closes", () => {
     expect(
       navIds({

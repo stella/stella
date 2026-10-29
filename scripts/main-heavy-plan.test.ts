@@ -566,6 +566,11 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
+  // The pull request quick-check carrier is the only fast-tier route into
+  // the heavy gate; the standalone quick checks keep their queue policy, so
+  // the queue exclusion below still removes them from pull requests.
+  expect(eventPolicies.jobs["ci.yml/pr-heavy-gate"]).toBe("pr-fast");
+  expect(eventPolicies.jobs["ci.yml/ci-quick-checks"]).toBe("queue");
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {

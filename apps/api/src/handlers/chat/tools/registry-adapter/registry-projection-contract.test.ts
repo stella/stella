@@ -48,6 +48,7 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
@@ -1377,6 +1378,8 @@ const CONTRACT_CORPUS = {
           [
             {
               id: uid(45),
+              clientId: null,
+              matterShare: 1000,
               invoiceNumber: "INV-1",
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1401,6 +1404,7 @@ const CONTRACT_CORPUS = {
           invoices: {
             findFirst: async () => ({
               id: uid(46),
+              clientId: null,
               workspaceId: WS,
               invoiceNumber: "INV-2",
               documentType: "invoice",
@@ -1430,6 +1434,7 @@ const CONTRACT_CORPUS = {
               timeEntries: [
                 {
                   id: uid(47),
+                  workspaceId: WS,
                   workItemId: uid(48),
                   workItemReference: { type: "available", id: uid(48) },
                   dateWorked: "2026-02-01",
@@ -1447,6 +1452,7 @@ const CONTRACT_CORPUS = {
               expenses: [
                 {
                   id: uid(49),
+                  workspaceId: WS,
                   matterId: uid(50),
                   matterReference: { type: "available", id: uid(50) },
                   dateIncurred: "2026-02-01",
@@ -1463,6 +1469,13 @@ const CONTRACT_CORPUS = {
               lines: [
                 {
                   id: uid(105),
+                  workspaceId: WS,
+                  workspace: { id: WS, name: "Matter", color: null },
+                  recordedDescription: null,
+                  recordedQuantity: null,
+                  recordedUnit: null,
+                  recordedUnitPrice: null,
+                  recordedNetAmount: null,
                   position: 0,
                   description: "Drafted the NDA",
                   quantity: "1.0000",
@@ -1487,12 +1500,20 @@ const CONTRACT_CORPUS = {
       }),
       expectRefPaths: [
         "invoice.workspaceId",
+        "invoice.timeEntries[].workspaceId",
         "invoice.timeEntries[].entityId",
         "invoice.timeEntries[].entityReference.id",
+        "invoice.timeEntries[].entityReference.workspaceId",
         "invoice.timeEntries[].entity.id",
+        "invoice.timeEntries[].entity.workspaceId",
+        "invoice.expenses[].workspaceId",
         "invoice.expenses[].entityId",
         "invoice.expenses[].entityReference.id",
+        "invoice.expenses[].entityReference.workspaceId",
         "invoice.expenses[].entity.id",
+        "invoice.expenses[].entity.workspaceId",
+        "invoice.lines[].workspaceId",
+        "invoice.lines[].workspace.id",
       ],
     },
   ],
@@ -1705,6 +1726,11 @@ const CONTRACT_CORPUS = {
             },
           ],
           citationsNextCursor: null,
+          caseFile: {
+            items: [],
+            nextCursor: null,
+            limit: LIMITS.caseLawCaseFilePageSize,
+          },
           country: "CZ",
           court: "Nejvyšší soud",
           courtId: null,
@@ -2532,6 +2558,11 @@ describe("decision text in chat projection", () => {
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,
+      caseFile: {
+        items: [],
+        nextCursor: null,
+        limit: LIMITS.caseLawCaseFilePageSize,
+      },
       country: "CZ",
       court: "Nejvyšší soud",
       courtId: null,

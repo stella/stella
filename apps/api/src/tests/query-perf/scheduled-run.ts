@@ -6,9 +6,11 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 
+import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
+import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import type { DataExportMaintenanceDependencies } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type {
   SchedulerDb,
@@ -107,6 +109,9 @@ export const captureScheduledJobRun = async ({
   const task =
     createSchedulerTaskRegistry(
       noopTask,
+      createCaseLawCoverageRefreshTask({
+        compute: computeCaseLawCoverageAnswer,
+      }),
       dataExportMaintenance === undefined ? {} : { dataExportMaintenance },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const outcome = await Result.tryPromise({

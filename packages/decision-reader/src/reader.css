@@ -17,6 +17,9 @@
      ~100 characters a line; ~70 is the length prose is read at. */
   --reader-measure: 70ch;
   --reader-paragraph-gap: 1em;
+  /* The gutter a statute list item's designator hangs in: room for `a)`,
+     `aa)` and `10.` at the text's own size. */
+  --reader-list-gutter: 1.75em;
   --reader-section-gap-top: 2.5em;
   --reader-section-gap-bottom: 0.8em;
   --reader-anchor-offset: 88px;
@@ -75,6 +78,28 @@
   -webkit-hyphens: auto;
   hyphens: auto;
   hyphenate-limit-chars: 7 3 3;
+}
+
+/* A statute list item (`a)`, `1.`) hangs its designator in a gutter, so its
+   wrapped lines align with its words rather than under its letter. The first
+   line pulls back by the gutter, the designator fills it (or overruns it by
+   its own width), and every later line starts past it. */
+.reader-list-hang {
+  padding-inline-start: var(--reader-list-gutter);
+  text-indent: calc(var(--reader-list-gutter) * -1);
+}
+
+.reader-list-marker {
+  display: inline-block;
+  min-width: var(--reader-list-gutter);
+  padding-inline-end: 0.25em;
+  text-indent: 0;
+}
+
+/* Provision wording quoted in a card: its items sit close, so a lead-in and
+   the list it opens read as one unit. */
+.reader-quote {
+  --reader-paragraph-gap: 0.25em;
 }
 
 /* Paper-like background for the reader.

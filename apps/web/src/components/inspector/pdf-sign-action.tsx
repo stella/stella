@@ -1,17 +1,16 @@
-import { lazy, Suspense, useState } from "react";
-
 import { useTranslations } from "use-intl";
 
-import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { SignatureIcon } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
-import type { PdfSignableFile } from "@/components/inspector/pdf-signing";
+import { openInspectorFilePreview } from "@/components/inspector/inspector-actions";
 import {
-  type PdfSignRequest,
-  useDesktopPdfSign,
-} from "@/components/inspector/use-desktop-pdf-sign";
+  beginPdfSignPlacement,
+  endPdfSignPlacement,
+  usePdfSignPlacementStore,
+} from "@/components/inspector/pdf-sign-placement-store";
+import type { PdfSignableFile } from "@/components/inspector/pdf-signing";
+import { useDesktopPdfSign } from "@/components/inspector/use-desktop-pdf-sign";
 import {
   DesktopRequiredDialog,
   useDesktopActionGate,
@@ -23,18 +22,11 @@ import type {
 } from "@/features/desktop/desktop-action-gate.logic";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import type { WorkspaceEntity } from "@/lib/types";
 
-export type PdfSignTarget = PdfSignableFile & { fieldId: string };
+export type PdfSignTarget = PdfSignableFile;
 
-// The placement preview renders the page with pdf.js; loading it only when the
-// dialog opens keeps pdf.js out of every surface that merely offers signing
-// (the row menu, the reader toolbar).
-const LazyPdfSignPlacement = lazy(async () => {
-  const module = await import("@/components/inspector/pdf-sign-placement");
-  return { default: module.PdfSignPlacement };
-});
-
-type PdfSignFlow = {
+export type PdfSignFlow = {
   /** What the action does in the current desktop presence, or that it runs. */
   label: string;
   /** The action itself, for surfaces that show the desktop status beside it. */
@@ -44,23 +36,50 @@ type PdfSignFlow = {
   isConnecting: boolean;
   /** A signing exchange is open in stella desktop. */
   isSigning: boolean;
-  start: () => void;
-  sign: (request: PdfSignRequest) => Promise<void>;
-  placementOpen: boolean;
-  setPlacementOpen: (open: boolean) => void;
+  /**
+   * Once stella desktop can sign, start placing the stamp on `target`'s
+   * pages in the viewer that shows it. `reveal` brings that viewer on screen
+   * when the action was offered somewhere else (a row menu, the page editor).
+   */
+  start: (target: PdfSignTarget, reveal?: () => void) => void;
+  /**
+   * Like `start`, but once stella desktop can sign, first runs `prepare` and
+   * places the stamp on the file it resolves (a version it just saved, say).
+   * `null` stops without signing; `prepare` reports its own failures.
+   */
+  startWith: (prepare: () => Promise<PdfSignTarget | null>) => void;
   requiredDialog: DesktopRequiredDialogProps;
 };
 
 /**
  * The sign action's state, kept by whoever outlives the trigger: a menu item
  * unmounts with its menu, so the row menu holds the flow beside the menu and
- * renders {@link PdfSignDialogs} there.
+ * renders {@link PdfSignRequiredDialog} there. The stamp is placed on the
+ * page in the PDF viewer; confirming it there hands the file to stella
+ * desktop through this flow.
  */
 export const usePdfSignFlow = (): PdfSignFlow => {
   const t = useTranslations();
   const gate = useDesktopActionGate("sign-pdf");
   const signing = useDesktopPdfSign({ connectDesktop: gate.connect });
-  const [placementOpen, setPlacementOpen] = useState(false);
+  const run = (perform: () => void) => {
+    if (signing.isSigning) {
+      signing.notifyAlreadySigning();
+      return;
+    }
+    gate.run(perform);
+  };
+  const place = (target: PdfSignTarget) => {
+    beginPdfSignPlacement({
+      confirm: (stamp) => {
+        detachedUserAction(signing.sign({ stamp, target }), {
+          context: "pdf-sign-action.sign",
+          failureMessage: t("workspaces.files.pdfSigning.startFailedTitle"),
+        });
+      },
+      fieldId: target.fieldId,
+    });
+  };
   return {
     label: signing.isSigning
       ? t("workspaces.files.pdfSigning.signingLabel")
@@ -72,81 +91,108 @@ export const usePdfSignFlow = (): PdfSignFlow => {
     setUp: gate.setUp,
     isConnecting: gate.isConnecting,
     isSigning: signing.isSigning,
-    start: () => {
-      if (signing.isSigning) {
-        signing.notifyAlreadySigning();
-        return;
-      }
-      gate.run(() => setPlacementOpen(true));
+    start: (target, reveal) => {
+      run(() => {
+        place(target);
+        reveal?.();
+      });
     },
-    sign: signing.sign,
-    placementOpen,
-    setPlacementOpen,
+    startWith: (prepare) => {
+      run(() => {
+        detachedUserAction(
+          (async () => {
+            const target = await prepare();
+            if (target === null) {
+              return;
+            }
+            place(target);
+          })(),
+          {
+            context: "pdf-sign-action.prepare",
+            failureMessage: t("workspaces.files.pdfSigning.startFailedTitle"),
+          },
+        );
+      });
+    },
     requiredDialog: gate.requiredDialog,
   };
 };
 
-type PdfSignDialogsProps = {
-  flow: PdfSignFlow;
-  target: PdfSignTarget;
+type PdfSignFromListOptions = {
+  entity: WorkspaceEntity;
+  /** `null` when the row offers no signing. */
+  target: PdfSignTarget | null;
+  workspaceId: string;
 };
 
-/** Stamp placement, then the desktop hand-off; or what the desktop needs first. */
-export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
-  const t = useTranslations();
-  return (
-    <>
-      <Dialog onOpenChange={flow.setPlacementOpen} open={flow.placementOpen}>
-        <DialogPopup className="sm:max-w-xl">
-          <Suspense
-            fallback={
-              <div className="flex min-h-48 items-center justify-center">
-                <Loader label={t("common.loading")} size="sm" />
-              </div>
-            }
-          >
-            <LazyPdfSignPlacement
-              fieldId={target.fieldId}
-              onConfirm={(stamp) => {
-                flow.setPlacementOpen(false);
-                detachedUserAction(flow.sign({ stamp, target }), {
-                  context: "pdf-sign-action.sign",
-                  failureMessage: t(
-                    "workspaces.files.pdfSigning.startFailedTitle",
-                  ),
-                });
-              }}
-              workspaceId={target.workspaceId}
-            />
-          </Suspense>
-        </DialogPopup>
-      </Dialog>
-      <DesktopRequiredDialog {...flow.requiredDialog} />
-    </>
-  );
+/**
+ * Signing offered on a list row. The stamp is placed on the page, so `sign`
+ * shows the file in the inspector beside the list and places it there. The
+ * list stays on screen, and with it the row that holds this flow, so the
+ * row's action reads as signing until stella desktop settles the exchange.
+ */
+export const usePdfSignFromList = ({
+  entity,
+  target,
+  workspaceId,
+}: PdfSignFromListOptions) => {
+  const flow = usePdfSignFlow();
+  const sign = () => {
+    if (target === null) {
+      return;
+    }
+    flow.start(target, () => {
+      openInspectorFilePreview({
+        entity,
+        fieldId: target.fieldId,
+        workspaceId,
+      });
+    });
+  };
+  return { flow, sign };
 };
+
+/** What stella desktop needs before it can sign: install, update or connect. */
+export const PdfSignRequiredDialog = ({ flow }: { flow: PdfSignFlow }) => (
+  <DesktopRequiredDialog {...flow.requiredDialog} />
+);
 
 type PdfSignButtonProps = {
   target: PdfSignTarget;
 };
 
+/**
+ * The viewer's sign action: it switches the viewer of `target` into stamp
+ * placement and, pressed again while placing, back out of it.
+ */
 export const PdfSignButton = ({ target }: PdfSignButtonProps) => {
   const flow = usePdfSignFlow();
+  const isPlacing = usePdfSignPlacementStore(
+    (state) => state.session?.fieldId === target.fieldId,
+  );
   return (
     <>
       <CapabilityAction action={{ capability: "desktop" }} surface="control">
         {(capabilityProps) => (
           <ToolbarIconAction
+            aria-pressed={isPlacing}
+            data-pressed={isPlacing ? "" : undefined}
             density="toolbar"
             disabled={flow.isConnecting}
             icon={<SignatureIcon className="size-3.5" />}
             label={flow.label}
-            onClick={flow.start}
+            onClick={() => {
+              if (isPlacing) {
+                endPdfSignPlacement();
+                return;
+              }
+              flow.start(target);
+            }}
             {...capabilityProps}
           />
         )}
       </CapabilityAction>
-      <PdfSignDialogs flow={flow} target={target} />
+      <PdfSignRequiredDialog flow={flow} />
     </>
   );
 };

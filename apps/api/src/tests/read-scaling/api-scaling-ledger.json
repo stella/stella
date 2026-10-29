@@ -1675,6 +1675,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/threads/:threadId/connectors/:toolCallId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/threads/:threadId/export",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2571,6 +2575,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/time-entries/me/submissions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/time-timers/:id/confirm",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2785,6 +2793,10 @@
     {
       "id": "PUT /v1/clauses/import",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/client-invoices/:clientId",
+      "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
     },
     {
       "id": "PUT /v1/contacts",

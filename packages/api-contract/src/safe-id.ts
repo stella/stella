@@ -1,3 +1,4 @@
+// parser-output-unchanged: Removal retry ID branding does not change parsed decision identities.
 // parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";
 
@@ -32,6 +33,7 @@ export type SafeIdType =
   | "caseLawPolarityRule"
   | "caseLawProvisionCitation"
   | "caseLawReconciliationItem"
+  | "caseLawRemovalReconciliationItem"
   | "caseLawResearchAnswerClaim"
   | "caseLawResearchColumn"
   | "caseLawSource"
@@ -85,6 +87,7 @@ export type SafeIdType =
   | "documentProcessingRun"
   | "documentReferenceCounter"
   | "documentReviewFinding"
+  | "documentReviewFindingDecision"
   | "documentReviewParty"
   | "documentReviewReferencePassage"
   | "documentReviewRun"
@@ -200,6 +203,16 @@ export const isSafeIdValue = (value: string): boolean =>
  * (the api closes `SafeIdType`) parses with this schema rather than restating
  * the check and its message.
  */
+/**
+ * A user id as the auth provider issues it: an opaque string, not a UUID, so
+ * every input that names a person accepts the same shape.
+ */
+export const userIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(128),
+);
+
 export const safeIdSchema = v.pipe(
   v.string(),
   v.check(isSafeIdValue, "Expected a non-empty, well-formed identifier"),
