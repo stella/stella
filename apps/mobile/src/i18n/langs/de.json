@@ -127,6 +127,21 @@
     "currentVersion": "Aktuelle Version",
     "loadFailed": "Dieser Eintrag konnte nicht geladen werden."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dieses Dokument konnte nicht geöffnet werden",
+    "failure": {
+      "offline": "Sie sind offline. Stellen Sie eine Internetverbindung her und versuchen Sie es erneut.",
+      "noFile": "Dieses Dokument hat noch keine Datei.",
+      "failed": "Beim Öffnen ist ein Fehler aufgetreten. Versuchen Sie es gleich noch einmal.",
+      "unsupported": "Aktualisieren Sie die App, um Dokumente zu öffnen."
+    },
+    "retry": "Erneut versuchen",
+    "preview": "Vorschau öffnen",
+    "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
+    "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
+    "details": "Details"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Klarheit für jeden Fall.",

@@ -194,6 +194,18 @@ const LoadedEntities = ({
         <EntityRow
           entity={item}
           onPress={() => {
+            // A document opens to its pages; a folder or task to its details.
+            if (item.kind === "document") {
+              router.push({
+                pathname: "/document/[workspaceId]/[entityId]",
+                params: {
+                  workspaceId,
+                  entityId: item.entityId,
+                  ...(item.name === null ? {} : { name: item.name }),
+                },
+              });
+              return;
+            }
             router.push({
               pathname: "/matter/[workspaceId]/[entityId]",
               params: { workspaceId, entityId: item.entityId },

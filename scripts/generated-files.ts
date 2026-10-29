@@ -177,6 +177,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
+  "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -1126,6 +1127,29 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-mobile-icons.ts", "--write"],
     check: ["bun", "scripts/generate-mobile-icons.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "mobile-folio-fonts",
+    outputKind: "committed",
+    outputs: ["apps/mobile/src/components/document-viewer/folio-fonts.gen.ts"],
+    inputs: [
+      "scripts/generate-mobile-folio-fonts.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      // folio's version, which pins the fontsource stylesheets it imports.
+      "apps/mobile/package.json",
+      "package.json",
+      "bun.lock",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-folio-fonts"],
+    ],
+    write: ["bun", "scripts/generate-mobile-folio-fonts.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-folio-fonts.ts"],
     autofix: true,
     after: [],
   },

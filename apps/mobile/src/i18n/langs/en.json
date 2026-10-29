@@ -127,6 +127,21 @@
     "currentVersion": "Current version",
     "loadFailed": "This item could not be loaded."
   },
+  "document": {
+    "title": "Document",
+    "failedTitle": "This document could not be opened",
+    "failure": {
+      "offline": "You are offline. Connect to the internet and try again.",
+      "noFile": "This document has no file yet.",
+      "failed": "Something went wrong while opening it. Try again in a moment.",
+      "unsupported": "Update the app to open documents."
+    },
+    "retry": "Try again",
+    "preview": "Open preview",
+    "previewDescription": "This file opens in the system preview.",
+    "unrendered": "This document cannot be shown here, but the system preview may open it.",
+    "details": "Details"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Clarity for every case.",
