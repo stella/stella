@@ -30,7 +30,7 @@ type ServedAst = {
 type ReadServedAstOptions = {
   astS3Key: string | null;
   contentHash: string | null;
-  pgAst: DocumentAst | EmptyAst | null;
+  pgAst: unknown;
   decisionId: SafeId<"caseLawDecision">;
   corpusReadEnabled: boolean;
   readStore: () => Promise<DocumentAst | EmptyAst | null>;

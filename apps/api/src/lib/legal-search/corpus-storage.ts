@@ -1,8 +1,9 @@
-import { panic, Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   type DocumentAst,
   persistedAstDegradations,
@@ -22,7 +23,9 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  STORED_CORPUS_VALIDATION_CODE,
   StoredAstDegradedError,
+  StoredCorpusValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import {
   persistedCorpusAstSchema,
@@ -56,6 +59,7 @@ import type {
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { logger } from "@/api/lib/observability/logger";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -102,16 +106,43 @@ export const parsePersistedCorpusSections = (
 ): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
 
 /**
- * A malformed stored AST still throws: that is a defect in what was
- * written. Vocabulary this reader does not declare is not: the schema
+ * Malformed stored ASTs raise a classified failure without retaining the payload.
+ * Undeclared vocabulary is recoverable: the schema
  * keeps what carries text and degrades the rest, and each degradation is
  * reported here so the row stays visible without costing the reader the
  * document.
  */
 export const parsePersistedCorpusAst = (
   value: unknown,
+  documentId?: string,
 ): DocumentAst | EmptyAst | null => {
-  const parsed = v.parse(persistedCorpusAstSchema, value);
+  const parsed = v.safeParse(persistedCorpusAstSchema, value);
+  if (!parsed.success) {
+    // Union issues nest the useful field paths; issue messages and values may
+    // contain decision text, so neither belongs in the classified error.
+    const paths = new Set<string>();
+    const collectPaths = (issues: readonly v.BaseIssue<unknown>[]): void => {
+      for (const issue of issues) {
+        const path = v.getDotPath(issue);
+        if (path !== null) {
+          paths.add(path);
+        }
+        if (issue.issues !== undefined) {
+          collectPaths(issue.issues);
+        }
+      }
+    };
+    collectPaths(parsed.issues);
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: paths.size === 0 ? ["$"] : [...paths],
+    });
+    if (documentId !== undefined) {
+      reportStoredCorpusValidation(error, documentId);
+    }
+    throw error;
+  }
   const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {
     captureError(
@@ -124,7 +155,30 @@ export const parsePersistedCorpusAst = (
       }),
     );
   }
-  return parsed;
+  return parsed.output;
+};
+
+/** Correlate a rejected payload without logging its values or validator messages. */
+export const reportStoredCorpusValidation = (
+  error: StoredCorpusValidationError,
+  documentId: string,
+): void => {
+  logger.error(
+    "case_law.decision.stored_payload_invalid",
+    sanitizeErrorAttributesForOutput({
+      decisionId: documentId,
+      code: error.code,
+      paths: error.paths,
+    }),
+  );
+  captureError(
+    error,
+    handlerErrorContext("corpus.storedPayloadInvalid", {
+      documentId,
+      code: error.code,
+      paths: error.paths.join(","),
+    }),
+  );
 };
 
 /**
@@ -951,6 +1005,13 @@ export const readCorpusPayloadOrFallback = async <T>({
   const payload = await Result.tryPromise(read);
   if (Result.isOk(payload)) {
     return payload.value;
+  }
+  const raised =
+    payload.error instanceof UnhandledException
+      ? payload.error.cause
+      : payload.error;
+  if (StoredCorpusValidationError.is(raised)) {
+    reportStoredCorpusValidation(raised, documentId);
   }
   // An erased member is not an outage, so it has no fallback: degrading to
   // another copy of the payload is exactly what the tombstone prevents.

@@ -53,12 +53,16 @@ import {
   publicRowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
-import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
+import {
+  CorpusPayloadUnavailableError,
+  StoredCorpusValidationError,
+} from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  reportStoredCorpusValidation,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusTombstoneReaderForTx,
@@ -637,10 +641,10 @@ type CorpusReadOutcome<TPayload> = {
 };
 
 /**
- * Contain an object-storage refusal, and only that. Anything else is a
+ * Contain an unavailable or invalid stored payload. Anything else is a
  * defect in the read and still fails it.
  */
-const containPayloadUnavailable = async <TPayload>(
+export const containPayloadUnavailable = async <TPayload>(
   read: () => Promise<TPayload | null>,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<CorpusReadOutcome<TPayload>> => {
@@ -655,24 +659,29 @@ const containPayloadUnavailable = async <TPayload>(
     outcome.error instanceof UnhandledException
       ? outcome.error.cause
       : outcome.error;
-  // Not the containable refusal. `readCorpusPayloadOrFallback` raises only
-  // `CorpusPayloadUnavailableError`, so anything else is the defect this
-  // helper's contract already names: it fails the read, carrying the original
-  // as its cause.
-  if (!CorpusPayloadUnavailableError.is(raised)) {
+  // Validation failures of historical rows use the same visible read-failed
+  // state as unavailable objects; neither means the source published no text.
+  if (
+    !CorpusPayloadUnavailableError.is(raised) &&
+    !StoredCorpusValidationError.is(raised)
+  ) {
     return panic(
       "Corpus read failed for a reason this read cannot contain",
       raised,
     );
   }
 
-  captureError(
-    raised,
-    handlerErrorContext("decisions.containPayloadUnavailable.raised", {
-      decisionId,
-      step: "readDecision.corpusPayloadUnavailable",
-    }),
-  );
+  if (StoredCorpusValidationError.is(raised)) {
+    reportStoredCorpusValidation(raised, decisionId);
+  } else {
+    captureError(
+      raised,
+      handlerErrorContext("decisions.containPayloadUnavailable.raised", {
+        decisionId,
+        step: "readDecision.corpusPayloadUnavailable",
+      }),
+    );
+  }
   return { payload: null, unavailable: true };
 };
 

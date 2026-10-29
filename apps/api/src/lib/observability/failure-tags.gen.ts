@@ -415,6 +415,7 @@ export const FAILURE_TAGS = [
   "StatuteSlugPageError",
   "StoreUnavailableError",
   "StoredAstDegradedError",
+  "StoredCorpusValidationError",
   "StoredRawReadError",
   "StragglerCatchUpError",
   "StreamDeadlineError",
