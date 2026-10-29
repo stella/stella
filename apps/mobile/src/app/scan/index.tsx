@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import type { NativeStackHeaderItem } from "expo-router/native-stack";
 import {
   ActivityIndicator,
   Alert,
@@ -18,7 +17,7 @@ import { ScanPageList } from "@/components/scan-page-list";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
-import { useGlyphImage } from "@/components/ui/use-glyph-image";
+import { barGlyph } from "@/components/ui/bar-glyph";
 import { epochMilliseconds } from "@/connection/clock";
 import { buildPdf, discardScans, scanPages } from "@/native/document-scanner";
 import {
@@ -70,8 +69,6 @@ const ScanReviewScreen = () => {
   /** What the screen waits for: the camera, or the PDF being bound. */
   const [busy, setBusy] = useState<"pdf" | "scan" | null>(null);
   const insets = useSafeAreaInsets();
-  const closeGlyph = useGlyphImage("x");
-  const shareGlyph = useGlyphImage("share");
   const size = sizeInUnits(totalSize(pages));
   const documentName = pdfName(name, defaultName);
   const ready = pages.length > 0 && busy === null;
@@ -161,46 +158,24 @@ const ScanReviewScreen = () => {
     ]);
   };
 
-  const rightItems: NativeStackHeaderItem[] = [
-    {
-      disabled: !ready,
-      label: t("save"),
-      onPress: save,
-      type: "button",
-      variant: "done",
-    },
-    ...(shareGlyph === null
-      ? []
-      : [
-          {
-            disabled: !ready,
-            icon: { source: shareGlyph, type: "image" as const },
-            label: t("share"),
-            onPress: share,
-            type: "button" as const,
-          },
-        ]),
-  ];
-
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: "",
-          unstable_headerLeftItems: () =>
-            closeGlyph === null
-              ? []
-              : [
-                  {
-                    icon: { source: closeGlyph, type: "image" },
-                    label: tabs("close"),
-                    onPress: close,
-                    type: "button",
-                  },
-                ],
-          unstable_headerRightItems: () => rightItems,
-        }}
-      />
+      <Stack.Screen options={{ title: "" }} />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button onPress={close}>
+          {barGlyph("x")}
+          <Stack.Toolbar.Label>{tabs("close")}</Stack.Toolbar.Label>
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button disabled={!ready} onPress={share}>
+          {barGlyph("share")}
+          <Stack.Toolbar.Label>{t("share")}</Stack.Toolbar.Label>
+        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button disabled={!ready} onPress={save} variant="done">
+          <Stack.Toolbar.Label>{t("save")}</Stack.Toolbar.Label>
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <View className="bg-background flex-1">
         <ScrollView
           contentContainerStyle={screenStyles.content}
