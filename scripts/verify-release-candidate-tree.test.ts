@@ -87,7 +87,7 @@ const writeCli = ({
 
 const withCandidate = (
   mutate: (directory: string) => void,
-  verify: (result: ReturnType<typeof Bun.spawnSync>) => void,
+  verify: (result: ReturnType<typeof Bun.spawnSync>, directory: string) => void,
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-tree-"));
   try {
@@ -112,8 +112,6 @@ const withCandidate = (
     writeFileSync(path.join(directory, "scripts/build.sh"), "echo build\n");
     git(directory, "add", ".");
     git(directory, "commit", "--quiet", "--message", "main");
-    const main = git(directory, "rev-parse", "HEAD");
-
     git(directory, "checkout", "--quiet", "-b", "release");
     writeFileSync(path.join(directory, "VERSION"), "1.2.4\n");
     mutate(directory);
@@ -122,9 +120,19 @@ const withCandidate = (
     const candidate = git(directory, "rev-parse", "HEAD");
 
     verify(
-      Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
-        cwd: directory,
-      }),
+      Bun.spawnSync(
+        [
+          "node",
+          verifier,
+          git(directory, "merge-base", candidate, "main"),
+          candidate,
+          "stella/stella",
+        ],
+        {
+          cwd: directory,
+        },
+      ),
+      directory,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -149,6 +157,86 @@ test("accepts the regenerated CLI version that matches its package bump", () =>
     (directory) => {
       writeCli({ directory, version: "5.0.1" });
       writeLock(directory, "1.0.0", "5.0.1");
+    },
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("a changelog-only correction after a failed RC keeps the release proof and receives rc.2", () =>
+  withCandidate(
+    (directory) => {
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Initial note\n",
+      );
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "chore: release v1.2.4");
+      git(directory, "tag", "v1.2.4-rc.1");
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Corrected note\n",
+      );
+    },
+    (result, directory) => {
+      expect(result.exitCode, stderrText(result)).toBe(0);
+      expect(git(directory, "diff", "--name-only", "HEAD^", "HEAD")).toBe(
+        "docs/changelog/v1.2.4.md",
+      );
+      const receipt = Bun.spawnSync(
+        [
+          "bash",
+          new URL("release-rc-number.sh", import.meta.url).pathname,
+          "1.2.4",
+          git(directory, "rev-parse", "HEAD"),
+        ],
+        { cwd: directory },
+      );
+      expect(receipt.exitCode, stderrText(receipt)).toBe(0);
+      expect(receipt.stdout.toString()).toBe(
+        "tag=v1.2.4-rc.2\nexisting=false\n",
+      );
+    },
+  ));
+
+test("a changelog-only correction cannot hide an executable edit in its release parent", () =>
+  withCandidate(
+    (directory) => {
+      writeFileSync(
+        path.join(directory, "scripts/build.sh"),
+        "echo poisoned\n",
+      );
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "chore: release v1.2.4");
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Corrected note\n",
+      );
+    },
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "executable or unrecognized path changed: scripts/build.sh",
+      );
+    },
+  ));
+
+test("merging a main code fix into the release retains the release data proof", () =>
+  withCandidate(
+    (directory) => {
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "chore: release v1.2.4");
+      git(directory, "checkout", "-q", "main");
+      writeFileSync(
+        path.join(directory, "scripts/build.sh"),
+        "echo main fix\n",
+      );
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "fix: build on main");
+      git(directory, "checkout", "-q", "release");
+      git(directory, "merge", "--no-edit", "main");
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Corrected note\n",
+      );
     },
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
   ));
@@ -719,7 +807,6 @@ test("every caller passes the full contract and a workflow token", async () => {
   }
   expect(callers).toContain(".github/workflows/release.yml");
   expect(callers).toContain("scripts/verify-release-tree-proof.sh");
-  // Main is squash-only, so the merged version commit is verified as the
-  // release pull request head it reproduces.
-  expect(squashCallers).toEqual([".github/workflows/release.yml"]);
+  // Tags stay on the release branch; active callers verify the release range.
+  expect(squashCallers).toEqual([]);
 });

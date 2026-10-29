@@ -89,7 +89,11 @@ export function PublicLawListFailure({
       className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
       message={
         <>
-          <span>{userErrorFromThrown(error, fallback)}</span>
+          <span>
+            {disposition === "retryable"
+              ? fallback
+              : userErrorFromThrown(error, fallback)}
+          </span>
           {disposition === "retryable" && description !== undefined && (
             <span className="text-foreground-strong-muted mt-1 block text-xs">
               {description}

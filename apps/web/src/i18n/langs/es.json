@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Ahora",
       "currentSession": "Actual",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} en {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} columnas × {rows} filas = {answers, plural, one {# respuesta} other {# respuestas}}. Las respuestas consumen presupuesto.",
+    "modelRefused": "El modelo se negó a responder",
+    "nothingFound": "No se encontró nada",
     "refusedBudget": "No ejecutado: presupuesto de respuestas no disponible",
     "rerunAllPage": "Volver a ejecutar todo (esta página)",
     "rerunColumnPage": "Volver a ejecutar columna (esta página)",
@@ -1016,12 +1019,15 @@
       "supreme": "Tribunales supremos"
     },
     "coverage": {
+      "allCurrent": "Todas las fuentes están al día",
       "completeness": "Exhaustividad",
+      "completenessHelp": "Resoluciones almacenadas respecto al total del editor, su listado o un recuento registrado.",
+      "countryNavigation": "Ir a un país",
       "courtsHeading": "Por tribunal",
       "decisionYears": "Años de las resoluciones",
+      "decisionsAcross": "resoluciones de {count, plural, one {# jurisdicción} other {# jurisdicciones}}",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "generatedAt": "Datos a {date}",
-      "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
       "healthDelayed": "Con retraso",
       "healthDisabled": "Desactivado",
@@ -1031,10 +1037,10 @@
       "lastSync": "Última sincronización",
       "notCountedYet": "Aún sin contar",
       "notMeasuredYet": "Aún sin medir",
-      "reportedByListing": "Contado a partir del listado del organismo publicador",
-      "reportedByOperator": "Introducido manualmente",
-      "reportedByPublisher": "Recuento del organismo publicador",
       "searchable": "Consultables",
+      "sourceExceptions": "{count, plural, one {# fuente requiere atención} other {# fuentes requieren atención}}",
+      "sourcesCurrent": "Fuentes al día",
+      "syncedAt": "Sincronizado {time}",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
       "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
@@ -1225,6 +1231,7 @@
       "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
+      "caseFileDocuments": "Documentos de este expediente judicial",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "citedDecisionPassage": "Pasaje de la resolución",
@@ -1451,6 +1458,17 @@
         "webSearch": "Activa la búsqueda web para usar esta habilidad"
       }
     },
+    "connectConnector": {
+      "checkAction": "Comprobar conexión",
+      "description": "El asistente solicita conectar {connector} para usar sus herramientas en esta conversación.",
+      "error": "No se pudo iniciar la conexión. Inténtalo de nuevo.",
+      "notConnected": "Aún no está conectado. Termina de iniciar sesión y vuelve a comprobarlo.",
+      "openTools": "Abrir herramientas",
+      "scopes": "Acceso solicitado: {scopes}",
+      "title": "Conectar un conector",
+      "tokenRequired": "{connector} necesita un token de acceso. Añádelo en la página de herramientas y luego comprueba la conexión.",
+      "waiting": "Termina de iniciar sesión en la ventana que se abrió."
+    },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
       "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
@@ -1525,7 +1543,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
+      "unnamed": "{count, plural, one {# más} many {# más} other {# más}}"
     },
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",
@@ -1766,6 +1784,7 @@
       "business_registry_lookup": "Buscando en el registro de empresas",
       "compare_versions": "Comparando versiones",
       "configure_template_fields": "Configurar campos de la plantilla",
+      "connect_connector": "Solicitando conectar un conector",
       "counterparty_check": "Verificando la contraparte",
       "create-document": "Preparando documento",
       "create_matter_document": "Creando documento",
@@ -2053,6 +2072,7 @@
     "confirm": "Confirmar",
     "confirmAction": "¿Está seguro?",
     "connect": "Conectar",
+    "connected": "Conectado",
     "connectionLost": "Conexión perdida",
     "connectionLostDescription": "Se perdió la conexión con el servidor. Reintentando automáticamente.",
     "convertTo": "Convertir a",
@@ -2213,6 +2233,7 @@
     "moveDown": "Mover abajo",
     "moveUp": "Mover arriba",
     "name": "Nombre",
+    "networkError": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "newMatter": "Nuevo asunto",
     "newRow": "Nueva fila",
     "next": "Siguiente",
@@ -2221,6 +2242,8 @@
     "noResults": "Sin resultados",
     "noVersions": "Sin historial de versiones",
     "none": "Ninguno",
+    "notConnected": "No conectado",
+    "notNow": "Ahora no",
     "notStated": "No indicado",
     "notes": "Notas",
     "open": "Abrir",
@@ -2469,10 +2492,10 @@
       "value": "Valor del campo"
     },
     "datePrecision": "Precisión de la fecha",
-    "deleteContact": "Eliminar cliente",
+    "deleteContact": "Eliminar contacto",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
-    "editContact": "Editar cliente",
+    "editContact": "Editar contacto",
     "emailTypes": {
       "other": "Otro",
       "personal": "Personal",
@@ -2485,7 +2508,7 @@
     "extractProcuracao": {
       "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
       "extracting": "Extrayendo poderdante(s)…",
-      "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
+      "fileHint": "stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
       "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
@@ -2530,6 +2553,7 @@
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Omitido: ID de contacto duplicado",
       "skippedDuplicateTaxId": "Omitido: identificación fiscal duplicada",
+      "skippedInFileDuplicate": "Omitido: repite una fila anterior del archivo",
       "skippedInvalidRow": "Omitido: la fila no cumple las reglas de importación",
       "skippedInvalidTaxId": "Omitido: identificación fiscal no válida",
       "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"
@@ -2571,6 +2595,7 @@
       "issue": {
         "address_line_required": "La línea de dirección 1 es obligatoria si se incluye una dirección.",
         "display_name_required": "No se pudo crear un nombre para mostrar.",
+        "in_file_duplicate": "Duplicado de una fila anterior de este archivo",
         "invalid_email": "La dirección de correo electrónico no es válida.",
         "invalid_phone": "El número de teléfono no es válido.",
         "invalid_tags": "Las etiquetas deben ser valores de texto.",
@@ -2599,7 +2624,11 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brasileño (dígito verificador)",
       "taxIdSchemeNone": "Sin validación de la identificación fiscal",
       "title": "Importar contactos",
-      "validateFailed": "No se han podido comprobar estos contactos."
+      "validateFailed": "No se han podido comprobar estos contactos.",
+      "warning": {
+        "ignored_populated_column": "La columna «{column}» contiene datos, pero se ignora.",
+        "possible_in_file_duplicate": "Posible duplicado de la fila {row}; solo coincide el nombre."
+      }
     },
     "invalidDateOfBirth": "Introduce una fecha de nacimiento válida.",
     "invalidNationalityCodes": "Introduce códigos de nacionalidad válidos.",
@@ -3296,7 +3325,6 @@
       "simple": "Revisión sencilla"
     },
     "moreFormatting": "Más formato",
-    "networkError": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "nextChange": "Cambio siguiente",
     "numberedList": "Lista numerada",
     "parseError": "No se pudo analizar el documento. Puede que esté dañado o en un formato no compatible.",
@@ -4629,7 +4657,6 @@
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
-      "title": "Configuración de la IA",
       "usingDefaults": "Se usan los valores predeterminados"
     },
     "invitations": {
@@ -5057,7 +5084,7 @@
         "title": "Autenticación de dos factores"
       },
       "wordEditIdentitySaved": "Identidad de edición en Word actualizada",
-      "wordEditShortcut": "Abreviatura de edición en Word",
+      "wordEditShortcut": "Iniciales para ediciones de Word",
       "wordEditShortcutDescription": "Etiqueta corta con tus iniciales en las ediciones de Word.",
       "wordEditShortcutPlaceholder": "p. ej. JK"
     },
@@ -5068,7 +5095,6 @@
       "cliInstallLabel": "Instalación",
       "cliLoginLabel": "Inicio de sesión",
       "cliTitle": "Interfaz de línea de comandos",
-      "connected": "Conectada",
       "connectedAgo": "Conectada {time}",
       "connectedAppsDescription": "Aplicaciones en las que iniciaste sesión con stella. Desconecta las que ya no uses.",
       "connectedAppsEmpty": "Aún nada. Configura Claude o ChatGPT arriba y aparecerá aquí.",
@@ -5091,7 +5117,6 @@
       "mcpTitle": "Servidor MCP",
       "mcpUrlLabel": "URL del servidor",
       "noMatches": "Ninguna conexión coincide con «{query}»",
-      "notConnected": "Sin conectar",
       "permissionCount": "{count, plural, one {# permiso} other {# permisos}}",
       "privateCredentialOnly": "Solo credencial privada",
       "searchPlaceholder": "Buscar conexiones",
@@ -5206,7 +5231,6 @@
       "usageLimitDescriptionNoEntitlement": "Las funciones de IA necesitan una autorización de uso activa para esta organización.",
       "usageLimitDescriptionUsageLimitExceeded": "Esta acción no se puede ejecutar con el estado de uso actual de la organización.",
       "usageLimitNeeded": "Necesario",
-      "usageLimitNotNow": "Ahora no",
       "usageLimitTitleEntitlementInactive": "La autorización de uso no está activa",
       "usageLimitTitleNoEntitlement": "Se requiere autorización de uso",
       "usageLimitTitleUsageLimitExceeded": "Límite de uso de IA alcanzado",
@@ -5447,16 +5471,16 @@
     "savedDescription": "Conjunto de estilos guardado",
     "sourceDocument": "DOCX de origen",
     "stellaDescription": "Formato jurídico completo y neutro de stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Conjuntos de estilos",
     "untitledDocument": "Documento sin título"
   },
   "success": {
     "aiConfigDeleted": "Configuración de IA eliminada",
     "aiConfigUpdated": "Configuración de IA actualizada",
-    "clientUpdated": "Cliente actualizado",
-    "contactCreated": "Cliente creado",
-    "contactDeleted": "Cliente eliminado",
+    "clientUpdated": "Contacto actualizado",
+    "contactCreated": "Contacto creado",
+    "contactDeleted": "Contacto eliminado",
     "documentCreated": "Documento creado",
     "folderCreated": "Carpeta creada",
     "invitationCanceled": "Invitación cancelada",
@@ -5992,7 +6016,11 @@
       "title": "Traducción lista"
     }
   },
+  "transportErrors": {
+    "timeout": "La solicitud tardó demasiado. Inténtalo de nuevo."
+  },
   "validation": {
+    "invalidEmail": "Introduce una dirección de correo electrónico válida.",
     "organizationNameRequired": "El nombre de la organización es obligatorio",
     "slugFormat": "El slug debe contener solo letras minúsculas, números y guiones",
     "slugRequired": "El slug es obligatorio"
@@ -6188,20 +6216,18 @@
         "notOpeningConnect": "¿No se abre? Conecta stella desktop",
         "notPickedUpDescription": "Puede que stella desktop no esté abierto o no esté conectado a esta cuenta. Conéctalo y vuelve a intentarlo.",
         "notPickedUpTitle": "stella desktop no abrió el PDF",
+        "placementAttachmentsOnly": "Esta vista muestra los adjuntos del PDF, así que el sello no se puede colocar aquí. Firma sin sello.",
         "placementBox": "Posición del sello",
-        "placementConfirm": "Abrir stella desktop",
-        "placementDescription": "Elige cómo aparece la firma en el PDF.",
+        "placementDrawTooLarge": "Demasiado grande para un sello. Suelta para usar el tamaño máximo.",
+        "placementDrawTooSmall": "Demasiado pequeño para un sello. Suelta para usar el tamaño mínimo.",
         "placementHint": "Arrastra el sello para moverlo o arrastra su esquina para cambiar su tamaño. Con el sello seleccionado, las flechas lo mueven y Mayús con una flecha cambia su tamaño.",
-        "placementInvisible": "Firma invisible",
-        "placementInvisibleDescription": "La firma se guarda en el archivo sin ninguna marca en las páginas.",
-        "placementPageLabel": "Página del sello",
-        "placementPageOption": "Página {page, number} de {count, number}",
-        "placementPreview": "Vista previa de la página {page, number}",
-        "placementPreviewFailed": "No se pudo cargar la vista previa de la página.",
+        "placementModeHint": "Arrastra sobre una página para dibujar el sello o haz clic para colocarlo.",
+        "placementPlaceOnLastPage": "Colocar en la última página",
+        "placementRedrawHint": "Arrastra el sello para ajustarlo o dibuja uno nuevo en cualquier página.",
+        "placementSignInvisible": "Firmar sin sello",
+        "placementSignVisible": "Firmar con sello",
         "placementTitle": "Firmar PDF",
         "placementTooSmall": "Esta página es demasiado pequeña para un sello. Elige otra página.",
-        "placementVisible": "Sello visible",
-        "placementVisibleDescription": "Un recuadro en la página muestra quién firmó y cuándo.",
         "preparingDescription": "Preparando el PDF para stella desktop.",
         "readOnlyDescription": "Este documento es de solo lectura.",
         "signedDescription": "La firma se guardó como la versión {versionNumber, number}.",

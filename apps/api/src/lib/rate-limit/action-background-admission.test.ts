@@ -87,7 +87,7 @@ describe("background action admission", () => {
         const script = args.at(0) ?? "";
         if (script.includes("ZREMRANGEBYSCORE")) {
           if (active === 1) {
-            return 0;
+            return [0, 1000];
           }
           active += 1;
           acquisitions += 1;

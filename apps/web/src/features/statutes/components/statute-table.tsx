@@ -16,7 +16,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
-import { statuteActLabel } from "@stll/api-contract/statute-act-number";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
@@ -305,7 +305,11 @@ const StatuteCell = ({
  */
 const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
   const openStatute = useOpenStatuteTab();
-  const { name, number } = statuteActLabel(statute);
+  const {
+    subject: name,
+    identity: number,
+    text,
+  } = statuteDisplayLabel(statute);
 
   return (
     <Link
@@ -315,12 +319,12 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
     >
       <DocumentIdentityBadge
         identity={statuteDocumentIdentity(statute.eli)}
-        title={statute.title}
+        title={text}
       />
       {number !== null && (
         <BidiText
           as="span"
-          className="text-foreground block font-medium whitespace-nowrap group-hover/act:underline"
+          className="text-foreground block font-medium whitespace-normal group-hover/act:underline"
         >
           <HighlightedText columnId="act" text={number} />
         </BidiText>

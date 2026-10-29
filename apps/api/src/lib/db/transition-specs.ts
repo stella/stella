@@ -13,6 +13,8 @@ import {
   folioCollabRooms,
   invoices,
   legalReaderAnswerMessages,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   pdfSigningSessions,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
@@ -212,6 +214,27 @@ const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   stateColumn: "status",
   edges: { committed: [], cancelled: [] },
   initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
+
+export const ORGANIZATION_ACCESS_STATE_TRANSITIONS = defineScopedTransitions({
+  table: organizationAccessStates,
+  key: "organizationId",
+  scope: [],
+  stateColumn: "state",
+  edges: {
+    [ORGANIZATION_ACCESS_STATE.selfManagedKeys]: [
+      ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    ],
+    [ORGANIZATION_ACCESS_STATE.evaluationPeriod]: [
+      ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    ],
+    [ORGANIZATION_ACCESS_STATE.evaluationEnded]: [],
+  },
+  initial: [
+    ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+    ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+  ],
 });
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
@@ -441,7 +464,7 @@ export const TRANSITIONS = {
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
-  organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,

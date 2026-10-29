@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatuteRouteParams,
   type StatuteRouteParams,
@@ -57,6 +58,7 @@ type LinkedStatute = {
   id: string;
   slug: string | null;
   title: string;
+  documentType?: string | null;
   versionValidFrom: string | null;
 };
 
@@ -70,7 +72,8 @@ export const createStatuteLinkTab = (
     documentId: statute.id,
     eli: statute.eli,
     slug: statute.slug,
-    statuteTitle: statute.title,
+    statuteTitle: statuteDisplayLabel({ ...statute, eli: statute.eli ?? "" })
+      .text,
     versionValidFrom: statute.versionValidFrom,
     ...(anchor === null ? {} : { anchorId: anchor }),
   });
