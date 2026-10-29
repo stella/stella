@@ -44,6 +44,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/components/ui/**/*.{ts,tsx}",
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
+  "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
