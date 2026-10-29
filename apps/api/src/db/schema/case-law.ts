@@ -1451,6 +1451,13 @@ export const caseLawDecisionAliases = p.pgTable(
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+    // case_law_decision_reject_retired_uuid reads aliases during owner decision INSERT/UPDATE.
+    p.pgPolicy("case_law_decision_aliases_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+    }),
   ],
 );
 

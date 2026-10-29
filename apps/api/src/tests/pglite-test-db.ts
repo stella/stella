@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
 import { getTableName, isTable, sql } from "drizzle-orm";
-import type { SQL, SQLWrapper } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -646,8 +646,6 @@ export const ROLE_GRANT_STATEMENTS = [
       ([relation, columns]) =>
         availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
-        relation !== getTableName(schema.caseLawDecisionCitationStats) &&
-        relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
         grantedPublicLawColumns(relation, columns).length > 0,
     )
     .map(
@@ -1160,23 +1158,6 @@ export const resetPgliteDatabase = async (
   if (difference !== undefined || restored.length !== baseline.objects.length) {
     panic(
       `PGlite reset structural mismatch: ${difference?.identity ?? "object count"}`,
-    );
-  }
-};
-
-/** Simulate the later grant release only in suites exercising exact reads. */
-export const grantPgliteDecisionCitationStatsReader = async (db: {
-  execute: (query: SQL) => PromiseLike<unknown>;
-}) => {
-  for (const table of [
-    schema.caseLawDecisionCitationStats,
-    schema.caseLawDecisionCitationStatsState,
-  ] as const) {
-    const relation = getTableName(table);
-    const columns = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[relation]);
-    await db.execute(
-      sql.raw(`GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
-      ON TABLE ${quoteSqlIdentifier(relation)} TO stella_public_law_reader`),
     );
   }
 };
