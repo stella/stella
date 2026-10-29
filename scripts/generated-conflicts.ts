@@ -1313,9 +1313,9 @@ export type PushOptions = {
 
 /**
  * Trusted: create the blobs, tree and merge commit, then move the branch with
- * a compare-and-swap: `updateRefs` applies only while the branch still points
- * at the head the resolution was built on, so a push or force-push in the
- * meantime is never overwritten or resurrected.
+ * a compare-and-swap: `updateRefs` is the expected-head lease and applies only
+ * while the branch still points at the head the resolution was built on, so a
+ * push or force-push in the meantime is never overwritten or resurrected.
  */
 export const push = async ({
   requests,
