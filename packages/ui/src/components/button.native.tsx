@@ -2,6 +2,7 @@ import type { PressableProps } from "react-native";
 import { Pressable } from "react-native";
 
 import {
+  BUTTON_PLAIN_VARIANT,
   BUTTON_VARIANT_TOKENS,
   type ButtonContract,
   type ButtonSize,
@@ -34,6 +35,9 @@ const SIZES = {
   "icon-sm": { box: `${CONTROL} size-8 rounded-lg`, label: "", slop: 6 },
   "icon-xl": { box: `${CONTROL} size-11 rounded-full`, label: "", slop: 0 },
   "icon-xs": { box: `${CONTROL} size-7 rounded-md`, label: "", slop: 8 },
+  // An action inside a line of text: no height, padding or border of its
+  // own, so it sits at the size of its label; `slop` reaches the target.
+  inline: { box: "items-center gap-1", label: "", slop: 8 },
   lg: { box: `${CONTROL} min-h-12 gap-2 rounded-lg px-5`, label: "", slop: 0 },
   // One row of a list: full width, its content leading and top-aligned (a
   // glyph stays beside a title's first line), as tall as the content plus
@@ -77,10 +81,21 @@ const PRESS = {
   muted: { pressed: "active:bg-accent", selected: "bg-accent" },
   outline: { pressed: "active:bg-accent", selected: "bg-accent" },
   secondary: { pressed: "active:bg-secondary/80", selected: "" },
+  // No box to fill: the content dims under the finger.
+  plain: { pressed: "active:opacity-80", selected: "" },
 } as const satisfies Record<
   ButtonVariant,
   { pressed: string; selected: string }
 >;
+
+/**
+ * `plain` has no box, no label colour and no size; like the web's, it does
+ * not dim when disabled, because its content says it is unavailable.
+ */
+const PLAIN = {
+  shape: { box: "", label: "", slop: 0 },
+  tokens: { surface: "", label: "" },
+} as const;
 
 type ButtonProps = Omit<PressableProps, "children" | "disabled"> &
   ButtonContract & { className?: string | undefined };
@@ -89,7 +104,9 @@ type ButtonProps = Omit<PressableProps, "children" | "disabled"> &
  * The web's `Button` (./button.tsx) on a phone: the same variants and sizes,
  * read from ./button.shared.ts, on a Pressable. A string child is set as the
  * button's label in its variant's colour; any other child is laid out as
- * given, which is how a row holds a glyph beside two lines of text.
+ * given, which is how a row holds a glyph beside two lines of text. A
+ * `plain` button paints no box or label colour and ignores `size`: its
+ * children are its look, stacked as in a View.
  */
 export const Button = ({
   accessibilityState,
@@ -99,15 +116,20 @@ export const Button = ({
   hitSlop,
   icon,
   loading = false,
+  selected: selectedProp,
   size,
   variant,
   ...props
 }: ButtonProps) => {
-  const shape = SIZES[size ?? "default"];
-  const tokens = BUTTON_VARIANT_TOKENS[variant ?? "default"];
+  const plain = variant === BUTTON_PLAIN_VARIANT;
+  const shape = plain ? PLAIN.shape : SIZES[size ?? "default"];
+  const tokens = plain
+    ? PLAIN.tokens
+    : BUTTON_VARIANT_TOKENS[variant ?? "default"];
   const press = PRESS[variant ?? "default"];
   const inactive = disabled || loading;
-  const selected = accessibilityState?.selected === true;
+  const selected =
+    selectedProp === true || accessibilityState?.selected === true;
   const label = [
     tokens.label,
     variant === "link" ? "text-foreground underline" : "",
@@ -124,10 +146,10 @@ export const Button = ({
         disabled: inactive,
       }}
       className={[
-        "flex-row",
+        plain ? "" : "flex-row",
         tokens.surface,
         shape.box,
-        inactive ? "opacity-64" : press.pressed,
+        inactive ? (plain ? "" : "opacity-64") : press.pressed,
         selected ? press.selected : "",
         className ?? "",
       ]
