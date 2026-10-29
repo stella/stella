@@ -538,6 +538,66 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual([0, 1]);
     });
 
+    test.each(["written", "missing", "reordered", "removed"] as const)(
+      "refuses a %s attachment payload change under the same asserted message ID",
+      async (change) => {
+        const originalFiles = FIXTURE_MESSAGE.files;
+        let changedFiles: typeof originalFiles;
+        if (change === "reordered") {
+          changedFiles = originalFiles.toReversed();
+        } else if (change === "removed") {
+          changedFiles = originalFiles.slice(0, 1);
+        } else {
+          const changedOrdinal = change === "written" ? 0 : 1;
+          changedFiles = originalFiles.map((file, ordinal) =>
+            ordinal === changedOrdinal
+              ? {
+                  ...file,
+                  content: new TextEncoder().encode("Different payload"),
+                }
+              : file,
+          );
+        }
+        const firstExport = await zfoFile();
+        const conflictingExport = await zfoFile({ files: changedFiles });
+        expect(sha256Hex(firstExport)).not.toBe(sha256Hex(conflictingExport));
+        const first = await storeZfoFile({ createdBy: uploaderId });
+        const copy = await storeZfoFile({ createdBy: uploaderId });
+        const failed = await processUpload({
+          entityId: first,
+          bytes: firstExport,
+          writes: { failAfter: 1, written: 0 },
+        });
+        expect(failed.isErr()).toBe(true);
+        const [record] = await records();
+        if (record === undefined) {
+          throw new Error("Expected the partially filed record");
+        }
+        const originalAttachments = await attachmentsOf(record.id);
+        expect(originalAttachments.map(({ ordinal }) => ordinal)).toEqual([0]);
+        const writes = { failAfter: null, written: 0 };
+        const refused = await processUpload({
+          entityId: copy,
+          bytes: conflictingExport,
+          writes,
+        });
+        expect(refused.isOk() && refused.value).toEqual({
+          status: "skipped",
+          reason: "invalid_content",
+        });
+        expect(writes.written).toBe(0);
+        expect(await attachmentsOf(record.id)).toEqual(originalAttachments);
+        const resumed = await processUpload({
+          entityId: first,
+          bytes: firstExport,
+        });
+        expect(resumed.isOk() && resumed.value.status).toBe("duplicate");
+        expect(
+          (await attachmentsOf(record.id)).map(({ ordinal }) => ordinal),
+        ).toEqual([0, 1]);
+      },
+    );
+
     test("a copy resumes missing attachments after the initial source is deleted", async () => {
       const bytes = await zfoFile();
       const first = await storeZfoFile({ createdBy: uploaderId });

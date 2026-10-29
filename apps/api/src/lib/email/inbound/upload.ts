@@ -392,7 +392,6 @@ type UploadedFiling = {
 
 type DataBoxCorrespondenceOptions = {
   message: ParsedDataBoxMessage;
-  bytes: ArrayBuffer;
   sourceEntityId: SafeId<"entity">;
   uploadedAt: string;
 };
@@ -403,8 +402,7 @@ type DataBoxCorrespondenceOptions = {
  * derived from current organization settings when the record is read.
  */
 const dataBoxCorrespondence = ({
-  message: { annotation, envelope },
-  bytes,
+  message: { annotation, envelope, files },
   sourceEntityId,
   uploadedAt,
 }: DataBoxCorrespondenceOptions): ParsedCorrespondence => ({
@@ -415,7 +413,19 @@ const dataBoxCorrespondence = ({
   dataBox: envelope,
   direction: null,
   messageId: envelope.messageId,
-  contentHash: hashSha256Hex(new Uint8Array(bytes)),
+  // Bind every ordinal, including files not yet written, to the parsed payload.
+  // CMS serialization and unverified message IDs cannot establish equivalence.
+  contentHash: hashSha256Hex(
+    JSON.stringify([
+      annotation,
+      envelope,
+      files.map(({ fileName, mimeType, bytes }) => [
+        fileName,
+        mimeType,
+        hashSha256Hex(bytes),
+      ]),
+    ]),
+  ),
   from: { address: envelope.sender.boxId, name: envelope.sender.name },
   to: [{ address: envelope.recipient.boxId, name: envelope.recipient.name }],
   cc: [],
@@ -485,17 +495,17 @@ const fileUploadedDataBoxMessage = async ({
     }
     scannedFiles.push(scanned.value);
   }
+  const content = dataBoxCorrespondence({
+    message: parsed.value,
+    sourceEntityId: scope.entityId,
+    uploadedAt: filing.receivedAt,
+  });
   const created = await createRecord({
     safeDb: safeDbFromScoped(scopedDb),
     organizationId: scope.organizationId,
     workspaceId: scope.workspaceId,
     filer: { type: "user", userId },
-    parsed: dataBoxCorrespondence({
-      message: parsed.value,
-      bytes,
-      sourceEntityId: scope.entityId,
-      uploadedAt: filing.receivedAt,
-    }),
+    parsed: content,
     attachments: [],
     expectedSourceVersionId: filing.expectedSourceVersionId,
     recordAuditEvent,
@@ -503,6 +513,9 @@ const fileUploadedDataBoxMessage = async ({
   const outcome = filingOutcome(created);
   if (created.type !== "ok") {
     return outcome;
+  }
+  if (created.contentHash !== content.contentHash) {
+    return skipped("invalid_content");
   }
   const correspondenceId = created.id;
   const parentId = await Result.tryPromise({

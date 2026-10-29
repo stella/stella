@@ -595,6 +595,8 @@ describe("check-migration-safety", () => {
         `CREATE FUNCTION maintain_documents() RETURNS void LANGUAGE plpgsql`,
         `CREATE FUNCTION maintain_documents(note text DEFAULT 'RETURNS TRIGGER') RETURNS void LANGUAGE plpgsql`,
         `CREATE FUNCTION maintain_documents() RETURNS trigger LANGUAGE unknown`,
+        `CREATE FUNCTION maintain_documents() RETURNS trigger LANGUAGE c`,
+        `CREATE FUNCTION maintain_documents() RETURNS trigger LANGUAGE plpgsql LANGUAGE sql`,
       ]) {
         expectFinding(
           runChecker(`${declaration} AS $$ BEGIN
@@ -603,6 +605,15 @@ describe("check-migration-safety", () => {
           "pre-deploy-row-loop",
         );
       }
+
+      expectFinding(
+        runChecker(`${trigger}
+          CREATE FUNCTION copy_documents() RETURNS void LANGUAGE plpgsql AS $$
+          BEGIN
+            FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP;
+          END $$;`),
+        "pre-deploy-row-loop",
+      );
     });
 
     it("allows additive DDL and fixed seed rows", () => {
