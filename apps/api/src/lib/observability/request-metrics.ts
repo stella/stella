@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
 import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
@@ -988,6 +989,29 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+const TRANSCRIPTION_DURATION_CAPPED_METRIC = "TranscriptionDurationCapped";
+
+export const emitTranscriptionDurationCappedMetric = (
+  modelId: TranscriptionModelId,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [
+            { Name: TRANSCRIPTION_DURATION_CAPPED_METRIC, Unit: "Count" },
+          ],
+        },
+      ],
+    },
+    event: "transcription.duration_capped",
+    modelId,
+    [TRANSCRIPTION_DURATION_CAPPED_METRIC]: 1,
+  });
+};
 
 type PublicCorpusAdmissionMetric = {
   class: Exclude<PublicCorpusClass, "browse">;

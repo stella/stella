@@ -1,3 +1,9 @@
+// OpenRouter's STT guide documents a 60-second processing deadline (2026-10-29):
+// https://openrouter.ai/docs/guides/overview/multimodal/stt
+// Catalog models do not promise a processing/audio speed ratio. Use a conservative
+// real-time chunk ceiling; this is an audio policy bound, not a throughput guarantee.
+export const MAX_TRANSCRIPTION_AUDIO_SECONDS = 60;
+
 export const MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES = 25 * 1024 * 1024;
 export const MAX_TRANSCRIPTION_VOCABULARY_TERMS = 100;
 /** Lengths are UTF-16 code units, matching JavaScript string validation. */

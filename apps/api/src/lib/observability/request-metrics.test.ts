@@ -7,6 +7,10 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import "@/api/tests/setup-env";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
+} from "@stll/ai-catalog/transcription";
 import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
@@ -25,6 +29,7 @@ import {
   emitChatRunLogMetric,
   emitPromptCacheMetric,
   emitReasoningReplayDroppedMetric,
+  emitTranscriptionDurationCappedMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
@@ -381,6 +386,40 @@ test("cost drop metrics count observations rather than failed batches", () => {
         ],
       },
     });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("transcription duration caps emit an extractable count with catalog metadata only", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    const modelIds = Object.keys(TRANSCRIPTION_MODELS).filter(
+      isTranscriptionModelId,
+    );
+    for (const modelId of modelIds) {
+      emitTranscriptionDurationCappedMetric(modelId);
+      const record: unknown = JSON.parse(lines.at(-1) ?? "null");
+      expect(record).toEqual({
+        _aws: {
+          Timestamp: expect.any(Number),
+          CloudWatchMetrics: [
+            {
+              Namespace: "Stella/Api",
+              Dimensions: [[]],
+              Metrics: [{ Name: "TranscriptionDurationCapped", Unit: "Count" }],
+            },
+          ],
+        },
+        event: "transcription.duration_capped",
+        modelId,
+        TranscriptionDurationCapped: 1,
+      });
+    }
+    expect(lines).toHaveLength(modelIds.length);
   } finally {
     resetMetricLineSinkForTesting();
   }

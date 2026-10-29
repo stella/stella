@@ -6,7 +6,10 @@ import {
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { MAX_TRANSCRIPTION_MULTIPART_BYTES } from "@stll/api-contract/transcription";
+import {
+  MAX_TRANSCRIPTION_AUDIO_SECONDS,
+  MAX_TRANSCRIPTION_MULTIPART_BYTES,
+} from "@stll/api-contract/transcription";
 import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -34,9 +37,9 @@ import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-creden
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { emitTranscriptionDurationCappedMetric } from "@/api/lib/observability/request-metrics";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
-import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { transcriptionUsageUnits } from "@/api/lib/usage/unit-model";
 import {
   assertUsageAvailable,
@@ -81,10 +84,15 @@ type UsageCaller = Pick<
   MemberCaller,
   "safeDb" | "session" | "user" | "recordAuditEvent" | "managedAIResidency"
 >;
-type PreflightOptions = { caller: UsageCaller; isByok: boolean };
+type PreflightOptions = {
+  caller: UsageCaller;
+  isByok: boolean;
+  required: number;
+};
 const checkUsage = async ({
   caller,
   isByok,
+  required,
 }: PreflightOptions): Promise<Result<void, HandlerError<402 | 503>>> => {
   if (isByok || !env.USAGE_ENFORCEMENT_ENABLED) {
     return Result.ok(undefined);
@@ -94,11 +102,7 @@ const checkUsage = async ({
       await assertUsageAvailable({
         tx,
         organizationId: caller.session.activeOrganizationId,
-        required: computeUsageUnitCost({
-          actionType: "transcription",
-          serviceTier: "standard",
-          isByok,
-        }),
+        required,
       }),
   );
   if (checked.isErr()) {
@@ -273,6 +277,7 @@ export const executeDictation = async (
       );
     }
     const isByok = ownKey !== undefined;
+    const maximumDurationMs = MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000;
     const usageCaller = {
       safeDb: ctx.safeDb,
       session,
@@ -281,7 +286,16 @@ export const executeDictation = async (
       managedAIResidency: residency,
     };
     yield* Result.await(
-      dependencies.preflight({ caller: usageCaller, isByok }),
+      dependencies.preflight({
+        caller: usageCaller,
+        isByok,
+        required: transcriptionUsageUnits({
+          modelId: body.modelId,
+          residency,
+          durationMs: maximumDurationMs,
+          isByok,
+        }).unitsConsumed,
+      }),
     );
     const admission = configuredModelAdmission(ctx);
     const credential =
@@ -304,10 +318,16 @@ export const executeDictation = async (
         signal: ctx.request.signal,
       }),
     );
+    if (result.durationMs > maximumDurationMs) {
+      emitTranscriptionDurationCappedMetric(body.modelId);
+    }
     yield* Result.await(
       dependencies.settle({
         caller: usageCaller,
-        result: { modelId: result.modelId, durationMs: result.durationMs },
+        result: {
+          modelId: result.modelId,
+          durationMs: Math.min(result.durationMs, maximumDurationMs),
+        },
         workspaceId,
         isByok,
       }),
