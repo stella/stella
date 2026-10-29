@@ -1254,8 +1254,8 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) =>
-      block.plainText === "" ? [] : [servedBlockText(block)],
+    .flatMap((block, index) =>
+      block.plainText === "" ? [] : [servedBlockText(block, blocks[index - 1])],
     )
     .join("\n\n");
 };

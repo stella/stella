@@ -1532,6 +1532,17 @@ describe("deployment environment verification", () => {
     }
   }
 
+  test("a missing contract readiness field refuses an otherwise matching deployment", async () => {
+    const result = await probe({
+      expectedEnvironment: "production",
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
+      "deployEnvironment must be production; observed unset",
+    );
+  });
+
   test("commit-only probes still accept a web version marker without a deployment environment", async () => {
     const result = await probe({
       expectedEnvironment: undefined,

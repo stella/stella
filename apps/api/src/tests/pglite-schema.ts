@@ -22,6 +22,11 @@ const CLIENT_INVOICES_MIGRATION_PATH = nodePath.join(
   "20261026220000_client_invoices",
   "migration.sql",
 );
+const BILLING_ACTIVITY_HOUR_CAP_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261029076000_billing_activity_rates_hour_caps",
+  "migration.sql",
+);
 const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261015090000_matter_access_rule_function",
@@ -1437,10 +1442,13 @@ export const installPgliteListVerificationBudgets = async (
 export const installPgliteInvoiceObjects = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(CLIENT_INVOICES_MIGRATION_PATH)
+  const statements = [
+    ...readMigrationStatements(CLIENT_INVOICES_MIGRATION_PATH),
+    ...readMigrationStatements(BILLING_ACTIVITY_HOUR_CAP_MIGRATION_PATH),
+  ]
     .map(executableSql)
     .filter((statement) =>
-      /^(?:CREATE FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
+      /^(?:CREATE (?:OR REPLACE )?FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION|CREATE TRIGGER|CREATE POLICY)/u.test(
         statement,
       ),
     );

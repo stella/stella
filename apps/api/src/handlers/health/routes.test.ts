@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DEPLOY_ENV_CONTRACT } from "@/api/deploy-env-contract";
 import { envBase } from "@/api/env-base";
 import { createHealthRoute } from "@/api/handlers/health/routes";
 import { createHttpApp } from "@/api/http/app";
@@ -48,9 +49,20 @@ describe("health routes", () => {
 
     const response = await server.fetch(new Request("http://localhost/ready"));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       deployEnvironment: envBase.DEPLOY_ENVIRONMENT ?? null,
     });
+    expect(
+      DEPLOY_ENV_CONTRACT.flatMap(({ readinessField }) =>
+        readinessField === undefined ? [] : [readinessField],
+      ),
+    ).toEqual(["deployEnvironment"]);
+    for (const { readinessField } of DEPLOY_ENV_CONTRACT) {
+      if (readinessField !== undefined) {
+        expect(body).toHaveProperty(readinessField);
+      }
+    }
   });
 
   for (const deployEnvironment of [

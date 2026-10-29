@@ -210,3 +210,33 @@ test("versioned statute breadcrumb names an expression that never entered into f
     screen.queryByRole("img", { name: en.statutes.status.current }),
   ).toBeNull();
 });
+
+// The bar narrows with the pane beside an open inspector, not only with the
+// window, so a crumb that may shrink has to clip its own text: one that
+// shrinks while its text keeps its width is drawn over its neighbours.
+test.each([{ kind: "statute" }, { kind: "decision" }] as const)(
+  "$kind trail folds by the bar's width and no crumb shrinks without truncating",
+  async ({ kind }) => {
+    const { container } = await mount({ kind });
+    expect(
+      container.querySelector('[data-slot="breadcrumb"]')?.parentElement
+        ?.className,
+    ).toContain("@container/law-crumbs");
+    const crumbs = [
+      ...container.querySelectorAll(
+        '[data-slot="breadcrumb-item"], [data-slot="breadcrumb-separator"]',
+      ),
+    ];
+    expect(crumbs.length).toBeGreaterThan(0);
+    for (const crumb of crumbs) {
+      const classes = [...crumb.classList];
+      // Folding by the window's width would leave a narrow pane unfolded.
+      expect(classes.filter((name) => /^(max-)?sm:/u.test(name))).toEqual([]);
+      if (classes.includes("min-w-0")) {
+        expect(crumb.querySelector(".truncate")).not.toBeNull();
+      } else {
+        expect(classes).toContain("shrink-0");
+      }
+    }
+  },
+);
