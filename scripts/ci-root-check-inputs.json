@@ -767,6 +767,8 @@
     "Select measured ratchet base from the target branch": ["**"],
     "Ratchet guard": ["**"],
     "Ratchet scanner invariants": ["**"],
+    "Web raw JSON API census self-test": ["@stll/web", "scripts/**"],
+    "Web raw JSON API census": ["@stll/web", "scripts/**"],
     "Test subject reachability census": ["**"],
     "Deployment feature guard": ["**"],
     "Processed-field backlog guard": ["@stll/api"],
