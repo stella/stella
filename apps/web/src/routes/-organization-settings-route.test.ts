@@ -2,7 +2,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
 
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
@@ -29,6 +28,41 @@ plugin({
 
 const { routeTree } = await import("@/routeTree.gen");
 
+const createTestRouter = (from: string) => {
+  const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
+  const router = createRouter({
+    context: {
+      analyticsValue,
+      queryClient: createAppQueryClient(),
+      routeErrorLifecycle: createRouteErrorLifecycleController(
+        analyticsValue.analytics,
+      ),
+    },
+    history: createMemoryHistory({ initialEntries: [from] }),
+    parseSearch: parseRouteSearch,
+    routeTree,
+    stringifySearch: stringifyRouteSearch,
+  });
+
+  for (const route of Object.values(router.routesById)) {
+    if (
+      route.id !== "/_protected/admin" &&
+      route.id !== "/_protected/settings/organization/"
+    ) {
+      route.options.beforeLoad = undefined;
+    }
+    route.options.loader = undefined;
+  }
+
+  return router;
+};
+
+const routeSections = (routeIds: string[], prefix: string) =>
+  routeIds
+    .filter((routeId) => routeId.startsWith(prefix) && routeId !== prefix)
+    .map((routeId) => routeId.slice(prefix.length))
+    .toSorted();
+
 test("the organization and legacy roots resolve to General", () => {
   for (const pathname of [
     "/settings/organization",
@@ -43,19 +77,28 @@ test("the organization and legacy roots resolve to General", () => {
   }
 });
 
-test("every legacy admin route preserves its section in Settings", () => {
-  const sections = readdirSync(import.meta.dir)
-    .filter((name) => name.endsWith(".tsx") && name !== "route.tsx")
-    .map((name) => name.replace(/\.tsx$/u, ""))
-    .filter((name) => name !== "index");
-  expect(sections.length).toBeGreaterThan(0);
-  for (const section of sections) {
-    expect(
-      organizationSettingsDestination(`/admin/${section}`, EMPTY_SEARCH),
-    ).toEqual({
-      to: `/settings/organization/${section}`,
-      search: EMPTY_SEARCH,
-    });
+test("every legacy admin route preserves its section in Settings", async () => {
+  const router = createTestRouter("/admin");
+  const legacySections = routeSections(
+    Object.keys(router.routesById),
+    "/_protected/admin/",
+  );
+  const settingsSections = routeSections(
+    Object.keys(router.routesById),
+    "/_protected/settings/organization/",
+  );
+
+  expect(legacySections).toEqual(settingsSections);
+  expect(legacySections.length).toBeGreaterThan(0);
+
+  for (const section of legacySections) {
+    await router.navigate({ to: `/admin/${section}` });
+    await router.load();
+
+    expect(router.state.location.pathname).toBe(
+      `/settings/organization/${section}`,
+    );
+    expect(router.state.location.search).toEqual(EMPTY_SEARCH);
   }
 });
 
@@ -77,30 +120,7 @@ test.each([
 ])(
   "the route tree redirects %s and preserves its search",
   async (from, pathname, search) => {
-    const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
-    const router = createRouter({
-      context: {
-        analyticsValue,
-        queryClient: createAppQueryClient(),
-        routeErrorLifecycle: createRouteErrorLifecycleController(
-          analyticsValue.analytics,
-        ),
-      },
-      history: createMemoryHistory({ initialEntries: [from] }),
-      parseSearch: parseRouteSearch,
-      routeTree,
-      stringifySearch: stringifyRouteSearch,
-    });
-
-    for (const route of Object.values(router.routesById)) {
-      if (
-        route.id !== "/_protected/admin" &&
-        route.id !== "/_protected/settings/organization/"
-      ) {
-        route.options.beforeLoad = undefined;
-      }
-      route.options.loader = undefined;
-    }
+    const router = createTestRouter(from);
 
     await router.load();
 
