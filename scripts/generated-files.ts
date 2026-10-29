@@ -1,6 +1,7 @@
 import {
   CAPABILITY_RUNTIME_INPUTS,
   CI_GENERATED_OUTPUTS,
+  MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
 } from "../packages/scripts/src/generated-files";
 
@@ -172,6 +173,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
+  "mobile-icons": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -422,6 +424,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
     "packages/locales/src/*",
+    "packages/mcp-apps/src/app-document.ts",
+    "packages/mcp-apps/src/bundles.ts",
     "packages/mcp-apps/src/manifest.ts",
     "packages/mcp-apps/src/resource-uri.ts",
     "packages/mcp-kit/package.json",
@@ -1064,7 +1068,10 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "mobile-ui-theme",
     outputKind: "committed",
-    outputs: ["apps/mobile/src/ui-theme.gen.ts"],
+    outputs: [
+      "apps/mobile/src/ui-theme.gen.ts",
+      "apps/mobile/ui-theme.gen.css",
+    ],
     inputs: [
       "packages/ui/src/styles/theme.css",
       "scripts/generate-mobile-ui-theme.ts",
@@ -1081,6 +1088,27 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-mobile-ui-theme.ts", "--write"],
     check: ["bun", "scripts/generate-mobile-ui-theme.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "mobile-icons",
+    outputKind: "committed",
+    outputs: ["apps/mobile/src/icons.gen.ts", "apps/mobile/src/brand.gen.ts"],
+    inputs: [
+      "packages/ui/src/icons.ts",
+      "packages/ui/src/components/stella-wordmark.tsx",
+      "scripts/generate-mobile-icons.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-icons"],
+    ],
+    write: ["bun", "scripts/generate-mobile-icons.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-icons.ts"],
     autofix: true,
     after: [],
   },
@@ -1400,7 +1428,9 @@ const GENERATOR_DECLARATIONS = [
     id: "mcp-app-bundles",
     outputKind: "derived",
     outputs: [
-      "packages/mcp-apps/src/*/generated/app.html.txt",
+      ...MCP_APP_DIRECTORY_OUTPUTS.map(
+        (file) => `packages/mcp-apps/src/*/generated/${file}`,
+      ),
       ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
@@ -1408,6 +1438,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
