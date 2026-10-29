@@ -494,7 +494,7 @@ describe("resolveCompareVersions", () => {
         versions,
       });
       expect(
-        resolved?.type === "ready"
+        resolved.type === "ready"
           ? [resolved.older.id, resolved.newer.id].toSorted()
           : null,
       ).toEqual([picked.id, kept.id].toSorted());

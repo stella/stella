@@ -30,7 +30,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
 
-import { ZoomControls } from "@/components/inspector/zoom-controls";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import type { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import {
   StatuteBlock,
@@ -458,7 +459,8 @@ type CompareFrameLayoutProps = {
 /**
  * The comparison's chrome stays put and only the rows scroll: the column
  * heads are what make a row far down the act legible. One row: each version
- * heads its own column, and the controls end the newer one's.
+ * heads its own column, and the controls end the newer one's. Zoom floats in
+ * the rows' corner, as in every reader.
  */
 const CompareFrameLayout = ({
   actions,
@@ -495,13 +497,6 @@ const CompareFrameLayout = ({
             </div>
             <div className="ms-auto flex shrink-0 items-center gap-1">
               {actions}
-              <ZoomControls
-                atMax={textScale.atMax}
-                atMin={textScale.atMin}
-                level={textScale.level}
-                onReset={textScale.reset}
-                onZoom={textScale.zoom}
-              />
               <Button
                 aria-label={t("statutes.compareClose")}
                 onClick={frame.onClose}
@@ -515,9 +510,18 @@ const CompareFrameLayout = ({
           </div>
         </div>
       </div>
-      {/* The rows, and only the rows, take the reader's text size. */}
-      <div className="flex min-h-0 flex-1 flex-col" {...textScale.rootProps}>
-        {children}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* The rows, and only the rows, take the reader's text size. */}
+        <div className="flex min-h-0 flex-1 flex-col" {...textScale.rootProps}>
+          {children}
+        </div>
+        <FloatingZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
       </div>
     </section>
   );
@@ -818,11 +822,14 @@ const VirtualCompareGroups = ({
         )}
         style={READER_STYLE}
       >
-        {masthead === null ? null : (
-          <div className="flow-root pt-6" ref={measureMasthead}>
-            <StatuteMasthead masthead={masthead} />
-          </div>
-        )}
+        {/* The floating zoom bar owns the top corner, so the list starts
+            below it; the clearance is measured with the masthead. */}
+        <div
+          className={cn("flow-root", VIEWER_OVERLAY_BAR_TOP_CLEARANCE)}
+          ref={measureMasthead}
+        >
+          {masthead === null ? null : <StatuteMasthead masthead={masthead} />}
+        </div>
         <div aria-hidden="true" style={{ height: paddingTop }} />
         {items.map((item) => {
           const group = groups.at(item.index);
@@ -1155,7 +1162,8 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
       <article
         className={cn(
           LEGAL_TEXT_CLASS_NAME,
-          "reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 py-3 pb-16 text-start md:grid-cols-2 md:px-8",
+          "reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 pb-16 text-start md:grid-cols-2 md:px-8",
+          VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
         )}
         style={READER_STYLE}
       >
