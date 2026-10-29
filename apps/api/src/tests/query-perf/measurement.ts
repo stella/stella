@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -16,6 +17,7 @@ import {
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
 
+import { analyzePlan } from "./plan-analyzer";
 import type { QueryPerfTenantProfileId } from "./profiles";
 import type { seedQueryPerf } from "./seed";
 import {
@@ -188,11 +190,20 @@ type MeasureQueryPerfOptions = {
   database: GatedTestDb;
   seed: Awaited<ReturnType<typeof seedQueryPerf>>;
   query: SQLWrapper;
+  owner: string;
 };
+
+const statementText = (query: SQLWrapper) =>
+  new PgDialect()
+    .sqlToQuery(query.getSQL())
+    .sql.replaceAll(/\s+/gu, " ")
+    .trim();
 
 const summarize = (
   samples: readonly QueryPerfMetrics[],
   lastPlan: ExplainPlanDocument | undefined,
+  owner: string,
+  statement: string,
 ) => {
   if (lastPlan === undefined) {
     return panic("Query perf did not measure a plan");
@@ -207,6 +218,7 @@ const summarize = (
       ),
     },
     plan: lastPlan,
+    planViolations: analyzePlan({ document: lastPlan, owner, statement }),
     samples,
   };
 };
@@ -216,6 +228,7 @@ export const measureQueryPerf = async ({
   database,
   seed,
   query,
+  owner,
 }: MeasureQueryPerfOptions) => {
   const samples: QueryPerfMetrics[] = [];
   let lastPlan: ExplainPlanDocument | undefined;
@@ -247,7 +260,7 @@ export const measureQueryPerf = async ({
       samples.push(metricsFromPlan(document));
     }
   }
-  return summarize(samples, lastPlan);
+  return summarize(samples, lastPlan, owner, statementText(query));
 };
 
 const isExplainPlanDocument = (
@@ -282,24 +295,29 @@ export const explainOwnerStatement = async (
 export const measureOwnerStatement = async ({
   database,
   build,
+  owner,
 }: {
   database: GatedTestDb;
   build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+  owner: string;
 }) => {
   const samples: QueryPerfMetrics[] = [];
   let lastPlan: ExplainPlanDocument | undefined;
+  let lastStatement = "";
   for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
     // db-await-in-loop: sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
-    const document = await database.transaction(async (tx) => {
+    const { document, statement } = await database.transaction(async (tx) => {
       await applyPlannerSettings(tx);
-      const explained = await explainOwnerStatement(tx, build(tx));
+      const query = build(tx);
+      const explained = await explainOwnerStatement(tx, query);
       await assertPlannerSettings(tx, "owner");
-      return explained;
+      return { document: explained, statement: statementText(query) };
     });
     lastPlan = document;
+    lastStatement = statement;
     if (sample !== 0) {
       samples.push(metricsFromPlan(document));
     }
   }
-  return summarize(samples, lastPlan);
+  return summarize(samples, lastPlan, owner, lastStatement);
 };

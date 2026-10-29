@@ -11,6 +11,94 @@ import {
   shapeViolations,
   sumMetrics,
 } from "./measurement";
+import { analyzePlan } from "./plan-analyzer";
+import { PLAN_EXCEPTIONS } from "./plan-exceptions";
+
+const plan = (Plan: Record<string, unknown>, executionTime = 1) => ({
+  Plan,
+  "Execution Time": executionTime,
+});
+
+test("a sequential scan on a large table fails while a declared small table passes", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Seq Scan", "Relation Name": "entities" }),
+      owner: "statement.owner",
+      statement: "select * from entities",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "legislation_sources",
+      }),
+      owner: "statement.owner",
+      statement: "select * from legislation_sources",
+    }),
+  ).toEqual([]);
+});
+
+test("an unbounded nested-loop outer side fails while a limit-bound side passes", () => {
+  const analyzeOuter = (outer: Record<string, unknown>) =>
+    analyzePlan({
+      document: plan({
+        "Node Type": "Nested Loop",
+        Plans: [
+          outer,
+          { "Node Type": "Index Scan", "Relation Name": "entities" },
+        ],
+      }),
+      owner: "statement.owner",
+      statement: "select joined rows",
+    }).map(({ kind }) => kind);
+  expect(analyzeOuter({ "Node Type": "Result", "Actual Rows": 1001 })).toEqual([
+    "unbounded-nested-loop",
+  ]);
+  expect(
+    analyzeOuter({
+      "Node Type": "Limit",
+      "Actual Rows": 1001,
+      Plans: [{ "Node Type": "Result" }],
+    }),
+  ).toEqual([]);
+});
+
+test("an external sort fails the spill rule", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Sort", "Sort Method": "external merge" }),
+      owner: "statement.owner",
+      statement: "select ordered rows",
+    }).map(({ kind }) => kind),
+  ).toEqual(["spill"]);
+});
+
+test("scaled execution time over the statement timeout share fails", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Result" }, 76),
+      owner: "statement.owner",
+      statement: "select 1",
+    }).map(({ kind }) => kind),
+  ).toEqual(["scaled-time"]);
+});
+
+test("the owner-named plan exception ledger only contains reviewed existing debt", () => {
+  expect(
+    PLAN_EXCEPTIONS.map(
+      ({ kind, owner, relation }) => `${owner}:${kind}:${relation}`,
+    ).toSorted(),
+  ).toEqual([
+    "statement.documents.searchHits:large-scan:entities",
+    "statement.documents.searchHits:large-scan:entity_versions",
+    "statement.documents.searchHits:large-scan:member",
+    "statement.documents.searchHits:large-scan:search_documents",
+    "statement.documents.searchHits:large-scan:workspace_members",
+    "statement.documents.searchHits:large-scan:workspaces",
+  ]);
+  expect(PLAN_EXCEPTIONS.every(({ reason }) => reason.length > 0)).toBe(true);
+});
 
 test("an absolute budget accepts its own page count and rejects one page more", () => {
   for (const { pages } of Object.values(READ_BUDGETS)) {

@@ -18,6 +18,7 @@ import {
   type QueryPerfMetrics,
   sumMetrics,
 } from "./measurement";
+import { analyzePlan, type PlanViolation } from "./plan-analyzer";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -140,13 +141,23 @@ export const measureScheduledJobRun = async ({
   }
   const statements = await database.transaction(async (tx) => {
     await applyPlannerSettings(tx);
-    const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
+    const measured: {
+      metrics: QueryPerfMetrics;
+      planViolations: PlanViolation[];
+      statement: string;
+    }[] = [];
     for (const statement of reads) {
       // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
       const plan = await explainOwnerStatement(tx, asQuery(statement));
+      const normalized = statement.text.replaceAll(/\s+/gu, " ").slice(0, 160);
       measured.push({
         metrics: metricsFromPlan(plan),
-        statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
+        planViolations: analyzePlan({
+          document: plan,
+          owner: jobId,
+          statement: normalized,
+        }),
+        statement: normalized,
       });
     }
     await assertPlannerSettings(tx, "owner");
@@ -154,6 +165,7 @@ export const measureScheduledJobRun = async ({
   });
   return {
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    planViolations: statements.flatMap(({ planViolations }) => planViolations),
     statements,
   };
 };
