@@ -56,6 +56,10 @@ import { includes } from "@/api/lib/type-guards";
 
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
 import {
+  isPlHoldingHeading,
+  startsWithPlOperativeVerb,
+} from "./pl-operative-verbs";
+import {
   appendTextInline,
   inlinesToPlainText,
   isExcludedHtmlTag,
@@ -151,14 +155,11 @@ const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
 // The editor numbers the reasons on from the operative points when they
 // share one outline ("V. UZASADNIENIE" after point IV).
 const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
-const HOLDING_HEADING_RE =
-  /^(?:orzeka|postanawia|postanowił|uchwala|uchwalił|zarządza)\s*(?::\s*)?$/iu;
-const OPERATIVE_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)]\s*/iu;
-const OPERATIVE_VERB_RE =
-  /^(?:oddala|oddalić|zmienia|uchyla|zasądza|stwierdza|umarza|umorzyć|utrzymuje|nakazuje|odrzuca|ustala|przyjmuje|przyznaje|odmawia przyjęcia skargi|zwraca się|przekazuje|obciążyć|nie obciąża|znosi)(?!\p{L})/iu;
+const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
 const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
-const AUTHORITY_DECISION_BASIS_RE =
-  /^(?:[IVXLCDM]+|\d+)[.)]\s+na podstawie\b/iu;
+const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
+const OPENING_RECITAL_RE =
+  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
 const CLOSING_RE =
   /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
 const SIGNATURE_RE =
@@ -173,7 +174,8 @@ const BLOCK_ANCHOR_PREFIX = {
   image: "i",
 } as const satisfies Record<Block["type"], string>;
 
-type ParserSection = "preamble" | "holding" | "reasoning";
+type ParserSection =
+  "preamble" | "composition" | "recital" | "holding" | "reasoning";
 
 type ParserState = {
   blocks: Block[];
@@ -633,13 +635,15 @@ const inferParagraphRole = (
     return "case-number";
   }
 
-  const operativeText = plainText.replace(OPERATIVE_ITEM_PREFIX_RE, "");
-  const isOperative =
-    OPERATIVE_VERB_RE.test(operativeText) ||
-    (state.sawDecisionTitle &&
-      state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
-      state.section === "preamble" &&
-      AUTHORITY_DECISION_BASIS_RE.test(plainText));
+  const numbered = DECISION_ITEM_PREFIX_RE.test(normalizedText);
+  const previous = state.blocks.at(-1);
+  const isStructuredHolding =
+    numbered &&
+    (state.section === "composition" ||
+      state.section === "recital" ||
+      (previous?.type === "heading" && previous.role === "decision-title"));
+  const isUnnumberedOperative =
+    !numbered && startsWithPlOperativeVerb(normalizedText);
   const signatureText = normalizedText.replace(/\[[\p{L}]{1,3}\]$/u, "").trim();
   const panelTokens = state.panelNames
     .flatMap((name) => name.split(/\s+/u))
@@ -653,33 +657,38 @@ const inferParagraphRole = (
     panelTokens.length === signatureTokens.length &&
     panelTokens.every((token, index) => token === signatureTokens[index]);
   const isBenchSignature =
-    state.section !== "preamble" &&
+    (state.section === "holding" || state.section === "reasoning") &&
     (isIndividualSignature || isFullPanelSignature);
   if (isBenchSignature) {
     return "signature";
   }
 
-  if (state.section === "reasoning") {
-    if (CLOSING_RE.test(plainText)) {
-      return "closing";
-    }
-
-    if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
-      return "signature";
-    }
-
-    return "argumentation";
-  }
-
-  if (state.section === "preamble" && PANEL_MEMBER_RE.test(plainText)) {
+  if (
+    (state.section === "preamble" || state.section === "composition") &&
+    PANEL_MEMBER_RE.test(normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""))
+  ) {
     return "panel";
   }
 
-  if (state.section === "holding" || isOperative) {
-    return "holding";
+  switch (state.section) {
+    case "reasoning":
+      if (CLOSING_RE.test(plainText)) {
+        return "closing";
+      }
+      if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
+        return "signature";
+      }
+      return "argumentation";
+    case "holding":
+      return "holding";
+    case "preamble":
+    case "composition":
+    case "recital":
+      return isStructuredHolding || isUnnumberedOperative ? "holding" : "intro";
+    default:
+      state.section satisfies never;
+      return panic("Unknown Polish decision region");
   }
-
-  return "intro";
 };
 
 const rememberPanelMember = (
@@ -691,6 +700,7 @@ const rememberPanelMember = (
     return;
   }
   const name = plainText
+    .replace(DECISION_ITEM_PREFIX_RE, "")
     .replace(/^(?:SSN|SSA|SSO|SSR)\s+/iu, "")
     .replaceAll(/\([^()]*\)/gu, " ")
     .replaceAll(/\s+/gu, " ")
@@ -708,6 +718,14 @@ const classifyParagraph = (
   rememberPanelMember(state, plainText, role);
   if (role === "holding") {
     state.section = "holding";
+    return role;
+  }
+  if (state.section === "preamble" || state.section === "composition") {
+    if (OPENING_RECITAL_RE.test(plainText)) {
+      state.section = "recital";
+    } else if (COMPOSITION_LINE_RE.test(plainText)) {
+      state.section = "composition";
+    }
   }
   return role;
 };
@@ -777,7 +795,7 @@ const handleHeadingText = (
     return true;
   }
 
-  if (HOLDING_HEADING_RE.test(plainText)) {
+  if (state.section !== "reasoning" && isPlHoldingHeading(plainText)) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "holding";
     return true;
@@ -813,20 +831,18 @@ const parseParagraphElement = (
     return true;
   }
 
-  // The role is read from the item's own words; the number its list prints
-  // before it is the list's, not a holding marker the item states.
-  const role = classifyParagraph(state, plainText);
-
-  if (itemMarker === undefined) {
-    pushParagraph(state, plainText, inlines, role);
-    return true;
-  }
-  const marked = withMarker(itemMarker, inlines);
+  // List counters identify operative points only within the decision's opening.
+  const marked =
+    itemMarker === undefined ? inlines : withMarker(itemMarker, inlines);
+  const markedText =
+    itemMarker === undefined
+      ? plainText
+      : normalizeWhitespace(inlinesToPlainText(marked));
   pushParagraph(
     state,
-    normalizeWhitespace(inlinesToPlainText(marked)),
+    markedText,
     marked,
-    role,
+    classifyParagraph(state, markedText),
   );
   return true;
 };
@@ -1015,7 +1031,7 @@ const parseListItemContent = ({
         state,
         marker,
         textInline(marker),
-        classifyParagraph(state, ""),
+        classifyParagraph(state, marker),
       );
       marker = undefined;
     }

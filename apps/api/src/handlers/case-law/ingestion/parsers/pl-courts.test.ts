@@ -122,23 +122,108 @@ describe("parsePlDecisionContent", () => {
 
   test.each([
     "oddala powództwo",
-    "1) zwraca się do sądu",
-    "I. umorzyć postępowanie",
-    "1. oddalić skargę",
-    "2. obciążyć kosztami",
+    "uchylić zaskarżony wyrok",
     "odmawia przyjęcia skargi kasacyjnej",
-  ])(
-    "classifies operative verbs without using bold or numbering alone: %s",
-    (text) => {
-      const { documentAst } = parsePlDecisionContent(
-        baseInput(`<p><strong>${text}</strong></p>`, {
-          decisionType: undefined,
-        }),
-      );
+  ])("uses generated operative forms for unnumbered clauses: %s", (text) => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(`<p>${text}</p>`, { decisionType: undefined }),
+    );
+    expect(documentAst.blocks.at(0)).toMatchObject({ role: "holding" });
+  });
 
-      expect(documentAst.blocks.at(0)).toMatchObject({ role: "holding" });
+  test("numbered infinitive rulings follow a decision title independently of the verb lexicon", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>POSTANOWIENIE</p><p>1. uchylić zaskarżone postanowienie.</p><p>2. zasądzić koszty.</p>",
+        { decisionType: "postanowienie" },
+      ),
+    );
+    expect(
+      documentAst.blocks.map((block) => [block.plainText, roleOfBlock(block)]),
+    ).toEqual([
+      ["POSTANOWIENIE", "decision-title"],
+      ["1. uchylić zaskarżone postanowienie.", "holding"],
+      ["2. zasądzić koszty.", "holding"],
+    ]);
+  });
+
+  test.each([
+    {
+      name: "finite numbered points",
+      items: "<p>1) oddala apelację.</p><p>2) zasądza koszty.</p>",
     },
-  );
+    {
+      name: "lettered points outside the lexicon",
+      items:
+        "<p>a) zobowiązać pozwaną do zapłaty.</p><p>b) ustanowić kuratora.</p>",
+    },
+    {
+      name: "HTML counters outside the lexicon",
+      items:
+        "<ol><li>zobowiązać pozwaną do zapłaty.</li><li>ustanowić kuratora.</li></ol>",
+    },
+  ])("the recital opens $name before the reasons", ({ items }) => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        `<p>WYROK</p><p>po rozpoznaniu sprawy o zapłatę,</p>${items}<h2>UZASADNIENIE</h2><p>1. Ustalenia faktyczne.</p>`,
+      ),
+    );
+    expect(
+      documentAst.blocks.filter((block) => roleOfBlock(block) === "holding"),
+    ).toHaveLength(2);
+    expect(documentAst.blocks.at(1)).toMatchObject({ role: "intro" });
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "argumentation" });
+  });
+
+  test("plain-text numbered rulings use the same structural region", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "POSTANOWIENIE\n\npo rozpoznaniu sprawy,\n\n1. zobowiązać pozwaną do zapłaty.\n\n2. ustanowić kuratora.\n\nUZASADNIENIE\n\n1. Ustalenia faktyczne.",
+        { decisionType: "postanowienie" },
+      ),
+    );
+    expect(
+      documentAst.blocks.filter((block) => roleOfBlock(block) === "holding"),
+    ).toHaveLength(2);
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "argumentation" });
+  });
+
+  test("a numeric decision date after the title is opening matter", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>WYROK</p><p>09.05.2024 r.</p><p>po rozpoznaniu sprawy,</p><p>1. uchylić postanowienie.</p>",
+      ),
+    );
+    expect(documentAst.blocks.at(1)).toMatchObject({
+      role: "intro",
+      plainText: "09.05.2024 r.",
+    });
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "holding" });
+  });
+
+  test("numbered bench members remain panel before the operative part", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>POSTANOWIENIE</p><p>Sąd Najwyższy w składzie:</p><p>1. SSN Anna Nowak</p><p>po rozpoznaniu sprawy,</p><p>1. uchylić postanowienie.</p><p>Anna Nowak</p>",
+        { decisionType: "postanowienie" },
+      ),
+    );
+    expect(documentAst.blocks.at(2)).toMatchObject({ role: "panel" });
+    expect(documentAst.blocks.at(4)).toMatchObject({ role: "holding" });
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "signature" });
+  });
+
+  test("a quoted ruling marker in the reasons does not reopen the operative part", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>WYROK</p><p>oddala apelację.</p><h2>UZASADNIENIE</h2><p>postanawia:</p><p>1. uchylić wcześniejsze postanowienie.</p>",
+      ),
+    );
+    expect(documentAst.blocks.slice(-2).map(roleOfBlock)).toEqual([
+      "argumentation",
+      "argumentation",
+    ]);
+  });
 
   test("does not classify a party's account of an operative verb as holding", () => {
     const { documentAst } = parsePlDecisionContent(
@@ -186,11 +271,14 @@ describe("parsePlDecisionContent", () => {
     "keeps a terminal clerk mark out of the operative part: %s",
     (mark) => {
       const { documentAst } = parsePlDecisionContent(
-        baseInput(`<p>1) oddala skargę.</p><p>${mark}</p>`, {
-          decisionType: undefined,
-        }),
+        baseInput(
+          `<p>POSTANOWIENIE</p><p>1) oddala skargę.</p><p>${mark}</p>`,
+          {
+            decisionType: undefined,
+          },
+        ),
       );
-      expect(documentAst.blocks.at(0)).toMatchObject({ role: "holding" });
+      expect(documentAst.blocks.at(1)).toMatchObject({ role: "holding" });
       expect(documentAst.blocks.at(-1)).toMatchObject({ role: "apparatus" });
     },
   );
