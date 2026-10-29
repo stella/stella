@@ -349,6 +349,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
+  - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
 - `stella task delete`
@@ -416,7 +417,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 439
+Beyond the curated commands above, the CLI generates 440
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

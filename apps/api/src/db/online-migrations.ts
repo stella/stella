@@ -30,6 +30,10 @@ import {
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
+} from "./billing-activity-hour-cap-constraint-validation";
+import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
@@ -379,6 +383,13 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody: `ON public.case_law_decisions USING btree (country, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
     isUnique: false,
     name: "case_law_decisions_country_date_published_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_language_date_published_idx" ON public."case_law_decisions" USING btree ("country", "language", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
+    definitionBody: `ON public.case_law_decisions USING btree (country, language, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    isUnique: false,
+    name: "case_law_decisions_country_language_date_published_idx",
     tableName: "case_law_decisions",
   },
   {
@@ -935,6 +946,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   READER_ANSWER_CONSTRAINT_VALIDATION,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
@@ -971,6 +983,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...READER_ANNOTATION_CONSTRAINTS,
     ...READER_ANSWER_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,

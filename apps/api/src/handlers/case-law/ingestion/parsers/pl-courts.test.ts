@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as cheerio from "cheerio";
+import { isTag } from "domhandler";
 
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
@@ -471,6 +472,15 @@ describe("ordered list items print the number a browser gives them", () => {
       ["1. Parent", "a. Child", "2. Next"],
     ],
     [
+      "<ol><li><div>Parent<ol><li>Child</li></ol></div></li></ol>",
+      ["1. Parent", "1. Child"],
+    ],
+    ["<ol><li><div><p></p></div>Actual text</li></ol>", ["1. Actual text"]],
+    [
+      "<ol><li><div><span>Parent<ol><li><div>Child<ol><li>Grandchild</li></ol></div></li></ol> tail</span></div></li></ol>",
+      ["1. Parent", "1. Child", "1. Grandchild", "tail"],
+    ],
+    [
       '<ol reversed><li>P<ol><li value="5">C1</li><li>C2</li></ol> tail</li><li>Q</li></ol>',
       ["2. P", "5. C1", "6. C2", "tail", "1. Q"],
     ],
@@ -526,6 +536,41 @@ describe("ordered list items print the number a browser gives them", () => {
     const large = listed(400);
     // Four times the runs: about four times the work, never sixteen.
     expect(large / small).toBeLessThan(5);
+  });
+
+  test("numbering sibling list items takes linear work", () => {
+    const attributeReads = (count: number) => {
+      let reads = 0;
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<ol>${"<li>Treść punktu</li>".repeat(count)}</ol>`, {
+          decisionType: undefined,
+          loadHtml: (html) => {
+            const $ = cheerio.load(html);
+            $("li").each((_, element) => {
+              if (!isTag(element)) {
+                return;
+              }
+              const attributes = element.attribs;
+              Object.defineProperty(element, "attribs", {
+                get: () => {
+                  reads += 1;
+                  return attributes;
+                },
+              });
+            });
+            return $;
+          },
+        }),
+      );
+      expect(documentAst.blocks).toHaveLength(count);
+      expect(documentAst.blocks.at(-1)?.plainText).toBe(
+        `${count}. Treść punktu`,
+      );
+      return reads;
+    };
+    const small = attributeReads(100);
+    const large = attributeReads(1000);
+    expect(large).toBeLessThanOrEqual(small * 11);
   });
 
   test("the number does not decide the item's role", () => {

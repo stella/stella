@@ -5131,7 +5131,7 @@
       "featureId": "time-billing"
     },
     "name": "resolve_rate",
-    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve an effective hourly rate from the matter's default table for the date: user+activity > role+activity > activity > user > role > table default. Returns integer minor-unit rate and currency, or nulls if none applies.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id", "date"],
@@ -5141,6 +5141,11 @@
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to resolve the rate in."
+        },
+        "activity_code": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Activity code to price."
         },
         "user_id": {
           "type": "string",

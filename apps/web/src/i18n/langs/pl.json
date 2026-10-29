@@ -547,6 +547,14 @@
     },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
+    "arrangement": {
+      "alertThreshold": "Próg powiadomienia (%)",
+      "amountCap": "Limit wynagrodzenia",
+      "flatFee": "Wynagrodzenie ryczałtowe",
+      "invalidCap": "Podaj dodatnie limity i próg powiadomienia od 0,01% do 100%.",
+      "minuteCap": "Limit czasu (minuty)",
+      "title": "Umowa o wynagrodzenie"
+    },
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",

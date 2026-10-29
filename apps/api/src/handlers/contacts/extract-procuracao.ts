@@ -127,7 +127,7 @@ const extractProcuracao = createSafeRootHandler(
     safeDb,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     const organizationId = session.activeOrganizationId;
