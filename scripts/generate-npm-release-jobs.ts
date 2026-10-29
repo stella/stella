@@ -54,12 +54,13 @@ export const readNpmReleaseGraph = ({
     panic("Duplicate package in npm publishing inventory");
   }
   const packages = new Map<string, NpmReleasePackage>();
-  const readPackage = (directory: string) => {
-    if (packages.has(directory)) {
-      return;
+  const readPackage = (directory: string): NpmReleasePackage => {
+    const known = packages.get(directory);
+    if (known !== undefined) {
+      return known;
     }
     if (!names.has(`@stll/${directory}`)) {
-      panic(`Unknown package '${directory}'.`);
+      return panic(`Unknown package '${directory}'.`);
     }
     let source: string;
     try {
@@ -107,6 +108,7 @@ export const readNpmReleaseGraph = ({
     for (const dependency of pkg.dependencies) {
       readPackage(dependency);
     }
+    return pkg;
   };
   for (const directory of roots) {
     readPackage(directory);
