@@ -85,6 +85,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: read
+      statuses: read
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,6 +130,24 @@ jobs:
             *) echo "send=true" >> "$GITHUB_OUTPUT" ;;
           esac
 
+      - name: Classify main-heavy infrastructure failures
+        id: classification
+        if: >-
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.path == '.github/workflows/main-heavy.yml'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          description=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/statuses?per_page=100" |
+            jq -r '[.[][] | select(.context == "main/heavy")][0].description // ""')
+          if [[ "$description" =~ CODE\ 0,\ INFRA\ [1-9][0-9]* ]]; then
+            echo "kind=Infrastructure failure" >> "$GITHUB_OUTPUT"
+          else
+            echo "kind=Failed workflow" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Send failure alert
         timeout-minutes: 2
         if: github.event_name == 'workflow_dispatch' || steps.outage.outputs.send == 'true'
@@ -136,7 +155,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}
           WEBHOOK_HEADERS: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_HEADERS }}
-          ALERT_KIND: ${{ github.event_name == 'workflow_dispatch' && 'Alert delivery test' || 'Failed workflow' }}
+          ALERT_KIND: ${{ github.event_name == 'workflow_dispatch' && 'Alert delivery test' || steps.classification.outputs.kind || 'Failed workflow' }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name || github.workflow }}
           RUN_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}

@@ -277,6 +277,7 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/main-heavy-classification.mjs
+            .github/workflows/ci.yml
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -294,6 +295,7 @@ jobs:
           script: |
             const { pathToFileURL } = require('node:url');
             const { resolve } = require('node:path');
+            const { readFileSync } = require('node:fs');
             const { collectMainHeavyFailures } = await import(pathToFileURL(
               resolve('.gh-retry/scripts/main-heavy-classification.mjs')).href);
             const results = JSON.parse(process.env.RESULTS);
@@ -304,7 +306,9 @@ jobs:
             let failures;
             try {
               failures = await collectMainHeavyFailures({ github, context,
-                sha: process.env.SHA, results, warn: message => core.warning(message) });
+                sha: process.env.SHA,
+                workflow: readFileSync('.gh-retry/.github/workflows/ci.yml', 'utf8'),
+                results, warn: message => core.warning(message) });
             } catch {
               core.warning('Job evidence is unavailable; failures remain CODE.');
               failures = Object.entries(results).filter(([, { result }]) => result !== 'success')
@@ -312,6 +316,7 @@ jobs:
             }
             const code = failures.filter(({ type }) => type === 'CODE').length;
             const infra = failures.filter(({ type }) => type === 'INFRA').length;
+            core.setOutput('code', code);
             core.setOutput('description', `Main heavy suites: failure (CODE ${code}, INFRA ${infra})`);
             await core.summary.addHeading('Main heavy failures').addTable([
               [{ data: 'Job', header: true }, { data: 'Classification', header: true },
@@ -327,11 +332,15 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DESCRIPTION: ${{ steps.classification.outputs.description }}
+          CODE_FAILURES: ${{ steps.classification.outputs.code }}
           PROOF_MAIN_BASE: ${{ needs.validate.outputs.main-base }}
         run: |
           state=failure
           if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
             state=success
+          fi
+          if [[ "${CODE_FAILURES:-1}" == 0 ]]; then
+            state=error
           fi
           if [[ -n "$PROOF_MAIN_BASE" ]]; then
             DESCRIPTION="${DESCRIPTION:-Main heavy suites: $state}; main=$PROOF_MAIN_BASE"
@@ -341,4 +350,4 @@ jobs:
               -f context=main/heavy -f state="$state" \
               -f description="${DESCRIPTION:-Main heavy suites: $state}" -f target_url="$RUN_URL"
           fi
-          [[ "$state" == success ]]
+          [[ "$state" == success || "$state" == error ]]

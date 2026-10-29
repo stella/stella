@@ -14,6 +14,56 @@ import { classifyMainHeavyFailures } from "./main-heavy-classification.mjs";
 import { scopeFilters } from "./test-scope";
 import { shardFilters } from "./test-shards";
 
+const classificationWorkflow = `jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@0000000000000000000000000000000000000000
+      - name: Test
+        run: bun test
+`;
+
+test.each([
+  {
+    title: "a typed checkout failure is infrastructure",
+    steps: [
+      { name: "Set up job", conclusion: "success" },
+      { name: "Checkout", conclusion: "failure" },
+      { name: "Test", conclusion: "skipped" },
+    ],
+    expected: "INFRA",
+  },
+  {
+    title: "a run step named Checkout stays code",
+    steps: [{ name: "Checkout", conclusion: "failure" }],
+    expected: "CODE",
+    workflow: `jobs:\n  fixture:\n    steps:\n      - name: Checkout\n        run: bun test\n`,
+  },
+  {
+    title: "a later code failure overrides checkout infrastructure",
+    steps: [
+      { name: "Checkout", conclusion: "failure" },
+      { name: "Test", conclusion: "failure" },
+    ],
+    expected: "CODE",
+  },
+  {
+    title: "a runner setup failure is infrastructure",
+    steps: [{ name: "Set up job", conclusion: "failure" }],
+    expected: "INFRA",
+  },
+])("$title", ({ expected, steps, workflow = classificationWorkflow }) => {
+  const failures = classifyMainHeavyFailures({
+    jobs: [
+      { name: "suites / fixture", conclusion: "failure", steps: [...steps] },
+    ],
+    queueJobs: [],
+    workflow,
+  });
+  expect(failures.map(({ type }) => type)).toEqual([expected]);
+});
+
 const root = path.resolve(import.meta.dirname, "..");
 const workflow = v.parse(
   v.object({

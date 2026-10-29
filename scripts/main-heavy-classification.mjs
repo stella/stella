@@ -18,6 +18,103 @@
  * }} EvidenceClient
  */
 
+// This is the owner for repository actions whose whole purpose is preparing a
+// runner. Keep code-producing, verification, and test actions out of this map.
+export const LOCAL_INFRASTRUCTURE_ACTIONS = {
+  "./.github/actions/ci-install":
+    "installs the repository toolchain and dependencies",
+  "./.github/actions/safe-chain": "installs the package-manager security shim",
+  "./.github/actions/setup-playwright": "prepares browser executables",
+  // Stack setup actions boot this repository's own services, so a failure
+  // there can be a code failure and stays out of this map.
+};
+
+const INFRASTRUCTURE_ACTIONS = [
+  "actions/checkout",
+  "oven-sh/setup-bun",
+  "actions/setup-node",
+  "actions/cache",
+];
+const RUNNER_INFRASTRUCTURE_STEPS = new Set([
+  "Set up job",
+  "Initialize containers",
+  "Complete job",
+  "Post job cleanup",
+]);
+
+/** @param {string} uses */
+const infrastructureAction = (uses) => {
+  const action = uses.split("@").at(0);
+  if (action === undefined) return false;
+  return (
+    INFRASTRUCTURE_ACTIONS.includes(action) ||
+    Object.hasOwn(LOCAL_INFRASTRUCTURE_ACTIONS, action)
+  );
+};
+
+/**
+ * Read the job and step structure needed here without treating display names as
+ * evidence. Workflow syntax outside jobs/steps is deliberately ignored.
+ * @param {string} source Trusted workflow source.
+ */
+export const infrastructureStepsByJob = (source) => {
+  const jobs = new Map();
+  let inJobs = false;
+  let job;
+  let stepName;
+  for (const line of source.split(/\r?\n/u)) {
+    if (line === "jobs:") {
+      inJobs = true;
+      continue;
+    }
+    if (!inJobs) continue;
+    const jobMatch = /^  ([A-Za-z0-9_-]+):\s*$/u.exec(line);
+    if (jobMatch) {
+      job = jobMatch.at(1);
+      if (job === undefined) continue;
+      jobs.set(job, { displayName: job, steps: new Set() });
+      stepName = undefined;
+      continue;
+    }
+    if (!job) continue;
+    const displayName = /^    name:\s*["']?([^"']+?)["']?\s*$/u.exec(line);
+    const display = displayName?.at(1);
+    if (display && !display.includes("${{")) {
+      const definition = jobs.get(job);
+      if (definition) definition.displayName = display;
+      continue;
+    }
+    const name = /^      - name:\s*["']?([^"']+?)["']?\s*$/u.exec(line);
+    if (name) {
+      stepName = name.at(1);
+      continue;
+    }
+    const uses = /^        uses:\s*([^\s#]+)/u.exec(line);
+    const action = uses?.at(1);
+    const definition = jobs.get(job);
+    if (stepName && action && definition && infrastructureAction(action)) {
+      definition.steps.add(stepName);
+      definition.steps.add(`Post ${stepName}`);
+    }
+  }
+  return jobs;
+};
+
+/** @param {string} name @param {Map<string, { displayName: string, steps: Set<string> }>} definitions */
+const jobInfrastructureSteps = (name, definitions) => {
+  const normalized = jobName(name);
+  for (const [id, definition] of definitions) {
+    if (
+      normalized === id ||
+      normalized.startsWith(`${id} (`) ||
+      normalized === definition.displayName ||
+      normalized.startsWith(`${definition.displayName} (`)
+    )
+      return definition.steps;
+  }
+  return new Set();
+};
+
 /** @param {string} name Workflow job display name. */
 const jobName = (name) => name.replace(/^suites \/ /u, "");
 /** @param {Job} job Completed or pending workflow job. */
@@ -34,9 +131,14 @@ const failed = ({ conclusion }) =>
 
 // The jobs API has no task/file selection receipts. Even matching successful
 // steps on the same Git tree cannot prove full versus affected test scope.
-/** @param {{ jobs: Job[], queueJobs: Job[] }} options Main and queue execution evidence. */
-export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
-  jobs.filter(failed).map((job) => {
+/** @param {{ jobs: Job[], queueJobs: Job[], workflow?: string }} options Main and queue execution evidence. */
+export const classifyMainHeavyFailures = ({
+  jobs,
+  queueJobs,
+  workflow = "",
+}) => {
+  const definitions = infrastructureStepsByJob(workflow);
+  return jobs.filter(failed).map((job) => {
     const executed = (job.steps ?? []).filter(
       ({ conclusion }) => conclusion !== "skipped",
     );
@@ -53,6 +155,25 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
           ),
         ),
     );
+    const infrastructureSteps = jobInfrastructureSteps(job.name, definitions);
+    const failedSteps = executed.filter(failed);
+    const allInfrastructure =
+      failedSteps.length > 0 &&
+      failedSteps.every(
+        ({ name }) =>
+          RUNNER_INFRASTRUCTURE_STEPS.has(name) ||
+          infrastructureSteps.has(name),
+      );
+    if (allInfrastructure) {
+      const firstFailedStep = failedSteps.at(0);
+      if (firstFailedStep === undefined)
+        throw new TypeError("Missing failed step");
+      return {
+        name: job.name,
+        type: "INFRA",
+        reason: `The failed step ${firstFailedStep.name} prepares the runner or toolchain.`,
+      };
+    }
     return {
       name: job.name,
       type: "CODE",
@@ -61,15 +182,17 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
         : "No matching merge-group pass proves the same tree and scope.",
     };
   });
+};
 
 /**
  * @param {{ github: EvidenceClient, context: { repo: Repository, runId: number },
- * sha: string, results: Record<string, { result: string }>, warn: (message: string) => void }} options Workflow context and evidence client.
+ * sha: string, workflow?: string, results: Record<string, { result: string }>, warn: (message: string) => void }} options Workflow context and evidence client.
  */
 export const collectMainHeavyFailures = async ({
   github,
   context,
   sha,
+  workflow = "",
   results,
   warn,
 }) => {
@@ -133,5 +256,5 @@ export const collectMainHeavyFailures = async ({
       );
     }
   }
-  return classifyMainHeavyFailures({ jobs, queueJobs });
+  return classifyMainHeavyFailures({ jobs, queueJobs, workflow });
 };
