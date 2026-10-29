@@ -53,26 +53,22 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
   });
 
   test("a concurrent removal cannot be republished by a monthly count", async () => {
-    await db
-      .insert(caseLawSources)
-      .values(
-        caseLawSourceRow({
-          id: sourceId,
-          adapterKey: `monthly-${sourceId}`,
-          name: "Monthly sitemap source",
-        }),
-      );
-    await db
-      .insert(caseLawDecisions)
-      .values({
-        id: decisionId,
-        sourceId,
-        country,
-        court: "Court",
-        language: "en",
-        caseNumber: "1/2024",
-        decisionDate: "2024-01-01",
-      });
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `monthly-${sourceId}`,
+        name: "Monthly sitemap source",
+      }),
+    );
+    await db.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      country,
+      court: "Court",
+      language: "en",
+      caseNumber: "1/2024",
+      decisionDate: "2024-01-01",
+    });
     const counted = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();
     let paused = false;
