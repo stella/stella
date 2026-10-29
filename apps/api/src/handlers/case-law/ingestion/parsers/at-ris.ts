@@ -6,6 +6,7 @@ import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-fiel
 import {
   type Block,
   type DocumentAst,
+  type HeadingBlock,
   isApparatusRole,
   type ParagraphBlock,
   type ParagraphRole,
@@ -222,6 +223,15 @@ const FAILURE_MESSAGE = {
 const parseFailure = (failure: RisParseFailure, cause?: unknown) =>
   Result.err(new ParseXmlError({ message: FAILURE_MESSAGE[failure], cause }));
 
+/** Whether a heading over `next` titles publisher head matter, not the decision. */
+const titlesHeadMatter = (next: RisItem | undefined): boolean => {
+  if (next?.type !== "paragraph" || next.element !== "absatz") {
+    return false;
+  }
+  const role = paragraphRole(next.contentType);
+  return isApparatusRole(role) || role === "intro" || role === "case-number";
+};
+
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
@@ -258,26 +268,20 @@ export const parseRisDecisionXml = (
     const text = plainTextOf(inlines);
     blockIndex += 1;
     if (item.type === "heading") {
-      const next = units.at(index + 1);
-      const nextRole =
-        next?.type === "paragraph" && next.element === "absatz"
-          ? paragraphRole(next.contentType)
-          : undefined;
-      const publisherHeading =
-        !bodyStarted &&
-        (isApparatusRole(nextRole) ||
-          nextRole === "intro" ||
-          nextRole === "case-number");
-      blocks.push({
+      const heading = {
         id: `b${blockIndex}`,
         anchorId: `h-${blockIndex}`,
         type: "heading",
         level: 1,
-        role: publisherHeading ? "publisher-heading" : "section-heading",
+        role:
+          !bodyStarted && titlesHeadMatter(units.at(index + 1))
+            ? "publisher-heading"
+            : "section-heading",
         inlines,
         plainText: text,
-      });
-      bodyStarted ||= !publisherHeading;
+      } satisfies HeadingBlock;
+      blocks.push(heading);
+      bodyStarted ||= startsDecisionBody(heading);
       continue;
     }
     if (item.contentType !== undefined) {
