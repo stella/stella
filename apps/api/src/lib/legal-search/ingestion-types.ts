@@ -665,7 +665,7 @@ export const PUBLISHER_REQUEST = {
   ANSWERED: "answered",
   /** Nothing was asked: the cursor is parked, waiting, or past the end. */
   NONE: "none",
-  /** Every request this page made failed; the page holds the cursor. */
+  /** Every request this page made failed; recovery may advance the cursor. */
   FAILED: "failed",
 } as const;
 
