@@ -547,6 +547,14 @@
     },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
+    "arrangement": {
+      "alertThreshold": "Próg powiadomienia (%)",
+      "amountCap": "Limit wynagrodzenia",
+      "flatFee": "Wynagrodzenie ryczałtowe",
+      "invalidCap": "Podaj dodatnie limity i próg powiadomienia od 0,01% do 100%.",
+      "minuteCap": "Limit czasu (minuty)",
+      "title": "Umowa o wynagrodzenie"
+    },
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
@@ -1572,6 +1580,12 @@
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
+      "dismiss": "Ukryj powiadomienie o połączeniu",
+      "stoppedWorking": "Twoje połączenie z <name>{server}</name> przestało działać.",
+      "waitingApproval": "Twoje połączenie z <name>{server}</name> oczekuje na zatwierdzenie."
+    },
     "mention": {
       "category": {
         "entities": "W tej sprawie",
@@ -5058,6 +5072,16 @@
       "preferredNamePlaceholder": "Twoje imię",
       "profileDescription": "Zarządzaj swoimi preferencjami osobistymi",
       "sendOtpCode": "Wyślij kod weryfikacyjny",
+      "signInMethods": {
+        "confirmDescription": "Aby odłączyć tę metodę logowania, wpisz nowy kod wysłany na Twój adres e-mail.",
+        "confirmTitle": "Odłączyć {provider}?",
+        "description": "Połącz konta, które używają tego samego zweryfikowanego adresu e-mail.",
+        "emailCode": "Kod e-mail",
+        "emailCodeDescription": "Zawsze możesz zalogować się za pomocą kodu wysłanego na Twój adres e-mail.",
+        "lastMethod": "Połącz inne konto, zanim odłączysz to.",
+        "title": "Metody logowania",
+        "unavailable": "Aby odłączyć metody logowania, należy skonfigurować wysyłanie poczty e-mail."
+      },
       "timezone": "Strefa czasowa",
       "timezoneDescription": "Używana w datach i godzinach w powiadomieniach i e-mailach",
       "timezoneSaved": "Zaktualizowano strefę czasową",

@@ -1789,12 +1789,6 @@
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "769cd47a24aa1bb073c1ae60cbe62c534a1c5e7a0cb14a667c59228afb3609ac",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
     "fingerprint": "79b524ca823812018b5fb66c7f9c92ce2b38bd5703a8c07b07c5a9d213d7ef91",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2134,18 +2128,6 @@
     "fingerprint": "6541337c5ca7ed3898adda2e349a37de6c266ed934de1508c57a541203e439f3",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/billing-time.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "86e86b48a33efe2319b7ef02a9159bace150fbfb4216c448d54196c201af76a1",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "e2b4b6e3a17c005240702eb246339afa1581b4a4798e2528cc69a78844feed15",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/billing/daily-target.ts",

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The parameter-store package declares better-result for the repository Result and TaggedError contract."
+}
