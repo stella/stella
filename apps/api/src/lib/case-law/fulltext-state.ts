@@ -34,6 +34,10 @@ import {
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 
+export const DECISION_TEXT_RECOVERY_FAILURE = {
+  LISTING_IDENTITY_NOT_FOUND: "listing_identity_not_found",
+} as const;
+
 const MINUTE_MS = 60_000;
 
 export const FULLTEXT_RECOVERY_LIMITS = {

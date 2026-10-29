@@ -191,6 +191,20 @@ type AttemptContext = Omit<FulltextRecoveryUnitOptions, "signal"> & {
   row: ClaimedDecisionTextWork;
 };
 
+type TextWorkSettlement = Awaited<ReturnType<typeof settleDecisionTextWork>>;
+const textWorkWasApplied = (settlement: TextWorkSettlement): boolean => {
+  switch (settlement.type) {
+    case "applied":
+      return true;
+    case "superseded":
+    case "stale-progress":
+      return false;
+    default:
+      settlement satisfies never;
+      return panic("Unhandled text work settlement");
+  }
+};
+
 /** Owns the mutable claim snapshot and every fenced state transition. */
 const createRecoveryAttempt = ({
   row: initial,
@@ -210,6 +224,7 @@ const createRecoveryAttempt = ({
   const adapter = registration.source;
   let row = initial;
   let observationOrder = row.sourceObservationOrder;
+  const currentRecovery = () => row.textState.recovery;
   const policy = fulltextPolicyForSource(adapter.key);
   const checkpoint = async (
     recovery: DecisionTextRecovery,
@@ -229,7 +244,7 @@ const createRecoveryAttempt = ({
       state,
       observationOrder,
     });
-    if (!applied) {
+    if (!textWorkWasApplied(applied)) {
       return "superseded";
     }
     const snapshot = await currentState(state);
@@ -249,10 +264,7 @@ const createRecoveryAttempt = ({
     };
     return "applied";
   };
-  const fail = async (
-    cause: DecisionTextFailure,
-    recovery = row.textState.recovery,
-  ): Promise<void> => {
+  const fail = async (cause: DecisionTextFailure): Promise<void> => {
     await lease.beforeDatabaseMark();
     const applied = await settleDecisionTextWork({
       scopedDb,
@@ -263,21 +275,22 @@ const createRecoveryAttempt = ({
         attemptCount: row.textState.attemptCount,
         cause,
         retryFloorMs: policy.retryFloorMs,
-        recovery,
+        recovery: currentRecovery(),
       }),
     });
-    if (applied) {
+    if (textWorkWasApplied(applied)) {
       summary.failed += 1;
     }
   };
   const finish = async (state: DecisionTextState): Promise<boolean> => {
     await lease.beforeDatabaseMark();
-    return await settleDecisionTextWork({
+    const settled = await settleDecisionTextWork({
       scopedDb,
       claimed: row,
       state,
       observationOrder,
     });
+    return textWorkWasApplied(settled);
   };
   const currentState = async (expected?: DecisionTextState) =>
     await scopedDb(async (tx) =>
@@ -344,7 +357,7 @@ const createRecoveryAttempt = ({
     if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
       const recovery =
         rawKey === null
-          ? row.textState.recovery
+          ? currentRecovery()
           : ({ type: DECISION_TEXT_RECOVERY.STORED_RAW_RETRY } as const);
       if ((await checkpoint(recovery, policy.retryFloorMs)) === "superseded") {
         return "superseded";
@@ -383,6 +396,7 @@ const createRecoveryAttempt = ({
       return row;
     },
     checkpoint,
+    currentRecovery,
     fail,
     finish,
     currentState,
@@ -471,13 +485,11 @@ const verifyHeldStorage = async (attempt: RecoveryAttempt) => {
 type RecoverSupplementOptions = {
   attempt: RecoveryAttempt;
   supplement: DecisionSupplement;
-  recovery: DecisionTextRecovery;
 };
 
 const recoverSupplement = async ({
   attempt,
   supplement,
-  recovery,
 }: RecoverSupplementOptions): Promise<RecoveryPhaseOutcome> => {
   const {
     adapter,
@@ -526,8 +538,10 @@ const recoverSupplement = async ({
     ) {
       attempt.adoptOwnedOrder(stored.sourceObservationOrder);
       if (
-        (await attempt.checkpoint(recovery, attempt.policy.retryFloorMs)) ===
-        "superseded"
+        (await attempt.checkpoint(
+          attempt.currentRecovery(),
+          attempt.policy.retryFloorMs,
+        )) === "superseded"
       ) {
         return "complete";
       }
@@ -624,7 +638,7 @@ const readAndReparseHeldRaw = async (
 const replayHeldRaw = async (
   attempt: RecoveryAttempt,
 ): Promise<RecoveryPhaseOutcome> => {
-  const { row, adapter, signal, now, persist, fail } = attempt;
+  const { row, adapter, signal, now, persist, fail, currentRecovery } = attempt;
   const reparseStoredRaw = adapter.reparseStoredRaw;
   if (
     reparseStoredRaw !== undefined &&
@@ -652,18 +666,23 @@ const replayHeldRaw = async (
       }
     }
     if (replay.isOk() && replay.value?.type === "supplement") {
+      if (
+        currentRecovery().type !== DECISION_TEXT_RECOVERY.STORED_RAW_RETRY &&
+        (await attempt.checkpoint({
+          type: DECISION_TEXT_RECOVERY.STORED_RAW_RETRY,
+        })) === "superseded"
+      ) {
+        return "complete";
+      }
       const outcome = await recoverSupplement({
         attempt,
         supplement: replay.value.supplement,
-        recovery: { type: DECISION_TEXT_RECOVERY.STORED_RAW_RETRY },
       });
       if (outcome === "complete") {
         return outcome;
       }
     }
-    if (
-      row.textState.recovery.type === DECISION_TEXT_RECOVERY.STORED_RAW_RETRY
-    ) {
+    if (currentRecovery().type === DECISION_TEXT_RECOVERY.STORED_RAW_RETRY) {
       let cause: DecisionTextFailure;
       if (replay.isErr()) {
         cause = replay.error;
@@ -678,21 +697,16 @@ const replayHeldRaw = async (
           code: "stored_raw_has_no_readable_output",
         };
       }
-      await fail(cause, {
-        type: DECISION_TEXT_RECOVERY.STORED_RAW_RETRY,
-      });
+      await fail(cause);
       return "complete";
     }
   } else if (
-    row.textState.recovery.type === DECISION_TEXT_RECOVERY.STORED_RAW_RETRY
+    currentRecovery().type === DECISION_TEXT_RECOVERY.STORED_RAW_RETRY
   ) {
-    await fail(
-      {
-        kind: DECISION_TEXT_FAILURE.STORAGE,
-        code: "stored_raw_retry_has_no_input",
-      },
-      row.textState.recovery,
-    );
+    await fail({
+      kind: DECISION_TEXT_FAILURE.STORAGE,
+      code: "stored_raw_retry_has_no_input",
+    });
     return "complete";
   }
   return "continue";
@@ -764,9 +778,9 @@ const recoverPublisherDocument = async (
 ): Promise<void> => {
   const {
     registration,
-    row,
     signal,
     checkpoint,
+    currentRecovery,
     summary,
     fail,
     lease,
@@ -788,8 +802,8 @@ const recoverPublisherDocument = async (
   }
   const publisher = await recoverFromPublisherListing({
     adapter: registration.source,
-    row,
-    recovery: row.textState.recovery,
+    row: attempt.row,
+    recovery: currentRecovery(),
     signal,
     checkpoint: async (recovery) => await checkpoint(recovery),
   });
@@ -798,19 +812,13 @@ const recoverPublisherDocument = async (
     case "superseded":
       return;
     case "continued":
-      if ((await checkpoint(publisher.recovery, 0)) === "superseded") {
+      if ((await checkpoint(currentRecovery(), 0)) === "superseded") {
         return;
       }
       summary.continued += 1;
       return;
     case "failed":
-      await fail(
-        publisher.cause,
-        publisher.cause.kind === DECISION_TEXT_FAILURE.PARSER_REFUSAL &&
-          publisher.cause.code === "listing_identity_not_found"
-          ? { type: DECISION_TEXT_RECOVERY.VERIFY_STORAGE }
-          : row.textState.recovery,
-      );
+      await fail(publisher.cause);
       return;
     case "built": {
       // Companions settle first; a failed companion must not leave the main
@@ -846,10 +854,10 @@ const recoverPublisherDocument = async (
       }
       // The source may explicitly publish a record without an attachment.
       const latest = {
-        ...row,
+        ...attempt.row,
         metadata: publisher.decision.metadata,
         sourceHash: publisher.decision.rawHash,
-        sourceUrl: publisher.decision.sourceUrl ?? row.sourceUrl,
+        sourceUrl: publisher.decision.sourceUrl ?? attempt.row.sourceUrl,
       };
       const terminal = terminalPublisherTextState({
         adapterKey: registration.source.key,
@@ -876,14 +884,13 @@ const recoverPublisherDocument = async (
         kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
         code: "publisher_returned_no_readable_text",
       };
-      await fail(cause, { type: DECISION_TEXT_RECOVERY.VERIFY_STORAGE });
+      await fail(cause);
       return;
     }
     case "built-supplement": {
       const outcome = await recoverSupplement({
         attempt,
         supplement: publisher.supplement,
-        recovery: row.textState.recovery,
       });
       if (outcome === "continue") {
         await fail({
@@ -904,8 +911,7 @@ const runRecoveryPhases = async (attempt: RecoveryAttempt): Promise<void> => {
     attempt;
   let storageFailure: DecisionTextFailure | null = null;
   if (
-    attempt.row.textState.recovery.type ===
-      DECISION_TEXT_RECOVERY.VERIFY_STORAGE ||
+    attempt.currentRecovery().type === DECISION_TEXT_RECOVERY.VERIFY_STORAGE ||
     policy.recovery === FULLTEXT_RECOVERY_KIND.DEFERRED_PDF
   ) {
     const storage = await verifyHeldStorage(attempt);
@@ -915,7 +921,7 @@ const runRecoveryPhases = async (attempt: RecoveryAttempt): Promise<void> => {
     storageFailure = storage.storageFailure;
   }
   if (
-    attempt.row.textState.recovery.type !==
+    attempt.currentRecovery().type !==
       DECISION_TEXT_RECOVERY.PUBLISHER_LISTING &&
     (await replayHeldRaw(attempt)) === "complete"
   ) {
@@ -928,7 +934,7 @@ const runRecoveryPhases = async (attempt: RecoveryAttempt): Promise<void> => {
     }
     if (
       (await checkpoint(
-        attempt.row.textState.recovery,
+        attempt.currentRecovery(),
         FULLTEXT_RECOVERY_LIMITS.MAX_RETRY_MS,
       )) === "superseded"
     ) {

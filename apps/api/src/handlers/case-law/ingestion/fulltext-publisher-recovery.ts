@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.text-policy";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
+  DECISION_TEXT_RECOVERY_FAILURE,
   FULLTEXT_RECOVERY_LIMITS,
   textFailureFromError,
 } from "@/api/lib/case-law/fulltext-state";
@@ -261,7 +262,7 @@ export const recoverFromPublisherListing = async ({
       return { type: "superseded" };
     }
     if (page >= listed.value.totalPages) {
-      return refused("listing_identity_not_found");
+      return refused(DECISION_TEXT_RECOVERY_FAILURE.LISTING_IDENTITY_NOT_FOUND);
     }
   }
   return {

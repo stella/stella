@@ -167,7 +167,7 @@ describe.serial("durable decision text recovery store", () => {
         state: failure(),
         observationOrder: claimed.sourceObservationOrder,
       }),
-    ).toBe(true);
+    ).toEqual({ type: "applied" });
     expect(
       await settleDecisionTextWork({
         scopedDb,
@@ -175,7 +175,7 @@ describe.serial("durable decision text recovery store", () => {
         state: failure(),
         observationOrder: claimed.sourceObservationOrder,
       }),
-    ).toBe(false);
+    ).toEqual({ type: "superseded" });
     const result = await db
       .select({ state: caseLawDecisions.textState })
       .from(caseLawDecisions)
@@ -184,6 +184,128 @@ describe.serial("durable decision text recovery store", () => {
       status: "fetch_failed",
       recovery: listing,
     });
+  });
+  test.each([
+    { type: "publisher_listing", slice: listing.slice, page: 0 },
+    { type: "publisher_listing", slice: listing.slice, page: listing.page - 1 },
+    { type: "publisher_listing", slice: "different-slice", page: 100 },
+    { type: "verify_storage" },
+    { type: "stored_raw_retry" },
+  ] as const)(
+    "a fenced failure cannot rewind its persisted publisher checkpoint: %j",
+    async (recovery) => {
+      await seed();
+      const claimed = await oneClaim();
+      const readState = async () =>
+        (
+          await db
+            .select({ state: caseLawDecisions.textState })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, claimed.id))
+        ).at(0)?.state;
+      const before = await readState();
+      const result = await settleDecisionTextWork({
+        scopedDb,
+        claimed,
+        observationOrder: claimed.sourceObservationOrder,
+        state: failedDecisionText({
+          now,
+          attemptCount: claimed.textState.attemptCount,
+          cause: { kind: "network", code: "reset" },
+          retryFloorMs: 0,
+          recovery,
+        }),
+      });
+      expect(await readState()).toEqual(before);
+      expect(result).toEqual({ type: "stale-progress" });
+    },
+  );
+  test("a later checkpoint rejects a behind-cursor write from its earlier snapshot", async () => {
+    await seed();
+    const claimed = await oneClaim();
+    const advanced = pendingDecisionText({
+      now,
+      attemptCount: claimed.textState.attemptCount,
+      lastAttemptAt: claimed.textState.lastAttemptAt,
+      delayMs: 0,
+      recovery: { ...listing, page: 12 },
+    });
+    expect(
+      await settleDecisionTextWork({
+        scopedDb,
+        claimed,
+        state: advanced,
+        observationOrder: claimed.sourceObservationOrder,
+      }),
+    ).toEqual({ type: "applied" });
+    const behind = failedDecisionText({
+      now,
+      attemptCount: claimed.textState.attemptCount,
+      retryFloorMs: 0,
+      cause: { kind: "network", code: "reset" },
+      recovery: { ...listing, page: 11 },
+    });
+    expect(
+      await settleDecisionTextWork({
+        scopedDb,
+        claimed,
+        state: behind,
+        observationOrder: claimed.sourceObservationOrder,
+      }),
+    ).toEqual({ type: "stale-progress" });
+    expect(
+      (
+        await db
+          .select({ state: caseLawDecisions.textState })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, claimed.id))
+      ).at(0)?.state,
+    ).toEqual(advanced);
+    expect(
+      await settleDecisionTextWork({
+        scopedDb,
+        claimed: { ...claimed, textState: advanced },
+        state: failedDecisionText({
+          now,
+          attemptCount: claimed.textState.attemptCount,
+          retryFloorMs: 0,
+          cause: { kind: "network", code: "reset" },
+          recovery: { ...listing, page: 13 },
+        }),
+        observationOrder: claimed.sourceObservationOrder,
+      }),
+    ).toEqual({ type: "applied" });
+  });
+  test("a new claim restarts an exhausted scan and supersedes its old owner", async () => {
+    await seed();
+    const claimed = await oneClaim();
+    expect(
+      await settleDecisionTextWork({
+        scopedDb,
+        claimed,
+        observationOrder: claimed.sourceObservationOrder,
+        state: failedDecisionText({
+          now,
+          attemptCount: claimed.textState.attemptCount,
+          retryFloorMs: 0,
+          cause: { kind: "parser_refusal", code: "listing_identity_not_found" },
+          recovery: listing,
+        }),
+      }),
+    ).toEqual({ type: "applied" });
+    const next = await oneClaim();
+    expect(next.textState.recovery).toEqual({ type: "verify_storage" });
+    expect(next.textState.attemptCount).toBe(
+      claimed.textState.attemptCount + 1,
+    );
+    expect(
+      await settleDecisionTextWork({
+        scopedDb,
+        claimed,
+        state: failure(),
+        observationOrder: claimed.sourceObservationOrder,
+      }),
+    ).toEqual({ type: "superseded" });
   });
   test("a newer publisher revision rejects the old source-order and hash completion", async () => {
     await seed();
@@ -199,7 +321,7 @@ describe.serial("durable decision text recovery store", () => {
         state: failure(),
         observationOrder: claimed.sourceObservationOrder,
       }),
-    ).toBe(false);
+    ).toEqual({ type: "superseded" });
   });
   test("periodic verification queues only an aged proof once and leaves fresh/boundary proofs intact", async () => {
     const rows = await seed(3);
@@ -269,7 +391,7 @@ describe.serial("durable decision text recovery store", () => {
         state: failure(),
         observationOrder: claimed.sourceObservationOrder,
       }),
-    ).toBe(false);
+    ).toEqual({ type: "superseded" });
     const result = await db
       .select({ state: caseLawDecisions.textState })
       .from(caseLawDecisions)

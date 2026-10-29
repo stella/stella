@@ -333,6 +333,85 @@ describe.serial(
       expect((await rowOf(id)).fulltext).toBe(body);
       expect((await rowOf(id)).textState?.status).toBe("stored");
     });
+    test("a fourth-page failure retains three durable page checkpoints", async () => {
+      const id = await seed({
+        textState: pendingDecisionText({
+          now: clock,
+          attemptCount: 0,
+          lastAttemptAt: null,
+          delayMs: 0,
+          recovery: { type: "publisher_listing", slice: "2026", page: 1 },
+        }),
+      });
+      const pages: number[] = [];
+      let failure: "pending" | "thrown" = "pending";
+      const source = registration({
+        list: async ({ page }) => {
+          pages.push(page);
+          if (page === 4 && failure === "pending") {
+            failure = "thrown";
+            throw new TypeError("Injected fourth-page listing failure");
+          }
+          return { totalPages: 9, items: [] };
+        },
+      });
+      expect(await run({ registration: source })).toMatchObject({
+        type: "worked",
+        summary: { failed: 1 },
+      });
+      expect(pages).toEqual([1, 2, 3, 4]);
+      const stored = (await rowOf(id)).textState;
+      expect(stored).toMatchObject({
+        status: "fetch_failed",
+        recovery: { type: "publisher_listing", slice: "2026", page: 4 },
+      });
+      if (stored?.status !== "fetch_failed") {
+        throw new TypeError("Expected persisted listing failure");
+      }
+      clock = new Date(new Date(stored.nextAttemptAt).getTime() + 31_000);
+      await run({ registration: source });
+      expect(pages.at(4)).toBe(4);
+    });
+    test("an exhausted listing restarts only after its failure is claimed again", async () => {
+      const id = await seed();
+      const pages: number[] = [];
+      let observation: "missing" | "available" = "missing";
+      const source = registration({
+        list: async ({ page }) => {
+          pages.push(page);
+          return {
+            totalPages: 2,
+            items:
+              observation === "available" && page === 0
+                ? [
+                    {
+                      identity: {
+                        type: "document",
+                        sourceDocumentId: documentId,
+                      },
+                      payload: {},
+                    },
+                  ]
+                : [],
+          };
+        },
+        build: async () => ({ type: "built", decision: candidate() }),
+      });
+      await run({ registration: source });
+      const stored = (await rowOf(id)).textState;
+      expect(stored).toMatchObject({
+        status: "fetch_failed",
+        recovery: { type: "publisher_listing", page: 2 },
+      });
+      if (stored?.status !== "fetch_failed") {
+        throw new TypeError("Expected a completed listing scan failure");
+      }
+      clock = new Date(new Date(stored.nextAttemptAt).getTime() + 31_000);
+      observation = "available";
+      await run({ registration: source });
+      expect(pages).toEqual([0, 1, 0]);
+      expect((await rowOf(id)).textState?.status).toBe("stored");
+    });
     test("an active source ingestion lease prevents every recovery side effect", async () => {
       await seed({ fulltext: body });
       await db

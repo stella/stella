@@ -1,8 +1,15 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
+import {
+  DECISION_TEXT_FAILURE,
+  DECISION_TEXT_RECOVERY,
+  decisionTextStateSchema,
+} from "@stll/api-contract/case-law-fulltext-state";
 import type {
   DecisionTextFailure,
+  DecisionTextRecovery,
   DecisionTextState,
 } from "@stll/api-contract/case-law-fulltext-state";
 import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
@@ -14,6 +21,7 @@ import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { eligibleDecisionTextSql } from "@/api/lib/case-law/fulltext-eligibility-sql";
 import {
+  DECISION_TEXT_RECOVERY_FAILURE,
   decisionTextObservationState,
   failedDecisionText,
   FULLTEXT_RECOVERY_LIMITS,
@@ -25,12 +33,50 @@ import {
   lockCaseLawDecisionRows,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
+import { compareAndSetStructuredState } from "@/api/lib/db/transitions";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
-import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 /** Only this owner installs proofs; the database invalidates them on payload writes. */
 const eligible = eligibleDecisionTextSql(caseLawDecisions);
+
+type WriteDecisionTextStatesOptions = {
+  tx: Pick<Transaction, "update">;
+  rows: readonly { id: SafeId<"caseLawDecision">; state: DecisionTextState }[];
+  fence: SQL | undefined;
+};
+/** Binds structured transitions to the verified decision-state schema and column. */
+const writeDecisionTextStates = async ({
+  tx,
+  rows,
+  fence,
+}: WriteDecisionTextStatesOptions) => {
+  if (fence === undefined) {
+    return panic("A decision text transition requires its fence");
+  }
+  const result = await compareAndSetStructuredState({
+    tx,
+    identity: caseLawDecisions.id,
+    column: caseLawDecisions.textState,
+    schema: decisionTextStateSchema,
+    changes: rows.map(({ id, state }) => ({ id, value: state, fence })),
+    // The state row records public corpus worker bookkeeping; no user action is performed.
+    recordTransitionAuditEvent: async () => await Promise.resolve(),
+  });
+  switch (result.type) {
+    case "updated":
+      return result.ids;
+    case "stale-fence":
+      return [];
+    case "schema-rejected":
+      return panic(
+        "Decision text state factory produced an invalid transition",
+      );
+    default:
+      result satisfies never;
+      return panic("Unhandled decision text transition");
+  }
+};
 
 export type DecisionTextPayloadWrite =
   | { type: "postgres"; payload: CorpusPayload }
@@ -79,18 +125,17 @@ export const recordDecisionTextObservationTx = async (
       );
     }
     // audit: skip — public corpus ingestion; proof is part of the payload transaction.
-    await tx
-      .update(caseLawDecisions)
-      .set({ textState: proof })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          eligible,
-          payloadWrite.type === "corpus"
-            ? eq(caseLawDecisions.contentHash, proof.contentHash)
-            : undefined,
-        ),
-      );
+    await writeDecisionTextStates({
+      tx,
+      rows: [{ id: decisionId, state: proof }],
+      fence: and(
+        eq(caseLawDecisions.id, decisionId),
+        eligible,
+        payloadWrite.type === "corpus"
+          ? eq(caseLawDecisions.contentHash, proof.contentHash)
+          : undefined,
+      ),
+    });
     return;
   }
   const cause = textFailureFromObservation(metadata);
@@ -118,17 +163,29 @@ export const recordDecisionTextObservationTx = async (
       ? Math.max(state.attemptCount, 1)
       : 1;
   // audit: skip — durable typed outcome of a public publisher read.
-  await tx
-    .update(caseLawDecisions)
-    .set({
-      textState: failedDecisionText({
-        now,
-        attemptCount: attempts,
-        cause,
-        retryFloorMs: FULLTEXT_RECOVERY_LIMITS.INITIAL_RETRY_MS,
-      }),
-    })
-    .where(and(eq(caseLawDecisions.id, decisionId), eligible));
+  await writeDecisionTextStates({
+    tx,
+    rows: [
+      {
+        id: decisionId,
+        state: failedDecisionText({
+          now,
+          attemptCount: attempts,
+          cause,
+          retryFloorMs: FULLTEXT_RECOVERY_LIMITS.INITIAL_RETRY_MS,
+          ...(state?.status === CASE_LAW_TEXT_STATUS.FETCH_PENDING ||
+          state?.status === CASE_LAW_TEXT_STATUS.FETCH_FAILED
+            ? { recovery: state.recovery }
+            : {}),
+        }),
+      },
+    ],
+    fence: and(
+      eq(caseLawDecisions.id, decisionId),
+      eligible,
+      sql`${caseLawDecisions.textState} IS NOT DISTINCT FROM ${JSON.stringify(current.textState)}::text::jsonb`,
+    ),
+  });
 };
 
 type RecordDecisionTextFailureOptions = {
@@ -173,21 +230,25 @@ export const recordDecisionTextFailureTx = async (
     return;
   }
   // audit: skip — same transaction as the fenced public document-fetch outcome.
-  await tx
-    .update(caseLawDecisions)
-    .set({
-      textState: failedDecisionText({
-        now,
-        attemptCount: Math.max(attemptCount, 1),
-        cause,
-        retryFloorMs,
-        ...(state?.status === CASE_LAW_TEXT_STATUS.FETCH_PENDING ||
-        state?.status === CASE_LAW_TEXT_STATUS.FETCH_FAILED
-          ? { recovery: state.recovery }
-          : {}),
-      }),
-    })
-    .where(where);
+  await writeDecisionTextStates({
+    tx,
+    rows: [
+      {
+        id: decisionId,
+        state: failedDecisionText({
+          now,
+          attemptCount: Math.max(attemptCount, 1),
+          cause,
+          retryFloorMs,
+          ...(state?.status === CASE_LAW_TEXT_STATUS.FETCH_PENDING ||
+          state?.status === CASE_LAW_TEXT_STATUS.FETCH_FAILED
+            ? { recovery: state.recovery }
+            : {}),
+        }),
+      },
+    ],
+    fence: where,
+  });
 };
 
 type SourceTextWorkOptions = {
@@ -224,27 +285,26 @@ export const adoptLegacyDecisionTextStates = async ({
         return 0;
       }
       // audit: skip — bounded adoption of legacy public corpus rows, no payload mutation.
-      const adopted = await tx
-        .update(caseLawDecisions)
-        .set({
-          textState: pendingDecisionText({
+      const adopted = await writeDecisionTextStates({
+        tx,
+        rows: rows.map(({ id }) => ({
+          id,
+          state: pendingDecisionText({
             now,
             attemptCount: 0,
             lastAttemptAt: null,
             delayMs: 0,
           }),
-        })
-        .where(
-          and(
-            inArray(
-              caseLawDecisions.id,
-              rows.map(({ id }) => id),
-            ),
-            isNull(caseLawDecisions.textState),
-            eligible,
+        })),
+        fence: and(
+          inArray(
+            caseLawDecisions.id,
+            rows.map(({ id }) => id),
           ),
-        )
-        .returning({ id: caseLawDecisions.id });
+          isNull(caseLawDecisions.textState),
+          eligible,
+        ),
+      });
       return adopted.length;
     },
   });
@@ -285,18 +345,22 @@ export const scheduleStaleDecisionTextProof = async ({
         return 0;
       }
       // audit: skip — bounded periodic reconciliation of a public corpus proof.
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          textState: pendingDecisionText({
-            now,
-            attemptCount: 0,
-            lastAttemptAt: null,
-            delayMs: 0,
-          }),
-        })
-        .where(and(eq(caseLawDecisions.id, row.id), eligible));
-      return 1;
+      const updated = await writeDecisionTextStates({
+        tx,
+        rows: [
+          {
+            id: row.id,
+            state: pendingDecisionText({
+              now,
+              attemptCount: 0,
+              lastAttemptAt: null,
+              delayMs: 0,
+            }),
+          },
+        ],
+        fence: and(eq(caseLawDecisions.id, row.id), eligible),
+      });
+      return updated.length;
     },
   });
 };
@@ -374,34 +438,30 @@ export const claimDecisionTextWork = async ({
           attemptCount: previous.attemptCount + 1,
           lastAttemptAt: now.toISOString(),
           delayMs: FULLTEXT_RECOVERY_LIMITS.CLAIM_MS,
-          recovery: previous.recovery,
+          recovery:
+            previous.status === CASE_LAW_TEXT_STATUS.FETCH_FAILED &&
+            previous.cause.kind === DECISION_TEXT_FAILURE.PARSER_REFUSAL &&
+            previous.cause.code ===
+              DECISION_TEXT_RECOVERY_FAILURE.LISTING_IDENTITY_NOT_FOUND
+              ? { type: DECISION_TEXT_RECOVERY.VERIFY_STORAGE }
+              : previous.recovery,
         });
         claimed.push({ ...row, textState: state });
       }
       if (claimed.length === 0) {
         return claimed;
       }
-      const transitions = claimed.map(
-        ({ id, textState }) =>
-          sql`WHEN ${id}::uuid THEN ${JSON.stringify(textState)}::text::jsonb`,
-      );
       // audit: skip — one atomic batch claim of bounded public corpus recovery work.
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          textState: sqlCaseFragment({
-            branches: transitions,
-            fallback: sql`${caseLawDecisions.textState}`,
-            operand: sql`${caseLawDecisions.id}`,
-          }),
-        })
-        .where(
-          inArray(
-            caseLawDecisions.id,
-            claimed.map(({ id }) => id),
-          ),
-        );
-      return claimed;
+      const updated = await writeDecisionTextStates({
+        tx,
+        rows: claimed.map(({ id, textState }) => ({ id, state: textState })),
+        fence: inArray(
+          caseLawDecisions.id,
+          claimed.map(({ id }) => id),
+        ),
+      });
+      const updatedIds = new Set(updated);
+      return claimed.filter(({ id }) => updatedIds.has(id));
     },
   });
 
@@ -417,35 +477,124 @@ type SettleDecisionTextWorkOptions = {
   observationOrder: bigint | null;
 };
 
-/** Never overwrite a later source observation, redaction, or another claim. */
+const TEXT_WORK_APPLIED = { type: "applied" } as const;
+const TEXT_WORK_SUPERSEDED = { type: "superseded" } as const;
+const TEXT_WORK_STALE_PROGRESS = { type: "stale-progress" } as const;
+
+const recoveryOf = (
+  state: DecisionTextState | null,
+): DecisionTextRecovery | null => {
+  if (state === null) {
+    return null;
+  }
+  switch (state.status) {
+    case CASE_LAW_TEXT_STATUS.FETCH_PENDING:
+    case CASE_LAW_TEXT_STATUS.FETCH_FAILED:
+      return state.recovery;
+    case CASE_LAW_TEXT_STATUS.STORED:
+    case CASE_LAW_TEXT_STATUS.PUBLISHER_HAS_NO_TEXT:
+    case CASE_LAW_TEXT_STATUS.METADATA_ONLY_BY_SOURCE:
+      return null;
+    default:
+      state satisfies never;
+      return panic("Unhandled decision text state");
+  }
+};
+
+type RecoveryProgressOptions = {
+  current: DecisionTextState | null;
+  next: DecisionTextState;
+};
+/** A cursor's slice is opaque; changing it cannot prove forward progress. */
+const recoveryProgressIsBehind = ({
+  current,
+  next,
+}: RecoveryProgressOptions): boolean => {
+  const previous = recoveryOf(current);
+  const requested = recoveryOf(next);
+  if (previous === null || requested === null) {
+    return false;
+  }
+  switch (previous.type) {
+    case DECISION_TEXT_RECOVERY.VERIFY_STORAGE:
+      return false;
+    case DECISION_TEXT_RECOVERY.STORED_RAW_RETRY:
+      return requested.type === DECISION_TEXT_RECOVERY.VERIFY_STORAGE;
+    case DECISION_TEXT_RECOVERY.PUBLISHER_LISTING:
+      return (
+        requested.type !== DECISION_TEXT_RECOVERY.PUBLISHER_LISTING ||
+        requested.slice !== previous.slice ||
+        requested.page < previous.page
+      );
+    default:
+      previous satisfies never;
+      return panic("Unhandled decision text recovery cursor");
+  }
+};
+
+/** Never overwrite another claim, source revision, or a later durable checkpoint. */
 export const settleDecisionTextWork = async ({
   scopedDb,
   claimed,
   state,
   observationOrder,
-}: SettleDecisionTextWorkOptions): Promise<boolean> =>
+}: SettleDecisionTextWorkOptions) =>
   await scopedDb(async (tx) => {
+    const fence = and(
+      eq(caseLawDecisions.id, claimed.id),
+      eligible,
+      sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${observationOrder}`,
+      observationOrder === claimed.sourceObservationOrder
+        ? and(
+            sql`${caseLawDecisions.textState} = ${JSON.stringify(claimed.textState)}::text::jsonb`,
+            sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimed.sourceHash}`,
+          )
+        : undefined,
+      observationOrder !== claimed.sourceObservationOrder &&
+        state.status !== CASE_LAW_TEXT_STATUS.FETCH_PENDING
+        ? sql`${caseLawDecisions.textState} ->> 'status' <> 'stored'`
+        : undefined,
+    );
+    await lockCaseLawDecisionRows({ tx, decisionIds: [claimed.id] });
+    const current = (
+      await tx
+        .select({
+          state: caseLawDecisions.textState,
+          sourceHash: caseLawDecisions.sourceHash,
+          observationOrder: caseLawDecisions.sourceObservationOrder,
+          matchesFence: sql<boolean>`coalesce(${fence}, false)`,
+        })
+        .from(caseLawDecisions)
+        .where(and(eq(caseLawDecisions.id, claimed.id), eligible))
+        .limit(1)
+    ).at(0);
+    if (current === undefined) {
+      return TEXT_WORK_SUPERSEDED;
+    }
+    const persisted = readDecisionTextState(current.state);
+    // Failure time may advance; the claim counter changes only on a new claim.
+    const sameAttempt =
+      current.observationOrder === observationOrder &&
+      (observationOrder !== claimed.sourceObservationOrder ||
+        (current.sourceHash === claimed.sourceHash &&
+          persisted !== null &&
+          (persisted.status === CASE_LAW_TEXT_STATUS.FETCH_PENDING ||
+            persisted.status === CASE_LAW_TEXT_STATUS.FETCH_FAILED) &&
+          persisted.attemptCount === claimed.textState.attemptCount));
+    if (
+      sameAttempt &&
+      recoveryProgressIsBehind({ current: persisted, next: state })
+    ) {
+      return TEXT_WORK_STALE_PROGRESS;
+    }
+    if (!current.matchesFence) {
+      return TEXT_WORK_SUPERSEDED;
+    }
     // audit: skip — fenced completion of a public full-text recovery attempt.
-    const rows = await tx
-      .update(caseLawDecisions)
-      .set({ textState: state })
-      .where(
-        and(
-          eq(caseLawDecisions.id, claimed.id),
-          eligible,
-          sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${observationOrder}`,
-          observationOrder === claimed.sourceObservationOrder
-            ? and(
-                sql`${caseLawDecisions.textState} = ${JSON.stringify(claimed.textState)}::text::jsonb`,
-                sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimed.sourceHash}`,
-              )
-            : undefined,
-          observationOrder !== claimed.sourceObservationOrder &&
-            state.status !== CASE_LAW_TEXT_STATUS.FETCH_PENDING
-            ? sql`${caseLawDecisions.textState} ->> 'status' <> 'stored'`
-            : undefined,
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-    return rows.length > 0;
+    const rows = await writeDecisionTextStates({
+      tx,
+      rows: [{ id: claimed.id, state }],
+      fence,
+    });
+    return rows.length > 0 ? TEXT_WORK_APPLIED : TEXT_WORK_SUPERSEDED;
   });
