@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import validateDecisionFilters, {
-  createDecisionFilterValidationRoute,
+  type createDecisionFilterValidationRoute,
 } from "@/api/handlers/case-law/decisions/filter-validation";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -22,12 +22,17 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 type DecisionFilterValidationMeasurementOptions = {
   size: number;
   db: GatedTestDb;
+  createHandler: typeof createDecisionFilterValidationRoute;
 };
 
 export const decisionFilterValidationScalingScenario = {
   name: "public decision filter validation",
   definition: validateDecisionFilters,
-  measure: async ({ size, db }: DecisionFilterValidationMeasurementOptions) => {
+  measure: async ({
+    size,
+    db,
+    createHandler,
+  }: DecisionFilterValidationMeasurementOptions) => {
     for (const table of ["case_law_sources", "case_law_decisions"]) {
       await db.execute(sql`CREATE TEMP TABLE ${sql.identifier(table)} (
         LIKE public.${sql.identifier(table)} INCLUDING DEFAULTS
@@ -72,7 +77,7 @@ export const decisionFilterValidationScalingScenario = {
               : "read committed",
         }),
     );
-    const route = createDecisionFilterValidationRoute(caseLawDb);
+    const route = createHandler(caseLawDb);
     return await runWithMeasuredQueryCounter(async (counter) => {
       const response = await route.handler(
         asTestRaw<Parameters<typeof route.handler>[0]>({

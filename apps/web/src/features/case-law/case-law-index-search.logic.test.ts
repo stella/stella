@@ -158,15 +158,12 @@ describe("the filters the URL carries", () => {
       type: "judgment",
       q: "nájem",
       questions: ["question-fixture"],
-      rewrite: "off",
+      rewrite: "off" as const,
       rewrittenFrom: "original query",
       futureSearchKey: { retained: "by default" },
-    } as const;
+    };
     for (const field of CASE_LAW_FILTER_KEYS) {
-      const next = dropCaseLawFilters(
-        { ...search, questions: [...search.questions] },
-        [field],
-      );
+      const next = dropCaseLawFilters(search, [field]);
       expect(next.futureSearchKey).toBe(search.futureSearchKey);
       expect(Object.keys(next).toSorted()).toEqual(
         Object.keys(search)

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createDecisionFilterValidationRoute } from "@/api/handlers/case-law/decisions/filter-validation";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
@@ -16,10 +17,12 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const small = await decisionFilterValidationScalingScenario.measure({
           size: 10,
           db: openClient().db,
+          createHandler: createDecisionFilterValidationRoute,
         });
         const large = await decisionFilterValidationScalingScenario.measure({
           size: 200,
           db: openClient().db,
+          createHandler: createDecisionFilterValidationRoute,
         });
         console.info(
           "handler-scaling",

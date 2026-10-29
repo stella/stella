@@ -30,7 +30,7 @@ export const decisionFilterValidationQuerySchema = v.object({
   ...caseLawScopedFiltersSchema.entries,
 });
 
-export const decisionFilterValidationHandler = async (
+const decisionFilterValidationHandler = async (
   {
     country,
     ...filters
