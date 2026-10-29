@@ -25,6 +25,7 @@ const timing = {
   deadlineMs: 100,
   intervalMs: 30,
   readTimeoutMs: 20,
+  gapToleranceMs: 40,
 };
 
 test("healthy proof monitoring performs a final readiness check", async () => {
@@ -43,17 +44,20 @@ test("healthy proof monitoring performs a final readiness check", async () => {
       return { status: "ready" };
     },
   });
-  expect(outcome).toEqual({ status: "ready" });
+  expect(outcome).toEqual({ status: "ready", recoveredGapsMs: [] });
   expect(reads).toBe(3);
   expect(clock.waits).toEqual([30]);
 });
 
-test("a sampled interruption remains interrupted after readiness recovers", async () => {
+test("a replaced task back on the same deployment within the tolerance is a recovered gap", async () => {
   const clock = fakeClock();
   const controller = new AbortController();
   let reads = 0;
   const read: ReadinessSource = async () => {
     reads += 1;
+    if (reads === 3) {
+      controller.abort();
+    }
     return { status: reads === 2 ? "not-ready" : "ready" };
   };
   const outcome = await monitorStagingReadiness({
@@ -62,11 +66,43 @@ test("a sampled interruption remains interrupted after readiness recovers", asyn
     signal: controller.signal,
     read,
   });
-  expect(reads).toBe(2);
-  expect(await read({ timeoutMs: timing.readTimeoutMs })).toEqual({
-    status: "ready",
+  // Away from the second sample (t=30) until the third (t=60).
+  expect(outcome).toEqual({ status: "ready", recoveredGapsMs: [30] });
+  expect(reads).toBe(4);
+});
+
+test("readiness away longer than the tolerance interrupts the proof", async () => {
+  const clock = fakeClock();
+  let reads = 0;
+  const outcome = await monitorStagingReadiness({
+    ...timing,
+    ...clock,
+    signal: new AbortController().signal,
+    read: async () => {
+      reads += 1;
+      return { status: reads === 1 ? "ready" : "not-ready" };
+    },
+  });
+  // Away from t=30; at t=90 the gap (60) exceeds the tolerance (40).
+  expect(outcome).toEqual({ status: "environment-interrupted" });
+  expect(reads).toBe(4);
+});
+
+test("a sample from another deployment interrupts at once, within any tolerance", async () => {
+  const clock = fakeClock();
+  let reads = 0;
+  const outcome = await monitorStagingReadiness({
+    ...timing,
+    ...clock,
+    gapToleranceMs: 1000,
+    signal: new AbortController().signal,
+    read: async () => {
+      reads += 1;
+      return { status: reads === 2 ? "wrong-deployment" : "ready" };
+    },
   });
   expect(outcome).toEqual({ status: "environment-interrupted" });
+  expect(reads).toBe(2);
 });
 
 test("a failed final sample marks the proof interrupted", async () => {

@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { readApiDeployment } from "./check-api-deployment";
+import {
+  ApiDeploymentMismatchError,
+  readApiDeployment,
+} from "./check-api-deployment";
 import { readStagingEcsReadiness } from "./staging-ecs-readiness";
 import {
   monitorStagingReadiness,
@@ -14,6 +17,9 @@ const MONITOR_DEADLINE_MS = 180 * 60_000;
 const FINISH_DEADLINE_MS = 45_000;
 const SAMPLE_INTERVAL_MS = 10_000;
 const READ_TIMEOUT_MS = 10_000;
+// A replaced task (a Spot reclaim, a failed health check) is back in well under
+// a minute; readiness away for longer interrupts the proof.
+const READINESS_GAP_TOLERANCE_MS = 60_000;
 
 type ReadStagingReadinessOptions = {
   url: URL;
@@ -36,14 +42,17 @@ export const readStagingReadiness = async ({
       timeoutMs,
       expectedEnvironment: "staging",
     });
+    if (probe.commit !== expectedCommit) {
+      return { status: "wrong-deployment" };
+    }
+    return { status: probe.statusCode === 200 ? probe.status : "not-ready" };
+  } catch (error) {
     return {
       status:
-        probe.statusCode === 200 && probe.commit === expectedCommit
-          ? probe.status
+        error instanceof ApiDeploymentMismatchError
+          ? "wrong-deployment"
           : "not-ready",
     };
-  } catch {
-    return { status: "not-ready" };
   }
 };
 
@@ -60,9 +69,15 @@ const readMonitorState = async (statePath: string): Promise<MonitorState> => {
   const body: unknown = JSON.parse(await readFile(statePath, "utf-8"));
   if (typeof body === "object" && body !== null) {
     const status = Reflect.get(body, "status");
+    if (status === "ready") {
+      const gaps = Reflect.get(body, "recoveredGapsMs");
+      return Array.isArray(gaps) &&
+        gaps.every((gap) => typeof gap === "number" && gap >= 0)
+        ? { status, recoveredGapsMs: gaps }
+        : { status: "proof-tooling-failure" };
+    }
     if (
       status === "monitoring" ||
-      status === "ready" ||
       status === "environment-interrupted" ||
       status === "proof-tooling-failure"
     ) {
@@ -119,11 +134,26 @@ const report = async (status: ProofStatus, detail = "") => {
   return exitCodes[status];
 };
 
+// A tolerated gap is never silent: the journeys passed across a replacement.
+const warnRecoveredGaps = async (gapsMs: readonly number[]) => {
+  const summary = process.env["GITHUB_STEP_SUMMARY"];
+  for (const gapMs of gapsMs) {
+    const line = `task replaced during proof: readiness returned to the same commit after ${String(Math.round(gapMs / 1000))} s`;
+    console.log(`::warning title=task-replaced::${annotationData(line)}`);
+    if (summary !== undefined) {
+      await appendFile(summary, `WARNING: ${line}\n`);
+    }
+  }
+};
+
 const finishMonitor = async (statePath: string): Promise<ProofStatus> => {
   await writeFile(`${statePath}.stop`, "finish");
   const deadline = performance.now() + FINISH_DEADLINE_MS;
   while (performance.now() < deadline) {
     const state = await readMonitorState(statePath);
+    if (state.status === "ready") {
+      await warnRecoveredGaps(state.recoveredGapsMs);
+    }
     if (state.status !== "monitoring") {
       return state.status;
     }
@@ -182,6 +212,7 @@ const run = async (): Promise<number> => {
     },
     intervalMs: SAMPLE_INTERVAL_MS,
     readTimeoutMs: READ_TIMEOUT_MS,
+    gapToleranceMs: READINESS_GAP_TOLERANCE_MS,
   };
   if (mode === "wait") {
     await Promise.all([
