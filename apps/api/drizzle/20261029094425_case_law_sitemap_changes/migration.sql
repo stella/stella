@@ -28,8 +28,6 @@ CREATE POLICY "case_law_sitemap_change_owner_access" ON "case_law_sitemap_change
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_changes" FROM stella;--> statement-breakpoint
 GRANT INSERT ON TABLE "case_law_sitemap_changes" TO stella;--> statement-breakpoint
-GRANT INSERT ON TABLE "case_law_sitemap_changes" TO stella_ingestion;--> statement-breakpoint
-GRANT USAGE ON SEQUENCE "case_law_sitemap_changes_id_seq" TO stella_ingestion;--> statement-breakpoint
 
 -- A decision's shard is its country and month, the bucket of its id, its
 -- source (the redistribution gate), its updated_at (the shard's last
