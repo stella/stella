@@ -16,6 +16,7 @@ import {
 } from "@stll/ui/frame";
 import { DownloadIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
@@ -149,7 +150,7 @@ const InvoiceLinkUnavailable = ({
   );
 };
 
-const InvoiceSummary = ({
+export const InvoiceSummary = ({
   invoice,
   token,
 }: {
@@ -201,11 +202,30 @@ const InvoiceSummary = ({
                 <span className="tabular-nums">{field.value}</span>
               </DetailsItem>
             ))}
-            {invoice.totals.map((field) => (
-              <DetailsItem key={field.label} label={field.label}>
-                <span className="tabular-nums">{field.value}</span>
-              </DetailsItem>
-            ))}
+            {invoice.totals.map((field, index) => {
+              const isAmountDue = index === invoice.totals.length - 1;
+              return (
+                <DetailsItem
+                  key={field.label}
+                  label={
+                    isAmountDue ? (
+                      <span className="font-semibold">{field.label}</span>
+                    ) : (
+                      field.label
+                    )
+                  }
+                >
+                  <span
+                    className={cn(
+                      "tabular-nums",
+                      isAmountDue && "font-semibold",
+                    )}
+                  >
+                    {field.value}
+                  </span>
+                </DetailsItem>
+              );
+            })}
           </DetailsGrid>
           {invoice.paid ? (
             <p className="text-sm font-medium">{t("paid")}</p>
