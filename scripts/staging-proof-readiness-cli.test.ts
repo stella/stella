@@ -64,7 +64,7 @@ for (const fixture of [
       commit: COMMIT,
       deployEnvironment: "production",
     }),
-    sample: "wrong-deployment",
+    sample: "wrong-deployment" as const,
   },
   { name: "malformed JSON", status: 200, body: "not JSON" },
   {
@@ -80,7 +80,7 @@ for (const fixture of [
       commit: "b".repeat(40),
       status: "ready",
     },
-    sample: "wrong-deployment",
+    sample: "wrong-deployment" as const,
   },
   {
     name: "an unhealthy status",
