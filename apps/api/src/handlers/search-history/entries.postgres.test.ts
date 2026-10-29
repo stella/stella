@@ -602,8 +602,8 @@ if (!databaseUrl || !enabled) {
           },
           query: async (query, params = []) =>
             await reserved.unsafe(query, [...params]),
-          release: () => {
-            reserved.release();
+          release: async () => {
+            await reserved.release();
           },
         } satisfies OnlineMigrationConnection;
         try {
