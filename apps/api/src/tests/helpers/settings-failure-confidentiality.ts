@@ -89,6 +89,41 @@ const assertReturnedAllowlist = (returned: unknown): void => {
   expect(JSON.stringify(graph)).not.toContain("metadata");
 
   if (returned instanceof Error) {
+    if ("code" in returned) {
+      expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
+        [
+          "_tag",
+          "claim",
+          "clause",
+          "code",
+          "column",
+          "confirmation",
+          "contactUrl",
+          "error",
+          "hint",
+          "issues",
+          "line",
+          "message",
+          "name",
+          "originalColumn",
+          "originalLine",
+          "requiredFields",
+          "retryAfterMs",
+          "retryable",
+          "sourceURL",
+          "stack",
+          "status",
+          "stepUp",
+          "usage",
+        ].toSorted(compareKeys),
+      );
+      expect(returned).toMatchObject({
+        code: "ai_config_stored_unreadable",
+        message: "Stored AI configuration could not be read",
+        status: 503,
+      });
+      return;
+    }
     expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
       [
         "_tag",
@@ -102,6 +137,21 @@ const assertReturnedAllowlist = (returned: unknown): void => {
         "sourceURL",
         "stack",
       ].toSorted(compareKeys),
+    );
+    return;
+  }
+  if (
+    typeof returned === "object" &&
+    returned !== null &&
+    "orgAIConfigStatus" in returned
+  ) {
+    expect(graph).toEqual(
+      descriptorGraph({
+        orgAIConfig: null,
+        orgAIConfigStatus: "unreadable",
+        promptCachingEnabled: null,
+        managedAIResidency: null,
+      }),
     );
     return;
   }
@@ -136,7 +186,12 @@ export const assertSettingsFailureConfidential = ({
       source: "organization_ai_config",
     },
   };
-  if (outputs.returned instanceof Error) {
+  const isDirectFailure =
+    outputs.returned instanceof Error ||
+    (typeof outputs.returned === "object" &&
+      outputs.returned !== null &&
+      "orgAIConfigStatus" in outputs.returned);
+  if (isDirectFailure) {
     expect(outputs.logRecords).toEqual([diagnostic]);
     expect(outputs.developmentEntries).toEqual([]);
     expect(outputs.analyticsEvents).toEqual([]);
