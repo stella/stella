@@ -1690,7 +1690,13 @@ const ClipboardApp = () => {
     (node: HTMLDivElement | null) => {
       timelineRailRef.current = node;
       observeTimelineRail(node);
-      return fadeScrollEdges(node);
+      const stopFading = fadeScrollEdges(node);
+      // A returned cleanup replaces React's detach call with `null`.
+      return () => {
+        stopFading?.();
+        timelineRailRef.current = null;
+        observeTimelineRail(null);
+      };
     },
     [observeTimelineRail],
   );
