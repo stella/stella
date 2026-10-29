@@ -68,7 +68,9 @@ test("expansion enrichment preserves its row before post-contract sibling storag
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     });
   let observationOrder = 0n;
-  const ingest = async (input: ReturnType<typeof publication>) => {
+  const ingest = async (
+    input: Parameters<typeof processDecision>[0]["input"],
+  ) => {
     observationOrder += 1n;
     const outcome = await processDecision({
       input,
