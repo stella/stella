@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
+import type { Verdict } from "@stll/db-load-gate/health";
+
 import * as schema from "@/api/db/schema";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -16,6 +18,7 @@ import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
+  coverageRefreshWroteSummary,
   describeServed,
   readCoverageRefreshState,
   seedCorpusReadBudgets,
@@ -38,7 +41,7 @@ import {
   READ_BUDGET_PROFILES,
   SCHEDULED_JOB_MEASUREMENTS,
 } from "./registry";
-import { measureScheduledJobRun } from "./scheduled-run";
+import { measureScheduledJobRun, QUERY_PERF_ADMISSION } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
 import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
@@ -315,6 +318,14 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             for (const violation of run.planViolations) {
               note(violation.message);
             }
+            if (
+              measurement.executed !== undefined &&
+              !(await measurement.executed(db))
+            ) {
+              note(
+                `${jobId} on ${generation} left no proof of its work; the budget measured only its bookkeeping`,
+              );
+            }
             return run.metrics;
           } finally {
             await release?.();
@@ -371,7 +382,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const coverageMeasurement =
           SCHEDULED_JOB_MEASUREMENTS[coverageJob.id] ??
           panic("The coverage refresh has no measurement");
-        const measureCoverageInPlace = async () => {
+        const measureCoverageInPlace = async (
+          admission: Verdict = QUERY_PERF_ADMISSION,
+        ) => {
           const served = CASE_LAW_SCENARIOS.quiet.size;
           await serveCaseLaw(db, served);
           const release = await coverageMeasurement.prepare?.({
@@ -380,11 +393,16 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             openClient,
           });
           try {
-            return await measureScheduledJobRun({
+            const run = await measureScheduledJobRun({
               database: db,
               jobId: coverageJob.id,
               task: coverageMeasurement.task,
+              admission,
             });
+            return {
+              ...run,
+              computed: await coverageRefreshWroteSummary(db),
+            };
           } finally {
             await release?.();
           }
@@ -402,8 +420,17 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           expect(await readCoverageRefreshState(db)).toEqual(found);
           const second = await measureCoverageInPlace();
           expect(await readCoverageRefreshState(db)).toEqual(found);
+          expect(first.computed).toBe(true);
+          expect(second.computed).toBe(true);
           expect(coverageShape(first).length).toBeGreaterThan(0);
           expect(coverageShape(second)).toEqual(coverageShape(first));
+          // The check above is what a busy-window hold would fail.
+          const held = await measureCoverageInPlace({
+            kind: "stop",
+            signals: [],
+          });
+          expect(held.computed).toBe(false);
+          expect(await readCoverageRefreshState(db)).toEqual(found);
         });
 
         // The gate must refuse what it exists to refuse. The freshness

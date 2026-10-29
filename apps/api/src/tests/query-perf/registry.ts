@@ -18,6 +18,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
 import {
   CASE_LAW_SCENARIOS,
+  coverageRefreshWroteSummary,
   isolateCoverageRefreshMeasurement,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
@@ -73,6 +74,12 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
 
 type ScheduledJobMeasurement = {
   prepare?: typeof seedSitemapReadBudget;
+  /**
+   * Whether the run did the job's work, read before `prepare` restores the
+   * fixture. A governed job the load governor held issues only its bookkeeping,
+   * and its statements would pass a budget without measuring the work.
+   */
+  executed?: (database: GatedTestDb) => Promise<boolean>;
   task: string;
   scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
 };
@@ -91,6 +98,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   [SCHEDULER_BACKFILL_IDS.coverage]: {
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
     prepare: isolateCoverageRefreshMeasurement,
+    executed: coverageRefreshWroteSummary,
     scenarios: [CASE_LAW_SCENARIOS.quiet],
   },
   "caseLaw.refreshSitemapShards.hourly": {

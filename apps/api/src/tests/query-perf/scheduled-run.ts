@@ -1,5 +1,8 @@
 import { panic, Result } from "better-result";
 
+import type { Verdict } from "@stll/db-load-gate/health";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
@@ -17,15 +20,29 @@ import { measureJobStatements } from "./statement-measurement";
 
 const noopTask = () => undefined;
 
+/**
+ * The load governor's admission for a measured run. The governor holds work
+ * in its busy windows (06:30-08:00 Europe/Prague by default), and held work
+ * issues only its own bookkeeping, so the measurement admits explicitly and
+ * the time of day cannot decide whether the measured work happens.
+ */
+export const QUERY_PERF_ADMISSION = {
+  kind: "normal",
+  signals: [],
+} as const satisfies Verdict;
+
 /** Measure the registered task's actual statements without replaying its results. */
 export const measureScheduledJobRun = async ({
   database,
   jobId,
   task: taskName,
+  admission = QUERY_PERF_ADMISSION,
 }: {
   database: GatedTestDb;
   jobId: string;
   task: string;
+  /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
+  admission?: Verdict;
 }) => {
   const job =
     DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
@@ -42,6 +59,11 @@ export const measureScheduledJobRun = async ({
       noopTask,
       createCaseLawCoverageRefreshTask({
         compute: computeCaseLawCoverageAnswer,
+        createRuntime: (options) =>
+          createScriptBackfillRuntime({
+            ...options,
+            readVerdict: async () => await Promise.resolve(admission),
+          }),
       }),
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const measured = await measureJobStatements({

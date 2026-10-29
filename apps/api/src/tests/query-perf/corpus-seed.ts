@@ -533,6 +533,11 @@ export const readCoverageRefreshState = async (database: GatedTestDb) => {
   return state;
 };
 
+/** The refresh ran its computation: its summary row is stored. */
+export const coverageRefreshWroteSummary = async (database: GatedTestDb) =>
+  (await readCoverageRefreshState(database))["case_law_coverage_summaries"] !==
+  "[]";
+
 const replaceCoverageRefreshState = async (
   database: GatedTestDb,
   state: Readonly<Record<string, string>>,
