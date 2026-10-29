@@ -1,12 +1,11 @@
 import { Result } from "better-result";
 
-import { EXTRA_COURTS } from "@stll/infosoud";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getKnownInfoSoudCourtName } from "@/api/lib/infosoud/client";
 import { projectionPayload } from "@/api/lib/projection-totality";
 
 import {
@@ -128,7 +127,7 @@ export const readVocabularyHandler = async ({
       });
     }
     for (const trackedCase of cases) {
-      const courtName = EXTRA_COURTS[trackedCase.courtCode];
+      const courtName = getKnownInfoSoudCourtName(trackedCase.courtCode);
       if (courtName !== undefined) {
         sources.push({
           term: courtName,
