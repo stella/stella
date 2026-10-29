@@ -215,10 +215,11 @@ const DIALOG_MOBILE_POPUP_CLASS_NAMES = {
 } as const satisfies Record<DialogMobileLayout, string | undefined>;
 
 /**
- * How wide the popup may grow from `sm` up. `sm` is a confirmation or a
- * single field, `default` a short form, `lg` a form with two columns or a
- * table, `xl` a review or a document picker. Below `sm` the mobile layout
- * decides.
+ * How wide the popup may grow. `sm` is a confirmation or a single field,
+ * `default` a short form, `lg` a form with two columns or a table, `xl` a
+ * review or a document picker. Unprefixed like the width it replaces, so a
+ * caller's own `max-w-*` still wins; below `sm` the bottom-sheet and
+ * fullscreen layouts lift the cap and a centred popup keeps it.
  */
 type DialogSize = "sm" | "default" | "lg" | "xl";
 
