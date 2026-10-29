@@ -196,7 +196,7 @@ export const hasFoldedSearchMatch = (
   text: string,
   query: string,
   options: SearchMatchOptions = {},
-) => {
+): boolean => {
   if (query.length === 0) {
     return false;
   }
@@ -295,9 +295,9 @@ export const findSearchMatchRanges = (
   }
 
   const match = {
-    matchCase: options.matchCase,
-    matchDiacritics: options.matchDiacritics,
-    wholeWords: options.wholeWords,
+    matchCase: options.matchCase ?? false,
+    matchDiacritics: options.matchDiacritics ?? false,
+    wholeWords: options.wholeWords ?? false,
   } satisfies SearchMatchOptions;
   return findFoldedRanges({
     content:

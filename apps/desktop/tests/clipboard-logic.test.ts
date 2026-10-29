@@ -36,6 +36,7 @@ import {
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
+import type { ClipboardSearchOptions } from "../src/clipboard/clipboard-logic";
 import type {
   ClipboardCopyFormat,
   ClipboardItem,
@@ -305,10 +306,7 @@ describe("clipboard search options", () => {
     plainText: "Čezký dodavatel, Praha",
   } satisfies ClipboardItem;
   const items = [ENTITY_ITEM, PREFIX_ITEM];
-  const search = (
-    query: string,
-    options: Partial<typeof DEFAULT_CLIPBOARD_SEARCH_OPTIONS>,
-  ) =>
+  const search = (query: string, options: Partial<ClipboardSearchOptions>) =>
     filterClipboardItems(items, query, null, {
       ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
       ...options,
