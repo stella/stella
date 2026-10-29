@@ -26,7 +26,7 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, count, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
@@ -45,8 +45,8 @@ import {
   user as authUser,
 } from "@/api/db/auth-schema";
 import {
-  authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
+  bindOwnerSyntheticSessionAuthorizer,
   isPartnerOAuthClient,
   rlsDb,
   rootDb,
@@ -200,7 +200,6 @@ import {
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
-import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   carriesSessionCredential,
   skippableSessionCookieOf,
@@ -212,6 +211,10 @@ import {
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
+import {
+  liveSessionAdapterWhere,
+  liveSessionPredicate,
+} from "@/api/lib/auth/session-liveness";
 import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
@@ -361,7 +364,10 @@ import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
-import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -394,10 +400,11 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
   ? instrumentQueryOrigins(authoritativeSessionReader)
   : authoritativeSessionReader;
 
-/** Access token lifetime in seconds (15 minutes). */
-const syntheticSessionAuthorityReader =
+/** Authenticated handlers receive a bounded session reader. */
+export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
 
+/** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -1418,8 +1425,6 @@ export const createAuth = (
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
-      rotationEnabled: env.SESSION_TOKEN_ROTATION_ENABLED,
-      capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
   const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
@@ -2368,9 +2373,10 @@ export const createAuth = (
         config: syntheticPrincipalAuthConfig,
         localPasswordEnabled: true,
         checkAccess: checkSyntheticPrincipalAccess,
-        authorizeSession: authorizeOwnerSyntheticSession,
+        authorizeSession: bindOwnerSyntheticSessionAuthorizer(
+          authorizeSyntheticSession,
+        ),
       }),
-      createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
         enabled: rateLimitEnabled,
@@ -3056,7 +3062,7 @@ export const authenticateSession = async (
       where: [
         { field: "id", value: session.id },
         { field: "userId", value: user.id },
-        { field: "expiresAt", operator: "gt", value: new Date() },
+        ...liveSessionAdapterWhere(new Date()),
       ],
       select: ["id"],
     });
@@ -3308,7 +3314,7 @@ export const resolveUserRealtimeAuthorization = async (
       and(
         eq(authSession.userId, member.userId),
         inArray(authSession.id, uniqueSessionIds),
-        gt(authSession.expiresAt, new Date()),
+        liveSessionPredicate(new Date(), authSession),
       ),
     )
     .where(
@@ -3348,7 +3354,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(authSession.userId, member.userId),
         inArray(authSession.id, uniqueSessionIds),
-        gt(authSession.expiresAt, new Date()),
+        liveSessionPredicate(new Date(), authSession),
       ),
     )
     .innerJoin(
@@ -3538,7 +3544,7 @@ const hasSyntheticSessionAuthority = async (current: {
   const userId = brandPersistedUserId(current.user.id);
   return (
     !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
-    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+    (await ownerSyntheticSessionAuthorityReader({ sessionId, userId })) !== null
   );
 };
 

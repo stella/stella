@@ -551,12 +551,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@tanstack/ai-mcp"],
   },
   {
-    path: "apps/api/src/lib/auth/session-bearer.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth plugin APIs for bearer session handling.",
-    transports: ["module:better-auth/plugins"],
-  },
-  {
     path: "apps/api/src/lib/auth/session-lifetime.ts",
     class: "vendor-sdk",
     reason: "Uses Better Auth APIs and database helpers for session lifetimes.",
@@ -634,11 +628,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/scripts/better-auth-sign-in-replay.ts",
     class: "operator-configured-infrastructure",
     reason: "Runs an authentication replay against the configured API origin.",
-    transports: [
-      "global:fetch",
-      "module:better-auth",
-      "module:better-auth/plugins",
-    ],
+    transports: ["global:fetch", "module:better-auth"],
   },
   {
     path: "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
