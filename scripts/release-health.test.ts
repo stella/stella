@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   chmodSync,
   mkdtempSync,
@@ -721,12 +721,15 @@ describe("persisted release health records", () => {
   });
 });
 
-// timeout: eight CLI runs, each spawning bun and a fake gh, exceed the default budget under load.
-test("private records roundtrip through authenticated CLI and refuse public stores", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "release-health-store-"));
-  try {
-    const recordFile = path.join(directory, "record.json");
-    const storedFile = path.join(directory, "stored.json");
+describe("private records through the authenticated CLI", () => {
+  let directory = "";
+  let recordFile = "";
+  let storedFile = "";
+
+  beforeAll(() => {
+    directory = mkdtempSync(path.join(tmpdir(), "release-health-store-"));
+    recordFile = path.join(directory, "record.json");
+    storedFile = path.join(directory, "stored.json");
     const gh = path.join(directory, "gh");
     writeFileSync(recordFile, JSON.stringify(privateRecord()));
     writeFileSync(
@@ -756,54 +759,68 @@ if (args[0] === "api") {
 `,
     );
     chmodSync(gh, 0o700);
-    type CliOptions = {
-      command: "record" | "findings";
-      privateStore?: boolean;
-      corrupt?: "none" | "true" | "baseline" | "json";
-      draft?: boolean | "inaccessible";
-    };
-    const cli = ({
-      command,
-      privateStore = true,
-      corrupt = "none",
-      draft = true,
-    }: CliOptions) => {
-      writeFileSync(
-        path.join(directory, "state.json"),
-        JSON.stringify({ privateStore: String(privateStore), corrupt, draft }),
-      );
-      return Bun.spawnSync(
-        [
-          "bun",
-          path.join(import.meta.dir, "release-health.ts"),
-          command,
-          "--release",
-          RELEASE,
-          "--record",
-          recordFile,
-          "--store",
-          "test-owner/private-records",
-        ],
-        {
-          env: {
-            ...process.env,
-            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
-            GH_TOKEN: "",
-            GITHUB_REPOSITORY: "test-owner/public-app",
-          },
+  });
+
+  afterAll(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  type CliOptions = {
+    command: "record" | "findings";
+    privateStore?: boolean;
+    corrupt?: "none" | "true" | "baseline" | "json";
+    draft?: boolean | "inaccessible";
+  };
+  const cli = ({
+    command,
+    privateStore = true,
+    corrupt = "none",
+    draft = true,
+  }: CliOptions) => {
+    writeFileSync(
+      path.join(directory, "state.json"),
+      JSON.stringify({ privateStore: String(privateStore), corrupt, draft }),
+    );
+    return Bun.spawnSync(
+      [
+        "bun",
+        path.join(import.meta.dir, "release-health.ts"),
+        command,
+        "--release",
+        RELEASE,
+        "--record",
+        recordFile,
+        "--store",
+        "test-owner/private-records",
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+          GH_TOKEN: "",
+          GITHUB_REPOSITORY: "test-owner/public-app",
         },
-      );
-    };
+      },
+    );
+  };
+
+  test("refuses a public store", () => {
     const refused = cli({ command: "record", privateStore: false });
     expect(refused.exitCode).not.toBe(0);
     expect(refused.stderr.toString()).toContain(
       "store must be a private repository",
     );
+  });
+
+  test("refuses a store that is no longer a draft", () => {
     const publishedStore = cli({ command: "record", draft: false });
     expect(publishedStore.exitCode).not.toBe(0);
     expect(publishedStore.stderr.toString()).toContain(
       "must remain a draft release",
     );
+  });
+
+  test("names an inaccessible draft without echoing the response", () => {
     const inaccessible = cli({ command: "findings", draft: "inaccessible" });
     expect(inaccessible.exitCode).not.toBe(0);
     expect(inaccessible.stderr.toString()).toContain("contents:write");
@@ -812,6 +829,9 @@ if (args[0] === "api") {
       "PRIVATE_RECORD_SENTINEL",
     );
     expect(inaccessible.stderr.toString()).not.toContain("/v1/summaries");
+  });
+
+  test("records, re-records and reads the record back", () => {
     const uploaded = cli({ command: "record" });
     expect(uploaded.exitCode).toBe(0);
     expect(uploaded.stdout.toString()).toBe("");
@@ -823,18 +843,22 @@ if (args[0] === "api") {
     const downloaded = cli({ command: "findings" });
     expect(downloaded.exitCode).toBe(0);
     expect(JSON.parse(downloaded.stdout.toString())).toEqual(privateRecord());
+  });
+
+  test("refuses a record that reads back differently", () => {
     const corrupted = cli({ command: "record", corrupt: "true" });
     expect(corrupted.exitCode).not.toBe(0);
     expect(corrupted.stderr.toString()).toContain("readback");
-    for (const corruption of ["baseline", "json"] as const) {
+  });
+
+  for (const corruption of ["baseline", "json"] as const) {
+    test(`refuses a malformed stored record (${corruption})`, () => {
       const malformed = cli({ command: "record", corrupt: corruption });
       expect(malformed.exitCode).not.toBe(0);
       expect(malformed.stderr.toString()).toContain("malformed");
       expect(malformed.stderr.toString()).not.toContain(
         "PRIVATE_RECORD_SENTINEL",
       );
-    }
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
+    });
   }
-}, 30_000);
+});
