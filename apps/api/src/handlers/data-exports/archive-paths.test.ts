@@ -15,7 +15,11 @@ import {
 } from "@/api/handlers/data-exports/archive-paths";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 
-const fold = (path: string) => normalizeUnicode(path, "NFC").toLowerCase();
+// ICU collation checks the fixture equivalence independently of the allocation key.
+const filesystemNames = new Intl.Collator("cs", {
+  usage: "search",
+  sensitivity: "accent",
+});
 
 describe("export archive paths", () => {
   test("normalises composed and decomposed names to the same NFC segment", () => {
@@ -45,6 +49,42 @@ describe("export archive paths", () => {
       "m/documents/Kupní smlouva (2).docx",
     ]);
   });
+
+  test.each([
+    {
+      first: "Σ.pdf",
+      second: "ς.pdf",
+      firstSuffix: "Σ (2).pdf",
+      secondSuffix: "ς (2).pdf",
+    },
+    {
+      first: "Smlouva č. 1.pdf",
+      second: "Smlouva c\u030c. 1.pdf",
+      firstSuffix: "Smlouva č. 1 (2).pdf",
+      secondSuffix: "Smlouva č. 1 (2).pdf",
+    },
+    {
+      first: "Ž.docx",
+      second: "ž.docx",
+      firstSuffix: "Ž (2).docx",
+      secondSuffix: "ž (2).docx",
+    },
+  ])(
+    "suffixes filesystem-equivalent names: $first and $second",
+    ({ first, second, firstSuffix, secondSuffix }) => {
+      expect(first).not.toBe(second);
+      expect(filesystemNames.compare(first, second)).toBe(0);
+      const allocator = new ArchivePathAllocator();
+      expect(allocator.allocate("dir", first)).toBe(`dir/${first}`);
+      expect(allocator.allocate("dir", second)).toBe(`dir/${secondSuffix}`);
+      const reserved = new ArchivePathAllocator();
+      reserved.reserve(`dir/${second}`);
+      expect(reserved.allocate("dir", first)).toBe(`dir/${firstSuffix}`);
+      expect(() => reserved.reserve(`dir/${first}`)).toThrow(
+        "Archive path already allocated",
+      );
+    },
+  );
 
   test("never lets a file take a reserved path", () => {
     const allocator = new ArchivePathAllocator();
@@ -81,6 +121,11 @@ describe("export archive paths", () => {
         ":",
         "\u0000",
         "ß",
+        "Σ",
+        "σ",
+        "ς",
+        "Ž",
+        "ž",
         "契",
       ),
       maxLength: 12,
@@ -90,8 +135,13 @@ describe("export archive paths", () => {
       fc.property(fc.array(name, { maxLength: 30 }), (names) => {
         const allocator = new ArchivePathAllocator();
         const paths = names.map((n) => allocator.allocate("dir", n));
-        const folded = new Set(paths.map(fold));
-        expect(folded.size).toBe(paths.length);
+        expect(
+          paths.every((path, index) =>
+            paths
+              .slice(index + 1)
+              .every((other) => filesystemNames.compare(path, other) !== 0),
+          ),
+        ).toBe(true);
         for (const path of paths) {
           expect(path).toBe(normalizeUnicode(path, "NFC"));
           expect(path.startsWith("dir/")).toBe(true);

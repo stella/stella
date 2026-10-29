@@ -6,6 +6,7 @@ import { panic } from "better-result";
 
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 import type { ZipCompression } from "@/api/handlers/data-exports/zip-writer";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -116,9 +117,6 @@ export const sanitizeArchiveSegment = (name: string): string => {
   return `${truncateUtf8(base, room).trimEnd()}${extension}`;
 };
 
-const foldKey = (path: string): string =>
-  normalizeUnicode(path, "NFC").toLowerCase();
-
 /**
  * Hands out unique archive paths. Two paths collide when they are equal
  * after NFC and case folding, because extracting both onto a
@@ -132,7 +130,7 @@ export class ArchivePathAllocator {
 
   /** Reserve a fixed path (manifest, metadata) that must not be renamed. */
   reserve(path: string): string {
-    const key = foldKey(path);
+    const key = archivePathKey(path);
     if (this.#taken.has(key)) {
       return panic(`Archive path already allocated: ${path}`);
     }
@@ -145,14 +143,14 @@ export class ArchivePathAllocator {
     const segment = sanitizeArchiveSegment(fileName);
     const prefix = directory.length > 0 ? `${directory}/` : "";
     const first = `${prefix}${segment}`;
-    if (!this.#taken.has(foldKey(first))) {
-      this.#taken.add(foldKey(first));
+    if (!this.#taken.has(archivePathKey(first))) {
+      this.#taken.add(archivePathKey(first));
       return first;
     }
     for (let n = 2; ; n++) {
       const candidate = `${prefix}${withSegmentSuffix(segment, ` (${n})`)}`;
-      if (!this.#taken.has(foldKey(candidate))) {
-        this.#taken.add(foldKey(candidate));
+      if (!this.#taken.has(archivePathKey(candidate))) {
+        this.#taken.add(archivePathKey(candidate));
         return candidate;
       }
     }

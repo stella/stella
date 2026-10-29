@@ -21,6 +21,8 @@ import { crc32 as zlibCrc32, deflateRaw } from "node:zlib";
 
 import { Temporal } from "@stll/time";
 
+import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
+
 export const ZIP_COMPRESSION = {
   STORE: "store",
   DEFLATE: "deflate",
@@ -392,10 +394,11 @@ export const writeZip = async function* (
   const names = new Set<string>();
   let offset = 0;
   for await (const entry of entries) {
-    if (names.has(entry.name)) {
+    const nameKey = archivePathKey(entry.name);
+    if (names.has(nameKey)) {
       panic(`Duplicate ZIP entry name: ${entry.name}`);
     }
-    names.add(entry.name);
+    names.add(nameKey);
     const localHeaderOffset = offset;
     const { source } = entry;
     switch (source.type) {

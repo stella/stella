@@ -167,8 +167,34 @@ describe("export ZIP writer", () => {
     };
     const rejection = await rejectionOf(collect([entry, entry]));
     expect(rejection).toBeInstanceOf(Error);
-    expect(String(rejection)).toContain("Duplicate ZIP entry name");
+    expect(rejection).toMatchObject({
+      message: "Duplicate ZIP entry name: a.txt",
+    });
   });
+
+  test.each([
+    { first: "Σ.pdf", second: "ς.pdf" },
+    { first: "Smlouva č. 1.pdf", second: "Smlouva c\u030c. 1.pdf" },
+    { first: "Ž.docx", second: "ž.docx" },
+  ])(
+    "refuses filesystem-equivalent entry names: $first and $second",
+    async ({ first, second }) => {
+      const entries = [first, second].map((name) => ({
+        name,
+        modifiedAt: MODIFIED_AT,
+        source: {
+          type: "bytes" as const,
+          data: text("document"),
+          compression: ZIP_COMPRESSION.STORE,
+        },
+      }));
+      const rejection = await rejectionOf(collect(entries));
+      expect(rejection).toBeInstanceOf(Error);
+      expect(rejection).toMatchObject({
+        message: `Duplicate ZIP entry name: ${second}`,
+      });
+    },
+  );
 
   test("writes no ZIP64 records for a small archive", async () => {
     const archive = await collect([
