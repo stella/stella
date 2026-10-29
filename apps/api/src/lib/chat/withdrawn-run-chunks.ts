@@ -1,6 +1,35 @@
 import { EventType } from "@tanstack/ai";
 import type { RunFinishedOutcome, StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
+import * as v from "valibot";
+
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
+
+const duration = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
+const timestamp = v.pipe(v.string(), v.isoTimestamp());
+const timingFields = {
+  finished: { status: v.literal("finished"), durationMs: duration },
+  running: {
+    status: v.literal("running"),
+    durationMs: duration,
+    startedAt: timestamp,
+    observedAt: timestamp,
+    elapsedMs: duration,
+  },
+} as const satisfies {
+  [Status in ChatTurnTiming["status"]]: Record<
+    keyof Extract<ChatTurnTiming, { status: Status }>,
+    v.GenericSchema
+  >;
+};
+const endMetadata = v.object({
+  turnTiming: v.nullable(
+    v.variant("status", [
+      v.object(timingFields.finished),
+      v.object(timingFields.running),
+    ]),
+  ),
+});
 
 const projectWithdrawnOutcome = (
   outcome: RunFinishedOutcome,
@@ -67,8 +96,21 @@ export const projectWithdrawnRunChunk = (
         ...(chunk.role === undefined ? {} : { role: chunk.role }),
         delta: marker,
       };
-    case EventType.TEXT_MESSAGE_END:
-      return { type: chunk.type, messageId: chunk.messageId };
+    case EventType.TEXT_MESSAGE_END: {
+      // Project only the timing contract; arbitrary SDK metadata can carry text.
+      const parsed = v.safeParse(endMetadata, chunk.metadata);
+      const metadata = parsed.success
+        ? (parsed.output satisfies { turnTiming: ChatTurnTiming | null })
+        : undefined;
+      return {
+        type: chunk.type,
+        messageId: chunk.messageId,
+        ...(chunk.timestamp === undefined
+          ? {}
+          : { timestamp: chunk.timestamp }),
+        ...(metadata === undefined ? {} : { metadata }),
+      };
+    }
     case EventType.MESSAGES_SNAPSHOT:
       return {
         type: chunk.type,
