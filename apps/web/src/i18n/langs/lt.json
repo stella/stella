@@ -547,6 +547,14 @@
     },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
+    "arrangement": {
+      "alertThreshold": "Įspėjimo slenkstis (%)",
+      "amountCap": "Atlygio riba",
+      "flatFee": "Fiksuotas atlygis",
+      "invalidCap": "Įveskite teigiamas ribas ir įspėjimo slenkstį nuo 0,01 % iki 100 %.",
+      "minuteCap": "Laiko riba (minutėmis)",
+      "title": "Susitarimas dėl atlygio"
+    },
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
@@ -933,12 +941,16 @@
         "reasoning": "Mąstymas"
       },
       "errors": {
+        "analysisDisabled": "DI analizės kūrimas šiame serveryje išjungtas. Skaitykite sprendimo tekstą arba bandykite vėliau.",
         "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "decisionNotFound": "Šis teismo sprendimas nerastas. Atverkite jį iš naujo paieškoje.",
+        "documentUnparseable": "Teismo sprendimo tekstas dar neparengtas analizei. Skaitykite pirminį šaltinį.",
+        "languageUnsupported": "DI analizė dar nepalaiko šio teismo sprendimo kalbos. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
         "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
         "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
         "retryAfter": "Bandyti dar kartą galėsite po {time}.",
-        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
-        "unavailable": "Šiam sprendimui DI analizė neprieinama."
+        "sourceRestricted": "Šaltinis neleidžia atlikti DI analizės. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}"
       },
       "generate": "Parengti DI santraukas",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
@@ -1275,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)",
       "versionBasisInferredCompact": "Sprendimo data · numanoma",
       "versionBasisInferredExplanation": "Redakcija nustatyta pagal sprendimo datą. Sprendime nenurodyta, kuri redakcija taikoma."
-    }
+    },
+    "withdrawnByPublisher": "Leidėjas atšaukė"
   },
   "catalogue": {
     "addCustom": "Pridėti pasirinktinį",
@@ -1572,6 +1585,12 @@
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kitas} few {+# kiti} many {+# kito} other {+# kitų}}",
+      "dismiss": "Slėpti pranešimą apie ryšį",
+      "stoppedWorking": "Jūsų ryšys su <name>{server}</name> nustojo veikti.",
+      "waitingApproval": "Jūsų ryšys su <name>{server}</name> laukia patvirtinimo."
+    },
     "mention": {
       "category": {
         "entities": "Šioje byloje",
@@ -4871,7 +4890,9 @@
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
   },
   "readerAnswers": {
+    "answerLanguage": "Atsakymo kalba",
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "documentLanguage": "Dokumento kalba ({language})",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
     "followUp": "Užduoti papildomą klausimą",
@@ -5058,6 +5079,16 @@
       "preferredNamePlaceholder": "Jūsų vardas",
       "profileDescription": "Tvarkykite savo asmenines nuostatas",
       "sendOtpCode": "Siųsti patvirtinimo kodą",
+      "signInMethods": {
+        "confirmDescription": "Norėdami atsieti šį prisijungimo būdą, įveskite naują į el. paštą atsiųstą kodą.",
+        "confirmTitle": "Atsieti „{provider}“?",
+        "description": "Susiekite paskyras, kuriose naudojamas tas pats patvirtintas el. pašto adresas.",
+        "emailCode": "El. paštu siunčiamas kodas",
+        "emailCodeDescription": "Visada galite prisijungti naudodami į el. paštą atsiųstą kodą.",
+        "lastMethod": "Prieš atjungdami šią paskyrą, susiekite kitą.",
+        "title": "Prisijungimo būdai",
+        "unavailable": "Norint atsieti prisijungimo būdus, turi būti sukonfigūruotas el. laiškų siuntimas."
+      },
       "timezone": "Laiko juosta",
       "timezoneDescription": "Naudojama pranešimų ir el. laiškų laiko žymoms",
       "timezoneSaved": "Laiko juosta atnaujinta",

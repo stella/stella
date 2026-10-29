@@ -1,3 +1,6 @@
+/** Maximum stored task or activity code length. */
+export const BILLING_CODE_MAX_LENGTH = 20;
+
 export const TIME_ENTRY_ACTIVITY_GROUPS = ["client", "internal"] as const;
 export type TimeEntryActivityGroup =
   (typeof TIME_ENTRY_ACTIVITY_GROUPS)[number];
@@ -206,3 +209,9 @@ export const INVOICE_LINE_INPUT_LIMITS = {
 } as const;
 
 export const INVOICE_LINE_QUANTITY_PATTERN = `^(0|[1-9][0-9]{0,${INVOICE_LINE_INPUT_LIMITS.quantityPrecision - INVOICE_LINE_INPUT_LIMITS.quantityScale - 1}})(\\.[0-9]{1,${INVOICE_LINE_INPUT_LIMITS.quantityScale}})?$`;
+
+/** Basis points represented by one percentage point of a billing cap. */
+export const BPS_PER_PERCENTAGE_POINT = 100;
+
+/** Largest minute cap representable by the persisted PostgreSQL integer column. */
+export const BILLING_CAP_MINUTES_MAX = 2_147_483_647;

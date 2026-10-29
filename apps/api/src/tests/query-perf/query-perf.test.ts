@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { getTableName, is, sql } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 
+import * as schema from "@/api/db/schema";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -36,6 +38,7 @@ import {
 } from "./registry";
 import { measureScheduledJobRun } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
+import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
@@ -50,6 +53,19 @@ const profileBudgets = (profile: "corpus" | "tenant") =>
     .filter(([, owner]) => owner === profile)
     .map(([id]) => id)
     .toSorted();
+
+test("query-perf table size declarations name real schema tables", () => {
+  const schemaTables: ReadonlySet<string> = new Set(
+    Object.values(schema)
+      .filter((value) => is(value, PgTable))
+      .map(getTableName),
+  );
+  expect(
+    Object.keys(QUERY_PERF_TABLE_SIZES).filter(
+      (name) => !schemaTables.has(name),
+    ),
+  ).toEqual([]);
+});
 
 test("every measurement execution guard applies even when pages fit or carry an over-budget marker", () => {
   for (const id of [
@@ -120,6 +136,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   database: db,
                   seed,
                   query: entry.query,
+                  owner: budgetId,
+                  ownerDeadlineMs: entry.ownerDeadlineMs,
+                  profileId,
                 }),
             );
             log({
@@ -141,6 +160,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               plan: good.plan.Plan,
             });
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            expect(good.planViolations.map(({ message }) => message)).toEqual(
+              [],
+            );
             expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
             await deadline.run(
               `CREATE POLICY ${id}`,
@@ -156,6 +178,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   database: db,
                   seed,
                   query: entry.query,
+                  owner: budgetId,
+                  ownerDeadlineMs: entry.ownerDeadlineMs,
+                  profileId,
                 }),
             );
             log({
@@ -224,7 +249,13 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           const result = await deadline.run(
             `measure ${id}`,
             async () =>
-              await measureOwnerStatement({ database: db, build: entry.build }),
+              await measureOwnerStatement({
+                database: db,
+                build: entry.build,
+                owner: budgetId,
+                ownerDeadlineMs: entry.ownerDeadlineMs,
+                profileId: "corpus",
+              }),
           );
           log({
             event: "read_budget_measurement",
@@ -246,6 +277,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               : `${id}: ${String(result.plan.Plan["Actual Rows"])} rows, expected ${String(entry.expectedRows)}`,
           );
           note(budgetProblem(budgetId, result.metrics));
+          for (const violation of result.planViolations) {
+            note(violation.message);
+          }
         }
 
         const runMetrics = async (
@@ -254,21 +288,35 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           served: ServedCaseLaw,
         ) => {
           await serveCaseLaw(db, served);
-          const generation = describeServed(served);
-          const run = await measureScheduledJobRun({
+          const measurement =
+            SCHEDULED_JOB_MEASUREMENTS[jobId] ??
+            panic(`No measurement for ${jobId}`);
+          const release = await measurement.prepare?.({
             database: db,
+            served,
             openClient,
-            jobId,
-            task,
           });
-          log({
-            event: "read_budget_job_run",
-            jobId,
-            generation,
-            ...run.metrics,
-            statements: run.statements,
-          });
-          return run.metrics;
+          try {
+            const generation = describeServed(served);
+            const run = await measureScheduledJobRun({
+              database: db,
+              jobId,
+              task,
+            });
+            log({
+              event: "read_budget_job_run",
+              jobId,
+              generation,
+              ...run.metrics,
+              statements: run.statements,
+            });
+            for (const violation of run.planViolations) {
+              note(violation.message);
+            }
+            return run.metrics;
+          } finally {
+            await release?.();
+          }
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.
@@ -325,6 +373,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               const result = await measureOwnerStatement({
                 database: db,
                 build: () => query,
+                owner: "fixture.unboundedFreshness",
+                ownerDeadlineMs: undefined,
+                profileId: "corpus",
               });
               pages += result.metrics.sharedBlocks;
             }
@@ -358,6 +409,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             const result = await measureOwnerStatement({
               database: db,
               build: () => query,
+              owner: "fixture.convergenceRevisionChecks",
+              ownerDeadlineMs: undefined,
+              profileId: "corpus",
             });
             pages += result.metrics.sharedBlocks;
           }

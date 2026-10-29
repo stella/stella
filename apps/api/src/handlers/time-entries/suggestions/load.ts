@@ -37,6 +37,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditResourceType } from "@/api/lib/audit-log";
 import { auditReadChangesSql } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
@@ -328,6 +329,8 @@ const readChatSignals = async (tx: Transaction, scope: SuggestionReadScope) =>
       workspaceId: chatMessages.workspaceId,
       threadId: chatMessages.threadId,
       title: chatThreads.title,
+      titleSource: chatThreads.titleSource,
+      subjectDecisionId: chatThreads.subjectDecisionId,
       createdAt: chatMessages.createdAt,
     })
     .from(chatMessages)
@@ -508,7 +511,14 @@ const readSuggestionInputs = async (
   tx: Transaction,
   scope: SuggestionReadScope,
 ) => {
-  const chatRows = await readChatSignals(tx, scope);
+  const storedChatRows = await readChatSignals(tx, scope);
+  const projection = await readWithdrawnCopyProjection({
+    values: storedChatRows,
+  });
+  const chatRows = storedChatRows.map((row) => ({
+    ...row,
+    title: projection.thread(row).title,
+  }));
   const auditRows = await readAuditSignals(tx, scope);
   const resourceEntityIds = auditResourceEntityIds(auditRows);
   const entityNames = await readEntityNames(tx, scope, [

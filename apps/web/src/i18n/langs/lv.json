@@ -547,6 +547,14 @@
     },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
+    "arrangement": {
+      "alertThreshold": "Brīdinājuma slieksnis (%)",
+      "amountCap": "Atlīdzības limits",
+      "flatFee": "Fiksēta atlīdzība",
+      "invalidCap": "Ievadiet pozitīvus limitus un brīdinājuma slieksni no 0,01 % līdz 100 %.",
+      "minuteCap": "Laika limits (minūtes)",
+      "title": "Vienošanās par atlīdzību"
+    },
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
@@ -933,12 +941,16 @@
         "reasoning": "Argumentācija"
       },
       "errors": {
+        "analysisDisabled": "AI analīzes veidošana šajā serverī ir izslēgta. Lasiet nolēmuma tekstu vai mēģiniet vēlāk.",
         "answerIncomplete": "{source, select, organization {Jūsu organizācijas {provider} atslēga atgrieza nepilnīgu atbildi.} other {AI modelis atgrieza nepilnīgu atbildi.}}",
+        "decisionNotFound": "Šis tiesas nolēmums netika atrasts. Atveriet to vēlreiz meklēšanā.",
+        "documentUnparseable": "Nolēmuma teksts vēl nav gatavs analīzei. Lasiet sākotnējo avotu.",
+        "languageUnsupported": "AI analīze vēl neatbalsta šī nolēmuma valodu. Lasiet nolēmuma tekstu vai sākotnējo avotu.",
         "providerRefused": "{source, select, organization {{provider} noraidīja pieprasījumu, kas veikts ar jūsu organizācijas atslēgu. Pārbaudiet atslēgu, tās kvotu un norēķinus organizācijas iestatījumos.} other {AI pakalpojumu sniedzējs noraidīja pieprasījumu.}}",
         "providerUnavailable": "{source, select, organization {{provider} pašlaik nav pieejams ar jūsu organizācijas atslēgu.} other {AI pakalpojumu sniedzējs pašlaik nav pieejams.}}",
         "retryAfter": "Vēlreiz mēģināt varēsiet pēc {time}.",
-        "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}",
-        "unavailable": "Šim nolēmumam AI analīze nav pieejama."
+        "sourceRestricted": "Avots neatļauj AI analīzi. Lasiet nolēmuma tekstu vai sākotnējo avotu.",
+        "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}"
       },
       "generate": "Sagatavot AI kopsavilkumus",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
@@ -1275,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
       "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
       "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
-    }
+    },
+    "withdrawnByPublisher": "Izdevējs atsaucis"
   },
   "catalogue": {
     "addCustom": "Pievienot pielāgotu",
@@ -1572,6 +1585,12 @@
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",
+      "dismiss": "Paslēpt paziņojumu par savienojumu",
+      "stoppedWorking": "Jūsu savienojums ar <name>{server}</name> vairs nedarbojas.",
+      "waitingApproval": "Jūsu savienojums ar <name>{server}</name> gaida apstiprinājumu."
+    },
     "mention": {
       "category": {
         "entities": "Šajā lietā",
@@ -4871,7 +4890,9 @@
     "viewOnGithub": "Skatīt vietnē GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Atbildes valoda",
     "budgetError": "Atbilžu budžets ir izsmelts.",
+    "documentLanguage": "Dokumenta valoda ({language})",
     "expand": "Izvērst atbildi",
     "explain": "Izskaidrot",
     "followUp": "Uzdot papildjautājumu",
@@ -5058,6 +5079,16 @@
       "preferredNamePlaceholder": "Jūsu vārds",
       "profileDescription": "Pārvaldiet savas personīgās preferences",
       "sendOtpCode": "Nosūtīt apstiprinājuma kodu",
+      "signInMethods": {
+        "confirmDescription": "Lai atsaistītu šo pierakstīšanās veidu, ievadiet jaunu kodu, kas nosūtīts uz jūsu e-pastu.",
+        "confirmTitle": "Atsaistīt {provider}?",
+        "description": "Saistiet kontus, kuros izmantota viena un tā pati verificētā e-pasta adrese.",
+        "emailCode": "E-pasta kods",
+        "emailCodeDescription": "Jūs vienmēr varat pierakstīties, izmantojot uz jūsu e-pastu nosūtītu kodu.",
+        "lastMethod": "Pirms šī konta atvienošanas pievienojiet citu kontu.",
+        "title": "Pierakstīšanās veidi",
+        "unavailable": "Lai atsaistītu pierakstīšanās veidus, jābūt konfigurētai e-pasta piegādei."
+      },
       "timezone": "Laika josla",
       "timezoneDescription": "Tiek izmantota laika zīmogiem paziņojumos un e-pastos",
       "timezoneSaved": "Laika josla atjaunināta",

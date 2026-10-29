@@ -547,6 +547,14 @@
     },
     "approve": "Schválit",
     "approveSelected": "Schválit vybrané",
+    "arrangement": {
+      "alertThreshold": "Práh upozornění (%)",
+      "amountCap": "Limit odměny",
+      "flatFee": "Paušální odměna",
+      "invalidCap": "Zadejte kladné limity a práh upozornění od 0,01 % do 100 %.",
+      "minuteCap": "Časový limit (minuty)",
+      "title": "Ujednání o odměně"
+    },
     "batchActions": "Hromadné akce",
     "billable": "Fakturovatelné",
     "billedAmount": "Fakturovaná částka",
@@ -933,12 +941,16 @@
         "reasoning": "Uvažování"
       },
       "errors": {
+        "analysisDisabled": "Generování AI analýzy je na tomto serveru vypnuté. Přečtěte si text rozhodnutí nebo to zkuste později.",
         "answerIncomplete": "{source, select, organization {Klíč vaší organizace pro {provider} vrátil neúplnou odpověď.} other {AI model vrátil neúplnou odpověď.}}",
+        "decisionNotFound": "Rozhodnutí nebylo nalezeno. Otevřete ho znovu z vyhledávání.",
+        "documentUnparseable": "Text rozhodnutí není připraven k analýze. Přečtěte si původní zdroj.",
+        "languageUnsupported": "AI analýza zatím nepodporuje jazyk tohoto rozhodnutí. Přečtěte si text rozhodnutí nebo původní zdroj.",
         "providerRefused": "{source, select, organization {{provider} odmítl požadavek s klíčem vaší organizace. Zkontrolujte klíč, jeho kvótu a fakturaci v nastavení organizace.} other {Poskytovatel AI požadavek odmítl.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pro klíč vaší organizace momentálně nedostupný.} other {Poskytovatel AI je momentálně nedostupný.}}",
         "retryAfter": "Znovu to můžete zkusit po {time}.",
-        "timedOut": "{source, select, organization {{provider} s klíčem vaší organizace neodpověděl včas.} other {AI model neodpověděl včas.}}",
-        "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
+        "sourceRestricted": "Zdroj nepovoluje AI analýzu. Přečtěte si text rozhodnutí nebo původní zdroj.",
+        "timedOut": "{source, select, organization {{provider} s klíčem vaší organizace neodpověděl včas.} other {AI model neodpověděl včas.}}"
       },
       "generate": "Sestavit právní věty pomocí AI",
       "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
@@ -1275,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Znění k datu rozhodnutí (odvozené)",
       "versionBasisInferredCompact": "Datum rozhodnutí · odvozeno",
       "versionBasisInferredExplanation": "Znění je odvozeno z data rozhodnutí. Rozhodnutí neuvádí, které znění se použije."
-    }
+    },
+    "withdrawnByPublisher": "Staženo vydavatelem"
   },
   "catalogue": {
     "addCustom": "Přidat vlastní",
@@ -1572,6 +1585,12 @@
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# další} few {+# další} other {+# dalších}}",
+      "dismiss": "Skrýt upozornění na připojení",
+      "stoppedWorking": "Vaše připojení ke službě <name>{server}</name> přestalo fungovat.",
+      "waitingApproval": "Vaše připojení ke službě <name>{server}</name> čeká na schválení."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spisu",
@@ -4871,7 +4890,9 @@
     "viewOnGithub": "Zobrazit na GitHubu"
   },
   "readerAnswers": {
+    "answerLanguage": "Jazyk odpovědi",
     "budgetError": "Rozpočet na odpovědi je vyčerpán.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
     "expand": "Rozbalit odpověď",
     "explain": "Vysvětlit",
     "followUp": "Položit doplňující otázku",
@@ -5058,6 +5079,16 @@
       "preferredNamePlaceholder": "Vaše jméno",
       "profileDescription": "Spravujte své osobní předvolby",
       "sendOtpCode": "Odeslat ověřovací kód",
+      "signInMethods": {
+        "confirmDescription": "Zadejte nový kód zaslaný na e-mail, abyste tento způsob přihlášení odpojili.",
+        "confirmTitle": "Odpojit {provider}?",
+        "description": "Propojte účty, které používají stejnou ověřenou e-mailovou adresu.",
+        "emailCode": "Kód z e-mailu",
+        "emailCodeDescription": "Vždy se můžete přihlásit pomocí kódu zaslaného na e-mail.",
+        "lastMethod": "Než tento účet odpojíte, propojte jiný účet.",
+        "title": "Způsoby přihlášení",
+        "unavailable": "Aby bylo možné odpojit způsoby přihlášení, musí být nakonfigurováno doručování e-mailů."
+      },
       "timezone": "Časové pásmo",
       "timezoneDescription": "Použije se pro časové údaje v oznámeních a e-mailech",
       "timezoneSaved": "Časové pásmo aktualizováno",
