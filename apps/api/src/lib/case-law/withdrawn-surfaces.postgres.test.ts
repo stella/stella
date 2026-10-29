@@ -1547,6 +1547,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               decisionId,
               court: "Fixture",
               decisionDate: null,
+              language: "cs",
               paragraphs: [
                 { paragraphId: "p1", text: secret },
                 { paragraphId: "p2", text: secret },

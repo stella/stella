@@ -1,3 +1,14 @@
+// parser-output-unchanged: [at-courts] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-vfgh] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-vwgh] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-bvwg] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-lvwg] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-asylgh] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-ubas] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-uvs] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-verg] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-umse] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
+// parser-output-unchanged: [at-bks] this decision reader constructs no numeric superscript inlines; regenerated output fingerprints match main.
 // parser-output-unchanged: [cz-ns] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
 // parser-output-unchanged: [cz-nss] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
 // parser-output-unchanged: [cz-us] this decision reader constructs no numeric superscript inlines; canonical text is unchanged.
