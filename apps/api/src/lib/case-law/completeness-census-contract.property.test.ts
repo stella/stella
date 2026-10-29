@@ -4,11 +4,11 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  type CensusSlice,
   censusSliceIsShort,
   censusVerdict,
   countryCensusVerdict,
   measureCensusCounts,
-  type CensusSlice,
 } from "./completeness-census-contract";
 
 const slice = (
