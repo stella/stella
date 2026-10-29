@@ -30,45 +30,27 @@ export const _d = () => (
 // --- Flagged: a class string held in a constant ---
 // oxlint-disable-next-line no-hover-only-reveal/no-hover-only-reveal
 const ROW_ACTION_CLASS_NAME = "opacity-0 peer-hover:opacity-100";
-export const _e = () => (
-  <button className={ROW_ACTION_CLASS_NAME} type="button" />
-);
+export const _e = () => <button className={ROW_ACTION_CLASS_NAME} type="button" />;
 
 // --- Accepted: touch screens show it at rest ---
 // expect-clean: no-hover-only-reveal/no-hover-only-reveal
 export const _ok1 = () => (
-  <button
-    className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
-    type="button"
-  />
+  <button className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100" type="button" />
 );
 export const _ok2 = () => (
-  <button
-    className="opacity-0 hover:opacity-100 [@media(hover:none)]:opacity-100"
-    type="button"
-  />
+  <button className="opacity-0 hover:opacity-100 any-pointer-coarse:opacity-100" type="button" />
 );
 // --- Accepted: hidden only under a variant, visible at rest ---
 export const _ok3 = () => (
   <button className="md:opacity-0 md:group-hover:opacity-100" type="button" />
 );
 // --- Accepted: revealed by state, not hover ---
-export const _ok4 = () => (
-  <div className="opacity-0 data-[state=open]:opacity-100" />
-);
-export const _ok5 = () => (
-  <button className="opacity-0 focus-visible:opacity-100" type="button" />
-);
+export const _ok4 = () => <div className="opacity-0 data-[state=open]:opacity-100" />;
+export const _ok5 = () => <button className="opacity-0 focus-visible:opacity-100" type="button" />;
 // --- Accepted: decoration nobody needs to reach ---
-export const _ok6 = () => (
-  <span aria-hidden="true" className="opacity-0 group-hover:opacity-100" />
-);
-const ChevronIcon = ({ className }: { className: string }) => (
-  <svg className={className} />
-);
-export const _ok7 = () => (
-  <ChevronIcon className="opacity-0 group-hover:opacity-100" />
-);
+export const _ok6 = () => <span aria-hidden="true" className="opacity-0 group-hover:opacity-100" />;
+const ChevronIcon = ({ className }: { className: string }) => <svg className={className} />;
+export const _ok7 = () => <ChevronIcon className="opacity-0 group-hover:opacity-100" />;
 export const _ok8 = () => (
   <div className="pointer-events-none opacity-0 group-hover/row:opacity-100" />
 );

@@ -356,51 +356,42 @@ export const DraggableRow = ({
   );
 
   const rowActions = (
-    <RowActions
-      anchor={contextAnchor}
-      entity={entity}
-      ocrSource={
-        getOcrSource({
-          fields: entity.fields,
-          propertyId: contextPropertyId,
-        }) ?? undefined
-      }
-      onOpenChange={(open) => {
-        if (open) {
-          setBulkEntities(getBulkSelectedEntities());
+    <span className="sr-only pointer-coarse:not-sr-only pointer-coarse:-my-2 pointer-coarse:shrink-0">
+      <RowActions
+        anchor={contextAnchor}
+        entity={entity}
+        ocrSource={
+          getOcrSource({
+            fields: entity.fields,
+            propertyId: contextPropertyId,
+          }) ?? undefined
         }
-        setContextOpen(open);
-        if (!open) {
-          setContextAnchor(null);
-          setContextPropertyId(null);
-          setBulkEntities(undefined);
+        onOpenChange={(open) => {
+          if (open) {
+            setBulkEntities(getBulkSelectedEntities());
+          }
+          setContextOpen(open);
+          if (!open) {
+            setContextAnchor(null);
+            setContextPropertyId(null);
+            setBulkEntities(undefined);
+          }
+        }}
+        onRename={isFolder ? () => onStartEditing(entity.entityId) : undefined}
+        open={contextOpen}
+        selectedEntities={contextOpen ? bulkEntities : undefined}
+        cellMetadataTarget={
+          contextPropertyId
+            ? {
+                propertyId: contextPropertyId,
+                metadata: entity.cellMetadata[contextPropertyId],
+              }
+            : null
         }
-      }}
-      onRename={isFolder ? () => onStartEditing(entity.entityId) : undefined}
-      open={contextOpen}
-      selectedEntities={contextOpen ? bulkEntities : undefined}
-      cellMetadataTarget={
-        contextPropertyId
-          ? {
-              propertyId: contextPropertyId,
-              metadata: entity.cellMetadata[contextPropertyId],
-            }
-          : null
-      }
-      triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100! focus-visible:opacity-100!"
-      workspaceId={workspaceId}
-    />
-  );
-
-  // Kebab stays mounted (right-click context menu uses the same Menu),
-  // but the visible trigger is hidden so the row checkbox owns this
-  // slot. We use sr-only positioning rather than `display: none` so
-  // keyboard users can still Tab to it and open the actions menu.
-  const selectCellWithActions = (
-    <>
-      {selectCellContent}
-      <span className="sr-only">{rowActions}</span>
-    </>
+        triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100! focus-visible:opacity-100!"
+        workspaceId={workspaceId}
+      />
+    </span>
   );
 
   useExternalSyncEffect(() => {
@@ -465,7 +456,8 @@ export const DraggableRow = ({
         ref={setRowRef}
         renderColumns={renderColumns}
         row={row}
-        selectCellWithActions={selectCellWithActions}
+        selectCellContent={selectCellContent}
+        rowActions={rowActions}
         selected={selected}
         visibleCells={visibleCells}
       />
@@ -499,7 +491,8 @@ export const DraggableRow = ({
           hasExpandedCell={isFocusedExpansionRow}
           onCellClick={handleCellClick}
           onCellContextMenu={handleCellContextMenu}
-          selectCellWithActions={selectCellWithActions}
+          selectCellContent={selectCellContent}
+          rowActions={rowActions}
           selected={selected}
           visibleCells={visibleCells}
         />
@@ -533,7 +526,8 @@ type FolderTableRowProps = {
   ref: (element: HTMLDivElement | null) => void;
   renderColumns: TableColumn[];
   row: TableRow;
-  selectCellWithActions: React.ReactNode;
+  selectCellContent: React.ReactNode;
+  rowActions: React.ReactNode;
   selected: boolean;
   visibleCells: TableCell[];
 };
@@ -552,7 +546,8 @@ const FolderTableRow = ({
   ref,
   renderColumns,
   row,
-  selectCellWithActions,
+  selectCellContent,
+  rowActions,
   selected,
   visibleCells,
 }: FolderTableRowProps) => {
@@ -591,7 +586,7 @@ const FolderTableRow = ({
         }}
       >
         <PinnedBoundary column={selectCell.column} />
-        {selectCellWithActions}
+        {selectCellContent}
       </WorkspaceGridCell>
       <WorkspaceGridCell
         aria-colindex={2}
@@ -608,15 +603,20 @@ const FolderTableRow = ({
         }}
       >
         <PinnedBoundary column={nameCell.column} />
-        <FolderCell
-          depth={row.depth}
-          editingEntityId={editingEntityId}
-          entity={entity}
-          isExpanded={row_getIsExpanded(row)}
-          onRename={onRename}
-          onStopEditing={onStopEditing}
-          startEditing={() => onStartEditing(entity.entityId)}
-        />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            <FolderCell
+              depth={row.depth}
+              editingEntityId={editingEntityId}
+              entity={entity}
+              isExpanded={row_getIsExpanded(row)}
+              onRename={onRename}
+              onStopEditing={onStopEditing}
+              startEditing={() => onStartEditing(entity.entityId)}
+            />
+          </div>
+          {rowActions}
+        </div>
       </WorkspaceGridCell>
       <WorkspaceGridCell
         aria-colindex={3}
@@ -644,7 +644,8 @@ type DataRowCellsProps = {
     canExpandCell: boolean,
   ) => void;
   onCellContextMenu: (event: React.MouseEvent, column: TableColumn) => void;
-  selectCellWithActions: React.ReactNode;
+  selectCellContent: React.ReactNode;
+  rowActions: React.ReactNode;
   selected: boolean;
   visibleCells: TableCell[];
 };
@@ -655,7 +656,8 @@ const DataRowCells = ({
   hasExpandedCell,
   onCellClick,
   onCellContextMenu,
-  selectCellWithActions,
+  selectCellContent,
+  rowActions,
   selected,
   visibleCells,
 }: DataRowCellsProps) =>
@@ -699,9 +701,10 @@ const DataRowCells = ({
       >
         <PinnedBoundary column={cell.column} />
         {isSelectCell ? (
-          selectCellWithActions
+          selectCellContent
         ) : (
           <EntityCellContent
+            actions={cellIndex === 1 ? rowActions : undefined}
             layout={getCellContentLayout({ contentMode, isExpandedCell })}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -732,12 +735,23 @@ const getCellContentLayout = ({
 };
 
 const EntityCellContent = ({
+  actions,
   children,
   layout,
 }: {
+  actions?: React.ReactNode;
   children: React.ReactNode;
   layout: CellContentLayout;
 }) => {
+  const content =
+    actions === undefined ? (
+      children
+    ) : (
+      <>
+        <span className="min-w-0 flex-1">{children}</span>
+        {actions}
+      </>
+    );
   switch (layout) {
     case "line":
       return (
@@ -747,7 +761,7 @@ const EntityCellContent = ({
             ROW_FIRST_LINE[FIRST_LINE].content,
           )}
         >
-          {children}
+          {content}
         </span>
       );
     case "wrap":
@@ -763,14 +777,14 @@ const EntityCellContent = ({
         >
           <FirstLineStrut firstLine={FIRST_LINE} />
           <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-            {children}
+            {content}
           </span>
         </span>
       );
     case "expanded":
       return (
         <span className="border-border/80 bg-background absolute inset-x-0 top-0 z-40 flex max-h-96 min-h-24 w-full min-w-0 items-start gap-1.5 overflow-y-auto border p-2 pb-8 shadow-lg">
-          {children}
+          {content}
         </span>
       );
     default:

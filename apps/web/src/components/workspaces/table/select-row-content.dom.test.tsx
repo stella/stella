@@ -333,6 +333,26 @@ const renderHost = async (
 };
 
 describe("every shared selection-column host", () => {
+  test("entity actions have their own space beside values, outside the selection cell", async () => {
+    const { view, assertNotOpened } = await renderHost(
+      "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+    );
+    const checkbox = view.getByRole("checkbox", { name: "1" });
+    const row = checkbox.closest('[role="row"]');
+    const actions = row?.querySelector('button[aria-label="Actions"]');
+    expect(actions).not.toBeNull();
+    expect(
+      actions?.closest('[role="gridcell"]') ===
+        checkbox.closest('[role="gridcell"]'),
+    ).toBe(false);
+    expect(row?.querySelectorAll('button[aria-label="Actions"]')).toHaveLength(
+      1,
+    );
+    fireEvent.click(checkbox);
+    expect(checkbox.getAttribute("aria-checked")).toBe("true");
+    assertNotOpened();
+  });
+
   test("the exercised host set equals the imports in product source", () => {
     expect(selectionHosts.toSorted()).toEqual([...fixtures.keys()].toSorted());
   });

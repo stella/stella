@@ -5,15 +5,15 @@
 // guesses where it is, invisible otherwise.
 //
 // Invariant: a class string that hides something until hover also says what
-// happens on a coarse pointer, with a `pointer-coarse:` (or
-// `[@media(hover:none)]:`) token. Usually that is
+// happens on a coarse pointer, with a visibility utility under
+// `pointer-coarse:`. Usually that is
 // `pointer-coarse:opacity-100`, so touch devices show the control at rest.
 //
 // Rejected: `opacity-0 group-hover:opacity-100`,
 // `opacity-0! group-hover/row:opacity-100!`, `invisible hover:visible`.
 //
 // Accepted:
-//   any of those plus a `pointer-coarse:` or `[@media(hover:none)]:` token.
+//   a matching touch reveal or an explicit touch hide under `pointer-coarse:`.
 //   a hide that only applies under a variant (`md:opacity-0`,
 //   `data-[closed]:opacity-0`): the base state is visible.
 //   a reveal that is not a hover (`focus-visible:opacity-100`,
@@ -54,18 +54,8 @@ const isHoverVariant = (variant: string): boolean =>
 const isTappableStateVariant = (variant: string): boolean =>
   /^(?:group-|peer-)?(?:data|aria|has)-/u.test(variant);
 
-const hasCoarsePointerVariant = (token: string): boolean =>
-  classVariants(token)
-    .split(":")
-    .some(
-      (variant) =>
-        variant === "pointer-coarse" || variant === "any-pointer-coarse",
-    );
-
-// The class tokenizer splits on parentheses, so an arbitrary media variant
-// (`[@media(hover:none)]:`) never arrives as one token; read it off the
-// string.
-const HOVER_NONE_MEDIA_VARIANT = "[@media(hover:none)]:";
+const isCoarsePointerVariant = (variant: string): boolean =>
+  variant === "pointer-coarse" || variant === "any-pointer-coarse";
 
 const variantsOf = (token: string): string[] => {
   const variants = classVariants(token);
@@ -158,10 +148,26 @@ const hidesUntilHover = (value: string): boolean => {
   if (revealsOnTappableState) {
     return false;
   }
-  return (
-    !tokens.some(hasCoarsePointerVariant) &&
-    !value.replaceAll(/\s/gu, "").includes(HOVER_NONE_MEDIA_VARIANT)
-  );
+  const touchDecisions = tokens.filter((token) => {
+    const variants = variantsOf(token);
+    return variants.length > 0 && variants.every(isCoarsePointerVariant);
+  });
+  const touchBases = new Set(touchDecisions.map(classBaseName));
+  if (
+    touchBases.has("hidden") ||
+    touchBases.has("hidden!") ||
+    [...HIDDEN].some((hidden) => touchBases.has(hidden))
+  ) {
+    return false;
+  }
+  return tokens.some((token) => {
+    const base = classBaseName(token);
+    if (classVariants(token) !== "" || !HIDDEN.has(base)) {
+      return false;
+    }
+    const shown = base.startsWith("opacity-") ? "opacity-100" : "visible";
+    return !touchBases.has(shown) && !touchBases.has(`${shown}!`);
+  });
 };
 
 export default eslintCompatPlugin({
