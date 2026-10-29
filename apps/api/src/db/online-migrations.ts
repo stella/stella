@@ -53,6 +53,7 @@ import {
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
 } from "./chat-content-v3-backfill";
+import { CHAT_RUN_TEXT_BOUNDARIES } from "./chat-run-text-boundaries";
 import {
   CLIENT_INVOICE_BACKFILL,
   CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
@@ -242,6 +243,43 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   ...FALLBACK_DECISION_INDEXES,
+  {
+    name: "chat_run_log_entries_message_snapshot_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_message_snapshot_idx\" ON public.chat_run_log_entries (organization_id, run_id, seq) WHERE chunk->>'type' = 'MESSAGES_SNAPSHOT'",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, seq) WHERE ((chunk ->> 'type'::text) = 'MESSAGES_SNAPSHOT'::text)",
+  },
+  {
+    name: "chat_run_log_entries_text_start_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_text_start_idx\" ON public.chat_run_log_entries (organization_id, run_id, seq) WHERE (chunk->>'type' = 'TEXT_MESSAGE_START' OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role'))",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, seq) WHERE (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_START'::text) OR (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_CHUNK'::text) AND (chunk ? 'role'::text)))",
+  },
+  {
+    name: "chat_run_log_entries_text_open_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_text_open_idx\" ON public.chat_run_log_entries (organization_id, run_id, text_boundary_initialization, text_message_end_seq, seq) WHERE (chunk->>'type' = 'TEXT_MESSAGE_START' OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role'))",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, text_boundary_initialization, text_message_end_seq, seq) WHERE (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_START'::text) OR (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_CHUNK'::text) AND (chunk ? 'role'::text)))",
+  },
+  {
+    name: "chat_run_log_entries_text_boundary_id_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_text_boundary_id_idx\" ON public.chat_run_log_entries (organization_id, run_id, md5(chunk->>'messageId'), seq) WHERE (chunk->>'type' = 'TEXT_MESSAGE_START' OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role') OR chunk->>'type' = 'TEXT_MESSAGE_END')",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, md5((chunk ->> 'messageId'::text)), seq) WHERE (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_START'::text) OR (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_CHUNK'::text) AND (chunk ? 'role'::text)) OR ((chunk ->> 'type'::text) = 'TEXT_MESSAGE_END'::text))",
+  },
+
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:
@@ -962,6 +1000,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CHAT_RUN_TEXT_BOUNDARIES,
   ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
   CLIENT_INVOICE_BACKFILL,
