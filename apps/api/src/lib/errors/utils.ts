@@ -248,10 +248,19 @@ const MAX_BYTES = 5 * 1024 * 1024;
 let devLogWrites: Promise<void> = Promise.resolve();
 let observeDevErrorRecord: ((record: unknown) => void) | null = null;
 
-/** In-memory test sink attached at the final JSONL record boundary. */
-export const installDevErrorJsonlObserverForTest = (
+type DevErrorJsonlObserver = {
+  drain: () => Promise<void>;
+  restore: () => void;
+};
+
+/**
+ * In-memory test sink attached at the final JSONL record boundary. Writes
+ * queued before installation settle first, so only later records reach it.
+ */
+export const installDevErrorJsonlObserverForTest = async (
   observer: (record: unknown) => void,
-): { drain: () => Promise<void>; restore: () => void } => {
+): Promise<DevErrorJsonlObserver> => {
+  await devLogWrites;
   observeDevErrorRecord = observer;
   return {
     drain: async () => {

@@ -145,7 +145,7 @@ describe("AI config handlers with an undecryptable stored config", () => {
           );
           const logServerDevError = errorUtils.logServerDevError;
           const jsonlRecords: unknown[] = [];
-          const jsonl = errorUtils.installDevErrorJsonlObserverForTest(
+          const jsonl = await errorUtils.installDevErrorJsonlObserverForTest(
             (record) => {
               jsonlRecords.push(record);
             },
