@@ -1817,7 +1817,7 @@ const assertIndexReady = async (
 
 type EnsureOnlineIndexOptions = {
   connection: OnlineMigrationConnection;
-  index: OnlineIndex;
+  index: OnlineIndexDeclaration;
   gate: OnlineIndexGateOptions;
   reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
