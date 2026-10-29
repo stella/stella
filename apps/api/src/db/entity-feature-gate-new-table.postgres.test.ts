@@ -162,6 +162,12 @@ describe.skipIf(!runPostgresTests)(
           ALTER TABLE public.${FIXTURE_TABLE} ENABLE ROW LEVEL SECURITY;
           ALTER TABLE public.${FIXTURE_TABLE} FORCE ROW LEVEL SECURITY;
           GRANT SELECT, INSERT, UPDATE, DELETE ON public.${FIXTURE_TABLE} TO stella;
+          -- As every real table has: forced row security binds the owner too,
+          -- and the fixture's setup rows are written as the owner.
+          CREATE POLICY ${FIXTURE_TABLE}_owner_access ON public.${FIXTURE_TABLE}
+            AS PERMISSIVE FOR ALL TO public
+            USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${FIXTURE_TABLE}'::regclass))
+            WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${FIXTURE_TABLE}'::regclass));
           CREATE POLICY workspace_select ON public.${FIXTURE_TABLE} FOR SELECT TO stella
             USING (workspace_id = ANY(COALESCE(NULLIF(current_setting('app.workspace_ids', true), '')::uuid[], ARRAY[]::uuid[])));
           CREATE POLICY workspace_insert ON public.${FIXTURE_TABLE} FOR INSERT TO stella
