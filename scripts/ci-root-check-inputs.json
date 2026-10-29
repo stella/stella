@@ -713,7 +713,8 @@
       "apps/desktop/src/shared/rpc.gen.ts",
       "packages/api-contract/src/desktop-edit-file-types.ts",
       "scripts/check-bridge-version.sh"
-    ]
+    ],
+    "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
     "Resolve static check receipts": ["**"],
