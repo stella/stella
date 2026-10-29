@@ -25,7 +25,6 @@ import {
   filterMattersByQuery,
   selectSiblingMatters,
 } from "@/components/breadcrumbs/matter-switcher.logic";
-import { CRUMB_SWITCHER_REVEAL_CLASS_NAME } from "@/components/breadcrumbs/shared";
 import { MatterOptionLabel } from "@/components/matter-option-label";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -124,27 +123,32 @@ export const MatterSwitcher = ({
 
   return (
     <Popover onOpenChange={changeOpen} open={open}>
-      <TooltipRoot>
-        <PopoverTrigger
-          render={
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-label={label}
-                  className={cn(
-                    revealOnHover && CRUMB_SWITCHER_REVEAL_CLASS_NAME,
-                  )}
-                  size="icon-xs"
-                  variant="ghost"
-                />
-              }
-            />
-          }
-        >
-          <ChevronDownIcon />
-        </PopoverTrigger>
-        <TooltipPopup>{label}</TooltipPopup>
-      </TooltipRoot>
+      {/* While more crumbs follow, the caret waits for a hover over its crumb
+          (the `group/crumb` item), so at rest it never sits beside the
+          separator chevron. Focus, an open popup and touch, which has no
+          hover, show it. */}
+      <span
+        className={cn(
+          "inline-flex",
+          revealOnHover &&
+            "opacity-0 transition-opacity group-focus-within/crumb:opacity-100 group-hover/crumb:opacity-100 has-data-popup-open:opacity-100 pointer-coarse:opacity-100",
+        )}
+      >
+        <TooltipRoot>
+          <PopoverTrigger
+            render={
+              <TooltipTrigger
+                render={
+                  <Button aria-label={label} size="icon-xs" variant="ghost" />
+                }
+              />
+            }
+          >
+            <ChevronDownIcon />
+          </PopoverTrigger>
+          <TooltipPopup>{label}</TooltipPopup>
+        </TooltipRoot>
+      </span>
       <PopoverPopup align="start" className="w-72" padding="none">
         <Command mode="none" onValueChange={setQuery} value={query}>
           <div className="border-b px-2.5 py-2">
