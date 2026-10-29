@@ -9,7 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readDecisions } from "./ci-job-classification/decisions";
+import {
+  readDecisions,
+  writeDecision,
+} from "./ci-job-classification/decisions";
 import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
@@ -108,16 +111,28 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       force: true,
     });
     for (const [key, decision] of Object.entries(decisions)) {
-      const file = path.join(root, decisionPathForKey(key));
-      mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`);
+      writeDecision(root, key, decision);
     }
   };
   const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", "-C", root, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Classification Test",
+        "-c",
+        "user.email=classification-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-C",
+        root,
+        ...args,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
   };
   const commitAll = (message: string) => {
@@ -163,31 +178,37 @@ const run = (root: string, ...args: string[]) => {
 
 const decisionsIn = (root: string) =>
   readDecisions({ type: "working-tree", root });
-
-const BEFORE = "jobs: {check: {env: {MODE: one}, steps: []}}";
-const AFTER = "jobs: {check: {env: {MODE: two}, steps: []}}";
-
-test("a digest-only change to an ordinary job is refreshed and then passes", () => {
-  const decisions = reviewed(BEFORE, "check");
-  const { root } = repository(
-    { workflow: BEFORE, decisions },
-    { workflow: AFTER, decisions },
+const storedDecisions = (decisions: Record<string, Decision>) =>
+  Object.fromEntries(
+    Object.entries(decisions).map(([key, decision]) => [
+      key,
+      {
+        kind: decision.kind,
+        qualifier: decision.qualifier,
+        approvedDigests: [decision.reviewedDigest],
+      },
+    ]),
   );
-  expect(run(root, "--check").exitCode).toBe(1);
+
+const BEFORE =
+  "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}}";
+const AFTER =
+  "jobs: {check: {steps: [{uses: acme/check@1111111111111111111111111111111111111111}]}}";
+
+test("an ordinary step change needs no refreshed approval", () => {
+  const ordinaryBefore = `jobs: {check: {steps: [{env: {TOKEN: '\${{ github.token }}'}, run: gh api /repos}, {run: bun test one}]}}`;
+  const ordinaryAfter = `jobs: {check: {steps: [{env: {TOKEN: '\${{ github.token }}'}, run: gh api /repos}, {run: bun test two}]}}`;
+  const decisions = reviewed(ordinaryBefore, "check");
+  const { root } = repository(
+    { workflow: ordinaryBefore, decisions },
+    { workflow: ordinaryAfter, decisions },
+  );
+  expect(run(root, "--check").exitCode).toBe(0);
 
   const write = run(root, "--write");
   expect(write.exitCode).toBe(0);
-  expect(write.stdout).toBe(
-    `Refreshed 1 mechanical classification digest(s): ${keyOf("check")}\n`,
-  );
-  // Only the digest moves; the human decision is kept byte for byte.
-  expect(decisionsIn(root)).toEqual({
-    [keyOf("check")]: {
-      kind: "ordinary",
-      qualifier: "Reviewed checks",
-      reviewedDigest: digestOf(AFTER, "check"),
-    },
-  });
+  expect(write.stdout).toBe("");
+  expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
   expect(run(root, "--check")).toEqual({
     exitCode: 0,
     stdout: "Classified 1 workflows\n",
@@ -195,6 +216,146 @@ test("a digest-only change to an ordinary job is refreshed and then passes", () 
   });
   // A second refresh is a no-op.
   expect(run(root, "--write")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+});
+
+test.each([
+  [
+    "inherited write permission",
+    "permissions: {contents: write}\njobs: {check: {steps: [{run: bun test one}]}}",
+    "permissions: {contents: write}\njobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "inherited secret",
+    `permissions: {contents: read}\nenv: {TOKEN: "\${{ secrets.X }}"}\njobs: {check: {steps: [{run: bun test one}]}}`,
+    `permissions: {contents: read}\nenv: {TOKEN: "\${{ secrets.X }}"}\njobs: {check: {steps: [{run: bun test two}]}}`,
+  ],
+  [
+    "deployment environment",
+    "jobs: {check: {environment: staging, steps: []}}",
+    "jobs: {check: {environment: production, steps: []}}",
+  ],
+  [
+    "runner",
+    "jobs: {check: {'runs-on': ubuntu-latest, steps: []}}",
+    "jobs: {check: {'runs-on': self-hosted, steps: []}}",
+  ],
+] as const)(
+  "%s changes an effectively privileged job digest",
+  (_, before, after) => {
+    expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
+  },
+);
+
+test.each([
+  [
+    "write permissions",
+    "permissions: {id-token: write}\njobs: {check: {steps: [{run: bun test one}]}}",
+    "permissions: {id-token: write}\njobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "credentials",
+    `jobs: {check: {env: {TOKEN: '\${{ secrets.DEPLOY }}'}, steps: [{run: bun test one}]}}`,
+    `jobs: {check: {env: {TOKEN: '\${{ secrets.DEPLOY }}'}, steps: [{run: bun test two}]}}`,
+  ],
+  [
+    "deployment environments",
+    "jobs: {check: {environment: staging, steps: [{run: bun test one}]}}",
+    "jobs: {check: {environment: staging, steps: [{run: bun test two}]}}",
+  ],
+  [
+    "base-branch triggers",
+    "on: pull_request_target\njobs: {check: {steps: [{run: bun test one}]}}",
+    "on: pull_request_target\njobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "self-hosted runners",
+    "jobs: {check: {'runs-on': [self-hosted, linux], steps: [{run: bun test one}]}}",
+    "jobs: {check: {'runs-on': [self-hosted, linux], steps: [{run: bun test two}]}}",
+  ],
+  [
+    "untrusted checkouts",
+    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
+    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
+  ],
+] as const)(
+  "privilege source: %s requires approval for an ordinary run change",
+  (_, before, after) => {
+    expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
+    const decisions = reviewed(before, "check");
+    const { root } = repository(
+      { workflow: before, decisions },
+      { workflow: after, decisions },
+    );
+    expect(run(root, "--check").exitCode).toBe(1);
+  },
+);
+
+test.each([
+  ["job env", "env: {DESTINATION: one}", "env: {DESTINATION: two}"],
+  [
+    "reusable workflow input",
+    "uses: acme/shared/.github/workflows/deploy.yml@v1, with: {destination: one}",
+    "uses: acme/shared/.github/workflows/deploy.yml@v1, with: {destination: two}",
+  ],
+  [
+    "strategy matrix",
+    "strategy: {matrix: {node: [20]}}",
+    "strategy: {matrix: {node: [22]}}",
+  ],
+] as const)(
+  "a write job requires approval for a changed %s",
+  (_, beforeField, afterField) => {
+    const before = `jobs: {check: {permissions: {contents: write}, ${beforeField}, steps: []}}`;
+    const after = `jobs: {check: {permissions: {contents: write}, ${afterField}, steps: []}}`;
+    const decisions = reviewed(before, "check");
+    const { root } = repository(
+      { workflow: before, decisions },
+      { workflow: after, decisions },
+    );
+    expect(run(root, "--check").exitCode).toBe(1);
+  },
+);
+
+test("pull_request_target with an untrusted checkout requires approval for every step change", () => {
+  const checkout = `{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}`;
+  const before = `on: pull_request_target\njobs: {check: {steps: [${checkout}, {run: echo one}]}}`;
+  const after = `on: pull_request_target\njobs: {check: {steps: [${checkout}, {run: echo two}]}}`;
+  const decisions = reviewed(before, "check");
+  const { root } = repository(
+    { workflow: before, decisions },
+    { workflow: after, decisions },
+  );
+  expect(run(root, "--check").exitCode).toBe(1);
+});
+
+test.each([
+  [
+    "renamed secret",
+    "on: push\njobs: {check: {env: {TOKEN: secrets.OLD}, steps: []}}",
+    "on: push\njobs: {check: {env: {TOKEN: secrets.NEW}, steps: []}}",
+  ],
+  [
+    "removed secret",
+    "on: push\njobs: {check: {env: {TOKEN: secrets.OLD}, steps: []}}",
+    "on: push\njobs: {check: {steps: []}}",
+  ],
+  [
+    "write permission",
+    "on: push\njobs: {check: {steps: []}}",
+    "on: push\njobs: {check: {permissions: {contents: write}, steps: []}}",
+  ],
+  [
+    "third-party action",
+    "on: push\njobs: {check: {steps: []}}",
+    "on: push\njobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}}",
+  ],
+  [
+    "trigger",
+    "on: push\njobs: {check: {steps: []}}",
+    "on: pull_request_target\njobs: {check: {steps: []}}",
+  ],
+] as const)("%s changes the privileged-surface digest", (_, before, after) => {
+  expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
 });
 
 for (const scenario of [
@@ -235,7 +396,7 @@ for (const scenario of [
       stdout: "",
       stderr: "",
     });
-    expect(decisionsIn(root)).toEqual(decisions);
+    expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
     const check = run(root, "--check");
     expect(check.exitCode).toBe(1);
     expect(check.stdout).toContain(
@@ -247,13 +408,13 @@ for (const scenario of [
 test("a new job is never classified by the refresh", () => {
   const decisions = reviewed(BEFORE, "check");
   const head =
-    "jobs: {check: {env: {MODE: one}, steps: []}, added: {steps: []}}";
+    "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}, added: {steps: []}}";
   const { root } = repository(
     { workflow: BEFORE, decisions },
     { workflow: head, decisions },
   );
   expect(run(root, "--write").exitCode).toBe(0);
-  expect(decisionsIn(root)).toEqual(decisions);
+  expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
   expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
@@ -295,7 +456,7 @@ for (const change of [
       { workflow: AFTER, decisions: edited },
     );
     expect(run(root, "--write").exitCode).toBe(0);
-    expect(decisionsIn(root)).toEqual(edited);
+    expect(decisionsIn(root)).toEqual(storedDecisions(edited));
     expect(run(root, "--check").exitCode).toBe(1);
   });
 }
@@ -351,6 +512,74 @@ test("pre-push fails on a change that needs review", () => {
   const result = run(root, "--pre-push");
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("Missing or changed job review");
+});
+
+test("independent privileged approvals merge without conflict", () => {
+  const baseWorkflow = `jobs:
+  x:
+    steps:
+      - run: echo x-old
+
+  y:
+    steps:
+      - run: echo y-old
+`;
+  const decisions = {
+    ...reviewed(baseWorkflow, "x"),
+    ...reviewed(baseWorkflow, "y"),
+  };
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: baseWorkflow, decisions },
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Classification Test",
+        "-c",
+        "user.email=classification-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-C",
+        root,
+        ...args,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  };
+
+  git("switch", "-c", "approve-x");
+  const workflowX = baseWorkflow.replace("echo x-old", "echo x-new");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowX);
+  writeDecision(root, keyOf("x"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(workflowX, "x"),
+  });
+  commitAll("approve x");
+
+  git("switch", "-c", "approve-y", "refs/remotes/origin/main");
+  const workflowY = baseWorkflow.replace("echo y-old", "echo y-new");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowY);
+  writeDecision(root, keyOf("y"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(workflowY, "y"),
+  });
+  commitAll("approve y");
+  git("merge", "--no-edit", "approve-x");
+
+  expect(run(root, "--check")).toEqual({
+    exitCode: 0,
+    stdout: "Classified 1 workflows\n",
+    stderr: "",
+  });
 });
 
 test("conflicting modes are rejected", () => {

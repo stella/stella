@@ -11,7 +11,12 @@ import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import {
+  assertProperty,
+  propertyConfig,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -69,6 +74,7 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -382,6 +388,143 @@ const prepared = (
   const batch = prepareCaseLawIngestionBatch({ decisions });
   return Result.isOk(batch) ? batch.value : panic(batch.error.message);
 };
+
+describe("crawl cancellation", () => {
+  test(
+    "cancelled decisions remain reachable on replay",
+    async () => {
+      await assertProperty(
+        "cancelled decisions remain reachable on replay",
+        fc.asyncProperty(fc.integer({ min: 3, max: 10 }), async (cancelAt) => {
+          const sourceId = await crawlSource();
+          const decisions = records(4);
+          const transfer = landingTransfer();
+          const drain = new AbortController();
+          const logs = installRecordingLogger();
+          let operations = 0;
+          const interruptedDb: ScopedDb = async (operation) => {
+            operations++;
+            if (operations === cancelAt) {
+              drain.abort();
+              throw new TypeError("operation interrupted");
+            }
+            return await scopedDb(operation);
+          };
+          czNsAdapter.fetchPage = async () =>
+            Result.ok({ decisions, nextCursor: "next-page" });
+          const sourceLease = await leaseFor(sourceId);
+          try {
+            const result = await runIngestionPipeline({
+              source: sourceLease.source,
+              sourceLease,
+              scopedDb: interruptedDb,
+              corpus: transfer.corpus,
+              maxPages: 1,
+              cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+              acquireStoredTotalAdmission: async () => "held",
+            });
+            expect(drain.signal.aborted).toBe(true);
+            expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+            expect(result.pagesProcessed).toBe(0);
+            expect(result.nextCursor).toBe(sourceLease.source.syncCursor);
+            expect(await sourceCursor(sourceId)).toBe(
+              sourceLease.source.syncCursor,
+            );
+            expect(await ledgerRows(sourceId)).toEqual([]);
+            expect(
+              logs.records.filter(
+                ({ message }) =>
+                  message === "case_law.ingestion.decision_failed" ||
+                  message === "case_law.ingestion.failure_records_not_written",
+              ),
+            ).toEqual([]);
+          } finally {
+            await sourceLease.release();
+            logs.restore();
+          }
+          const replay = await crawlCaller.apply({
+            sourceId,
+            decisions,
+            corpus: transfer.corpus,
+          });
+          expect(replay.type).toBe("certified");
+          expect(
+            (await decisionRows(sourceId)).map(
+              ({ sourceDocumentId }) => sourceDocumentId,
+            ),
+          ).toEqual(
+            decisions.map(({ sourceDocumentId }) => sourceDocumentId ?? null),
+          );
+          expect(await ledgerRows(sourceId)).toEqual([]);
+        }),
+        { numRuns: 8 },
+      );
+    },
+    propertyTestTimeout(120_000),
+  );
+
+  test("an admission pause holds the page without recording failures", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: records(3), nextCursor: "next-page" });
+    let batches = 0;
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        batchRecordLimit: 1,
+        maxPages: 1,
+        acquireBatchAdmission: async () =>
+          ++batches === 1 ? "granted" : "paused",
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+      expect(result.inserted).toBe(1);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+      expect(await ledgerRows(sourceId)).toEqual([]);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("an operation error without cancellation records a decision failure", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    const logs = installRecordingLogger();
+    let operations = 0;
+    const failedDb: ScopedDb = async (operation) => {
+      if (++operations === 3) {
+        throw new TypeError("operation interrupted");
+      }
+      return await scopedDb(operation);
+    };
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: records(1), nextCursor: "next-page" });
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb: failedDb,
+        corpus: landingTransfer().corpus,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.stopKind).not.toBe(INGESTION_STOP_KIND.DEADLINE);
+      expect(await ledgerRows(sourceId)).toHaveLength(1);
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "case_law.ingestion.decision_failed",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await sourceLease.release();
+      logs.restore();
+    }
+  });
+});
 
 test("the registered batch clones and persists declared URL scalars and diagnostics without display-text decoding", async () => {
   const rootUrl = "https://example.test/?root=&amp;amp;&encoded=%26";
