@@ -947,6 +947,10 @@
       "samples": 11,
       "p95Seconds": 0,
       "p99Seconds": 0
+    },
+    "Test depth repository scripts": {
+      "minutes": 30,
+      "samples": 0
     }
   },
   "code-quality-web-rest": {
