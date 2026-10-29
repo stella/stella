@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { getColumnTable, is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import nodePath from "node:path";
 
@@ -279,7 +280,10 @@ describe("account deletion FK coverage", () => {
     const userForeignKeys = findUserForeignKeys();
     const keys = new Set<string>();
     for (const { column, reason } of RETAINED_USER_ATTRIBUTION_COLUMNS) {
-      const table = column.table;
+      const table = getColumnTable(column);
+      if (!isPgTable(table)) {
+        return panic("Retained attribution must belong to a PostgreSQL table");
+      }
       const config = getTableConfig(table);
       const key = gapKey(config.name, column.name);
       expect(keys.has(key)).toBe(false);
