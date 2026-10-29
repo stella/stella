@@ -4200,17 +4200,19 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
 type DiffOptions = {
   perFile?: true | undefined;
   allowlist?: true | undefined;
+  renamedFrom?: ReadonlyMap<string, string> | undefined;
 };
 
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
-  { perFile, allowlist }: DiffOptions = {},
+  { perFile, allowlist, renamedFrom }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
-    const from = baseline.files[file] ?? 0;
+    const baselineFile = renamedFrom?.get(file) ?? file;
+    const from = baseline.files[baselineFile] ?? 0;
     if (to > from) {
       regressedFiles.push({ file, from, to });
     }
@@ -4219,8 +4221,11 @@ const diffMetric = (
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
+    const renamedTo = new Map(
+      [...(renamedFrom ?? [])].map(([to, from]) => [from, to]),
+    );
     for (const [file, from] of Object.entries(baseline.files)) {
-      const to = current.files[file] ?? 0;
+      const to = current.files[renamedTo.get(file) ?? file] ?? 0;
       if (to < from) {
         staleFiles.push({ file, from, to });
       }
@@ -4304,19 +4309,21 @@ type AssessMeasurementsOptions = {
   current: Baseline;
   baseline: Baseline;
   metrics?: readonly RatchetMetric[];
+  renamedFrom?: ReadonlyMap<string, string>;
 };
 
 export const assessMeasurements = ({
   current,
   baseline,
   metrics = RATCHET_METRICS,
+  renamedFrom,
 }: AssessMeasurementsOptions): MeasurementAssessment => {
   const diffs = metrics.map((metric) =>
     diffMetric(
       metric.id,
       requireSnapshot(current, metric.id),
       baseline[metric.id] ?? { count: 0, files: {} },
-      { perFile: metricGate(metric).perFile },
+      { perFile: metricGate(metric).perFile, renamedFrom },
     ),
   );
   return {
@@ -4336,6 +4343,33 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
+
+const renamedFiles = (
+  base: string,
+  head: string | undefined,
+): ReadonlyMap<string, string> => {
+  const output = readGit([
+    "diff",
+    "--find-renames",
+    "--name-status",
+    "-z",
+    base,
+    ...(head === undefined ? [] : [head]),
+    "--",
+  ]);
+  const fields = output.split("\0");
+  const renamedFrom = new Map<string, string>();
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++] ?? "";
+    const source = fields[index++] ?? "";
+    if (!status.startsWith("R")) {
+      continue;
+    }
+    const destination = fields[index++] ?? "";
+    renamedFrom.set(destination, source);
+  }
+  return renamedFrom;
+};
 
 const comparisonBase = (headRef?: string): string => {
   const explicitBase =
@@ -4638,7 +4672,11 @@ const runCheck = (): number => {
   const drops: MetricDiff[] = [];
   const remedies = new Set<string>();
 
-  const assessment = assessMeasurements({ current, baseline });
+  const assessment = assessMeasurements({
+    current,
+    baseline,
+    renamedFrom: renamedFiles(base, headRef),
+  });
   for (const [index, diff] of assessment.diffs.entries()) {
     const metric =
       RATCHET_METRICS.at(index) ?? panic("ratchet diff has no metric");
@@ -4690,7 +4728,8 @@ const runCheck = (): number => {
   if (regressions.some(({ id }) => PER_FILE_METRIC_IDS.has(id))) {
     console.error(
       "\nA per-file metric fails on any file above its own baseline, even when\n" +
-        "the total did not rise: move the new occurrence behind the owner instead.",
+        "the total did not rise: move the new occurrence behind the owner instead.\n" +
+        "File moves follow Git rename detection; edits below Git's similarity threshold are treated as a deletion plus an addition.",
     );
   }
   for (const remedy of remedies) {
