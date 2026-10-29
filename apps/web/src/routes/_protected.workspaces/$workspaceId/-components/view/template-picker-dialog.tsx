@@ -361,7 +361,7 @@ const TemplateRow = ({
   const Icon = layoutIcons[template.layoutType];
 
   return (
-    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onFocus mirrors onMouseEnter (keyboard parity); the <li> stays a semantic list item wrapping the actionable <button>
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onFocus mirrors onMouseEnter (keyboard parity); the <li> stays a semantic list item wrapping the actionable Button
     <li
       className="hover:bg-muted/50 flex items-center gap-2 rounded p-2"
       onFocus={onPreview}
@@ -370,15 +370,15 @@ const TemplateRow = ({
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <CapabilityAction action={{ capability }} surface="control">
         {(capabilityProps) => (
-          <button
-            className="min-w-0 flex-1 truncate text-start text-sm"
+          <Button
+            className="flex min-w-0 flex-1"
             disabled={isPending}
             onClick={onUse}
-            type="button"
+            variant="plain"
             {...capabilityProps}
           >
-            {template.name}
-          </button>
+            <span className="truncate text-sm">{template.name}</span>
+          </Button>
         )}
       </CapabilityAction>
       {canDelete && (
@@ -429,17 +429,17 @@ const BuiltInTemplateRow = ({
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <CapabilityAction action={{ capability }} surface="control">
         {(capabilityProps) => (
-          <button
-            className="min-w-0 flex-1 truncate text-start text-sm"
+          <Button
+            className="flex min-w-0 flex-1"
             disabled={isPending}
             onClick={onUse}
             onFocus={onPreview}
             onMouseEnter={onPreview}
-            type="button"
+            variant="plain"
             {...capabilityProps}
           >
-            {name}
-          </button>
+            <span className="truncate text-sm">{name}</span>
+          </Button>
         )}
       </CapabilityAction>
       <CapabilityAction action={{ capability }} surface="control">

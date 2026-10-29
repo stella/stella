@@ -10,8 +10,8 @@ import {
   DialogPopup,
 } from "@stll/ui/dialog";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import { cn } from "@stll/ui/utils";
 
 import { MatterCombobox } from "@/components/billing/matter-combobox";
@@ -136,18 +136,17 @@ export const SplitEntryDialog = ({
               </div>
               <div className="w-20">
                 <Label>{t("billing.split.percentage")}</Label>
-                <Input
-                  inputMode="numeric"
+                <NumberInput
+                  inputProps={{
+                    "aria-label": t("billing.split.percentage"),
+                    inputMode: "numeric",
+                  }}
                   max={100}
                   min={1}
-                  onChange={(e) =>
-                    updateSplit(
-                      index,
-                      "percentage",
-                      Number(e.currentTarget.value),
-                    )
+                  onValueChange={(next) =>
+                    updateSplit(index, "percentage", next ?? 0)
                   }
-                  type="number"
+                  step={1}
                   value={split.percentage}
                 />
               </div>

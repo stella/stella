@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -201,6 +202,7 @@ export const AICellSourceCard = ({
               onPointerLeave={() => {
                 dismissedRef.current = false;
               }}
+              // oxlint-disable-next-line no-native-ui/no-native-button -- the trigger wraps cell children that can hold their own flag buttons, and neither <button> nor Button may contain interactive content
               role="button"
               tabIndex={0}
             />
@@ -222,13 +224,16 @@ export const AICellSourceCard = ({
       </PreviewCardTrigger>
       <PreviewCardPopup align="start" className="w-80 p-0">
         {onOpen ? (
-          <button
-            className="hover:bg-accent/40 flex w-full cursor-pointer flex-col gap-2 rounded-lg p-3 text-start"
+          <Button
+            className="block w-full"
+            focusRing="inside"
             onClick={onOpen}
-            type="button"
+            variant="plain"
           >
-            {cardContent}
-          </button>
+            <span className="hover:bg-accent/40 flex w-full flex-col gap-2 rounded-lg p-3">
+              {cardContent}
+            </span>
+          </Button>
         ) : (
           <div className="flex w-full flex-col gap-2 rounded-lg p-3 text-start">
             {cardContent}

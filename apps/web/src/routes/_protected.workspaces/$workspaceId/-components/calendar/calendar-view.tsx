@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -637,13 +638,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                 ref={monthScrollRef}
               >
                 <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
-                  <button
-                    className="text-muted-foreground hover:text-foreground rounded text-xs font-medium"
+                  <Button
                     onClick={() => scrollToMonth(viewDate)}
-                    type="button"
+                    size="inline"
+                    variant="muted"
                   >
-                    {monthLabel}
-                  </button>
+                    <span className="text-xs font-medium">{monthLabel}</span>
+                  </Button>
                 </div>
 
                 {monthWeeks.map((week) => (

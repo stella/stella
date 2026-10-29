@@ -587,8 +587,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 <ScrollArea className="min-h-0 flex-1 rounded-lg border">
                   <div className="divide-y">
                     {tasks.map((task) => (
-                      <button
-                        className="hover:bg-accent/50 flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-start"
+                      <Button
+                        className="block w-full min-w-0"
                         key={task.entityId}
                         onClick={() =>
                           useInspectorTabsStore.getState().openTask({
@@ -602,58 +602,65 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           name: task.name,
                           status: task.status,
                         })}
-                        type="button"
+                        variant="plain"
                       >
-                        <EntityKindIcon
-                          className="size-4 shrink-0"
-                          kind="task"
-                          status={task.status}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">{task.name}</p>
-                          <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                            {task.assignedTo !== null && (
-                              <PersonMentionLabel
-                                avatarClassName="size-4 text-[7px]"
-                                mention={{
-                                  name: task.assignedTo,
-                                  image: task.assignedToImage,
-                                  deletedAt: task.assignedToDeletedAt,
-                                }}
-                              />
-                            )}
-                            {task.dueDate && (
-                              <>
-                                {task.assignedTo ? " · " : ""}
-                                {getFormatter().dateTime(
-                                  toDateTimeEpoch(task.dueDate),
-                                  { ...DAY_AND_MONTH_FORMAT, timeZone: "UTC" },
-                                )}
-                                {task.dueDate < today
-                                  ? ` · ${t("tasks.overdue")}`
-                                  : ""}
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      </button>
+                        <span className="hover:bg-accent/50 flex w-full min-w-0 items-center gap-3 px-3 py-2.5">
+                          <EntityKindIcon
+                            className="size-4 shrink-0"
+                            kind="task"
+                            status={task.status}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">{task.name}</p>
+                            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                              {task.assignedTo !== null && (
+                                <PersonMentionLabel
+                                  avatarClassName="size-4 text-[7px]"
+                                  mention={{
+                                    name: task.assignedTo,
+                                    image: task.assignedToImage,
+                                    deletedAt: task.assignedToDeletedAt,
+                                  }}
+                                />
+                              )}
+                              {task.dueDate && (
+                                <>
+                                  {task.assignedTo ? " · " : ""}
+                                  {getFormatter().dateTime(
+                                    toDateTimeEpoch(task.dueDate),
+                                    {
+                                      ...DAY_AND_MONTH_FORMAT,
+                                      timeZone: "UTC",
+                                    },
+                                  )}
+                                  {task.dueDate < today
+                                    ? ` · ${t("tasks.overdue")}`
+                                    : ""}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </span>
+                      </Button>
                     ))}
                   </div>
                 </ScrollArea>
               );
             }
             return (
-              <button
+              <Button
+                className="flex flex-1"
                 disabled={createTaskOnce.pending}
-                className="text-muted-foreground hover:bg-muted/50 hover:text-foreground flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-6 text-center text-sm disabled:opacity-64"
                 onClick={() => {
                   detached(handleCreateTask(), "overview-view.create-task");
                 }}
-                type="button"
+                variant="plain"
               >
-                <PlusIcon className="size-3.5" />
-                {t("tasks.newTask")}
-              </button>
+                <span className="text-muted-foreground hover:bg-muted/50 hover:text-foreground flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-6 text-center text-sm in-disabled:opacity-64">
+                  <PlusIcon className="size-3.5" />
+                  {t("tasks.newTask")}
+                </span>
+              </Button>
             );
           })()}
           <Menu
@@ -868,10 +875,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                         render={
                                           <TooltipTrigger
                                             render={
-                                              <button
+                                              <Button
                                                 aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
-                                                className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
-                                                type="button"
+                                                className="inline-flex size-6 items-center justify-center sm:size-7"
+                                                variant="plain"
                                               />
                                             }
                                           />
@@ -1075,13 +1082,13 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
 
   if (onClick) {
     return (
-      <button
-        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
-        onClick={onClick}
-        type="button"
-      >
-        {content}
-      </button>
+      // The clickable card draws the same card as the static one below and
+      // only adds a hover tint, so a row of stats reads as one set.
+      <Button className="block" onClick={onClick} variant="plain">
+        <span className="bg-card hover:bg-muted/50 flex h-full w-full flex-col items-start gap-1.5 rounded-lg border px-4 py-3">
+          {content}
+        </span>
+      </Button>
     );
   }
 

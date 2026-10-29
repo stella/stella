@@ -19,6 +19,7 @@ import { Button } from "@stll/ui/button";
 import { Field, FieldError } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -216,17 +217,21 @@ export const InvoiceLineEditor = ({
           <form.Field name="unitPrice">
             {(field) => (
               <Field name={field.name}>
-                <Input
-                  aria-label={t("billing.invoiceComposer.rate")}
-                  dir="ltr"
+                <NumberInput
+                  inputProps={{
+                    "aria-label": t("billing.invoiceComposer.rate"),
+                    onBlur: field.handleBlur,
+                  }}
                   min={0}
-                  step={10 ** -currencyMinorUnitDigits(currency)}
-                  type="number"
+                  // An emptied field stays NaN, as the native number input
+                  // reported it, so the schema rejects it instead of saving 0.
+                  onValueChange={(next) =>
+                    field.handleChange(next ?? Number.NaN)
+                  }
                   readOnly={isFlatFeeLine}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) =>
-                    field.handleChange(event.target.valueAsNumber)
+                  step={10 ** -currencyMinorUnitDigits(currency)}
+                  value={
+                    Number.isNaN(field.state.value) ? null : field.state.value
                   }
                 />
                 <FieldError />

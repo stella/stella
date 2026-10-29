@@ -261,28 +261,30 @@ const RateTablesView = ({
               className="group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2"
               key={table.id}
             >
-              <button
-                className="flex min-w-0 flex-1 flex-col gap-0.5 text-start"
+              <Button
+                className="flex min-w-0 flex-1"
                 onClick={() => onSelectTable(table.id)}
-                type="button"
+                variant="plain"
               >
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {table.name}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {table.name}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      {table.currency}
+                    </span>
+                    {table.isDefault && (
+                      <StarIcon className="fill-warning text-warning size-3 shrink-0" />
+                    )}
                   </span>
-                  <span className="text-muted-foreground shrink-0 text-xs">
-                    {table.currency}
+                  <span className="text-muted-foreground text-xs">
+                    {t("billing.rates.rateCount", {
+                      count: table.entryCount,
+                    })}
                   </span>
-                  {table.isDefault && (
-                    <StarIcon className="fill-warning text-warning size-3 shrink-0" />
-                  )}
-                </div>
-                <span className="text-muted-foreground text-xs">
-                  {t("billing.rates.rateCount", {
-                    count: table.entryCount,
-                  })}
                 </span>
-              </button>
+              </Button>
 
               <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                 {!table.isDefault && (
