@@ -21,6 +21,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/columns",
   "@/api/db/connection-budget",
   "@/api/db/dedicated-connection-slots",
+  "@/api/db/dedicated-connection-timeouts",
   "@/api/db/corpus-schema-lane",
   "@/api/db/currency-exponents",
   "@/api/db/database-relations",

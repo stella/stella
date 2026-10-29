@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
-      "markPaid": "Fizetettnek jelöl",
       "noEntries": "Nincs ehhez a számlához kapcsolt tétel",
       "noInvoices": "Még nincsenek számlák",
       "paidAt": "Fizetve",
+      "payments": {
+        "amountTooHigh": "Az összeg meghaladja a(z) {amount} hátralékot.",
+        "confirmVoid": "A kifizetés sztornózottként nyilvántartásban marad, és többé nem számít bele ennek a számlának a kiegyenlítésébe.",
+        "empty": "Még nincs rögzített kifizetés",
+        "method": "Fizetési mód",
+        "methods": {
+          "bank_transfer": "Banki átutalás",
+          "card": "Kártya",
+          "cash": "Készpénz",
+          "other": "Egyéb mód"
+        },
+        "outstandingAmount": "Hátralék: {amount}",
+        "paidOn": "Fizetés dátuma",
+        "partiallyPaid": "Részben kifizetve",
+        "record": "Kifizetés rögzítése",
+        "summary": "Kifizetve {paid}, hátralék {outstanding}",
+        "title": "Kifizetések",
+        "void": "Kifizetés sztornózása",
+        "voided": "Sztornózva"
+      },
       "removeEntries": "Tételek eltávolítása",
       "send": "Küldés",
       "statuses": {

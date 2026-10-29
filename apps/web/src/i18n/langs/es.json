@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Gastos vinculados",
       "linkedTimeEntries": "Registros de tiempo vinculados",
-      "markPaid": "Marcar como pagada",
       "noEntries": "No hay registros vinculados a esta factura",
       "noInvoices": "Aún no hay facturas",
       "paidAt": "Pagada el",
+      "payments": {
+        "amountTooHigh": "El importe supera el pendiente de {amount}.",
+        "confirmVoid": "El pago queda registrado como anulado y deja de computarse en esta factura.",
+        "empty": "Aún no hay pagos registrados",
+        "method": "Forma de pago",
+        "methods": {
+          "bank_transfer": "Transferencia bancaria",
+          "card": "Tarjeta",
+          "cash": "Efectivo",
+          "other": "Otra forma"
+        },
+        "outstandingAmount": "Pendiente {amount}",
+        "paidOn": "Fecha de pago",
+        "partiallyPaid": "Pagada parcialmente",
+        "record": "Registrar pago",
+        "summary": "Pagado {paid}, pendiente {outstanding}",
+        "title": "Pagos",
+        "void": "Anular pago",
+        "voided": "Anulado"
+      },
       "removeEntries": "Eliminar registros",
       "send": "Enviar",
       "statuses": {

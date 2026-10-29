@@ -269,6 +269,10 @@ describe("aggregate declaration sites", () => {
       body: "await acquire(tx, ids);",
     },
     {
+      imported: "lockInvoiceInStatus as acquire",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+    },
+    {
       imported: "withAggregateParentBatch as acquire",
       body: "await acquire({tx, organizationIds: [], workspaceIds: ids, mode: 'no key update'});",
     },
@@ -289,6 +293,41 @@ describe("aggregate declaration sites", () => {
   );
 
   test.each([
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquired'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: null, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, ...other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, [key]: other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "const acquire = async () => {}; await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/fake-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
     {
       module: "@/api/lib/db/aggregate-lock",
       body: "acquire(tx, ids);",

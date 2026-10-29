@@ -1265,6 +1265,8 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
+      paidAmount: v.number(),
+      outstandingAmount: v.number(),
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1291,6 +1293,8 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     dueDate: v.nullable(v.string()),
     currency: v.string(),
     totalAmount: v.number(),
+    paidAmount: v.number(),
+    outstandingAmount: v.number(),
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
