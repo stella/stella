@@ -1,30 +1,30 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
+import { CI_INSTALL_PREINSTALL_FILES } from "./ci-install-preinstall-files";
 import {
   BUN_FLAGS,
+  checkDockerSource,
   checkRepositoryDockerSources,
   commandEntries,
-  checkDockerSource,
   copySource,
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
   installToolingCopies,
   sourceClosureProblems,
-  updateInstallToolingCopies,
   type SourceTree,
+  updateInstallToolingCopies,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
@@ -41,6 +41,37 @@ const tree = (files: readonly string[]): SourceTree =>
   new Map(files.map((file) => [`/app/${file}`, file]));
 
 describe("Docker source closure", () => {
+  test("pre-install tooling imports only built-ins and dependency-free owners", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "..");
+    const allowedOwners = new Set([
+      "../packages/scripts/src/child-exit-status",
+      // This dependency-free owner is copied into the pre-install Docker stage.
+      "../packages/sha256/src/bun",
+    ]);
+    for (const file of CI_INSTALL_PREINSTALL_FILES) {
+      const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      const imports = new Bun.Transpiler({ loader: "ts" }).scanImports(source);
+      const invalid = imports
+        .map(({ path: specifier }) => specifier)
+        .filter((specifier) => {
+          if (specifier.startsWith("node:") || specifier.startsWith("bun:")) {
+            return false;
+          }
+          if (allowedOwners.has(specifier)) {
+            return false;
+          }
+          if (!specifier.startsWith("./")) {
+            return true;
+          }
+          const target = path.posix.normalize(
+            path.posix.join(path.posix.dirname(file), specifier),
+          );
+          return !/^scripts\/ci-install(?:-[\w-]+)?(?:\.ts)?$/u.test(target);
+        });
+      expect(invalid, `${file} must remain install-free`).toEqual([]);
+    }
+  });
+
   test("API install tooling COPY lines match the complete runtime import closure", () => {
     updateInstallToolingCopies(path.resolve(import.meta.dir, ".."), false);
   });
@@ -221,6 +252,52 @@ describe("Docker source closure", () => {
       }
     }
   });
+
+  test("a packaged build output copied from another stage runs without a source closure", () => {
+    const stages = [
+      "FROM bun AS builder",
+      "FROM bun AS runner",
+      "COPY --from=builder /app/bundles/ /app/",
+    ];
+    expect(
+      checkDockerSource(
+        root,
+        [...stages, "FROM runner AS smoke", "RUN bun /app/smoke.js"].join("\n"),
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        [...stages, "RUN bun /opt/absent.js"].join("\n"),
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /opt/absent.js"]);
+  });
+
+  test.each(["/", "/./", "/nested/.."])(
+    "root-copied packaged artifacts retain a single separator: %s",
+    (destination) => {
+      for (const entry of ["/smoke.js", "/app/smoke.js"]) {
+        expect(
+          checkDockerSource(
+            root,
+            [
+              "FROM bun AS builder",
+              "FROM bun AS runner",
+              `COPY --from=builder /packaged/ ${destination}`,
+              "FROM runner AS smoke",
+              `RUN bun ${entry}`,
+            ].join("\n"),
+            new Map(),
+            new Map(),
+          ),
+        ).toEqual([]);
+      }
+    },
+  );
 
   test("source wrappers check their inner reads without splitting quoted arguments", () => {
     const entry = put("wrapper/entry.ts", 'import "./missing";');
@@ -1035,13 +1112,13 @@ describe("Docker source closure", () => {
         mkdirSync(path.dirname(target), { recursive: true });
         writeFileSync(target, source);
       };
-      const output = GENERATORS.find(
-        ({ id }) => id === "route-tree",
-      )?.outputs.at(0);
-      if (output === undefined) {
-        throw new Error("Route tree output is missing");
+      const outputs = GENERATORS.find(({ id }) => id === "route-tree")?.outputs;
+      if (outputs === undefined) {
+        panic("Route tree outputs are missing");
       }
-      write(output, "export const routeTree = {};");
+      for (const output of outputs) {
+        write(output, "export const generated = true;");
+      }
       const producer = "apps/web/scripts/generate-route-tree.ts";
       const manifest = "apps/web/package.json";
       const entry = "apps/web/src/entry.ts";
@@ -1062,7 +1139,15 @@ describe("Docker source closure", () => {
           },
         }),
       );
-      write(entry, 'import "./routeTree.gen";');
+      write(
+        entry,
+        outputs
+          .map(
+            (output) =>
+              `import ${JSON.stringify(`./${path.basename(output, ".ts")}`)};`,
+          )
+          .join("\n"),
+      );
       const context: SourceTree = new Map(
         [producer, manifest, entry].map((file) => [`/${file}`, file]),
       );
@@ -1380,7 +1465,7 @@ describe("Docker source closure", () => {
     { rootIgnore: "", specificIgnore: "entry.ts", available: false },
     { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
     { rootIgnore: "", specificIgnore: undefined, available: true },
-  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
+  ])("Dockerfile ignore rules replace the root rules: %j", async (fixture) => {
     const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
     writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
     writeFileSync(
@@ -1405,18 +1490,19 @@ describe("Docker source closure", () => {
         Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
       ).toBe(0);
     }
-    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
+    expect(await checkRepositoryDockerSources(fixtureRoot)).toEqual(
       fixture.available
         ? []
         : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
     );
   });
 
-  test("every tracked Dockerfile passes the full hydrated repository check", () => {
+  // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
+  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
     expect(
-      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
-  }, 30_000);
+  }, 40_000);
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
@@ -1646,11 +1732,12 @@ describe("Docker source closure", () => {
     expect(configurations.length).toBeGreaterThan(0);
     const patterns = new Set<string>();
     for (const configuration of configurations) {
-      const parsed = ts.parseConfigFileTextToJson(
-        configuration,
-        readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+      const parsed = Result.try(() =>
+        Bun.JSONC.parse(
+          readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+        ),
       );
-      expect(parsed.error, configuration).toBeUndefined();
+      expect(parsed.isOk(), configuration).toBe(true);
       const config = v.parse(
         v.looseObject({
           compilerOptions: v.optional(
@@ -1659,7 +1746,7 @@ describe("Docker source closure", () => {
             }),
           ),
         }),
-        parsed.config,
+        parsed.unwrapOr(undefined),
       );
       for (const pattern of Object.keys(config.compilerOptions?.paths ?? {})) {
         patterns.add(pattern);

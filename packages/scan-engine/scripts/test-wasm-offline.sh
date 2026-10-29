@@ -15,6 +15,8 @@ export PATH="${CARGO_HOME}/bin:${PATH}"
 mkdir -p "${CARGO_HOME}"
 
 cd "${CRATE_DIR}"
-CARGO_NET_OFFLINE=false bash scripts/wasm-toolchain.sh
+# The fresh cache downloads everything once, retried as a unit; the build
+# below then proves it needs nothing else.
+CARGO_NET_OFFLINE=false bash ../../scripts/retry.sh bash scripts/wasm-toolchain.sh
 CARGO_NET_OFFLINE=true bun run build:wasm
 bun run check:wasm --check

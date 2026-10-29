@@ -1,8 +1,8 @@
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 /**
- * Opaque bearer tokens for browser-to-desktop handoffs and the desktop
- * sessions they open.
+ * Opaque bearer tokens for document collaboration and browser-to-desktop
+ * handoffs and sessions.
  *
  * 64 lowercase hex characters carrying two UUIDv7 values, so a token has ~148
  * random bits and a fixed length every endpoint can check before it hashes.

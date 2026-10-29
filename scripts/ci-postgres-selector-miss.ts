@@ -1,10 +1,10 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
-import { POSTGRES_CERTIFIABLE_SHARD_COUNTS } from "../apps/api/scripts/postgres-test-shards";
+import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
 import { planPostgresTests } from "./ci-postgres-test-plan";
 import { parseJunit } from "./fix-tests-on-base";
 
@@ -130,9 +130,11 @@ type PostgresRunJobs = v.InferOutput<typeof fullRunJobsSchema>["jobs"];
 
 const POSTGRES_SHARD_JOB = /(?:^| \/ )postgres-service-suites \((\d+)\)$/u;
 
-// A historical run is judged by the shard topology it ran with, which can
-// differ from today's: its shard jobs must be exactly 1..n for a known n,
-// and every one of them must have succeeded.
+// A run certifies coverage only when its shard jobs are exactly 1..n for
+// today's shard count n, and every one of them succeeded. Accepting several
+// counts would let an n-shard run that lacks its last shard pass as a
+// smaller topology, so a run from before a shard-count change never
+// certifies; the next full run on main restores the baseline.
 export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean => {
   const shards = new Set(
     jobs.flatMap((job) => {
@@ -140,9 +142,9 @@ export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean => {
       return shard === undefined ? [] : [Number(shard)];
     }),
   );
-  const count = Math.max(0, ...shards);
+  const count = POSTGRES_TEST_SHARD_IDS.length;
   return (
-    POSTGRES_CERTIFIABLE_SHARD_COUNTS.includes(count) &&
+    Math.max(0, ...shards) === count &&
     shards.size === count &&
     Array.from({ length: count }, (_, index) => index + 1).every(
       (shard) =>

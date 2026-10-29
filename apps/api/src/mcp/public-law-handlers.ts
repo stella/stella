@@ -67,7 +67,13 @@ export const defaultSearchLegislationHandler: typeof searchLegislationHandler =
   async (body, legislationDb, observer) =>
     await (
       await import("@/api/handlers/legislation/search")
-    ).searchLegislationHandler(body, legislationDb, observer);
+    ).searchLegislationHandler(body, legislationDb, observer, {
+      loadSearchConfigs: async () =>
+        await (
+          await import("@/api/lib/case-law/public-case-law-config")
+        ).loadPublicFtsSearchConfigs(),
+      stageTool: "search_legislation",
+    });
 
 export const defaultResolveStatuteExpression: typeof resolveStatuteExpression =
   async (query, legislationDb, surface) =>

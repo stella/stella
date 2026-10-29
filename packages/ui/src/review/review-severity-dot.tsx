@@ -8,11 +8,7 @@ import type { ReviewStatusTone } from "./review-status-badge";
  * their call site rather than growing a palette of their own.
  */
 export type ReviewSeverityLevel =
-  | "critical"
-  | "high"
-  | "medium"
-  | "low"
-  | "none";
+  "critical" | "high" | "medium" | "low" | "none";
 
 type ReviewSeverityDotProps = {
   level: ReviewSeverityLevel;

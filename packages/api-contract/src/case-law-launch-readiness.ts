@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "./api-date";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
 import { publicCountriesFor } from "./public-country-capability";
@@ -33,7 +34,7 @@ const launchReadinessCountrySchema = v.pipe(
 const launchReadinessEntrySchema = v.strictObject({
   country: launchReadinessCountrySchema,
   evalSetExists: v.literal(true),
-  lastCensusDate: v.pipe(v.string(), v.isoDate()),
+  lastCensusDate: apiDateSchema,
   lastCensusGreen: v.literal(true),
 });
 
@@ -75,22 +76,69 @@ const CASE_LAW_PAGE_COUNTRIES = publicCountriesFor("caseLaw", "pages");
 
 const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
 
-/** Every admitted country must have a receipt, and receipts cannot admit independently. */
+type CaseLawExplicitLaunch = {
+  decidedBy: string;
+  decidedOn: string;
+};
+
+/** Countries launched to case-law search by an explicit decision; null means none. */
+export const CASE_LAW_EXPLICIT_LAUNCHES = {
+  CZE: null,
+  EU: { decidedBy: "project owner", decidedOn: "2026-10-23" },
+  HUN: { decidedBy: "project owner", decidedOn: "2026-10-23" },
+  POL: { decidedBy: "project owner", decidedOn: "2026-10-20" },
+  SVK: { decidedBy: "project owner", decidedOn: "2026-10-23" },
+} as const satisfies Record<
+  CaseLawBrowserCountry,
+  CaseLawExplicitLaunch | null
+>;
+
+export const CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES =
+  CASE_LAW_BROWSER_COUNTRIES.filter(
+    (country) => CASE_LAW_EXPLICIT_LAUNCHES[country] !== null,
+  );
+
 /**
  * Countries admitted to case-law search, the API search surfaces and MCP.
+ * Each needs exactly one of a serving receipt or an explicit launch.
  * Pages, sitemaps and crawl use `PUBLIC_CASE_LAW_PAGE_COUNTRIES` instead.
  */
 export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_CASE_LAW_COUNTRIES.map(
   (country) => {
     const receipt = servingReceipts.find((candidate) => candidate === country);
-    if (receipt === undefined) {
+    const explicit = CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some(
+      (candidate) => candidate === country,
+    );
+    if (receipt !== undefined && explicit) {
+      return panic(
+        "A country with a case-law serving receipt cannot also be an explicit launch.",
+      );
+    }
+    if (receipt !== undefined) {
+      return receipt;
+    }
+    if (!explicit) {
       return panic(
         "An admitted public country needs a case-law serving receipt.",
       );
     }
-    return receipt;
+    const branded = v.safeParse(launchReadinessCountrySchema, country);
+    if (!branded.success) {
+      return panic("An explicit case-law launch must name a browser country.");
+    }
+    return branded.output;
   },
 );
+if (
+  CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some(
+    (country) =>
+      !ADMITTED_CASE_LAW_COUNTRIES.some((candidate) => candidate === country),
+  )
+) {
+  panic(
+    "An explicit case-law launch cannot admit a pending or withdrawn country.",
+  );
+}
 if (
   servingReceipts.some(
     (country) =>

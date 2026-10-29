@@ -1,19 +1,10 @@
-import { Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import { copyToClipboard } from "@stll/clipboard";
-import { Button } from "@stll/ui/button";
-import { CopyIcon } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "@stll/ui/input-group";
-import { stellaToast } from "@stll/ui/toast";
 
-import { getAnalytics } from "@/lib/analytics/provider";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { CopyActionButton } from "@/components/copy-action-button";
 
 type CopyFieldProps = {
   label: string;
@@ -23,38 +14,20 @@ type CopyFieldProps = {
 /** A read-only value with a copy-to-clipboard button, used for the MCP
  * server URL and CLI commands on the connections settings page and in
  * the onboarding setup preview. */
-export const CopyField = ({ label, value }: CopyFieldProps) => {
-  const t = useTranslations();
-
-  const handleCopy = async () => {
-    const copied = await copyToClipboard(value);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <InputGroup>
-        <InputGroupInput className="font-mono text-sm" readOnly value={value} />
-        <InputGroupAddon align="inline-end">
-          <Button
-            aria-label={t("common.copy")}
-            onClick={() => {
-              detached(handleCopy(), "copy-field.copy");
-            }}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <CopyIcon />
-          </Button>
-        </InputGroupAddon>
-      </InputGroup>
-    </div>
-  );
-};
+export const CopyField = ({ label, value }: CopyFieldProps) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-muted-foreground text-xs">{label}</span>
+    <InputGroup>
+      <InputGroupInput className="font-mono text-sm" readOnly value={value} />
+      <InputGroupAddon align="inline-end">
+        <CopyActionButton
+          iconClassName="size-4"
+          iconOnly
+          size="icon-sm"
+          text={value}
+          variant="ghost"
+        />
+      </InputGroupAddon>
+    </InputGroup>
+  </div>
+);

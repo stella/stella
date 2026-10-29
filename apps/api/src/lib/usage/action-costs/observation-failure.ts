@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import { failureSink, type FailureSink } from "@/api/lib/observability/failure";
+import { type FailureSink, failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitActionCostDropMetric } from "@/api/lib/observability/request-metrics";

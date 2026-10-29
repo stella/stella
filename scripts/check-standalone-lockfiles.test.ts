@@ -15,9 +15,10 @@ import {
   AUTO_INSTALL_DISABLED,
   checkStandaloneLockfiles,
   isTrackedLockfile,
-  requiresMalwareScan,
   parseInstallCommands,
+  requiresMalwareScan,
 } from "./check-standalone-lockfiles";
+import { pruneBunfigFiles } from "./check-stll-quarantine-excludes";
 
 const ROOT_BUNFIG = `
 [install]
@@ -104,6 +105,32 @@ const covered = {
 };
 
 describe("standalone lockfile guard", () => {
+  test("passes after pruning an expired exclude from every bunfig", () => {
+    const expired =
+      'minimumReleaseAgeExcludes = [\n  "body-parser", # quarantine-expires: 2020-01-01T00:00:00.000Z\n]\n';
+    const { root, trackedFiles } = fixture({
+      "bunfig.toml": ROOT_BUNFIG.replace(
+        'minimumReleaseAgeExcludes = [\n  "@stll/native",\n]\n',
+        () => expired,
+      ),
+      "tools/docs/bun.lock": STANDALONE_LOCK.replace(
+        '"packages": {',
+        '"packages": {\n    "body-parser": ["body-parser@1.0.0", "", {}, "sha512-test"],',
+      ),
+      "tools/docs/bunfig.toml": `${QUARANTINED_BUNFIG}${expired}`,
+      "tools/docs/package.json": "{}",
+    });
+
+    expect(
+      pruneBunfigFiles({
+        now: new Date("2020-01-02T00:00:00.000Z"),
+        root,
+        trackedFiles,
+      }),
+    ).toEqual(["bunfig.toml", "tools/docs/bunfig.toml"]);
+    expect(checkStandaloneLockfiles({ root, trackedFiles }).errors).toEqual([]);
+  });
+
   test("passes a standalone lockfile that carries every safety net", () => {
     const result = checkStandaloneLockfiles(fixture(covered));
 

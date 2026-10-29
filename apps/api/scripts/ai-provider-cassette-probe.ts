@@ -54,6 +54,7 @@ const run = async () => {
     provider: "openrouter",
   } as const;
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     deadlineMs: 30_000,
     caching: { enabled: false, reason: "org-disabled" },

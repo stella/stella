@@ -8,10 +8,10 @@ import { ImageIcon, ImageOffIcon, RotateCcwIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { isClipboardImagePreviewDataUrl } from "./clipboard-types";

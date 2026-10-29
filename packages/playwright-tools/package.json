@@ -8,14 +8,15 @@
   "sideEffects": false,
   "exports": {
     "./marketing-case-law.json": "./src/marketing-case-law.json",
-    "./marketing-config": "./src/marketing-config.ts"
+    "./app-marketing-config": "./src/app-marketing-config.ts",
+    "./landing-marketing-config": "./src/landing-marketing-config.ts",
+    "./devices": "./src/devices.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/playwright-tools",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/playwright-tools",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
   },
   "devDependencies": {

@@ -8,17 +8,29 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { session } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { auditLogs, entities, entityVersions, fields } from "@/api/db/schema";
+import {
+  auditLogs,
+  entities,
+  entityVersions,
+  fields,
+  properties,
+  syntheticSessionControl,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,6 +39,16 @@ import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachmen
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import {
+  SYNTHETIC_PRINCIPAL,
+  SYNTHETIC_SESSION_CONTROL_ID,
+} from "@/api/lib/synthetic-principal/constants";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -49,6 +71,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
 const seededEntityIds: SafeId<"entity">[] = [];
+const seededWorkspaceIds: SafeId<"workspace">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -73,6 +96,17 @@ afterAll(async () => {
       .delete(entityVersions)
       .where(inArray(entityVersions.entityId, seededEntityIds));
     await testDb.delete(entities).where(inArray(entities.id, seededEntityIds));
+  }
+  if (seededWorkspaceIds.length > 0) {
+    await testDb
+      .delete(properties)
+      .where(inArray(properties.workspaceId, seededWorkspaceIds));
+    await testDb
+      .delete(workspaceMembers)
+      .where(inArray(workspaceMembers.workspaceId, seededWorkspaceIds));
+    await testDb
+      .delete(workspaces)
+      .where(inArray(workspaces.id, seededWorkspaceIds));
   }
   await releaseRlsFixture();
 });
@@ -198,8 +232,8 @@ const expectOneContentRow = async (
 };
 
 const expectStatus = (response: unknown, code: number) => {
-  expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
+  expect(response).toBeInstanceOf(HttpStatusResponse);
+  if (response instanceof HttpStatusResponse) {
     expect(response.code).toBe(code);
   }
 };
@@ -218,13 +252,145 @@ const readUrl = async (
   recordAuditEvent: AuditRecorder = recorderA(),
 ) =>
   await readFileHandler({
+    readSessionAuthority: async () => null,
+    source: { kind: "request", sessionId: "fixture-session" },
     scopedDb: scopedDbA(),
     fieldId,
+    userId: ids.userA1,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
     purpose,
     recordAuditEvent,
   });
+
+const setupDedicatedDownload = async () => {
+  const store = createSyntheticSessionStore(asTestRaw(testDb));
+  await store.revokeSyntheticSessions();
+  await testDb
+    .insert(syntheticSessionControl)
+    .values({ id: SYNTHETIC_SESSION_CONTROL_ID, status: "enabled" })
+    .onConflictDoUpdate({
+      target: syntheticSessionControl.id,
+      set: { status: "enabled" },
+    });
+  await store.mintSyntheticSession({
+    keyLabel: "file-download-fixture",
+    requestId: undefined,
+    userAgent: null,
+  });
+  const [source] = await testDb
+    .select({ id: session.id })
+    .from(session)
+    .where(eq(session.userId, SYNTHETIC_PRINCIPAL.user.id));
+  expect(source).toBeDefined();
+  if (!source) {
+    throw new Error("Dedicated session fixture was not created");
+  }
+
+  const organizationId = brandPersistedOrganizationId(
+    SYNTHETIC_PRINCIPAL.org.id,
+  );
+  const userId = brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id);
+  const workspaceId = createSafeId<"workspace">();
+  seededWorkspaceIds.push(workspaceId);
+  await testDb.insert(workspaces).values({
+    id: workspaceId,
+    organizationId,
+    name: "Dedicated principal fixture",
+    reference: workspaceId,
+  });
+  await testDb.insert(workspaceMembers).values({
+    id: createSafeId<"workspaceMember">(),
+    workspaceId,
+    userId,
+  });
+  const propertyId = createSafeId<"property">();
+  await testDb.insert(properties).values({
+    id: propertyId,
+    workspaceId,
+    name: "File",
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  const entityId = createSafeId<"entity">();
+  const entityVersionId = createSafeId<"entityVersion">();
+  const fieldId = createSafeId<"field">();
+  const fileId = createSafeId<"userFile">();
+  seededEntityIds.push(entityId);
+  await testDb.insert(entities).values({
+    id: entityId,
+    workspaceId,
+    kind: "document",
+    name: "Dedicated download.pdf",
+  });
+  await testDb.insert(entityVersions).values({
+    id: entityVersionId,
+    workspaceId,
+    entityId,
+  });
+  await testDb.insert(fields).values({
+    id: fieldId,
+    workspaceId,
+    propertyId,
+    entityVersionId,
+    content: {
+      version: 1,
+      type: "file",
+      id: fileId,
+      fileName: "dedicated-download.pdf",
+      mimeType: PDF_MIME_TYPE,
+      sizeBytes: 2048,
+      encrypted: false,
+      sha256Hex: "d".repeat(64),
+      pdfFileId: null,
+    },
+  });
+  fake.put(
+    envBase.S3_BUCKET,
+    createFileKey({
+      organizationId,
+      workspaceId,
+      fileId,
+      mimeType: PDF_MIME_TYPE,
+    }),
+    new Uint8Array([37, 80, 68, 70]),
+    PDF_MIME_TYPE,
+  );
+
+  const scopedDb = asTestRaw<ScopedDb>(
+    createScopedDb(testDb, [workspaceId], organizationId, userId),
+  );
+  const recordAuditEvent = createAuditRecorder({
+    organizationId,
+    workspaceId,
+    userId,
+    request: new Request("https://api.example.test/files"),
+    server: null,
+  });
+  const download = async () => {
+    const authority = await readSyntheticSessionAuthority(testDb, {
+      sessionId: source.id,
+      userId,
+    });
+    return await readFileHandler({
+      readSessionAuthority: async ({ sessionId, userId: authorityUserId }) =>
+        sessionId === source.id && authorityUserId === userId
+          ? authority
+          : null,
+      source: { kind: "request", sessionId: source.id },
+      scopedDb,
+      fieldId,
+      userId,
+      organizationId,
+      workspaceId,
+      purpose: "download",
+      recordAuditEvent,
+    });
+  };
+
+  return { download, store };
+};
 
 const URL_CASES = [
   {
@@ -278,6 +444,30 @@ const URL_CASES = [
 ] as const;
 
 describe("file URL grants", () => {
+  test("a dedicated principal receives a session-bound signed URL", async () => {
+    const { download } = await setupDedicatedDownload();
+
+    const response = await download();
+
+    expect(response).toHaveProperty("presignedUrl");
+    if (!("presignedUrl" in response)) {
+      return;
+    }
+    expect(
+      Number(new URL(response.presignedUrl).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(60);
+  });
+
+  test("a revoked dedicated session is refused a signed URL", async () => {
+    const { download, store } = await setupDedicatedDownload();
+    await store.revokeSyntheticSessions();
+
+    expect(await rejectionOf(download())).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
+  });
+
   test.each(URL_CASES)(
     "$name commits one $action row bound to the actor, matter and document",
     async ({ purpose, stored, deliveredMimeType, action, disposition }) => {
@@ -289,10 +479,17 @@ describe("file URL grants", () => {
 
       const response = await readUrl(seeded.fieldId, purpose);
 
+      const requestedLifetime =
+        "presignedUrl" in response
+          ? Number(
+              new URL(response.presignedUrl).searchParams.get("X-Amz-Expires"),
+            )
+          : null;
       expect(response).toMatchObject({
         mimeType: deliveredMimeType,
         presignedUrl: expect.stringContaining(deliveredKey),
       });
+      expect(requestedLifetime).toBe(15 * 60);
       await expectOneContentRow(seeded.entityId, {
         action,
         metadata: {
@@ -480,7 +677,8 @@ const readAttachment = async ({
       query: { disposition },
       recordAuditEvent,
       request: new Request("https://api.example.test/files/email-attachment"),
-      route: "/files/:workspaceId/email-attachment/:fieldId/:attachmentId",
+      route:
+        "/v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId" satisfies ApiRoutePath,
       scopedDb: scopedDbA(),
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },

@@ -32,10 +32,11 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
+  firstNotificationsPageRefresh,
   notificationsOptions,
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
@@ -81,17 +82,23 @@ export const NotificationBell = () => {
     // The user channel carries a single event kind today; this bind makes a
     // second kind a compile error here instead of a silently ignored event.
     eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    detached(
-      refetchFirstNotificationsPage({ organizationId, queryClient, userId }),
-      "notification-bell.refetch-first-page",
-    );
+    return [
+      firstNotificationsPageRefresh({
+        organizationId,
+        queryClient,
+        userId,
+      }),
+    ];
   });
 
   useExternalSyncEffect(() => {
     if (listError === null) {
       return;
     }
-    analytics.captureError(listError);
+    analytics.captureError(listError, {
+      fingerprintKey: "NotificationBell:listError",
+      scope: { type: "handler", handlerId: "NotificationBell:listError" },
+    });
     notifyUserError(listError, t("common.unexpectedError"));
   }, [analytics, listError, t]);
 
@@ -104,7 +111,7 @@ export const NotificationBell = () => {
       return;
     }
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .notifications({
             notificationId: toSafeId<"notification">(notification.id),
@@ -125,7 +132,7 @@ export const NotificationBell = () => {
 
   const markAllRead = async () => {
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(await api.notifications["read-all"].post()),
+      unwrapApiResponse(await api.notifications["read-all"].post()),
     );
     if (Result.isError(requested)) {
       reportFailure(requested.error);

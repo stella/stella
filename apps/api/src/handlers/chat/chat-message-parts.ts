@@ -34,16 +34,18 @@ import type {
   ChatMessageRole,
   ChatPart,
   ChatTanStackPart,
-  PersistableChatPartType,
-  PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableChatMessageCandidate,
+  PersistableChatPartType,
   PersistableTerminalAssistantMessage,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  isPersistedJsonObject,
   isPersistedJsonValue,
+  isPersistedToolProviderMetadata,
   proveParsedToolInput,
   proveParsedToolOutput,
   provePersistedChatMessageContentV3,
@@ -260,12 +262,16 @@ const persistedV3PartToChatPart = ({
       arguments:
         persistedInput.status === "raw"
           ? persistedInput.rawArguments
-          : stringifyPersistedJsonValue(persistedInput.value),
+          : (persistedInput.rawArguments ??
+            stringifyPersistedJsonValue(persistedInput.value)),
       id: part.id,
       ...(input === undefined ? {} : { input }),
       ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
       name: part.name,
       ...(part.output === undefined ? {} : { output }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
@@ -336,7 +342,11 @@ const decodePersistedToolInput = (input: unknown): PersistedToolInput => {
       : panic("Stored v3 tool call has invalid raw arguments");
   }
   if (input["status"] === "parsed" && "value" in input) {
-    return proveParsedToolInput(input["value"]);
+    const rawArguments = input["rawArguments"];
+    if (rawArguments !== undefined && typeof rawArguments !== "string") {
+      return panic("Stored v3 tool call has invalid raw arguments");
+    }
+    return proveParsedToolInput(input["value"], rawArguments);
   }
   return panic("Stored v3 tool call has invalid input state");
 };
@@ -511,6 +521,7 @@ export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
  */
 const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "approval-requested": false,
+  // Only an approved client-executed call: `isApprovedClientCallAwaitingResult`.
   "approval-responded": false,
   // A terminal stream can end while the provider has only announced a call or
   // is still emitting its JSON arguments. Neither state carries usable input,
@@ -521,6 +532,28 @@ const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "input-complete": true,
   "input-streaming": false,
 } as const satisfies Record<TanStackToolCallState, boolean>;
+
+/** A tool call as stored, or as read back over the API. */
+type ApprovableToolCall = {
+  type: "tool-call";
+  state: TanStackToolCallState;
+  approval?: { approved?: boolean };
+  metadata?: unknown;
+  output?: unknown;
+};
+
+/**
+ * An approved client-executed call whose result has not arrived. Resuming the
+ * approval hands the call to the client, so it stays `approval-responded` with
+ * input only until the client posts its result.
+ */
+export const isApprovedClientCallAwaitingResult = (
+  part: ApprovableToolCall,
+): boolean =>
+  part.state === "approval-responded" &&
+  part.approval?.approved === true &&
+  part.output === undefined &&
+  chatToolExecutor(part) === "client";
 
 const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
   name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
@@ -649,8 +682,9 @@ export const getAwaitingUserInteractions = (
       continue;
     }
     if (
-      CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-      !isServerChatToolCall(part)
+      (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
+        !isServerChatToolCall(part)) ||
+      isApprovedClientCallAwaitingResult(part)
     ) {
       interactions.push({
         type: clientToolInteractionType(part.name),
@@ -659,6 +693,27 @@ export const getAwaitingUserInteractions = (
     }
   }
   return interactions;
+};
+
+/** The tools whose calls in `message` await an approval. */
+export const getAwaitedApprovalToolNames = (
+  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
+): ReadonlySet<string> => {
+  if (message === null) {
+    return new Set();
+  }
+  const awaitedCallIds = new Set(
+    getAwaitingUserInteractions(message).flatMap((interaction) =>
+      interaction.type === "approval" ? [interaction.toolCallId] : [],
+    ),
+  );
+  return new Set(
+    message.parts.flatMap((part) =>
+      part.type === "tool-call" && awaitedCallIds.has(part.id)
+        ? [part.name]
+        : [],
+    ),
+  );
 };
 
 export const getAwaitingUserInteraction = (
@@ -694,7 +749,8 @@ const CLIENT_INTERACTION_RESOLUTION = {
   },
   "client-tool": {
     "approval-requested": null,
-    "approval-responded": null,
+    // An approved call the client has not run yet.
+    "approval-responded": "unchanged",
     "awaiting-input": null,
     complete: "resolved",
     error: "resolved",
@@ -952,16 +1008,23 @@ const CHAT_PART_VALIDATORS = {
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
   subagent: () => false,
-  text: (part) => typeof part["content"] === "string",
+  text: (part) =>
+    typeof part["content"] === "string" &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
   thinking: (part) =>
     typeof part["content"] === "string" &&
     (part["provenance"] === undefined ||
-      isReasoningProvenance(part["provenance"])),
+      isReasoningProvenance(part["provenance"])) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
   "tool-call": (part) =>
     typeof part["id"] === "string" &&
     typeof part["name"] === "string" &&
     typeof part["arguments"] === "string" &&
-    isTanStackToolCallState(part["state"]),
+    isTanStackToolCallState(part["state"]) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedToolProviderMetadata(part["providerMetadata"])),
   "tool-result": (part) =>
     typeof part["toolCallId"] === "string" &&
     isTanStackToolResultContent(part["content"]) &&
@@ -1168,8 +1231,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 type ChatPartPersistenceDecision =
-  | { type: "drop"; partType: string }
-  | { type: "persist"; part: ChatPart };
+  { type: "drop"; partType: string } | { type: "persist"; part: ChatPart };
 
 export const classifyChatPartForPersistence = (
   part: unknown,
@@ -1303,6 +1365,9 @@ const chatPartToPersistedV3Part = ({
       ...(part.output === undefined
         ? {}
         : { output: proveParsedToolOutput(part.output) }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
@@ -1341,7 +1406,14 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  return proveParsedToolInput(part.input);
+  // Keep the argument text only when the parsed input cannot reproduce it.
+  const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
+  return proveParsedToolInput(
+    part.input,
+    reproduced.isOk() && deepEquals(reproduced.value, part.input)
+      ? undefined
+      : part.arguments,
+  );
 };
 
 const persistedToolResultContentFromChatContent = (

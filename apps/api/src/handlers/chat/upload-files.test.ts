@@ -78,6 +78,7 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   );
   return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
 };
+const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
 const uploadDependencies = {
   reserveChatObjectCleanupIntent: async () => Result.ok([]),
@@ -174,7 +175,7 @@ describe("chat attachment hydration", () => {
         metadata: { filename: "scan.pdf" },
         source: {
           type: "data",
-          value: Buffer.from(fileBytes).toString("base64"),
+          value: Buffer.from(fileBytes).toBase64(),
           mimeType: PDF_MIME_TYPE,
         },
         type: "document",
@@ -316,6 +317,7 @@ describe("chat attachment hydration", () => {
         fileName: "schedule.xlsx",
         mimeType: XLSX_MIME_TYPE,
       },
+      organizationId,
       recordAuditEvent: mock(async () => undefined),
       safeDb,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
@@ -381,6 +383,7 @@ describe("chat attachment hydration", () => {
     const result = await uploadMessageFiles({
       dependencies: uploadDependencies,
       message,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId: toSafeId<"chatThread">("thread_1"),
@@ -446,6 +449,7 @@ describe("chat attachment hydration", () => {
         fileName: "notes.txt",
         mimeType: TEXT_PLAIN_MIME_TYPE,
       },
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
@@ -539,6 +543,7 @@ describe("chat attachment hydration", () => {
         fileName: "scan.png",
         mimeType: IMAGE_PNG_MIME_TYPE,
       },
+      organizationId,
       recordAuditEvent: mock(async () => undefined),
       safeDb,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
@@ -573,6 +578,7 @@ describe("chat attachment hydration", () => {
       const result = await uploadUserFile({
         dependencies: uploadDependencies,
         file: { bytes, fileName: "notes.txt", mimeType: TEXT_PLAIN_MIME_TYPE },
+        organizationId,
         recordAuditEvent: mock(async () => undefined),
         safeDb,
         threadId: toSafeId<"chatThread">(
@@ -615,6 +621,7 @@ describe("chat attachment hydration", () => {
         fileName: hostileName,
         mimeType: TEXT_PLAIN_MIME_TYPE,
       },
+      organizationId,
       recordAuditEvent: mock(async () => undefined),
       safeDb,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
@@ -627,6 +634,7 @@ describe("chat attachment hydration", () => {
     // declared MIME type so the object is served as text, not as a download.
     const putKey =
       requestKeys("PUT").at(0) ?? panic("no PUT reached the store");
+    expect(putKey.startsWith(`${organizationId}/`)).toBe(true);
     const stored = fake.objects.get(`${bucket}/${putKey}`);
     expect(stored?.bytes).toEqual(
       new TextEncoder().encode("confidential text"),
@@ -644,14 +652,7 @@ describe("chat attachment hydration", () => {
   ] as const)(
     "keeps the %s ledger refusal status instead of a server error",
     async (reservationStatus, expectedStatus) => {
-      const organizationId = toSafeId<"organization">(
-        "11111111-1111-4111-8111-111111111115",
-      );
-      const testTx = asTestRaw<Transaction>({
-        query: {
-          chatThreads: { findFirst: async () => ({ organizationId }) },
-        },
-      });
+      const testTx = asTestRaw<Transaction>({});
       const safeDb: SafeDb = async (callback) =>
         await Result.tryPromise(async () => await callback(testTx));
       // The ledger answers the reservation itself, so no object is written.
@@ -676,6 +677,7 @@ describe("chat attachment hydration", () => {
             fileName: "notes.txt",
             mimeType: TEXT_PLAIN_MIME_TYPE,
           },
+          organizationId,
           recordAuditEvent: mock(async () => undefined),
           safeDb,
           threadId: toSafeId<"chatThread">(

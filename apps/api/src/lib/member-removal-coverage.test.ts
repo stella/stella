@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as agentSchema from "@/api/db/agent-auth-schema";
@@ -53,6 +53,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
   "case_law_analysis_failures.provider_diagnostic",
+  // Global corpus coverage counts and source metadata contain no member identifiers.
+  "case_law_coverage_summaries.answer",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
@@ -63,14 +65,19 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",
+  // Corpus removal evidence and retry state contain no member identifiers.
+  "case_law_removal_reconciliation_items.payload",
   "case_law_replay_audit_events.details",
   "case_law_replay_batches.gate_verdict",
   "case_law_research_answers.answer",
   "case_law_research_answers.run",
   "case_law_research_columns.content",
   "case_law_research_columns.tool",
+  "case_law_sitemap_shard_counts.months",
   "case_law_sources.config",
   "case_law_sources.descriptor",
+  // Corpus enumeration cursor and publisher backoff contain no member identifiers.
+  "case_law_sources.removal_checkpoint",
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
   "chat_threads.active_skill",
@@ -116,6 +123,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
+  // Terminal AI outcomes contain a run id and timestamp, not a member id; the
+  // refusal reason is a closed literal and cannot carry user-provided text.
+  "fields.ai_settlement",
   "flow_definitions.steps",
   "flow_definitions.trigger",
   "flow_runs.definition_snapshot",
@@ -135,6 +145,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
+  "legal_reader_answers.continuation_spans",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
@@ -145,6 +156,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "mcp_connector_authorization_reviews.approved_endpoint_origins",
   "mcp_connectors.oauth_confirmed_endpoint_origins",
   "mcp_oauth_clients.registration_response",
+  "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
   "organization_settings.practice_jurisdictions",
@@ -291,6 +303,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "correspondence_filers.filed_by_user_id":
     "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "document_processing_runs.requested_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "document_review_finding_decisions.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "document_review_findings.decided_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -482,6 +496,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "mcp_web_handoff.user_id":
+    "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
   "search_history_entries.user_id":
@@ -505,6 +521,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

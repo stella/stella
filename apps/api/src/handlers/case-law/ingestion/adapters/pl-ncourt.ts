@@ -2,7 +2,7 @@
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -71,13 +71,13 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -125,10 +125,10 @@ import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";

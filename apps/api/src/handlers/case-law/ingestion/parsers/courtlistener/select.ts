@@ -11,8 +11,9 @@ import { panic } from "better-result";
  * not hold.
  */
 
-import type { OpinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
+// parser-output-unchanged: imports the same snapshot row shape from its pure parser module.
+import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
@@ -32,8 +33,8 @@ import {
 import { parsePlainText, parsePreformatted } from "./plain-text";
 import { plainTextStructureOf } from "./plain-text-structure";
 import {
-  publishedTextDefects,
   type PublishedTextDefect,
+  publishedTextDefects,
 } from "./source-defects";
 import {
   classifyCourtListenerText,

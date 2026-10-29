@@ -1,0 +1,629 @@
+{
+  "estimator": {
+    "proseCharactersPerToken": 3,
+    "jsonCharactersPerToken": 2.4,
+    "note": "Estimate = ceil((name + description chars) / 3 + input-schema JSON chars / 2.4). Character counts use JavaScript string length."
+  },
+  "tools": [
+    {
+      "name": "add_matter_member",
+      "nameChars": 17,
+      "descriptionChars": 43,
+      "inputSchemaChars": 258,
+      "totalChars": 318,
+      "estimatedTokens": 128
+    },
+    {
+      "name": "case_law_coverage",
+      "nameChars": 17,
+      "descriptionChars": 547,
+      "inputSchemaChars": 457,
+      "totalChars": 1021,
+      "estimatedTokens": 379
+    },
+    {
+      "name": "check_counterparty",
+      "nameChars": 18,
+      "descriptionChars": 440,
+      "inputSchemaChars": 3772,
+      "totalChars": 4230,
+      "estimatedTokens": 1725
+    },
+    {
+      "name": "compare_documents",
+      "nameChars": 17,
+      "descriptionChars": 506,
+      "inputSchemaChars": 3326,
+      "totalChars": 3849,
+      "estimatedTokens": 1561
+    },
+    {
+      "name": "configure_template_fields",
+      "nameChars": 25,
+      "descriptionChars": 405,
+      "inputSchemaChars": 5212,
+      "totalChars": 5642,
+      "estimatedTokens": 2316
+    },
+    {
+      "name": "create_reader_annotation",
+      "nameChars": 24,
+      "descriptionChars": 327,
+      "inputSchemaChars": 2216,
+      "totalChars": 2567,
+      "estimatedTokens": 1041
+    },
+    {
+      "name": "create_template",
+      "nameChars": 15,
+      "descriptionChars": 807,
+      "inputSchemaChars": 1252,
+      "totalChars": 2074,
+      "estimatedTokens": 796
+    },
+    {
+      "name": "delete_clause",
+      "nameChars": 13,
+      "descriptionChars": 123,
+      "inputSchemaChars": 331,
+      "totalChars": 467,
+      "estimatedTokens": 184
+    },
+    {
+      "name": "delete_contact",
+      "nameChars": 14,
+      "descriptionChars": 148,
+      "inputSchemaChars": 334,
+      "totalChars": 496,
+      "estimatedTokens": 194
+    },
+    {
+      "name": "delete_document",
+      "nameChars": 15,
+      "descriptionChars": 216,
+      "inputSchemaChars": 458,
+      "totalChars": 689,
+      "estimatedTokens": 268
+    },
+    {
+      "name": "delete_matter",
+      "nameChars": 13,
+      "descriptionChars": 167,
+      "inputSchemaChars": 331,
+      "totalChars": 511,
+      "estimatedTokens": 198
+    },
+    {
+      "name": "delete_reader_annotation",
+      "nameChars": 24,
+      "descriptionChars": 169,
+      "inputSchemaChars": 437,
+      "totalChars": 630,
+      "estimatedTokens": 247
+    },
+    {
+      "name": "delete_task",
+      "nameChars": 11,
+      "descriptionChars": 169,
+      "inputSchemaChars": 332,
+      "totalChars": 512,
+      "estimatedTokens": 199
+    },
+    {
+      "name": "delete_time_entry",
+      "nameChars": 17,
+      "descriptionChars": 258,
+      "inputSchemaChars": 356,
+      "totalChars": 631,
+      "estimatedTokens": 240
+    },
+    {
+      "name": "describe_capability",
+      "nameChars": 19,
+      "descriptionChars": 393,
+      "inputSchemaChars": 256,
+      "totalChars": 668,
+      "estimatedTokens": 244
+    },
+    {
+      "name": "fetch",
+      "nameChars": 5,
+      "descriptionChars": 413,
+      "inputSchemaChars": 622,
+      "totalChars": 1040,
+      "estimatedTokens": 399
+    },
+    {
+      "name": "fill_template",
+      "nameChars": 13,
+      "descriptionChars": 485,
+      "inputSchemaChars": 970,
+      "totalChars": 1468,
+      "estimatedTokens": 571
+    },
+    {
+      "name": "get_usage",
+      "nameChars": 9,
+      "descriptionChars": 259,
+      "inputSchemaChars": 76,
+      "totalChars": 344,
+      "estimatedTokens": 121
+    },
+    {
+      "name": "link_matter_contact",
+      "nameChars": 19,
+      "descriptionChars": 474,
+      "inputSchemaChars": 664,
+      "totalChars": 1157,
+      "estimatedTokens": 441
+    },
+    {
+      "name": "list_audit_log",
+      "nameChars": 14,
+      "descriptionChars": 389,
+      "inputSchemaChars": 1256,
+      "totalChars": 1659,
+      "estimatedTokens": 658
+    },
+    {
+      "name": "list_capabilities",
+      "nameChars": 17,
+      "descriptionChars": 602,
+      "inputSchemaChars": 851,
+      "totalChars": 1470,
+      "estimatedTokens": 561
+    },
+    {
+      "name": "list_clauses",
+      "nameChars": 12,
+      "descriptionChars": 441,
+      "inputSchemaChars": 1027,
+      "totalChars": 1480,
+      "estimatedTokens": 579
+    },
+    {
+      "name": "list_contacts",
+      "nameChars": 13,
+      "descriptionChars": 229,
+      "inputSchemaChars": 573,
+      "totalChars": 815,
+      "estimatedTokens": 320
+    },
+    {
+      "name": "list_documents",
+      "nameChars": 14,
+      "descriptionChars": 402,
+      "inputSchemaChars": 1112,
+      "totalChars": 1528,
+      "estimatedTokens": 602
+    },
+    {
+      "name": "list_invoices",
+      "nameChars": 13,
+      "descriptionChars": 468,
+      "inputSchemaChars": 655,
+      "totalChars": 1136,
+      "estimatedTokens": 434
+    },
+    {
+      "name": "list_matters",
+      "nameChars": 12,
+      "descriptionChars": 348,
+      "inputSchemaChars": 677,
+      "totalChars": 1037,
+      "estimatedTokens": 403
+    },
+    {
+      "name": "list_playbooks",
+      "nameChars": 14,
+      "descriptionChars": 309,
+      "inputSchemaChars": 553,
+      "totalChars": 876,
+      "estimatedTokens": 339
+    },
+    {
+      "name": "list_properties",
+      "nameChars": 15,
+      "descriptionChars": 339,
+      "inputSchemaChars": 544,
+      "totalChars": 898,
+      "estimatedTokens": 345
+    },
+    {
+      "name": "list_reader_annotations",
+      "nameChars": 23,
+      "descriptionChars": 223,
+      "inputSchemaChars": 905,
+      "totalChars": 1151,
+      "estimatedTokens": 460
+    },
+    {
+      "name": "list_tasks",
+      "nameChars": 10,
+      "descriptionChars": 379,
+      "inputSchemaChars": 1424,
+      "totalChars": 1813,
+      "estimatedTokens": 723
+    },
+    {
+      "name": "list_templates",
+      "nameChars": 14,
+      "descriptionChars": 688,
+      "inputSchemaChars": 354,
+      "totalChars": 1056,
+      "estimatedTokens": 382
+    },
+    {
+      "name": "list_time_entries",
+      "nameChars": 17,
+      "descriptionChars": 587,
+      "inputSchemaChars": 1597,
+      "totalChars": 2201,
+      "estimatedTokens": 867
+    },
+    {
+      "name": "lookup_business_registry",
+      "nameChars": 24,
+      "descriptionChars": 347,
+      "inputSchemaChars": 633,
+      "totalChars": 1004,
+      "estimatedTokens": 388
+    },
+    {
+      "name": "mint_web_handoff",
+      "nameChars": 16,
+      "descriptionChars": 110,
+      "inputSchemaChars": 169,
+      "totalChars": 295,
+      "estimatedTokens": 113
+    },
+    {
+      "name": "open_case_law_decision",
+      "nameChars": 22,
+      "descriptionChars": 234,
+      "inputSchemaChars": 470,
+      "totalChars": 726,
+      "estimatedTokens": 282
+    },
+    {
+      "name": "open_document_version_upload",
+      "nameChars": 28,
+      "descriptionChars": 216,
+      "inputSchemaChars": 208,
+      "totalChars": 452,
+      "estimatedTokens": 168
+    },
+    {
+      "name": "open_file_comparison",
+      "nameChars": 20,
+      "descriptionChars": 340,
+      "inputSchemaChars": 76,
+      "totalChars": 436,
+      "estimatedTokens": 152
+    },
+    {
+      "name": "prepare_feedback",
+      "nameChars": 16,
+      "descriptionChars": 711,
+      "inputSchemaChars": 2079,
+      "totalChars": 2806,
+      "estimatedTokens": 1109
+    },
+    {
+      "name": "prepare_file_comparison",
+      "nameChars": 23,
+      "descriptionChars": 667,
+      "inputSchemaChars": 1140,
+      "totalChars": 1830,
+      "estimatedTokens": 705
+    },
+    {
+      "name": "prepare_file_comparison_from_links",
+      "nameChars": 34,
+      "descriptionChars": 342,
+      "inputSchemaChars": 1058,
+      "totalChars": 1434,
+      "estimatedTokens": 567
+    },
+    {
+      "name": "preview_cited_provision",
+      "nameChars": 23,
+      "descriptionChars": 86,
+      "inputSchemaChars": 705,
+      "totalChars": 814,
+      "estimatedTokens": 331
+    },
+    {
+      "name": "preview_template_conditions",
+      "nameChars": 27,
+      "descriptionChars": 449,
+      "inputSchemaChars": 435,
+      "totalChars": 911,
+      "estimatedTokens": 340
+    },
+    {
+      "name": "read_capability",
+      "nameChars": 15,
+      "descriptionChars": 364,
+      "inputSchemaChars": 913,
+      "totalChars": 1292,
+      "estimatedTokens": 507
+    },
+    {
+      "name": "read_case_law_citations",
+      "nameChars": 23,
+      "descriptionChars": 767,
+      "inputSchemaChars": 1140,
+      "totalChars": 1930,
+      "estimatedTokens": 739
+    },
+    {
+      "name": "read_case_law_decision",
+      "nameChars": 22,
+      "descriptionChars": 558,
+      "inputSchemaChars": 2623,
+      "totalChars": 3203,
+      "estimatedTokens": 1287
+    },
+    {
+      "name": "read_case_law_decision_blocks",
+      "nameChars": 29,
+      "descriptionChars": 263,
+      "inputSchemaChars": 374,
+      "totalChars": 666,
+      "estimatedTokens": 254
+    },
+    {
+      "name": "read_contact",
+      "nameChars": 12,
+      "descriptionChars": 130,
+      "inputSchemaChars": 161,
+      "totalChars": 303,
+      "estimatedTokens": 115
+    },
+    {
+      "name": "read_content_across_matters",
+      "nameChars": 27,
+      "descriptionChars": 338,
+      "inputSchemaChars": 298,
+      "totalChars": 663,
+      "estimatedTokens": 246
+    },
+    {
+      "name": "read_document",
+      "nameChars": 13,
+      "descriptionChars": 600,
+      "inputSchemaChars": 727,
+      "totalChars": 1340,
+      "estimatedTokens": 508
+    },
+    {
+      "name": "read_provision_history",
+      "nameChars": 22,
+      "descriptionChars": 618,
+      "inputSchemaChars": 1602,
+      "totalChars": 2242,
+      "estimatedTokens": 881
+    },
+    {
+      "name": "read_statute",
+      "nameChars": 12,
+      "descriptionChars": 800,
+      "inputSchemaChars": 990,
+      "totalChars": 1802,
+      "estimatedTokens": 684
+    },
+    {
+      "name": "read_statute_provisions",
+      "nameChars": 23,
+      "descriptionChars": 703,
+      "inputSchemaChars": 1913,
+      "totalChars": 2639,
+      "estimatedTokens": 1040
+    },
+    {
+      "name": "remove_matter_member",
+      "nameChars": 20,
+      "descriptionChars": 125,
+      "inputSchemaChars": 423,
+      "totalChars": 568,
+      "estimatedTokens": 225
+    },
+    {
+      "name": "resolve_case_law_decision",
+      "nameChars": 25,
+      "descriptionChars": 554,
+      "inputSchemaChars": 671,
+      "totalChars": 1250,
+      "estimatedTokens": 473
+    },
+    {
+      "name": "resolve_law_citation",
+      "nameChars": 20,
+      "descriptionChars": 740,
+      "inputSchemaChars": 1789,
+      "totalChars": 2549,
+      "estimatedTokens": 999
+    },
+    {
+      "name": "resolve_rate",
+      "nameChars": 12,
+      "descriptionChars": 272,
+      "inputSchemaChars": 406,
+      "totalChars": 690,
+      "estimatedTokens": 264
+    },
+    {
+      "name": "run_playbook",
+      "nameChars": 12,
+      "descriptionChars": 272,
+      "inputSchemaChars": 281,
+      "totalChars": 565,
+      "estimatedTokens": 212
+    },
+    {
+      "name": "save_clause",
+      "nameChars": 11,
+      "descriptionChars": 402,
+      "inputSchemaChars": 3241,
+      "totalChars": 3654,
+      "estimatedTokens": 1489
+    },
+    {
+      "name": "save_contact",
+      "nameChars": 12,
+      "descriptionChars": 303,
+      "inputSchemaChars": 2245,
+      "totalChars": 2560,
+      "estimatedTokens": 1041
+    },
+    {
+      "name": "save_document",
+      "nameChars": 13,
+      "descriptionChars": 516,
+      "inputSchemaChars": 1455,
+      "totalChars": 1984,
+      "estimatedTokens": 783
+    },
+    {
+      "name": "save_filled_template",
+      "nameChars": 20,
+      "descriptionChars": 391,
+      "inputSchemaChars": 1437,
+      "totalChars": 1848,
+      "estimatedTokens": 736
+    },
+    {
+      "name": "save_matter",
+      "nameChars": 11,
+      "descriptionChars": 328,
+      "inputSchemaChars": 962,
+      "totalChars": 1301,
+      "estimatedTokens": 514
+    },
+    {
+      "name": "save_playbook",
+      "nameChars": 13,
+      "descriptionChars": 396,
+      "inputSchemaChars": 6303,
+      "totalChars": 6712,
+      "estimatedTokens": 2763
+    },
+    {
+      "name": "save_task",
+      "nameChars": 9,
+      "descriptionChars": 418,
+      "inputSchemaChars": 1867,
+      "totalChars": 2294,
+      "estimatedTokens": 921
+    },
+    {
+      "name": "save_time_entry",
+      "nameChars": 15,
+      "descriptionChars": 480,
+      "inputSchemaChars": 2017,
+      "totalChars": 2512,
+      "estimatedTokens": 1006
+    },
+    {
+      "name": "search",
+      "nameChars": 6,
+      "descriptionChars": 521,
+      "inputSchemaChars": 307,
+      "totalChars": 834,
+      "estimatedTokens": 304
+    },
+    {
+      "name": "search_across_matters",
+      "nameChars": 21,
+      "descriptionChars": 151,
+      "inputSchemaChars": 531,
+      "totalChars": 703,
+      "estimatedTokens": 279
+    },
+    {
+      "name": "search_boe_legislation",
+      "nameChars": 22,
+      "descriptionChars": 547,
+      "inputSchemaChars": 1849,
+      "totalChars": 2418,
+      "estimatedTokens": 961
+    },
+    {
+      "name": "search_case_law",
+      "nameChars": 15,
+      "descriptionChars": 499,
+      "inputSchemaChars": 5147,
+      "totalChars": 5661,
+      "estimatedTokens": 2316
+    },
+    {
+      "name": "search_legislation",
+      "nameChars": 18,
+      "descriptionChars": 722,
+      "inputSchemaChars": 2365,
+      "totalChars": 3105,
+      "estimatedTokens": 1233
+    },
+    {
+      "name": "set_field_value",
+      "nameChars": 15,
+      "descriptionChars": 297,
+      "inputSchemaChars": 2771,
+      "totalChars": 3083,
+      "estimatedTokens": 1259
+    },
+    {
+      "name": "set_practice_jurisdictions",
+      "nameChars": 26,
+      "descriptionChars": 277,
+      "inputSchemaChars": 2049,
+      "totalChars": 2352,
+      "estimatedTokens": 955
+    },
+    {
+      "name": "submit_feedback",
+      "nameChars": 15,
+      "descriptionChars": 588,
+      "inputSchemaChars": 2374,
+      "totalChars": 2977,
+      "estimatedTokens": 1191
+    },
+    {
+      "name": "update_organization_settings",
+      "nameChars": 28,
+      "descriptionChars": 163,
+      "inputSchemaChars": 1256,
+      "totalChars": 1447,
+      "estimatedTokens": 587
+    },
+    {
+      "name": "update_reader_annotation",
+      "nameChars": 24,
+      "descriptionChars": 202,
+      "inputSchemaChars": 1590,
+      "totalChars": 1816,
+      "estimatedTokens": 738
+    },
+    {
+      "name": "upload_document_version",
+      "nameChars": 23,
+      "descriptionChars": 290,
+      "inputSchemaChars": 750,
+      "totalChars": 1063,
+      "estimatedTokens": 417
+    },
+    {
+      "name": "write_capability",
+      "nameChars": 16,
+      "descriptionChars": 444,
+      "inputSchemaChars": 1075,
+      "totalChars": 1535,
+      "estimatedTokens": 602
+    }
+  ],
+  "totals": {
+    "characters": 127703,
+    "estimatedTokens": 50609
+  }
+}

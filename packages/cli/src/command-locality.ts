@@ -16,6 +16,7 @@ const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
   "compatibility",
   "tools",
   "upload",
+  "update",
 ]);
 
 /**

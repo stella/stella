@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
-  readFileSync,
-  readdirSync,
-  mkdtempSync,
   mkdirSync,
-  writeFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -544,9 +544,12 @@ describe("high-volume index-build migration rule", () => {
       );
     };
     try {
+      // The expand-only rules refuse this historical file outside the
+      // baseline; this case pins only the high-volume grandfathering.
       const unchanged = run(file, original);
-      expect(new TextDecoder().decode(unchanged.stderr)).toBe("");
-      expect(unchanged.exitCode).toBe(0);
+      expect(new TextDecoder().decode(unchanged.stderr)).not.toContain(
+        `[${RULE_ID}]`,
+      );
       for (const [target, sql] of [
         [
           file,

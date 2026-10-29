@@ -24,9 +24,18 @@ concurrency:
   group: type-cost-measurement
   cancel-in-progress: false
 
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.projects.outputs.matrix }}
@@ -44,7 +53,7 @@ jobs:
           matrix=$(python3 scripts/type-cost-projects.py)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -63,7 +72,7 @@ jobs:
       - name: Package compiler inputs
         run: tar -czf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz" apps/api/.cache/typecheck-declarations apps/extension/.wxt
       - name: Upload compiler inputs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: type-cost-inputs
           path: ${{ runner.temp }}/type-cost-inputs
@@ -72,7 +81,7 @@ jobs:
 
   measure:
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -85,7 +94,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -94,7 +103,7 @@ jobs:
         env:
           NPM_TOKEN: ""
       - name: Download compiler inputs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: type-cost-inputs
           path: ${{ runner.temp }}/type-cost-inputs
@@ -130,7 +139,7 @@ jobs:
           exit "$status"
       - name: Upload diagnostics and trace
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: type-cost-${{ matrix.id }}
           path: ${{ runner.temp }}/type-cost-result

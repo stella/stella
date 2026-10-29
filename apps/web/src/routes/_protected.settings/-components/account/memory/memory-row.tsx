@@ -1,23 +1,29 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
   PencilIcon,
   PinIcon,
+  Trash2Icon,
 } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { updateMemory as updateMemoryRequest } from "@/lib/memory-api";
+import {
+  deleteMemory as deleteMemoryRequest,
+  updateMemory as updateMemoryRequest,
+} from "@/lib/memory-api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
 import type { MemoryListItem } from "@/routes/_protected.settings/-queries/memories";
@@ -55,6 +61,7 @@ export const MemoryRow = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [draft, setDraft] = useState(memory.content);
 
   const updateMemory = useMutation({
@@ -75,7 +82,25 @@ export const MemoryRow = ({
       }
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow:failure",
+        scope: { type: "handler", handlerId: "MemoryRow:failure" },
+      });
+      notifyUserError(error, tErrors("actionFailed"));
+    },
+  });
+
+  const deleteMemory = useMutation({
+    mutationFn: async () => await deleteMemoryRequest(memory.id),
+    onSuccess: async () => {
+      await invalidateMemories(queryClient, activeOrganizationId);
+      stellaToast.add({ title: t("deletedToast"), type: "success" });
+    },
+    onError: (error: unknown) => {
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow.delete:failure",
+        scope: { type: "handler", handlerId: "MemoryRow.delete:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });
@@ -93,15 +118,32 @@ export const MemoryRow = ({
 
   return (
     <div className="bg-card flex flex-col gap-2 rounded-lg border p-3">
+      <DestructiveConfirmDialog
+        cancelLabel={commonT("cancel")}
+        confirmLabel={commonT("delete")}
+        confirmation={commonT("delete")}
+        description={t("deleteDescription")}
+        inputLabel={t("deleteConfirmation", {
+          confirmation: commonT("delete"),
+        })}
+        loading={deleteMemory.isPending}
+        onConfirm={() => {
+          deleteMemory.mutate();
+        }}
+        onOpenChange={setDeleteDialogOpen}
+        open={deleteDialogOpen}
+        title={t("deleteTitle")}
+      />
       <div className="flex items-start justify-between gap-2">
         <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium">
           {tRoot(MEMORY_KIND_KEYS[memory.kind])}
         </span>
         <MemoryActions
           canManage={canManage}
-          isPending={updateMemory.isPending}
+          isPending={updateMemory.isPending || deleteMemory.isPending}
           memory={memory}
           onArchive={() => updateMemory.mutate({ status: "archived" })}
+          onDelete={() => setDeleteDialogOpen(true)}
           onEdit={() => {
             setDraft(memory.content);
             setIsEditing((prev) => !prev);
@@ -160,6 +202,7 @@ type MemoryActionsProps = {
   isPending: boolean;
   memory: MemoryListItem;
   onArchive: () => void;
+  onDelete: () => void;
   onEdit: () => void;
   onPin: () => void;
   onRestore: () => void;
@@ -170,6 +213,7 @@ const MemoryActions = ({
   isPending,
   memory,
   onArchive,
+  onDelete,
   onEdit,
   onPin,
   onRestore,
@@ -179,17 +223,31 @@ const MemoryActions = ({
   if (!canManage) {
     return null;
   }
+  const deleteAction = (
+    <Button
+      aria-label={commonT("delete")}
+      disabled={isPending}
+      onClick={onDelete}
+      size="icon-sm"
+      variant="ghost"
+    >
+      <Trash2Icon className="size-4" />
+    </Button>
+  );
   if (memory.status === "archived" || memory.status === "stale") {
     return (
-      <Button
-        disabled={isPending}
-        onClick={onRestore}
-        size="sm"
-        variant="ghost"
-      >
-        <ArchiveRestoreIcon className="size-4" />
-        {commonT("restore")}
-      </Button>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <Button
+          disabled={isPending}
+          onClick={onRestore}
+          size="sm"
+          variant="ghost"
+        >
+          <ArchiveRestoreIcon className="size-4" />
+          {commonT("restore")}
+        </Button>
+        {deleteAction}
+      </div>
     );
   }
 
@@ -223,6 +281,7 @@ const MemoryActions = ({
       >
         <ArchiveIcon className="size-4" />
       </Button>
+      {deleteAction}
     </div>
   );
 };

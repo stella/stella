@@ -1,20 +1,32 @@
-import { panic } from "better-result";
-import { SQL } from "bun";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL as SqlFragment } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { openCancellableReservedSession } from "@/api/db/long-running-connection";
 import { stellaPublicLawReader } from "@/api/db/rls";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { parsePostgresTimeoutMs } from "@/api/db/shared-pool-timeout-policy";
 import { setSharedReadTransactionGuards } from "@/api/db/shared-pool-timeouts";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import { queryCountLogger } from "@/api/lib/db-query-counter";
+import {
+  instrumentDedicatedSqlCounts,
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
-import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
+import {
+  getPublicReadSignal,
+  getPublicReadStatementTimeoutMs,
+  withPublicReadIo,
+} from "@/api/lib/legal-search/public-read-timeout-context";
+import { logger } from "@/api/lib/observability/logger";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -26,6 +38,10 @@ import type {
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
+const SLOW_PUBLIC_LAW_STATEMENT_MS = 1000;
+// Frame 2 is the callsite: helper, transaction proxy, caller. Logger service.version
+// scopes these repository-relative source or bundled-output locations to a build.
+const PUBLIC_LAW_SQL_CALLSITE_FRAME = 2;
 
 /**
  * How much of one state a transaction sees.
@@ -40,6 +56,165 @@ export type PublicLawReadIsolation = "read-committed" | "repeatable-read";
 export type PublicLawReadOptions = { isolation?: PublicLawReadIsolation };
 
 type PublicLawSharedReadTransaction = Pick<Transaction, "execute" | "select">;
+
+/** The callsite names a query without exposing its SQL or bound values. */
+const publicLawStatementName = (): string => {
+  const trace = { stack: "" };
+  Error.captureStackTrace(trace);
+  const frames = trace.stack
+    .split("\n")
+    .filter((line) => line.includes(" at "));
+  const frame = frames.at(PUBLIC_LAW_SQL_CALLSITE_FRAME);
+  if (frame === undefined) {
+    logger.warn("public_law.statement_callsite_unavailable");
+    return "callsite-unavailable";
+  }
+  const trimmed = frame.trim();
+  const location = trimmed.endsWith(")")
+    ? trimmed.slice(trimmed.lastIndexOf("(") + 1, -1)
+    : trimmed.slice(trimmed.lastIndexOf(" ") + 1);
+  const columnSeparator = location.lastIndexOf(":");
+  const lineSeparator = location.lastIndexOf(":", columnSeparator - 1);
+  if (lineSeparator === -1 || columnSeparator <= lineSeparator) {
+    logger.warn("public_law.statement_callsite_unavailable");
+    return "callsite-unavailable";
+  }
+  const sourcePath = location.slice(0, lineSeparator);
+  const line = location.slice(lineSeparator + 1, columnSeparator);
+  const column = location.slice(columnSeparator + 1);
+  const relativePath = sourcePath.startsWith(`${process.cwd()}/`)
+    ? sourcePath.slice(process.cwd().length + 1)
+    : (sourcePath.split("/").at(-1) ?? "unknown-source");
+  return `${relativePath}:${line}:${column}`;
+};
+
+const observePublicLawStatement = async <T>(
+  statementName: string,
+  operation: () => Promise<T>,
+): Promise<Result<T, PublicLawStatementError>> => {
+  const startedAt = performance.now();
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      getPublicReadSignal()?.throwIfAborted();
+      return await operation();
+    },
+    catch: (cause: unknown) =>
+      new PublicLawStatementError({
+        message: "Public-law statement failed",
+        cause,
+      }),
+  });
+  const durationMs = Math.round(performance.now() - startedAt);
+  if (Result.isError(outcome)) {
+    if (getPgErrorCode(outcome.error) === "57014") {
+      logger.warn("public_law.read_statement_cancelled", {
+        "statement.callsite": statementName,
+        durationMs,
+      });
+    } else if (durationMs >= SLOW_PUBLIC_LAW_STATEMENT_MS) {
+      logger.warn("public_law.read_statement_slow", {
+        "statement.callsite": statementName,
+        durationMs,
+      });
+    }
+    return outcome;
+  }
+  if (durationMs >= SLOW_PUBLIC_LAW_STATEMENT_MS) {
+    logger.warn("public_law.read_statement_slow", {
+      "statement.callsite": statementName,
+      durationMs,
+    });
+  }
+  return outcome;
+};
+
+// Wrap only executable query builders; subqueries and SQL fragments must keep
+// their original non-thenable behavior and every other builder method intact.
+const observedQueryBuilder = <T extends object>(
+  builder: T,
+  statementName: string,
+): T =>
+  new Proxy(builder, {
+    get: (target, property) => {
+      const method = Reflect.get(target, property, target);
+      if (
+        property === "then" ||
+        property === "catch" ||
+        property === "finally"
+      ) {
+        if (typeof method !== "function") {
+          return method;
+        }
+        return (...args: unknown[]) => {
+          const outcome = observePublicLawStatement(
+            statementName,
+            async () => await Promise.resolve(target),
+          ).then((result) => {
+            if (Result.isError(result)) {
+              return abortTransaction(result.error);
+            }
+            return result.value;
+          });
+          const continuation: unknown = Reflect.get(outcome, property, outcome);
+          if (typeof continuation !== "function") {
+            panic("Observed promise continuation must be callable", property);
+          }
+          const result: unknown = Reflect.apply(continuation, outcome, args);
+          return result;
+        };
+      }
+      if (typeof method !== "function") {
+        return method;
+      }
+      if (property === "execute") {
+        return async (...args: unknown[]) => {
+          const outcome = await observePublicLawStatement(
+            statementName,
+            async () => {
+              const result: unknown = Reflect.apply(method, target, args);
+              return await result;
+            },
+          );
+          if (Result.isError(outcome)) {
+            return abortTransaction(outcome.error);
+          }
+          return outcome.value;
+        };
+      }
+      return (...args: unknown[]) => {
+        const result: unknown = Reflect.apply(method, target, args);
+        if (typeof result !== "object" || result === null) {
+          return result;
+        }
+        const execute: unknown = Reflect.get(result, "execute", result);
+        return typeof execute === "function"
+          ? observedQueryBuilder(result, statementName)
+          : result;
+      };
+    },
+  });
+
+export const observePublicLawReadTransaction = (
+  transaction: PublicLawSharedReadTransaction,
+): PublicLawSharedReadTransaction =>
+  new Proxy(transaction, {
+    get: (target, property) => {
+      if (property === "execute") {
+        return (...args: Parameters<typeof target.execute>) => {
+          const statementName = publicLawStatementName();
+          return observedQueryBuilder(target.execute(...args), statementName);
+        };
+      }
+      if (property === "select") {
+        return (...args: Parameters<typeof target.select>) => {
+          const statementName = publicLawStatementName();
+          return observedQueryBuilder(target.select(...args), statementName);
+        };
+      }
+      const value: unknown = Reflect.get(target, property, target);
+      return value;
+    },
+  });
 
 export type PublicLawDatabaseRolePermissions = {
   canAccessOtherDatabase: boolean;
@@ -96,6 +271,22 @@ type ExternalPublicLawDatabase = {
 };
 
 let externalPublicLawDatabase: ExternalPublicLawDatabase | null = null;
+
+// Cancellation has its own bounded pool: a full read pool cannot service it.
+let cancellationClient: ReturnType<typeof createSqlClient> | undefined;
+const cancelPublicLawBackend = async (pid: number) => {
+  cancellationClient ??= instrumentDedicatedSqlCounts(
+    createSqlClient({
+      url: envBase.PUBLIC_LAW_DATABASE_URL ?? envBase.DATABASE_URL,
+      max: 1,
+      connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
+      idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+      connection: { statement_timeout: 5000 },
+    }),
+    "cleanup",
+  );
+  await cancellationClient.unsafe("SELECT pg_cancel_backend($1)", [pid]);
+};
 
 /**
  * The column tuples of one bound, as a relation a CTE can name. An empty bound
@@ -412,13 +603,21 @@ const publicLawReadGuards = (): readonly PublicLawReadGuard[] =>
 const startRoleValidation = async (
   external: ExternalPublicLawDatabase,
 ): Promise<void> => {
-  const validation = external.database.transaction(async (tx) => {
-    await configureReadTransaction(
-      tx,
-      "read-committed",
-      EXTERNAL_PUBLIC_LAW_READ_GUARDS,
-    );
-    await validateExternalPublicLawDatabase(tx);
+  const validation = withPublicReadIo("database", async (io) => {
+    const resource = await openPublicReadDatabase(external.database, io.signal);
+    try {
+      await io.readTransaction(resource.database, async (tx) => {
+        const observedTransaction = observePublicLawReadTransaction(tx);
+        await configureReadTransaction(
+          observedTransaction,
+          "read-committed",
+          EXTERNAL_PUBLIC_LAW_READ_GUARDS,
+        );
+        await validateExternalPublicLawDatabase(observedTransaction);
+      });
+    } finally {
+      await resource.close();
+    }
   });
   const promise = validation.then(
     () => {
@@ -467,16 +666,18 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
 
   if (externalPublicLawDatabase === null) {
     const client = runTransactionsInCallerContext(
-      new SQL({
-        url,
-        connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
-        max: envBase.PUBLIC_LAW_DATABASE_POOL_MAX,
-        maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
-        idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
-        ...sharedPoolConnectionSettings("public_law"),
-      }),
+      instrumentSqlTransactionCounts(
+        createSqlClient({
+          url,
+          connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
+          max: envBase.PUBLIC_LAW_DATABASE_POOL_MAX,
+          maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
+          idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+          ...sharedPoolConnectionSettings("public_law"),
+        }),
+      ),
     );
-    const database = drizzle({
+    const database = createDatabase({
       client,
       relations: databaseRelations,
       logger: isLocalDevOpen() ? queryCountLogger : undefined,
@@ -491,6 +692,28 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
   return externalPublicLawDatabase.database;
 };
 
+const openPublicReadDatabase = async (
+  pool: typeof rootDb,
+  signal: AbortSignal | undefined,
+) => {
+  if (signal === undefined) {
+    return { database: pool, close: async () => await Promise.resolve() };
+  }
+  const reservation = await openCancellableReservedSession({
+    reserve: async () =>
+      instrumentDedicatedSqlCounts(await pool.$client.reserve({ signal })),
+    cancelBackend: cancelPublicLawBackend,
+    signal,
+  });
+  return {
+    database: createDatabase({
+      client: runTransactionsInCallerContext(reservation.session),
+      relations: databaseRelations,
+    }),
+    close: reservation.close,
+  };
+};
+
 /**
  * Shared read-only transaction boundary for public legal data.
  *
@@ -501,12 +724,36 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
 export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
   options?: PublicLawReadOptions,
-): Promise<T> => {
-  const isolation = options?.isolation ?? "read-committed";
-  const database = await getPublicLawDatabase();
-  return await database.transaction(async (tx) => {
-    await configureReadTransaction(tx, isolation, publicLawReadGuards());
+): Promise<T> =>
+  await withPublicReadIo("database", async (io) => {
+    const signal = io.signal;
+    signal?.throwIfAborted();
+    const isolation = options?.isolation ?? "read-committed";
+    const pool = await getPublicLawDatabase();
+    const resource = await openPublicReadDatabase(pool, signal);
+    let outcome: Result<T, unknown>;
+    try {
+      const read = io.readTransaction(
+        resource.database,
+        async (transaction) => {
+          const tx = observePublicLawReadTransaction(transaction);
+          await configureReadTransaction(tx, isolation, publicLawReadGuards());
 
-    return await fn(tx);
+          return await fn(tx);
+        },
+      );
+      outcome = await read.then(
+        (value) => Result.ok(value),
+        (error: unknown) => Result.err(error),
+      );
+    } finally {
+      await resource.close();
+    }
+    // Cancellation and the transaction have both settled before admission releases.
+    // A driver cancellation is the caller's abort, not a statement timeout.
+    signal?.throwIfAborted();
+    if (Result.isError(outcome)) {
+      return abortTransaction(outcome.error);
+    }
+    return outcome.value;
   });
-};

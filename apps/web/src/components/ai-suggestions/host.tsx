@@ -39,13 +39,13 @@ import {
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   MessageSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
@@ -56,6 +56,7 @@ import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
+  ChatSendOutcome,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
@@ -159,17 +160,19 @@ type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
+  sendDisabled?: boolean;
   /**
    * Emitted on send. `files` carries any attachments the user added via
    * the shared (+) menu, always an array (empty for preset chips, which
    * never attach); callers thread them into `buildChatRequestMessage`
-   * without a fallback.
+   * without a fallback. The outcome says whether the composer keeps the
+   * draft (see `ChatSendOutcome`); preset sends carry no draft to keep.
    */
   onSubmit: (input: {
     prompt: string;
     presetId?: string;
     files: ChatInputDraft["files"];
-  }) => Promise<void> | void;
+  }) => Promise<ChatSendOutcome>;
   onSubmitError?: ((error: unknown) => void) | undefined;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
@@ -462,6 +465,7 @@ export const PromptBar = (props: PromptBarProps) => {
     status,
     pendingCount,
     canSubmitNow,
+    sendDisabled,
     onSubmit,
     onSubmitError,
     presetScopeChooser,
@@ -512,6 +516,7 @@ export const PromptBar = (props: PromptBarProps) => {
   } = getPromptBarAvailability({
     isEmpty,
     onRetry,
+    sendDisabled,
     onStop,
     queueWhileGenerating,
     sendDisabledReason,
@@ -550,9 +555,8 @@ export const PromptBar = (props: PromptBarProps) => {
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
   const handleComposerSubmit = useCallback(
-    async (draft: ChatInputDraft) => {
-      await onSubmit({ prompt: draft.html, files: draft.files });
-    },
+    async (draft: ChatInputDraft): Promise<ChatSendOutcome> =>
+      await onSubmit({ prompt: draft.html, files: draft.files }),
     [onSubmit],
   );
 
@@ -572,6 +576,7 @@ export const PromptBar = (props: PromptBarProps) => {
   // silently drop the attached file. With attachments present the user sends
   // through the normal composer path instead.
   const presetChipsVisible =
+    !sendDisabled &&
     layout === "floating" &&
     !threadHasMessages &&
     presets !== undefined &&
@@ -958,6 +963,7 @@ const getPromptBarAvailability = ({
   onStop,
   queueWhileGenerating,
   sendDisabledReason,
+  sendDisabled = false,
   status,
 }: {
   isEmpty: boolean;
@@ -965,16 +971,15 @@ const getPromptBarAvailability = ({
   onStop: PromptBarProps["onStop"];
   queueWhileGenerating: boolean;
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  sendDisabled: PromptBarProps["sendDisabled"];
   status: PromptBarProps["status"];
 }) => {
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
   const isSendBlocked = sendDisabledReason !== undefined;
-  const submitDisabled = busy || isSendBlocked;
+  const submitDisabled = busy || isSendBlocked || sendDisabled;
   const retryOffer =
-    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
-      ? onRetry
-      : undefined;
+    onRetry !== undefined && isEmpty && !submitDisabled ? onRetry : undefined;
   return {
     busy,
     composerActionMode: resolveChatComposerAction({
@@ -983,7 +988,7 @@ const getPromptBarAvailability = ({
       onRetry: retryOffer,
     }),
     composerSubmitDisabled: queueWhileGenerating
-      ? status === "applying" || isSendBlocked
+      ? status === "applying" || isSendBlocked || sendDisabled
       : submitDisabled,
     inputDisabled: isSendBlocked,
     isGenerating,

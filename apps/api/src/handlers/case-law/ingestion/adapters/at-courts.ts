@@ -49,10 +49,10 @@ import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/a
 import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -64,8 +64,8 @@ import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
-  AT_RIS_METADATA_URL_SCHEMA,
   AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  AT_RIS_METADATA_URL_SCHEMA,
 } from "./at-courts.metadata-urls";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";

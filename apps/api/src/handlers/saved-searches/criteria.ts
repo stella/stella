@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { Temporal } from "@stll/time";
 
 import { ENTITY_KINDS } from "@/api/db/schema";
@@ -35,6 +36,7 @@ const mimeTypeSchema = v.pipe(
 const timestampSchema = v.pipe(
   v.string(),
   v.isoTimestamp(),
+  API_STORABLE_INSTANT_CHECK,
   v.rawTransform(({ dataset, addIssue, NEVER }) => {
     const instant = Result.try(() => Temporal.Instant.from(dataset.value));
     if (instant.isErr()) {

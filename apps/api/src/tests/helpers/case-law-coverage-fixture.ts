@@ -1,40 +1,31 @@
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
-import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
+import type { PublisherCensus } from "@/api/lib/case-law/completeness-census-contract";
 
 const asOf = "2026-10-01T12:00:00.000Z";
 const storedAsOf = "2026-09-30T12:00:00.000Z";
-const census = {
-  aggregateUnit: "slice-memberships",
-  verdict: "incomplete",
-  scopeStatus: "full-publisher",
-  outcome: "publisher-count",
-  evidenceRef: "https://example.test/publisher-count",
-  measuredSlices: 1,
-  expectedSlices: 1,
-  shortSlices: 1,
-  publisher: 200,
-  stored: 150,
-  withText: 147,
-  observedAt: asOf,
-  years: [
-    { year: 2026, slices: 1, publisher: 200, stored: 150, withText: 147 },
-  ],
-  worstSlices: [
-    {
-      slice: "2026",
-      year: 2026,
-      outcome: "publisher-count",
-      publisher: 200,
-      stored: 150,
-      withText: 147,
-      observedAt: asOf,
-      evidenceRef: "https://example.test/publisher-count",
-    },
-  ],
-} satisfies SourceCensus;
+
+const publisherCensus = {
+  type: "unknown",
+  measurement: {
+    aggregateUnit: "slice-memberships",
+    verdict: "unmeasured",
+    scopeStatus: "partial-publisher",
+    outcome: "none-exposed",
+    evidenceRef: "synthetic-fixture",
+    measuredSlices: 0,
+    expectedSlices: null,
+    shortSlices: 0,
+    publisher: null,
+    stored: 0,
+    withText: 0,
+    observedAt: null,
+    years: [],
+    worstSlices: [],
+  },
+} satisfies PublisherCensus;
 const base = {
+  censusVerdict: "unmeasured",
   health: "current",
-  censusVerdict: "incomplete",
   stored: { decisions: 150, asOf: storedAsOf },
   addedLastWeek: 5,
   completeness: {
@@ -57,8 +48,14 @@ const base = {
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
-      census,
-      knownGaps: { type: "unknown" },
+      publisherCensus,
+      storedDecisions: 150,
+      publishedDecisions: 100,
+      courts: [{ court: "Nejvyšší soud", decisions: 100 }],
+      knownGaps: {
+        type: "not_reconciled",
+        reason: "The source listing is not date-sliced.",
+      },
       completeness: { state: "not-measured-yet" },
       addedLastWeek: 5,
     },
@@ -68,12 +65,17 @@ const base = {
 export const CASE_LAW_COVERAGE_FIXTURE = {
   generatedAt: asOf,
   provisionProcessing: [],
-  totals: { searchable: 100, stored: { decisions: 300, asOf: storedAsOf } },
+  totals: {
+    addedLastWeek: 10,
+    searchable: 100,
+    stored: { decisions: 300, asOf: storedAsOf },
+  },
   countries: [
     {
       ...base,
       country: "CZE",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       searchable: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -106,6 +108,7 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
       stored: { decisions: 0, asOf: null },
       country: "EU",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       searchable: 0,
       decisionYearFrom: null,
       decisionYearTo: null,
@@ -122,8 +125,11 @@ const expectedSources = [
     decisionYearFrom: 1993,
     decisionYearTo: 2026,
     pendingTextCount: 3,
-    census,
-    knownGaps: { type: "unknown" },
+    publisherCensus,
+    knownGaps: {
+      type: "not_reconciled",
+      reason: "The source listing is not date-sliced.",
+    },
   },
 ] as const;
 
@@ -131,9 +137,9 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
   asOf,
   countries: [
     {
-      censusVerdict: "incomplete",
       country: "CZE",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       decisions: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -145,9 +151,9 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       ],
     },
     {
-      censusVerdict: "incomplete",
       country: "SVK",
       availability: "in-preparation",
+      censusVerdict: "unmeasured",
       decisions: 150,
       decisionYearFrom: null,
       decisionYearTo: null,
@@ -155,9 +161,9 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       courts: null,
     },
     {
-      censusVerdict: "incomplete",
       country: "EU",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       decisions: 0,
       decisionYearFrom: null,
       decisionYearTo: null,

@@ -1,8 +1,6 @@
-import Elysia from "elysia";
-
 import readLegislation from "@/api/handlers/legislation/get";
 import searchLegislation from "@/api/handlers/legislation/search";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
 /**
  * Corpus-legislation routes (ingested statutes searchable via the
@@ -10,18 +8,10 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
  * avoid colliding with the existing BOE proxy routes in routes.ts.
  */
 
-export const legislationCorpusRoute = new Elysia({
-  prefix: "/legislation/corpus",
-})
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .post("/search", searchLegislation.handler, {
-    body: searchLegislation.config.body,
-    permissions: searchLegislation.config.permissions,
-    response: searchLegislation.config.response,
-  })
-  .get("/:documentId", readLegislation.handler, {
-    params: readLegislation.config.params,
-    permissions: readLegislation.config.permissions,
-  });
+export const legislationCorpusRoute = routes(
+  {
+    "/search": { POST: searchLegislation },
+    "/:documentId": { GET: readLegislation },
+  },
+  { prefix: "/legislation/corpus" },
+);

@@ -9,6 +9,9 @@ import { describe, expect, test } from "bun:test";
 // forces a deliberate decision: widen the range, release the package, or
 // update this pin with the reasoning in the PR.
 const EXPECTED_REGISTRY_RESOLVED = [
+  // The API's tenant-id guard uses the published @stll/text-search matcher
+  // and its native engines (aho-corasick, regex-set); the repository has no
+  // workspace for them to link instead.
   "@stll/aho-corasick",
   "@stll/aho-corasick-darwin-arm64",
   "@stll/aho-corasick-darwin-x64",
@@ -52,6 +55,10 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/stdnum-linux-x64-gnu",
   "@stll/stdnum-wasm",
   "@stll/stdnum-win32-x64-msvc",
+  "@stll/test-kit",
+  "@stll/text-search",
+  "@stll/time",
+  "@stll/utf8-boundaries",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

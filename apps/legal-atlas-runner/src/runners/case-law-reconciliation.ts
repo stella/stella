@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
  * The standing walk that keeps every reconcilable source honest.
@@ -33,6 +35,8 @@ export const RECONCILIATION_TURN = {
    * misconfigured source would read as a settled one.
    */
   MISCONFIGURED: "misconfigured",
+  /** The caller's deadline or drain signal stopped the in-flight unit. */
+  ABORTED: "aborted",
 } as const;
 
 type ReconciliationTurn =
@@ -87,6 +91,8 @@ export type ReconciliationSweepSummary = ReconciliationCounts & {
   leased: number;
   /** Turns that found the source stating something no unit can act on. */
   misconfigured: number;
+  /** Turns cancelled by a deadline or process drain. */
+  aborted: number;
   /** Turns that threw, wherever the throw came from. */
   errored: number;
   /**
@@ -110,6 +116,7 @@ const emptySummary = (): ReconciliationSweepSummary => ({
   idle: 0,
   leased: 0,
   misconfigured: 0,
+  aborted: 0,
   errored: 0,
   lastError: undefined,
   erroredSources: [],
@@ -132,11 +139,12 @@ const emptySummary = (): ReconciliationSweepSummary => ({
  * on; liveness is the daemon's own heartbeat.
  */
 const summaryIsEmpty = ({
+  aborted,
   errored,
   misconfigured,
   worked,
 }: ReconciliationSweepSummary): boolean =>
-  worked === 0 && errored === 0 && misconfigured === 0;
+  worked === 0 && aborted === 0 && errored === 0 && misconfigured === 0;
 
 const addCounts = (
   summary: ReconciliationSweepSummary,
@@ -277,7 +285,8 @@ export const runCaseLawReconciliationLoop = async ({
       try {
         const result = await (source?.runWorkUnit() ??
           Promise.resolve({ turn: RECONCILIATION_TURN.IDLE }));
-        switch (result.turn) {
+        const turn = result.turn;
+        switch (turn) {
           case RECONCILIATION_TURN.WORKED:
             summary.worked += 1;
             worked = true;
@@ -294,8 +303,15 @@ export const runCaseLawReconciliationLoop = async ({
           case RECONCILIATION_TURN.MISCONFIGURED:
             summary.misconfigured += 1;
             break;
-          default:
+          case RECONCILIATION_TURN.ABORTED:
+            summary.aborted += 1;
             break;
+          default: {
+            turn satisfies never;
+            return panic(
+              `Unhandled reconciliation turn: ${JSON.stringify(result)}`,
+            );
+          }
         }
         failureStreaks.delete(sourceIndex);
         retryAtMs.delete(sourceIndex);

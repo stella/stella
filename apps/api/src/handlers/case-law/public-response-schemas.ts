@@ -1,5 +1,4 @@
-import type { TSchema } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
@@ -7,10 +6,10 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
-  summarizeDecisionCitationsHandler,
-  listLeadingCitationsHandler,
   DecisionCitationRow,
   LeadingCitationRow,
+  listLeadingCitationsHandler,
+  summarizeDecisionCitationsHandler,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   CITATION_TIMELINE_MAX_YEARS,
@@ -21,11 +20,12 @@ import {
   CASE_LAW_COVERAGE_HEALTH,
   CASE_LAW_TOTAL_REPORTER,
 } from "@/api/handlers/case-law/decisions/coverage-health";
+import { CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND } from "@/api/handlers/case-law/decisions/coverage-years";
 import type { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import type {
-  listLatestDecisionsHandler,
   LatestDecision,
   LatestDecisionsByCourt,
+  listLatestDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/latest";
 import type { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { languageAlternatesSchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -38,10 +38,10 @@ import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/dec
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import {
   CENSUS_VERDICTS,
-  sourceCensusSchema,
+  publisherCensusSchema,
 } from "@/api/lib/case-law/completeness-census-contract";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -57,7 +57,7 @@ type Success<T extends (...args: never[]) => unknown> = Exclude<
 
 // Display caps cover the stored identity columns at four bytes per code point.
 const identity = {
-  id: tSafeId("caseLawDecision"),
+  id: resourceIdSchema("caseLawDecision"),
   caseNumber: boundedString(1024),
   slug: nullableBoundedString(1024),
   country: boundedString(12),
@@ -65,7 +65,7 @@ const identity = {
   language: boundedString(32),
 };
 const date = nullableBoundedString(128);
-const numberOrNull = t.Union([t.Number(), t.Null()]);
+const numberOrNull = v.union([v.number(), v.null()]);
 const headnote = decisionHeadnotePreviewSchema;
 const decision = {
   ...identity,
@@ -74,457 +74,381 @@ const decision = {
   decisionDate: date,
   decisionType: nullableBoundedString(512),
 };
-const page = <T extends Parameters<typeof t.Array>[0]>(
-  item: T,
-  maxItems: number,
-) =>
-  t.Object(
-    {
-      items: t.Array(item, { maxItems }),
-      limit: t.Number(),
-      nextCursor: nullableBoundedString(4096),
-    },
-    { additionalProperties: false },
-  );
+const page = <T extends v.GenericSchema>(item: T, maxItems: number) =>
+  v.object({
+    items: v.pipe(v.array(item), v.maxLength(maxItems)),
+    limit: v.number(),
+    nextCursor: nullableBoundedString(4096),
+  });
 // A sitemap answers one whole index or shard: its limit is the fixed capacity
 // and there is never a next page.
-const sitemapPage = <
-  T extends Parameters<typeof t.Array>[0],
-  TLimit extends number,
->(
+const sitemapPage = <T extends v.GenericSchema, TLimit extends number>(
   item: T,
   limit: TLimit,
 ) =>
-  t.Object(
-    {
-      items: t.Array(item, { maxItems: limit }),
-      limit: t.Literal(limit),
-      nextCursor: t.Null(),
-    },
-    { additionalProperties: false },
-  );
+  v.object({
+    items: v.pipe(v.array(item), v.maxLength(limit)),
+    limit: v.literal(limit),
+    nextCursor: v.null(),
+  });
 export const listDecisionsResponseSchema = page(
-  t.Object(
-    {
-      ...decision,
-      caseNumberType: t.UnionEnum(DECISION_PRIMARY_REFERENCE_TYPES),
-      courtAbbreviation: nullableBoundedString(512),
-      courtTier: t.UnionEnum(COURT_TIER_LABELS),
-      sourceUrl: nullableBoundedString(8192),
-      headnote,
-      citationCount: t.Number(),
-      createdAt: boundedString(128),
-    } satisfies Record<
-      keyof Success<typeof listDecisionsHandler>["items"][number],
-      TSchema
-    >,
-    { additionalProperties: false },
-  ),
+  v.object({
+    ...decision,
+    caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
+    courtAbbreviation: nullableBoundedString(512),
+    courtTier: v.picklist(COURT_TIER_LABELS),
+    sourceUrl: nullableBoundedString(8192),
+    headnote,
+    citationCount: v.number(),
+    createdAt: boundedString(128),
+  } satisfies Record<
+    keyof Success<typeof listDecisionsHandler>["items"][number],
+    v.GenericSchema
+  >),
   LIMITS.caseLawSearchPageSizeMax,
 );
-export const latestDecisionsResponseSchema = t.Object(
-  {
-    country: identity.country,
-    courts: t.Array(
-      t.Object(
-        {
-          court: identity.court,
-          tierLabel: t.UnionEnum(SHELF_TIER_LABEL_VALUES),
-          decisions: t.Array(
-            t.Object(
-              {
-                ...decision,
-                headnote,
-                citationCount: t.Number(),
-              } satisfies Record<keyof LatestDecision, TSchema>,
-              { additionalProperties: false },
-            ),
-            { maxItems: LIMITS.caseLawLatestPerCourt },
+export const latestDecisionsResponseSchema = v.object({
+  country: identity.country,
+  courts: v.pipe(
+    v.array(
+      v.object({
+        court: identity.court,
+        tierLabel: v.picklist(SHELF_TIER_LABEL_VALUES),
+        decisions: v.pipe(
+          v.array(
+            v.object({
+              ...decision,
+              headnote,
+              citationCount: v.number(),
+            } satisfies Record<keyof LatestDecision, v.GenericSchema>),
           ),
-        } satisfies Record<keyof LatestDecisionsByCourt, TSchema>,
-        { additionalProperties: false },
-      ),
-      { maxItems: LIMITS.caseLawLatestCourts },
+          v.maxLength(LIMITS.caseLawLatestPerCourt),
+        ),
+      } satisfies Record<keyof LatestDecisionsByCourt, v.GenericSchema>),
     ),
-  } satisfies Record<keyof Success<typeof listLatestDecisionsHandler>, TSchema>,
-  { additionalProperties: false },
-);
-const facet = t.Object(
-  {
-    value: boundedString(2048),
-    label: t.Optional(boundedString(2048)),
-    count: t.Number(),
-  } satisfies Record<keyof FacetBucket, TSchema>,
-  { additionalProperties: false },
-);
-export const decisionFacetsResponseSchema = t.Object(
-  {
-    country: t.Array(facet, { maxItems: LIMITS.caseLawFacetLimit }),
-    court: t.Array(facet, { maxItems: LIMITS.caseLawFacetLimit }),
-    year: t.Array(facet, { maxItems: LIMITS.caseLawYearFacetLimit }),
-  } satisfies Record<keyof Success<typeof listDecisionFacetsHandler>, TSchema>,
-  { additionalProperties: false },
-);
+    v.maxLength(LIMITS.caseLawLatestCourts),
+  ),
+} satisfies Record<
+  keyof Success<typeof listLatestDecisionsHandler>,
+  v.GenericSchema
+>);
+const facet = v.object({
+  value: boundedString(2048),
+  label: v.exactOptional(boundedString(2048)),
+  count: v.number(),
+} satisfies Record<keyof FacetBucket, v.GenericSchema>);
+export const decisionFacetsResponseSchema = v.object({
+  country: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
+  court: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
+  year: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawYearFacetLimit)),
+} satisfies Record<
+  keyof Success<typeof listDecisionFacetsHandler>,
+  v.GenericSchema
+>);
 const activity = {
-  decisions: t.Number(),
-  addedLastDay: t.Number(),
-  addedLastWeek: t.Number(),
+  decisions: v.number(),
+  addedLastDay: v.number(),
+  addedLastWeek: v.number(),
   updatedAt: date,
 };
-const courtStatus = t.Union([
-  t.Object(
-    {
-      type: t.Literal("court"),
-      court: identity.court,
-      courtAbbreviation: nullableBoundedString(512),
-      tier: t.UnionEnum(COURT_TIER_LABELS),
-      ...activity,
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("tier"),
-      tier: t.UnionEnum(COURT_TIER_LABELS),
-      courts: t.Number(),
-      ...activity,
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("other-courts"),
-      tier: t.Literal("other"),
-      courts: t.Union([t.Number(), t.Null()]),
-      decisions: t.Number(),
-    },
-    { additionalProperties: false },
-  ),
+const courtStatus = v.union([
+  v.object({
+    type: v.literal("court"),
+    court: identity.court,
+    courtAbbreviation: nullableBoundedString(512),
+    tier: v.picklist(COURT_TIER_LABELS),
+    ...activity,
+  }),
+  v.object({
+    type: v.literal("tier"),
+    tier: v.picklist(COURT_TIER_LABELS),
+    courts: v.number(),
+    ...activity,
+  }),
+  v.object({
+    type: v.literal("other-courts"),
+    tier: v.literal("other"),
+    courts: v.union([v.number(), v.null()]),
+    decisions: v.number(),
+  }),
 ]);
-const courts = t.Array(courtStatus, { maxItems: LIMITS.caseLawFacetLimit + 1 });
-export const corpusStatusResponseSchema = t.Object(
-  {
-    decisions: t.Number(),
-    updatedAt: date,
-    courts,
-  } satisfies Record<
-    keyof Success<typeof readCaseLawCorpusStatusHandler>,
-    TSchema
-  >,
-  { additionalProperties: false },
+const courts = v.pipe(
+  v.array(courtStatus),
+  v.maxLength(LIMITS.caseLawFacetLimit + 1),
 );
-const relatedDecision = t.Object(
-  {
-    ...decision,
-    courtAbbreviation: nullableBoundedString(2048),
-    sourceUrl: nullableBoundedString(8192),
-    caseNumberType: t.UnionEnum(DECISION_PRIMARY_REFERENCE_TYPES),
-    citationAuthority: t.Number(),
-  } satisfies Record<
-    keyof NonNullable<DecisionCitationRow["decision"]>,
-    TSchema
-  >,
-  { additionalProperties: false },
-);
-const citation = t.Object(
-  {
-    id: tSafeId("caseLawCitation"),
-    citationText: boundedString(16_384),
-    sectionIndex: numberOrNull,
-    treatment: t.UnionEnum(CITATION_TREATMENTS),
-    doctrine: t.Union([
-      t.UnionEnum([...DOCTRINAL_TREATMENTS, "unread"]),
-      t.Null(),
-    ]),
-    decision: t.Union([relatedDecision, t.Null()]),
-  } satisfies Record<keyof Omit<DecisionCitationRow, "evidenceQuote">, TSchema>,
-  { additionalProperties: false },
-);
+export const corpusStatusResponseSchema = v.object({
+  decisions: v.number(),
+  updatedAt: date,
+  health: v.enum(CASE_LAW_COVERAGE_HEALTH),
+} satisfies Record<
+  keyof Success<typeof readCaseLawCorpusStatusHandler>,
+  v.GenericSchema
+>);
+const relatedDecision = v.object({
+  ...decision,
+  courtAbbreviation: nullableBoundedString(2048),
+  sourceUrl: nullableBoundedString(8192),
+  caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
+  citationAuthority: v.number(),
+} satisfies Record<
+  keyof NonNullable<DecisionCitationRow["decision"]>,
+  v.GenericSchema
+>);
+const citation = v.object({
+  id: resourceIdSchema("caseLawCitation"),
+  citationText: boundedString(16_384),
+  sectionIndex: numberOrNull,
+  treatment: v.picklist(CITATION_TREATMENTS),
+  doctrine: v.union([
+    v.picklist([...DOCTRINAL_TREATMENTS, "unread"]),
+    v.null(),
+  ]),
+  decision: v.union([relatedDecision, v.null()]),
+} satisfies Record<
+  keyof Omit<DecisionCitationRow, "evidenceQuote">,
+  v.GenericSchema
+>);
 // A leading citation always names a held decision; only the general list
 // carries unresolved rows.
-const leadingCitation = t.Object(
-  {
-    id: tSafeId("caseLawCitation"),
-    citationText: boundedString(16_384),
-    sectionIndex: numberOrNull,
-    treatment: t.UnionEnum(CITATION_TREATMENTS),
-    decision: relatedDecision,
-  } satisfies Record<keyof LeadingCitationRow, TSchema>,
-  { additionalProperties: false },
-);
-export const citationsResponseSchema = t.Object(
-  {
-    ...page(citation, LIMITS.caseLawSearchPageSizeMax).properties,
-    doctrineAvailability: t.UnionEnum(["available", "unavailable"]),
-  },
-  { additionalProperties: false },
-);
-export const leadingCitationsResponseSchema = t.Object(
-  {
-    items: t.Array(leadingCitation, {
-      maxItems: CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT,
-    }),
-  } satisfies Record<
-    keyof Success<typeof listLeadingCitationsHandler>,
-    TSchema
-  >,
-  { additionalProperties: false },
-);
-const treatmentCounts = {
-  negative: t.Number(),
-  neutral: t.Number(),
-  positive: t.Number(),
-  supportive: t.Number(),
-  mixed: t.Number(),
-  unclassified: t.Number(),
-};
-export const citationSummaryResponseSchema = t.Object(
-  {
-    incoming: t.Object(treatmentCounts, { additionalProperties: false }),
-    outgoing: t.Object(treatmentCounts, { additionalProperties: false }),
-    precision: t.Union([
-      t.Object({ status: t.Literal("exact") }, { additionalProperties: false }),
-      t.Object(
-        {
-          status: t.Literal("bounded"),
-          capped: t.Object(
-            { incoming: t.Boolean(), outgoing: t.Boolean() },
-            { additionalProperties: false },
-          ),
-        },
-        { additionalProperties: false },
-      ),
-    ]),
-    incomingByYear: t.Array(
-      t.Object(
-        { ...treatmentCounts, year: t.Number() },
-        { additionalProperties: false },
-      ),
-      {
-        maxItems: CITATION_TIMELINE_MAX_YEARS,
-      },
-    ),
-  } satisfies Record<
-    keyof Success<typeof summarizeDecisionCitationsHandler>,
-    TSchema
-  >,
-  { additionalProperties: false },
-);
-export const sitemapShardsResponseSchema = sitemapPage(
-  t.Object(
-    {
-      bucket: boundedString(128),
-      country: boundedString(12),
-      lastmod: date,
-      month: boundedString(8),
-      year: boundedString(32),
-    } satisfies Record<
-      keyof Success<typeof listSitemapShardsHandler>["items"][number],
-      TSchema
-    >,
-    { additionalProperties: false },
+const leadingCitation = v.object({
+  id: resourceIdSchema("caseLawCitation"),
+  citationText: boundedString(16_384),
+  sectionIndex: numberOrNull,
+  treatment: v.picklist(CITATION_TREATMENTS),
+  decision: relatedDecision,
+} satisfies Record<keyof LeadingCitationRow, v.GenericSchema>);
+export const citationsResponseSchema = v.object({
+  ...page(citation, LIMITS.caseLawSearchPageSizeMax).entries,
+  doctrineAvailability: v.picklist(["available", "unavailable"]),
+});
+export const leadingCitationsResponseSchema = v.object({
+  items: v.pipe(
+    v.array(leadingCitation),
+    v.maxLength(CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT),
   ),
+} satisfies Record<
+  keyof Success<typeof listLeadingCitationsHandler>,
+  v.GenericSchema
+>);
+const treatmentCounts = {
+  negative: v.number(),
+  neutral: v.number(),
+  positive: v.number(),
+  supportive: v.number(),
+  mixed: v.number(),
+  unclassified: v.number(),
+};
+export const citationSummaryResponseSchema = v.object({
+  incoming: v.object(treatmentCounts),
+  outgoing: v.object(treatmentCounts),
+  precision: v.union([
+    v.object({ status: v.literal("exact") }),
+    v.object({
+      status: v.literal("bounded"),
+      capped: v.object({ incoming: v.boolean(), outgoing: v.boolean() }),
+    }),
+  ]),
+  incomingByYear: v.pipe(
+    v.array(v.object({ ...treatmentCounts, year: v.number() })),
+    v.maxLength(CITATION_TIMELINE_MAX_YEARS),
+  ),
+} satisfies Record<
+  keyof Success<typeof summarizeDecisionCitationsHandler>,
+  v.GenericSchema
+>);
+export const sitemapShardsResponseSchema = sitemapPage(
+  v.object({
+    bucket: boundedString(128),
+    country: boundedString(12),
+    lastmod: date,
+    month: boundedString(8),
+    year: boundedString(32),
+  } satisfies Record<
+    keyof Success<typeof listSitemapShardsHandler>["items"][number],
+    v.GenericSchema
+  >),
   LIMITS.caseLawSitemapIndexEntryLimit,
 );
 const sitemapDecision = { ...identity, updatedAt: boundedString(128) };
 export const sitemapDecisionsResponseSchema = sitemapPage(
-  t.Object(
-    {
-      ...sitemapDecision,
-      languageAlternates: t.Array(
-        t.Object(sitemapDecision, { additionalProperties: false }),
-        {
-          maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
-        },
-      ),
-    } satisfies Record<
-      keyof Success<typeof listSitemapShardDecisionsHandler>["items"][number],
-      TSchema
-    >,
-    { additionalProperties: false },
-  ),
+  v.object({
+    ...sitemapDecision,
+    languageAlternates: v.pipe(
+      v.array(v.object(sitemapDecision)),
+      v.maxLength(LIMITS.caseLawLanguageAlternatesPerGroupMax),
+    ),
+  } satisfies Record<
+    keyof Success<typeof listSitemapShardDecisionsHandler>["items"][number],
+    v.GenericSchema
+  >),
   LIMITS.caseLawSitemapShardUrlLimit,
 );
-const stored = t.Object(
-  { decisions: t.Number(), asOf: date },
-  { additionalProperties: false },
-);
-const completeness = t.Object(
-  {
-    measuredSources: t.Number(),
-    stored: t.Number(),
-    reported: t.Number(),
-    storedAsOf: date,
-    staleSources: t.Number(),
-    notMeasuredSources: t.Number(),
-    notCountedSources: t.Number(),
-  },
-  { additionalProperties: false },
-);
+const stored = v.object({ decisions: v.number(), asOf: date });
+const completeness = v.object({
+  measuredSources: v.number(),
+  stored: v.number(),
+  reported: v.number(),
+  storedAsOf: date,
+  staleSources: v.number(),
+  notMeasuredSources: v.number(),
+  notCountedSources: v.number(),
+});
 const measurement = {
-  stored: t.Number(),
+  stored: v.number(),
   storedAsOf: boundedString(128),
-  reported: t.Number(),
+  reported: v.number(),
   reportedAsOf: boundedString(128),
-  reportedBy: t.Enum(CASE_LAW_TOTAL_REPORTER),
+  reportedBy: v.enum(CASE_LAW_TOTAL_REPORTER),
 };
-const sourceCompleteness = t.Union([
-  t.Object(
-    { state: t.Literal("measured"), ...measurement },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    { state: t.Literal("stale"), ...measurement },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    { state: t.Literal("not-measured-yet") },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    { state: t.Literal("not-counted-yet") },
-    { additionalProperties: false },
-  ),
+const sourceCompleteness = v.union([
+  v.object({ state: v.literal("measured"), ...measurement }),
+  v.object({ state: v.literal("stale"), ...measurement }),
+  v.object({ state: v.literal("not-measured-yet") }),
+  v.object({ state: v.literal("not-counted-yet") }),
 ]);
 const countryCoverage = {
-  censusVerdict: t.UnionEnum(CENSUS_VERDICTS),
   // An enum record keeps the literal union; a mapped array would widen it.
-  country: t.Enum(
+  country: v.enum(
     Object.fromEntries(
       CASE_LAW_JURISDICTIONS.map((country) => [country, country]),
     ),
   ),
-  health: t.Enum(CASE_LAW_COVERAGE_HEALTH),
+  health: v.enum(CASE_LAW_COVERAGE_HEALTH),
   stored,
   addedLastWeek: numberOrNull,
   completeness,
-  sources: t.Array(
-    t.Object(
-      {
+  censusVerdict: v.picklist(CENSUS_VERDICTS),
+  sources: v.pipe(
+    v.array(
+      v.object({
         adapterKey: boundedString(512),
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
-        health: t.Enum(CASE_LAW_COVERAGE_HEALTH),
+        health: v.enum(CASE_LAW_COVERAGE_HEALTH),
         lastSyncAt: date,
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
-        pendingTextCount: t.Number(),
-        census: sourceCensusSchema,
-        knownGaps: t.Union([
-          t.Object(
-            { type: t.Literal("unknown") },
-            { additionalProperties: false },
+        pendingTextCount: v.number(),
+        publisherCensus: publisherCensusSchema,
+        storedDecisions: numberOrNull,
+        publishedDecisions: v.number(),
+        courts: v.pipe(
+          v.array(
+            v.object({
+              court: v.nullable(identity.court),
+              decisions: v.number(),
+            }),
           ),
-          t.Object(
-            { type: t.Literal("none-recorded") },
-            { additionalProperties: false },
-          ),
-          t.Object(
-            {
-              type: t.Literal("known"),
-              gaps: t.Array(
-                t.Object(
-                  {
-                    from: boundedString(128),
-                    to: boundedString(128),
-                    reason: boundedString(2048),
-                    evidenceRef: boundedString(8192),
-                  },
-                  { additionalProperties: false },
-                ),
-                { maxItems: 100 },
+          v.maxLength(LIMITS.caseLawFacetLimit + 1),
+        ),
+        knownGaps: v.union([
+          v.object({
+            type: v.literal("not_reconciled"),
+            reason: boundedString(2048),
+          }),
+          v.object({
+            type: v.literal("reconciled"),
+            summary: v.object({
+              missing: v.number(),
+              shortSlices: v.number(),
+              unlistedSlices: v.number(),
+            }),
+            years: v.pipe(
+              v.array(
+                v.union([
+                  v.object({ year: v.number(), type: v.literal("complete") }),
+                  v.object({
+                    year: v.number(),
+                    type: v.literal("gaps"),
+                    missing: v.number(),
+                    shortSlices: v.number(),
+                  }),
+                  v.object({
+                    year: v.number(),
+                    type: v.literal("unlisted"),
+                    missing: v.number(),
+                    shortSlices: v.number(),
+                    unlistedSlices: v.number(),
+                  }),
+                ]),
               ),
-            },
-            { additionalProperties: false },
-          ),
+              v.maxLength(CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND),
+            ),
+          }),
         ]),
         completeness: sourceCompleteness,
         addedLastWeek: numberOrNull,
-      },
-      { additionalProperties: false },
+      }),
     ),
-    { maxItems: CASE_LAW_SOURCE_ROWS_BOUND },
+    v.maxLength(CASE_LAW_SOURCE_ROWS_BOUND),
   ),
 };
-const provisionProcessingState = t.Union([
-  t.Object(
-    {
-      type: t.Literal("available"),
-      pendingCount: boundedString(128),
-      oldestPendingAt: nullableBoundedString(128),
-      sampledAt: boundedString(128),
-      revision: t.Number(),
-      scopeGeneration: t.Number(),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("notSupportedYet"),
-      reason: t.Union([
-        t.Literal("no_profile"),
-        t.Literal("no_multilingual_profile"),
-        t.Literal("language_not_supported"),
-        t.Literal("unknown_jurisdiction"),
-      ]),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("unavailable"),
-      reason: t.Union([
-        t.Literal("state_not_seeded"),
-        t.Literal("scope_inactive"),
-        t.Literal("revision_unavailable"),
-        t.Literal("read_failed"),
-      ]),
-      lastSampledAt: nullableBoundedString(128),
-    },
-    { additionalProperties: false },
-  ),
+const provisionProcessingState = v.union([
+  v.object({
+    type: v.literal("available"),
+    pendingCount: boundedString(128),
+    oldestPendingAt: nullableBoundedString(128),
+    sampledAt: boundedString(128),
+    revision: v.number(),
+    scopeGeneration: v.number(),
+  }),
+  v.object({
+    type: v.literal("notSupportedYet"),
+    reason: v.picklist([
+      "no_profile",
+      "no_multilingual_profile",
+      "language_not_supported",
+      "unknown_jurisdiction",
+    ]),
+  }),
+  v.object({
+    type: v.literal("unavailable"),
+    reason: v.picklist([
+      "state_not_seeded",
+      "scope_inactive",
+      "revision_unavailable",
+      "read_failed",
+    ]),
+    lastSampledAt: nullableBoundedString(128),
+  }),
 ]);
 
-export const coverageResponseSchema = t.Object(
-  {
-    generatedAt: boundedString(128),
-    provisionProcessing: t.Array(
-      t.Object(
-        {
-          country: countryCoverage.country,
-          state: provisionProcessingState,
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: CASE_LAW_JURISDICTIONS.length },
+export const coverageResponseSchema = v.object({
+  generatedAt: boundedString(128),
+  provisionProcessing: v.pipe(
+    v.array(
+      v.object({
+        country: countryCoverage.country,
+        state: provisionProcessingState,
+      }),
     ),
-    totals: t.Object(
-      { searchable: t.Number(), stored },
-      { additionalProperties: false },
-    ),
-    countries: t.Array(
-      t.Union([
-        t.Object(
-          {
-            ...countryCoverage,
-            availability: t.Literal("searchable"),
-            searchable: t.Number(),
-            decisionYearFrom: numberOrNull,
-            decisionYearTo: numberOrNull,
-            courts: t.Union([courts, t.Null()]),
-          },
-          { additionalProperties: false },
-        ),
-        t.Object(
-          {
-            ...countryCoverage,
-            availability: t.Literal("in-preparation"),
-          },
-          { additionalProperties: false },
-        ),
+    v.maxLength(CASE_LAW_JURISDICTIONS.length),
+  ),
+  totals: v.object({
+    addedLastWeek: v.nullable(v.number()),
+    searchable: v.nullable(v.number()),
+    stored,
+  }),
+  countries: v.pipe(
+    v.array(
+      v.union([
+        v.object({
+          ...countryCoverage,
+          availability: v.literal("searchable"),
+          searchable: v.number(),
+          decisionYearFrom: numberOrNull,
+          decisionYearTo: numberOrNull,
+          courts: v.union([courts, v.null()]),
+        }),
+        v.object({
+          ...countryCoverage,
+          availability: v.literal("in-preparation"),
+        }),
       ]),
-      { maxItems: CASE_LAW_JURISDICTIONS.length },
     ),
-  } satisfies Record<keyof Success<typeof readCaseLawCoverageHandler>, TSchema>,
-  { additionalProperties: false },
-);
+    v.maxLength(CASE_LAW_JURISDICTIONS.length),
+  ),
+} satisfies Record<
+  keyof Success<typeof readCaseLawCoverageHandler>,
+  v.GenericSchema
+>);

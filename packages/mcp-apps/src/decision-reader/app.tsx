@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
 
+import { TooltipProvider } from "@stll/ui/tooltip";
+
 import { createReaderController } from "./controller";
 import { ReaderView } from "./view";
 
@@ -11,8 +13,12 @@ const root = document.querySelector("#app");
 if (root === null) {
   panic("Decision reader app mount is missing");
 }
-createRoot(root).render(<ReaderView host={controller} />);
+createRoot(root).render(
+  <TooltipProvider>
+    <ReaderView host={controller} />
+  </TooltipProvider>,
+);
 controller.bridge.detached(
   controller.bridge.connect(),
-  "connect decision reader",
+  "decisionReader.connect",
 );

@@ -8,7 +8,7 @@ relationships and content types, and the OOXML namespace constants those
 operations need.
 
 ```ts
-import { loadDocx, extractText, ensureRelationship } from "@stll/docx-utils";
+import { ensureRelationship, extractText, loadDocx } from "@stll/docx-utils";
 
 const zip = await loadDocx(bytes);
 const text = await extractText(zip, "word/document.xml");

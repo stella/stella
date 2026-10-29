@@ -160,15 +160,13 @@ export type KanbanSubgroupBoardProps<TRow> = {
    * card straight into that intersection. None by default.
    */
   renderLaneColumnAction?:
-    | ((context: KanbanSubgroupLaneColumnActionContext) => ReactNode)
-    | undefined;
+    ((context: KanbanSubgroupLaneColumnActionContext) => ReactNode) | undefined;
   /**
    * The line above a band's columns. Defaults to `KanbanColumnBandHeader`
    * with the band's label and count.
    */
   renderBandHeader?:
-    | ((context: KanbanSubgroupBandHeaderContext) => ReactNode)
-    | undefined;
+    ((context: KanbanSubgroupBandHeaderContext) => ReactNode) | undefined;
   /**
    * A lane's slot while its band is collapsed. Defaults to the band's name
    * set vertically over the count; a host that accepts drops into a collapsed
@@ -181,16 +179,14 @@ export type KanbanSubgroupBoardProps<TRow> = {
     | undefined;
   /** Accessible name for a band's collapse toggle. */
   formatBandToggleLabel?:
-    | ((band: KanbanColumnBand, collapsed: boolean) => string)
-    | undefined;
+    ((band: KanbanColumnBand, collapsed: boolean) => string) | undefined;
   /**
    * Controlled band collapse. Omit both and the board keeps the collapsed
    * bands itself; a persisted view supplies both.
    */
   isBandCollapsed?: ((band: KanbanColumnBand) => boolean) | undefined;
   onBandCollapsedChange?:
-    | ((band: KanbanColumnBand, collapsed: boolean) => void)
-    | undefined;
+    ((band: KanbanColumnBand, collapsed: boolean) => void) | undefined;
   formatCount?: ((count: number) => ReactNode) | undefined;
   footer?: ReactNode;
   className?: string | undefined;

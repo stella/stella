@@ -70,6 +70,7 @@ afterAll(async () => {
 });
 
 type FixtureOptions = {
+  userId?: string;
   ageMs?: number;
   idleMs?: number | null;
   expiresAt?: Date;
@@ -77,18 +78,21 @@ type FixtureOptions = {
 };
 
 const insertSession = async ({
+  userId = mintAuthProviderIdValue(),
   ageMs = DAY_MS,
   idleMs = HOUR_MS,
   expiresAt = new Date(NOW.getTime() + DAY_MS),
   refreshMode = "automatic",
 }: FixtureOptions = {}) => {
-  const userId = mintAuthProviderIdValue();
   fixtureUsers.push(userId);
-  await testDb.insert(user).values({
-    id: userId,
-    name: "Session fixture",
-    email: `${userId}@session.test`,
-  });
+  await testDb
+    .insert(user)
+    .values({
+      id: userId,
+      name: "Session fixture",
+      email: `${userId}@session.test`,
+    })
+    .onConflictDoNothing({ target: user.id });
   const fixture = {
     id: mintAuthProviderIdValue(),
     userId,
@@ -150,7 +154,12 @@ describe("session rollout policies", () => {
     ] as const;
     const fixtures = await Promise.all(
       cases.map(async (entry) => {
-        const initial = await insertSession();
+        const initial = await insertSession({
+          userId:
+            entry.prefix === "smoke-session-"
+              ? "smoke-user-stella"
+              : mintAuthProviderIdValue(),
+        });
         const id = `${entry.prefix}${initial.id}`;
         await testDb
           .update(session)
@@ -173,6 +182,7 @@ describe("session rollout policies", () => {
       );
     }
     const short = await insertSession({
+      userId: "smoke-user-stella",
       expiresAt: new Date(NOW.getTime() - DAY_MS + 60_000),
     });
     await testDb
@@ -184,7 +194,7 @@ describe("session rollout policies", () => {
       .where(eq(session.id, short.id));
     await testDb.$client.exec(backfill);
     const preserved = await testDb.query.session.findFirst({
-      where: { userId: { eq: short.userId } },
+      where: { id: { eq: `smoke-session-${short.id}` } },
     });
     expect(preserved?.refreshMode).toBe("fixed");
     expect(preserved?.expiresAt).toEqual(short.expiresAt);
@@ -895,8 +905,10 @@ describe("native authentication session responses", () => {
     expect(body).toMatchObject({
       session: { id: fixture.original.id, token: current.token },
     });
-    for (const field of Object.keys(SESSION_LIFETIME_FIELDS)) {
-      expect(body).not.toHaveProperty(`session.${field}`);
+    for (const [field, config] of Object.entries(SESSION_LIFETIME_FIELDS)) {
+      if ("returned" in config) {
+        expect(body).not.toHaveProperty(`session.${field}`);
+      }
     }
     const refreshedCookie = responseCookies(refreshed);
     expect(refreshedCookie).toContain("session_token=");
@@ -910,8 +922,10 @@ describe("native authentication session responses", () => {
     );
     expect(cached).not.toBeNull();
     expect(cached).toMatchObject({ session: { token: current.token } });
-    for (const field of Object.keys(SESSION_LIFETIME_FIELDS)) {
-      expect(cached).not.toHaveProperty(`session.${field}`);
+    for (const [field, config] of Object.entries(SESSION_LIFETIME_FIELDS)) {
+      if ("returned" in config) {
+        expect(cached).not.toHaveProperty(`session.${field}`);
+      }
     }
     fixture.advance(59_999);
     const cachedInFlight = await fixture.requestSession();

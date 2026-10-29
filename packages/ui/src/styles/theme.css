@@ -148,6 +148,9 @@
   /* The Stella mark breathing: the one indeterminate loading motion.
      Opacity and scale only, so it never triggers layout. */
   --animate-loader: loader 1.8s ease-in-out infinite;
+  /* A toast's remaining time; the element sets the duration from the
+     toast's timeout and pauses it while the toast timer is held. */
+  --animate-toast-countdown: toast-countdown 1s linear forwards;
   /* A list item settling into place; callers stagger it by index. */
   --animate-rise: rise 240ms ease-out both;
   /* StatusMark: the running arc turns (paused, never reset, when it stops);
@@ -198,6 +201,14 @@
     }
     to {
       opacity: 1;
+    }
+  }
+  @keyframes toast-countdown {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
     }
   }
   @keyframes loader {

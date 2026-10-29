@@ -1,23 +1,36 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
-export const vatRateParams = t.Object({ vatRateId: tSafeId("vatRate") });
-const code = t.String({ minLength: 1, maxLength: 64 });
-const name = t.String({ minLength: 1, maxLength: 128 });
-const rateBps = t.Integer({ minimum: 0, maximum: 2_147_483_647 });
-const date = t.String({ format: "date" });
-export const createVatRateBody = t.Object({
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+
+export const vatRateParams = v.object({
+  vatRateId: resourceIdSchema("vatRate"),
+});
+const code = v.pipe(v.string(), v.minLength(1), v.maxLength(64));
+const name = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
+const rateBps = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(2_147_483_647),
+);
+const date = apiDateSchema;
+export const createVatRateBody = v.object({
   code,
   name,
   rateBps,
   validFrom: date,
-  validTo: t.Optional(t.Nullable(date)),
+  validTo: v.optional(v.nullable(date)),
 });
-export const updateVatRateBody = t.Object({
-  code: t.Optional(code),
-  name: t.Optional(name),
-  rateBps: t.Optional(rateBps),
-  validFrom: t.Optional(date),
-  validTo: t.Optional(t.Nullable(date)),
+export const updateVatRateBody = v.object({
+  code: v.optional(code),
+  name: v.optional(name),
+  rateBps: v.optional(rateBps),
+  validFrom: v.optional(date),
+  validTo: v.optional(v.nullable(date)),
+});
+export const applyVatRatePresetBody = v.object({
+  country: v.picklist(VAT_RATE_PRESET_COUNTRIES),
 });

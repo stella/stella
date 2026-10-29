@@ -15,6 +15,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
+  caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
@@ -50,6 +51,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
+  legislationWorkIdentifiers: "legislation_work_identifiers",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -313,6 +315,14 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier: "required",
     tier_label: "required",
     weight: "required",
+  },
+  // Publisher-reported slice totals aggregated into the public coverage page.
+  case_law_coverage_slices: {
+    source_id: "required",
+    slice: "required",
+    reported: "required",
+    collected: "required",
+    checked_at: "required",
   },
   // Accept the future reader grant before a later release grants and reads it.
   case_law_decision_aliases: {
@@ -609,6 +619,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   legislation_sources: {
     id: "required",
     descriptor: "required",
+  },
+  legislation_work_identifiers: {
+    source_id: "required",
+    identifier: "required",
+    eli: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.

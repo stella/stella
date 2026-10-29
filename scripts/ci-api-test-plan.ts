@@ -1,12 +1,12 @@
 import { panic } from "better-result";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import {
   allApiTests,
-  selectApiTestImpact,
   type ApiTestImpact,
+  selectApiTestImpact,
 } from "./api-test-impact";
 import {
   API_TEST_SHARD_IDS,
@@ -58,6 +58,14 @@ export const parseApiTestImpact = (output: string): ApiTestImpact => {
 };
 
 type TestJobShard = (typeof FULL_TEST_JOB_SHARDS)[number];
+type NonEmptyTestJobShards = readonly [TestJobShard, ...TestJobShard[]];
+type CiApiTestPlan =
+  | {
+      type: "run";
+      impact: ApiTestImpact;
+      matrix: { shard: NonEmptyTestJobShards };
+    }
+  | { type: "skip"; impact: ApiTestImpact };
 type CiApiTestPlanOptions = {
   event: string;
   scopeUnknown: boolean;
@@ -69,7 +77,7 @@ export const planCiApiTests = ({
   scopeUnknown,
   testJobs,
   select,
-}: CiApiTestPlanOptions) => {
+}: CiApiTestPlanOptions): CiApiTestPlan => {
   let impact = allApiTests();
   if ((event === "pull_request" || event === "merge_group") && !scopeUnknown) {
     try {
@@ -84,17 +92,21 @@ export const planCiApiTests = ({
   }
   const fullPlan = fullTestPlan();
   const enabledApiShards = new Set(API_TEST_SHARD_IDS.slice(0, impact.shards));
+  const shards = fullPlan.matrix.shard.filter(
+    (shard) =>
+      (scopeUnknown ||
+        !["pull_request", "merge_group"].includes(event) ||
+        testJobs.includes(shard)) &&
+      (!isApiTestShardId(shard) || enabledApiShards.has(shard)),
+  );
+  const firstShard = shards.at(0);
+  if (firstShard === undefined) {
+    return { type: "skip", impact };
+  }
   return {
+    type: "run",
     impact,
-    matrix: {
-      shard: fullPlan.matrix.shard.filter(
-        (shard) =>
-          (scopeUnknown ||
-            !["pull_request", "merge_group"].includes(event) ||
-            testJobs.includes(shard)) &&
-          (!isApiTestShardId(shard) || enabledApiShards.has(shard)),
-      ),
-    },
+    matrix: { shard: [firstShard, ...shards.slice(1)] },
   };
 };
 
@@ -164,8 +176,17 @@ if (import.meta.main) {
       select: allApiTests,
     });
   }
+  const matrix =
+    plan.type === "run" ? plan.matrix : { shard: ["rest-web"] as const };
+  writeFileSync(
+    path.join(
+      process.env["RUNNER_TEMP"] ?? panic("Missing RUNNER_TEMP"),
+      "api-test-files",
+    ),
+    plan.impact.files.join("\n"),
+  );
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_matrix=${JSON.stringify(plan.matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
+    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
   );
 }

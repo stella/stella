@@ -11,7 +11,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/collab",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/collab",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "test": "bun test"
   },
   "dependencies": {
@@ -21,7 +20,7 @@
     "@stll/errors": "workspace:*",
     "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
     "crossws": "^0.4.15",

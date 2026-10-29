@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
@@ -10,13 +10,37 @@ export const TEST_DURATION_SOURCE = {
   measured: "measured",
 } as const;
 
+/** Recent measurements kept per file; the weight is their median. */
+export const TEST_DURATION_HISTORY_LIMIT = 5;
+
+const secondsSchema = v.pipe(v.number(), v.finite(), v.minValue(0));
+
 const durationSchema = v.record(
   v.string(),
   v.strictObject({
-    seconds: v.pipe(v.number(), v.finite(), v.minValue(0)),
+    seconds: secondsSchema,
     source: v.literal(TEST_DURATION_SOURCE.measured),
+    // Absent in caches written before histories: `seconds` is then the
+    // only sample.
+    history: v.optional(
+      v.pipe(
+        v.array(secondsSchema),
+        v.minLength(1),
+        v.maxLength(TEST_DURATION_HISTORY_LIMIT),
+      ),
+    ),
   }),
 );
+
+/** Median of samples; the mean of the middle pair for an even count. */
+export const medianSeconds = (samples: readonly number[]) => {
+  const sorted = samples.toSorted((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const high = sorted[middle] ?? panic("Median of no samples");
+  return sorted.length % 2 === 1
+    ? high
+    : ((sorted[middle - 1] ?? high) + high) / 2;
+};
 
 export const readDurationWeights = (value: unknown) =>
   v.parse(durationSchema, value);

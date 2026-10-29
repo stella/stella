@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -8,6 +8,8 @@ import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-laun
 import type { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
+  caseLawSitemapCountryGenerations,
+  caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -23,7 +25,12 @@ import {
   decisionMonthSqlFor,
   decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
+  sitemapDocumentRepresentativeFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
+import {
+  lockCaseLawRemovalSnapshots,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -154,6 +161,8 @@ const afterCursorSql = (
  * the publication gate is its partial predicate, so the page is an index-only
  * range read that stops at the limit. A page with no rows ends the phase; a
  * page whose rows are all withheld still returns its cursor, with no counts.
+ * The bounded page then probes document identities to count only their one
+ * global language representative; the cursor still advances over every row.
  * Exported for the plan test, which holds it to that index.
  */
 export const sitemapRefreshPageSql = ({
@@ -212,8 +221,10 @@ export const sitemapRefreshPageSql = ({
       count(*)::int AS total,
       (extract(epoch FROM max(page.updated_at)) * 1000)::float8 AS last_modified_ms
     FROM page
+    INNER JOIN ${caseLawDecisions} ON ${caseLawDecisions.id} = page.id
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = page.source_id
     WHERE ${redistributableCaseLawSource}
+      AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY page.year, page.month, page.bucket
   ) AS counts ON true
 `;
@@ -232,16 +243,15 @@ const pageRowSchema = v.object({
 
 type BucketCount = { lastModifiedMs: number; total: number };
 type MonthCounts = Map<string, BucketCount>;
-/** `country|year|month` to its buckets' counts. */
+/** `year|month` to its buckets' counts, for one country. */
 type CountryMonths = Map<string, MonthCounts>;
 
 /**
- * Add one page's counts to the running totals and answer where the next page
- * resumes, or null once the phase is walked to its end.
+ * Add one page's counts to the country's running totals and answer where the
+ * next page resumes, or null once the phase is walked to its end.
  */
 const accumulatePage = (
   months: CountryMonths,
-  country: string,
   rows: unknown[],
 ): SitemapRefreshCursor | null => {
   let cursor: SitemapRefreshCursor | null = null;
@@ -262,7 +272,7 @@ const accumulatePage = (
     ) {
       continue;
     }
-    const monthKey = `${country}|${row.year}|${row.month}`;
+    const monthKey = `${row.year}|${row.month}`;
     const buckets = months.get(monthKey) ?? new Map<string, BucketCount>();
     months.set(monthKey, buckets);
     const counted = buckets.get(row.bucket);
@@ -283,99 +293,236 @@ const throwIfAborted = (signal: AbortSignal | undefined): void => {
   }
 };
 
+type CountCountryOptions = {
+  db: RefreshDb;
+  budget: SitemapRefreshBudget;
+  pageSize: number;
+  signal: AbortSignal | undefined;
+  country: string;
+};
+
+type CountCountryResult = {
+  generation: bigint;
+  months: CountryMonths;
+  pages: number;
+};
+
 /**
- * Walk every public country's sitemap index entries, a page per statement,
- * inside one read-only REPEATABLE READ transaction: each statement is short,
- * and every page reads the same snapshot, so a decision updated or re-dated
- * during the walk cannot move past the cursor and be counted twice or skipped.
+ * Walk one country's sitemap index entries, a page per statement, inside one
+ * read-only REPEATABLE READ transaction: each statement is short, and every
+ * page reads the same snapshot, so a decision updated or re-dated during the
+ * walk cannot move past the cursor and be counted twice or skipped. The index
+ * leads with the country, so no decision moves between two countries' walks
+ * and each country needs only its own snapshot.
  */
-const countSitemapMonths = async (
-  db: RefreshDb,
-  budget: SitemapRefreshBudget,
-  pageSize: number,
-  signal: AbortSignal | undefined,
-): Promise<{ months: CountryMonths; pages: number }> =>
-  await db.transaction(async (tx) => {
+const countCountryMonths = async ({
+  db,
+  budget,
+  pageSize,
+  signal,
+  country,
+}: CountCountryOptions): Promise<CountCountryResult> =>
+  await withAggregateTransaction(db, async (tx) => {
     await tx.execute(
       sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
     );
     await setTransactionBudget(tx, budget);
+    const generation =
+      (
+        await tx
+          .select({ generation: caseLawSitemapCountryGenerations.generation })
+          .from(caseLawSitemapCountryGenerations)
+          .where(eq(caseLawSitemapCountryGenerations.country, country))
+          .limit(1)
+      ).at(0)?.generation ?? 0n;
     const months: CountryMonths = new Map();
     let pages = 0;
-    for (const country of PUBLIC_CASE_LAW_PAGE_COUNTRIES) {
-      for (const phase of ["dated", "undated"] as const) {
-        let cursor: SitemapRefreshCursor | null = null;
-        do {
-          throwIfAborted(signal);
-          const page = sitemapRefreshPageSql({
-            country,
-            cursor,
-            pageSize,
-            phase,
-          });
-          // db-await-in-loop: a keyset walk; each page resumes after the previous page's last index entry
-          const rows = executedRows(await tx.execute(page));
-          cursor = accumulatePage(months, country, rows);
-          pages += 1;
-        } while (cursor !== null);
-      }
+    for (const phase of ["dated", "undated"] as const) {
+      let cursor: SitemapRefreshCursor | null = null;
+      do {
+        throwIfAborted(signal);
+        const page = sitemapRefreshPageSql({
+          country,
+          cursor,
+          pageSize,
+          phase,
+        });
+        // db-await-in-loop: a keyset walk; each page resumes after the previous page's last index entry
+        const rows = executedRows(await tx.execute(page));
+        cursor = accumulatePage(months, rows);
+        pages += 1;
+      } while (cursor !== null);
     }
-    return { months, pages };
+    return { generation, months, pages };
+  });
+
+const stagedMonthSchema = v.strictObject({
+  year: v.string(),
+  month: v.string(),
+  bucket: v.string(),
+  total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+  lastModifiedMs: v.number(),
+});
+const stagedMonthsSchema = v.array(stagedMonthSchema);
+type StagedMonth = v.InferOutput<typeof stagedMonthSchema>;
+
+const toStagedMonths = (months: CountryMonths): StagedMonth[] =>
+  [...months].flatMap(([monthKey, buckets]) => {
+    const [year, month] = monthKey.split("|");
+    if (year === undefined || month === undefined) {
+      return panic(`Malformed sitemap month key ${monthKey}`);
+    }
+    return [...buckets].map(([bucket, { total, lastModifiedMs }]) => ({
+      year,
+      month,
+      bucket,
+      total,
+      lastModifiedMs,
+    }));
+  });
+
+/**
+ * How long a staged country count stays usable. A walk that stops short of
+ * the last country leaves the earlier ones staged; past this age they are
+ * counted again, so a snapshot never mixes counts further apart than this.
+ */
+export const SITEMAP_COUNT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+/** A staged count is usable while it is younger than its maximum age. */
+const freshlyStaged = sql`${caseLawSitemapShardCounts.countedAt} > now() - make_interval(secs => ${SITEMAP_COUNT_MAX_AGE_MS / 1000})`;
+
+type StageCountryOptions = {
+  db: RefreshDb;
+  budget: SitemapRefreshBudget;
+  country: string;
+  months: CountryMonths;
+  pages: number;
+  generation: bigint;
+};
+
+const stageCountry = async ({
+  db,
+  budget,
+  country,
+  months,
+  pages,
+  generation,
+}: StageCountryOptions): Promise<boolean> => {
+  const staged = JSON.stringify(toStagedMonths(months));
+  return await withAggregateTransaction(db, async (tx) => {
+    await setTransactionBudget(tx, budget);
+    // Serialize the compare and stage with removal invalidation. A removal
+    // either follows this write and deletes it, or advances the generation first.
+    await lockCaseLawRemovalSnapshots(tx);
+    const currentGeneration =
+      (
+        await tx
+          .select({ generation: caseLawSitemapCountryGenerations.generation })
+          .from(caseLawSitemapCountryGenerations)
+          .where(eq(caseLawSitemapCountryGenerations.country, country))
+          .limit(1)
+      ).at(0)?.generation ?? 0n;
+    if (currentGeneration !== generation) {
+      return false;
+    }
+    await tx
+      .insert(caseLawSitemapShardCounts)
+      .values({
+        country,
+        months: sql`${staged}::text::jsonb`,
+        pages,
+        countedAt: sql`now()`,
+      })
+      .onConflictDoUpdate({
+        target: caseLawSitemapShardCounts.country,
+        set: {
+          months: sql`excluded.months`,
+          pages: sql`excluded.pages`,
+          countedAt: sql`excluded.counted_at`,
+        },
+      });
+    return true;
+  });
+};
+
+const readFreshlyStagedCountries = async (
+  db: RefreshDb,
+  budget: SitemapRefreshBudget,
+): Promise<ReadonlySet<string>> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await setTransactionBudget(tx, budget);
+    const rows = await tx
+      .select({ country: caseLawSitemapShardCounts.country })
+      .from(caseLawSitemapShardCounts)
+      .where(freshlyStaged);
+    return new Set(rows.map(({ country }) => country));
   });
 
 type ShardRow = typeof caseLawSitemapShards.$inferInsert;
+
+type StagedCountry = { country: string; months: readonly StagedMonth[] };
 
 /**
  * A month becomes one `all` row, or one row per bucket once it passes the
  * split threshold.
  */
-const shardRows = (months: CountryMonths): ShardRow[] =>
-  [...months].flatMap(([monthKey, buckets]) => {
-    const [country, year, month] = monthKey.split("|");
-    if (country === undefined || year === undefined || month === undefined) {
-      return panic(`Malformed sitemap month key ${monthKey}`);
-    }
-    let monthTotal = 0;
-    let monthLastModifiedMs = 0;
-    for (const count of buckets.values()) {
-      monthTotal += count.total;
-      monthLastModifiedMs = Math.max(monthLastModifiedMs, count.lastModifiedMs);
-    }
-    if (monthTotal > SITEMAP_SHARD_SPLIT_THRESHOLD) {
-      return [...buckets].map(([bucket, count]) => ({
-        bucket,
-        country,
-        lastModifiedAt: new Date(count.lastModifiedMs),
-        month,
-        total: count.total,
-        year,
-      }));
-    }
-    return [
-      {
-        bucket: SITEMAP_ALL_BUCKET,
-        country,
-        lastModifiedAt: new Date(monthLastModifiedMs),
-        month,
-        total: monthTotal,
-        year,
-      },
-    ];
+const shardRows = (countries: readonly StagedCountry[]): ShardRow[] =>
+  countries.flatMap(({ country, months }) => {
+    const byMonth = Map.groupBy(
+      months,
+      ({ year, month }) => `${year}|${month}`,
+    );
+    return [...byMonth.values()].flatMap((buckets) => {
+      const first = buckets.at(0) ?? panic("A staged month has no buckets");
+      let monthTotal = 0;
+      let monthLastModifiedMs = 0;
+      for (const { total, lastModifiedMs } of buckets) {
+        monthTotal += total;
+        monthLastModifiedMs = Math.max(monthLastModifiedMs, lastModifiedMs);
+      }
+      if (monthTotal > SITEMAP_SHARD_SPLIT_THRESHOLD) {
+        return buckets.map(({ bucket, total, lastModifiedMs }) => ({
+          bucket,
+          country,
+          lastModifiedAt: new Date(lastModifiedMs),
+          month: first.month,
+          total,
+          year: first.year,
+        }));
+      }
+      return [
+        {
+          bucket: SITEMAP_ALL_BUCKET,
+          country,
+          lastModifiedAt: new Date(monthLastModifiedMs),
+          month: first.month,
+          total: monthTotal,
+          year: first.year,
+        },
+      ];
+    });
   });
 
+type SwapOutcome =
+  | { type: "swapped"; pages: number; rows: readonly ShardRow[] }
+  | { type: "incomplete"; missing: number };
+
 /**
- * Replace the snapshot the public index reads in one transaction, so a reader
- * sees the previous snapshot or this one, never a mix. The table lock admits
- * readers and queues a second refresh's swap behind this one, so overlapping
- * refreshes each replace the snapshot whole rather than interleaving.
+ * Replace the snapshot the public index reads from every staged country, in
+ * one transaction, so a reader sees the previous snapshot or this one, never
+ * a mix, and clear the staged counts for the next cycle. The table lock admits
+ * readers and queues a second refresh's swap behind this one. A run that
+ * finds a public country unstaged or its count expired (an overlapping run
+ * swapped and cleared the counts, or the count aged during this run's walk)
+ * replaces nothing, so a snapshot never omits a country or mixes counts
+ * further apart than their maximum age.
  */
 const swapSnapshot = async (
   db: RefreshDb,
   { statementTimeoutMs }: SitemapRefreshBudget,
-  rows: ShardRow[],
   signal: AbortSignal | undefined,
-): Promise<void> => {
-  await db.transaction(async (tx) => {
+): Promise<SwapOutcome> =>
+  await withAggregateTransaction(db, async (tx) => {
     // The lock wait covers an overlapping refresh's swap, itself bounded by
     // the same statement budget.
     await setTransactionBudget(tx, {
@@ -385,6 +532,32 @@ const swapSnapshot = async (
     await tx.execute(
       sql`LOCK TABLE ${caseLawSitemapShards} IN SHARE ROW EXCLUSIVE MODE`,
     );
+    const staged = await tx
+      .select({
+        country: caseLawSitemapShardCounts.country,
+        months: caseLawSitemapShardCounts.months,
+        pages: caseLawSitemapShardCounts.pages,
+      })
+      .from(caseLawSitemapShardCounts)
+      .where(
+        and(
+          inArray(caseLawSitemapShardCounts.country, [
+            ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+          ]),
+          // A count that aged past its limit while later countries were
+          // walked is missing too; the next run counts it again.
+          freshlyStaged,
+        ),
+      );
+    const missing = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length - staged.length;
+    if (missing > 0) {
+      return { type: "incomplete", missing };
+    }
+    const countries = staged.map(({ country, months }) => ({
+      country,
+      months: v.parse(stagedMonthsSchema, months),
+    }));
+    const rows = shardRows(countries);
     await tx.delete(caseLawSitemapShards).where(sql`true`);
     // One statement for the whole snapshot, sent as one JSON document: its
     // size is bounded by the index entry limit, where a VALUES list would be
@@ -413,21 +586,49 @@ const swapSnapshot = async (
         last_modified_at timestamptz
       )
     `);
+    await tx.delete(caseLawSitemapShardCounts).where(sql`true`);
     // A run whose lease was lost or whose deadline passed while it wrote
     // rolls back here rather than replacing a newer run's snapshot.
     throwIfAborted(signal);
+    let pages = 0;
+    for (const country of staged) {
+      pages += country.pages;
+    }
+    return { type: "swapped", pages, rows };
   });
+
+/**
+ * How long one run counts before it stops at the next country boundary. It
+ * leaves the scheduler's runtime ceiling room for the country in progress and
+ * the swap; the next run resumes from the staged counts.
+ */
+const SITEMAP_REFRESH_RUN_BUDGET_MS = 15 * 60 * 1000;
+
+/** Counts one country in its own snapshot and stages it; answers the pages read. */
+const countAndStageCountry = async (
+  options: Parameters<typeof countCountryMonths>[0],
+): Promise<{ pages: number; staged: boolean }> => {
+  const walked = await countCountryMonths(options);
+  const { db, budget, country } = options;
+  const staged = await stageCountry({ db, budget, country, ...walked });
+  return { pages: walked.pages, staged };
 };
+
+type SitemapRefreshOutcome =
+  | { type: "counting"; counted: number; remaining: number; pages: number }
+  | { type: "swapped"; largestShard: number; pages: number; shards: number };
 
 /**
  * Recount the public sitemap shards and replace the snapshot the public index
  * reads.
  *
- * The count is a walk of the sitemap index in pages, each its own short
- * statement under its own timeout, so no statement's work grows with the
- * corpus, and all of them read one snapshot. The counts accumulate here and
- * are written in one swap at the end: an aborted or failed walk leaves the
- * previous snapshot in place.
+ * Each country is counted in its own snapshot, a page per statement under its
+ * own timeout, and staged in `case_law_sitemap_shard_counts`, so no statement
+ * or transaction grows with the whole corpus. A run counts countries until its
+ * budget is spent and answers `counting`; the next run resumes with the
+ * countries not freshly staged. Once every public country is staged, one swap
+ * replaces the snapshot and clears the staged counts. An aborted or failed
+ * run leaves the previous snapshot in place.
  *
  * The index read refuses a snapshot it cannot serve, so an over-capacity
  * count is logged here rather than withheld.
@@ -437,34 +638,88 @@ export const refreshCaseLawSitemapShards = async (
   {
     pageSize = SITEMAP_REFRESH_PAGE_SIZE,
     poolIdleTimeoutS = envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+    runBudgetMs = SITEMAP_REFRESH_RUN_BUDGET_MS,
+    clock = () => performance.now(),
     signal,
   }: {
     pageSize?: number;
     /** The idle timeout of the pool `db` draws from; see `sitemapRefreshBudget`. */
     poolIdleTimeoutS?: number;
+    runBudgetMs?: number;
+    /** Monotonic milliseconds; only differences are read. */
+    clock?: () => number;
     signal?: AbortSignal;
   } = {},
-): Promise<{ largestShard: number; pages: number; shards: number }> => {
+): Promise<SitemapRefreshOutcome> => {
   if (!Number.isInteger(pageSize) || pageSize < 1) {
     return panic("Sitemap refresh page size must be a positive integer");
   }
+  const startedAt = clock();
   const budget = sitemapRefreshBudget(poolIdleTimeoutS);
-  const { months, pages } = await countSitemapMonths(
-    db,
-    budget,
-    pageSize,
-    signal,
+  const staged = await readFreshlyStagedCountries(db, budget);
+  const pending = PUBLIC_CASE_LAW_PAGE_COUNTRIES.filter(
+    (country) => !staged.has(country),
   );
+  let counted = 0;
+  let pages = 0;
+  for (const country of pending) {
+    throwIfAborted(signal);
+    // db-await-in-loop: one snapshot per country; each is staged before the next starts
+    const countryCount = await countAndStageCountry({
+      db,
+      budget,
+      pageSize,
+      signal,
+      country,
+    });
+    pages += countryCount.pages;
+    counted += 1;
+    if (!countryCount.staged) {
+      return {
+        type: "counting",
+        counted,
+        remaining: pending.length - counted + 1,
+        pages,
+      };
+    }
+    // Checked after a country, so every run stages at least one and a
+    // budget shorter than one country's walk still advances the cycle.
+    if (counted < pending.length && clock() - startedAt >= runBudgetMs) {
+      return {
+        type: "counting",
+        counted,
+        remaining: pending.length - counted,
+        pages,
+      };
+    }
+  }
 
   throwIfAborted(signal);
-  const rows = shardRows(months);
-  await swapSnapshot(db, budget, rows, signal);
-
-  let largestShard = 0;
-  for (const row of rows) {
-    largestShard = Math.max(largestShard, row.total);
+  const swapped = await swapSnapshot(db, budget, signal);
+  switch (swapped.type) {
+    case "incomplete":
+      return {
+        type: "counting",
+        counted,
+        remaining: swapped.missing,
+        pages,
+      };
+    case "swapped":
+      break;
+    default:
+      swapped satisfies never;
+      return panic("Unknown sitemap swap outcome");
   }
-  const outcome = { largestShard, pages, shards: rows.length };
+  let largestShard = 0;
+  for (const { total } of swapped.rows) {
+    largestShard = Math.max(largestShard, total);
+  }
+  const outcome = {
+    type: "swapped",
+    largestShard,
+    pages: swapped.pages,
+    shards: swapped.rows.length,
+  } as const satisfies SitemapRefreshOutcome;
   if (
     outcome.largestShard > LIMITS.caseLawSitemapShardUrlLimit ||
     outcome.shards > LIMITS.caseLawSitemapIndexEntryLimit - 1
@@ -475,4 +730,27 @@ export const refreshCaseLawSitemapShards = async (
     });
   }
   return outcome;
+};
+
+/** Retire both staged counts and published shards for the changed country. */
+export const invalidateCaseLawSitemapShardsTx = async (
+  tx: RefreshTransaction,
+  country: string,
+): Promise<void> => {
+  await tx
+    .insert(caseLawSitemapCountryGenerations)
+    .values({ country, generation: 1n })
+    .onConflictDoUpdate({
+      target: caseLawSitemapCountryGenerations.country,
+      set: {
+        generation: sql`${caseLawSitemapCountryGenerations.generation} + 1`,
+      },
+    });
+  // audit: skip — sitemap invalidation belongs to the canonical removal audit.
+  await tx
+    .delete(caseLawSitemapShardCounts)
+    .where(eq(caseLawSitemapShardCounts.country, country));
+  await tx
+    .delete(caseLawSitemapShards)
+    .where(eq(caseLawSitemapShards.country, country));
 };

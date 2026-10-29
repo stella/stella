@@ -1,5 +1,29 @@
 import path from "node:path";
 
+/**
+ * Parser versions cover the source modules that can shape persisted parser
+ * output. Traversal stops before the reviewed infrastructure boundaries below:
+ * their imported bindings provide observability, configuration, or connection
+ * setup and are never written into a parser result. Keep this list small; the
+ * guard rejects missing entries and entries under output-shaping roots.
+ */
+export const PARSER_OUTPUT_BOUNDARIES = [
+  {
+    path: "apps/api/src/env-base.ts",
+    reason:
+      "Environment validation provides configuration and never parser output values.",
+  },
+  {
+    path: "apps/api/src/lib/observability/logger.ts",
+    reason: "Structured logging is an output-independent side effect.",
+  },
+  {
+    path: "apps/api/src/lib/version.ts",
+    reason:
+      "The application version configures request identification and telemetry.",
+  },
+] as const satisfies readonly { path: string; reason: string }[];
+
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
 const LEGISLATION_REGISTRY_PATH =
@@ -12,12 +36,27 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
+const PARSER_VERSION_MODULE =
+  "apps/api/src/lib/legal-search/ingestion-constants.ts";
+const OUTPUT_SHAPING_ROOTS = [
+  ADAPTER_DIRECTORY,
+  LEGISLATION_ADAPTER_DIRECTORY,
+  ...PARSER_DIRECTORIES,
+  CASE_LAW_DIRECTORY,
+  "packages/legal-ast/",
+  "packages/text-normalize/",
+  "packages/sha256/",
+];
 const OUTPUT_UNCHANGED =
   /^\s*\/\/\s*parser-output-unchanged:\s+(?:\[([a-z\d-]+)\]\s+\S.*|(?!\[)(\S.*))$/u;
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
 type SourceTree = ReadonlyMap<string, string>;
+export type ParserOutputBoundary = {
+  path: string;
+  reason: string;
+};
 type StaticValue =
   | { type: "number"; file: string; name: string; value: number }
   | {
@@ -55,11 +94,16 @@ class StaticTree {
   private readonly versionDeclarations = new Map<string, Set<string>>();
   private readonly codeCache = new Map<string, string>();
   private readonly closureCache = new Map<string, Set<string>>();
+  private readonly outputBoundaries: ReadonlySet<string>;
 
   readonly files: SourceTree;
 
-  constructor(files: SourceTree) {
+  constructor(
+    files: SourceTree,
+    boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
+  ) {
     this.files = files;
+    this.outputBoundaries = new Set(boundaries.map(({ path: file }) => file));
   }
 
   code(file: string): string {
@@ -174,7 +218,11 @@ class StaticTree {
     const queue = [file];
     while (queue.length > 0) {
       const current = queue.pop();
-      if (current === undefined || files.has(current)) {
+      if (
+        current === undefined ||
+        files.has(current) ||
+        this.outputBoundaries.has(current)
+      ) {
         continue;
       }
       files.add(current);
@@ -370,15 +418,15 @@ class StaticTree {
       const declaration = `\\b(?:const|let|var)\\s+${name}(?:\\s*:[^=;]+)?\\s*=\\s*`;
       source = source.replace(
         new RegExp(`(${declaration})\\d+\\b`, "u"),
-        "$1<VERSION>",
+        (_, start: string) => `${start}0`,
       );
       source = source.replace(
         new RegExp(`(${declaration}\\{)([^}]*)(\\})`, "u"),
         (_, start: string, properties: string, end: string) =>
-          `${start}${properties.replace(/(:\s*)\d+\b/gu, "$1<VERSION>")}${end}`,
+          `${start}${properties.replace(/(:\s*)\d+\b/gu, (_number, colon: string) => `${colon}0`)}${end}`,
       );
     }
-    return source;
+    return printedCode(file, source);
   }
 
   owners(): SourceOwnersResult {
@@ -477,8 +525,10 @@ class StaticTree {
 }
 
 /** Read the registered output owners without importing live adapters. */
-export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
-  new StaticTree(files).owners();
+export const sourceOwners = (
+  files: SourceTree,
+  boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
+): SourceOwnersResult => new StaticTree(files, boundaries).owners();
 
 // Match the original source rather than transpiled output: local types and
 // unused imports can be erased, but deleting them still needs a version decision.
@@ -518,6 +568,34 @@ const withoutOutputUnchangedMarkers = (source: string): string =>
     .split("\n")
     .filter((line) => !OUTPUT_UNCHANGED.test(line))
     .join("\n");
+
+const NAMED_SPECIFIERS =
+  /^((?:import|export)(?: type)? \{)([^}]*)(\} from )/gmu;
+
+// Layout, comments, types and the order of names inside one import never
+// change what a parser emits, so a formatting-only edit must not demand a
+// version bump. Compare the code the transpiler prints, with named
+// specifiers sorted; statement order still counts. Source it cannot parse
+// compares verbatim, which still demands the bump.
+const printedCode = (file: string, source: string): string => {
+  const printer = file.endsWith("x") ? jsxTranspiler : transpiler;
+  let printed: string;
+  try {
+    printed = printer.transformSync(source);
+  } catch {
+    return source;
+  }
+  return printed.replace(
+    NAMED_SPECIFIERS,
+    (_, open: string, names: string, close: string) =>
+      `${open}${names
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .toSorted()
+        .join(", ")}${close}`,
+  );
+};
 
 const LOCATION_DEPENDENT = /\bimport\.meta\b|\b__dirname\b|\b__filename\b/u;
 const SOURCE_MODULE = /\.[cm]?[jt]sx?$/u;
@@ -587,17 +665,43 @@ const movedParserSources = (
   return moved;
 };
 
-type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
+type CheckParserVersionsOptions = {
+  base: SourceTree;
+  head: SourceTree;
+  boundaries?: readonly ParserOutputBoundary[];
+};
+
+const boundaryErrors = (
+  head: SourceTree,
+  boundaries: readonly ParserOutputBoundary[],
+): string[] =>
+  boundaries.flatMap(({ path: file }) => {
+    if (!head.has(file)) {
+      return [`Parser output boundary does not exist in head tree: ${file}`];
+    }
+    if (
+      file === PARSER_VERSION_MODULE ||
+      OUTPUT_SHAPING_ROOTS.some((root) => file.startsWith(root))
+    ) {
+      return [`Parser output boundary lies in an output-shaping root: ${file}`];
+    }
+    return [];
+  });
 
 export const checkParserVersions = ({
   base,
   head,
+  boundaries = PARSER_OUTPUT_BOUNDARIES,
 }: CheckParserVersionsOptions): string[] => {
-  const baseTree = new StaticTree(base);
-  const headTree = new StaticTree(head);
+  const baseTree = new StaticTree(base, boundaries);
+  const headTree = new StaticTree(head, boundaries);
   const before = baseTree.owners();
   const after = headTree.owners();
-  const errors = [...before.errors, ...after.errors];
+  const errors = [
+    ...boundaryErrors(head, boundaries),
+    ...before.errors,
+    ...after.errors,
+  ];
   const movedSources = movedParserSources(baseTree, headTree);
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
@@ -625,8 +729,44 @@ export const checkParserVersions = ({
     if (changed.length === 0 || current.version > previous.version) {
       continue;
     }
+    // A marked parser that still imports a workspace package removed from the
+    // repository now gets it from the registry; only that package's deleted
+    // files are covered by the marker.
+    const externalizedRoots = [...current.parsers].flatMap((file) => {
+      const baseLines = new Set((base.get(file) ?? "").split("\n"));
+      const marked = (head.get(file) ?? "").split("\n").some((line) => {
+        if (baseLines.has(line)) {
+          return false;
+        }
+        const marker = OUTPUT_UNCHANGED.exec(line);
+        const owner = marker?.at(1);
+        return marker !== null && (owner === undefined || owner === key);
+      });
+      if (!marked) {
+        return [];
+      }
+      return (file.endsWith("x") ? jsxTranspiler : transpiler)
+        .scanImports(head.get(file) ?? "")
+        .flatMap(({ path: specifier }) => {
+          const name = specifier.startsWith("@stll/")
+            ? specifier.slice("@stll/".length).split("/").at(0)
+            : undefined;
+          const root = `packages/${name ?? ""}/`;
+          return name !== undefined &&
+            baseTree.resolve(file, specifier) !== undefined &&
+            !head.has(`${root}package.json`)
+            ? [root]
+            : [];
+        });
+    });
     const unexempted = changed.filter((file) => {
       if (movedSources.has(file) || deletedReexports.has(file)) {
+        return false;
+      }
+      if (
+        !head.has(file) &&
+        externalizedRoots.some((root) => file.startsWith(root))
+      ) {
         return false;
       }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));
@@ -649,28 +789,101 @@ export const checkParserVersions = ({
 };
 
 type GitResult =
-  | { type: "ok"; output: Uint8Array }
-  | { type: "failed"; detail: string };
+  { type: "ok"; output: Uint8Array } | { type: "failed"; detail: string };
 
-const git = (args: string[], input?: string): GitResult => {
-  const result = Bun.spawnSync(["git", ...args], {
-    cwd: path.resolve(import.meta.dir, ".."),
-    stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return result.exitCode === 0
-    ? { type: "ok", output: result.stdout }
-    : { type: "failed", detail: result.stderr.toString().trim() };
+const gitIn =
+  (repository: string) =>
+  (args: string[], input?: string): GitResult => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return result.exitCode === 0
+      ? { type: "ok", output: result.stdout }
+      : { type: "failed", detail: result.stderr.toString().trim() };
+  };
+
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
+const git = gitIn(REPOSITORY_ROOT);
+
+/**
+ * CI checks out a blobless clone (`filter: blob:none`), which holds only the
+ * blobs its checkout wrote; `cat-file --batch` would fetch every other one in
+ * a round trip of its own, so a large diff spent minutes on base versions.
+ * One fetch of every missing blob replaces those round trips.
+ */
+const fetchMissingObjects = (
+  objects: readonly string[],
+  runGit: typeof git,
+): GitResult => {
+  const check = runGit(
+    ["--no-lazy-fetch", "cat-file", "--batch-check=%(objectname)"],
+    `${objects.join("\n")}\n`,
+  );
+  if (check.type === "failed") {
+    return check;
+  }
+  const missing = new TextDecoder()
+    .decode(check.output)
+    .split("\n")
+    .flatMap((line) => {
+      const [object, state] = line.split(" ");
+      return state === "missing" && object !== undefined ? [object] : [];
+    });
+  if (missing.length === 0) {
+    return check;
+  }
+  const promisors = runGit([
+    "config",
+    "--get-regexp",
+    String.raw`^remote\..+\.promisor$`,
+  ]);
+  const remote =
+    promisors.type === "ok"
+      ? /^remote\.(.+)\.promisor true$/mu
+          .exec(new TextDecoder().decode(promisors.output))
+          ?.at(1)
+      : undefined;
+  if (remote === undefined) {
+    return {
+      type: "failed",
+      detail: `${String(missing.length)} source objects are missing and no promisor remote can supply them`,
+    };
+  }
+  // Match Git's lazy fetch: object IDs may be blobs, so commit negotiation
+  // must not interpret them as revision tips.
+  return runGit(
+    [
+      "-c",
+      "fetch.negotiationAlgorithm=noop",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--recurse-submodules=no",
+      "--filter=blob:none",
+      "--stdin",
+      remote,
+    ],
+    `${missing.join("\n")}\n`,
+  );
 };
 
 type ReadGitTreeResult =
-  | { type: "ok"; files: SourceTree }
-  | { type: "failed"; detail: string };
+  { type: "ok"; files: SourceTree } | { type: "failed"; detail: string };
+
+type ReadGitTreeOptions = {
+  repository?: string;
+};
 
 // Read immutable git objects in one batch, without checking out either tree.
-export const readGitTree = (ref: string): ReadGitTreeResult => {
-  const listing = git([
+export const readGitTree = (
+  ref: string,
+  { repository = REPOSITORY_ROOT }: ReadGitTreeOptions = {},
+): ReadGitTreeResult => {
+  const runGit = gitIn(repository);
+  const listing = runGit([
     "ls-tree",
     "-r",
     "-z",
@@ -698,10 +911,15 @@ export const readGitTree = (ref: string): ReadGitTreeResult => {
       sources.push({ file, object });
     }
   }
-  const objects = git(
-    ["cat-file", "--batch"],
-    `${sources.map(({ object }) => object).join("\n")}\n`,
-  );
+  if (sources.length === 0) {
+    return { type: "ok", files };
+  }
+  const wanted = sources.map(({ object }) => object);
+  const fetched = fetchMissingObjects(wanted, runGit);
+  if (fetched.type === "failed") {
+    return fetched;
+  }
+  const objects = runGit(["cat-file", "--batch"], `${wanted.join("\n")}\n`);
   if (objects.type === "failed") {
     return objects;
   }

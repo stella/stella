@@ -14,10 +14,12 @@ import { PassThrough, type Readable } from "node:stream";
 import { json } from "node:stream/consumers";
 import * as v from "valibot";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { down } from "./agent-session";
 import {
-  DevProcessSurvivedError,
   devProcessStartedAt,
+  DevProcessSurvivedError,
   readDevProcessGroups,
   spawnDevProcess,
   stopDevProcessGroups,
@@ -116,13 +118,14 @@ const disposeTree = async (
     }
   }
   await tree.child.exited;
-  const deadline = performance.now() + 2000;
-  while (
-    liveMembers(tree.child.pid).length > 0 &&
-    performance.now() < deadline
-  ) {
-    await Bun.sleep(20);
-  }
+  await waitForExternalState({
+    description: `every member of process group ${String(tree.child.pid)} exits`,
+    intervalMs: 20,
+    timeoutMs: 2000,
+    read: () => liveMembers(tree.child.pid).length === 0,
+    // The assertion below names the members still alive.
+    onTimeout: () => undefined,
+  });
   expect(liveMembers(tree.child.pid)).toEqual([]);
 };
 

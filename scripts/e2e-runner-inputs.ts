@@ -1,97 +1,122 @@
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import {
+  type Node,
+  parseSource,
+  type Program,
+} from "../packages/scripts/src/syntax-tree";
 import { isPlaywrightTestFile } from "./e2e-spec-shards-core";
+
+const stringValue = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
 
 const CONFIG_PATH = "apps/web/e2e/playwright.config.ts";
 
-const createConfigReader = (tree: ts.SourceFile) => {
-  const bindings = new Map<string, ts.Expression>();
+const createConfigReader = (tree: Program) => {
+  const bindings = new Map<string, Node>();
   const configFactories = new Set<string>();
-  let exported: ts.Expression | undefined;
-  for (const statement of tree.statements) {
-    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
-      exported = statement.expression;
+  let exported: Node | undefined;
+  for (const entry of tree.body) {
+    const statement =
+      entry.type === "ExportNamedDeclaration" && entry.declaration
+        ? entry.declaration
+        : entry;
+    if (statement.type === "ExportDefaultDeclaration") {
+      exported = statement.declaration;
     }
     if (
-      ts.isVariableStatement(statement) &&
-      statement.declarationList.flags === ts.NodeFlags.Const
+      statement.type === "VariableDeclaration" &&
+      statement.kind === "const"
     ) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-          bindings.set(declaration.name.text, declaration.initializer);
+      for (const declaration of statement.declarations) {
+        if (declaration.id.type === "Identifier" && declaration.init) {
+          bindings.set(declaration.id.name, declaration.init);
         }
       }
     }
     if (
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === "@playwright/test"
+      statement.type === "ImportDeclaration" &&
+      statement.source.value === "@playwright/test"
     ) {
-      const imports = statement.importClause?.namedBindings;
-      if (imports && ts.isNamedImports(imports)) {
-        for (const imported of imports.elements) {
-          if (
-            (imported.propertyName ?? imported.name).text === "defineConfig"
-          ) {
-            configFactories.add(imported.name.text);
-          }
+      for (const imported of statement.specifiers) {
+        if (
+          imported.type === "ImportSpecifier" &&
+          (imported.imported.type === "Identifier"
+            ? imported.imported.name
+            : imported.imported.value) === "defineConfig"
+        ) {
+          configFactories.add(imported.local.name);
         }
       }
     }
   }
   const resolve = (
-    expression: ts.Expression | undefined,
+    expression: Node | null | undefined,
     seen = new Set<string>(),
-  ): ts.Expression | undefined => {
+  ): Node | undefined => {
     if (!expression) {
       return undefined;
     }
     if (
-      ts.isParenthesizedExpression(expression) ||
-      ts.isAsExpression(expression) ||
-      ts.isSatisfiesExpression(expression)
+      expression.type === "ParenthesizedExpression" ||
+      expression.type === "TSAsExpression" ||
+      expression.type === "TSSatisfiesExpression"
     ) {
       return resolve(expression.expression, seen);
     }
-    if (!ts.isIdentifier(expression)) {
+    if (expression.type !== "Identifier") {
       return expression;
     }
-    if (seen.has(expression.text)) {
+    if (seen.has(expression.name)) {
       return undefined;
     }
-    seen.add(expression.text);
-    return resolve(bindings.get(expression.text), seen);
+    seen.add(expression.name);
+    return resolve(bindings.get(expression.name), seen);
   };
-  const properties = (expression: ts.Expression | undefined) => {
+  const properties = (expression: Node | null | undefined) => {
     const resolved = resolve(expression);
-    if (!resolved || !ts.isObjectLiteralExpression(resolved)) {
+    if (!resolved || resolved.type !== "ObjectExpression") {
       return undefined;
     }
-    const fields = new Map<string, ts.Expression>();
+    const fields = new Map<string, Node>();
     for (const property of resolved.properties) {
-      if (ts.isShorthandPropertyAssignment(property)) {
-        fields.set(property.name.text, property.name);
-        continue;
-      }
       if (
-        !ts.isPropertyAssignment(property) ||
-        !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+        property.type !== "Property" ||
+        property.computed ||
+        property.method ||
+        property.kind !== "init" ||
+        !(
+          property.key.type === "Identifier" ||
+          (property.key.type === "Literal" &&
+            typeof property.key.value === "string")
+        )
       ) {
         return undefined;
       }
-      fields.set(property.name.text, property.initializer);
+      fields.set(
+        property.key.type === "Identifier"
+          ? property.key.name
+          : property.key.value,
+        property.value,
+      );
     }
     return fields;
   };
   let configExpression = resolve(exported);
-  if (configExpression && ts.isCallExpression(configExpression)) {
+  if (configExpression?.type === "CallExpression") {
     if (
-      !ts.isIdentifier(configExpression.expression) ||
-      !configFactories.has(configExpression.expression.text) ||
+      configExpression.callee.type !== "Identifier" ||
+      !configFactories.has(configExpression.callee.name) ||
       configExpression.arguments.length !== 1
     ) {
       return undefined;
@@ -102,50 +127,49 @@ const createConfigReader = (tree: ts.SourceFile) => {
   if (!config) {
     return undefined;
   }
-  const strings = (expression: ts.Expression): string[] | undefined => {
+  const strings = (expression: Node): string[] | undefined => {
     const resolved = resolve(expression);
     if (!resolved) {
       return undefined;
     }
-    if (ts.isStringLiteralLike(resolved)) {
-      return [resolved.text];
+    const literal = stringValue(resolved);
+    if (literal !== undefined) {
+      return [literal];
     }
-    if (!ts.isArrayLiteralExpression(resolved)) {
+    if (resolved.type !== "ArrayExpression") {
       return undefined;
     }
     const values: string[] = [];
     for (const element of resolved.elements) {
       const value = resolve(element);
-      if (!value || !ts.isStringLiteralLike(value)) {
+      const elementValue = value ? stringValue(value) : undefined;
+      if (elementValue === undefined) {
         return undefined;
       }
-      values.push(value.text);
+      values.push(elementValue);
     }
     return values;
   };
   const matchers = (
-    expression: ts.Expression,
+    expression: Node,
   ): ((file: string) => boolean)[] | undefined => {
     const resolved = resolve(expression);
     if (!resolved) {
       return undefined;
     }
-    if (ts.isStringLiteralLike(resolved)) {
+    const literal = stringValue(resolved);
+    if (literal !== undefined) {
       // Playwright prepends **/ and matches string patterns without case.
       // Extglobs require minimatch semantics; widen rather than approximate.
-      if (/[@+?!*]\(/u.test(resolved.text)) {
+      if (/[@+?!*]\(/u.test(literal)) {
         return undefined;
       }
-      const pattern = resolved.text.startsWith("**/")
-        ? resolved.text
-        : `**/${resolved.text}`;
+      const pattern = literal.startsWith("**/") ? literal : `**/${literal}`;
       const glob = new Bun.Glob(pattern.toLowerCase());
       return [(file) => glob.match(file.toLowerCase())];
     }
-    if (ts.isRegularExpressionLiteral(resolved)) {
-      const text = resolved.text;
-      const end = text.lastIndexOf("/");
-      const pattern = new RegExp(text.slice(1, end), text.slice(end + 1));
+    if (resolved.type === "Literal" && "regex" in resolved) {
+      const pattern = new RegExp(resolved.regex.pattern, resolved.regex.flags);
       return [
         (file) => {
           pattern.lastIndex = 0;
@@ -153,12 +177,12 @@ const createConfigReader = (tree: ts.SourceFile) => {
         },
       ];
     }
-    if (!ts.isArrayLiteralExpression(resolved)) {
+    if (resolved.type !== "ArrayExpression") {
       return undefined;
     }
     const predicates: ((file: string) => boolean)[] = [];
     for (const element of resolved.elements) {
-      const parsed = matchers(element);
+      const parsed = element ? matchers(element) : undefined;
       if (!parsed) {
         return undefined;
       }
@@ -191,10 +215,10 @@ const setupProjectInputs = ({
     return [];
   }
   const projects = resolve(projectsExpression);
-  if (!projects || !ts.isArrayLiteralExpression(projects)) {
+  if (!projects || projects.type !== "ArrayExpression") {
     return undefined;
   }
-  const namedProjects = new Map<string, Map<string, ts.Expression>>();
+  const namedProjects = new Map<string, Map<string, Node>>();
   const setupNames = new Set<string>();
   for (const project of projects.elements) {
     const fields = properties(project);
@@ -202,13 +226,14 @@ const setupProjectInputs = ({
       return undefined;
     }
     const name = resolve(fields.get("name"));
-    if (!name || !ts.isStringLiteralLike(name)) {
+    const projectName = name ? stringValue(name) : undefined;
+    if (projectName === undefined) {
       return undefined;
     }
-    if (namedProjects.has(name.text)) {
+    if (namedProjects.has(projectName)) {
       return undefined;
     }
-    namedProjects.set(name.text, fields);
+    namedProjects.set(projectName, fields);
     for (const field of ["dependencies", "teardown"]) {
       const value = fields.get(field);
       if (!value) {
@@ -230,13 +255,11 @@ const setupProjectInputs = ({
     }
     const testDirExpression = project.get("testDir") ?? config.get("testDir");
     const testDir = testDirExpression ? resolve(testDirExpression) : undefined;
-    if (testDirExpression && (!testDir || !ts.isStringLiteralLike(testDir))) {
+    const testDirValue = testDir ? stringValue(testDir) : undefined;
+    if (testDirExpression && testDirValue === undefined) {
       return undefined;
     }
-    const testDirectory = path.resolve(
-      directory,
-      testDir && ts.isStringLiteralLike(testDir) ? testDir.text : ".",
-    );
+    const testDirectory = path.resolve(directory, testDirValue ?? ".");
     const relativeDirectory = repoRelativePath(
       root,
       realpathSync(testDirectory),
@@ -271,15 +294,11 @@ const setupProjectInputs = ({
 // Resolve only static configuration, without executing code from a pull request.
 // Unknown configuration is handled by the caller's full-suite fallback.
 export const e2eRunnerInputs = (root: string): string[] | undefined => {
-  const absoluteConfig = path.join(root, CONFIG_PATH);
+  const canonicalRoot = realpathSync(root);
+  const absoluteConfig = path.join(canonicalRoot, CONFIG_PATH);
   const source = readFileSync(absoluteConfig, "utf-8");
   new Bun.Transpiler({ loader: "ts" }).scan(source);
-  const tree = ts.createSourceFile(
-    absoluteConfig,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const tree = parseSource(absoluteConfig, source).program;
   const reader = createConfigReader(tree);
   if (!reader) {
     return undefined;
@@ -298,13 +317,17 @@ export const e2eRunnerInputs = (root: string): string[] | undefined => {
     }
     for (const reference of references) {
       const absolute = realpathSync(Bun.resolveSync(reference, directory));
-      const relative = repoRelativePath(root, absolute);
+      const relative = repoRelativePath(canonicalRoot, absolute);
       if (relative.startsWith("../") || relative.includes("node_modules/")) {
         return undefined;
       }
       entries.push(relative);
     }
   }
-  const setupInputs = setupProjectInputs({ root, directory, ...reader });
+  const setupInputs = setupProjectInputs({
+    root: canonicalRoot,
+    directory,
+    ...reader,
+  });
   return setupInputs === undefined ? undefined : [...entries, ...setupInputs];
 };

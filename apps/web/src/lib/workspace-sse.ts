@@ -1,4 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -11,7 +12,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/workspace-sse-connection.logic";
 import type { WorkspaceStreamAccess } from "@/lib/workspace-sse-connection.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
@@ -35,9 +37,83 @@ const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
 // Long enough for the stream's access check, short enough that a hung probe
 // only delays the next reconnect attempt.
 const WORKSPACE_STREAM_PROBE_TIMEOUT_MS = 10_000;
+const WORKSPACE_INVALIDATION_BATCH_MS = 16;
+
+type QueryActionBatch = {
+  add: (actions: WorkspaceRealtimeQueryAction[]) => void;
+  cancel: () => void;
+};
+
+/** Coalesces a stream burst so each cache key is touched once per frame. */
+export const createWorkspaceQueryActionBatch = (
+  apply: (actions: WorkspaceRealtimeQueryAction[]) => void,
+  schedule: (callback: () => void, delayMs: number) => () => void = (
+    callback,
+    delayMs,
+  ) => {
+    const timer = setTimeout(callback, delayMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  },
+): QueryActionBatch => {
+  const pending = new Map<string, WorkspaceRealtimeQueryAction>();
+  let cancelScheduled: (() => void) | null = null;
+
+  const flush = () => {
+    cancelScheduled?.();
+    cancelScheduled = null;
+    const actions = [...pending.values()];
+    pending.clear();
+    if (actions.length === 0) {
+      return;
+    }
+    apply(actions);
+  };
+
+  return {
+    add: (actions) => {
+      if (actions.length === 0) {
+        return;
+      }
+      for (const action of actions) {
+        // Re-insert so the flush keeps the order of each key's last action.
+        const key = `${action.type}:${hashKey(action.queryKey)}`;
+        pending.delete(key);
+        pending.set(key, action);
+      }
+      cancelScheduled ??= schedule(flush, WORKSPACE_INVALIDATION_BATCH_MS);
+    },
+    cancel: () => {
+      // Preserve the last event's freshness when navigation ends a stream
+      // before its scheduled batch runs.
+      flush();
+    },
+  };
+};
 
 type UseWorkspaceSSEOptions = {
   onEvent?: (event: WorkspaceRealtimeEvent) => void;
+};
+
+export const applyWorkspaceRealtimeQueryActions = (
+  queryClient: QueryClient,
+  actions: WorkspaceRealtimeQueryAction[],
+) => {
+  const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
+  for (const action of actions) {
+    switch (action.type) {
+      case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
+        realtimeRefresh.refresh(action.queryKey);
+        break;
+      case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
+        queryClient.removeQueries({ queryKey: action.queryKey, exact: false });
+        break;
+      default:
+        action satisfies never;
+        panic(`Unhandled action: ${String(action)}`);
+    }
+  }
 };
 
 const getWorkspaceSSEUrl = (workspaceId: string) =>
@@ -85,14 +161,25 @@ export const useWorkspaceSSE = (
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const t = useTranslations();
+  const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
 
   const applyQueryActions = (actions: WorkspaceRealtimeQueryAction[]) => {
-    for (const action of actions) {
+    applyWorkspaceRealtimeQueryActions(queryClient, actions);
+  };
+  const applyBatchedQueryActions = useLatestCallback(applyQueryActions);
+  const handleParsedEvent = useLatestCallback(
+    (event: WorkspaceRealtimeEvent): WorkspaceRealtimeQueryAction[] => {
+      options.onEvent?.(event);
+      return getWorkspaceRealtimeQueryActions(event, workspaceId);
+    },
+  );
+  const refreshAfterReconnect = useLatestCallback(() => {
+    for (const action of getWorkspaceReconnectQueryActions(workspaceId)) {
       switch (action.type) {
         case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
           detached(
-            queryClient.invalidateQueries({ queryKey: action.queryKey }),
-            "sse.invalidate",
+            realtimeRefresh.invalidateImmediately(action.queryKey),
+            "sse.reconnect-invalidate",
           );
           break;
         case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
@@ -103,88 +190,91 @@ export const useWorkspaceSSE = (
           break;
         default:
           action satisfies never;
-          panic(`Unhandled action: ${String(action)}`);
+          panic(`Unhandled reconnect action: ${String(action)}`);
       }
     }
-  };
-  const handleParsedEvent = useLatestCallback(
-    (event: WorkspaceRealtimeEvent) => {
-      options.onEvent?.(event);
-      applyQueryActions(getWorkspaceRealtimeQueryActions(event, workspaceId));
-    },
-  );
-  const refreshAfterReconnect = useLatestCallback(() => {
-    applyQueryActions(getWorkspaceReconnectQueryActions(workspaceId));
   });
   const captureConnectionOutage = useLatestCallback(() => {
     analytics.captureError(
       // Stable message: the workspace id adds nothing to grouping and the
       // failure is the same defect regardless of workspace.
       new Error("SSE connection failed to re-establish"),
+      {
+        fingerprintKey: "useWorkspaceSSE:Error",
+        scope: { type: "handler", handlerId: "useWorkspaceSSE:Error" },
+      },
     );
   });
   const leaveEndedMatter = useLatestCallback(async () => {
-    notifyUserError(undefined, t("errors.matterNotFound"));
+    notifyUserProblem(t("errors.matterNotFound"));
     // Leave first: dropping the cache while the matter's views are still
     // mounted would only make them refetch into the same refusal.
     await navigate({ to: "/workspaces", replace: true });
     queryClient.removeQueries({
       predicate: (query) => isWorkspaceQueryKey(query.queryKey, workspaceId),
     });
-    await queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+    await realtimeRefresh.invalidateImmediately(workspacesKeys.all);
   });
 
-  useExternalSyncEffect(
-    () =>
-      connectWorkspaceStream({
-        openSource: ({ onOpen, onMessage, onError }) => {
-          const stream = new EventSource(
-            getWorkspaceSSEUrl(workspaceId),
-            WORKSPACE_SSE_EVENT_SOURCE_INIT,
-          );
-          stream.addEventListener("open", onOpen);
-          stream.addEventListener("message", (event: MessageEvent) => {
-            onMessage(String(event.data));
-          });
-          stream.addEventListener("error", onError);
-          return {
-            isClosed: () => stream.readyState === EventSource.CLOSED,
-            close: () => {
-              stream.close();
-            },
-          };
-        },
-        isOnline: () => navigator.onLine,
-        schedule: (callback, delayMs) => {
-          const timer = setTimeout(callback, delayMs);
-          return () => {
-            clearTimeout(timer);
-          };
-        },
-        probeAccess: (settle) => {
-          detached(
-            probeWorkspaceStreamAccess(workspaceId).then(settle),
-            "workspace-stream.probe-access",
-          );
-        },
-        onMessage: (data) => {
-          const parsed = parseWorkspaceRealtimeMessage(data);
-          if (parsed) {
-            handleParsedEvent(parsed);
-          }
-        },
-        onOutage: captureConnectionOutage,
-        onAccessEnded: () => {
-          detached(leaveEndedMatter(), "workspace-stream.leave-ended-matter");
-        },
-        onReconnected: refreshAfterReconnect,
-      }),
-    [
-      workspaceId,
-      captureConnectionOutage,
-      handleParsedEvent,
-      leaveEndedMatter,
-      refreshAfterReconnect,
-    ],
-  );
+  useExternalSyncEffect(() => {
+    // One batch per connection: its cleanup applies what the stream delivered
+    // before navigation ended it.
+    const actionBatch = createWorkspaceQueryActionBatch(
+      applyBatchedQueryActions,
+    );
+    const disconnect = connectWorkspaceStream({
+      openSource: ({ onOpen, onMessage, onError }) => {
+        const stream = new EventSource(
+          getWorkspaceSSEUrl(workspaceId),
+          WORKSPACE_SSE_EVENT_SOURCE_INIT,
+        );
+        stream.addEventListener("open", onOpen);
+        stream.addEventListener("message", (event: MessageEvent) => {
+          onMessage(String(event.data));
+        });
+        stream.addEventListener("error", onError);
+        return {
+          isClosed: () => stream.readyState === EventSource.CLOSED,
+          close: () => {
+            stream.close();
+          },
+        };
+      },
+      isOnline: () => navigator.onLine,
+      schedule: (callback, delayMs) => {
+        const timer = setTimeout(callback, delayMs);
+        return () => {
+          clearTimeout(timer);
+        };
+      },
+      probeAccess: (settle) => {
+        detached(
+          probeWorkspaceStreamAccess(workspaceId).then(settle),
+          "workspace-stream.probe-access",
+        );
+      },
+      onMessage: (data) => {
+        const parsed = parseWorkspaceRealtimeMessage(data);
+        if (parsed) {
+          actionBatch.add(handleParsedEvent(parsed));
+        }
+      },
+      onOutage: captureConnectionOutage,
+      onAccessEnded: () => {
+        detached(leaveEndedMatter(), "workspace-stream.leave-ended-matter");
+      },
+      onReconnected: refreshAfterReconnect,
+    });
+    return () => {
+      actionBatch.cancel();
+      disconnect();
+    };
+  }, [
+    workspaceId,
+    applyBatchedQueryActions,
+    captureConnectionOutage,
+    handleParsedEvent,
+    leaveEndedMatter,
+    refreshAfterReconnect,
+  ]);
 };

@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
+import { spotTargetSchema } from "@stll/api-contract/spot";
 
 import {
   entities,
@@ -14,29 +15,21 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  sourceEntityId: tSafeId("entity"),
-  sourceEntityVersionId: tSafeId("entityVersion"),
-  locator: t.Union([
-    t.Object({ type: t.Literal("document") }),
-    t.Object({
-      type: t.Literal("docx-block"),
-      blockId: t.String({ minLength: 1, maxLength: 512 }),
-    }),
-    t.Object({
-      type: t.Literal("pdf-page"),
-      pageNumber: t.Integer({ minimum: 1 }),
-    }),
-  ]),
-  quote: t.Optional(
-    t.Nullable(t.String({ maxLength: LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH })),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  sourceEntityId: resourceIdSchema("entity"),
+  sourceEntityVersionId: resourceIdSchema("entityVersion"),
+  locator: spotTargetSchema,
+  quote: v.optional(
+    v.nullable(
+      v.pipe(v.string(), v.maxLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH)),
+    ),
   ),
 });
 

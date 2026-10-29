@@ -66,7 +66,6 @@ export const envWebClientSchema = {
   VITE_SEO_INDEXABLE: featureFlagSchema,
   VITE_WORKFLOWS_ENABLED: featureFlagSchema,
   VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
-  VITE_FEATURE_AI_MEMORY: featureFlagSchema,
   VITE_FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   VITE_FEATURE_INBOX: featureFlagSchema,
   /** Lets a production deployment expose per-browser beta previews. */

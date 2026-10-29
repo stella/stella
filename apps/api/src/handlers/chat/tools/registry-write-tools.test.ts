@@ -1,6 +1,7 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
@@ -18,6 +19,7 @@ import {
   WRITE_TOOL_SCOPES,
 } from "@/api/mcp/matter-requirement";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -31,17 +33,21 @@ const threadId = toSafeId<"chatThread">("55555555-5555-4555-8555-555555555555");
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("This test never reaches the database.");
 };
-const unusedSafeDb: SafeDb = async () => {
-  throw new Error("This test never reaches the database.");
-};
+// Only the execution audit row reaches the database, and its recorder below
+// discards it, so the transaction is never read.
+const { safeDb: auditOnlySafeDb } = createScopedDbMock({});
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
-const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
-  getChatTools({
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
-      organizationId,
-      userId,
-    }),
+const chatToolsFor = (
+  turnWorkspaceIds: SafeId<"workspace">[],
+  currentWorkspaceIds = turnWorkspaceIds,
+) => {
+  const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+    organizationId,
+    userId,
+  });
+  return getChatTools({
+    featureAccessSnapshot,
     docxSuggestionSurface: "file-overlay",
     hasActiveDocxEditClient: false,
     hasActiveDocxFileClient: false,
@@ -55,14 +61,29 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     refRegistry: createChatRefRegistry(),
     registryDispatch: BUSINESS_REGISTRY_DISPATCH,
     requestWorkspaceId: null,
-    resolveCurrentMembership: async () => ({ role: "owner" }),
-    safeDb: unusedSafeDb,
+    resolveCurrentExecutionContext: async () =>
+      await Promise.resolve(
+        Result.ok({
+          accessibleWorkspaces: currentWorkspaceIds.map((id) => ({
+            id,
+            status: "active" as const,
+          })),
+          featureAccessSnapshot,
+          pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
+            currentWorkspaceIds.includes(id),
+          role: "owner",
+          safeDb: auditOnlySafeDb,
+          scopedDb: unusedScopedDb,
+          userEmail: "standard@example.test",
+        }),
+      ),
+    safeDb: auditOnlySafeDb,
     scopedDb: unusedScopedDb,
     thirdPartyBoundary: { type: "raw" },
     threadId,
     toolDefectMemo: createChatToolDefectMemo(),
     toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds,
+      accessibleWorkspaceIds: turnWorkspaceIds,
       pinnedIds: [],
     }),
     userId,
@@ -70,10 +91,9 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     webSearchEnabled: false,
     webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     workspaceId: null,
-    workspaceStatusById: new Map(
-      accessibleWorkspaceIds.map((id) => [id, "active"]),
-    ),
+    workspaceStatusById: new Map(turnWorkspaceIds.map((id) => [id, "active"])),
   });
+};
 
 const projectedWriteToolNames = Object.entries(WRITE_TOOL_REF_FIELD_MAP)
   .filter(([, entry]) => entry.chatProjectable)
@@ -118,6 +138,23 @@ describe("chat write tools and the caller's matter count", () => {
           hint: expect.stringContaining("save_matter"),
         },
       });
+    }
+  });
+
+  test("refuses a matter-scoped write after current matter access is removed", async () => {
+    const saveTask = chatToolsFor([workspaceId], [])["save_task"];
+    if (saveTask?.execute === undefined) {
+      throw new Error("save_task must be executable before access changes");
+    }
+    const failure = await Promise.resolve(
+      saveTask.execute({ name: "Draft the NDA" }),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(ChatToolError);
+    if (failure instanceof ChatToolError) {
+      expect(failure.kind).toBe("not-found");
     }
   });
 });

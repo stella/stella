@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 
@@ -14,10 +14,9 @@ import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 
-const decisionSchema = t.Object(
-  { status: t.UnionEnum(["enabled", "hidden"]) },
-  { additionalProperties: false },
-);
+const decisionSchema = v.strictObject({
+  status: v.picklist(["enabled", "hidden"]),
+});
 
 const config = {
   contract: "patch",
@@ -25,18 +24,13 @@ const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
   response: safePublicHandlerResponseSchemasWithStatusText(
-    t.Object(
-      {
-        features: t.Object(
-          {
-            "activity-timeline": decisionSchema,
-            "time-billing": decisionSchema,
-          } satisfies Record<DesktopFeatureId, typeof decisionSchema>,
-          { additionalProperties: false },
-        ),
-      },
-      { additionalProperties: false },
-    ),
+    v.object({
+      features: v.object({
+        "activity-timeline": decisionSchema,
+        "time-billing": decisionSchema,
+        "local-agents": decisionSchema,
+      } satisfies Record<DesktopFeatureId, typeof decisionSchema>),
+    }),
   ),
 } satisfies PublicHandlerConfig;
 
@@ -76,6 +70,7 @@ export const createDesktopFeatureAccessReadEndpoint = (
       features: {
         "activity-timeline": decide(snapshot, "activity-timeline"),
         "time-billing": decide(snapshot, "time-billing"),
+        "local-agents": decide(snapshot, "local-agents"),
       } satisfies Record<DesktopFeatureId, unknown>,
     });
   });

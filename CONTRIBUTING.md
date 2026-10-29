@@ -49,18 +49,18 @@ structure.
 ### Typechecking
 
 Run `bun run typecheck` for workspace checks or `bun run typecheck:repo` for
-repository tooling. These commands use Bun 1.4.3’s native checker locally and in
+repository tooling. These commands use Bun’s native checker locally and in
 CI. For a direct project check, use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for a
-solution config with project references. `bun run check:typecheck-parity` compares
-TypeScript and Bun diagnostics on repository code and seeded cases. CI runs full
-parity when the Bun pin or resolved TypeScript compiler versions change, and
-nightly or on manual dispatch. Every PR retains Bun checks and a seeded-error
-probe.
+solution config with project references. Bun's checker is the only type
+checker. The seeded-error probe, which verifies that the checker rejects known
+errors, runs on manual dispatch.
 
 Editors continue to use the TypeScript language service: Bun provides no LSP.
-Keep the TypeScript dependency and its compatibility alias for compiler-API tools
-such as dependency-cruiser and for declaration generation.
+`typescript6` stays only for the compiler-API tools that still import it, and
+`apps/landing` keeps `typescript` because `astro check` needs it. Package
+declarations come from Oxc (`dts: { generator: "oxc" }`), which needs explicit
+types on exports, or from tsrs where a package cannot provide them.
 
 ### Claude Code LSP (experimental)
 
@@ -149,10 +149,24 @@ gh api graphql -F owner=stella -F repo=stella -F pr=123 -f query='query($owner: 
   --jq '[.. | .annotations? | .nodes? // empty | .[] | select(.annotationLevel == "FAILURE")]'
 ```
 
-The same records are in the run's `ci-failures` artifact
-(`gh run download <run-id> -n ci-failures`) and its job summary. A failing
-test step also ends its log with the failing tests and their errors. CI logs
-carry no colour codes.
+The same records are in the run's `ci-failures` artifact and its job
+summary. One command prints them as Markdown for a run id or URL; for a run
+without the artifact (still running, or the gate passed) it builds them from
+the failed jobs' logs:
+
+```bash
+bun scripts/ci-failure-digest.ts show <run-id-or-url> --repo stella/stella
+```
+
+The `show` command requires GitHub CLI 2.97.0 or newer; job-log downloads use
+its `--allow-escape-sequences` option. Failed log downloads print the shared
+GitHub retry helper's status metadata and appear as unavailable in the digest.
+
+Each record keeps the failing check's own closing output (up to 15 lines),
+without passing tests or runner banners. Jobs that were cancelled without a
+failed step, such as test shards stopped by fail-fast, are listed apart as
+cancelled, not failed. A failing test step also ends its log with the
+failing tests and their errors. CI logs carry no colour codes.
 
 > In a fresh git worktree run `bun run setup:worktree` once to prepare dependencies.
 > `bun run lint:changed` lints only your
@@ -209,7 +223,7 @@ unprefixed global names.
   for TypeScript; `bun run lint:css` runs Stylelint's correctness checks over
   authored CSS. CSS checks also run in `lint`, `code-check`, and affected CI.
   Tailwind v4 directives and deliberate fallback declarations are supported;
-  embedded Astro styles are not scanned. **Formatting**: Oxfmt.
+  embedded Astro styles are not scanned. **Formatting**: `bun fmt`.
 - **Tests**: write tests for new functionality when applicable.
 
 ## Changesets
@@ -231,15 +245,16 @@ it:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
+- `@stll/fetch`
 - `@stll/mcp-kit`
 - `@stll/money`
+- `@stll/scan-engine`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`
 - `@stll/stable-stringify`
 - `@stll/start-runtime`
 - `@stll/template-conditions`
 - `@stll/text-normalize`
-- `@stll/time`
 - `@stll/ui`
 - `@stll/workspace-model`
 - `@stll/workspace-ui`

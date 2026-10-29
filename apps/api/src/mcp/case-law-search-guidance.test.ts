@@ -13,7 +13,7 @@ describe("search_case_law guidance", () => {
   test("off keeps the search contract without experimental guidance", () => {
     expect(searchCaseLawTexts("off")).toEqual({
       description:
-        "Search case law within one country. `queries` merges phrasings of one question; matchedQueries names those behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+        "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values.",
       queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.`,
       limit:
         "Merged-page size, split evenly across the queries (at least one hit each)",
@@ -25,7 +25,13 @@ describe("search_case_law guidance", () => {
   test("v1 says how a phrasing is matched and how the limit is shared", () => {
     const { description, queries, limit } = searchCaseLawTexts("v1");
 
-    expect(queries).toContain("must occur in the same passage");
+    expect(queries).toContain(
+      "A full match needs every word of a phrasing except function words in one passage",
+    );
+    // Partial matches can top up a short page, so v1 never says every hit
+    // holds every word.
+    expect(description).toContain("after all_terms hits");
+    expect(description).toContain("Relevance pages may add some_terms hits");
     expect(queries).toContain("two to four words");
     expect(queries).toContain("a phrasing of its own");
     expect(queries).toContain("`§ N` plus the act's name or abbreviation");

@@ -83,6 +83,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.
   "case_law_reconciliation_items",
+  // Removal retries are corpus coordination state; ingestion owns mutations.
+  "case_law_removal_reconciliation_items",
   // Where the citation-resolution walk had got to. Operational progress the
   // status rollup reads; only the resolution loop advances it.
   "case_law_citation_resolution_progress",
@@ -159,6 +161,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "account_audit_logs",
   "chat_thread_names",
   "chat_message_revisions",
+  "document_review_finding_decisions",
 ]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.
@@ -190,6 +193,10 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Work-identifier aliases are served through the public-law reader; the
+  // request role has no direct access to this ingestion-owned relation.
+  "legislation_work_identifiers",
+  "synthetic_session_control",
   // Guidance ingestion is owner-only until a read capability is introduced.
   "soft_law_sources",
   "soft_law_ingestion_attempts",
@@ -198,6 +205,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "soft_law_document_locators",
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
+  "case_law_sitemap_shard_counts",
+  // Removal generations are owner/ingestion-only, beside shard staging counts.
+  "case_law_sitemap_country_generations",
   "case_law_replay_batches",
   "case_law_replay_blocked",
   "case_law_replay_daily_rows",
@@ -232,6 +242,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "mcp_web_handoff",
   "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
@@ -253,6 +264,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_decision_source_identities",
   // UUID retirement is ingestion-owned; request transactions cannot access it.
   "case_law_decision_aliases",
+  // Retired publisher identities are ingestion repair state; request
+  // transactions must not observe or mutate them.
+  "case_law_decision_alias_moved_identities",
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",
@@ -276,6 +290,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
   "case_law_source_arrivals",
+  "case_law_coverage_summaries",
   "legislation_facet_counts",
   "legislation_facet_refreshes",
   "statute_sitemap_shards",

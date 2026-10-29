@@ -1,11 +1,10 @@
 import { Result } from "better-result";
-import Elysia from "elysia";
 
 import {
+  createSearchSummaryChatThread,
   refineSearchBodySchema,
   refineSearchQuery,
   searchSummaryChatBodySchema,
-  createSearchSummaryChatThread,
   summarizeSearchBodySchema,
   summarizeSearchResults,
 } from "@/api/handlers/search/ai";
@@ -15,13 +14,15 @@ import {
 } from "@/api/handlers/search/facets";
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
+import { routes } from "@/api/http/route";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 const searchEndpoint = createSafeRootHandler(
   {
@@ -102,6 +103,10 @@ const refineSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -147,6 +152,10 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     const activeWorkspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
@@ -183,6 +192,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
   } satisfies HandlerConfig,
   async function* ({
     body,
+    featureAccessSnapshot,
     getActiveWorkspaceIds,
     safeDb,
     scopedDb,
@@ -200,6 +210,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             accessibleWorkspaceIds: activeWorkspaceIds,
             body,
+            featureAccessSnapshot,
             safeDb,
             scopedDb,
             userId: user.id,
@@ -212,31 +223,14 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
   },
 );
 
-export const searchRoute = new Elysia({ prefix: "/search" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .post("/", searchEndpoint.handler, {
-    body: searchEndpoint.config.body,
-    permissions: searchEndpoint.config.permissions,
-  })
-  .post("/facets", searchFacetsEndpoint.handler, {
-    body: searchFacetsEndpoint.config.body,
-    permissions: searchFacetsEndpoint.config.permissions,
-  })
-  .post("/preview", searchPreviewEndpoint.handler, {
-    body: searchPreviewEndpoint.config.body,
-    permissions: searchPreviewEndpoint.config.permissions,
-  })
-  .post("/refine", refineSearchEndpoint.handler, {
-    body: refineSearchEndpoint.config.body,
-    permissions: refineSearchEndpoint.config.permissions,
-  })
-  .post("/summary", summarizeSearchEndpoint.handler, {
-    body: summarizeSearchEndpoint.config.body,
-    permissions: summarizeSearchEndpoint.config.permissions,
-  })
-  .post("/summary/chat", searchSummaryChatEndpoint.handler, {
-    body: searchSummaryChatEndpoint.config.body,
-    permissions: searchSummaryChatEndpoint.config.permissions,
-  });
+export const searchRoute = routes(
+  {
+    "/": { POST: searchEndpoint },
+    "/facets": { POST: searchFacetsEndpoint },
+    "/preview": { POST: searchPreviewEndpoint },
+    "/refine": { POST: refineSearchEndpoint },
+    "/summary": { POST: summarizeSearchEndpoint },
+    "/summary/chat": { POST: searchSummaryChatEndpoint },
+  },
+  { prefix: "/search" },
+);

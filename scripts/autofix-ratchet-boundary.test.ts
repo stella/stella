@@ -1,12 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
   existsSync,
+  mkdirSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";

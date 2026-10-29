@@ -3,8 +3,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
   lstatSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readlinkSync,
   rmSync,
@@ -25,8 +25,8 @@ import {
   createDesktopEnv,
   createWebEnv,
   describeFailedProbes,
-  dockerComposeDownCommand,
   dockerComposeCommand,
+  dockerComposeDownCommand,
   dockerProjectBelongsToWorktree,
   dockerProjectName,
   ensureWorktreeEnvLinks,
@@ -40,15 +40,15 @@ import {
   loadEnvFile,
   MAX_HASH_OFFSET,
   migrateLegacyS3DevCredentials,
-  projectsForDeletedWorktrees,
   parseDockerComposePsJson,
   parseForeignPortOwners,
   parseStellaDockerProject,
   portsForOffset,
+  projectsForDeletedWorktrees,
+  reportGroupStopFailure,
   requiredPortsForMode,
   resolveAutoInfraOffset,
   resolveMainRootFromCommonDir,
-  reportGroupStopFailure,
   resolveOffset,
   runMainAndExit,
   shouldAutoOpenBrowser,
@@ -1366,7 +1366,7 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts"]);
+    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
     expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
   });
 
@@ -1388,13 +1388,11 @@ describe("dev env factories", () => {
       }).primary;
     const scheduledJobsModes = (seeded: boolean) =>
       primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
-    // Every process the mode starts hosts background writers; a step missing
-    // from this list would keep writing after the seed. A seeded stack starts
-    // no document-processing worker: with its writers disabled it would exit
-    // at once, which the runner treats as a crash of the whole stack.
-    expect(scheduledJobsModes(true)).toEqual(["disabled"]);
+    // The API process stays scheduler-disabled after seeding, while the
+    // separately started queue worker drains uploaded documents.
+    expect(scheduledJobsModes(true)).toEqual(["disabled", "enabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
-    expect(primarySteps(true).map((step) => step.label)).not.toContain(
+    expect(primarySteps(true).map((step) => step.label)).toContain(
       "Document processing worker",
     );
     expect(primarySteps(false).map((step) => step.label)).toContain(
@@ -1510,8 +1508,39 @@ describe("dev env factories", () => {
         .map((step) => step.cmd.includes("--watch"));
 
     expect(watching(false)).toEqual([true, true]);
-    // A seeded stack starts only the API: its document worker is not started.
-    expect(watching(true)).toEqual([false]);
+    expect(watching(true)).toEqual([false, false]);
+  });
+
+  test("only a seeded stack preloads the seeded organization's feature grants", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const apiPreloads = (seeded: boolean) => {
+      const api = buildPersistentSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode: "dev:api",
+        ports: portsForOffset(0),
+        rootDir,
+        seeded,
+      }).primary.find((step) => step.label === "API server");
+      return (api?.cmd ?? []).flatMap((arg, index, cmd) =>
+        cmd[index - 1] === "--preload" ? [arg] : [],
+      );
+    };
+
+    expect(apiPreloads(false)).toEqual(["./src/dev/register-mock-ai.ts"]);
+    const seededPreloads = apiPreloads(true);
+    expect(seededPreloads).toEqual([
+      "./src/dev/register-mock-ai.ts",
+      "./scripts/grant-seeded-organization-features.ts",
+    ]);
+    for (const preload of seededPreloads) {
+      expect(
+        existsSync(
+          path.resolve(import.meta.dirname, "../../../apps/api", preload),
+        ),
+      ).toBe(true);
+    }
   });
 
   test("prepares API databases by applying migrations", () => {
@@ -1578,6 +1607,7 @@ describe("dev env factories", () => {
       DB_LOAD_GATE_EBS_SIGNAL: "disabled",
       FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",
+      DEPLOY_ENVIRONMENT: "development",
       NODE_ENV: "development",
       STELLA_API_PORT: "3101",
       STELLA_LOCAL_DEV: "1",

@@ -224,6 +224,23 @@ export const CENSUS_CAPABILITIES = {
     evidenceRef:
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.research.md#completeness-census",
   },
+  "cz-uohs": {
+    type: "none-exposed",
+    evidence: {
+      type: "unverified",
+      reason: "Source-wide enumeration has not been independently verified.",
+    },
+    evidenceRef: "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts",
+  },
+  "uk-fcl": {
+    type: "none-exposed",
+    evidence: {
+      type: "unverified",
+      reason:
+        "The aggregate feed total is not a verified denominator for each year and court slice.",
+    },
+    evidenceRef: "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts",
+  },
 } as const satisfies Record<AdapterKey, CensusCapability>;
 
 const CAPABILITY_BY_KEY: ReadonlyMap<string, CensusCapability> = new Map(

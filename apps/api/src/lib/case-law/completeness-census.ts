@@ -83,23 +83,26 @@ export const currentCensusSourceScopes = async ({
     }),
   );
 
-export const unmeasuredSourceCensus = (adapterKey: string): SourceCensus => ({
-  aggregateUnit: CENSUS_AGGREGATE_UNIT,
-  verdict: "unmeasured",
-  scopeStatus: "partial-publisher",
-  outcome: censusCapabilityFor(adapterKey)?.type ?? "none-exposed",
-  evidenceRef:
-    censusCapabilityFor(adapterKey)?.evidenceRef ?? "unregistered-adapter",
-  measuredSlices: 0,
-  expectedSlices: null,
-  shortSlices: 0,
-  publisher: null,
-  stored: 0,
-  withText: 0,
-  observedAt: null,
-  years: [],
-  worstSlices: [],
-});
+export const unmeasuredSourceCensus = (adapterKey: string): SourceCensus => {
+  const capability =
+    censusCapabilityFor(adapterKey) ?? panic("Unregistered census adapter");
+  return {
+    aggregateUnit: CENSUS_AGGREGATE_UNIT,
+    verdict: "unmeasured",
+    scopeStatus: "partial-publisher",
+    outcome: capability.type,
+    evidenceRef: capability.evidenceRef,
+    measuredSlices: 0,
+    expectedSlices: null,
+    shortSlices: 0,
+    publisher: null,
+    stored: 0,
+    withText: 0,
+    observedAt: null,
+    years: [],
+    worstSlices: [],
+  };
+};
 
 const short = sql`${census.publisherCount} IS NOT NULL AND (${census.storedCount} < ${census.publisherCount} OR ${census.textCount}::bigint * 1000 < ${census.storedCount}::bigint * 999)`;
 

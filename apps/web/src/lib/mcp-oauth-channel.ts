@@ -26,8 +26,7 @@ const mcpOAuthMessageSchema = v.variant("status", [
 ]);
 
 export type McpOAuthOutcome =
-  | { status: "connected" }
-  | { status: "error"; reason: string };
+  { status: "connected" } | { status: "error"; reason: string };
 
 export type McpOAuthWindowStatus = "invalid" | "opened" | "redirected";
 

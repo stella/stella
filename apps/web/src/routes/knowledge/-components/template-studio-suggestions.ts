@@ -22,6 +22,7 @@ import { buildPositionalText } from "@stll/folio-react";
 import type { AISuggestion } from "@stll/folio-react";
 import { stableStringify } from "@stll/stable-stringify";
 import { scanMarkers } from "@stll/template-conditions";
+import { findSearchMatchKeyRanges } from "@stll/text-normalize/search-match-key";
 
 import { createUuid } from "@/lib/uuid";
 
@@ -86,17 +87,22 @@ export const buildReplacementSuggestions = (
     let regionStart = 0;
     let regionEnd = haystack.length;
     if (spec.scopeText !== undefined && spec.scopeText.length > 0) {
-      const scopeIdx = haystack.indexOf(spec.scopeText);
-      if (scopeIdx !== -1) {
-        regionStart = scopeIdx;
-        regionEnd = scopeIdx + spec.scopeText.length;
+      const scopeRange = findSearchMatchKeyRanges(haystack, spec.scopeText, {
+        maxMatches: 1,
+      }).at(0);
+      if (scopeRange !== undefined) {
+        regionStart = scopeRange.start;
+        regionEnd = scopeRange.end;
       }
     }
 
-    let idx = haystack.indexOf(spec.literalText, regionStart);
-    while (idx !== -1 && idx + spec.literalText.length <= regionEnd) {
-      const from = positional.pmPositionAt(idx);
-      const to = positional.pmPositionAt(idx + spec.literalText.length - 1) + 1;
+    const matchRanges = findSearchMatchKeyRanges(haystack, spec.literalText, {
+      end: regionEnd,
+      start: regionStart,
+    });
+    for (const matchRange of matchRanges) {
+      const from = positional.pmPositionAt(matchRange.start);
+      const to = positional.pmPositionAt(matchRange.end - 1) + 1;
       const overlaps = occupied.some((r) => from < r.to && to > r.from);
       if (!overlaps) {
         occupied.push({ from, to });
@@ -108,12 +114,15 @@ export const buildReplacementSuggestions = (
           topic: spec.topic,
           severity: "substantive",
           range: { from, to },
-          originalText: spec.literalText,
+          originalText: haystack.slice(matchRange.start, matchRange.end),
           suggestedText: spec.suggestedText,
-          contextBefore: haystack.slice(Math.max(0, idx - CONTEXT_CHARS), idx),
+          contextBefore: haystack.slice(
+            Math.max(0, matchRange.start - CONTEXT_CHARS),
+            matchRange.start,
+          ),
           contextAfter: haystack.slice(
-            idx + spec.literalText.length,
-            idx + spec.literalText.length + CONTEXT_CHARS,
+            matchRange.end,
+            matchRange.end + CONTEXT_CHARS,
           ),
           rationale: spec.rationale,
           status: "pending",
@@ -123,7 +132,6 @@ export const buildReplacementSuggestions = (
         }
         suggestions.push(suggestion);
       }
-      idx = haystack.indexOf(spec.literalText, idx + spec.literalText.length);
     }
   }
 

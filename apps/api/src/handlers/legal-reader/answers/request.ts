@@ -1,13 +1,14 @@
 import { Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { PreparedReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
@@ -21,7 +22,7 @@ type ReaderAnswerRequestOptions = Pick<
   scopedDb: ScopedDb;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   request: Request;
   usageLane?: UsageLaneDecision;
 };
@@ -47,6 +48,9 @@ export const readerAnswerRequest = ({
   });
   if (available.isErr()) {
     return available;
+  }
+  if (managedAIResidency === null) {
+    return Result.err(storedAIConfigUnreadableError(undefined));
   }
   const scope = {
     organizationId: session.activeOrganizationId,

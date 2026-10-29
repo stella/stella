@@ -24,16 +24,17 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const downloadZipParamsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: resourceIdSchema("entity"),
 });
 
 // At most this many files are fetched from S3 at once. Bounds the
@@ -87,6 +88,8 @@ const collectDescendants = async (
     SELECT id, parent_id AS "parentId", kind, name FROM descendants
   `),
   );
+
+const ZIP_FETCH_KEY = "zip.archiveEntries";
 
 const downloadZipHandler = async function* ({
   safeDb,
@@ -293,14 +296,12 @@ const downloadZipHandler = async function* ({
       yield { name: result.path, input: result.data };
     }
 
-    // Failures surface in two places: a notice inside the archive so the
-    // user sees what is missing, and telemetry (file ids only — never
-    // names) so the failure is observable server-side.
+    // Report missing entries in the archive and capture only their IDs.
     if (failedPaths.length > 0) {
-      captureError(
-        new Error(`${failedPaths.length} file(s) failed to fetch from S3`),
-        { entityId, fileIds: failedFileIds.join(",") },
-      );
+      const message = `${failedPaths.length} file(s) failed to fetch from S3`;
+      const error = new Error(message);
+      const context = { entityId, fileIds: failedFileIds.join(",") };
+      captureError(error, handlerErrorContext(ZIP_FETCH_KEY, context));
       yield {
         name: uniquePath(seenPaths, `${rootPath}/${ERROR_MANIFEST_NAME}`),
         input: buildErrorManifest(failedPaths),

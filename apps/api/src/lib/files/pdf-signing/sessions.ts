@@ -1,3 +1,6 @@
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
+
+import { DESKTOP_HANDOFF_LIFETIME_SECONDS } from "@stll/api-contract/desktop-handoff";
 /**
  * Lifecycle of a PDF signing exchange: minting the handoff, redeeming it
  * exactly once, and authorizing every later call from the session token.
@@ -7,10 +10,6 @@
  * locks its row and consumes it in one transaction, so two desktops racing
  * the same deep link cannot both win.
  */
-
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
-
-import { DESKTOP_HANDOFF_LIFETIME_SECONDS } from "@stll/api-contract/desktop-handoff";
 import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
 
@@ -30,9 +29,9 @@ import type {
   PdfSigningStamp,
 } from "@/api/db/schema";
 import {
-  createBackgroundAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -53,6 +52,8 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import type { CredentialPrincipal } from "@/api/lib/synthetic-principal/credential-policy";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import { isRecord } from "@/api/lib/type-guards";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
@@ -72,7 +73,10 @@ export const computePdfSigningHandoffExpiresAt = () =>
 const computePdfSigningSessionExpiresAt = () =>
   expiryFromNow(PDF_SIGNING_SESSION_TTL_MS);
 
-export const createPdfSigningToken = createOpaqueToken;
+export const createPdfSigningToken = (principal: CredentialPrincipal) => {
+  requireSessionCredentialIssuer("pdfSigning", principal);
+  return createOpaqueToken();
+};
 
 export const hashPdfSigningToken = hashOpaqueToken;
 
@@ -112,6 +116,7 @@ export const openPdfSigningSession = async ({
   tx: Transaction;
   values: typeof pdfSigningSessions.$inferInsert;
 }): Promise<OpenedPdfSigningSession> => {
+  requireSessionCredentialIssuer("pdfSigning", { userId: values.createdBy });
   // The exchange is opened on the version the stamp and certification were
   // checked against, and only while it is still current. The share lock
   // holds a concurrent version write off until this transaction ends.
@@ -281,7 +286,7 @@ export const redeemPdfSigningHandoff = async (
   }
 
   const now = new Date();
-  const sessionToken = createPdfSigningToken();
+  const sessionToken = createPdfSigningToken(identity);
   const expiresAt = computePdfSigningSessionExpiresAt();
 
   return await scoped(async (tx) => {

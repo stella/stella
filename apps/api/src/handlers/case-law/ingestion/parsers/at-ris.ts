@@ -4,13 +4,14 @@ import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import type {
   Block,
   DocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
   validateAndLog,

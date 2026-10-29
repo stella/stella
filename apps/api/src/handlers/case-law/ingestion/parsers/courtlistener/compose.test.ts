@@ -24,8 +24,8 @@ import { COURTLISTENER_TEXT_LIMITS, createTextBudget } from "./outcome";
 import {
   COURTLISTENER_TEXT_FORMATS,
   selectOpinionText,
-  textStructureOf,
   type TextStructure,
+  textStructureOf,
 } from "./select";
 import {
   parsedWords,

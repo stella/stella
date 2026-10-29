@@ -24,12 +24,12 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisions,
   caseLawCorpusPackRefs,
-  corpusIndexProjectionStates,
+  caseLawDecisions,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
+  corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -228,6 +228,39 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+    });
+
+    test("deferred storage keeps text when its AST has duplicate anchors", async () => {
+      const id = await insertDecision({
+        caseNumber: `reader-schema-${suffix}`,
+      });
+      const decision = await claimFor(id);
+      const block = parsedAst.blocks.at(0);
+      if (block === undefined) {
+        expect.unreachable("Fixture has a heading");
+      }
+      const invalidAst = {
+        ...parsedAst,
+        blocks: [block, { ...block, id: "b2" }],
+      };
+      await storeBackfilledDocument({
+        decision,
+        document: { ...parsedDocument, documentAst: invalidAst },
+        scopedDb,
+        mode: "off",
+        transfer: null,
+      });
+      const row = (
+        await db
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            documentAst: caseLawDecisions.documentAst,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id))
+      ).at(0);
+      expect(row?.fulltext).toBe(parsedDocument.fulltext);
+      expect(row?.documentAst).toEqual({});
     });
 
     test("moves the row's keys and hash onto the real document", async () => {

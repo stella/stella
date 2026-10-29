@@ -1,15 +1,15 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
+  getPropertyName,
+  type ImportedFromOptions,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isImportedFrom,
   memberPropertyName,
-  getPropertyName,
   resolveVariable,
-  type AstNode,
-  type ImportedFromOptions,
 } from "./utils.ts";
 
 type RuleContext = ImportedFromOptions["context"];
@@ -123,9 +123,20 @@ const guardedBefore = (context: RuleContext, mutation: AstNode) => {
     if (
       !isAstNode(refusal) ||
       refusal.type !== "IfStatement" ||
-      refusal.range[1] >= mutation.range[0] ||
-      !isIdentifier(refusal.test, declaration.id.name)
+      refusal.range[1] >= mutation.range[0]
     ) {
+      return false;
+    }
+    const test = refusal.test;
+    const resultRefusal =
+      isAstNode(test) &&
+      test.type === "CallExpression" &&
+      Array.isArray(test.arguments) &&
+      test.arguments.length === 0 &&
+      isAstNode(test.callee) &&
+      memberPropertyName(test.callee) === "isErr" &&
+      isIdentifier(test.callee.object, declaration.id.name);
+    if (!isIdentifier(test, declaration.id.name) && !resultRefusal) {
       return false;
     }
     const consequence = refusal.consequent;

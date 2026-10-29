@@ -9,27 +9,50 @@ no_auto_install: true
 
 pre-commit:
   parallel: false
+  # Stop at the first failing hook: the deps check gates every other hook,
+  # and a hook failing for want of dependencies would only add noise.
+  piped: true
   commands:
+    # Runs first (priority) and stops the commit, naming the install command,
+    # when this checkout lacks what the hooks import. It never installs.
+    deps:
+      priority: 1
+      run: bash scripts/require-hook-deps.sh
+    # The hooks below that act on staged paths take them from one owner,
+    # scripts/precommit-paths.ts (`files:`): every staged path in an ordinary
+    # commit, and in a merge commit only the paths that differ from every
+    # parent (conflict resolutions and edits made during the merge). A path
+    # taken unchanged from either parent was checked on its own side. glob
+    # filters that list, and an empty result skips the hook.
+    # secrets, tracked-symlinks and lockfiles read the whole index by design:
+    # they are fail-closed checks and never take a narrowed list.
     secrets:
       run: bun run secrets:check:staged
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
+      files: bun scripts/precommit-paths.ts
       # Lint autofixes never reach a commit unreviewed: the hook fails and
-      # prints them instead (scripts/precommit-lint.ts). stage_fixed makes
-      # lefthook hide unstaged changes, so lint checks the staged text; the
-      # script restores every file, so it never stages a fix.
-      run: bun scripts/precommit-lint.ts {staged_files}
-      stage_fixed: true
+      # prints them instead (scripts/precommit-lint.ts). lefthook hides the
+      # unstaged part of partially staged files during every pre-commit, so
+      # lint checks the staged text; the script restores every file and
+      # never stages a fix.
+      run: bun scripts/precommit-lint.ts {files}
     format:
-      glob: "**/*.{ts,tsx,js,jsx,json,css}"
-      run: bun run format:guard && bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern {staged_files}
-      stage_fixed: true
+      files: bun scripts/precommit-paths.ts
+      # bun fmt re-stages what it formats and refuses a partially staged file
+      # whose staged text needs formatting. It skips ignored paths and, with
+      # --ignore-unknown, files in a language it does not format.
+      run: bun fmt --staged --ignore-unknown {files}
     i18n:
       glob: "apps/web/src/i18n/langs/*.{json,ts}"
-      run: bun run i18n:sync
-      stage_fixed: true
+      files: bun scripts/precommit-paths.ts
+      # The sync runs packages/scripts tools and an apps/web script. The
+      # script stages exactly the files the sync changed and refuses before
+      # writing when one of them holds unstaged changes.
+      run: bash scripts/require-hook-deps.sh packages/scripts apps/web && bun scripts/precommit-i18n.ts
     ai-skills:
       glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"
+      files: bun scripts/precommit-paths.ts
       run: bash scripts/check-ai-skill-sources.sh
     tracked-symlinks:
       # Match the archive's staged tree, never ignored or unstaged targets.
@@ -38,12 +61,13 @@ pre-commit:
       # Reads the index, so a lockfile staged in this commit is checked too.
       run: bun run check:standalone-lockfiles
 
-# Pre-push keeps only checks that finish in about a second and whose failure
-# would cost a full CI round trip. Lint, typecheck, format, i18n, and the
+# Pre-push keeps only focused checks whose failure would cost a full CI round
+# trip. Lint, format, i18n, and the
 # query-cache type check run in CI only (pre-commit already formats staged
 # files and syncs i18n); run `bun run verify` locally when you want them
-# earlier. Every push skips compiler work, including documentation-only pushes
-# and low-memory hosts. scripts/pre-push-policy.test.ts guards this boundary.
+# earlier. Typecheck runs only for touched TypeScript packages, sequentially;
+# documentation-only pushes skip compiler work. scripts/pre-push-policy.test.ts
+# guards this boundary.
 pre-push:
   parallel: false
   commands:
@@ -53,6 +77,9 @@ pre-push:
       run: bun scripts/changeset-guard.ts --base origin/main
     cli-contract:
       run: bun scripts/check-cli-contract-changeset.ts --base origin/main
+    # Checks each touched TypeScript package once, sequentially.
+    typecheck:
+      run: bun scripts/pre-push-typecheck.ts --base origin/main
     secrets:
       # The hook's stdin carries the ref updates the push would publish; the
       # scanner scopes each gitleaks run to exactly those commits.
@@ -64,3 +91,9 @@ pre-push:
     # quarantine, a Dependabot cooldown and a frozen install.
     lockfiles:
       run: bun run check:standalone-lockfiles
+    # One git diff, then nothing unless the pushed commits touch a job
+    # classification input. It refreshes digests that only need a mechanical
+    # update (commit them and push again) and fails on any job that still
+    # needs review. CI rechecks at the workflow revision.
+    job-classification:
+      run: bun scripts/check-ci-job-classification.ts --pre-push

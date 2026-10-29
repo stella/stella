@@ -2,7 +2,7 @@
  *  `Intl` caches use it so a long-lived process cannot grow one without
  *  bound. */
 export class BoundedLruCache<TKey, TValue> {
-  readonly #entries = new Map<TKey, TValue>();
+  readonly #entries = new Map<TKey, { value: TValue }>();
   readonly #limit: number;
 
   constructor(limit: number) {
@@ -10,20 +10,20 @@ export class BoundedLruCache<TKey, TValue> {
   }
 
   get(key: TKey): TValue | undefined {
-    const value = this.#entries.get(key);
-    if (value === undefined) {
+    const entry = this.#entries.get(key);
+    if (entry === undefined) {
       return undefined;
     }
     this.#entries.delete(key);
-    this.#entries.set(key, value);
-    return value;
+    this.#entries.set(key, entry);
+    return entry.value;
   }
 
   set(key: TKey, value: TValue): void {
     // `Map.set` on an existing key keeps its insertion slot; deleting first
     // moves a rewritten entry to the most-recent end.
     this.#entries.delete(key);
-    this.#entries.set(key, value);
+    this.#entries.set(key, { value });
     if (this.#entries.size <= this.#limit) {
       return;
     }

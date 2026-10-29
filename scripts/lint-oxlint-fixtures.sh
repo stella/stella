@@ -24,6 +24,8 @@ bun scripts/check-contract-domain-ledger.ts
 bun scripts/calendar-day-ledger.ts --self-test
 bun scripts/calendar-day-ledger.ts
 bun scripts/fill-diagnostics-ledger.ts --self-test
+bun scripts/test-timing-ledger.ts --self-test
+bun scripts/test-timing-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 
 bash scripts/check-oxlint-node-loader.test.sh
 bash scripts/check-oxlint-node-loader.sh
@@ -53,7 +55,6 @@ bun --bun oxlint -c oxlint.config.ts \
   "${plugin_sources[@]}"
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
-bun test ./scripts/oxlint-typebox-unsafe.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
 bun test ./scripts/check-oxlint-plugin-registry.test.ts
 bun test ./scripts/check-oxlint-fixture-counts.test.ts

@@ -8,12 +8,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
-  CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
-  type CorpusStemming,
-  type CorpusFreeTextOptions,
+  CORPUS_QUERY_LEAF_BUDGET,
   corpusDecisionTypeClause,
   corpusFreeTextClause,
+  type CorpusFreeTextOptions,
+  type CorpusStemming,
   type CorpusTermExpander,
   partitionCorpusQueryTokens,
   quoteCorpusValue,
@@ -244,6 +244,40 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
       ' AND language:"cs"' +
       ' AND court:"Nejvyšší soud"' +
       " AND decision_date:[2020-01-01 TO 2024-12-31]",
+  );
+});
+
+test("the assembler ORs the words under match any and leaves the filters ANDed", () => {
+  const filters = { jurisdiction: "CZE", language: "cs" };
+  const strict = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+  });
+  const relaxed = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+    match: "any",
+  });
+  expect(relaxed).toBe(
+    '("promlčení" OR "náhrada" OR "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+  // Asking for "all" explicitly is the default, byte for byte.
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "promlčení náhrada škody",
+      filters,
+      match: "all",
+    }),
+  ).toBe(strict);
+  expect(strict).toBe(
+    '("promlčení" AND "náhrada" AND "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
   );
 });
 

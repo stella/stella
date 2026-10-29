@@ -99,7 +99,7 @@ export const AICellSourceCard = ({
   const visibleStatements = statements.slice(0, MAX_STATEMENTS);
   const hiddenStatementCount = statements.length - visibleStatements.length;
   const statementTextClassName = cn(
-    "text-justify text-xs leading-relaxed text-wrap hyphens-auto",
+    "text-xs leading-relaxed text-wrap hyphens-auto",
     // Unclamped rationale scrolls within the popup rather than truncating; the
     // container must be block-level for max-height/overflow to form a scroll box
     // (an inline span ignores both).
@@ -144,7 +144,7 @@ export const AICellSourceCard = ({
           </span>
           {statement.quotes.map((quote) => (
             <span
-              className="text-muted-foreground line-clamp-3 text-justify text-xs leading-relaxed text-wrap hyphens-auto italic"
+              className="text-muted-foreground line-clamp-3 text-xs leading-relaxed text-wrap hyphens-auto italic"
               key={quote.key}
             >
               "{quote.text}"
@@ -242,8 +242,7 @@ export const AICellSourceCard = ({
 type CellFlagProvenanceRowProps = {
   flagId: string;
   provenance:
-    | NonNullable<WorkspaceCellMetadata["flagProvenance"]>[string]
-    | undefined;
+    NonNullable<WorkspaceCellMetadata["flagProvenance"]>[string] | undefined;
 };
 
 const CellFlagProvenanceRow = ({

@@ -1,120 +1,162 @@
 import path from "node:path";
-import ts from "typescript";
 
-import { parseSource } from "./parse-memo";
+import {
+  type Node,
+  type ObjectProperty,
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+
+type Identifier = Extract<Node, { type: "Identifier" }>;
+type FunctionLike = Extract<
+  Node,
+  {
+    type:
+      "ArrowFunctionExpression" | "FunctionDeclaration" | "FunctionExpression";
+  }
+>;
 
 const TRUNCATING_CLASS =
   /(?:^|[\s:])(?:truncate|text-ellipsis|line-clamp-\d+|whitespace-nowrap|overflow-hidden)(?:\s|$)/u;
 const ERROR_CAPABLE_METHODS = new Set(["error", "add", "update", "promise"]);
 
 const textFields = new Set(["title", "description"]);
+type SourceTree = ParsedSource & { parents: ReadonlyMap<Node, Node> };
+const nodeText = (node: Node, source: ParsedSource) =>
+  source.sourceText.slice(node.start, node.end);
+const isFunctionLike = (node: Node): node is FunctionLike =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression";
+const stringValue = (node: Node) => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked;
+  }
+  return undefined;
+};
+const visitChildren = (root: Node, visit: (node: Node) => void) => {
+  walk(root, (node) => {
+    if (node !== root) {
+      visit(node);
+      return "skip-children";
+    }
+    return undefined;
+  });
+};
 
-type SourceBinding = { value: ts.Node; scope: ts.Node };
-const bindingAtScope = (bindings: readonly SourceBinding[], scope: ts.Node) =>
+type SourceBinding = { value: Node; scope: Node };
+const bindingAtScope = (bindings: readonly SourceBinding[], scope: Node) =>
   bindings.findLast((candidate) => candidate.scope === scope);
 
-const collectToastBindings = (source: ts.SourceFile) => {
+const collectToastBindings = (source: SourceTree) => {
   const toastNames = new Set<string>();
   const errorWrappers = new Set<string>();
   const declarations = new Map<string, SourceBinding[]>();
-  const declare = (name: string, value: ts.Node, declaration: ts.Node) => {
-    let scope = declaration.parent;
-    while (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
-      scope = scope.parent;
+  const declare = (name: string, value: Node, declaration: Node) => {
+    let scope = source.parents.get(declaration);
+    while (
+      scope &&
+      scope.type !== "BlockStatement" &&
+      scope.type !== "Program"
+    ) {
+      scope = source.parents.get(scope);
+    }
+    if (!scope) {
+      return;
     }
     const bindings = declarations.get(name) ?? [];
     bindings.push({ value, scope });
     declarations.set(name, bindings);
   };
-  const resolve = (identifier: ts.Identifier) => {
-    const bindings = declarations.get(identifier.text) ?? [];
-    let scope = identifier.parent;
-    while (!ts.isSourceFile(scope)) {
+  const resolve = (identifier: Identifier) => {
+    const bindings = declarations.get(identifier.name) ?? [];
+    let scope = source.parents.get(identifier);
+    while (scope) {
       const binding = bindingAtScope(bindings, scope);
       if (binding) {
         return binding.value;
       }
       if (
-        ts.isFunctionLike(scope) &&
-        scope.parameters.some(
+        isFunctionLike(scope) &&
+        scope.params.some(
           (parameter) =>
-            ts.isIdentifier(parameter.name) &&
-            parameter.name.text === identifier.text,
+            parameter.type === "Identifier" &&
+            parameter.name === identifier.name,
         )
       ) {
         return undefined;
       }
-      scope = scope.parent;
+      scope = source.parents.get(scope);
     }
-    return bindingAtScope(bindings, scope)?.value;
+    return undefined;
   };
-  const collect = (node: ts.Node) => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      /@stll\/ui(?:\/components)?\/toast$/u.test(node.moduleSpecifier.text)
-    ) {
-      const bindings = node.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings)) {
-        for (const binding of bindings.elements) {
-          if ((binding.propertyName ?? binding.name).text === "stellaToast") {
-            toastNames.add(binding.name.text);
-          }
+  const collect = (node: Node) => {
+    if (node.type === "ImportDeclaration") {
+      for (const binding of node.specifiers) {
+        if (binding.type !== "ImportSpecifier") {
+          continue;
+        }
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        if (
+          /@stll\/ui(?:\/components)?\/toast$/u.test(node.source.value) &&
+          imported === "stellaToast"
+        ) {
+          toastNames.add(binding.local.name);
+        }
+        if (
+          /(?:^|\/)user-toast$/u.test(node.source.value) &&
+          [
+            "notifyUserError",
+            "notifyAuthClientError",
+            "detachedUserAction",
+          ].includes(imported)
+        ) {
+          errorWrappers.add(binding.local.name);
         }
       }
     }
     if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      /(?:^|\/)user-toast$/u.test(node.moduleSpecifier.text)
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init
     ) {
-      const bindings = node.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings)) {
-        for (const binding of bindings.elements) {
-          if (
-            [
-              "notifyUserError",
-              "notifyAuthClientError",
-              "detachedUserAction",
-            ].includes((binding.propertyName ?? binding.name).text)
-          ) {
-            errorWrappers.add(binding.name.text);
-          }
-        }
-      }
+      declare(node.id.name, node.init, node);
     }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer
-    ) {
-      declare(node.name.text, node.initializer, node);
+    if (node.type === "FunctionDeclaration" && node.id && node.body) {
+      declare(node.id.name, node.body, node);
     }
-    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
-      declare(node.name.text, node.body, node);
-    }
-    ts.forEachChild(node, collect);
+    visitChildren(node, collect);
   };
-  collect(source);
+  collect(source.program);
 
   return { toastNames, errorWrappers, resolve };
 };
 
-const returnedExpressions = (body: ts.Node) => {
-  const expressions: ts.Node[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isReturnStatement(node)) {
-      if (node.expression) {
-        expressions.push(node.expression);
+const returnedExpressions = (body: Node | null) => {
+  if (body === null) {
+    return [];
+  }
+  const expressions: Node[] = [];
+  const visit = (node: Node) => {
+    if (node.type === "ReturnStatement") {
+      if (node.argument) {
+        expressions.push(node.argument);
       }
       return;
     }
-    if (ts.isFunctionLike(node)) {
+    if (isFunctionLike(node)) {
       return;
     }
-    ts.forEachChild(node, visit);
+    visitChildren(node, visit);
   };
-  if (ts.isBlock(body)) {
+  if (body.type === "BlockStatement") {
     visit(body);
   } else {
     expressions.push(body);
@@ -124,18 +166,18 @@ const returnedExpressions = (body: ts.Node) => {
 
 const createRenderedFields =
   (
-    source: ts.SourceFile,
+    source: SourceTree,
     resolve: ReturnType<typeof collectToastBindings>["resolve"],
   ) =>
-  (root: ts.Node | undefined, fields: ReadonlySet<string>) => {
-    const values: ts.Node[] = [];
-    const seen = new Set<ts.Node>();
-    const visit = (node: ts.Node) => {
+  (root: Node | undefined, fields: ReadonlySet<string>) => {
+    const values: Node[] = [];
+    const seen = new Set<Node>();
+    const visit = (node: Node) => {
       if (seen.has(node)) {
         return;
       }
       seen.add(node);
-      if (ts.isIdentifier(node)) {
+      if (node.type === "Identifier") {
         const declaration = resolve(node);
         if (declaration) {
           visit(declaration);
@@ -143,53 +185,60 @@ const createRenderedFields =
         return;
       }
       if (
-        ts.isAsExpression(node) ||
-        ts.isSatisfiesExpression(node) ||
-        ts.isParenthesizedExpression(node)
+        node.type === "TSAsExpression" ||
+        node.type === "TSSatisfiesExpression" ||
+        node.type === "ParenthesizedExpression"
       ) {
         visit(node.expression);
         return;
       }
-      if (ts.isConditionalExpression(node)) {
-        visit(node.whenTrue);
-        visit(node.whenFalse);
+      if (node.type === "ConditionalExpression") {
+        visit(node.consequent);
+        visit(node.alternate);
         return;
       }
-      if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      if (
+        node.type === "ArrowFunctionExpression" ||
+        node.type === "FunctionExpression"
+      ) {
         for (const expression of returnedExpressions(node.body)) {
           visit(expression);
         }
         return;
       }
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-        const declaration = resolve(node.expression);
+      if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+        const declaration = resolve(node.callee);
         if (declaration) {
           visit(declaration);
         }
         return;
       }
-      if (ts.isBlock(node)) {
+      if (node.type === "BlockStatement") {
         for (const expression of returnedExpressions(node)) {
           visit(expression);
         }
         return;
       }
-      if (!ts.isObjectLiteralExpression(node)) {
+      if (!(node.type === "ObjectExpression")) {
         return;
       }
       for (const property of node.properties) {
-        if (ts.isSpreadAssignment(property)) {
-          visit(property.expression);
+        if (property.type === "SpreadElement") {
+          visit(property.argument);
         } else if (
-          ts.isPropertyAssignment(property) &&
-          fields.has(property.name.getText(source).replaceAll(/['"]/gu, ""))
+          !property.method &&
+          !property.shorthand &&
+          property.kind === "init" &&
+          fields.has(nodeText(property.key, source).replaceAll(/['"]/gu, ""))
         ) {
-          values.push(property.initializer);
+          values.push(property.value);
         } else if (
-          ts.isShorthandPropertyAssignment(property) &&
-          fields.has(property.name.text)
+          property.shorthand &&
+          fields.has(
+            property.key.type === "Identifier" ? property.key.name : "",
+          )
         ) {
-          values.push(property.name);
+          values.push(property.value);
         }
       }
     };
@@ -201,7 +250,7 @@ const createRenderedFields =
 
 const createOptionText =
   (renderedFields: ReturnType<typeof createRenderedFields>) =>
-  (node: ts.Node | undefined) => [
+  (node: Node | undefined) => [
     ...renderedFields(node, textFields),
     ...renderedFields(node, new Set(["action", "actionProps"])).flatMap(
       (action) => renderedFields(action, new Set(["label", "children"])),
@@ -210,45 +259,55 @@ const createOptionText =
 
 const createTruncatingAttribute =
   (
-    source: ts.SourceFile,
+    source: SourceTree,
     resolve: ReturnType<typeof collectToastBindings>["resolve"],
   ) =>
-  (node: ts.Node) => {
-    if (!ts.isJsxAttribute(node) || !node.initializer) {
+  (node: Node) => {
+    if (!(node.type === "JSXAttribute") || !node.value) {
       return false;
     }
-    if (node.name.getText(source) === "style") {
+    if (nodeText(node.name, source) === "style") {
       return /\b(?:textOverflow\s*:\s*["']ellipsis|WebkitLineClamp\s*:|whiteSpace\s*:\s*["']nowrap)/u.test(
-        node.initializer.getText(source),
+        nodeText(node.value, source),
       );
     }
-    if (node.name.getText(source) !== "className") {
+    if (nodeText(node.name, source) !== "className") {
       return false;
     }
-    const seen = new Set<ts.Node>();
+    const seen = new Set<Node>();
     let found = false;
-    const visit = (value: ts.Node) => {
+    const visit = (value: Node) => {
       if (seen.has(value)) {
         return;
       }
       seen.add(value);
-      if (ts.isStringLiteralLike(value) && TRUNCATING_CLASS.test(value.text)) {
+      if (
+        stringValue(value) !== undefined &&
+        TRUNCATING_CLASS.test(stringValue(value) ?? "")
+      ) {
         found = true;
       }
-      if (ts.isIdentifier(value)) {
+      if (value.type === "Identifier") {
         const declaration = resolve(value);
         if (declaration) {
           visit(declaration);
         }
       }
-      ts.forEachChild(value, visit);
+      visitChildren(value, visit);
     };
-    visit(node.initializer);
+    visit(node.value);
     return found;
   };
 
+const isPropertyName = (node: Node, parent: Node | undefined) =>
+  (parent?.type === "MemberExpression" &&
+    !parent.computed &&
+    parent.property === node) ||
+  (parent?.type === "Property" && !parent.shorthand && parent.key === node) ||
+  (parent?.type === "JSXAttribute" && parent.name === node);
+
 type ToastTruncationDetectorOptions = {
-  source: ts.SourceFile;
+  source: SourceTree;
   resolve: ReturnType<typeof collectToastBindings>["resolve"];
   renderedFields: ReturnType<typeof createRenderedFields>;
   optionText: ReturnType<typeof createOptionText>;
@@ -260,76 +319,75 @@ const createToastTruncationDetector = ({
   optionText,
 }: ToastTruncationDetectorOptions) => {
   const attributeTruncates = createTruncatingAttribute(source, resolve);
-  return (root: ts.Node) => {
-    const seen = new Set<ts.Node>();
+  return (root: Node) => {
+    const seen = new Set<Node>();
     let found = false;
-    const visit = (node: ts.Node) => {
+    const visit = (node: Node) => {
       if (seen.has(node)) {
         return;
       }
       seen.add(node);
       // Data receivers and request arguments are not rendered toast content.
       // Following them can reach a route's entire page through its loader.
-      if (ts.isPropertyAccessExpression(node)) {
-        if (ts.isIdentifier(node.expression)) {
-          const declaration = resolve(node.expression);
+      if (
+        node.type === "MemberExpression" &&
+        !node.computed &&
+        node.property.type === "Identifier"
+      ) {
+        if (node.object.type === "Identifier") {
+          const declaration = resolve(node.object);
           for (const renderedText of renderedFields(
             declaration,
-            new Set([node.name.text]),
+            new Set([node.property.name]),
           )) {
             visit(renderedText);
           }
         }
         return;
       }
-      if (ts.isElementAccessExpression(node)) {
+      if (node.type === "MemberExpression" && node.computed) {
         return;
       }
-      if (ts.isCallExpression(node)) {
-        if (ts.isIdentifier(node.expression)) {
-          const declaration = resolve(node.expression);
+      if (node.type === "CallExpression") {
+        if (node.callee.type === "Identifier") {
+          const declaration = resolve(node.callee);
           if (declaration) {
             visit(declaration);
           }
         }
         for (const argument of node.arguments) {
           if (
-            ts.isJsxElement(argument) ||
-            ts.isJsxSelfClosingElement(argument) ||
-            ts.isJsxFragment(argument)
+            argument.type === "JSXElement" ||
+            argument.type === "JSXFragment"
           ) {
             visit(argument);
           }
         }
         return;
       }
-      if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      if (
+        node.type === "ArrowFunctionExpression" ||
+        node.type === "FunctionExpression"
+      ) {
         for (const expression of returnedExpressions(node.body)) {
           visit(expression);
         }
         return;
       }
-      if (ts.isBlock(node)) {
+      if (node.type === "BlockStatement") {
         for (const expression of returnedExpressions(node)) {
           visit(expression);
         }
         return;
       }
-      if (ts.isObjectLiteralExpression(node)) {
+      if (node.type === "ObjectExpression") {
         for (const renderedText of optionText(node)) {
           visit(renderedText);
         }
         return;
       }
-      if (
-        ts.isIdentifier(node) &&
-        !(
-          ts.isPropertyAccessExpression(node.parent) &&
-          node.parent.name === node
-        ) &&
-        !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
-        !(ts.isJsxAttribute(node.parent) && node.parent.name === node)
-      ) {
+      const parent = source.parents.get(node);
+      if (node.type === "Identifier" && !isPropertyName(node, parent)) {
         const declaration = resolve(node);
         if (declaration) {
           visit(declaration);
@@ -338,7 +396,7 @@ const createToastTruncationDetector = ({
       if (attributeTruncates(node)) {
         found = true;
       }
-      ts.forEachChild(node, visit);
+      visitChildren(node, visit);
     };
     visit(root);
     return found;
@@ -346,7 +404,15 @@ const createToastTruncationDetector = ({
 };
 
 export const inspectToastSource = (text: string, fileName = "source.tsx") => {
-  const source = parseSource({ text, fileName });
+  const parsed = parseSource(fileName, text);
+  const parents = new Map<Node, Node>();
+  walk(parsed.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parents.set(node, parent);
+    }
+  });
+  const source = { ...parsed, parents };
   const { toastNames, errorWrappers, resolve } = collectToastBindings(source);
   const renderedFields = createRenderedFields(source, resolve);
   const optionText = createOptionText(renderedFields);
@@ -357,23 +423,24 @@ export const inspectToastSource = (text: string, fileName = "source.tsx") => {
     optionText,
   });
   const entries: { line: number; kind: string; truncating: boolean }[] = [];
-  const record = (node: ts.Node, kind: string, texts: readonly ts.Node[]) => {
+  const record = (node: Node, kind: string, texts: readonly Node[]) => {
     entries.push({
-      line:
-        source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+      line: source.locate(node.start).line,
       kind,
       truncating: texts.some(truncates),
     });
   };
-  const inspect = (node: ts.Node) => {
+  const inspect = (node: Node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      toastNames.has(node.expression.expression.text) &&
-      ERROR_CAPABLE_METHODS.has(node.expression.name.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier" &&
+      node.callee.object.type === "Identifier" &&
+      toastNames.has(node.callee.object.name) &&
+      ERROR_CAPABLE_METHODS.has(node.callee.property.name)
     ) {
-      const method = node.expression.name.text;
+      const method = node.callee.property.name;
       const argument =
         method === "update" || method === "promise"
           ? node.arguments.at(1)
@@ -391,9 +458,9 @@ export const inspectToastSource = (text: string, fileName = "source.tsx") => {
       record(node, method, texts);
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      errorWrappers.has(node.expression.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      errorWrappers.has(node.callee.name)
     ) {
       const fallback = node.arguments.at(1);
       const texts = fallback ? [fallback] : [];
@@ -405,29 +472,38 @@ export const inspectToastSource = (text: string, fileName = "source.tsx") => {
     }
     // Exported option builders may be consumed in another file. Their error
     // variant is part of the same census even without a local toast call.
-    if (ts.isObjectLiteralExpression(node)) {
-      const properties = node.properties.filter(ts.isPropertyAssignment);
+    if (node.type === "ObjectExpression") {
+      const properties = node.properties.filter(
+        (property): property is ObjectProperty =>
+          property.type === "Property" &&
+          !property.method &&
+          !property.shorthand &&
+          property.kind === "init",
+      );
       const hasErrorType = properties.some(
         (property) =>
-          property.name.getText(source).replaceAll(/['"]/gu, "") === "type" &&
-          ts.isStringLiteral(property.initializer) &&
-          property.initializer.text === "error",
+          nodeText(property.key, source).replaceAll(/['"]/gu, "") === "type" &&
+          property.value.type === "Literal" &&
+          property.value.value === "error",
       );
       const hasText = node.properties.some(
         (property) =>
-          (ts.isPropertyAssignment(property) ||
-            ts.isShorthandPropertyAssignment(property)) &&
+          ((property.type === "Property" &&
+            !property.method &&
+            !property.shorthand &&
+            property.kind === "init") ||
+            (property.type === "Property" && property.shorthand)) &&
           textFields.has(
-            property.name.getText(source).replaceAll(/['"]/gu, ""),
+            nodeText(property.key, source).replaceAll(/['"]/gu, ""),
           ),
       );
       if (hasErrorType && hasText) {
         record(node, "error-options", optionText(node));
       }
     }
-    ts.forEachChild(node, inspect);
+    visitChildren(node, inspect);
   };
-  inspect(source);
+  inspect(source.program);
   return entries;
 };
 

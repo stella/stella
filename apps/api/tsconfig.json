@@ -29,7 +29,6 @@
       "@stll/template-packs/schema": [
         "../../packages/template-packs/src/schema.ts"
       ],
-      "@stll/time": ["../../packages/time/src/index.ts"],
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",

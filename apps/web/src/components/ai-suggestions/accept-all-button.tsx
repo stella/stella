@@ -28,8 +28,8 @@ import { CheckCheckIcon } from "@stll/ui/icons";
 
 import type { ReviewChange } from "@/components/ai-suggestions/review-bar.logic";
 import {
-  SEVERITY_ORDER,
   type ReviewSeverityKey,
+  SEVERITY_ORDER,
 } from "@/components/ai-suggestions/review-store";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";

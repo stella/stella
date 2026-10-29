@@ -29,9 +29,9 @@ import {
   annotatedOriginLabelKey,
   BILINGUAL_DISPOSITION_LABEL_KEYS,
   BILINGUAL_ROW_KIND_LABEL_KEYS,
-  isBilingualRowDisposition,
   type BilingualPreparedRow,
   type BilingualRowDisposition,
+  isBilingualRowDisposition,
 } from "@/components/bilingual-translate-queries";
 
 type BilingualReviewRowsProps = {

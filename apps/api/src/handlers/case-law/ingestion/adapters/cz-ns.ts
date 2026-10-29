@@ -1,7 +1,7 @@
 // parser-output-unchanged: Reconciliation exposes the existing matched or shown listing count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -18,15 +18,15 @@ import {
   backlogSurface,
   decodeSourceRawEnvelope,
   defineSourceAdapter,
-  excludedSourceField,
-  excludedSourceSurface,
   EMPTY_AST,
   encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -54,8 +54,8 @@ import {
   type UnreadPublisherOutcome,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   isNullishArrayOf,
   isNullishString,
   isNullishValue,
@@ -67,10 +67,10 @@ import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/c
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";

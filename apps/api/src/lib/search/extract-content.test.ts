@@ -3,9 +3,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import {
+  OCTET_STREAM_MIME_TYPE,
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
-  OCTET_STREAM_MIME_TYPE,
 } from "@/api/mime-types";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";

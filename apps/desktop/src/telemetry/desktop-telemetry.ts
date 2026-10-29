@@ -7,6 +7,7 @@ export const DESKTOP_TELEMETRY_WINDOWS = {
   selfHostConnectDialog: "selfHostConnectDialog",
   takeoverDialog: "takeoverDialog",
   activity: "activity",
+  onboarding: "onboarding",
 } as const;
 
 export const DESKTOP_TELEMETRY_OPERATIONS = {
@@ -27,6 +28,8 @@ export const DESKTOP_TELEMETRY_OPERATIONS = {
   activityRead: "activityRead",
   activitySubscribe: "activitySubscribe",
   activityUpdate: "activityUpdate",
+  permissionsUpdate: "permissionsUpdate",
+  shortcutUpdate: "shortcutUpdate",
 } as const;
 
 export const DESKTOP_TELEMETRY_ERROR_CODES = {
@@ -53,7 +56,7 @@ export const DESKTOP_TELEMETRY_SPANS = {
   clipboardSnapshotRequest: "clipboardSnapshotRequest",
 } as const;
 
-type DesktopTelemetryWindow =
+export type DesktopTelemetryWindow =
   (typeof DESKTOP_TELEMETRY_WINDOWS)[keyof typeof DESKTOP_TELEMETRY_WINDOWS];
 type DesktopTelemetryOperation =
   (typeof DESKTOP_TELEMETRY_OPERATIONS)[keyof typeof DESKTOP_TELEMETRY_OPERATIONS];
@@ -384,6 +387,9 @@ export const desktopTelemetryWindowFromLabel = (
       return DESKTOP_TELEMETRY_WINDOWS.takeoverDialog;
     case "activity":
       return DESKTOP_TELEMETRY_WINDOWS.activity;
+    case "onboarding":
+    case "accessibility-guide":
+      return DESKTOP_TELEMETRY_WINDOWS.onboarding;
     default:
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.windowLabelMismatch,

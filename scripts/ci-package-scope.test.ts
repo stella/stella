@@ -13,8 +13,8 @@ import path from "node:path";
 import { dependencyScope } from "./ci-dependency-scope";
 import {
   markdownChecks,
-  markdownReaders,
   markdownReaderInputNames,
+  markdownReaders,
   requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
@@ -85,7 +85,7 @@ const dependencyRepository = (
     writeFileSync(target, JSON.stringify(value));
   };
   const commit = (message: string) => {
-    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["add", "."], { maxBuffer: 2 ** 30, cwd: root });
     execFileSync(
       "git",
       [
@@ -97,15 +97,16 @@ const dependencyRepository = (
         "-m",
         message,
       ],
-      { cwd: root },
+      { maxBuffer: 2 ** 30, cwd: root },
     );
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     }).trim();
   };
   try {
-    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["init", "-q"], { maxBuffer: 2 ** 30, cwd: root });
     write("package.json", {
       name: "root",
       devDependencies: { oxlint: "1.0.0" },
@@ -155,6 +156,7 @@ const dependencyRepository = (
 test("dependency metadata selects tooling, runtime consumers, shared base, and unknown changes", () => {
   dependencyRepository((root, commit) => {
     const base = execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     }).trim();
@@ -409,6 +411,7 @@ test("a planted markdown reader joins isolated checks, including deleted input f
   });
 });
 
+// Measured p95: 11.3 s; this must derive readers from the real repository graph.
 test("the exact README change derives its genuine readers without package jobs", () => {
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
@@ -436,7 +439,7 @@ test("the exact README change derives its genuine readers without package jobs",
     ".github/workflows/ci.yml:ci-checks-policy:Documentation source policy rule",
     ".github/workflows/ci.yml:ci-checks-policy:Instruction references",
   ]);
-}, 30_000);
+}, 25_000);
 
 test("an aliased filesystem reader with a typed path constant joins automatically", () => {
   repository((root, write) => {
@@ -1148,21 +1151,28 @@ test("owner-named Markdown declarations preserve input scope without duplicate p
 });
 
 test("every owner-named input declaration enters the census even through a delegated reader", () => {
+  // Listed in command order, the order the plan returns them in.
+  const declared = ["scripts/other-reader.ts", "scripts/owned-reader.ts"];
   repository((root, write) => {
-    const declared = ["scripts/owned-reader.ts", "scripts/other-reader.ts"];
     for (const [index, file] of declared.entries()) {
       write(
         file,
         `import { consume } from "./consumer";
-         export const CI_MARKDOWN_READER_INPUTS_OWNER_${index} = ["docs/owned.md"];
-         export const CI_MARKDOWN_READER_COMMAND = "bun ${file}";
-         consume();`,
+           export const CI_MARKDOWN_READER_INPUTS_OWNER_${index} = ["docs/owned.md"];
+           export const CI_MARKDOWN_READER_COMMAND = "bun ${file}";
+           consume();`,
       );
     }
-    const census = new Set(markdownReaders(root).map(({ file }) => file));
-    for (const file of declared) {
-      expect(census.has(file), file).toBe(true);
-    }
+    const outputs = [declared, declared.toReversed()].map((sourceFileOrder) => {
+      const census = new Set(markdownReaders(root).map(({ file }) => file));
+      for (const file of declared) {
+        expect(census.has(file), file).toBe(true);
+      }
+      return markdownReaders(root, sourceFileOrder)
+        .filter(({ inputs }) => inputs.includes("docs/owned.md"))
+        .map(({ file }) => file);
+    });
+    expect(outputs).toEqual([declared, declared]);
     expect(markdownChecks({ root, changed: ["docs/owned.md"] })).toEqual(
       declared.map((file) => ["bun", file]),
     );

@@ -1,5 +1,9 @@
 {
-  "extends": ["./tsconfig.json", "./.cache/typecheck-declarations/roots.json"],
+  "extends": [
+    "./tsconfig.json",
+    "./typecheck-required/roots.json",
+    "./.cache/typecheck-declarations/roots.json"
+  ],
   "compilerOptions": {
     "composite": true,
     "noCheck": true,

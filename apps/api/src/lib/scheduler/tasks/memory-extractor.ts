@@ -19,6 +19,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
+import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   type ChatDurableRefText,
@@ -31,13 +32,18 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -53,8 +59,8 @@ import {
 } from "@/api/lib/scheduler/tasks/memory-extractor-queue";
 import {
   EXTRACTABLE_MEMORY_KINDS,
-  resolveExtractedMemoryScope,
   type ExtractableMemoryKind,
+  resolveExtractedMemoryScope,
 } from "@/api/lib/scheduler/tasks/memory-extractor-scope";
 import type {
   SchedulerDb,
@@ -166,7 +172,7 @@ const runMemoryExtraction = async ({
   logger,
   signal,
 }: RunMemoryExtractionOptions): Promise<void> => {
-  if (!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY")) {
+  if (!isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID)) {
     return;
   }
 
@@ -214,6 +220,11 @@ const runMemoryExtraction = async ({
     };
     if (access !== COMPACTION_OWNER_ACCESS.current) {
       await settleAccessLost(access);
+      await processCompactionAt(index + 1);
+      return;
+    }
+
+    if (!(await hasCurrentMemoryFeatureAccess(db, compaction))) {
       await processCompactionAt(index + 1);
       return;
     }
@@ -336,17 +347,29 @@ const recordMemoryExtractionFailure = async ({
       .where(eq(chatThreadCompactions.id, compactionId));
   });
   if (Result.isError(stampResult)) {
-    captureError(stampResult.error, {
-      feature: "memory.extractor.failure_stamp",
-      compactionId,
-    });
+    captureError(
+      stampResult.error,
+      handlerErrorContext(
+        "tasks.recordMemoryExtractionFailure.stampResult_error",
+        {
+          feature: "memory.extractor.failure_stamp",
+          compactionId,
+        },
+      ),
+    );
     logger.warn("scheduler.memory_extractor_failure_stamp_failed", {
       "error.type": errorTag(stampResult.error),
       "compaction.id": compactionId,
     });
   }
 
-  captureError(error, { feature, compactionId });
+  captureError(
+    error,
+    handlerErrorContext("tasks.recordMemoryExtractionFailure", {
+      feature,
+      compactionId,
+    }),
+  );
   logger.warn(logEvent, {
     "error.type": errorTag(error),
     "compaction.id": compactionId,
@@ -509,9 +532,12 @@ const extractCandidates = async ({
     catch: (error: unknown) => error,
   });
   if (Result.isError(transcriptResult)) {
-    captureError(transcriptResult.error, {
-      feature: "memory.extractor.transcript",
-    });
+    captureError(
+      transcriptResult.error,
+      handlerErrorContext("tasks.extractCandidates.transcriptResult_error", {
+        feature: "memory.extractor.transcript",
+      }),
+    );
   }
   const transcript = Result.isError(transcriptResult)
     ? ""
@@ -537,15 +563,17 @@ const extractCandidates = async ({
     settings.value;
 
   let analytics:
-    | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
-    | undefined;
+    ReturnType<typeof createTanStackAIAnalyticsCallbacks> | undefined;
 
   const tried = await Result.tryPromise({
     try: async () => {
       // Re-read after potentially slow configuration loading and immediately
       // before provider transmission. The outer check avoids needless setup;
       // this one closes the opt-out window around the actual model call.
-      if (!(await hasCurrentExtractionConsent(db, compaction))) {
+      if (
+        !(await hasCurrentExtractionConsent(db, compaction)) ||
+        !(await hasCurrentMemoryFeatureAccess(db, compaction))
+      ) {
         return Result.ok(null);
       }
       // Extraction has no anonymization step: a thread that switched to
@@ -599,6 +627,7 @@ const extractCandidates = async ({
           });
 
           return await generateTanStackObjectForTask({
+            userId: admission.userId,
             dataClass: "customer",
             task: "short-text",
             serviceTier: "batch",
@@ -660,6 +689,19 @@ const extractCandidates = async ({
       })),
     ),
   );
+};
+
+const hasCurrentMemoryFeatureAccess = async (
+  db: SchedulerDb,
+  compaction: CompactionRow,
+): Promise<boolean> => {
+  const decision = await resolveFeatureAccess({
+    tx: db,
+    organizationId: compaction.threadOrganizationId,
+    userId: compaction.threadUserId,
+    featureId: AI_MEMORY_FEATURE_ID,
+  });
+  return decision.status === "enabled";
 };
 
 const hasCurrentExtractionConsent = async (

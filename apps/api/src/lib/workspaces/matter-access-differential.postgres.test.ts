@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
 import { roles } from "@stll/permissions";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -17,6 +17,7 @@ import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-w
 import { canUseFolioCollabWorkspace } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
@@ -88,6 +89,10 @@ const insertOrganization = async (
     name: "Matter access differential",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(tx, {
+    organizationId,
+    now: new Date(),
   });
   const clientId = createSafeId<"contact">();
   await tx.insert(contacts).values({
@@ -303,7 +308,7 @@ describe.skipIf(!runPostgresTests)(
             }
           });
         }),
-        { numRuns: 12 },
+        propertyConfig({ numRuns: 12 }),
       );
     });
   },

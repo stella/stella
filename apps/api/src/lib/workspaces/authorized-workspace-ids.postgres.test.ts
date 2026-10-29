@@ -9,8 +9,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   activeAuthorizedWorkspaceQuery,
-  authorizedWorkspaceIdSubquery,
   authorizedWorkspaceIds,
+  authorizedWorkspaceIdSubquery,
+  readAuthorizedWorkspaceExecutionAccess,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -98,7 +99,13 @@ describe.skipIf(!runPostgresTests)(
           });
           const outcome = await scopedDb(async (tx) => ({
             set: await readAuthorizedWorkspaces(tx, { organizationId }),
-            ids: await authorizedWorkspaceIds(tx, { organizationId }),
+            executionAccess: await readAuthorizedWorkspaceExecutionAccess(tx, {
+              organizationId,
+            }),
+            ids: await authorizedWorkspaceIds(tx, {
+              organizationId,
+              workspaceIds: [assignedId, closingId, otherId],
+            }),
             assigned: await activeAuthorizedWorkspaceQuery(tx, assignedId),
             other: await activeAuthorizedWorkspaceQuery(tx, otherId),
             // Candidates come from a VALUES list, not a row-policy table,
@@ -112,7 +119,11 @@ describe.skipIf(!runPostgresTests)(
             ),
           }));
 
-          if (outcome.set.isErr() || outcome.ids.isErr()) {
+          if (
+            outcome.set.isErr() ||
+            outcome.ids.isErr() ||
+            outcome.executionAccess.isErr()
+          ) {
             panic("Authorized workspace read failed");
           }
           expect(outcome.set.value.workspaces).toHaveLength(2);
@@ -122,8 +133,26 @@ describe.skipIf(!runPostgresTests)(
               { id: closingId, status: "deleting" },
             ]),
           );
-          expect(outcome.set.value.activeIds).toEqual([assignedId]);
-          expect(outcome.ids.value).toEqual([assignedId]);
+          expect(outcome.executionAccess.value.accessibleWorkspaces).toEqual(
+            expect.arrayContaining([
+              { id: assignedId, status: "active" },
+              { id: closingId, status: "deleting" },
+            ]),
+          );
+          expect(
+            outcome.executionAccess.value.accessibleWorkspaces,
+          ).toHaveLength(2);
+          for (const id of [assignedId, closingId]) {
+            expect(
+              outcome.executionAccess.value.pinServerValidatedWorkspaceId(id),
+            ).toBe(true);
+          }
+          expect(
+            outcome.executionAccess.value.pinServerValidatedWorkspaceId(
+              otherId,
+            ),
+          ).toBe(false);
+          expect([...outcome.ids.value]).toEqual([assignedId]);
           expect(outcome.assigned).toEqual([{ id: assignedId }]);
           expect(outcome.other).toEqual([]);
           expect(outcome.compared).toEqual([{ id: assignedId }]);

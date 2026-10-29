@@ -1,4 +1,7 @@
 // parser-output-unchanged: Completeness observations replace manifest gap declarations; parsed output is unchanged.
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
+// parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.
 import { panic } from "better-result";
 
 import {
@@ -132,6 +135,10 @@ const ADAPTER_JURISDICTIONS = {
   EU: {
     country: "EU",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.EU,
+  },
+  GBR: {
+    country: "GBR",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.GBR,
   },
   HUN: {
     country: "HUN",
@@ -578,6 +585,22 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    key: ADAPTER_KEYS.UK_FCL,
+    documentStage: "inline",
+    name: "Find Case Law",
+    publisher: "Find Case Law",
+    publicHomeUrl: "https://caselaw.nationalarchives.gov.uk",
+    ...ADAPTER_JURISDICTIONS.GBR,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      fromInclusive: "2001-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     key: ADAPTER_KEYS.HU_BHGY,
     documentStage: "inline",
@@ -653,6 +676,23 @@ export const ADAPTER_MANIFESTS = {
       // The register's oldest decision is dated 4 January 2000.
       type: "decision-date",
       fromInclusive: "2000-01-01",
+      through: OPEN_RANGE,
+    },
+  },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    key: ADAPTER_KEYS.CZ_UOHS,
+    documentStage: "inline",
+    name: "Czech Office for the Protection of Competition Decisions",
+    publisher: "Úřad pro ochranu hospodářské soutěže",
+    publicHomeUrl:
+      "https://uohs.gov.cz/cs/informacni-centrum/sbirky-rozhodnuti.html",
+    ...ADAPTER_JURISDICTIONS.CZE,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      fromInclusive: "1991-01-01",
       through: OPEN_RANGE,
     },
   },
@@ -755,9 +795,11 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.AT_FINDOK]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.EU_ECJ]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.HU_BHGY]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.UK_FCL]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_KIS]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_UOHS]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
   ...FIXTURE_SOURCE_APP_READER_TEXT,
 } as const satisfies Record<

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, RwLock};
 
-use crate::config::APP_DATA_DIR_NAME;
+use crate::device_preference::DevicePreference;
 
 /// The locale the native strings render in. It lives here rather than in
 /// Tauri's managed state because `t` is called from places that hold no
@@ -175,10 +173,7 @@ fn system_locale() -> Option<&'static str> {
 
 /// Initialize the translation system. Call once at startup.
 pub fn init() {
-  let saved = saved_language_path()
-    .as_deref()
-    .and_then(read_language_file)
-    .and_then(|tag| resolve_locale(&tag));
+  let saved = saved_language().read().and_then(|tag| resolve_locale(&tag));
   set_active_locale(choose_startup_locale(saved, system_locale()));
 }
 
@@ -189,76 +184,14 @@ pub fn init_en() {
   set_active_locale("en");
 }
 
-fn saved_language_path() -> Option<PathBuf> {
-  dirs::data_dir()
-    .map(|data_dir| data_dir.join(APP_DATA_DIR_NAME).join(LANGUAGE_FILE_NAME))
-}
-
-/// Reads the saved locale tag. Only a regular file counts: a directory or a
-/// symlink at the path is never read, as with the app-data marker files.
-fn read_language_file(path: &Path) -> Option<String> {
-  if !fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_file()) {
-    return None;
-  }
-  let raw = fs::read_to_string(path).ok()?;
-  let tag = raw.trim();
-  (!tag.is_empty()).then(|| tag.to_string())
-}
-
-fn write_language_file(path: &Path, locale: &str) -> Result<(), String> {
-  match fs::symlink_metadata(path) {
-    Ok(meta) if !meta.file_type().is_file() => {
-      return Err("saved language path is not a regular file".to_string());
-    }
-    _ => {}
-  }
-
-  let parent = path
-    .parent()
-    .ok_or_else(|| "saved language path is invalid".to_string())?;
-  fs::create_dir_all(parent)
-    .map_err(|error| format!("saved language directory failed: {error}"))?;
-
-  // Written beside the target and renamed into place, as the clipboard store
-  // does: the rename replaces whatever sits at the path in one step instead
-  // of following a link planted there after the check above.
-  let temp_path = path.with_extension(format!(
-    "{}.{}.tmp",
-    std::process::id(),
-    uuid::Uuid::new_v4()
-  ));
-  if let Err(error) = fs::write(&temp_path, locale) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("saved language write failed: {error}"));
-  }
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-
-    if let Err(error) =
-      fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))
-    {
-      let _ = fs::remove_file(&temp_path);
-      return Err(format!("saved language permissions failed: {error}"));
-    }
-  }
-  if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("saved language replace failed: {error}"));
-  }
-  Ok(())
+fn saved_language() -> DevicePreference {
+  DevicePreference::in_app_data(LANGUAGE_FILE_NAME)
 }
 
 /// Saves `locale` so the next launch renders native strings in it before any
-/// window exists. Writing only on a change keeps a window's start-up
-/// reconciliation from touching the disk on every launch.
+/// window exists.
 fn persist_language(locale: &str) -> Result<(), String> {
-  let path = saved_language_path()
-    .ok_or_else(|| "app data directory is unavailable".to_string())?;
-  if read_language_file(&path).as_deref() == Some(locale) {
-    return Ok(());
-  }
-  write_language_file(&path, locale)
+  saved_language().write(locale)
 }
 
 /// Right-to-left locales, as the shared direction map the web app reads
@@ -675,7 +608,7 @@ mod tests {
 
   // -- startup resolution --
 
-  fn unique_path() -> PathBuf {
+  fn unique_path() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("stella-language-{}", uuid::Uuid::new_v4()))
   }
 
@@ -695,39 +628,15 @@ mod tests {
   }
 
   #[test]
-  fn a_saved_language_round_trips() {
-    let path = unique_path();
-    assert_eq!(read_language_file(&path), None);
-
-    write_language_file(&path, "pt-BR").unwrap();
-    assert_eq!(read_language_file(&path).as_deref(), Some("pt-BR"));
-
-    write_language_file(&path, "ar").unwrap();
-    assert_eq!(read_language_file(&path).as_deref(), Some("ar"));
-
-    fs::remove_file(&path).unwrap();
-  }
-
-  #[test]
-  fn a_directory_is_never_a_saved_language() {
-    let path = unique_path();
-    fs::create_dir(&path).unwrap();
-
-    assert_eq!(read_language_file(&path), None);
-    assert!(write_language_file(&path, "cs").is_err());
-
-    fs::remove_dir(&path).unwrap();
-  }
-
-  #[test]
   fn an_unrecognised_saved_language_is_ignored() {
     let path = unique_path();
-    write_language_file(&path, "kl-GL").unwrap();
+    let preference = DevicePreference::at(path.clone());
+    preference.write("kl-GL").unwrap();
 
-    let saved = read_language_file(&path).and_then(|tag| resolve_locale(&tag));
+    let saved = preference.read().and_then(|tag| resolve_locale(&tag));
     assert_eq!(choose_startup_locale(saved, Some("de")), "de");
 
-    fs::remove_file(&path).unwrap();
+    std::fs::remove_file(&path).unwrap();
   }
 
   // -- resolve_locale --

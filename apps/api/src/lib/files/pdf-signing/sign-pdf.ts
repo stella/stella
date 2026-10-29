@@ -252,9 +252,7 @@ const prepareSignatureField = async (
  * hash on the same async boundary keeps both phases computing it identically.
  */
 const signedAttributesDigestHex = async (data: Uint8Array) =>
-  Buffer.from(await browserHashSha256Bytes(new Uint8Array(data))).toString(
-    "hex",
-  );
+  Buffer.from(await browserHashSha256Bytes(new Uint8Array(data))).toHex();
 
 /**
  * What only phase 2 adds: trusted time. The timestamp is an unsigned

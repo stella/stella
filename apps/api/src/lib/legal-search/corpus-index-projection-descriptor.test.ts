@@ -6,9 +6,9 @@ import {
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  type CaseLawProjectionInput,
   caseLawProjectionTitle,
   deriveCorpusIndexProjectionDescriptor,
-  type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";

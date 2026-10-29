@@ -52,7 +52,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
   getPropertyName,

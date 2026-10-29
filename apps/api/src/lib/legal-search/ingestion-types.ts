@@ -1,4 +1,6 @@
 // parser-output-unchanged: The optional reconciliation publisherCount field carries census observations; decision parser inputs and output are unchanged.
+// parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
+// parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
@@ -7,20 +9,22 @@
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
+// parser-output-unchanged: adapter definitions keep their declared reconciliation types; parsed output is unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
-  TextField,
   ReadDecisionTextFields,
+  TextField,
 } from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_TEXT_FIELD,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
@@ -33,19 +37,20 @@ import type {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import {
-  toPlainText,
-  PlainTextError,
-  toPlainTextMetadataObject,
   type PlainText,
+  PlainTextError,
   type PlainTextMetadataValue,
+  toPlainText,
+  toPlainTextMetadataObject,
 } from "@/api/lib/case-law/plain-text";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
-  withDocumentStageWindow,
   type DocumentStagePageOptions,
+  withDocumentStageWindow,
 } from "@/api/lib/legal-search/document-stage-observation";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
@@ -58,16 +63,44 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type SourceRawParts,
+} from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
 export type { EmptyAst };
 
-/** A judge as one decision names them, before the roster is consulted. */
-export type DecisionJudgeInput = {
+/**
+ * A judge the source names in the form a reader sees, titles removed.
+ *
+ * Each variant rules out the other's name field, so a reader of either
+ * spelling (`judge.czechDeclinedName !== undefined`) tells them apart, and a
+ * consumer that only reads printed names still compiles against both.
+ */
+export type PrintedDecisionJudge = {
   role: DecisionJudgeRole;
   nameAsPrinted: string;
+  czechDeclinedName?: never;
 };
+
+/**
+ * A judge a Czech text names inside a sentence, in the case its grammar asks
+ * for ("z předsedy Jana Svatoně"). The declined form is never shown: the row
+ * is written only when the court's roster names exactly one person it can be,
+ * and then under that person's own name.
+ */
+export type CzechDeclinedDecisionJudge = {
+  role: DecisionJudgeRole;
+  czechDeclinedName: string;
+  nameAsPrinted?: never;
+};
+
+/** A judge as one decision names them, before the roster is consulted. */
+export type DecisionJudgeInput =
+  PrintedDecisionJudge | CzechDeclinedDecisionJudge;
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -91,17 +124,7 @@ export const DOCUMENT_DELIVERY = {
 type DocumentDelivery =
   (typeof DOCUMENT_DELIVERY)[keyof typeof DOCUMENT_DELIVERY];
 
-/**
- * One opinion a decision prints (the majority, a concurrence, a dissent) and
- * the AST blocks it consists of, footnotes included. A short-form citation
- * never reaches back across an opinion, so its boundaries are structure the
- * parser states, not wording the extractor guesses from.
- */
-export type CitationOpinionScope = {
-  opinionId: string;
-  blockIds: readonly string[];
-  boundaries: "proven" | "unproven";
-};
+export type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 
 /** Result of parsing a single court decision from a source. */
 export type RawIngestionResult = {
@@ -184,6 +207,15 @@ export type RawIngestionResult = {
    */
   legacyEcli?: string | undefined;
   /**
+   * The docket an older adapter version stored this same publisher document
+   * under, where it differs from `caseNumber` (a court letter the publisher
+   * never printed, read off the publisher's own identifier). Like
+   * `legacyEcli`, it only lets the pipeline find the legacy null-id row this
+   * document produced, which it adopts only on ECLI or source URL proof; it
+   * is never stored.
+   */
+  legacyCaseNumber?: string | undefined;
+  /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on
    * `caseNumber`: a citation names the docket alone, so a number carrying a
@@ -264,8 +296,7 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    | Readonly<Record<string, SourceRawObjectPayload>>
-    | undefined;
+    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -276,13 +307,23 @@ type PlainTextResultFields = {
   sheetNumber?: PlainText | undefined;
   ecli?: PlainText | undefined;
   legacyEcli?: PlainText | undefined;
+  legacyCaseNumber?: PlainText | undefined;
   court: PlainText;
   decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
   judges?:
-    | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
-        nameAsPrinted: PlainText;
-      })[]
+    | readonly (
+        | {
+            role: DecisionJudgeRole;
+            nameAsPrinted: PlainText;
+            czechDeclinedName?: never;
+          }
+        | {
+            role: DecisionJudgeRole;
+            czechDeclinedName: PlainText;
+            nameAsPrinted?: never;
+          }
+      )[]
     | undefined;
   textFields: Readonly<
     Record<
@@ -304,8 +345,7 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  | { type: "accepted" }
-  | { type: "item_build_failed"; error: PlainTextError };
+  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -319,6 +359,7 @@ export const PLAIN_TEXT_RESULT_FIELDS = {
   sheetNumber: true,
   ecli: true,
   legacyEcli: true,
+  legacyCaseNumber: true,
   court: true,
   decisionType: true,
   metadata: true,
@@ -416,6 +457,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       sheetNumber: yield* optionalPlainText(raw.sheetNumber),
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
+      legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
@@ -426,11 +468,16 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
         raw.judges === undefined
           ? undefined
           : yield* Result.all(
-              raw.judges.map(({ role, nameAsPrinted }) =>
-                toPlainText(nameAsPrinted).map((plain) => ({
-                  role,
-                  nameAsPrinted: plain,
-                })),
+              raw.judges.map((judge) =>
+                judge.czechDeclinedName !== undefined
+                  ? toPlainText(judge.czechDeclinedName).map((plain) => ({
+                      role: judge.role,
+                      czechDeclinedName: plain,
+                    }))
+                  : toPlainText(judge.nameAsPrinted).map((plain) => ({
+                      role: judge.role,
+                      nameAsPrinted: plain,
+                    })),
               ),
             ),
       textFields: {
@@ -630,161 +677,18 @@ export type UnreadListedItem = {
   outcome: UnreadOutcome;
 };
 
-/**
- * Every response an adapter fetched for one decision, under the name it gives
- * each part.
- *
- * A source that serves a decision across several pages — a detail page beside
- * the document itself — has to store all of them or replay can only ever
- * recover what the parser already read. A field first captured later is then
- * unrecoverable for stored rows: the page that states it was fetched, parsed
- * for the fields of the day, and dropped.
- *
- * Parts are named by role rather than by URL: a replay asks for the detail
- * page, and which address served it is history.
- */
-export type SourceRawParts = Readonly<Record<string, string>>;
-
-/**
- * A binary response the envelope names instead of holding.
- *
- * `location` is an address in the form the corpus key columns already use
- * (`corpus-location.ts`): today always a plain object key, and a packed
- * address once these files are packed together, which is a change to where
- * the bytes are written and to nothing that reads this reference.
- *
- * `sha256` and `byteLength` are over the publisher's bytes, so a read can be
- * checked against what was stored rather than trusted for having arrived —
- * the check that matters once an address names a range inside an object
- * shared with other decisions.
- */
-export type SourceRawObjectRef = {
-  readonly location: string;
-  readonly sha256: string;
-  readonly contentType: string;
-  readonly byteLength: number;
-};
-
-/** The binary responses of one envelope, under their part names. */
-export type SourceRawObjects = Readonly<Record<string, SourceRawObjectRef>>;
-
-/**
- * Media type for a multi-part raw payload, distinct from `application/json` so
- * a reader can tell an envelope from a publisher's own JSON document.
- */
-export const SOURCE_RAW_ENVELOPE_CONTENT_TYPE =
-  "application/vnd.stella.case-law-raw+json";
-
-const SOURCE_RAW_ENVELOPE_VERSION = 1;
-
-/**
- * Write an envelope over the text parts, and over the binary parts it names.
- *
- * `objects` is omitted rather than written empty when a decision has no
- * binary response, so the payload of an adapter that stores only text is
- * byte-identical to what it wrote before binaries existed.
- */
-export const encodeSourceRawEnvelope = (
-  parts: SourceRawParts,
-  objects: SourceRawObjects = {},
-): string =>
-  JSON.stringify({
-    version: SOURCE_RAW_ENVELOPE_VERSION,
-    parts,
-    ...(Object.keys(objects).length === 0 ? {} : { objects }),
-  });
-
-/**
- * The parts of a stored envelope, or `null` for a payload that is not one —
- * which is how a row stored before its adapter had an envelope reads, and why
- * every caller has to handle it rather than assume the shape it writes today.
- */
-export const decodeSourceRawEnvelope = (raw: string): SourceRawParts | null => {
-  const parsed = Result.try({
-    try: (): unknown => JSON.parse(raw),
-    catch: () => null,
-  }).unwrapOr(null);
-
-  if (
-    parsed === null ||
-    typeof parsed !== "object" ||
-    !("version" in parsed) ||
-    parsed.version !== SOURCE_RAW_ENVELOPE_VERSION ||
-    !("parts" in parsed) ||
-    typeof parsed.parts !== "object" ||
-    parsed.parts === null
-  ) {
-    return null;
-  }
-
-  const parts = Object.entries(parsed.parts);
-  return parts.every(([, value]) => typeof value === "string")
-    ? Object.fromEntries(parts.map(([name, value]) => [name, String(value)]))
-    : null;
-};
-
-const isSourceRawObjectRef = (value: unknown): value is SourceRawObjectRef =>
-  typeof value === "object" &&
-  value !== null &&
-  "location" in value &&
-  typeof value.location === "string" &&
-  "sha256" in value &&
-  typeof value.sha256 === "string" &&
-  "contentType" in value &&
-  typeof value.contentType === "string" &&
-  "byteLength" in value &&
-  typeof value.byteLength === "number";
-
-/**
- * The binary parts a stored envelope names, or `{}` for one that names none.
- *
- * Empty rather than null for every absence there is — not an envelope, an
- * envelope written before binaries, an `objects` map that does not read back
- * as references — because all of them mean the same thing to a caller: this
- * row states no binary response. A reader that had to tell them apart would
- * be deciding about the storage format rather than about the decision.
- */
-export const decodeSourceRawEnvelopeObjects = (
-  raw: string,
-): SourceRawObjects => {
-  const parsed = Result.try({
-    try: (): unknown => JSON.parse(raw),
-    catch: () => null,
-  }).unwrapOr(null);
-
-  if (
-    parsed === null ||
-    typeof parsed !== "object" ||
-    !("version" in parsed) ||
-    parsed.version !== SOURCE_RAW_ENVELOPE_VERSION ||
-    !("objects" in parsed) ||
-    typeof parsed.objects !== "object" ||
-    parsed.objects === null
-  ) {
-    return {};
-  }
-
-  const objects = Object.entries(parsed.objects);
-  return objects.every(([, value]) => isSourceRawObjectRef(value))
-    ? Object.fromEntries(objects)
-    : {};
-};
-
-/**
- * Re-write a stored envelope with the addresses its binary parts were
- * written under.
- *
- * The adapter cannot name them: an address carries the corpus key the bytes
- * landed at, and the write happens in the pipeline. So the adapter states the
- * bytes and this closes the envelope over what storage answered.
- */
-export const withSourceRawObjects = (
-  raw: string,
-  objects: SourceRawObjects,
-): string => {
-  const parts = decodeSourceRawEnvelope(raw);
-  return parts === null ? raw : encodeSourceRawEnvelope(parts, objects);
-};
+export {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/source-raw-envelope";
+export type {
+  SourceRawObjectRef,
+  SourceRawObjects,
+  SourceRawParts,
+} from "@/api/lib/legal-search/source-raw-envelope";
 
 /**
  * A stored raw payload that is not an envelope, and the part names its own
@@ -1026,6 +930,8 @@ export type StoredRawListing =
       parts: SourceRawParts;
       /** The listing row, verified to name the decision the database holds. */
       listing: Record<string, unknown>;
+      /** The decoded envelope, reusable when replay preserves it verbatim. */
+      sourceRaw: string;
     }
   | StoredRawReparseRejected;
 
@@ -1061,7 +967,8 @@ export const readStoredRawListing = ({
     };
   }
 
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const sourceRaw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(sourceRaw);
   const listingRaw = parts?.[part];
   if (parts === null || listingRaw === undefined) {
     return {
@@ -1092,7 +999,7 @@ export const readStoredRawListing = ({
     };
   }
 
-  return { type: "listing", parts, listing };
+  return { type: "listing", parts, listing, sourceRaw };
 };
 
 /**
@@ -1377,8 +1284,7 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    | (() => SourceReconciliation["buildDecision"])
-    | undefined;
+    (() => SourceReconciliation["buildDecision"]) | undefined;
 };
 
 /**
@@ -1570,9 +1476,7 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  | StoredSourceSurface
-  | ExcludedSourceSurface
-  | BacklogSourceSurface;
+  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({
@@ -1765,18 +1669,56 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
 };
 
+type ScopedCallbacks<TSource> = {
+  [
+    TKey in keyof TSource as Extract<
+      TSource[TKey],
+      (...args: never[]) => unknown
+    > extends never
+      ? never
+      : TKey
+  ]-?: TSource[TKey] | undefined;
+};
+
 /** Build an adapter from the source facts declared for its registry key. */
-export const defineSourceAdapter = <const TKey extends AdapterKey>(
-  adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => {
+export const defineSourceAdapter = <
+  const TKey extends AdapterKey,
+  const TAdapter extends SourceAdapterDefinition<TKey>,
+>(
+  // `key` names TKey for inference; the constraint then binds documentStage to
+  // that key's manifest instead of the union of every manifest's stage.
+  adapter: TAdapter & { readonly key: TKey },
+): Omit<SourceAdapter, "key" | "documentStage" | "reconciliation"> & {
+  readonly key: TAdapter["key"];
+  readonly documentStage: TAdapter["documentStage"];
+  readonly reconciliation: TAdapter["reconciliation"] & SourceReconciliation;
+} => {
+  const scope = { type: "ingestion", adapterKey: adapter.key } as const;
+  const scoped = <TArgs extends unknown[], TResult>(
+    operation: (...args: TArgs) => TResult,
+  ) =>
+    function (this: unknown, ...args: TArgs) {
+      return withExceptionScope(scope, () => operation.apply(this, args));
+    };
+  const reconciliation = adapter.reconciliation;
+  const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
+  const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
+  const reparseStoredRaw = adapter.reparseStoredRaw;
+  const collectionEnrichment = adapter.collectionEnrichment;
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
-  ) => await withDocumentStageWindow({ ...options, source: adapter.key });
-  return {
-    ...adapter,
+  ) =>
+    await withExceptionScope(
+      scope,
+      async () =>
+        await withDocumentStageWindow({ ...options, source: adapter.key }),
+    );
+  // Total callback projections make a new callback require a scope decision.
+  const callbacks = {
     observeDocumentStage,
-    country: ADAPTER_MANIFESTS[adapter.key].country,
-    name: ADAPTER_MANIFESTS[adapter.key].name,
+    getTotalCount: scoped(adapter.getTotalCount),
+    reparseStoredRaw:
+      reparseStoredRaw === undefined ? undefined : scoped(reparseStoredRaw),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
         fetchPage: async () => {
@@ -1794,5 +1736,65 @@ export const defineSourceAdapter = <const TKey extends AdapterKey>(
         },
         observe: onDocumentObservation,
       }),
+  } satisfies ScopedCallbacks<SourceAdapter>;
+  const { reparseStoredRaw: scopedReparseStoredRaw, ...requiredCallbacks } =
+    callbacks;
+  const reconciliationCallbacks = {
+    revisionOf: scoped(reconciliation.revisionOf),
+    sliceOf: scoped(reconciliation.sliceOf),
+    nextSlice: scoped(reconciliation.nextSlice),
+    previousSlice: scoped(reconciliation.previousSlice),
+    listSlicePage: scoped(reconciliation.listSlicePage),
+    buildDecision: scoped(reconciliation.buildDecision),
+    heldWithoutDetail:
+      reconciliation.heldWithoutDetail === undefined
+        ? undefined
+        : scoped(reconciliation.heldWithoutDetail),
+    createSliceBuildDecision:
+      createSliceBuildDecision === undefined
+        ? undefined
+        : scoped(function (this: unknown) {
+            return scoped(createSliceBuildDecision.call(this));
+          }),
+  } satisfies ScopedCallbacks<SourceReconciliation>;
+  const sourceFieldCallbacks = {
+    listSourceFields: scoped(adapter.sourceFields.listSourceFields),
+  } satisfies ScopedCallbacks<SourceFieldInventory>;
+  const collection =
+    collectionEnrichment === undefined
+      ? undefined
+      : {
+          ...collectionEnrichment,
+          ...({
+            readIssue: scoped(collectionEnrichment.readIssue),
+            join: scoped(collectionEnrichment.join),
+          } satisfies ScopedCallbacks<SkCollectionConnector>),
+        };
+  const textless =
+    textlessHeldRecheck === undefined
+      ? undefined
+      : {
+          ...textlessHeldRecheck,
+          ...({
+            buildDecisionFromStored: scoped(
+              textlessHeldRecheck.buildDecisionFromStored,
+            ),
+          } satisfies ScopedCallbacks<TextlessHeldRecheck>),
+        };
+  return {
+    ...adapter,
+    ...requiredCallbacks,
+    ...(scopedReparseStoredRaw === undefined
+      ? {}
+      : { reparseStoredRaw: scopedReparseStoredRaw }),
+    country: ADAPTER_MANIFESTS[adapter.key].country,
+    name: ADAPTER_MANIFESTS[adapter.key].name,
+    sourceFields: { ...adapter.sourceFields, ...sourceFieldCallbacks },
+    collectionEnrichment: collection,
+    reconciliation: {
+      ...reconciliation,
+      ...reconciliationCallbacks,
+      textlessHeldRecheck: textless,
+    },
   };
 };

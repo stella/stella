@@ -25,8 +25,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {
   copyIngestionTablePrivileges,
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 
 import { czNsAdapter } from "./adapters/cz-ns";
@@ -166,7 +166,7 @@ describe.skipIf(!enabled)(
           expect(remainingCycleMs(deadline)).toBeGreaterThan(130_000);
         } finally {
           await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-          holder.release();
+          await holder.release();
         }
       });
     }, 60_000);
@@ -451,7 +451,7 @@ describe.skipIf(!enabled)(
             monotonic.mockRestore();
             releaseAdmission.resolve(undefined);
             await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-            holder.release();
+            await holder.release();
           }
         });
       }, 60_000);

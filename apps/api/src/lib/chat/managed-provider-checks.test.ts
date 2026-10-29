@@ -1,6 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, jest, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
@@ -354,8 +354,13 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               dataClass === "customer"
                 ? { dataClass, managedAIResidency: residency }
                 : { dataClass };
+            // Managed requests carry the credential their tier resolved.
             const adapter = createTanStackTextAdapterFactory({
               provider: "openrouter",
+              managedOpenRouterCredential: {
+                type: "static",
+                apiKey: "fixture-key",
+              },
               ...policy,
             })(MODEL);
             const options = {

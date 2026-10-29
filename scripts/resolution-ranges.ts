@@ -25,9 +25,9 @@ import { parseBunLockText } from "./bun-lock-text";
 import {
   applyReplacements,
   directPropertyValue,
+  type JsonTextReplacement,
   rootObjectStart,
   stringTokenAt,
-  type JsonTextReplacement,
 } from "./json-text-edit";
 
 // A local error class instead of better-result: consumers run without an install.

@@ -3,12 +3,15 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import {
   createChatAttachmentPart,
   isChatPart,
   mergeAnonRestorations,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import { errorToolResult } from "@/api/handlers/chat/chat-turn-settlement";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import type {
   ChatAttachmentPart,
@@ -18,8 +21,18 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
+import {
+  isPersistedJsonObject,
+  isPersistedJsonValue,
+} from "@/api/lib/chat/persisted-message-content";
+import type { PersistedJsonObject } from "@/api/lib/chat/persisted-message-content";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
+import {
+  accountLegacyChatContent,
+  emptyLegacyChatAccounting,
+  type LegacyChatAccounting,
+} from "./chat-content-v3-accounting";
 
 export const LOSSY_JSON_NUMBER = "lossy-json-number";
 
@@ -27,8 +40,16 @@ export class LegacyChatContentError extends TaggedError(
   "LegacyChatContentError",
 )<{
   message: string;
-  reason: "invalid-legacy-part" | typeof LOSSY_JSON_NUMBER;
-}> {}
+  reason:
+    | "invalid-legacy-part"
+    | "unaccounted-legacy-field"
+    | typeof LOSSY_JSON_NUMBER;
+  accounting?: LegacyChatAccounting;
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const invalidLegacyPart = (
   message = "Stored legacy chat content has an invalid or unsupported part",
@@ -50,6 +71,7 @@ type LegacyAiSdkFilePart = {
 };
 
 type LegacyAiSdkTextPart = {
+  providerMetadata?: PersistedJsonObject;
   text: string;
   type: "text";
 };
@@ -60,7 +82,11 @@ type NormalizedLegacyMessageParts = {
 };
 
 const isLegacyAiSdkTextPart = (part: unknown): part is LegacyAiSdkTextPart =>
-  isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
+  isRecord(part) &&
+  part["type"] === "text" &&
+  typeof part["text"] === "string" &&
+  (part["providerMetadata"] === undefined ||
+    isPersistedJsonObject(part["providerMetadata"]));
 
 const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
   isRecord(part) &&
@@ -75,6 +101,9 @@ const legacyAiSdkTextPartToTanStack = (
 ): Extract<ChatTanStackPart, { type: "text" }> => ({
   type: "text",
   content: part.text,
+  ...(part.providerMetadata === undefined
+    ? {}
+    : { providerMetadata: part.providerMetadata }),
 });
 
 const legacyAiSdkFilePartToTanStack = (
@@ -107,6 +136,21 @@ const normalizeLegacyMessagePartsToTanStack = (
     }
     if (isChatPart(part)) {
       normalized.push(validateV2Part(part));
+      continue;
+    }
+    if (
+      isRecord(part) &&
+      part["type"] === "reasoning" &&
+      typeof part["text"] === "string"
+    ) {
+      const thinking: unknown = {
+        type: "thinking",
+        content: part["text"],
+        ...("providerMetadata" in part
+          ? { providerMetadata: part["providerMetadata"] }
+          : {}),
+      };
+      normalized.push(validateV2Part(thinking));
       continue;
     }
     if (isLegacyAiSdkTextPart(part)) {
@@ -155,12 +199,32 @@ const normalizeLegacyMessagePartsToTanStack = (
         return invalidLegacyPart();
       }
       normalized.push(converted);
+      if (part["state"] === "output-error") {
+        if (
+          converted.type !== "tool-call" ||
+          typeof part["errorText"] !== "string"
+        ) {
+          return invalidLegacyPart();
+        }
+        normalized.push(errorToolResult(converted.id, part["errorText"]));
+      }
+      continue;
+    }
+    // An AI SDK step boundary carries nothing but its type, and v3 has no
+    // step concept: dropping the bare marker loses no content. A marker with
+    // any other field is not this shape and still rejects the message.
+    if (isLegacyStepStartPart(part)) {
       continue;
     }
     invalidLegacyPart();
   }
   return { metadata, parts: normalized };
 };
+
+const isLegacyStepStartPart = (part: unknown) =>
+  isRecord(part) &&
+  part["type"] === "step-start" &&
+  Object.keys(part).length === 1;
 
 const DECIMAL_LITERAL = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/u;
 
@@ -314,15 +378,31 @@ const legacyToolPartToTanStack = (
   }
 
   const input = Reflect.get(part, "input");
+  // An AI SDK call whose input failed validation keeps only `rawInput`; its
+  // JSON text is the call's raw arguments, and the call has no parsed input.
+  const rawInput =
+    input === undefined && "rawInput" in part ? part["rawInput"] : undefined;
   const next: unknown = {
     type: "tool-call" as const,
     id,
     name,
-    arguments: safeStringifyToolArguments(input ?? {}),
+    arguments: safeStringifyToolArguments(rawInput ?? input ?? {}),
     state: legacyToolStateToTanStack(part["state"]),
     ...("input" in part ? { input } : {}),
     ...("output" in part ? { output: Reflect.get(part, "output") } : {}),
     ...("metadata" in part ? { metadata: part["metadata"] } : {}),
+    ...("callProviderMetadata" in part || "resultProviderMetadata" in part
+      ? {
+          providerMetadata: {
+            ...("callProviderMetadata" in part
+              ? { call: part["callProviderMetadata"] }
+              : {}),
+            ...("resultProviderMetadata" in part
+              ? { result: part["resultProviderMetadata"] }
+              : {}),
+          },
+        }
+      : {}),
     ...legacyToolApprovalToTanStack(part["approval"]),
   };
 
@@ -351,9 +431,10 @@ const legacyToolStateToTanStack = (state: unknown) => {
     case "approval-responded":
       return "approval-responded" as const;
     case "output-available":
-    case "output-error":
     case "complete":
       return "complete" as const;
+    case "output-error":
+      return "error" as const;
     case "awaiting-input":
       return "input-complete" as const;
     default:
@@ -379,7 +460,8 @@ const legacyToolApprovalToTanStack = (
     return invalidLegacyPart();
   }
   const id = getStringProperty(approval, "id");
-  const needsApproval = approval["needsApproval"];
+  const needsApproval =
+    approval["needsApproval"] === undefined ? true : approval["needsApproval"];
   const approved = approval["approved"];
   if (
     !id ||
@@ -397,92 +479,8 @@ const legacyToolApprovalToTanStack = (
   };
 };
 
-type CreateDocumentInput = {
-  name: string;
-  source: string;
-};
-type CreateDocumentOutput =
-  | {
-      success: true;
-      fileName: string;
-      entityId: string;
-      fieldId: string;
-      workspaceId: string;
-      entityRef: string;
-      matterRef: string;
-      href: string;
-      mention: string;
-    }
-  | {
-      success: false;
-      message: string;
-    };
-
-const CREATE_DOCUMENT_TOOL_PART_TYPE = "tool-create-document";
-// Old outputs predate route IDs. Empty IDs pass historical-message validation
-// while keeping the web "open created document" affordance hidden.
-const LEGACY_MISSING_ROUTE_ID = "";
-
-const normalizeLegacyRawToolInputs = (parts: readonly unknown[]): unknown[] =>
-  parts.map((part) => normalizeLegacyRawCreateDocumentPart(part));
-
-const normalizeCreateDocumentInput = (
-  input: unknown,
-): CreateDocumentInput | null => {
-  const name = getLegacyStringProperty(input, "name");
-  const source =
-    getLegacyStringProperty(input, "source") ??
-    getLegacyStringProperty(input, "markdown");
-  if (!name || !source) {
-    return null;
-  }
-
-  return { name, source };
-};
-
-const normalizeCreateDocumentOutput = (
-  output: unknown,
-): CreateDocumentOutput | null => {
-  if (!isRecord(output)) {
-    return null;
-  }
-
-  if (output["success"] === false) {
-    const message = getLegacyStringProperty(output, "message");
-    return message ? { success: false, message } : null;
-  }
-
-  if (output["success"] !== true) {
-    return null;
-  }
-
-  const fileName = getLegacyStringProperty(output, "fileName");
-  const entityRef = getLegacyStringProperty(output, "entityRef");
-  const matterRef = getLegacyStringProperty(output, "matterRef");
-  const href = getLegacyStringProperty(output, "href");
-  const mention = getLegacyStringProperty(output, "mention");
-  if (!fileName || !entityRef || !matterRef || !href || !mention) {
-    return null;
-  }
-
-  return {
-    success: true,
-    fileName,
-    entityId:
-      getLegacyStringProperty(output, "entityId") ?? LEGACY_MISSING_ROUTE_ID,
-    fieldId:
-      getLegacyStringProperty(output, "fieldId") ?? LEGACY_MISSING_ROUTE_ID,
-    workspaceId:
-      getLegacyStringProperty(output, "workspaceId") ?? LEGACY_MISSING_ROUTE_ID,
-    entityRef,
-    matterRef,
-    href,
-    mention,
-  };
-};
-
-const normalizeLegacyRawCreateDocumentPart = (part: unknown): unknown => {
-  if (!isRecord(part) || part["type"] !== CREATE_DOCUMENT_TOOL_PART_TYPE) {
+const validateLegacyRawCreateDocumentPart = (part: unknown): unknown => {
+  if (!isRecord(part) || part["type"] !== "tool-create-document") {
     return part;
   }
 
@@ -514,29 +512,7 @@ const normalizeLegacyRawCreateDocumentPart = (part: unknown): unknown => {
   ) {
     return invalidLegacyPart();
   }
-  const input = normalizeCreateDocumentInput(rawInput);
-  const output = normalizeCreateDocumentOutput(rawOutput);
-  if (!input && !output) {
-    return part;
-  }
-
-  return {
-    ...part,
-    ...(input && { input }),
-    ...(output && { output }),
-  };
-};
-
-const getLegacyStringProperty = (
-  value: unknown,
-  key: string,
-): string | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const property = value[key];
-  return typeof property === "string" ? property : null;
+  return part;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -575,7 +551,7 @@ export const convertLegacyChatContent = (
   const normalized =
     version === 1
       ? normalizeLegacyMessagePartsToTanStack(
-          normalizeLegacyRawToolInputs(content["data"]),
+          content["data"].map(validateLegacyRawCreateDocumentPart),
         )
       : normalizeV2Content(content);
   const proved = Result.try({
@@ -600,6 +576,14 @@ export const convertLegacyChatContent = (
   });
   if (proved.isErr()) {
     throw proved.error;
+  }
+  const accounting = accountLegacyChatContent(content, proved.value);
+  if (accounting.unaccountedFields.length > 0) {
+    throw new LegacyChatContentError({
+      message: "Stored legacy chat content has unaccounted fields",
+      reason: "unaccounted-legacy-field",
+      accounting,
+    });
   }
   return proved.value;
 };
@@ -666,4 +650,30 @@ const isLegacyMetadata = (value: unknown): value is ChatMessageMetadata => {
         }),
       ))
   );
+};
+
+/** The read-only census uses the same conversion and proof as promotion. */
+export const inspectLegacyChatContent = (content: unknown) => {
+  const outcome = Result.try({
+    try: () => convertLegacyChatContent(content),
+    catch: (error) =>
+      error instanceof LegacyChatContentError
+        ? error
+        : new LegacyChatContentError({
+            message: "Stored legacy chat content is invalid",
+            reason: "invalid-legacy-part",
+          }),
+  });
+  if (outcome.isErr()) {
+    return {
+      outcome: "refused" as const,
+      reason: outcome.error.reason,
+      ...(outcome.error.accounting ?? emptyLegacyChatAccounting()),
+    };
+  }
+  return {
+    outcome: "converted" as const,
+    content: outcome.value,
+    ...accountLegacyChatContent(content, outcome.value),
+  };
 };

@@ -7,7 +7,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
-import { sourceCensusProjection } from "@/api/lib/case-law/completeness-census-contract";
+import { sourceCensusSchema } from "@/api/lib/case-law/completeness-census-contract";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -92,7 +92,7 @@ describe.skipIf(!enabled)("overlapping publisher slices (postgres)", () => {
             { year: 2026, slices: 2, publisher: 2, stored: 2, withText: 2 },
           ],
         });
-        expect(v.parse(sourceCensusProjection, complete).aggregateUnit).toBe(
+        expect(v.parse(sourceCensusSchema, complete).aggregateUnit).toBe(
           "slice-memberships",
         );
         await db
@@ -114,5 +114,5 @@ describe.skipIf(!enabled)("overlapping publisher slices (postgres)", () => {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
     });
-  }, 120_000);
+  });
 });

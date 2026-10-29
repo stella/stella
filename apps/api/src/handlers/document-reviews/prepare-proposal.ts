@@ -10,7 +10,7 @@
  */
 
 import { panic, Result } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ReferenceSource } from "@/api/handlers/document-reviews/reference-position-normalizer";
@@ -27,7 +27,7 @@ import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models"
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
-type ProposalBody = Static<typeof proposeReviewPositionsBodySchema>;
+type ProposalBody = v.InferOutput<typeof proposeReviewPositionsBodySchema>;
 
 export type PreparedProposal = {
   target: PreparedDocxFile;

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "PAY by square, the Slovak payment QR, is an LZMA-compressed payload; @stll/invoicing declares lzma1 (Apache-2.0, no dependencies) for compress() behind the API-only pay-by-square subpath, so the web bundle does not load it."
+}

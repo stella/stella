@@ -7,12 +7,15 @@ import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
   buildScreeningIndex,
+  DEFAULT_CUTOFF,
   SANCTIONS_SOURCES,
   screen,
-  DEFAULT_CUTOFF,
-  MAX_SCREENING_WORK,
 } from "@stll/sanctions";
-import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import type {
+  SanctionsEntry,
+  SanctionsSource,
+  ScreeningIndex,
+} from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -42,6 +45,10 @@ import {
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -401,26 +408,44 @@ describe("sanctions screening service", () => {
   test(
     "bounds the returned matches and says how many there were",
     async () => {
-      const result = await screenSanctionsSubject({
-        db: requestDb,
-        subject: {
-          type: "organization",
-          name: "Acme Trading Company",
-          identifiers: [],
-        },
-        practiceJurisdictions: [],
-        now: FRESH_NOW,
-        indexCache: createSanctionsIndexCache(),
+      const metricLines: string[] = [];
+      setMetricLineSinkForTesting((line) => {
+        metricLines.push(line);
       });
-      const un = listOf(result.unwrap().lists, "un");
-      expect(un).toMatchObject({
-        status: "possible-match",
-        totalMatches: TRUNCATED_ENTRIES,
-        truncated: true,
-      });
-      expect(un.possibleMatches).toHaveLength(SANCTIONS_MATCH_LIMIT);
-      // A capped scan that found matches stays a possible match.
-      expect(result.unwrap().status).toBe("possible-match");
+      try {
+        const result = await screenSanctionsSubject({
+          db: requestDb,
+          subject: {
+            type: "organization",
+            name: "Acme Trading Company",
+            identifiers: [],
+          },
+          practiceJurisdictions: [],
+          now: FRESH_NOW,
+          indexCache: createSanctionsIndexCache(),
+        });
+        const un = listOf(result.unwrap().lists, "un");
+        expect(un).toMatchObject({
+          status: "possible-match",
+          totalMatches: TRUNCATED_ENTRIES,
+          truncated: true,
+        });
+        expect(un.possibleMatches).toHaveLength(SANCTIONS_MATCH_LIMIT);
+        // A capped scan that found matches stays a possible match.
+        expect(result.unwrap().status).toBe("possible-match");
+        const metrics = metricLines
+          .map((line) => JSON.parse(line))
+          .filter(({ SanctionsScreeningListCompletion }) =>
+            Number.isInteger(SanctionsScreeningListCompletion),
+          );
+        expect(metrics).toHaveLength(sanctionsSourceIds().length);
+        expect(metrics.find(({ source }) => source === "un")?.outcome).toBe(
+          "complete",
+        );
+        expect(JSON.stringify(metrics)).not.toContain("Acme Trading Company");
+      } finally {
+        resetMetricLineSinkForTesting();
+      }
     },
     DB_TEST_TIMEOUT_MS,
   );
@@ -491,9 +516,9 @@ describe("sanctions screening service", () => {
         reason: "load-failed",
       });
       expect(listOf(screening.lists, "eu").status).toBe("clear");
-      expect(reports).toEqual([
-        { stage: "list-screening", reason: "index-load", source: "uk" },
-      ]);
+      // The index cache owns and reports a failed load; the screening that
+      // meets it adds no report of its own.
+      expect(reports).toEqual([]);
     },
     DB_TEST_TIMEOUT_MS,
   );
@@ -536,6 +561,9 @@ describe("sanctions screening service", () => {
       let failing = true;
       const builds = new Map<SanctionsSource, number>();
       const reported: { source: SanctionsSource; editionId: string }[] = [];
+      const screeningReports: Parameters<
+        typeof reportSanctionsScreeningFailure
+      >[0][] = [];
       const indexCache = createSanctionsIndexCache({
         nowMs: () => clock,
         build: (lists) => {
@@ -565,10 +593,15 @@ describe("sanctions screening service", () => {
             practiceJurisdictions: ["CH"],
             now: FRESH_NOW,
             indexCache,
+            reportFailure: (report) => {
+              screeningReports.push(report);
+            },
           })
         ).unwrap();
 
-      const first = await run();
+      // Two screenings wait on the same failing load.
+      const [first, concurrent] = await Promise.all([run(), run()]);
+      expect(listOf(concurrent.lists, "ch").reason).toBe("load-failed");
       expect(first.status).toBe("unavailable");
       expect(listOf(first.lists, "ch")).toMatchObject({
         status: "unavailable",
@@ -589,6 +622,9 @@ describe("sanctions screening service", () => {
       expect(listOf(second.lists, "ch").reason).toBe("load-failed");
       expect(builds.get("ch")).toBe(1);
       expect(reported).toHaveLength(1);
+      // One failed load is one report, the cache's: neither the screening
+      // waiting on it nor one inside the pause reports it again.
+      expect(screeningReports).toEqual([]);
 
       // After it, the next screening tries again.
       failing = false;
@@ -1581,39 +1617,53 @@ test.each(["matcher-unavailable", "operation"] as const)(
 
 test("a bounded scan with no matches is incomplete and keeps its screened edition", async () => {
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
-  const result = await screenSanctionsSubject({
-    db: requestDb,
-    subject: {
-      type: "organization",
-      name: "Synthetic Company",
-      identifiers: [],
-    },
-    practiceJurisdictions: [],
-    now: FRESH_NOW,
-    reportFailure: (report) => {
-      reports.push(report);
-    },
-    matcher: async ({ query }) =>
-      Result.ok({
-        ...screen(buildScreeningIndex([]), query, {
-          cutoff: DEFAULT_CUTOFF,
-        }).unwrap(),
-        truncated: true,
-      }),
+  const metricLines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    metricLines.push(line);
   });
-  expect(result.unwrap().status).toBe("incomplete");
-  for (const list of result.unwrap().lists) {
-    expect(list).toMatchObject({
-      status: "incomplete",
-      reason: null,
-      truncated: true,
-      totalMatches: 0,
-      possibleMatches: [],
+  try {
+    const result = await screenSanctionsSubject({
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "Synthetic Company",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+      reportFailure: (report) => {
+        reports.push(report);
+      },
+      matcher: async ({ query }) =>
+        Result.ok({
+          ...screen(buildScreeningIndex([]), query, {
+            cutoff: DEFAULT_CUTOFF,
+          }).unwrap(),
+          truncated: true,
+        }),
     });
-    expect(list.editionId).not.toBeNull();
-    expect(list.verifiedAt).not.toBeNull();
+    expect(result.unwrap().status).toBe("incomplete");
+    for (const list of result.unwrap().lists) {
+      expect(list).toMatchObject({
+        status: "incomplete",
+        reason: null,
+        truncated: true,
+        totalMatches: 0,
+        possibleMatches: [],
+      });
+      expect(list.editionId).not.toBeNull();
+      expect(list.verifiedAt).not.toBeNull();
+    }
+    const metrics = metricLines.map((line) => JSON.parse(line));
+    expect(metrics).toHaveLength(sanctionsSourceIds().length);
+    expect(metrics.map(({ source, outcome }) => [source, outcome])).toEqual(
+      sanctionsSourceIds().map((source) => [source, "incomplete"]),
+    );
+    expect(JSON.stringify(metrics)).not.toContain("Synthetic Company");
+    expect(reports).toEqual([]);
+  } finally {
+    resetMetricLineSinkForTesting();
   }
-  expect(reports).toEqual([]);
 });
 
 test("freshness read fallback observes its cause before answering all lists unavailable", async () => {
@@ -1655,7 +1705,7 @@ test("freshness read fallback observes its cause before answering all lists unav
   ).toBe(true);
 });
 
-test("work exhaustion returns an incomplete screened result without reporting a load failure", async () => {
+test("work exhaustion reports its list and returns an incomplete screened result", async () => {
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const healthy = createSanctionsIndexCache();
   const result = await screenSanctionsSubject({
@@ -1678,10 +1728,23 @@ test("work exhaustion returns an incomplete screened result without reporting a 
         }
         const index = {
           ...loaded.value,
-          identifierEntries: new Map([
-            ["12345", Array.from({ length: MAX_SCREENING_WORK + 1 }, () => 0)],
-          ]),
-        };
+          names: {
+            ...loaded.value.names,
+            entities: {
+              nativeBytes: loaded.value.names.entities.nativeBytes,
+              postingCount: loaded.value.names.entities.postingCount,
+              toBytes: () => loaded.value.names.entities.toBytes(),
+              search: (query, params) => {
+                const exhausted = loaded.value.names.entities.search(query, {
+                  ...params,
+                  maxCost: 0,
+                });
+                expect(exhausted.exhausted).toBe(true);
+                return exhausted;
+              },
+            },
+          },
+        } satisfies ScreeningIndex;
         const reached = screen(
           index,
           {
@@ -1709,7 +1772,9 @@ test("work exhaustion returns an incomplete screened result without reporting a 
   expect(eu.publishedAt).not.toBeNull();
   expect(eu.verifiedAt).not.toBeNull();
   expect(result.unwrap().status).toBe("incomplete");
-  expect(reports).toEqual([]);
+  expect(reports).toEqual([
+    { stage: "list-screening", reason: "work-limit", source: "eu" },
+  ]);
 });
 
 test("public matcher work exhaustion returns incomplete without pool failure or warmup", async () => {
@@ -1764,7 +1829,13 @@ test("public matcher work exhaustion returns incomplete without pool failure or 
         truncated: true,
       });
     }
-    expect(reports).toEqual([]);
+    expect(reports).toEqual(
+      sanctionsSourceIds().map((source) => ({
+        stage: "list-screening",
+        reason: "work-limit",
+        source,
+      })),
+    );
     expect(poolReports).toEqual([]);
     expect(leases).toBe(1);
   } finally {
@@ -1926,21 +1997,33 @@ test.each(Object.values(boundaryFaults))(
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
-      const expectedCaptures = [
+      const anticipated = [
         "deadline",
         "closed",
         "admission",
         "work-limit",
-      ].some((anticipated) => anticipated === fault)
-        ? 0
-        : 1;
+      ].some((failureCause) => failureCause === fault);
+      const expectedCaptures = anticipated ? 0 : 1;
       expect(analytics.exceptions()).toHaveLength(expectedCaptures);
       expect(logs.at("ERROR")).toHaveLength(expectedCaptures);
       const boundary = logs.records.filter(
         ({ message }) => message === "sanctions.screening_failed",
       );
       if (fault === "work-limit") {
-        expect(boundary).toHaveLength(0);
+        expect(boundary).toHaveLength(sanctionsSourceIds().length);
+        expect(
+          boundary.map(({ attributes }) => [
+            attributes?.["stage"],
+            attributes?.["phase"],
+            attributes?.["source"],
+          ]),
+        ).toEqual(
+          sanctionsSourceIds().map((source) => [
+            "list-screening",
+            "work-limit",
+            source,
+          ]),
+        );
         expect(
           result.lists.every(({ status }) => status === "incomplete"),
         ).toBe(true);

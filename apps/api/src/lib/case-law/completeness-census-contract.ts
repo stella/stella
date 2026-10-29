@@ -1,6 +1,4 @@
-import { Type, type Static } from "@sinclair/typebox";
 import { panic } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -8,10 +6,7 @@ import {
   CENSUS_OUTCOMES,
   CENSUS_SCOPE_STATUSES,
 } from "@/api/lib/case-law/completeness-census-values";
-import {
-  boundedString,
-  nullableBoundedString,
-} from "@/api/lib/search/response-text-bounds";
+import { boundedString } from "@/api/lib/search/response-text-bounds";
 
 export const CENSUS_VERDICTS = [
   "complete",
@@ -21,58 +16,103 @@ export const CENSUS_VERDICTS = [
 export const CENSUS_WORST_SLICES_LIMIT = 10;
 export const CENSUS_YEAR_SUMMARIES_LIMIT = 300;
 
-const censusSliceSchema = t.Object(
-  {
-    slice: boundedString(256),
-    year: t.Union([Type.Integer(), t.Null()]),
-    outcome: t.UnionEnum(CENSUS_OUTCOMES),
-    publisher: t.Union([Type.Integer({ minimum: 0 }), t.Null()]),
-    stored: Type.Integer({ minimum: 0 }),
-    withText: Type.Integer({ minimum: 0 }),
-    observedAt: boundedString(128),
-    evidenceRef: boundedString(8192),
-  },
-  { additionalProperties: false },
-);
-export type CensusSlice = Static<typeof censusSliceSchema>;
+const integer = v.pipe(v.number(), v.integer());
+const nonNegativeInteger = v.pipe(integer, v.minValue(0));
+const createCensusSliceSchema = <TText extends v.GenericSchema<string, string>>(
+  text: (maxBytes: number) => TText,
+) =>
+  v.strictObject({
+    slice: text(256),
+    year: v.nullable(integer),
+    outcome: v.picklist(CENSUS_OUTCOMES),
+    publisher: v.nullable(nonNegativeInteger),
+    stored: nonNegativeInteger,
+    withText: nonNegativeInteger,
+    observedAt: text(128),
+    evidenceRef: text(8192),
+  });
+const censusSliceSchema = createCensusSliceSchema(boundedString);
+export type CensusSlice = v.InferOutput<typeof censusSliceSchema>;
 
-export const sourceCensusSchema = t.Object(
-  {
-    aggregateUnit: t.Literal(CENSUS_AGGREGATE_UNIT, {
-      description:
-        "Source and year totals count entries across slices, not distinct decisions; one decision can belong to several slices.",
-    }),
-    verdict: t.UnionEnum(CENSUS_VERDICTS),
-    scopeStatus: t.UnionEnum(CENSUS_SCOPE_STATUSES),
-    outcome: t.UnionEnum(CENSUS_OUTCOMES),
-    evidenceRef: boundedString(8192),
-    measuredSlices: Type.Integer({ minimum: 0 }),
-    expectedSlices: t.Union([Type.Integer({ minimum: 1 }), t.Null()]),
-    shortSlices: Type.Integer({ minimum: 0 }),
-    publisher: t.Union([Type.Integer({ minimum: 0 }), t.Null()]),
-    stored: Type.Integer({ minimum: 0 }),
-    withText: Type.Integer({ minimum: 0 }),
-    observedAt: nullableBoundedString(128),
-    years: t.Array(
-      t.Object(
-        {
-          year: Type.Integer(),
-          slices: Type.Integer(),
-          publisher: Type.Integer(),
-          stored: Type.Integer(),
-          withText: Type.Integer(),
-        },
-        { additionalProperties: false },
+const createSourceCensusSchema = <
+  TText extends v.GenericSchema<string, string>,
+>(
+  text: (maxBytes: number) => TText,
+) =>
+  v.strictObject({
+    aggregateUnit: v.literal(CENSUS_AGGREGATE_UNIT),
+    verdict: v.picklist(CENSUS_VERDICTS),
+    scopeStatus: v.picklist(CENSUS_SCOPE_STATUSES),
+    outcome: v.picklist(CENSUS_OUTCOMES),
+    evidenceRef: text(8192),
+    measuredSlices: nonNegativeInteger,
+    expectedSlices: v.nullable(v.pipe(integer, v.minValue(1))),
+    shortSlices: nonNegativeInteger,
+    publisher: v.nullable(nonNegativeInteger),
+    stored: nonNegativeInteger,
+    withText: nonNegativeInteger,
+    observedAt: v.nullable(text(128)),
+    years: v.pipe(
+      v.array(
+        v.strictObject({
+          year: integer,
+          slices: integer,
+          publisher: integer,
+          stored: integer,
+          withText: integer,
+        }),
       ),
-      { maxItems: CENSUS_YEAR_SUMMARIES_LIMIT },
+      v.maxLength(CENSUS_YEAR_SUMMARIES_LIMIT),
     ),
-    worstSlices: t.Array(censusSliceSchema, {
-      maxItems: CENSUS_WORST_SLICES_LIMIT,
+    worstSlices: v.pipe(
+      v.array(createCensusSliceSchema(text)),
+      v.maxLength(CENSUS_WORST_SLICES_LIMIT),
+    ),
+  });
+export const sourceCensusSchema = createSourceCensusSchema(boundedString);
+export type SourceCensus = v.InferOutput<typeof sourceCensusSchema>;
+
+/** Publisher observations supplement the independent reconciled-slice ledger. */
+export const createPublisherCensusSchema = <
+  TText extends v.GenericSchema<string, string>,
+>(
+  text: (maxBytes: number) => TText,
+) =>
+  v.union([
+    v.strictObject({
+      type: v.literal("unknown"),
+      measurement: createSourceCensusSchema(text),
     }),
-  },
-  { additionalProperties: false },
-);
-export type SourceCensus = Static<typeof sourceCensusSchema>;
+    v.strictObject({
+      type: v.literal("none-recorded"),
+      measurement: createSourceCensusSchema(text),
+    }),
+    v.strictObject({
+      type: v.literal("known"),
+      measurement: createSourceCensusSchema(text),
+    }),
+  ]);
+export const publisherCensusSchema = createPublisherCensusSchema(boundedString);
+export type PublisherCensus = v.InferOutput<typeof publisherCensusSchema>;
+
+export const publisherCensusOf = (
+  measurement: SourceCensus,
+): PublisherCensus => {
+  if (measurement.shortSlices > 0) {
+    return { type: "known", measurement };
+  }
+  switch (measurement.verdict) {
+    case "complete":
+      return { type: "none-recorded", measurement };
+    case "unmeasured":
+      return { type: "unknown", measurement };
+    case "incomplete":
+      return panic("Incomplete publisher census has no short slices");
+    default:
+      measurement.verdict satisfies never;
+      return panic("Unknown publisher census verdict");
+  }
+};
 
 type MeasureCensusCountsOptions = {
   listed: number;
@@ -102,43 +142,6 @@ export const measureCensusCounts = ({
     enumeratedCount: listed,
   } as const;
 };
-
-// Checked against the public contract at every producer and projection call site.
-export const sourceCensusProjection = v.strictObject({
-  aggregateUnit: v.literal(CENSUS_AGGREGATE_UNIT),
-  verdict: v.picklist(CENSUS_VERDICTS),
-  scopeStatus: v.picklist(CENSUS_SCOPE_STATUSES),
-  outcome: v.picklist(CENSUS_OUTCOMES),
-  evidenceRef: v.string(),
-  measuredSlices: v.number(),
-  expectedSlices: v.nullable(v.number()),
-  shortSlices: v.number(),
-  publisher: v.nullable(v.number()),
-  stored: v.number(),
-  withText: v.number(),
-  observedAt: v.nullable(v.string()),
-  years: v.array(
-    v.strictObject({
-      year: v.number(),
-      slices: v.number(),
-      publisher: v.number(),
-      stored: v.number(),
-      withText: v.number(),
-    }),
-  ),
-  worstSlices: v.array(
-    v.strictObject({
-      slice: v.string(),
-      year: v.nullable(v.number()),
-      outcome: v.picklist(CENSUS_OUTCOMES),
-      publisher: v.nullable(v.number()),
-      stored: v.number(),
-      withText: v.number(),
-      observedAt: v.string(),
-      evidenceRef: v.string(),
-    }),
-  ),
-}) satisfies v.GenericSchema<SourceCensus>;
 
 type CensusVerdictOptions = {
   slices: readonly CensusSlice[];

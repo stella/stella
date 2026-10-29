@@ -18,6 +18,7 @@ import {
   FLOW_RUN_QUEUE_NAME,
   type FlowStepJobData,
 } from "@/api/lib/flows/flow-run-queue";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
@@ -161,10 +162,13 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
 
     failFlowRunFromWorker(job.data, error, { database: db }).catch(
       (finalizeError: unknown) => {
-        captureError(finalizeError, {
-          runId: job.data.runId,
-          stepIndex: String(job.data.stepIndex),
-        });
+        captureError(
+          finalizeError,
+          handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
+            runId: job.data.runId,
+            stepIndex: String(job.data.stepIndex),
+          }),
+        );
       },
     );
   });
@@ -187,7 +191,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
   reconcileOrphanedFlowRuns({}, { database: db }).catch((error: unknown) => {
-    captureError(error);
+    captureError(error, handlerErrorContext("flows.initFlowRunWorker"));
     logger.error("flow.reconcile_failed", errorSystemFields(error));
   });
 

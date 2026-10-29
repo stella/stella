@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import type { LawHistoryCountry } from "@/features/law-search-history/law-search-history-query";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
@@ -32,6 +33,7 @@ const queryImportBatchSchema = v.object({
 });
 
 const usage = {
+  country: "CZE" as const,
   firstUsedAt: "2026-01-01T12:00:00Z",
   lastUsedAt: "2026-01-02T12:00:00Z",
   useCount: 1,
@@ -86,7 +88,7 @@ const seed = [
     kind: "statute",
     id: toSafeId<"searchHistoryEntry">("history-statute"),
     documentId: "statute-1",
-    title: "Act",
+    title: `Zákon č. 172/2026 Sb. · ${"kterým se mění zákon ".repeat(40)}`,
     path: "/law/cz/statutes/statute-1",
     documentIdentity: { kind: "statute", number: "172", year: "2026" },
   },
@@ -203,6 +205,16 @@ test("server recent rows render known court chips, unknown decision icons and st
   expect(identity?.textContent).toContain("172/26");
   expect(identity?.textContent).toContain("172/2026");
   expect(statute.querySelector("svg")).toBeNull();
+  const statuteTitle = screen.getByText(/Zákon č. 172\/2026 Sb\./u);
+  for (
+    let element: HTMLElement | null = statuteTitle;
+    element !== null && element !== statute;
+    element = element.parentElement
+  ) {
+    expect(element.className).not.toMatch(
+      /truncate|line-clamp|overflow-hidden/u,
+    );
+  }
 });
 
 test("server recents filter, reopen queries and delete their server entry id", async () => {
@@ -248,6 +260,51 @@ test("recent controls render in Arabic with the same court identity", async () =
       .getByRole("link", { name: /23 Cdo 1001/u })
       .querySelector('[data-slot="court-badge"]')?.textContent,
   ).toBe("NS");
+});
+
+test("recents stay a placeholder until the session says who is visiting", async () => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  // The session read is held, as it is through the server render, until the
+  // test answers it: nobody is signed in.
+  const session = Promise.withResolvers<Response>();
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(async () => session.promise, {
+      preconnect: () => undefined,
+    }),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  try {
+    await act(async () => {
+      render(
+        <QueryClientProvider client={client}>
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <LawRecent country="CZE" onSearch={() => undefined} />
+            </FormattingProvider>
+          </IntlProvider>
+        </QueryClientProvider>,
+      );
+    });
+    expect(
+      screen.getByRole("status", { name: messages.common.loading }),
+    ).toBeTruthy();
+    expect(screen.queryByText(messages.lawHome.noRecent)).toBeNull();
+    expect(screen.queryByText(messages.common.loading)).toBeNull();
+
+    await act(async () => {
+      session.resolve(Response.json(null));
+    });
+    await waitFor(() =>
+      expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy(),
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+  } finally {
+    client.clear();
+    transport.mockRestore();
+  }
 });
 
 test("signed-in recents import local data once and always display server data", async () => {
@@ -315,7 +372,7 @@ test("signed-in recents import local data once and always display server data", 
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent country="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,
@@ -446,17 +503,19 @@ const mountServerHistory = async (
       { preconnect: () => undefined },
     ),
   );
+  const page = (country: LawHistoryCountry) => (
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <LawRecent country={country} onSearch={() => undefined} />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>
+  );
+  let rendered: ReturnType<typeof render> | undefined;
   try {
     await act(async () => {
-      render(
-        <QueryClientProvider client={client}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
-            </FormattingProvider>
-          </IntlProvider>
-        </QueryClientProvider>,
-      );
+      rendered = render(page("CZE"));
     });
   } catch (error) {
     await act(async () => cleanup());
@@ -467,6 +526,12 @@ const mountServerHistory = async (
   return {
     requests,
     client,
+    /** The country picker moving to another jurisdiction. */
+    setCountry: async (country: LawHistoryCountry) => {
+      await act(async () => {
+        rendered?.rerender(page(country));
+      });
+    },
     setScope: async ({
       userId,
       organizationId,
@@ -571,6 +636,76 @@ test("recents tabs fetch each kind beyond the newest twenty mixed entries", asyn
       ),
     ).toBe(true);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("recents list only the selected jurisdiction's searches and opened decisions", async () => {
+  const stored = [
+    ...seed,
+    {
+      ...seed[0],
+      country: "POL",
+      id: toSafeId<"searchHistoryEntry">("history-polish-search"),
+      query: "zadośćuczynienie",
+    },
+    {
+      ...seed[1],
+      country: "POL",
+      id: toSafeId<"searchHistoryEntry">("history-polish-decision"),
+      documentId: "decision-pl",
+      title: "II CSKP 61/24 · Sąd Najwyższy",
+      path: "/law/pol/cases/sad-najwyzszy/ii-cskp-61-24",
+      documentIdentity: {
+        kind: "decision",
+        courtAbbreviation: "SN",
+        courtTier: "supreme",
+      },
+    },
+  ];
+  const fixture = await mountServerHistory(({ url, method }) => {
+    if (method !== "GET" || !url.pathname.includes("search-history")) {
+      throw new TypeError("Expected a history list request");
+    }
+    const country = url.searchParams.get("country");
+    return Response.json({
+      scope: {
+        userId: "scoped-history-reader",
+        organizationId: "scoped-history-org-a",
+      },
+      items: stored.filter((entry) => entry.country === country),
+      nextCursor: null,
+      limit: 20,
+    });
+  });
+  try {
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /23 Cdo 1001/u })).toBeTruthy(),
+    );
+    expect(screen.getByRole("button", { name: /náhrada škody/u })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /II CSKP 61\/24/u })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /zadośćuczynienie/u }),
+    ).toBeNull();
+
+    await fixture.setCountry("POL");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: /II CSKP 61\/24/u }),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen.getByRole("button", { name: /zadośćuczynienie/u }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /23 Cdo 1001/u })).toBeNull();
+    expect(screen.queryByRole("button", { name: /náhrada škody/u })).toBeNull();
+    expect(
+      fixture.requests.map(({ url }) => url.searchParams.get("country")),
+    ).toEqual(expect.arrayContaining(["CZE", "POL"]));
+    expect(
+      fixture.requests.every(({ url }) => url.searchParams.has("country")),
+    ).toBe(true);
   } finally {
     await fixture.dispose();
   }
@@ -1318,7 +1453,7 @@ test(
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent country="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,

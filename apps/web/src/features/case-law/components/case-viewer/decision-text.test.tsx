@@ -409,10 +409,9 @@ const renderTopMatter = ({
   documentAst = ast,
   fields = {},
   notesByAnchorId,
-}: Partial<
-  Pick<TextDecision, "courtAbbreviation" | "courtTier" | "documentAst">
-> & {
+}: Partial<Pick<TextDecision, "courtAbbreviation" | "courtTier">> & {
   analysis?: DecisionAnalysis;
+  documentAst?: DocumentAst | null;
   fields?: TextFieldOverrides;
   notesByAnchorId?: ReadonlyMap<string, ReactNode>;
 } = {}): string =>
@@ -426,6 +425,8 @@ const renderTopMatter = ({
               analysis === undefined ? null : (
                 <AiHeadnotes
                   analysis={analysis}
+                  blocks={documentAst?.blocks ?? []}
+                  language="en"
                   onAnchorClick={() => undefined}
                 />
               )
@@ -625,13 +626,19 @@ const sectionMark = (markup: string, text: string): string => {
 // would also rank one author above the other.
 describe("a headnote the court wrote and one a model wrote", () => {
   const analysis = {
-    version: 3,
+    version: 4,
     generatedAt: "2026-02-01T00:00:00.000Z",
     model: "test-model",
     inputFingerprint: "fingerprint-1",
     tree: [],
-    holding: { anchors: [], language: "cs", text: "Model holding sentence." },
-    abstract: { language: "cs", text: "Model abstract sentence." },
+    holding: {
+      spans: [{ text: "Model holding sentence.", anchors: [] }],
+      language: "cs",
+    },
+    abstract: {
+      spans: [{ text: "Model abstract sentence.", anchors: [] }],
+      language: "cs",
+    },
     topics: [],
   } satisfies DecisionAnalysis;
   const courtHeadnote = "Publisher headnote sentence.";

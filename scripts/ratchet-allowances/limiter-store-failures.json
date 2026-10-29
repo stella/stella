@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "The RateLimitContext read and increment contract returns counters and exposes I/O failures through rejected promises. Its Redis owner rejects with LimiterStoreUnavailableError so the request boundary can render the shared retryable 503 response."
+}

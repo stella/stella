@@ -1,23 +1,29 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged } from "@oxlint/plugins";
 // Disallow user ID request schemas typed as raw strings.
-// User IDs are auth-provider strings, but handlers should still use the
-// branded `tUserId` schema at boundaries. That prevents ownership-like fields
-// from degrading back into arbitrary strings and makes follow-up membership
+// User IDs are auth-provider strings, but handlers should still read them
+// through the shared `userIdSchema` (or the branded `resourceIdSchema("user")`)
+// from `@/api/lib/custom-schema` at boundaries. That keeps one length bound and
+// one shape for every user reference, prevents ownership-like fields from
+// degrading back into arbitrary strings, and makes follow-up membership
 // validation explicit in handler code.
+//
+// A user ID field is a property named `userId`, ending in `UserId`
+// (`leadUserId`, `assigneeUserId`), or one of the contact owner fields. Its
+// value is reported when it contains an inline `v.string()` anywhere (bare,
+// wrapped in `v.optional`/`v.nullable`, or at the head of a `v.pipe`) and does
+// not reference `userIdSchema`.
 
-import { getCalleeName, getPropertyName } from "./utils.ts";
+import { getCalleeName, getPropertyName, isAstNode } from "./utils.ts";
 
-const USER_ID_SCHEMA_FIELDS = new Set([
-  "userId",
-  "originatingAttorneyId",
-  "responsibleAttorneyId",
-]);
+const USER_ID_FIELD = /^userId$|UserId$/u;
 
 const CONTACT_OWNER_FIELDS = new Set([
   "originatingAttorneyId",
   "responsibleAttorneyId",
 ]);
+
+const USER_ID_SCHEMA = "userIdSchema";
 
 const ORG_USER_VALIDATORS = new Set([
   "validateOrgUserId",
@@ -25,45 +31,61 @@ const ORG_USER_VALIDATORS = new Set([
   "lockOrgUserIdsForAssignment",
 ]);
 
-const containsSchemaIdentifier = (node, name) => {
-  if (!node) {
+const isUserIdField = (name: string): boolean =>
+  USER_ID_FIELD.test(name) || CONTACT_OWNER_FIELDS.has(name);
+
+const childExpressions = (node: unknown): unknown[] => {
+  if (!isAstNode(node)) {
+    return [];
+  }
+  switch (node.type) {
+    case "CallExpression":
+      return [
+        node.callee,
+        ...(Array.isArray(node.arguments) ? node.arguments : []),
+      ];
+    case "MemberExpression":
+      return [node.object, node.property];
+    case "ArrayExpression":
+      return Array.isArray(node.elements) ? node.elements : [];
+    case "SpreadElement":
+      return [node.argument];
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+    case "ParenthesizedExpression":
+      return [node.expression];
+    default:
+      return [];
+  }
+};
+
+const containsSchemaIdentifier = (node: unknown, name: string): boolean => {
+  if (!isAstNode(node)) {
     return false;
   }
   if (node.type === "Identifier") {
     return node.name === name;
   }
-  if (node.type === "CallExpression") {
-    return (
-      containsSchemaIdentifier(node.callee, name) ||
-      node.arguments.some((arg) => containsSchemaIdentifier(arg, name))
-    );
-  }
-  if (node.type === "MemberExpression") {
-    return (
-      containsSchemaIdentifier(node.object, name) ||
-      containsSchemaIdentifier(node.property, name)
-    );
-  }
-  if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
-    return containsSchemaIdentifier(node.expression, name);
-  }
-  return false;
+  return childExpressions(node).some((child) =>
+    containsSchemaIdentifier(child, name),
+  );
 };
 
-const containsRawStringSchema = (node) => {
-  if (!node) {
+const containsRawStringSchema = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
     return false;
   }
-  if (node.type === "CallExpression") {
-    if (getCalleeName(node.callee) === "t.String") {
-      return true;
-    }
-    return node.arguments.some(containsRawStringSchema);
+  if (
+    node.type === "CallExpression" &&
+    getCalleeName(node.callee) === "v.string"
+  ) {
+    return true;
   }
-  if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
-    return containsRawStringSchema(node.expression);
+  if (node.type === "MemberExpression") {
+    return false;
   }
-  return false;
+  return childExpressions(node).some(containsRawStringSchema);
 };
 
 export default eslintCompatPlugin({
@@ -74,38 +96,19 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawUserIdSchema:
-            "User ID schema field '{{name}}' must use tUserId, not t.String(). Brand user IDs at the handler boundary.",
+            "User ID schema field '{{name}}' must use userIdSchema (or " +
+            'resourceIdSchema("user")) from @/api/lib/custom-schema, not an ' +
+            "inline v.string(). Read user IDs through the shared schema at " +
+            "the handler boundary.",
           missingOrgUserValidation:
-            "Contact owner field '{{name}}' must be validated with validateOrgUserId(s) before it is written.",
+            "Contact owner field '{{name}}' must be validated with " +
+            "validateOrgUserId(s) or lockOrgUserIdsForAssignment before it " +
+            "is written.",
         },
       },
       createOnce(context) {
         let hasValidateOrgUserId = false;
         const ownerFieldNodes: { name: string; node: Ranged }[] = [];
-
-        const checkProperty = (node) => {
-          const name = getPropertyName(node.key);
-          if (!name || !USER_ID_SCHEMA_FIELDS.has(name)) {
-            return;
-          }
-
-          if (CONTACT_OWNER_FIELDS.has(name)) {
-            ownerFieldNodes.push({ node, name });
-          }
-
-          if (containsSchemaIdentifier(node.value, "tUserId")) {
-            return;
-          }
-          if (!containsRawStringSchema(node.value)) {
-            return;
-          }
-
-          context.report({
-            node,
-            messageId: "rawUserIdSchema",
-            data: { name },
-          });
-        };
 
         return {
           before() {
@@ -117,7 +120,29 @@ export default eslintCompatPlugin({
               hasValidateOrgUserId = true;
             }
           },
-          Property: checkProperty,
+          Property(node) {
+            const name = getPropertyName(node.key);
+            if (!name || !isUserIdField(name)) {
+              return;
+            }
+
+            if (CONTACT_OWNER_FIELDS.has(name)) {
+              ownerFieldNodes.push({ node, name });
+            }
+
+            if (containsSchemaIdentifier(node.value, USER_ID_SCHEMA)) {
+              return;
+            }
+            if (!containsRawStringSchema(node.value)) {
+              return;
+            }
+
+            context.report({
+              node,
+              messageId: "rawUserIdSchema",
+              data: { name },
+            });
+          },
           "Program:exit"() {
             if (hasValidateOrgUserId) {
               return;

@@ -2,10 +2,12 @@ import MentionExtension from "@tiptap/extension-mention";
 import { mergeAttributes, ReactNodeViewRenderer } from "@tiptap/react";
 
 import type {
+  BusinessRegistrySlug,
   ChatCorpusScope,
   EntityKind,
   ResourceRef,
 } from "@stll/api-contract";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { ChatMentionNode } from "@/components/chat-mention-node";
 
@@ -46,6 +48,18 @@ export type ChatMentionOption =
       category: "corpus";
       kind: "corpus";
       scope: ChatCorpusScope;
+    })
+  | (ChatMentionOptionBase & {
+      /** A business registry the turn is scoped to. */
+      category: "registry";
+      kind: "registry";
+      registry: BusinessRegistrySlug;
+    })
+  | (ChatMentionOptionBase & {
+      /** One of the user's MCP connectors the turn is scoped to. */
+      category: "connector";
+      kind: "connector";
+      connector: string;
     });
 
 export type ChatReferenceCategory = ChatMentionOption["category"];
@@ -129,11 +143,11 @@ export const selectChatSuggestionItems = ({
   query,
   searchedItems,
 }: SelectChatSuggestionItemsOptions): ChatMentionOption[] => {
-  const lower = query.toLowerCase();
-
-  const filteredLocalItems = lower
-    ? localItems.filter((item) => item.label.toLowerCase().includes(lower))
-    : localItems;
+  const filteredLocalItems = filterBySearchQuery({
+    items: localItems,
+    query,
+    fields: ({ label }) => [label],
+  });
   const all = [...filteredLocalItems, ...searchedItems];
 
   // Cap per category to keep the list balanced

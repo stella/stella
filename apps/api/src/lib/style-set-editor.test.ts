@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { paragraphNumberingReferenceId } from "@stll/docx-core/model";
 import {
@@ -9,10 +9,10 @@ import {
 } from "@stll/folio-core/server";
 
 import {
-  createStellaStyleEditorPreset,
   applyStyleSetEditorSettings,
-  readStyleSetEditorPreset,
+  createStellaStyleEditorPreset,
   createStyleSetEditorPreviewBuffer,
+  readStyleSetEditorPreset,
 } from "@/api/lib/style-set-editor";
 import {
   styleSetEditorSettingsSchema,
@@ -44,9 +44,9 @@ describe("style set visual editing", () => {
   test("accepts only font sizes representable as OOXML half-points", () => {
     const { settings } = createStellaStyleEditorPreset();
 
-    expect(Value.Check(styleSetEditorSettingsSchema, settings)).toBe(true);
+    expect(v.is(styleSetEditorSettingsSchema, settings)).toBe(true);
     expect(
-      Value.Check(styleSetEditorSettingsSchema, {
+      v.is(styleSetEditorSettingsSchema, {
         ...settings,
         body: { ...settings.body, fontSizePt: 10.25 },
       }),
@@ -57,21 +57,21 @@ describe("style set visual editing", () => {
     const { settings } = createStellaStyleEditorPreset();
 
     expect(
-      Value.Check(styleSetPreviewFromEditorSchema, {
+      v.is(styleSetPreviewFromEditorSchema, {
         type: "stella",
         settings,
         content: previewContent,
       }),
     ).toBe(true);
     expect(
-      Value.Check(styleSetPreviewFromEditorSchema, {
+      v.is(styleSetPreviewFromEditorSchema, {
         type: "saved",
         settings,
         content: previewContent,
       }),
     ).toBe(false);
     expect(
-      Value.Check(styleSetPreviewFromEditorSchema, {
+      v.is(styleSetPreviewFromEditorSchema, {
         type: "stella",
         settings,
         content: { ...previewContent, title: "x".repeat(2001) },
