@@ -276,11 +276,14 @@ function ContactImportStudio() {
 
     review.seed({
       taxIdScheme: state.mapping.taxIdScheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-      })),
+      rows: result.value.rows.map(
+        ({ contact, issues, rowNumber, warnings }) => ({
+          candidate: contact,
+          issues,
+          rowNumber,
+          warnings,
+        }),
+      ),
     });
     setState({
       status: "review",
@@ -778,13 +781,12 @@ const ReviewStep = ({
       </div>
       <ImportReviewSummary review={review} />
       <div className="space-y-3">
-        {review.rows.map((row, index) => (
+        {review.rows.map((row) => (
           <ImportCandidateCard
             fields={fields}
             key={row.id}
             onChange={(candidate) => review.updateRow(row.id, candidate)}
             onRemove={() => review.removeRow(row.id)}
-            ordinal={index + 1}
             row={row}
           />
         ))}

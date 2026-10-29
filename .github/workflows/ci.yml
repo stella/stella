@@ -136,6 +136,9 @@ jobs:
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_durations_hash: ${{ steps.postgres-test-durations.outputs.hash }}
+      # `i/n` matrix values sized from measured durations; n is this run's own.
+      postgres_shards: ${{ steps.postgres-shards.outputs.postgres_shards || '["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8"]' }}
+      postgres_shard_count: ${{ steps.postgres-shards.outputs.postgres_shard_count || '8' }}
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
@@ -1125,7 +1128,9 @@ jobs:
           COMPARISON_BASE: ${{ steps.changed-files.outputs.comparison_base }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
+            : > "$RUNNER_TEMP/api-test-files"
             {
               echo 'ci_tests_required=true'
               echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}'
@@ -1247,6 +1252,26 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
+      # The shard count follows the durations the shards verify: growth adds
+      # a shard, and a projection over budget at the maximum is a warning.
+      # Without the planner the maximum count stands in; time never fails.
+      - name: Plan Postgres test shards
+        id: postgres-shards
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && inputs.pr_depth_only != true
+          && steps.changed-files.outputs.postgres_suites_required == 'true'
+          && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on')
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-postgres-shard-plan.ts; then
+            echo '::warning::Postgres shard planning unavailable; using the maximum shard count.'
+            {
+              echo 'postgres_shards=["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8"]'
+              echo 'postgres_shard_count=8'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Select changed PR e2e shards
         id: e2e-pr-selection
         continue-on-error: true
@@ -1257,6 +1282,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
           changed_files=()
           if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
             while IFS= read -r -d '' file; do
@@ -1264,6 +1290,7 @@ jobs:
             done < "$RUNNER_TEMP/api-test-changed-paths"
           fi
           plan=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
+          printf '%s\n' "$plan" > "$RUNNER_TEMP/e2e-pr-selection.json"
           matrix=$(jq -c .matrix <<< "$plan")
           mode=$(jq -r .status <<< "$plan")
           specs=$(jq -c .specs <<< "$plan")
@@ -1281,20 +1308,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
           ROUTE_SMOKE_REQUIRED: ${{ steps.changed-files.outputs.route_smoke_required }}
-          SELECTED_MATRIX: ${{ steps.e2e-pr-selection.outputs.matrix }}
           SELECTED_MODE: ${{ steps.e2e-pr-selection.outputs.mode }}
-          SELECTED_SPECS: ${{ steps.e2e-pr-selection.outputs.specs }}
+          SELECTED_PLAN_PATH: ${{ runner.temp }}/e2e-pr-selection.json
           SELECTOR_OUTCOME: ${{ steps.e2e-pr-selection.outcome }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || -z "$SELECTED_MATRIX" ]]; then
+          if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || ! -s "$SELECTED_PLAN_PATH" ]]; then
             matrix=$(bun scripts/e2e-spec-shards-core.ts all)
             mode=full
             specs='[]'
           else
-            matrix=$SELECTED_MATRIX
+            matrix=$(jq -c .matrix "$SELECTED_PLAN_PATH")
             mode=$SELECTED_MODE
-            specs=$SELECTED_SPECS
+            specs=$(jq -c .specs "$SELECTED_PLAN_PATH")
           fi
           # route-smoke runs the same seeded network proof for affected merge
           # groups, so do not start a second production stack for that leg.
@@ -1333,7 +1359,7 @@ jobs:
           ARMED_PROOF_JOBS: ${{ steps.completed-depth.outputs.armed_proof_jobs || '[]' }}
           ARMED_JOB_SCOPES: ${{ steps.heavy-plan.outputs.armed_job_scopes || '{}' }}
           HEAVY_PROOF_JOBS: &armed_proof_jobs '["migration-upgrade-rehearsal","release-typecheck","web-image-smoke","mobile-build","landing-build","route-smoke","stack-redaction-browsers","e2e-vite-canary","marketing-screenshots","api-image-smoke","legal-atlas-image","desktop-windows-dry-run","windows-scripts","desktop-rust-tests"]'
-          CHANGED_SCOPE: ${{ toJSON(steps.changed-files.outputs) }}
+          CHANGED_SCOPE_PATH: ${{ runner.temp }}/changed-scope.json
           MERGE_GROUP_HEAVY_KEEP: '["migration-upgrade-rehearsal","e2e-report"]'
         run: |
           armed_delta=false
@@ -1350,10 +1376,10 @@ jobs:
                 # The exact bound source payloads must cover every suite this
                 # group now requires; missing planner inputs retain all suites.
                 if [[ "${ARMED_PROOF:-}" == complete ]] && jq -ne \
-                  --argjson scopes "$ARMED_JOB_SCOPES" --argjson plans "$CHANGED_SCOPE" --argjson eligible "$HEAVY_PROOF_JOBS" \
+                  --argjson scopes "$ARMED_JOB_SCOPES" --slurpfile plans "$CHANGED_SCOPE_PATH" --argjson eligible "$HEAVY_PROOF_JOBS" \
                   --argjson proven "$ARMED_PROOF_JOBS" --argjson keep "$MERGE_GROUP_HEAVY_KEEP" \
                   --arg marketing "${MARKETING_REQUIRED:-false}" '
-                    ($plans + {marketing_screenshots_required: $marketing}) as $planned
+                    ($plans[0] + {marketing_screenshots_required: $marketing}) as $planned
                     | ($scopes | type == "object" and length > 0)
                     and (($scopes | keys) == ($eligible | sort))
                     and all($scopes[]; if . == null then true
@@ -1385,7 +1411,7 @@ jobs:
           PACKAGE_CHECKS_REQUIRED: ${{ steps.changed-files.outputs.package_checks_required }}
           SELECTED_REQUIRED: ${{ steps.api-test-selection.outputs.ci_tests_required }}
           SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
-          SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
+          SELECTED_FILES_PATH: ${{ runner.temp }}/api-test-files
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
           SELECTED_SCOPE: ${{ steps.api-test-selection.outputs.test_scope }}
         run: |
@@ -1398,7 +1424,8 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             {
               echo 'api_test_files<<API_TEST_FILES_END'
-              printf '%s\n' "$SELECTED_FILES"
+              cat "$SELECTED_FILES_PATH"
+              printf '\n'
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
           # ci_tests_required is the one gate of ci-tests: without package
@@ -2208,6 +2235,15 @@ jobs:
           bun scripts/check-published-exports.ts packages/fetch
           bun scripts/check-published-exports.ts packages/scan-engine
 
+      - name: Rebuild every npm package to verify identical tarball bytes
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        timeout-minutes: 20
+        run: bash scripts/check-publish-reproducibility.sh
+
+      - name: npm release jobs match the package dependency graph
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/generate-npm-release-jobs.ts --check
+
       - name: Load merge base measurement
         timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2968,6 +3004,7 @@ jobs:
         run: nproc; free -g
 
       - name: Test API or rest
+        id: test-api-or-rest
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3008,6 +3045,8 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
+          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
@@ -3016,6 +3055,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed API or rest test output
+        if: failure() && steps.test-api-or-rest.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-${{ matrix.shard }}
+          path: ${{ steps.test-api-or-rest.outputs.output }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
@@ -3027,6 +3075,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test web
+        id: test-web
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3051,6 +3100,8 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
+          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
@@ -3059,6 +3110,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed web test output
+        if: failure() && steps.test-web.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-web
+          path: ${{ steps.test-web.outputs.output }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Repeat changed tests
         if: >-
@@ -3763,7 +3823,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # ci-plan sizes n from measured durations; each value is `i/n`, so
+        # every shard job name records the n its run planned.
+        shard: ${{ fromJSON(needs.ci-plan.outputs.postgres_shards) }}
     permissions:
       contents: read
       packages: read
@@ -3861,6 +3923,8 @@ jobs:
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/postgres.log" --frozen-lockfile --ignore-scripts --filter @stll/api --filter @stll/cli
         env:
           NPM_TOKEN: ""
+          STELLA_CI_INSTALL_RESTORE: uncached
+          STELLA_CI_INSTALL_KEY: filtered-install
 
       - name: Configure test Postgres parity
         run: |
@@ -3874,7 +3938,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: bun-install-${{ github.job }}-${{ matrix.shard }}
+          name: bun-install-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
@@ -3925,7 +3989,7 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
-          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/3
+          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -3954,7 +4018,7 @@ jobs:
         if: ${{ !cancelled() && steps.postgres-tests.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: postgres-test-timings-${{ matrix.shard }}
+          name: postgres-test-timings-${{ strategy.job-index }}
           path: ${{ runner.temp }}/postgres-test-timings/*.json
           retention-days: 1
           if-no-files-found: warn

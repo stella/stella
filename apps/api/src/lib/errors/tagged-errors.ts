@@ -432,6 +432,17 @@ export class StoredAstDegradedError extends TaggedError(
   degradations: readonly PersistedAstDegradation[];
 }> {}
 
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
+)<{
+  message: string;
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
+}> {}
+
 /** Validation/domain-layer errors: no valid inputs, invalid config. */
 export class WorkflowValidationError extends TaggedError(
   "WorkflowValidationError",
