@@ -100,9 +100,10 @@ const Textarea = ({
                 ? "field-sizing-content"
                 : "field-sizing-fixed resize-none",
               // One line is `1lh`; the block padding is added on top so the
-              // last allowed line is not cut.
+              // last allowed line is not cut. The floor height gives way, as
+              // `min-height` would otherwise win over a smaller cap.
               maxRows !== undefined &&
-                "max-h-[calc(var(--textarea-max-rows)*1lh+--spacing(3))]",
+                "max-h-[calc(var(--textarea-max-rows)*1lh+--spacing(3))] min-h-0 max-sm:min-h-0",
               counted && "pb-6",
             )}
             data-slot="textarea"
