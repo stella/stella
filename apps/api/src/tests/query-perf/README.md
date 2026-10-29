@@ -33,6 +33,14 @@ template; the fixture database is dropped after its clients close.
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
 
+- Global Case Law search (`case-law-search-fixture.ts`): 3,000 and 30,000
+  decisions with 200 fixed full-text matches and an 11-row page. Wide section
+  bodies exercise TOAST reads. The production statement must fit its buffer
+  budget at both sizes and preserve the same rows, fields and ordering as a
+  control that moves the page bound after enrichment. That control must exceed
+  the budget. Logs report both measurements and plans; the read cost must stay
+  stable as unrelated decisions grow.
+
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
 its budget, and the census-readiness revision checks must fail the scale rule.
