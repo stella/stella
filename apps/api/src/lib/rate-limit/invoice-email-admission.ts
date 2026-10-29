@@ -44,7 +44,9 @@ type EmailBudget = {
  */
 export const createInvoiceEmailAdmission =
   (context: Pick<RateLimitContext, "increment">) =>
-  async (options: InvoiceEmailAdmissionOptions) => {
+  async (
+    options: InvoiceEmailAdmissionOptions,
+  ): Promise<Result<void, HandlerError>> => {
     const budgets: EmailBudget[] = [
       {
         key: `invoice-email:user:${sha256Hex(options.userId)}`,

@@ -1186,12 +1186,12 @@ const lifecycleUpdateStatement = ({
     ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
     ${guard === undefined ? sql`` : sql`AND (${guard})`}`;
   if (capturePreviousStatus === "none") {
-    return sql`UPDATE ${table} SET ${sql.join(assignments, sql`, `)}
+    return sql`UPDATE ${table} SET ${sql.join([...assignments], sql`, `)}
       WHERE ${predicate}
       RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}`;
   }
   return sql`WITH transition_source AS MATERIALIZED (${lockedInvoiceTransitionSource(predicate)})
-    UPDATE ${table} SET ${sql.join(assignments, sql`, `)}
+    UPDATE ${table} SET ${sql.join([...assignments], sql`, `)}
     FROM transition_source
     WHERE ${identity.column} = transition_source.source_id
     RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)},

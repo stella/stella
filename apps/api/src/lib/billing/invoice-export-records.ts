@@ -263,7 +263,7 @@ type LoadedInvoice = Omit<AuthenticatedInvoice, "timeEntries" | "expenses"> & {
   expenses: readonly (DocumentSourceAmounts["expenses"][number] &
     Pick<
       AuthenticatedInvoice["expenses"][number],
-      "workspaceId" | "dateIncurred"
+      "workspaceId" | "dateIncurred" | "category"
     >)[];
 };
 type LoadedExport = Omit<AuthenticatedExport, "invoices" | "timekeepers"> & {
