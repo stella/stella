@@ -1,12 +1,14 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Úlohy",
+    "close": "Zavrieť",
+    "law": "Judikatúra",
     "matters": "Spisy",
-    "settings": "Nastavenia"
+    "more": "Ďalšie",
+    "settings": "Nastavenia",
+    "tasks": "Úlohy"
   },
   "chat": {
-    "description": "Majte rozpracovanú prácu poruke a pokračujte z akéhokoľvek zariadenia.",
     "emptyTitle": "Zatiaľ žiadne konverzácie",
     "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna.",
     "noMatchesTitle": "Žiadne zodpovedajúce konverzácie",
@@ -35,19 +37,62 @@
     "answerWorking": "Pracujem…",
     "answerStopped": "Zastavené.",
     "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
-    "answerFailed": "Odpoveď sa nepodarilo dokončiť."
+    "answerFailed": "Odpoveď sa nepodarilo dokončiť.",
+    "composerMenu": "Otvoriť ponuku príloh a nástrojov",
+    "pickTitle": "Vyberte konverzáciu",
+    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
   },
   "tasks": {
-    "description": "Pozrite sa, čo si vyžaduje pozornosť, bez otvárania celého pracovného priestoru.",
     "emptyTitle": "Žiadne otvorené úlohy",
-    "emptyDescription": "Tu sa zobrazí pridelená a nadchádzajúca práca."
+    "emptyDescription": "Tu sa zobrazia otvorené úlohy, ktoré vám boli pridelené.",
+    "loadFailed": "Vaše úlohy sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "newTask": "Nová úloha",
+    "add": "Pridať",
+    "name": "Názov úlohy",
+    "dueTitle": "Termín",
+    "matterTitle": "Spis",
+    "findMatter": "Nájsť spis",
+    "addFailed": "Úlohu sa nepodarilo pridať. Skúste to znova.",
+    "mattersFailed": "Vaše spisy sa nepodarilo načítať.",
+    "dueOn": "termín {day}",
+    "dueChoice": {
+      "none": "Bez termínu",
+      "today": "Dnes",
+      "tomorrow": "Zajtra",
+      "nextWeek": "O týždeň"
+    },
+    "due": {
+      "overdue": "Po termíne",
+      "today": "Dnes",
+      "tomorrow": "Zajtra",
+      "week": "Tento týždeň",
+      "later": "Neskôr",
+      "none": "Bez termínu"
+    },
+    "markDone": "Označiť ako hotové",
+    "reopen": "Znova otvoriť",
+    "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
+    "pickTitle": "Vyberte úlohu",
+    "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu.",
+    "openMatter": "Otvoriť spis"
   },
   "matters": {
-    "description": "Nájdite spis a rýchlo získajte potrebný kontext.",
     "emptyTitle": "Zatiaľ žiadne spisy",
     "emptyDescription": "Tu sa zobrazia vaše nedávne spisy.",
     "loadFailed": "Vaše spisy sa nepodarilo načítať.",
-    "retry": "Skúsiť znova"
+    "retry": "Skúsiť znova",
+    "groupBy": "Zoskupiť podľa",
+    "noGrouping": "Nezoskupovať",
+    "groupClient": "Klient",
+    "personal": "Osobný",
+    "newMatter": "Nový spis",
+    "create": "Vytvoriť",
+    "name": "Názov spisu",
+    "personalHint": "Spis vznikne ako osobný a uvidíte ho len vy. Klienta a členov pridáte na webe.",
+    "createFailed": "Spis sa nepodarilo vytvoriť. Skúste to znova.",
+    "pickTitle": "Vyberte spis",
+    "pickDescription": "Vyberte spis zo zoznamu a uvidíte jeho dokumenty a úlohy."
   },
   "matter": {
     "documents": "Dokumenty",
@@ -71,7 +116,10 @@
       "in_review": "Na kontrolu",
       "done": "Hotová",
       "cancelled": "Zrušená"
-    }
+    },
+    "add": "Pridať",
+    "scanDocument": "Naskenovať dokument",
+    "newTask": "Nová úloha"
   },
   "entity": {
     "type": "Typ",
@@ -80,11 +128,18 @@
     "loadFailed": "Položku sa nepodarilo načítať."
   },
   "signIn": {
-    "title": "Prihláste sa do aplikácie stella",
-    "description": "Zadajte adresu svojho servera stella. Prihlásenie potvrdíte v prehliadači.",
+    "beta": "Beta",
+    "headline": "Jasno v každom prípade.",
+    "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
+    "submit": "Prihlásiť sa",
+    "terms": "Pokračovaním súhlasíte s našimi <terms>zmluvnými podmienkami</terms>.",
+    "options": "Možnosti prihlásenia",
+    "serverTitle": "Server",
+    "serverDescription": "Aplikácia sa prihlasuje do stella. Iný server zadajte, len ak vaša organizácia prevádzkuje vlastný.",
+    "useStella": "Použiť stella",
+    "done": "Hotovo",
     "serverLabel": "Adresa servera",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Pokračovať",
     "sessionEnded": "Vaša relácia skončila. Prihláste sa znova.",
     "errors": {
       "address": "Zadajte adresu https, napríklad stella.example.com.",
@@ -97,5 +152,79 @@
     "accountTitle": "Účet",
     "server": "Server",
     "signOut": "Odhlásiť sa"
+  },
+  "header": {
+    "search": "Hľadať"
+  },
+  "law": {
+    "title": "Judikatúra",
+    "newest": "Najnovšie rozhodnutia",
+    "noResults": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá.",
+    "noResultsHint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
+    "unavailable": "Vyhľadávanie je dočasne nedostupné",
+    "retry": "Skúsiť znova",
+    "headnote": "Právna veta",
+    "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+    "openSource": "Otvoriť originál",
+    "loadFailed": "Judikatúru sa nepodarilo načítať.",
+    "share": "Zdieľať"
+  },
+  "more": {
+    "soon": "Čoskoro",
+    "timers": "Časovače",
+    "voiceInput": "Hlasové zadávanie"
+  },
+  "writes": {
+    "consentNeeded": "Aby aplikácia mohla robiť zmeny, stella potrebuje vaše povolenie. Prihláste sa znova a udeľte ho.",
+    "signInAgain": "Prihlásiť sa znova"
+  },
+  "timers": {
+    "title": "Časovače",
+    "start": "Spustiť",
+    "startTimer": "Spustiť časovač",
+    "newTimer": "Nový časovač",
+    "description": "Na čom pracujete?",
+    "matterTitle": "Spis",
+    "noMatter": "Bez spisu",
+    "noDescription": "Bez popisu",
+    "running": "Beží",
+    "paused": "Pozastavené",
+    "pause": "Pozastaviť",
+    "resume": "Pokračovať",
+    "save": "Uložiť",
+    "discard": "Zahodiť",
+    "emptyTitle": "Žiadne časovače",
+    "emptyDescription": "Spustite časovač tlačidlom + a po dokončení ho uložte ako výkaz času.",
+    "loadFailed": "Vaše časovače sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "unavailable": "Vaša organizácia nemá zapnuté vykazovanie času.",
+    "startFailed": "Časovač sa nepodarilo spustiť. Skúste to znova.",
+    "changeFailed": "Časovač sa nepodarilo zmeniť. Skúste to znova."
+  },
+  "scan": {
+    "title": "Naskenovať dokument",
+    "upload": "Nahrať",
+    "name": "Názov dokumentu",
+    "defaultName": "Sken {day}",
+    "pages": "{count, plural, one {# strana} few {# strany} other {# strán}}",
+    "matterTitle": "Spis",
+    "uploadFailed": "Sken sa nepodarilo nahrať. Skúste to znova.",
+    "failedTitle": "Skenovanie zlyhalo",
+    "failed": "Fotoaparát sken neuložil. Skúste to znova."
+  },
+  "shortcuts": {
+    "search": "Hľadať",
+    "palette": "Paleta príkazov",
+    "next": "Ďalší výsledok",
+    "previous": "Predchádzajúci výsledok",
+    "toggleList": "Zobraziť alebo skryť zoznam"
+  },
+  "palette": {
+    "placeholder": "Hľadajte spisy a konverzácie alebo spustite príkaz",
+    "noResults": "Nič nezodpovedá „{query}“"
+  },
+  "pane": {
+    "showList": "Zobraziť zoznam",
+    "hideList": "Skryť zoznam"
   }
 }

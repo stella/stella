@@ -8,6 +8,7 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { REWRITTEN_MIGRATION_INDEXES } from "../lib/db/migration-history";
+import { ACCOUNT_AUDIT_CONSTRAINT_VALIDATION } from "./account-audit-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
@@ -618,6 +619,30 @@ describe("online migrations", () => {
       expect(harness.released()).toBe(true);
     },
   );
+
+  test("validates the account audit event check once and rejects incomplete startup", async () => {
+    const { name } = ACCOUNT_AUDIT_CONSTRAINT_VALIDATION;
+    const harness = createHarness({ unvalidatedConstraints: [name] });
+    const rejection = await reportOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: `Online repair ${name} introduced by ${ACCOUNT_AUDIT_CONSTRAINT_VALIDATION.introducedBy} is not complete: constraint ${name} is not validated`,
+    });
+    const beforeRepair = harness.statements.length;
+    await runOnlineMigrations(harness.pool);
+    await reportOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool);
+    expect(
+      harness.statements
+        .slice(beforeRepair)
+        .filter((statement) =>
+          statement.includes(`VALIDATE CONSTRAINT "${name}"`),
+        ),
+    ).toHaveLength(1);
+    expect(harness.released()).toBe(true);
+  });
 
   test("every validation a registered repair runs is declared, and each runs once", async () => {
     const declared = ONLINE_CONSTRAINT_VALIDATIONS.map(
