@@ -64,8 +64,8 @@ const redirectDestination = (routePath: string) => {
   if (routePath.startsWith("/_protected/workspaces/")) {
     return "/workspaces/$workspaceId";
   }
-  if (routePath.startsWith("/_protected/admin/")) {
-    return "/admin/members";
+  if (routePath.startsWith("/_protected/settings/organization/")) {
+    return "/settings/organization/members";
   }
   return "/workspaces";
 };
@@ -273,7 +273,7 @@ describe("organization settings admission request wave", () => {
             activeOrganizationId: CALLER.organizationId,
           },
         },
-        location: { pathname: "/admin/members" },
+        location: { pathname: "/settings/organization/members" },
         matches: [{ staticData: {} }],
       });
       expect(

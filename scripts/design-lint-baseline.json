@@ -308,7 +308,7 @@
     "apps/web/src/features/knowledge/views/tools/tools-catalogue-view.tsx": 1,
     "apps/web/src/features/style-sets/style-set-editor-controls.tsx": 1,
     "apps/web/src/features/style-sets/style-set-picker-dialog.tsx": 1,
-    "apps/web/src/routes/_protected.admin/audit-logs.tsx": 1,
+    "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx": 1,
     "apps/web/src/routes/_protected.chat/-components/chat-turn-navigator.tsx": 1,
     "apps/web/src/routes/_protected.contacts/$contactId.tsx": 2,
     "apps/web/src/routes/_protected.contacts/import.tsx": 1,

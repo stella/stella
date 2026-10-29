@@ -85,9 +85,9 @@ afterAll(async () => {
 
 describe("organization admin admission", () => {
   test("the admission matrix contains the root and every page", () => {
-    expect(adminPaths).toContain("/admin");
-    expect(adminPaths).toContain("/admin/members");
-    expect(adminPaths).toContain("/admin/time-policy");
+    expect(adminPaths).toContain("/settings/organization");
+    expect(adminPaths).toContain("/settings/organization/members");
+    expect(adminPaths).toContain("/settings/organization/time-policy");
     expect(adminPaths.length).toBeGreaterThan(1);
   });
 

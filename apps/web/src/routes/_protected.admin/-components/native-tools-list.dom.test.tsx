@@ -5,7 +5,9 @@ import messages from "@/i18n/langs/en.json" with { type: "json" };
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/admin/tools" });
+GlobalRegistrator.register({
+  url: "http://localhost:3000/settings/organization/tools",
+});
 const originalFetch = globalThis.fetch;
 const { cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");

@@ -5,7 +5,9 @@ import type { Role } from "@/lib/auth-client";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
+GlobalRegistrator.register({
+  url: "http://localhost:3000/settings/organization/general",
+});
 // Beta availability otherwise reads the request host through the server
 // runtime; the deployment switch decides it here.
 Object.assign(import.meta.env, {
@@ -102,7 +104,7 @@ const renderShell = async (locale: "en" | "ar", role: Role) => {
   });
   const appRouter = router.createRouter({
     history: router.createMemoryHistory({
-      initialEntries: ["/admin/general"],
+      initialEntries: ["/settings/organization/general"],
     }),
     isServer: false,
     routeTree: rootRoute.addChildren([pageRoute]),
@@ -130,31 +132,33 @@ test.each(
   "account and organization share one translated navigation in %s",
   async (locale) => {
     const { view, messages } = await renderShell(locale, "owner");
-    await waitFor(() => expect(hrefs(view)).toContain("/admin/time-policy"));
+    await waitFor(() =>
+      expect(hrefs(view)).toContain("/settings/organization/time-policy"),
+    );
     expect(hrefs(view)).toEqual([
       "/settings/account/profile",
       "/settings/account/desktop",
       "/settings/account/connections",
       "/settings/account/beta",
-      "/admin/general",
-      "/admin/members",
-      "/admin/usage",
-      "/admin/audit-logs",
-      "/admin/ai",
-      "/admin/anonymization",
-      "/admin/tools",
-      "/admin/matter-numbering",
-      "/admin/document-types",
-      "/admin/time-policy",
-      "/admin/number-series",
-      "/admin/vat-rates",
-      "/admin/billing",
+      "/settings/organization/general",
+      "/settings/organization/members",
+      "/settings/organization/usage",
+      "/settings/organization/audit-logs",
+      "/settings/organization/ai",
+      "/settings/organization/anonymization",
+      "/settings/organization/tools",
+      "/settings/organization/matter-numbering",
+      "/settings/organization/document-types",
+      "/settings/organization/time-policy",
+      "/settings/organization/number-series",
+      "/settings/organization/vat-rates",
+      "/settings/organization/billing",
     ]);
     expect(
       view
         .getByRole("link", { name: messages.admin.modelsAndProviders })
         .getAttribute("href"),
-    ).toBe("/admin/ai");
+    ).toBe("/settings/organization/ai");
     expect(
       view
         .getByRole("link", { name: messages.admin.general })
@@ -178,12 +182,16 @@ test("members without management access see only their account", async () => {
   await waitFor(() =>
     expect(hrefs(view)).toContain("/settings/account/profile"),
   );
-  expect(hrefs(view).filter((href) => href?.startsWith("/admin"))).toEqual([]);
+  expect(
+    hrefs(view).filter((href) => href?.startsWith("/settings/organization")),
+  ).toEqual([]);
 });
 
 test("usage settings stay hidden when the usage feature is disabled", async () => {
   Reflect.set(env, "VITE_FEATURE_USAGE", false);
   const { view } = await renderShell("en", "owner");
-  await waitFor(() => expect(hrefs(view)).toContain("/admin/general"));
-  expect(hrefs(view)).not.toContain("/admin/usage");
+  await waitFor(() =>
+    expect(hrefs(view)).toContain("/settings/organization/general"),
+  );
+  expect(hrefs(view)).not.toContain("/settings/organization/usage");
 });

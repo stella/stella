@@ -146,7 +146,10 @@ export const OrganizationDangerZone = ({
                 <div role="alert" className="flex flex-col gap-2 text-sm">
                   <p>{refusalMessage}</p>
                   {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
-                    <a className="underline" href="/admin/usage">
+                    <a
+                      className="underline"
+                      href="/settings/organization/usage"
+                    >
                       {t("admin.planAndUsage")}
                     </a>
                   )}
@@ -168,7 +171,10 @@ export const OrganizationDangerZone = ({
                 <span className="mt-2 block" role="alert">
                   {refusalMessage}
                   {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
-                    <a className="ms-2 underline" href="/admin/usage">
+                    <a
+                      className="ms-2 underline"
+                      href="/settings/organization/usage"
+                    >
                       {t("admin.planAndUsage")}
                     </a>
                   )}

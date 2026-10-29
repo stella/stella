@@ -23,7 +23,7 @@ type RouteExemption = {
 const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
   {
     "/": { reason: "The entry route redirects into the appropriate shell." },
-    "/_protected/admin/": {
+    "/_protected/settings/organization/": {
       reason: "The administration layout owns the redirect title.",
       fields: ["title"],
     },
@@ -43,7 +43,9 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
       reason: "The matter layout owns the selected view title.",
       fields: ["title"],
     },
-    "/_protected/admin/catalogue": { reason: "Redirects to Knowledge tools." },
+    "/_protected/settings/organization/catalogue": {
+      reason: "Redirects to Knowledge tools.",
+    },
     "/_protected/verify/$code": {
       reason: "Completes verification and redirects.",
     },

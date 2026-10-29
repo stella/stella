@@ -31,7 +31,6 @@
     "organizationId": "ID de l’organisation",
     "organizationLeft": "Vous avez quitté l’organisation.",
     "planAndUsage": "Offre et utilisation",
-    "title": "Administration de l’organisation",
     "toolsDescription": "Activez ou désactivez les outils intégrés pour toutes les personnes de cette organisation."
   },
   "agentClaim": {

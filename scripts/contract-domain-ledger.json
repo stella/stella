@@ -1692,10 +1692,6 @@
     "reason": "Existing usagePoliciesKeys domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.admin/members.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
-    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx::ContactCommunicationEditor::maxLength:7::1",
     "reason": "Existing ContactCommunicationEditor UI validation or presentation bound; contract migration pending."
   },
@@ -1798,6 +1794,10 @@
   {
     "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:6::1",
     "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization.members.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
+    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.logic.test.ts::triggerTypes::domain:[\"direct\",\"user_dispatch\",\"agent_delegation\",\"schedule\",\"webhook\",\"credential\",\"system\"]::1",

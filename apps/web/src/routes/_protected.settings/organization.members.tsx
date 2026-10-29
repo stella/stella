@@ -1,0 +1,640 @@
+import { useState } from "react";
+
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { compareByLocale } from "@stll/collation";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Frame } from "@stll/ui/frame";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EllipsisVerticalIcon,
+  SearchIcon,
+} from "@stll/ui/icons";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/input-group";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Skeleton } from "@stll/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
+
+import { SettingsPageHeader } from "@/components/settings-page-header";
+import Tooltip from "@/components/tooltip";
+import { UserIdentity } from "@/components/user-avatar";
+import { useFormattingLocale } from "@/i18n/formatting-context";
+import { roleOptions } from "@/lib/auth-queries";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  useCancelInvitation,
+  useInviteMember,
+  useRemoveMember,
+} from "@/lib/organization/mutations";
+import { organizationOptions } from "@/lib/organization/queries";
+import { formatMemberDate } from "@/lib/organization/utils";
+import { pageTitle } from "@/lib/page-title";
+import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/routes/-route-presentation";
+import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
+import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
+import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
+
+type SortKey = "name" | "role" | "joined";
+type SortDir = "asc" | "desc";
+type Sort = { key: SortKey; dir: SortDir };
+
+const MEMBERS_SKELETON_ROW_COUNT = 8;
+const INVITATIONS_SKELETON_ROW_COUNT = 3;
+
+// Stable keys so loading rows never fall back to array-index keys.
+const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
+
+// The members and invitations tables are hand-rolled @stll/ui markup (no
+// TanStack), so a single column descriptor array per table is the source of
+// truth: both the real header and the loading skeleton map over it, so they
+// cannot drift. `sortKey` distinguishes sortable heads from inert ones (the
+// trailing actions column has no header). `skeleton` shapes the placeholder.
+type MemberSkeletonShape = "identity" | "control" | "text" | "none";
+
+// Secondary columns give way on phones, so the columns people act on fit
+// without scrolling sideways.
+const SECONDARY_COLUMN_CLASS = "hidden sm:table-cell";
+
+type MemberColumn = {
+  id: "user" | "role" | "joined" | "actions";
+  sortKey: SortKey | null;
+  label: "common.user" | "common.role" | "organization.members.joined" | null;
+  skeleton: MemberSkeletonShape;
+  secondary?: true;
+};
+
+const MEMBER_COLUMNS: readonly MemberColumn[] = [
+  { id: "user", sortKey: "name", label: "common.user", skeleton: "identity" },
+  { id: "role", sortKey: "role", label: "common.role", skeleton: "control" },
+  {
+    id: "joined",
+    sortKey: "joined",
+    label: "organization.members.joined",
+    skeleton: "text",
+    secondary: true,
+  },
+  { id: "actions", sortKey: null, label: null, skeleton: "none" },
+];
+
+const isSecondaryMemberColumn = (id: MemberColumn["id"]) =>
+  MEMBER_COLUMNS.some((column) => column.id === id && column.secondary);
+
+type InvitationColumn = {
+  id: "email" | "role" | "status" | "invited" | "expires" | "actions";
+  label:
+    | "common.email"
+    | "common.role"
+    | "common.status"
+    | "organization.invitations.invited"
+    | "organization.invitations.expires"
+    | null;
+  secondary?: true;
+};
+
+const INVITATION_COLUMNS: readonly InvitationColumn[] = [
+  { id: "email", label: "common.email" },
+  { id: "role", label: "common.role" },
+  { id: "status", label: "common.status" },
+  {
+    id: "invited",
+    label: "organization.invitations.invited",
+    secondary: true,
+  },
+  {
+    id: "expires",
+    label: "organization.invitations.expires",
+    secondary: true,
+  },
+  { id: "actions", label: null },
+];
+
+const isSecondaryInvitationColumn = (id: InvitationColumn["id"]) =>
+  INVITATION_COLUMNS.some((column) => column.id === id && column.secondary);
+
+export const Route = createFileRoute(
+  "/_protected/settings/organization/members",
+)({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.members",
+      to: "/settings/organization/members",
+    }),
+  },
+  loader: async ({ context }) => {
+    // Prime the org + role queries the page suspends on so the fetch starts
+    // during navigation instead of after the component mounts and suspends.
+    await Promise.all([
+      ensureRouteQueryData(
+        context.queryClient,
+        organizationOptions(context.user.activeOrganizationId),
+      ),
+      ensureRouteQueryData(context.queryClient, roleOptions),
+    ]);
+  },
+  component: Members,
+  pendingComponent: MembersPendingComponent,
+  head: () => ({ meta: [{ title: pageTitle("common.members") }] }),
+});
+
+function Members() {
+  const t = useTranslations();
+  const locale = useFormattingLocale();
+  const activeOrganizationId = Route.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
+  const { data: currentUserRole } = useSuspenseQuery(roleOptions);
+  const userId = Route.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
+  const q = useSearch({
+    from: "/_protected/settings/organization",
+    select: (s) => s.q,
+  });
+
+  const [sort, setSort] = useState<Sort>({ key: "name", dir: "asc" });
+
+  const toggleSort = (key: SortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  };
+
+  const { invitations: filteredInvitations, members } = filterOrganizationLists(
+    {
+      invitations: data.invitations,
+      members: data.members,
+      query: q,
+    },
+  );
+  const filteredMembers = (() => {
+    const compareName = compareByLocale(locale);
+    const sorted = members.toSorted((a, b) => {
+      let cmp: number;
+      if (sort.key === "name") {
+        cmp = compareName(a.user.name, b.user.name);
+      } else if (sort.key === "role") {
+        cmp =
+          ORGANIZATION_ROLE_NAMES.indexOf(a.role) -
+          ORGANIZATION_ROLE_NAMES.indexOf(b.role);
+      } else {
+        cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+
+    return sorted;
+  })();
+
+  const removeMember = useRemoveMember();
+  const cancelInvitation = useCancelInvitation();
+  const inviteMember = useInviteMember();
+
+  return (
+    <>
+      <SettingsPageHeader
+        description={t("settings.organization.membersDescription")}
+        title={t("common.members")}
+      />
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.activeMembers")}
+        </h2>
+        <Frame>
+          <OrganizationListToolbar />
+          <Table>
+            <MembersTableHeader sort={sort} toggleSort={toggleSort} />
+            <TableBody>
+              {filteredMembers.map((member) => {
+                const isSelf = member.userId === userId;
+                return (
+                  <TableRow className="group" key={member.id}>
+                    <TableCell>
+                      <UserIdentity
+                        avatarClassName="size-8 shrink-0 text-3xs"
+                        image={member.user.image}
+                        name={member.user.name}
+                        secondaryText={member.user.email}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <RoleCell
+                        currentUserRole={currentUserRole}
+                        isSelf={isSelf}
+                        memberEmail={member.user.email}
+                        memberId={member.id}
+                        memberRole={member.role}
+                      />
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        isSecondaryMemberColumn("joined") &&
+                          SECONDARY_COLUMN_CLASS,
+                      )}
+                    >
+                      {formatMemberDate(member.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-end">
+                      {!isSelf && (
+                        <Menu>
+                          <Tooltip
+                            content={t("common.actions")}
+                            render={
+                              <MenuTrigger
+                                className="opacity-0! transition-opacity group-hover:opacity-100! focus-visible:opacity-100! pointer-coarse:opacity-100!"
+                                render={
+                                  <Button size="icon-xs" variant="ghost" />
+                                }
+                              />
+                            }
+                          >
+                            <EllipsisVerticalIcon />
+                          </Tooltip>
+                          <MenuPopup>
+                            <MenuItem
+                              disabled={removeMember.isPending}
+                              onClick={() => removeMember.mutate(member.id)}
+                              variant="destructive"
+                            >
+                              {t("common.removeMember")}
+                            </MenuItem>
+                          </MenuPopup>
+                        </Menu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {filteredMembers.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    className="text-muted-foreground text-center"
+                    colSpan={4}
+                  >
+                    {t("organization.members.noMembersFound")}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Frame>
+      </section>
+
+      {data.invitations.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+            {t("settings.organization.pendingInvitations")}
+          </h2>
+          <Frame>
+            <Table>
+              <InvitationsTableHeader />
+              <TableBody>
+                {filteredInvitations.map((invitation) => (
+                  <TableRow key={invitation.id}>
+                    <TableCell>
+                      <BidiText direction="ltr">{invitation.email}</BidiText>
+                    </TableCell>
+                    <TableCell>
+                      {t(`organization.roles.${invitation.role}`)}
+                    </TableCell>
+                    <TableCell>
+                      {t(
+                        `organization.invitations.statuses.${invitation.status}`,
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        isSecondaryInvitationColumn("invited") &&
+                          SECONDARY_COLUMN_CLASS,
+                      )}
+                    >
+                      {formatMemberDate(invitation.createdAt)}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        isSecondaryInvitationColumn("expires") &&
+                          SECONDARY_COLUMN_CLASS,
+                      )}
+                    >
+                      {formatMemberDate(invitation.expiresAt)}
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <Menu>
+                        <Tooltip
+                          content={t("common.actions")}
+                          render={
+                            <MenuTrigger
+                              render={<Button size="icon-xs" variant="ghost" />}
+                            />
+                          }
+                        >
+                          <EllipsisVerticalIcon />
+                        </Tooltip>
+                        <MenuPopup>
+                          <MenuItem
+                            disabled={
+                              invitation.status !== "rejected" ||
+                              inviteMember.isPending
+                            }
+                            onClick={() => {
+                              inviteMember.mutate(
+                                {
+                                  email: invitation.email,
+                                  role: invitation.role,
+                                  resend: true,
+                                },
+                                {
+                                  onSuccess: () => {
+                                    stellaToast.add({
+                                      title: t("success.invitationResent"),
+                                      type: "success",
+                                    });
+                                  },
+                                  onError: (error) => {
+                                    notifyUserError(
+                                      error,
+                                      t("errors.actionFailed"),
+                                    );
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            {t("organization.invitations.resendInvitation")}
+                          </MenuItem>
+                          <MenuItem
+                            disabled={
+                              invitation.status !== "pending" ||
+                              cancelInvitation.isPending
+                            }
+                            onClick={() =>
+                              cancelInvitation.mutate(invitation.id)
+                            }
+                            variant="destructive"
+                          >
+                            {t("organization.invitations.cancelInvitation")}
+                          </MenuItem>
+                        </MenuPopup>
+                      </Menu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredInvitations.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      className="text-muted-foreground text-center"
+                      colSpan={6}
+                    >
+                      {t("organization.invitations.noInvitationsFound")}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Frame>
+        </section>
+      )}
+    </>
+  );
+}
+
+type SortableHeadProps = {
+  label: string;
+  active: SortDir | null;
+  onClick: () => void;
+  className: string | undefined;
+};
+
+const SortableHead = ({
+  label,
+  active,
+  onClick,
+  className,
+}: SortableHeadProps) => (
+  <TableHead className={className}>
+    <button
+      className="text-foreground hover:text-foreground-strong-muted group inline-flex items-center gap-1 text-start"
+      onClick={onClick}
+      type="button"
+    >
+      <span>{label}</span>
+      <span
+        aria-hidden
+        className={cn(
+          "size-3 transition-opacity",
+          active === null && "opacity-0 group-hover:opacity-40",
+        )}
+      >
+        {active === "desc" ? (
+          <ArrowDownIcon className="size-3" />
+        ) : (
+          <ArrowUpIcon className="size-3" />
+        )}
+      </span>
+    </button>
+  </TableHead>
+);
+
+type MembersTableHeaderProps = {
+  sort: Sort;
+  toggleSort: (key: SortKey) => void;
+};
+
+// Real header and skeleton both map over MEMBER_COLUMNS, so adding, removing,
+// or reordering a column updates both at once.
+const MembersTableHeader = ({ sort, toggleSort }: MembersTableHeaderProps) => {
+  const t = useTranslations();
+
+  return (
+    <TableHeader>
+      <TableRow>
+        {MEMBER_COLUMNS.map((column) => {
+          if (column.sortKey === null || column.label === null) {
+            return (
+              <TableHead
+                className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+                key={column.id}
+              />
+            );
+          }
+          const sortKey = column.sortKey;
+          return (
+            <SortableHead
+              active={sort.key === sortKey ? sort.dir : null}
+              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+              key={column.id}
+              label={t(column.label)}
+              onClick={() => toggleSort(sortKey)}
+            />
+          );
+        })}
+      </TableRow>
+    </TableHeader>
+  );
+};
+
+const InvitationsTableHeader = () => {
+  const t = useTranslations();
+
+  return (
+    <TableHeader>
+      <TableRow>
+        {INVITATION_COLUMNS.map((column) =>
+          column.label === null ? (
+            <TableHead
+              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+              key={column.id}
+            />
+          ) : (
+            <TableHead
+              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+              key={column.id}
+            >
+              {t(column.label)}
+            </TableHead>
+          ),
+        )}
+      </TableRow>
+    </TableHeader>
+  );
+};
+
+const MemberSkeletonCell = ({ shape }: { shape: MemberSkeletonShape }) => {
+  if (shape === "identity") {
+    return (
+      <div className="flex items-center gap-2">
+        <Skeleton className="size-8 shrink-0 rounded-full" />
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+      </div>
+    );
+  }
+  if (shape === "control") {
+    return <Skeleton className="h-8 w-32" />;
+  }
+  if (shape === "none") {
+    return null;
+  }
+  return <Skeleton className="h-4 w-24" />;
+};
+
+// Skeleton body derived from MEMBER_COLUMNS: one cell per column, in order, so
+// it stays aligned with both the real header and the real rows.
+const MembersSkeletonRows = () =>
+  SKELETON_ROW_KEYS.slice(0, MEMBERS_SKELETON_ROW_COUNT).map((rowKey) => (
+    <TableRow key={rowKey}>
+      {MEMBER_COLUMNS.map((column) => (
+        <TableCell
+          className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+          key={column.id}
+        >
+          <MemberSkeletonCell shape={column.skeleton} />
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+
+const InvitationsSkeletonRows = () =>
+  SKELETON_ROW_KEYS.slice(0, INVITATIONS_SKELETON_ROW_COUNT).map((rowKey) => (
+    <TableRow key={rowKey}>
+      {INVITATION_COLUMNS.map((column) => (
+        <TableCell
+          className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
+          key={column.id}
+        >
+          {column.id === "actions" ? null : <Skeleton className="h-4 w-24" />}
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+
+// Inert toolbar matching OrganizationListToolbar's layout so the pending shell
+// reserves the same space and the page does not jump when data resolves.
+const MembersToolbarPlaceholder = () => {
+  const t = useTranslations();
+
+  return (
+    <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
+      <InputGroup className="max-w-sm flex-1">
+        <InputGroupInput disabled placeholder={t("common.search")} />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
+    </div>
+  );
+};
+
+const NOOP_SORT: Sort = { key: "name", dir: "asc" };
+const noopToggleSort = () => undefined;
+
+// Structural skeleton for route-pending: the section headers plus the members
+// table chrome (headers from MEMBER_COLUMNS) with shimmer rows, and the
+// invitations table chrome with a few shimmer rows. Hoisted `function` so the
+// Route literal above can reference it.
+function MembersPendingComponent() {
+  const t = useTranslations();
+
+  return (
+    <>
+      <SettingsPageHeader
+        description={t("settings.organization.membersDescription")}
+        title={t("common.members")}
+      />
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.activeMembers")}
+        </h2>
+        <Frame>
+          <MembersToolbarPlaceholder />
+          <Table>
+            <MembersTableHeader sort={NOOP_SORT} toggleSort={noopToggleSort} />
+            <TableBody>
+              <MembersSkeletonRows />
+            </TableBody>
+          </Table>
+        </Frame>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.pendingInvitations")}
+        </h2>
+        <Frame>
+          <Table>
+            <InvitationsTableHeader />
+            <TableBody>
+              <InvitationsSkeletonRows />
+            </TableBody>
+          </Table>
+        </Frame>
+      </section>
+    </>
+  );
+}

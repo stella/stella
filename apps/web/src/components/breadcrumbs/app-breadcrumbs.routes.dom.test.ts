@@ -88,13 +88,17 @@ test.each([
     ],
   },
   {
-    pathname: "/admin/members",
+    pathname: "/settings/organization/members",
     decisions: [
-      { type: "label", labelKey: "common.organization", to: "/admin" },
+      {
+        type: "label",
+        labelKey: "common.organization",
+        to: "/settings/organization",
+      },
       {
         type: "label",
         labelKey: "common.members",
-        to: "/admin/members",
+        to: "/settings/organization/members",
       },
     ],
   },

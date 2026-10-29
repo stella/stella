@@ -14,7 +14,7 @@ import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/admin/members",
+  url: "http://localhost:3000/settings/organization/members",
 });
 
 const originalFetch = globalThis.fetch;

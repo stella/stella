@@ -81,16 +81,24 @@ const ORGANIZATION_SECTIONS = [
     id: "organization",
     labelKey: "common.organization",
     items: [
-      { to: "/admin/general", labelKey: "admin.general", icon: BuildingIcon },
-      { to: "/admin/members", labelKey: "common.members", icon: UsersIcon },
       {
-        to: "/admin/usage",
+        to: "/settings/organization/general",
+        labelKey: "admin.general",
+        icon: BuildingIcon,
+      },
+      {
+        to: "/settings/organization/members",
+        labelKey: "common.members",
+        icon: UsersIcon,
+      },
+      {
+        to: "/settings/organization/usage",
         labelKey: "admin.planAndUsage",
         icon: GaugeIcon,
         gate: "usage",
       },
       {
-        to: "/admin/audit-logs",
+        to: "/settings/organization/audit-logs",
         labelKey: "settings.organization.auditLogs",
         icon: HistoryIcon,
       },
@@ -100,14 +108,18 @@ const ORGANIZATION_SECTIONS = [
     id: "ai",
     labelKey: "admin.ai",
     items: [
-      { to: "/admin/ai", labelKey: "admin.modelsAndProviders", icon: CpuIcon },
       {
-        to: "/admin/anonymization",
+        to: "/settings/organization/ai",
+        labelKey: "admin.modelsAndProviders",
+        icon: CpuIcon,
+      },
+      {
+        to: "/settings/organization/anonymization",
         labelKey: "settings.organization.anonymization.title",
         icon: EyeOffIcon,
       },
       {
-        to: "/admin/tools",
+        to: "/settings/organization/tools",
         labelKey: "knowledge.sections.tools.title",
         icon: WrenchIcon,
       },
@@ -118,35 +130,35 @@ const ORGANIZATION_SECTIONS = [
     labelKey: "admin.firmSetup",
     items: [
       {
-        to: "/admin/matter-numbering",
+        to: "/settings/organization/matter-numbering",
         labelKey: "settings.organization.matterNumbering",
         icon: HashIcon,
       },
       {
-        to: "/admin/document-types",
+        to: "/settings/organization/document-types",
         labelKey: "settings.organization.documentTypes.title",
         icon: FileTextIcon,
       },
       {
-        to: "/admin/time-policy",
+        to: "/settings/organization/time-policy",
         labelKey: "settings.organization.timePolicy.title",
         icon: ClockIcon,
         gate: "timeBilling",
       },
       {
-        to: "/admin/number-series",
+        to: "/settings/organization/number-series",
         labelKey: "billing.numberSeries.title",
         icon: ListOrderedIcon,
         gate: "billing",
       },
       {
-        to: "/admin/vat-rates",
+        to: "/settings/organization/vat-rates",
         labelKey: "billing.vatRates.title",
         icon: LandmarkIcon,
         gate: "billing",
       },
       {
-        to: "/admin/billing",
+        to: "/settings/organization/billing",
         labelKey: "admin.billingProfiles",
         icon: BanknoteIcon,
         gate: "billing",

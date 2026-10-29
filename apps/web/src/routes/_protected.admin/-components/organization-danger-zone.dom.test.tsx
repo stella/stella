@@ -4,7 +4,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import messages from "@/i18n/langs/en.json" with { type: "json" };
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
+GlobalRegistrator.register({
+  url: "http://localhost:3000/settings/organization/general",
+});
 const originalFetch = globalThis.fetch;
 const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
@@ -114,7 +116,7 @@ test("renewing-subscription deletion stays open and offers plan and usage recove
     within(dialog)
       .getByRole("link", { name: messages.admin.planAndUsage })
       .getAttribute("href"),
-  ).toBe("/admin/usage");
+  ).toBe("/settings/organization/usage");
   expect(requests).toEqual([
     {
       path: "/api/auth/organization/delete",

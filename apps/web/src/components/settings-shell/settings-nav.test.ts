@@ -35,22 +35,29 @@ describe("settingsNavSections", () => {
       [
         "organization",
         [
-          "/admin/general",
-          "/admin/members",
-          "/admin/usage",
-          "/admin/audit-logs",
+          "/settings/organization/general",
+          "/settings/organization/members",
+          "/settings/organization/usage",
+          "/settings/organization/audit-logs",
         ],
       ],
-      ["ai", ["/admin/ai", "/admin/anonymization", "/admin/tools"]],
+      [
+        "ai",
+        [
+          "/settings/organization/ai",
+          "/settings/organization/anonymization",
+          "/settings/organization/tools",
+        ],
+      ],
       [
         "firm-setup",
         [
-          "/admin/matter-numbering",
-          "/admin/document-types",
-          "/admin/time-policy",
-          "/admin/number-series",
-          "/admin/vat-rates",
-          "/admin/billing",
+          "/settings/organization/matter-numbering",
+          "/settings/organization/document-types",
+          "/settings/organization/time-policy",
+          "/settings/organization/number-series",
+          "/settings/organization/vat-rates",
+          "/settings/organization/billing",
         ],
       ],
     ]);
@@ -87,15 +94,15 @@ describe("settingsNavSections", () => {
     for (const hidden of [
       "/settings/account/memory",
       "/settings/account/beta",
-      "/admin/time-policy",
-      "/admin/number-series",
-      "/admin/vat-rates",
-      "/admin/billing",
-      "/admin/usage",
+      "/settings/organization/time-policy",
+      "/settings/organization/number-series",
+      "/settings/organization/vat-rates",
+      "/settings/organization/billing",
+      "/settings/organization/usage",
     ]) {
       expect(shown).not.toContain(hidden);
     }
-    expect(shown).toContain("/admin/matter-numbering");
+    expect(shown).toContain("/settings/organization/matter-numbering");
     expect(shown).toContain("/settings/account/profile");
   });
 });

@@ -325,7 +325,7 @@ const mount = async (
   const root = router.createRootRoute({ component: router.Outlet });
   const settings = router.createRoute({
     getParentRoute: () => root,
-    path: "/admin",
+    path: "/settings/organization",
     component: SettingsRoute,
   });
   const destination = router.createRoute({
@@ -335,7 +335,7 @@ const mount = async (
   });
   const appRouter = router.createRouter({
     history: router.createMemoryHistory({
-      initialEntries: ["/admin"],
+      initialEntries: ["/settings/organization"],
     }),
     isServer: false,
     routeTree: root.addChildren([settings, destination]),
@@ -434,7 +434,7 @@ test("leaving AI provider settings with a dirty key prompts before navigation", 
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(screen.getByText(messages.common.unsavedLeaveConfirm)).toBeDefined();
-  expect(appRouter.state.location.pathname).toBe("/admin");
+  expect(appRouter.state.location.pathname).toBe("/settings/organization");
 });
 
 test("leaving clean AI provider settings proceeds without a prompt", async () => {
@@ -498,7 +498,7 @@ test("cancelling the leave prompt retains the edited key and settings route", as
   await waitFor(() =>
     expect(Object.hasOwn(dialog.dataset, "open")).toBe(false),
   );
-  expect(appRouter.state.location.pathname).toBe("/admin");
+  expect(appRouter.state.location.pathname).toBe("/settings/organization");
   expect(
     providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
   ).toHaveProperty("value", GOOGLE_KEY);
@@ -1253,7 +1253,7 @@ test("leaving with an edited decision model prompts before navigation", async ()
     void appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
-  expect(appRouter.state.location.pathname).toBe("/admin");
+  expect(appRouter.state.location.pathname).toBe("/settings/organization");
 });
 
 test("page header save reveals Anthropic workspace recovery and preserves the complete error", async () => {
@@ -1594,7 +1594,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
       void appRouter.navigate({ to: "/settings" });
     });
     expect(await screen.findByRole("alertdialog")).toBeDefined();
-    expect(appRouter.state.location.pathname).toBe("/admin");
+    expect(appRouter.state.location.pathname).toBe("/settings/organization");
   },
 );
 

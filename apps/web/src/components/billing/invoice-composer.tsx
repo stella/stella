@@ -1051,7 +1051,7 @@ const DetailsStep = ({
               {seller === null ? (
                 <Link
                   className="underline underline-offset-4"
-                  to="/admin/billing"
+                  to="/settings/organization/billing"
                 >
                   {t("billing.invoiceComposer.addSellerProfile")}
                 </Link>

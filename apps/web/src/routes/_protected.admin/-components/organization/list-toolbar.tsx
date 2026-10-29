@@ -16,8 +16,8 @@ import { InviteMemberDialog } from "@/components/organization/invite-member-dial
 import { detached } from "@/lib/detached";
 import { optionalSearchStringSchema } from "@/lib/schema";
 
-const adminParentRoute = getRouteApi("/_protected/admin");
-const membersRoute = getRouteApi("/_protected/admin/members");
+const adminParentRoute = getRouteApi("/_protected/settings/organization");
+const membersRoute = getRouteApi("/_protected/settings/organization/members");
 
 /**
  * One-shot marker for the value the debounced writer last pushed up, so the
@@ -56,7 +56,7 @@ export const OrganizationListToolbar = () => {
     setLastWrittenQuery({ value: normalizeQuery(value) });
     detached(
       navigate({
-        to: "/admin/members",
+        to: "/settings/organization/members",
         search: (prev) => ({ ...prev, q: value || undefined }),
       }),
       "list-toolbar.navigate",
