@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
@@ -345,6 +345,7 @@ type ReadQueuedPageOptions = {
   settled: SQL | undefined;
   cursor: QueuedCursor | null;
   pageSize: number;
+  requester: "present" | "absent";
 };
 
 // One page of settled queued exports after `cursor`.
@@ -353,8 +354,28 @@ const readQueuedPage = async ({
   settled,
   cursor,
   pageSize,
-}: ReadQueuedPageOptions) =>
-  await readCursorPage(
+  requester,
+}: ReadQueuedPageOptions) => {
+  // Fetch keys from the covering queue index before reading row payloads:
+  // owner RLS selectivity can otherwise favor a growing requester scan and sort.
+  const candidates = db
+    .select({ id: organizationDataExports.id })
+    .from(organizationDataExports)
+    .where(
+      and(
+        settled,
+        requester === "present"
+          ? isNotNull(organizationDataExports.requestedBy)
+          : isNull(organizationDataExports.requestedBy),
+        afterQueued(cursor),
+      ),
+    )
+    .orderBy(
+      asc(organizationDataExports.createdAt),
+      asc(organizationDataExports.id),
+    )
+    .limit(pageSize + 1);
+  return await readCursorPage(
     db
       .select({
         id: organizationDataExports.id,
@@ -366,19 +387,14 @@ const readQueuedPage = async ({
         ),
       })
       .from(organizationDataExports)
-      .where(
-        and(
-          settled,
-          isNotNull(organizationDataExports.requestedBy),
-          afterQueued(cursor),
-        ),
-      )
+      .where(inArray(organizationDataExports.id, candidates))
       .orderBy(
         asc(organizationDataExports.createdAt),
         asc(organizationDataExports.id),
       ),
     { limit: pageSize, cursorForItem: (row) => row.id },
   );
+};
 
 const requeueQueued = async (
   { db, deps, summary, now }: StepArgs,
@@ -390,17 +406,13 @@ const requeueQueued = async (
     before(organizationDataExports.createdAt, settledBefore),
   );
   // An export whose requester's account was deleted cannot run as anyone.
-  const abandonedPage = await readCursorPage(
-    db
-      .select(sweepColumns)
-      .from(organizationDataExports)
-      .where(and(settled, isNull(organizationDataExports.requestedBy)))
-      .orderBy(
-        asc(organizationDataExports.createdAt),
-        asc(organizationDataExports.id),
-      ),
-    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
-  );
+  const abandonedPage = await readQueuedPage({
+    db,
+    settled,
+    cursor: null,
+    pageSize: BATCH_SIZE,
+    requester: "absent",
+  });
   const abandoned = abandonedPage.items;
   summary.hasMore ||= abandonedPage.nextCursor !== null;
   await moveEach(
@@ -432,6 +444,7 @@ const requeueQueued = async (
       settled,
       cursor,
       pageSize: deps.handoffPageSize,
+      requester: "present",
     });
     const handoffs = await Promise.all(
       queuedPage.items.flatMap((row) => {
