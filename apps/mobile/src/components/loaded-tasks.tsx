@@ -4,11 +4,10 @@ import { Result } from "better-result";
 import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { Text } from "@stll/ui/text";
-
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
-import { RetryButton } from "@/components/retry-button";
+import { LoadFailedCard } from "@/components/load-failure";
 import { TaskRow } from "@/components/task-row";
 import { dayAt, groupByDue } from "@/state/tasks";
 import type { TasksLoad, TaskSummary } from "@/state/tasks";
@@ -43,14 +42,17 @@ export const LoadedTasks = ({
   const empty = Result.isOk(result) ? (
     <EmptyCard description={t("emptyDescription")} title={t("emptyTitle")} />
   ) : (
-    <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-      <RetryButton label={t("retry")} onPress={onReload} />
-    </EmptyCard>
+    <LoadFailedCard
+      error={result.error}
+      onRetry={onReload}
+      retryLabel={t("retry")}
+      title={t("loadFailed")}
+    />
   );
 
   return (
     <SectionList
-      contentContainerStyle={screenStyles.content}
+      {...emptyListProps(tasks.length === 0)}
       // The header is the platform's translucent bar; the list scrolls under it.
       contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(task) => task.id}

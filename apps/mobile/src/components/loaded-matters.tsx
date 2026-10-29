@@ -4,13 +4,12 @@ import { Result } from "better-result";
 import { FlatList, Pressable, RefreshControl, SectionList } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { Text } from "@stll/ui/text";
-
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
+import { LoadFailedCard } from "@/components/load-failure";
 import { MatterRow } from "@/components/matter-row";
 import { useMattersView } from "@/components/matters-view";
-import { RetryButton } from "@/components/retry-button";
 import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { MattersLoad, MatterSummary } from "@/state/matters";
 import { groupByClient } from "@/state/matters-groups";
@@ -48,9 +47,12 @@ export const LoadedMatters = ({
   const empty = Result.isOk(result) ? (
     <EmptyCard description={t("emptyDescription")} title={t("emptyTitle")} />
   ) : (
-    <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-      <RetryButton label={t("retry")} onPress={onReload} />
-    </EmptyCard>
+    <LoadFailedCard
+      error={result.error}
+      onRetry={onReload}
+      retryLabel={t("retry")}
+      title={t("loadFailed")}
+    />
   );
   const refreshControl = (
     <RefreshControl
@@ -63,7 +65,7 @@ export const LoadedMatters = ({
   if (groupBy === "client") {
     return (
       <SectionList
-        contentContainerStyle={screenStyles.content}
+        {...emptyListProps(matters.length === 0)}
         // The header is the platform's translucent bar; the list scrolls under it.
         contentInsetAdjustmentBehavior="automatic"
         keyExtractor={(matter) => matter.id}
@@ -107,7 +109,7 @@ export const LoadedMatters = ({
   }
   return (
     <FlatList
-      contentContainerStyle={screenStyles.content}
+      {...emptyListProps(matters.length === 0)}
       contentInsetAdjustmentBehavior="automatic"
       data={matters}
       keyExtractor={(matter) => matter.id}
