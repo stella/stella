@@ -17,6 +17,8 @@ const { AnnotationToolbar } = await import("./annotation-toolbar");
 const { cleanSelectionText } = await import("./reader-copy-text.logic");
 
 const SELECTED_TEXT = "Selected passage";
+/** Chrome the reader prints beside the document: no anchored block. */
+const NOTICE_TEXT = "The AI model did not answer in time.";
 
 const originalRects = Object.getOwnPropertyDescriptor(
   Range.prototype,
@@ -164,6 +166,93 @@ test.each([100, 650])(
     expect(document.getSelection()?.toString()).toBe(SELECTED_TEXT);
   },
 );
+
+test("the bar acts on the document's text, not on words selected in the reader's chrome", async () => {
+  const rootRef = createRef<HTMLDivElement>();
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <div ref={rootRef}>
+          <p data-anchor="p1">{SELECTED_TEXT}</p>
+          <p>{NOTICE_TEXT}</p>
+        </div>
+        <AnnotationToolbar
+          activeAnnotation={null}
+          activeSpans={[]}
+          controller={{
+            create: async () => Result.ok(undefined),
+            redo: async () => undefined,
+            remove: async () => Result.ok(undefined),
+            undo: async () => undefined,
+            update: async () => Result.ok(undefined),
+          }}
+          mode="guest"
+          onActivateAnnotation={() => undefined}
+          onClearActive={() => undefined}
+          scrollContainerRef={rootRef}
+          target={{
+            type: "statute",
+            id: "statute",
+            country: "CZ",
+            eli: "https://example.test/statute",
+            provisionByAnchorId: new Map(),
+            title: "Statute",
+            versionValidFrom: null,
+          }}
+        />
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  const root = rootRef.current;
+  if (root === null) {
+    throw new TypeError("Selection fixture is missing");
+  }
+  root.getBoundingClientRect = () => new DOMRect(0, 0, 900, 768);
+  for (
+    let node: HTMLElement | null = root;
+    node !== null;
+    node = node.parentElement
+  ) {
+    node.style.overflowX = "visible";
+    node.style.overflowY = "visible";
+  }
+  Object.defineProperty(Range.prototype, "getClientRects", {
+    configurable: true,
+    value: () => {
+      const rect = new DOMRect(200, 100, 140, 20);
+      return {
+        0: rect,
+        length: 1,
+        item: () => rect,
+        [Symbol.iterator]: () => [rect][Symbol.iterator](),
+      };
+    },
+  });
+  const selectAll = async (element: HTMLElement) => {
+    const text = element.firstChild;
+    if (text === null) {
+      throw new TypeError("Selection fixture is missing its text");
+    }
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, text.textContent?.length ?? 0);
+    const selection = document.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    await act(async () => {
+      fireEvent.pointerUp(element, { clientX: 250, clientY: 110 });
+      await new Promise((resolve) => {
+        requestAnimationFrame(resolve);
+      });
+    });
+  };
+
+  await selectAll(view.getByText(NOTICE_TEXT));
+  expect(view.queryByRole("button", { name: "Copy" })).toBeNull();
+
+  await selectAll(view.getByText(SELECTED_TEXT));
+  expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
+});
 
 test("copy preview scrolls the whole citation and stays open while it scrolls", async () => {
   const { view } = await openCopyMenu(100);

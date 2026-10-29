@@ -3,14 +3,15 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
-// parser-output-unchanged: imports the document AST from its package owner
-// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
-import type {
-  Block,
-  DocumentAst,
-  ParagraphRole,
+import {
+  type Block,
+  type DocumentAst,
+  isApparatusRole,
+  type ParagraphBlock,
+  type ParagraphRole,
+  plainTextOf,
+  startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
-import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import {
@@ -239,7 +240,9 @@ export const parseRisDecisionXml = (
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
   let blockIndex = 0;
-  for (const item of joinWrappedLines(items)) {
+  let bodyStarted = false;
+  const units = joinWrappedLines(items);
+  for (const [index, item] of units.entries()) {
     if (item.type === "break") {
       continue;
     }
@@ -250,15 +253,26 @@ export const parseRisDecisionXml = (
     const text = plainTextOf(inlines);
     blockIndex += 1;
     if (item.type === "heading") {
+      const next = units.at(index + 1);
+      const nextRole =
+        next?.type === "paragraph" && next.element === "absatz"
+          ? paragraphRole(next.contentType)
+          : undefined;
+      const publisherHeading =
+        !bodyStarted &&
+        (isApparatusRole(nextRole) ||
+          nextRole === "intro" ||
+          nextRole === "case-number");
       blocks.push({
         id: `b${blockIndex}`,
         anchorId: `h-${blockIndex}`,
         type: "heading",
         level: 1,
-        role: "section-heading",
+        role: publisherHeading ? "publisher-heading" : "section-heading",
         inlines,
         plainText: text,
       });
+      bodyStarted ||= !publisherHeading;
       continue;
     }
     if (item.contentType !== undefined) {
@@ -270,14 +284,21 @@ export const parseRisDecisionXml = (
       }
     }
     const role = paragraphRole(item.contentType);
-    blocks.push({
+    const block = {
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
-      ...(role ? { role } : {}),
+      ...(role
+        ? {
+            role:
+              bodyStarted && isApparatusRole(role) ? "publisher-note" : role,
+          }
+        : {}),
       inlines,
       plainText: text,
-    });
+    } satisfies ParagraphBlock;
+    blocks.push(block);
+    bodyStarted ||= startsDecisionBody(block);
   }
   if (blocks.length === 0) {
     return parseFailure("no-blocks");

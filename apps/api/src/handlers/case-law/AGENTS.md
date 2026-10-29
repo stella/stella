@@ -733,10 +733,11 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
   - `"holding"` — ruling/verdict paragraphs (bold in reader)
   - `"closing"` — closing formula
   - `"signature"` — judge signatures
-  - `"syllabus"`, `"headnotes"`, `"summary"`, `"counsel"`,
-    `"apparatus"` — publisher-authored matter around the decision
-    (`APPARATUS_ROLES`); the reader folds these behind one disclosure
-  - `"panel"` — the judges sitting; not folded
+  - `"syllabus"`, `"headnotes"`, `"summary"`, `"apparatus"` — publisher head
+    matter (`APPARATUS_ROLES`); the reader folds consecutive blocks behind
+    one localized disclosure, only before the decision body
+  - `"publisher-note"` — publisher annotations after the decision; not folded
+  - `"panel"`, `"counsel"` — the judges sitting and representatives; not folded
   - (no role) — regular body text
 - `table` with optional `role`:
   - `"related-proceedings"` — hidden in reader
@@ -745,6 +746,13 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
   URL into an asset store; a `data:` URI is rejected, because the AST is
   read, indexed and prompted with as a whole and would carry the bytes
   down every one of those paths. Its `plainText` is the alt text.
+
+An opening publisher section heading uses `"publisher-heading"`; a court section uses
+`"section-heading"`. Closing dates, signatures and certifications use
+`"closing"` or `"signature"`, never head matter. `headMatterPrecedesBody` in
+`@stll/legal-ast/document-ast` enforces ordering in the canonical and persisted
+schemas; ingestion rejects invalid structure with a typed reason and retains
+text. Footnotes keep their own placement and never become head-matter regions.
 
 Every block has: `id` (nanoid), `anchorId` (stable for deep
 links) and `plainText` (for search/AI); `heading` and `paragraph` also

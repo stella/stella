@@ -7,6 +7,10 @@ import {
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
+import {
+  CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -159,10 +163,10 @@ const logIngestionFailures = async (
         .insert(caseLawIngestionFailures)
         .values(identified)
         .onConflictDoNothing({
-          target: [
-            caseLawIngestionFailures.sourceId,
-            caseLawIngestionFailures.recordIdentity,
-          ],
+          target: onlineUniqueIndexTarget(
+            CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
+            caseLawIngestionFailures,
+          ),
           where: isNotNull(caseLawIngestionFailures.recordIdentity),
         });
     }
