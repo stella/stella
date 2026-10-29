@@ -564,7 +564,9 @@ export const isSharedPlaygroundHarness = (file: string): boolean => {
     normalized === "package.json" ||
     normalized === "apps/web/package.json" ||
     normalized.startsWith("patches/") ||
-    /^apps\/web\/(?:vite|tailwind|postcss)\.config\.[^/]+$/u.test(normalized) ||
+    /^(?:apps\/web\/)?(?:vite|tailwind|postcss)\.config\.[^/]+$/u.test(
+      normalized,
+    ) ||
     normalized === "apps/web/index.html" ||
     normalized.startsWith("apps/web/public/") ||
     /^packages\/[^/]+\/package\.json$/u.test(normalized) ||
@@ -584,26 +586,91 @@ export const isSharedPlaygroundHarness = (file: string): boolean => {
   );
 };
 
+const webCompilerInputs = (root: string) => {
+  const files = new Set(["tsconfig.json", "apps/web/tsconfig.json"]);
+  let complete = true;
+  for (const file of files) {
+    if (!existsSync(path.join(root, file))) {
+      complete = false;
+      continue;
+    }
+    let config: unknown;
+    try {
+      config = Bun.JSONC.parse(readFileSync(path.join(root, file), "utf-8"));
+    } catch {
+      complete = false;
+      continue;
+    }
+    if (
+      typeof config !== "object" ||
+      config === null ||
+      Array.isArray(config)
+    ) {
+      complete = false;
+      continue;
+    }
+    if (!("extends" in config)) {
+      continue;
+    }
+    const bases = [config.extends].flat();
+    for (const base of bases) {
+      if (typeof base !== "string") {
+        complete = false;
+        continue;
+      }
+      const resolved = [base, `${base}.json`]
+        .map((specifier) => resolveImport(specifier, file, root, new Set()))
+        .find((candidate) => candidate.complete && candidate.files.length > 0);
+      if (resolved === undefined) {
+        complete = false;
+        continue;
+      }
+      for (const dependency of resolved.files) {
+        files.add(dependency);
+      }
+    }
+  }
+  return { files, complete };
+};
+
+const isWebOrPackage = (file: string) =>
+  file.startsWith("apps/web/") || file.startsWith("packages/");
+
+const isKnownSource = (file: string) =>
+  (file.startsWith(`${WEB_SOURCE}/`) ||
+    /^packages\/[^/]+\/src\//u.test(file)) &&
+  SOURCE_EXTENSIONS.some((extension) => file.endsWith(extension));
+
 export const selectGeometrySpecs = (
   changedFiles: readonly string[],
   root = REPO_ROOT,
 ): readonly string[] => {
   const inventory = readPlaygroundInventory(root);
-  const changed = new Set(changedFiles.map(normalize));
+  const changed = new Set(
+    changedFiles
+      .map(normalize)
+      .filter(
+        (file) =>
+          !/\.mdx?$/iu.test(file) ||
+          file.startsWith(`${WEB_SOURCE}/`) ||
+          /^packages\/[^/]+\/src\//u.test(file),
+      ),
+  );
+  if (changed.size === 0) {
+    return [];
+  }
   if (!inventory.complete || [...changed].some(isSharedPlaygroundHarness)) {
     return inventory.specs;
   }
-  // A workspace export can point outside `src` (an exported stylesheet), so
-  // every package path goes on to the closure check.
-  if (
-    ![...changed].some(
-      (file) =>
-        file.startsWith("apps/web/src/") ||
-        file.startsWith("packages/") ||
-        file.endsWith(".geometry.spec.ts"),
-    )
-  ) {
+  const compiler = webCompilerInputs(root);
+  if ([...changed].some((file) => compiler.files.has(file))) {
+    return inventory.specs;
+  }
+  if (![...changed].some(isWebOrPackage)) {
     return [];
+  }
+  if (!compiler.complete) {
+    return inventory.specs;
   }
   // Only source and stylesheet imports are traced. Any other file a page can
   // reach (an image, a font, an asset a stylesheet references with url())
@@ -623,6 +690,20 @@ export const selectGeometrySpecs = (
     return inventory.specs;
   }
   const selected = new Set<string>();
+  const unclassified = new Set(
+    [...changed].filter(
+      (file) =>
+        isWebOrPackage(file) &&
+        !isKnownSource(file) &&
+        !(
+          file.startsWith(`${SPEC_DIRECTORY}/`) &&
+          /\.(?:geometry|visual)\.spec\.ts$/u.test(file)
+        ),
+    ),
+  );
+  for (const file of shell.files) {
+    unclassified.delete(file);
+  }
   const closures = new Map<string, ReturnType<typeof staticImportClosure>>();
   for (const spec of inventory.specs) {
     if (changed.has(spec)) {
@@ -645,11 +726,17 @@ export const selectGeometrySpecs = (
         if (!closure.complete) {
           return inventory.specs;
         }
+        for (const file of closure.files) {
+          unclassified.delete(file);
+        }
         if ([...changed].some((file) => closure.files.has(file))) {
           selected.add(spec);
         }
       }
     }
+  }
+  if (unclassified.size > 0) {
+    return inventory.specs;
   }
   return [...selected].toSorted();
 };

@@ -28,6 +28,8 @@ const createSelectionFixture = () => {
     writeFileSync(path.join(root, file), source);
   };
   const spec = "apps/web/e2e/ui-playground/fixture.geometry.spec.ts";
+  write("tsconfig.json", "{}\n");
+  write("apps/web/tsconfig.json", "{}\n");
   write(
     "apps/web/src/routes/dev/-visual-metadata.ts",
     "export const visualRegistry = {\n  fixture: {},\n} as const;\n",
@@ -137,7 +139,7 @@ test("selects loader, transitive, spec, and shared harness changes", () => {
   ).toEqual(inventory.specs);
   expect(
     selectGeometrySpecs(["apps/web/e2e/ui-playground/README.md"], ROOT),
-  ).toEqual(inventory.specs);
+  ).toEqual([]);
 });
 
 test("the planner reads NUL-delimited changed paths from a file", () => {
@@ -159,6 +161,94 @@ test("the planner reads NUL-delimited changed paths from a file", () => {
     });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
     expect(JSON.parse(result.stdout.toString())).toEqual([spec]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  "tsconfig.json",
+  "apps/web/tsconfig.json",
+  "config/web-base.json",
+  "packages/compiler/base.json",
+  "vite.config.ts",
+  "apps/web/postcss.config.cjs",
+  "apps/web/tailwind.config.ts",
+  "apps/web/other.config.json",
+  "apps/web/.browserslistrc",
+  "apps/web/config/other.ts",
+  "packages/theme/config/other.json",
+  "packages/theme/config/other.ts",
+])(
+  "build and unclassified configuration changes select every spec: %s",
+  (changed) => {
+    const { root, write } = createSelectionFixture();
+    try {
+      write("apps/web/src/routes/dev/fixture.ts", "export {};\n");
+      write(
+        "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+        'const url = "/dev?visual=fixture";\n',
+      );
+      write(
+        "apps/web/tsconfig.json",
+        '{ // web config\n "extends": ["../../config/web-base"] }',
+      );
+      write(
+        "config/web-base.json",
+        '{ "extends": "@stll/compiler/base.json" }',
+      );
+      write(
+        "packages/compiler/package.json",
+        JSON.stringify({
+          name: "@stll/compiler",
+          exports: { "./base.json": "./base.json" },
+        }),
+      );
+      write("packages/compiler/base.json", "{}");
+      expect(selectGeometrySpecs([changed], root)).toEqual([
+        "apps/web/e2e/ui-playground/fixture.geometry.spec.ts",
+        "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test.each([
+  "README.md",
+  "docs/guide.md",
+  "apps/web/README.md",
+  "apps/web/e2e/ui-playground/README.md",
+  "packages/theme/README.md",
+])("documentation changes select no geometry specs: %s", (changed) => {
+  const { root, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", "export {};\n");
+    expect(selectGeometrySpecs([changed], root)).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  "{ invalid",
+  "[]",
+  '{ "extends": 42 }',
+  '{ "extends": "./missing" }',
+])("an unresolved compiler configuration selects every spec: %s", (config) => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", "export {};\n");
+    write(
+      "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+      'const url = "/dev?visual=fixture";\n',
+    );
+    write("apps/web/tsconfig.json", config);
+    expect(selectGeometrySpecs([spec], root)).toEqual([
+      "apps/web/e2e/ui-playground/fixture.geometry.spec.ts",
+      "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
