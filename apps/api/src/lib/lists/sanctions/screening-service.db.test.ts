@@ -1157,6 +1157,129 @@ test("concurrent cold requests share one warmup and its read never holds the mat
   }
 });
 
+test("screening deadlines between edition leases do not discard warmed indexes", async () => {
+  const clock = createMatcherTestClock();
+  const workers: Worker[] = [];
+  const pool = createSanctionsMatcherPool({
+    clock,
+    createWorker: () => {
+      const worker = new Worker(
+        new URL("sanctions-matcher-worker.ts", import.meta.url),
+      );
+      workers.push(worker);
+      return worker;
+    },
+  });
+  const editions = new Map(
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).flatMap(
+      ({ source, edition }) => (edition === null ? [] : [[source, edition]]),
+    ),
+  );
+  const firstSource: SanctionsSource = "eu";
+  const secondSource: SanctionsSource = "uk";
+  const firstEdition =
+    editions.get(firstSource) ?? panic("Missing first fixture edition");
+  const secondEdition =
+    editions.get(secondSource) ?? panic("Missing second fixture edition");
+  const secondRead = Promise.withResolvers<undefined>();
+  const releaseSecondRead = Promise.withResolvers<undefined>();
+  const indexed = new Map<SanctionsSource, number>();
+  const reloading = new Set<SanctionsSource>();
+  let trackReloads = false;
+  let stalledReads = 0;
+  const releaseStalledReads = Promise.withResolvers<undefined>();
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async (work, options) =>
+        await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              hasEdition: (source, editionId) =>
+                !reloading.has(source) && session.hasEdition(source, editionId),
+              load: async (request) => {
+                if (trackReloads) {
+                  indexed.set(
+                    request.source,
+                    (indexed.get(request.source) ?? 0) + 1,
+                  );
+                }
+                const reply = await session.load(request);
+                if (reply === "indexed") {
+                  reloading.delete(request.source);
+                }
+                return reply;
+              },
+            }),
+          options,
+        ),
+    },
+    clock,
+    loadEntries: async (options) => {
+      if (trackReloads && options.edition.id === secondEdition.id) {
+        secondRead.resolve(undefined);
+        await releaseSecondRead.promise;
+      }
+      return await loadEditionEntries(options);
+    },
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    expect(workers).toHaveLength(1);
+
+    trackReloads = true;
+    reloading.add(firstSource);
+    reloading.add(secondSource);
+    publicScreen.warmupWant(requestDb, firstSource, firstEdition);
+    publicScreen.warmupWant(requestDb, secondSource, secondEdition);
+    await secondRead.promise;
+    expect(indexed.get(firstSource)).toBe(1);
+
+    const stalledDb: ScopedDb = async (operation) => {
+      stalledReads += 1;
+      await releaseStalledReads.promise;
+      return await requestDb(operation);
+    };
+    const requests = Array.from(
+      { length: 4 },
+      async (_, index) =>
+        await publicScreen({
+          ...publicProps(`Gap Request ${index}`),
+          db: stalledDb,
+        }),
+    );
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+    for (const request of requests) {
+      const answer = (await request).unwrap();
+      expect(answer.status).toBe("unavailable");
+      expect(answer.lists.every(({ reason }) => reason === "warming")).toBe(
+        true,
+      );
+    }
+    expect(stalledReads).toBe(SANCTIONS_MATCHER_CONFIG.poolSizeMax);
+
+    releaseSecondRead.resolve(undefined);
+    await publicScreen.warmupSettled();
+    expect(indexed).toEqual(
+      new Map([
+        [firstSource, 1],
+        [secondSource, 1],
+      ]),
+    );
+    expect(workers).toHaveLength(1);
+  } finally {
+    releaseStalledReads.resolve(undefined);
+    releaseSecondRead.resolve(undefined);
+    await publicScreen.warmupSettled();
+    await pool.close();
+  }
+});
+
 test("loaded lists keep screening while another edition reloads behind a held read", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });
