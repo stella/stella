@@ -176,5 +176,19 @@ export const extractMessageSearchText = (content: unknown): string => {
   return parts.join(" ").slice(0, LIMITS.chatMessageSearchTextMaxLength);
 };
 
+const normalizedChatSearchTextSql = (text: SQL) =>
+  sql`unaccent(arabic_normalize(coalesce(${text}, '')))`;
+
 export const chatSearchVectorSql = (text: SQL) =>
-  sql`to_tsvector('simple', unaccent(arabic_normalize(coalesce(${text}, ''))))`;
+  sql`to_tsvector('simple', ${normalizedChatSearchTextSql(text)})`;
+
+/** JSON strings introduce positional gaps without indexing placeholder words. */
+export const chatSearchSegmentsVectorSql = (
+  segments: SQL,
+) => sql`jsonb_to_tsvector(
+  'simple', to_jsonb(ARRAY(
+    SELECT ${normalizedChatSearchTextSql(sql`segment.value`)}
+    FROM jsonb_array_elements_text(${segments}) WITH ORDINALITY AS segment(value, ordinal)
+    ORDER BY segment.ordinal LIMIT ${LIMITS.searchChatCandidateSourceMessagesMax + 1}
+  )), '["string"]'::jsonb
+)`;

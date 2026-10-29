@@ -1028,6 +1028,96 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
 
   test.each([
     {
+      placement: "withdrawn slot",
+      texts: ["alpha", "negligence", "beta"],
+      withdrawn: true,
+      query: '"alpha beta"',
+      matches: false,
+    },
+    {
+      placement: "adjacent retained messages",
+      texts: ["alpha", "beta"],
+      withdrawn: false,
+      query: '"alpha beta"',
+      matches: true,
+    },
+    {
+      placement: "retained phrase",
+      texts: ["alpha beta", "negligence", "gamma"],
+      withdrawn: true,
+      query: '"alpha beta"',
+      matches: true,
+    },
+    {
+      placement: "negated phrase across withdrawn slot",
+      texts: ["alpha", "negligence", "beta"],
+      withdrawn: true,
+      query: 'alpha NOT "alpha beta"',
+      matches: true,
+    },
+  ])(
+    "projected phrase matching respects $placement",
+    async ({ texts, withdrawn, query, matches }) => {
+      const id = createSafeId<"chatThread">();
+      seededThreads.push(id);
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title: "Phrase fixture",
+          titleSource: "user",
+        });
+        await tx.insert(chatMessages).values(
+          texts.map((text, index) => ({
+            id: createSafeId<"chatMessage">(),
+            threadId: id,
+            userId,
+            workspaceId,
+            role:
+              index === 1 && withdrawn
+                ? ("assistant" as const)
+                : ("user" as const),
+            createdAt: new Date(Date.UTC(2026, 9, 18, 10, index)),
+            content: proveTextOnlyPersistedChatMessageContent({
+              version: 3,
+              data: [
+                {
+                  type: "text",
+                  content:
+                    index === 1 && withdrawn
+                      ? `${text} [decision](#stella-decision=${decisionId})`
+                      : text,
+                },
+              ],
+            }),
+          })),
+        );
+        await upsertChatThreadSearchDocument(id, tx);
+      });
+      const result = await request(async () =>
+        searchGlobal(
+          {
+            organizationId,
+            userId,
+            accessibleWorkspaceIds: [workspaceId],
+            selectedWorkspaceIds: [],
+            types: ["chat"],
+            editedByUserIds: [],
+            mimeTypes: [],
+            query,
+            limit: 10,
+          },
+          { scopedDb },
+        ),
+      );
+      expect(result.hits.some((hit) => hit.id === `chat:${id}`)).toBe(matches);
+    },
+  );
+
+  test.each([
+    {
       placement: "title and message",
       title: "titlequartz",
       messages: ["messageamber"],
@@ -2361,6 +2451,108 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       expect(large.queries.length).toBe(small.queries.length);
       expect(large.rows).toBe(small.rows);
       expect(large.bytes).toBeLessThanOrEqual(small.bytes + 1024);
+    },
+  );
+
+  test.each(
+    [false, true].flatMap((withdrawn) =>
+      (["snapshot", "cursor"] as const).map((mode) => ({ withdrawn, mode })),
+    ),
+  )(
+    "closed $mode replay reads a multi-chunk persisted answer (withdrawn link: $withdrawn)",
+    async ({ withdrawn, mode }) => {
+      const { writer, options, threadId: id } = await liveLogFixture("generic");
+      const persistedAnswerId = createSafeId<"chatMessage">();
+      const pieces = [
+        "a".repeat(600 * 1024),
+        "b".repeat(600 * 1024),
+        withdrawn
+          ? ` [decision](#stella-decision=${decisionId})`
+          : " retained answer",
+      ];
+      const text = pieces.join("");
+      const sourceChunks = pieces.map((delta) => ({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: persistedAnswerId,
+        delta,
+      })) satisfies StreamChunk[];
+      expect(
+        sourceChunks.every(
+          (chunk) => Buffer.byteLength(JSON.stringify(chunk)) < 1024 * 1024,
+        ),
+      ).toBe(true);
+      expect(Buffer.byteLength(text)).toBeGreaterThan(1024 * 1024);
+      await scopedDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          id: persistedAnswerId,
+          threadId: id,
+          userId,
+          workspaceId,
+          role: "assistant",
+          content: proveTextOnlyPersistedChatMessageContent({
+            version: 3,
+            data: [{ type: "text", content: text }],
+          }),
+        });
+        await tx
+          .update(chatTurns)
+          .set({ timingMessageId: persistedAnswerId })
+          .where(eq(chatTurns.id, options.execution.id));
+      });
+      // A resumed producer's persisted prefix can precede its checkpointed durable suffix.
+      await writer.append([
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: persistedAnswerId,
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: persistedAnswerId,
+          delta: "tail answer",
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: persistedAnswerId },
+      ]);
+      await writer.close();
+      const state = await scopedDb(
+        async (tx) =>
+          await tx
+            .select({ summary: chatRunLogs.referenceSummary })
+            .from(chatRunLogs)
+            .where(eq(chatRunLogs.runId, options.runId))
+            .limit(1),
+      );
+      expect(state.at(0)?.summary).toMatchObject({
+        type: "checkpointed",
+        decisionIds: [],
+      });
+      const replayed = await request(async () => {
+        if (mode === "snapshot") {
+          return await writer.snapshot();
+        }
+        const replay = createChatRunLog({
+          ...options,
+          db: scopedDb,
+          resumeOffset: "1",
+        });
+        const entries = [];
+        for await (const entry of replay.read(
+          "1",
+          new AbortController().signal,
+        )) {
+          entries.push(entry);
+        }
+        return entries;
+      });
+      expect(
+        replayed.find(
+          ({ chunk }) => chunk.type === EventType.TEXT_MESSAGE_CONTENT,
+        )?.chunk,
+      ).toEqual({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: persistedAnswerId,
+        delta: withdrawn ? marker : "tail answer",
+      });
     },
   );
 

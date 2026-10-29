@@ -211,7 +211,6 @@ type RunLogHeaderOptions = Pick<
   includeReferences: boolean;
   restoreRolesAfter?: bigint | undefined;
 };
-const sourceReadBudget = sql`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'checkpointed' THEN ${MAX_CHUNK_BYTES}::integer ELSE ${MAX_RUN_BYTES}::integer END`;
 const readRunLogHeaderOnTx = async ({
   tx,
   organizationId,
@@ -244,10 +243,10 @@ const readRunLogHeaderOnTx = async ({
           ? sql<RunLogReferenceSummary>`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'checkpointed' THEN jsonb_build_object('type', 'checkpointed', 'through', ${chatRunLogs.referenceSummary}->'through', 'decisionIds', ${chatRunLogs.referenceSummary}->'decisionIds') ELSE ${chatRunLogs.referenceSummary} END`
           : sql<RunLogReferenceSummary | null>`null`,
         sourceContent: includeReferences
-          ? sql`CASE WHEN octet_length(${chatMessages.content}::text) <= ${sourceReadBudget} THEN ${chatMessages.content} ELSE NULL END`
+          ? sql`CASE WHEN octet_length(${chatMessages.content}::text) <= ${MAX_RUN_BYTES}::integer THEN ${chatMessages.content} ELSE NULL END`
           : sql`null`,
         sourceOverflow: includeReferences
-          ? sql<boolean>`coalesce(octet_length(${chatMessages.content}::text) > ${sourceReadBudget}, false)`
+          ? sql<boolean>`coalesce(octet_length(${chatMessages.content}::text) > ${MAX_RUN_BYTES}::integer, false)`
           : sql<boolean>`false`,
         tailType: sql<string | null>`${chatRunLogEntries.chunk}->>'type'`,
         tailHasTiming: sql<boolean>`coalesce(${chatRunLogEntries.chunk}->'metadata' ? 'turnTiming', false)`,

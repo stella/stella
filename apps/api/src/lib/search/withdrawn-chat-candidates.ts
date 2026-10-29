@@ -7,10 +7,10 @@ import type { Transaction } from "@/api/db/root";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 import {
-  chatSearchVectorSql,
+  chatSearchSegmentsVectorSql,
   extractMessageSearchText,
 } from "./chat-search-text";
 import { TS_HEADLINE_CONFIG } from "./highlight";
@@ -109,27 +109,31 @@ export const projectChatSearchCandidates = async ({
       marker === null || row["title_source"] === "user"
         ? String(row["title"])
         : "";
-    const messages = Array.isArray(row["source_messages"])
+    const messages = isUnknownArray(row["source_messages"])
       ? row["source_messages"]
       : [];
-    const text = messages
-      .flatMap((message: unknown) => {
-        if (!isRecord(message)) {
-          return [];
-        }
-        if (
-          message["role"] !== "user" &&
-          projection.marker(message["content"], subject) !== null
-        ) {
-          return [];
-        }
-        return [extractMessageSearchText(message["content"])];
-      })
-      .join(" ");
+    // Retained neighbours share positions; a withdrawn slot starts a new segment.
+    const segments: string[] = [];
+    let parts = [title];
+    for (const message of messages) {
+      if (!isRecord(message)) {
+        continue;
+      }
+      if (
+        message["role"] !== "user" &&
+        projection.marker(message["content"], subject) !== null
+      ) {
+        segments.push(parts.join(" "));
+        parts = [];
+        continue;
+      }
+      parts.push(extractMessageSearchText(message["content"]));
+    }
+    segments.push(parts.join(" "));
     return {
       id: row.id,
       title,
-      text,
+      segments,
       updated_at: row["updated_at"],
     };
   });
@@ -141,14 +145,14 @@ export const projectChatSearchCandidates = async ({
     headline: string | null;
   }>(sql`
     WITH source AS (
-      SELECT *, ${chatSearchVectorSql(sql`title || ' ' || text`)} AS tsv
+      SELECT *, ${chatSearchSegmentsVectorSql(sql`segments`)} AS tsv
       FROM jsonb_to_recordset(${JSON.stringify(admitted)}::text::jsonb)
-        AS r(id text, title text, text text, updated_at timestamptz)
+        AS r(id text, title text, segments jsonb, updated_at timestamptz)
     ), ranked AS (
     SELECT id,
       ${searchTitleTierSql(sql`title`, query)} AS tier,
       ${query.trim() === "" ? sql`extract(epoch from updated_at)::float8 * 1000` : sql`ts_rank(tsv, ${tsQuery})::float8`} AS score,
-      ${query.trim() === "" ? sql`NULL::text` : sql`ts_headline('public.stella_unaccent'::regconfig, left(title || ' ' || text, ${LIMITS.searchHeadlineDocumentMaxChars}), ${tsQuery}, ${TS_HEADLINE_CONFIG})`} AS headline
+      ${query.trim() === "" ? sql`NULL::text` : sql`ts_headline('public.stella_unaccent'::regconfig, left(array_to_string(ARRAY(SELECT value FROM jsonb_array_elements_text(segments) WITH ORDINALITY AS segment(value, ordinal) ORDER BY ordinal LIMIT ${LIMITS.searchChatCandidateSourceMessagesMax + 1}), ' '), ${LIMITS.searchHeadlineDocumentMaxChars}), ${tsQuery}, ${TS_HEADLINE_CONFIG})`} AS headline
     FROM source
     WHERE ${query.trim() === "" ? sql`true` : sql`tsv @@ ${tsQuery}`}
     )
