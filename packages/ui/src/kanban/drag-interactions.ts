@@ -1,7 +1,6 @@
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
-import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { panic } from "better-result";
@@ -79,7 +78,10 @@ export const registerKanbanCardDrag = ({
     onGenerateDragPreview: ({ nativeSetDragImage }) => {
       setCustomNativeDragPreview({
         nativeSetDragImage,
-        getOffset: centerUnderPointer,
+        getOffset: ({ container }) => {
+          const { width, height } = container.getBoundingClientRect();
+          return { x: width / 2, y: height / 2 };
+        },
         render: ({ container }) => {
           const preview: KanbanCardDragPreview = getDragPreview?.() ?? {
             type: "card",
