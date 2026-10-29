@@ -2,7 +2,9 @@
 export { isConnectionFailure } from "./connection-failure";
 
 export type FetchTimeout =
-  { type: "headers"; ms: number } | { type: "idle"; ms: number };
+  | { type: "total"; ms: number }
+  | { type: "headers"; ms: number }
+  | { type: "idle"; ms: number };
 
 export type TransportRequestInit = RequestInit & {
   timeout?: FetchTimeout;
@@ -20,7 +22,7 @@ export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
     | { timeout: FetchTimeout; timeoutMs?: never }
     // Existing numeric callers are enumerated by the transfer-window guard.
     | {
-        /** Choose a headers or idle timeout for new callers. */
+        /** Use an explicit timeout policy for new callers. */
         timeoutMs: number;
         timeout?: never;
       }
@@ -71,7 +73,7 @@ const executeFetchWithTimeout = async (
       throw error;
     })
     .finally(() => {
-      if (timeout !== undefined) {
+      if (timeout !== undefined && timeout.type !== "total") {
         clear();
       }
     });

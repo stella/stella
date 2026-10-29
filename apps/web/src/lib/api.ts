@@ -38,7 +38,10 @@ export const createWebApiFetcher =
     await fetcher(url, {
       ...init,
       signal: signal ?? undefined,
-      timeoutMs: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
+      timeout: {
+        type: "total",
+        ms: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
+      },
     });
 
 // Types the API owns and the browser reads by name, re-exported through the

@@ -178,11 +178,11 @@ describe("response timeout policies", () => {
   });
 
   for (const policy of [
-    { timeoutMs: 20 },
+    { timeout: { type: "total", ms: 20 } },
     { timeout: { type: "headers", ms: 20 } },
     { timeout: { type: "idle", ms: 20 } },
   ] as const) {
-    const type = "timeoutMs" in policy ? "total" : policy.timeout.type;
+    const { type } = policy.timeout;
     test(`${type} policy clears its timer when the transport rejects before headers`, async () => {
       jest.useFakeTimers();
       const reason = new TypeError("Transport failed");
@@ -250,7 +250,7 @@ describe("response timeout policies", () => {
       jest.useFakeTimers();
       const fixture = streamFixture();
       const response = await fixture.request("https://example.com", {
-        timeoutMs: 20,
+        timeout: { type: "total", ms: 20 },
       });
       const result =
         consumption === "json"
@@ -274,7 +274,7 @@ describe("response timeout policies", () => {
     jest.useFakeTimers();
     const fixture = streamFixture();
     const response = await fixture.request("https://example.com", {
-      timeoutMs: 20,
+      timeout: { type: "total", ms: 20 },
     });
     const result = response.json();
     await advance(19);
@@ -291,7 +291,7 @@ describe("response timeout policies", () => {
     const controller = new AbortController();
     const reason = new DOMException("Caller cancelled", "AbortError");
     const response = await fixture.request("https://example.com", {
-      timeoutMs: 20,
+      timeout: { type: "total", ms: 20 },
       signal: controller.signal,
     });
     const result = response.body

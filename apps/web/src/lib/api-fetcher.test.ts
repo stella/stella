@@ -43,7 +43,7 @@ describe("web API fetcher timeout policy", () => {
     await owner.fetcher("https://example.test", {});
 
     expect(owner.calls).toHaveLength(1);
-    expect(owner.calls[0]?.init.timeoutMs).toBe(30_000);
+    expect(owner.calls[0]?.init.timeout).toEqual({ type: "total", ms: 30_000 });
   });
 
   test("keeps the caller abort signal", async () => {
@@ -62,7 +62,7 @@ describe("web API fetcher timeout policy", () => {
 
     await owner.fetcher("https://example.test", { timeoutMs: 5 });
 
-    expect(owner.calls[0]?.init.timeoutMs).toBe(5);
+    expect(owner.calls[0]?.init.timeout).toEqual({ type: "total", ms: 5 });
   });
 
   test("parses a completed JSON response", async () => {

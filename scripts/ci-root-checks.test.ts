@@ -594,6 +594,12 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   "ci-checks-policy/Dependabot group guard (installed packages)": [
     "scripts/dependabot-grouping.test.ts",
   ],
+  "ci-checks-policy/Web raw JSON API census self-test": [
+    "scripts/web-raw-json-api-census.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census": [
+    "scripts/web-raw-json-api-census.ts",
+  ],
 };
 
 // Forward oracle: source owners produced by derived generators, then the
