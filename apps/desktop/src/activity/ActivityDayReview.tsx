@@ -27,12 +27,14 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { AiActionIcon, LockKeyholeIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
+import { AiActionIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
+import { TimeEntryRow } from "@stll/ui/time-entry-row";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
@@ -68,7 +70,7 @@ import type {
   ReviewState,
 } from "./billing-review-state";
 import "./day-review.css";
-import { canAssign, matchDay } from "./day-review-logic";
+import { canAssign, matchDay, narrativeEvidence } from "./day-review-logic";
 import type {
   DayReviewGroup,
   MatchConfidence,
@@ -142,17 +144,20 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
   ) {
     setReview({ edits, sources: captureReviewSources([...groups.values()]) });
   }
-  const narrative = (group: DayReviewGroup) =>
-    group.evidence.length
-      ? t("narrativeEvidence", {
-          evidence: format.list(group.evidence, { type: "conjunction" }),
-        })
+  const narrative = (group: DayReviewGroup) => {
+    const evidence = narrativeEvidence(
+      group.evidence,
+      group.matter?.name ?? null,
+    );
+    return evidence.length
+      ? format.list(evidence, { type: "conjunction" })
       : t("narrativeApps", {
           apps: format.list(
             group.apps.map(({ name }) => name),
             { type: "conjunction" },
           ),
         });
+  };
   const initial = (group: DayReviewGroup) =>
     initialReviewEdit({
       type: "single",
@@ -340,10 +345,6 @@ export const ActivityDayReview = ({
     eligible.map((group) => ({ group, content: editFor(group).content })),
   );
   const selectionExceedsLimit = items.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
-  const selectedTenths = selected.reduce(
-    (sum, group) => sum + group.roundedTenths,
-    0,
-  );
   const session = useBillingDraftSession({
     snapshot,
     billingDrafts,
@@ -556,8 +557,6 @@ export const ActivityDayReview = ({
       <ReviewBar
         selected={selected}
         itemCount={items.length}
-        eligibleCount={eligible.length}
-        hours={hours(selectedTenths / 10)}
         snapshot={snapshot}
         submission={submission}
         drafts={session.bar}
@@ -617,19 +616,27 @@ const DayReviewMetrics = ({ header, segments }: DayReviewMetricsProps) => {
   return (
     <div className="flex flex-wrap items-center gap-5">
       {header}
-      <div className="ms-auto flex flex-wrap gap-6 tabular-nums">
+      <div className="ms-auto flex flex-wrap gap-4 tabular-nums">
         {[
-          { label: t("activeLabel"), ms: activeMs },
-          { label: t("matchedToMatters"), ms: matchedMs },
-          { label: t("draftedLabel"), ms: draftedMs },
-        ].map(({ label, ms }) => (
-          <div key={label}>
-            <b className="block text-base font-semibold">
-              {t("hours", { hours: hours(ms / 3_600_000) })}
-            </b>
-            <span className="text-muted-foreground text-xs">{label}</span>
-          </div>
-        ))}
+          { label: t("matchedToMatters"), ms: matchedMs, shown: true },
+          // Active equals matched on a fully assigned day; show it only when
+          // some time still needs a matter.
+          {
+            label: t("activeLabel"),
+            ms: activeMs,
+            shown: activeMs > matchedMs,
+          },
+          { label: t("draftedLabel"), ms: draftedMs, shown: draftedMs > 0 },
+        ]
+          .filter(({ shown }) => shown)
+          .map(({ label, ms }) => (
+            <p key={label} className="text-sm">
+              <b className="font-medium">
+                {t("hours", { hours: hours(ms / 3_600_000) })}
+              </b>{" "}
+              <span className="text-muted-foreground">{label}</span>
+            </p>
+          ))}
       </div>
     </div>
   );
@@ -761,8 +768,6 @@ const DRAFT_BUTTON_LABELS = {
 const ReviewBar = ({
   selected,
   itemCount,
-  eligibleCount,
-  hours,
   snapshot,
   submission,
   drafts,
@@ -772,8 +777,6 @@ const ReviewBar = ({
 }: {
   selected: readonly DayReviewGroup[];
   itemCount: number;
-  eligibleCount: number;
-  hours: string;
   snapshot: ActivityDaySnapshot;
   submission: Submission;
   drafts: ReviewBarDrafts | null;
@@ -790,26 +793,16 @@ const ReviewBar = ({
     submission.type === "discarding" ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
-    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-t px-6 py-3">
-      <span className="text-muted-foreground text-xs tabular-nums">
-        {t("selectedSummary", {
-          selected: selected.length,
-          total: eligibleCount,
-          hours,
-        })}
-      </span>
-      <span className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
-        <LockKeyholeIcon aria-hidden="true" className="size-3" />
-        {t("batchPrivacy")}
-      </span>
+    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-end gap-2 border-t px-6 py-3">
       <CopyButton
         copiedLabel={t("copied")}
         disabled={selected.length === 0}
         iconClassName="size-4"
+        iconOnly
         label={t("copySummary")}
         onCopy={onCopy}
-        size="sm"
-        variant="outline"
+        size="icon-sm"
+        variant="ghost"
       />
       {drafts?.undoable ? (
         <Button
@@ -868,21 +861,53 @@ type ReviewItemFieldsProps = {
   item: ReviewItem;
   structured: boolean;
   editable: boolean;
+  /** A row with several entries gives each its own switch; one entry's sits at the row's end. */
+  showBillable: boolean;
   onNarrative: (narrative: string) => void;
   onBillable: (billable: boolean) => void;
+};
+
+/** Billable as a switch named by its tooltip; the label would repeat on every row. */
+const BillableSwitch = ({
+  item,
+  editable,
+  onBillable,
+}: {
+  item: ReviewItem;
+  editable: boolean;
+  onBillable: (billable: boolean) => void;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Switch
+            aria-label={t("entryBillable")}
+            aria-describedby={`review-item-${item.key}`}
+            checked={item.billable}
+            disabled={!editable}
+            onCheckedChange={(checked) => onBillable(checked)}
+          />
+        }
+      />
+      <TooltipPopup>{t("entryBillable")}</TooltipPopup>
+    </Tooltip>
+  );
 };
 
 const ReviewItemFields = ({
   item,
   structured,
   editable,
+  showBillable,
   onNarrative,
   onBillable,
 }: ReviewItemFieldsProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   return (
-    <div className="mt-2" id={`review-item-${item.key}`}>
+    <div className="mt-1 flex flex-col gap-1" id={`review-item-${item.key}`}>
       {structured ? (
         <p className="text-muted-foreground flex items-center gap-2 text-xs">
           <MatterIcon matter={item.matter} className="size-3" />
@@ -899,35 +924,27 @@ const ReviewItemFields = ({
           <BillingClassificationCodes classification={item.classification} />
         </div>
       ) : null}
-      <Textarea
-        className="hover:border-input focus-visible:border-ring min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"
-        rows={1}
-        aria-label={t("entryNarrative")}
-        aria-describedby={`review-item-${item.key}`}
-        value={item.narrative}
-        maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
-        disabled={!editable}
-        onChange={(event) => onNarrative(event.target.value)}
-      />
-      <Label className="text-muted-foreground gap-1.5 text-xs">
-        <Button
-          role="switch"
-          aria-label={t("entryBillable")}
-          aria-describedby={`review-item-${item.key}`}
-          aria-checked={item.billable}
-          disabled={!editable}
-          size="icon-xs"
-          variant="ghost"
-          className={`h-4 w-7 rounded-full border-0 ${item.billable ? "bg-primary" : "bg-input"}`}
-          onClick={() => onBillable(!item.billable)}
-        >
-          <span
-            aria-hidden="true"
-            className={`bg-primary-foreground absolute start-0.5 size-3 rounded-full transition-transform motion-reduce:transition-none ${item.billable ? "translate-x-2.5 rtl:-translate-x-2.5" : ""}`}
+      <div className="flex items-start gap-3">
+        <div className="text-muted-foreground min-w-0 flex-1 text-sm">
+          <Textarea
+            inline
+            rows={1}
+            aria-label={t("entryNarrative")}
+            aria-describedby={`review-item-${item.key}`}
+            value={item.narrative}
+            maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
+            disabled={!editable}
+            onChange={(event) => onNarrative(event.target.value)}
           />
-        </Button>
-        {t("entryBillable")}
-      </Label>
+        </div>
+        {showBillable ? (
+          <BillableSwitch
+            item={item}
+            editable={editable}
+            onBillable={onBillable}
+          />
+        ) : null}
+      </div>
     </div>
   );
 };
@@ -973,12 +990,9 @@ const ReviewEntries = ({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-sm font-semibold">
+        <h2 className="sr-only">
           {snapshot.date === snapshot.today ? t("reviewToday") : t("reviewDay")}
         </h2>
-        <p className="text-muted-foreground text-xs">
-          {t("reviewDescription")}
-        </p>
       </div>
       <div className="divide-y overflow-clip rounded-xl border">
         {groups.map((group) => {
@@ -1053,28 +1067,45 @@ const ReviewEntries = ({
               </div>
             );
           }
+          const items = absorbed.has(group.id)
+            ? []
+            : reviewItems(
+                [{ group: { ...group, matter }, content: edit.content }],
+                currentGroups,
+              );
+          const single = items.length === 1 ? items[0] : undefined;
+          const setBillable = (itemKey: string) => (billable: boolean) =>
+            dispatch({
+              type: "set-billable",
+              groupId: group.id,
+              initial: edit,
+              itemKey,
+              billable,
+            });
           return (
-            <div
+            <TimeEntryRow
               key={matter.id}
-              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 min-[40rem]:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
-            >
-              <Checkbox
-                className="mt-0.5"
-                aria-label={t("includeMatter", { matter: matter.name })}
-                checked={edit.selected}
-                disabled={!editable}
-                onCheckedChange={(selected) =>
-                  dispatch({
-                    type: "set-selected",
-                    groupId: group.id,
-                    initial: edit,
-                    selected,
-                  })
-                }
-              />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  <ActivityMatterHeading matter={matter} />
+              frame="plain"
+              inactive={!edit.selected}
+              leading={
+                <Checkbox
+                  aria-label={t("includeMatter", { matter: matter.name })}
+                  checked={edit.selected}
+                  disabled={!editable}
+                  onCheckedChange={(selected) =>
+                    dispatch({
+                      type: "set-selected",
+                      groupId: group.id,
+                      initial: edit,
+                      selected,
+                    })
+                  }
+                />
+              }
+              icon={<MatterIcon matter={matter} className="size-4 shrink-0" />}
+              title={<bdi id={`review-matter-${matter.id}`}>{matter.name}</bdi>}
+              badges={
+                <>
                   {matter.signals.upcomingDeadline ? (
                     <ReviewStatusBadge tone="neutral">
                       {t("upcomingDeadline")} ·{" "}
@@ -1091,63 +1122,65 @@ const ReviewEntries = ({
                       {t("newAssignment")}
                     </ReviewStatusBadge>
                   ) : null}
-                  {
+                  {group.confidence === "likely" ? (
                     <ReviewStatusBadge
                       tone={CONFIDENCE_TONES[group.confidence]}
                     >
                       {t(CONFIDENCE_LABELS[group.confidence])}
                     </ReviewStatusBadge>
-                  }
-                </div>
-                <Evidence group={group} snapshot={snapshot} />
-                {absorbed.has(group.id) ? (
-                  <p className="text-muted-foreground mt-2 px-2 text-xs">
-                    {t("aiMergedIntoAnother")}
-                  </p>
-                ) : (
-                  <>
-                    {reviewItems(
-                      [{ group: { ...group, matter }, content: edit.content }],
-                      currentGroups,
-                    ).map((item) => (
-                      <ReviewItemFields
-                        key={item.key}
-                        item={item}
-                        structured={edit.content.type === "accepted"}
-                        editable={editable}
-                        onNarrative={(narrative) =>
-                          dispatch({
-                            type: "set-narrative",
-                            groupId: group.id,
-                            initial: edit,
-                            itemKey: item.key,
-                            narrative,
-                          })
-                        }
-                        onBillable={(billable) =>
-                          dispatch({
-                            type: "set-billable",
-                            groupId: group.id,
-                            initial: edit,
-                            itemKey: item.key,
-                            billable,
-                          })
-                        }
-                      />
-                    ))}
-                    {draftReview({ ...group, matter })}
-                  </>
-                )}
-              </div>
-              <div className="col-start-2 flex items-center justify-between gap-2 min-[40rem]:col-start-3 min-[40rem]:flex-col min-[40rem]:items-end">
-                <div className="text-base font-semibold tabular-nums">
+                  ) : null}
+                </>
+              }
+              meta={
+                <>
+                  {matter.reference ? <span>{matter.reference}</span> : null}
+                  <Evidence group={group} snapshot={snapshot} compact />
+                </>
+              }
+              duration={
+                <span title={t("roundedSixMinutes")}>
                   {t("hours", { hours: hours(group.roundedTenths / 10) })}
-                  <span className="text-muted-foreground text-2xs block font-normal">
-                    {t("roundedSixMinutes")}
-                  </span>
-                </div>
-              </div>
-            </div>
+                </span>
+              }
+              trailing={
+                single ? (
+                  <BillableSwitch
+                    item={single}
+                    editable={editable}
+                    onBillable={setBillable(single.key)}
+                  />
+                ) : null
+              }
+            >
+              {absorbed.has(group.id) ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {t("aiMergedIntoAnother")}
+                </p>
+              ) : (
+                <>
+                  {items.map((item) => (
+                    <ReviewItemFields
+                      key={item.key}
+                      item={item}
+                      structured={edit.content.type === "accepted"}
+                      editable={editable}
+                      showBillable={single === undefined}
+                      onNarrative={(narrative) =>
+                        dispatch({
+                          type: "set-narrative",
+                          groupId: group.id,
+                          initial: edit,
+                          itemKey: item.key,
+                          narrative,
+                        })
+                      }
+                      onBillable={setBillable(item.key)}
+                    />
+                  ))}
+                  {draftReview({ ...group, matter })}
+                </>
+              )}
+            </TimeEntryRow>
           );
         })}
       </div>
@@ -1158,11 +1191,22 @@ const ReviewEntries = ({
 const Evidence = ({
   group,
   snapshot,
+  compact = false,
 }: {
   group: DayReviewGroup;
   snapshot: ActivityDaySnapshot;
+  /** Icons only; the narrative below already names the work. */
+  compact?: boolean;
 }) => (
-  <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+  <div
+    className={`text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs ${compact ? "" : "mt-1"}`}
+    title={
+      compact
+        ? group.evidence.join(" · ") ||
+          group.apps.map(({ name }) => name).join(" · ")
+        : undefined
+    }
+  >
     {group.apps.map(({ identifier }) => (
       <ActivitySourceIcon
         key={identifier}
@@ -1170,7 +1214,7 @@ const Evidence = ({
         sourceAppVisuals={snapshot.sourceAppVisuals}
       />
     ))}
-    <bdi className="min-w-0 wrap-break-word">
+    <bdi className={compact ? "sr-only" : "min-w-0 wrap-break-word"}>
       {group.evidence.join(" · ") ||
         group.apps.map(({ name }) => name).join(" · ")}
     </bdi>

@@ -544,9 +544,10 @@ test("only explicit batch creation sends the edited billing fields and prevents 
   page,
 }) => {
   await installNativeBoundary({ page });
+  // A confident match needs no badge; only a likely one asks for a look.
   await expect(
     page.getByText(enMessages.activity.strongMatch, { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   const narrative = page.getByRole("textbox", {
     name: enMessages.activity.entryNarrative,
   });
@@ -2118,13 +2119,14 @@ test("short matched activity counts toward its matter draft", async ({
       name: enMessages.activity.reviewToday,
       exact: true,
     }),
-  ).toBeVisible();
+  ).toBeAttached();
   await expect(
     page.getByRole("button", { name: "Create 1 draft", exact: true }),
   ).toBeEnabled();
-  await expect(
-    page.getByText(enMessages.activity.roundedSixMinutes, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("0.1 h", { exact: true })).toHaveAttribute(
+    "title",
+    enMessages.activity.roundedSixMinutes,
+  );
 });
 
 for (const language of ["en", "ar"] as const) {
@@ -2165,7 +2167,7 @@ for (const language of ["en", "ar"] as const) {
   });
 }
 
-test("timeline and totals reuse local app visuals and keep a neutral fallback", async ({
+test("app totals reuse local app visuals and keep a neutral fallback", async ({
   page,
 }) => {
   const iconDataUrl =
@@ -2198,18 +2200,6 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
   const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
   await expect(fallback.locator("img")).toHaveCount(0);
   await expect(fallback.locator("svg").first()).toBeVisible();
-  const lane = page.getByRole("region", {
-    name: enMessages.activity.reviewToday,
-  });
-  await expect(
-    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
-  ).toHaveAttribute("src", iconDataUrl);
-  await expect(
-    lane
-      .getByRole("button", { name: /Preview$/u })
-      .locator("svg")
-      .first(),
-  ).toBeVisible();
   await page
     .getByRole("button", { name: "Stop recording Example Editor" })
     .click();
@@ -2240,7 +2230,7 @@ for (const motion of ["no-preference", "reduce"] as const) {
       }),
     ).toHaveCount(0);
     const matterSegments = preview.locator(
-      "[data-activity-matter-lane] [data-activity-segment]",
+      "[data-activity-segment][data-activity-matter]",
     );
     await expect(matterSegments).toHaveCount(previewApps.length);
     for (const segment of await matterSegments.all()) {

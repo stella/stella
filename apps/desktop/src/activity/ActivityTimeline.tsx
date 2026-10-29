@@ -9,7 +9,6 @@ import type {
 } from "@stll/api-contract/desktop-time-entries";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { PhoneIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
@@ -22,7 +21,6 @@ import {
 } from "@stll/ui/tooltip";
 
 import type { ActivityDaySnapshot } from "./activity-types";
-import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import type { MatchedSegment } from "./day-review-logic";
 import { MatterPicker } from "./MatterPicker";
 
@@ -113,13 +111,9 @@ export const ActivityTimeline = ({
     });
   const selected =
     selection && selection.endMs > selection.startMs ? selection : null;
-  const legend = [
-    ...new Map(
-      segments.flatMap(({ matter }) =>
-        matter ? [[matter.id, matter] as const] : [],
-      ),
-    ).values(),
-  ];
+  const hasUnassigned = segments.some(
+    ({ type, matter }) => type === "active" && !matter,
+  );
   return (
     <section
       className="flex flex-col gap-2"
@@ -143,7 +137,7 @@ export const ActivityTimeline = ({
           ))}
         </div>
         <div
-          className={`bg-muted relative mt-1 h-9 touch-none overflow-clip rounded-lg ${mode === "review" ? "cursor-crosshair" : ""}`}
+          className={`bg-muted relative mt-1 h-4 touch-none overflow-clip rounded-md ${mode === "review" ? "cursor-crosshair" : ""}`}
           onPointerDown={(event) => pointerHandlers().onPointerDown(event)}
           onPointerMove={(event) => pointerHandlers().onPointerMove(event)}
           onPointerUp={(event) => pointerHandlers().onPointerUp(event)}
@@ -157,10 +151,16 @@ export const ActivityTimeline = ({
               render={<button type="button" />}
               data-activity-segment=""
               data-activity-away={segment.type === "idle" ? "" : undefined}
-              className={`absolute inset-y-1 flex min-w-0 items-center gap-1 overflow-clip rounded-md border px-1 ${segment.type === "idle" ? "" : "bg-card"} ${segment.drafted ? "opacity-50" : ""}`}
+              data-activity-matter={segment.matter ? "" : undefined}
+              // One lane: a segment is its matter's colour; unassigned time
+              // stays neutral and away time is hatched (day-review.css).
+              className={`absolute inset-y-0 rounded-sm ${segment.type === "active" && !segment.matter ? "bg-input" : ""} ${segment.drafted ? "opacity-40" : "opacity-85"}`}
               style={{
                 left: `${pct(segment.startMs)}%`,
                 width: `${pct(segment.endMs) - pct(segment.startMs)}%`,
+                backgroundColor: segment.matter
+                  ? resolveMatterColor(segment.matter.id, segment.matter.color)
+                  : undefined,
                 animationDelay: `${Math.min(index, 8) * 70}ms`,
               }}
               aria-label={`${time(segment.startMs)} – ${time(segment.endMs)} · ${segmentLabel(segment, t)}`}
@@ -177,20 +177,7 @@ export const ActivityTimeline = ({
                 }
                 dragged.current = false;
               }}
-            >
-              {segment.type === "idle" ? null : (
-                <ActivitySourceIcon
-                  appIdentifier={segment.appIdentifier}
-                  sourceAppVisuals={snapshot.sourceAppVisuals}
-                />
-              )}
-              {segment.call ? (
-                <PhoneIcon
-                  aria-hidden="true"
-                  className="text-muted-foreground size-3 shrink-0"
-                />
-              ) : null}
-            </TooltipTrigger>
+            />
           ))}
           {selected ? (
             <div
@@ -209,29 +196,6 @@ export const ActivityTimeline = ({
             ) : null
           }
         </Tooltip>
-        <div
-          data-activity-matter-lane=""
-          className="relative mt-1 h-2.5 overflow-clip rounded"
-        >
-          {segments.map((segment, index) =>
-            segment.matter ? (
-              <div
-                key={`${segment.startMs}-${segment.appIdentifier}`}
-                data-activity-segment=""
-                className={`absolute inset-y-0 rounded-sm ${segment.drafted ? "opacity-40" : "opacity-85"}`}
-                style={{
-                  left: `${pct(segment.startMs)}%`,
-                  width: `${pct(segment.endMs) - pct(segment.startMs)}%`,
-                  backgroundColor: resolveMatterColor(
-                    segment.matter.id,
-                    segment.matter.color,
-                  ),
-                  animationDelay: `${Math.min(index, 8) * 70}ms`,
-                }}
-              />
-            ) : null,
-          )}
-        </div>
         {snapshot.recordingStatus === "recording" &&
         snapshot.date === snapshot.today &&
         now >= start &&
@@ -244,25 +208,16 @@ export const ActivityTimeline = ({
           </div>
         ) : null}
       </div>
-      <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {legend.map((matter) => (
-          <span className="flex items-center gap-1.5" key={matter.id}>
-            <MatterIcon matter={matter} className="size-3" />
-            <bdi>{matter.name}</bdi>
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <i data-activity-away="" className="size-3 rounded-sm" />
-          {t("awayNotCounted")}
-        </span>
-      </div>
       {mode === "review" ? (
-        <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
-          <p>{t("timelineHint")}</p>
+        <div className="flex items-center justify-between gap-2">
+          {/* The drag hint only helps while some time still has no matter. */}
+          <p className="text-muted-foreground text-xs">
+            {hasUnassigned ? t("timelineHint") : null}
+          </p>
           <Button
             disabled={disabled}
-            variant="ghost"
-            size="sm"
+            variant="muted"
+            size="xs"
             onClick={() =>
               setSelection({ startMs: first.startMs, endMs: last.endMs })
             }

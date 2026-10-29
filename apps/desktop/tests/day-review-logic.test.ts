@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 
 import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
-import { canAssign, matchDay } from "../src/activity/day-review-logic";
+import {
+  canAssign,
+  matchDay,
+  narrativeEvidence,
+} from "../src/activity/day-review-logic";
 
 const candidates = [
   {
@@ -225,6 +229,35 @@ describe("local matter day review", () => {
       "b",
       undefined,
       "b",
+    ]);
+  });
+});
+
+describe("narrativeEvidence", () => {
+  test("names documents without extensions and drops titles that repeat the matter", () => {
+    expect(
+      narrativeEvidence(
+        [
+          "Client meeting: Northgate",
+          "Northgate Logistics v. Harbor Freight – stella",
+          "Particulars of Claim.docx",
+          "Expert report.pdf",
+          "Particulars of Claim",
+        ],
+        "Northgate Logistics v. Harbor Freight",
+      ),
+    ).toEqual([
+      "Client meeting: Northgate",
+      "Particulars of Claim",
+      "Expert report",
+    ]);
+  });
+
+  test("keeps at most three items and skips blanks", () => {
+    expect(narrativeEvidence([" ", "A.docx", "B", "C", "D"], null)).toEqual([
+      "A",
+      "B",
+      "C",
     ]);
   });
 });
