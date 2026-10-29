@@ -1,5 +1,6 @@
-import { Linking, Platform, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, StyleSheet, View } from "react-native";
 
+import { Text } from "@/components/ui/text";
 import { parseMarkdown } from "@/state/markdown";
 import type { Block, Span } from "@/state/markdown";
 import { useAppColors } from "@/theme";
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   bold: {
+    fontFamily: "DMSans-Bold",
     fontWeight: "700",
   },
   code: {
@@ -144,14 +146,17 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   h1: {
+    fontFamily: "DMSans-Bold",
     fontSize: 22,
     fontWeight: "700",
   },
   h2: {
+    fontFamily: "DMSans-Bold",
     fontSize: 19,
     fontWeight: "700",
   },
   h3: {
+    fontFamily: "DMSans-SemiBold",
     fontSize: 17,
     fontWeight: "600",
   },
@@ -183,6 +188,8 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   text: {
+    // DM Sans, the web's typeface; each weight is its own embedded face.
+    fontFamily: "DMSans-Regular",
     fontSize: 16,
     lineHeight: 23,
   },

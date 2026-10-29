@@ -1676,6 +1676,18 @@
         "$TURBO_ROOT$/scripts/product-frontend-files.ts"
       ]
     },
+    // The app is held to the web it is styled from: its tests read the web's
+    // sign-in backdrop, navigation, icons and button variants.
+    "@stll/mobile#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
+        "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
+        "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
+        "$TURBO_ROOT$/packages/ui/src/**"
+      ]
+    },
     "@stll/web#test": {
       "dependsOn": [
         "transit",

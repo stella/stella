@@ -1580,6 +1580,12 @@
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
+      "dismiss": "Ukryj powiadomienie o połączeniu",
+      "stoppedWorking": "Twoje połączenie z <name>{server}</name> przestało działać.",
+      "waitingApproval": "Twoje połączenie z <name>{server}</name> oczekuje na zatwierdzenie."
+    },
     "mention": {
       "category": {
         "entities": "W tej sprawie",

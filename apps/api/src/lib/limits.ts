@@ -625,6 +625,7 @@ export const LIMITS = {
    * caller should search instead of choosing.
    */
   caseLawLookupCandidatesMax: 5,
+  caseLawLookupSubjectMaxChars: 400,
   /**
    * Publisher document fetches one batch read may trigger. A decision whose
    * document nobody has fetched yet costs a crawl, so a batch reads the
