@@ -113,7 +113,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
@@ -121,7 +121,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
@@ -129,7 +129,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
@@ -137,7 +137,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -145,7 +145,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
@@ -153,7 +153,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "letter-spaced words and section markers are recomputed from stored markup, including uneven chunks witnessed by intact words in the decision; paragraph text has no feature storage of its own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -161,7 +161,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
@@ -169,7 +169,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
@@ -177,7 +177,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -185,7 +185,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
@@ -201,7 +201,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -297,7 +297,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
@@ -305,7 +305,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
@@ -313,7 +313,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Read the stated judgment type and ECLI availability from the stored XML envelope.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
@@ -329,7 +329,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -337,7 +337,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
@@ -345,7 +345,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
@@ -353,7 +353,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
     },
   },
 } as const satisfies ParserVersionScopes<
