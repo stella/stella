@@ -1773,7 +1773,11 @@ const listCzRegionalSlicePage = async ({
         identity,
         payload: item,
         ...(identity.type === "case-number"
-          ? { censusCourtEvidence: observedCensusCourt(item.soud) }
+          ? {
+              censusCourtEvidence: observedCensusCourt(
+                czRegionalIdentityItem(item)?.soud,
+              ),
+            }
           : {}),
       };
     }),

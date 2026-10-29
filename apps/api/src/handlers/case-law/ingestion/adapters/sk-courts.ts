@@ -1511,7 +1511,9 @@ const listSkCourtsSlicePage = async ({
         ...(identity.type === "case-number"
           ? {
               censusCourtEvidence: observedCensusCourt(
-                skCourtsIdentityFields(item)?.court,
+                isSkApiItem(item)
+                  ? skCourtsIdentityFields(item)?.court
+                  : undefined,
               ),
             }
           : {}),
