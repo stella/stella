@@ -1248,6 +1248,10 @@ if (import.meta.main) {
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
+  writeFileSync(
+    path.join(runnerTemp, "changed-scope.json"),
+    `${JSON.stringify(scope)}\n`,
+  );
   if (Bun.env["GITHUB_OUTPUT"]) {
     await Bun.write(Bun.file(Bun.env["GITHUB_OUTPUT"]), output);
   } else {
