@@ -130,59 +130,106 @@ const wrapped = ({ node, wrappers, wrapperNamespaces }: WrappedOptions) => {
 };
 
 type ModelBindings = {
+  file: string;
   bindings: ReadonlySet<string>;
   namespaces: ReadonlySet<string>;
 };
-type ImportExpressionOptions = {
-  file: string;
-  expression: ts.Expression;
-  namespaces: ReadonlySet<string>;
+type ModelReferenceKind = "module" | "operation" | "continuation";
+type ModelReference = ReadonlySet<ModelReferenceKind>;
+const combineModelReferences = (
+  references: readonly ModelReference[],
+): ModelReference => new Set(references.flatMap((reference) => [...reference]));
+const memberOf = (expression: ts.Expression) => {
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { receiver: expression.expression, name: expression.name.text };
+  }
+  if (ts.isElementAccessExpression(expression)) {
+    return {
+      receiver: expression.expression,
+      name: ts.isStringLiteral(expression.argumentExpression)
+        ? expression.argumentExpression.text
+        : undefined,
+    };
+  }
+  return undefined;
 };
-const importsModel = ({
-  file,
-  expression,
-  namespaces,
-}: ImportExpressionOptions): boolean => {
-  if (ts.isIdentifier(expression)) {
-    return namespaces.has(expression.text);
-  }
-  if (
-    ts.isAwaitExpression(expression) ||
-    ts.isParenthesizedExpression(expression)
-  ) {
-    return importsModel({
-      file,
-      expression: expression.expression,
-      namespaces,
-    });
-  }
-  if (
-    !ts.isCallExpression(expression) ||
-    expression.expression.kind !== ts.SyntaxKind.ImportKeyword
-  ) {
-    return false;
-  }
-  const specifier = expression.arguments.at(0);
-  return (
-    specifier !== undefined &&
-    ts.isStringLiteral(specifier) &&
-    MODEL_MODULES.has(modulePath(file, specifier.text))
-  );
+/** Resolve module receivers and operation values through the same expression graph. */
+const modelReference = ({ file, bindings, namespaces }: ModelBindings) => {
+  const resolve = (expression: ts.Expression): ModelReference => {
+    if (ts.isIdentifier(expression)) {
+      const kinds = new Set<ModelReferenceKind>();
+      if (namespaces.has(expression.text)) {
+        kinds.add("module");
+      }
+      if (bindings.has(expression.text)) {
+        kinds.add("operation");
+      }
+      return kinds;
+    }
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAwaitExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression) ||
+      ts.isNonNullExpression(expression) ||
+      ts.isTypeAssertionExpression(expression)
+    ) {
+      return resolve(expression.expression);
+    }
+    if (ts.isConditionalExpression(expression)) {
+      return combineModelReferences([
+        resolve(expression.whenTrue),
+        resolve(expression.whenFalse),
+      ]);
+    }
+    if (ts.isBinaryExpression(expression)) {
+      return combineModelReferences([
+        resolve(expression.left),
+        resolve(expression.right),
+      ]);
+    }
+    const member = memberOf(expression);
+    if (member !== undefined) {
+      const kinds = new Set<ModelReferenceKind>();
+      const receiver = resolve(member.receiver);
+      if (receiver.has("module")) {
+        if (member.name === "then") {
+          kinds.add("continuation");
+        } else if (member.name === undefined || names.has(member.name)) {
+          kinds.add("operation");
+        }
+      }
+      if (member.name !== undefined && bindings.has(member.name)) {
+        kinds.add("operation");
+      }
+      return kinds;
+    }
+    if (
+      ts.isCallExpression(expression) &&
+      expression.expression.kind === ts.SyntaxKind.ImportKeyword
+    ) {
+      const specifier = expression.arguments.at(0);
+      if (
+        specifier !== undefined &&
+        ts.isStringLiteral(specifier) &&
+        MODEL_MODULES.has(modulePath(file, specifier.text))
+      ) {
+        return new Set(["module"]);
+      }
+    }
+    return new Set();
+  };
+  return resolve;
 };
 type ImportedBindingOptions = {
-  file: string;
   node: ts.Node;
-  namespaces: ReadonlySet<string>;
+  resolve: ReturnType<typeof modelReference>;
 };
-const importedModelBinding = ({
-  file,
-  node,
-  namespaces,
-}: ImportedBindingOptions) => {
+const importedModelBinding = ({ node, resolve }: ImportedBindingOptions) => {
   if (
     ts.isVariableDeclaration(node) &&
     node.initializer !== undefined &&
-    importsModel({ file, expression: node.initializer, namespaces })
+    resolve(node.initializer).has("module")
   ) {
     return node.name;
   }
@@ -192,17 +239,14 @@ const importedModelBinding = ({
   const callback = node.parent;
   const call = callback.parent;
   if (
-    (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) &&
-    callback.parameters.at(0) === node &&
-    ts.isCallExpression(call) &&
-    call.arguments.at(0) === callback &&
-    ts.isPropertyAccessExpression(call.expression) &&
-    call.expression.name.text === "then" &&
-    importsModel({ file, expression: call.expression.expression, namespaces })
+    !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) ||
+    callback.parameters.at(0) !== node ||
+    !ts.isCallExpression(call) ||
+    call.arguments.at(0) !== callback
   ) {
-    return node.name;
+    return undefined;
   }
-  return undefined;
+  return resolve(call.expression).has("continuation") ? node.name : undefined;
 };
 type BindModuleOptions = {
   binding: ts.BindingName;
@@ -234,48 +278,6 @@ const bindModelModule = ({
     }
   }
   return changed;
-};
-const modelReference = ({ bindings, namespaces }: ModelBindings) => {
-  const reference = (expression: ts.Expression): boolean => {
-    if (ts.isIdentifier(expression)) {
-      return bindings.has(expression.text);
-    }
-    if (
-      ts.isParenthesizedExpression(expression) ||
-      ts.isAsExpression(expression) ||
-      ts.isSatisfiesExpression(expression) ||
-      ts.isNonNullExpression(expression) ||
-      ts.isTypeAssertionExpression(expression)
-    ) {
-      return reference(expression.expression);
-    }
-    if (ts.isConditionalExpression(expression)) {
-      return reference(expression.whenTrue) || reference(expression.whenFalse);
-    }
-    if (ts.isBinaryExpression(expression)) {
-      return reference(expression.left) || reference(expression.right);
-    }
-    if (ts.isPropertyAccessExpression(expression)) {
-      return (
-        bindings.has(expression.name.text) ||
-        (ts.isIdentifier(expression.expression) &&
-          namespaces.has(expression.expression.text) &&
-          names.has(expression.name.text))
-      );
-    }
-    if (
-      ts.isElementAccessExpression(expression) &&
-      ts.isIdentifier(expression.expression) &&
-      namespaces.has(expression.expression.text)
-    ) {
-      return (
-        !ts.isStringLiteral(expression.argumentExpression) ||
-        names.has(expression.argumentExpression.text)
-      );
-    }
-    return false;
-  };
-  return reference;
 };
 
 export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
@@ -339,33 +341,14 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       }
     }
   });
-  const reference = modelReference({ bindings, namespaces });
+  const resolve = modelReference({ file, bindings, namespaces });
   // Resolve aliases to a fixed point, including a chain declared before its source.
   let changed = true;
   const resolveAlias = (node: ts.Node) => {
-    const imported = importedModelBinding({ file, node, namespaces });
+    const imported = importedModelBinding({ node, resolve });
     if (imported !== undefined) {
       changed =
         bindModelModule({ binding: imported, bindings, namespaces }) || changed;
-    }
-    if (
-      ts.isBindingElement(node) &&
-      ts.isIdentifier(node.name) &&
-      ts.isObjectBindingPattern(node.parent) &&
-      ts.isVariableDeclaration(node.parent.parent) &&
-      node.parent.parent.initializer !== undefined &&
-      ts.isIdentifier(node.parent.parent.initializer) &&
-      namespaces.has(node.parent.parent.initializer.text)
-    ) {
-      const property = node.propertyName ?? node.name;
-      if (
-        (ts.isIdentifier(property) || ts.isStringLiteral(property)) &&
-        names.has(property.text) &&
-        !bindings.has(node.name.text)
-      ) {
-        bindings.add(node.name.text);
-        changed = true;
-      }
     }
     if (
       !(
@@ -375,7 +358,7 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       ) ||
       !ts.isIdentifier(node.name) ||
       node.initializer === undefined ||
-      !reference(node.initializer)
+      !resolve(node.initializer).has("operation")
     ) {
       return;
     }
@@ -391,22 +374,12 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
   let legacyCalls = 0;
   const writes: number[] = [];
   visit(tree, (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword
-    ) {
-      const specifier = node.arguments.at(0);
-      if (
-        specifier !== undefined &&
-        ts.isStringLiteral(specifier) &&
-        MODEL_MODULES.has(modulePath(file, specifier.text))
-      ) {
-        modelImport = true;
-      }
+    if (ts.isCallExpression(node) && resolve(node).has("module")) {
+      modelImport = true;
     }
     if (
       ts.isCallExpression(node) &&
-      reference(node.expression) &&
+      resolve(node.expression).has("operation") &&
       !wrapped({ node, wrappers, wrapperNamespaces })
     ) {
       legacyCalls++;

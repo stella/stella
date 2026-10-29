@@ -867,6 +867,46 @@ test("generated artefact provenance counts every dynamic-import invocation", asy
   }
 });
 
+test("generated artefact provenance resolves model receivers through expression wrappers", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const { prefix, receiver } of [
+    { prefix: "export {};", receiver: `await import(${module})` },
+    { prefix: `import * as m from ${module};`, receiver: "m" },
+  ]) {
+    for (const expression of [
+      receiver,
+      `(${receiver})`,
+      `(${receiver}) as M`,
+      `(${receiver}) satisfies M`,
+      `(${receiver})!`,
+      `await (${receiver})`,
+    ]) {
+      for (const use of [
+        `(${expression}).collectTanStackTextRun({});`,
+        `(${expression})["collectTanStackTextRun"]({});`,
+        `const alias = (${expression}); alias.collectTanStackTextRun({});`,
+        `const { collectTanStackTextRun: fn } = (${expression}); fn({});`,
+      ]) {
+        const source = `${prefix} ${use}`;
+        const scanned = inspectArtefactGenerators({ file, source });
+        expect(scanned, source).toMatchObject({
+          modelImport: true,
+          legacyCalls: 1,
+        });
+        expect(
+          assessArtefactGenerator({ file, scanned, ledger: {} }),
+          source,
+        ).toContain(
+          `${file}: raw generation count 1; migrate through generateArtefact and shrink the transition list`,
+        );
+      }
+    }
+  }
+});
+
 test("generated artefact provenance rejects new consumers and transition growth in a real diff", async () => {
   const { checkArtefactProvenance } =
     await import("./generated-artefact-provenance");

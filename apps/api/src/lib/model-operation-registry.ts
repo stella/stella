@@ -1,7 +1,56 @@
-import type MODEL_OPERATIONS from "../../../../scripts/ownership/model-operation-callers.ts";
+/** Production entry points shared by generation contracts and ownership admission. */
+export const MODEL_OPERATION_MODULES = [
+  "apps/api/src/handlers/ai-autocomplete/stream.ts",
+  "apps/api/src/handlers/case-law/analysis/generate.ts",
+  "apps/api/src/handlers/case-law/analysis/significance-run.ts",
+  "apps/api/src/handlers/case-law/decisions/search-expand.ts",
+  "apps/api/src/handlers/case-law/decisions/search-refine.ts",
+  "apps/api/src/lib/chat/chat-request.ts",
+  "apps/api/src/handlers/chat/chat-turn-run.ts",
+  "apps/api/src/handlers/chat/compaction.ts",
+  "apps/api/src/handlers/chat/generate-thread-title.ts",
+  "apps/api/src/handlers/chat/get-suggested-prompts.ts",
+  "apps/api/src/handlers/chat/improve-prompt.ts",
+  "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
+  "apps/api/src/handlers/chat/stream-chat.ts",
+  "apps/api/src/handlers/chat/subagent-runner.ts",
+  "apps/api/src/handlers/legal-reader/answers/model.ts",
+  "apps/api/src/handlers/chat/suggest-thread-title.ts",
+  "apps/api/src/handlers/chat/thread-recap.ts",
+  "apps/api/src/handlers/chat/thread-title-prompt.ts",
+  "apps/api/src/handlers/clauses/rewrite.ts",
+  "apps/api/src/handlers/contacts/extract-procuracao.ts",
+  "apps/api/src/handlers/document-reviews/reference-positions.ts",
+  "apps/api/src/handlers/entities/placements/suggest.ts",
+  "apps/api/src/handlers/playbooks/derive-ask.ts",
+  "apps/api/src/handlers/search/ai.ts",
+  "apps/api/src/handlers/skills/drafts/generate.ts",
+  "apps/api/src/handlers/skills/proposals/from-comments/create.ts",
+  "apps/api/src/handlers/skills/resources/rewrite.ts",
+  "apps/api/src/handlers/templates/prefill.ts",
+  "apps/api/src/handlers/time-entries/polish-narrative.ts",
+  "apps/api/src/lib/ai-change-summary.ts",
+  "apps/api/src/lib/bbox/ai-generate-b-boxes.ts",
+  "apps/api/src/lib/bilingual/ai.ts",
+  "apps/api/src/lib/case-law/research-answer-runner.ts",
+  "apps/api/src/lib/chat/thread-compaction.ts",
+  "apps/api/src/lib/document-review/parties.ts",
+  "apps/api/src/lib/document-review/reference-grade.ts",
+  "apps/api/src/lib/document-translation/ai.ts",
+  "apps/api/src/lib/docx/ai-field-generator.ts",
+  "apps/api/src/lib/flows/flow-executor.ts",
+  "apps/api/src/lib/lists/verification/model-call.ts",
+  "apps/api/src/lib/properties/column-prompt-suggestion.ts",
+  "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+  "apps/api/src/lib/scouts/document-deadlines.ts",
+  "apps/api/src/lib/structured-output-budget-probe.ts",
+  "apps/api/src/lib/templates/suggest-template-fields.ts",
+  "apps/api/src/lib/workflow/ai-generate-batch.ts",
+  "apps/api/src/lib/workflow/decisions/decide.ts",
+  "apps/api/src/lib/workflow/verdict-engine.ts",
+] as const;
 
-/** The ownership declaration is the source of truth for production generators. */
-export type ModelOperationId = (typeof MODEL_OPERATIONS.owner)[number];
+export type ModelOperationId = (typeof MODEL_OPERATION_MODULES)[number];
 
 /** One boundary list feeds admission, provenance and request-send policy. */
 export const MODEL_OPERATION_BOUNDARIES = {
