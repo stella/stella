@@ -162,6 +162,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // matters-write consent. They get their own dedicated consent bucket rather
   // than borrowing the workspace write scope.
   chat: "stella:chat",
+  dictation: "stella:chat",
   clauses: "stella:knowledge_write",
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.

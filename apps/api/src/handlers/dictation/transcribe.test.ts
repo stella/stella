@@ -1,0 +1,302 @@
+import { Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import {
+  MAX_TRANSCRIPTION_AUDIO_BYTES,
+  MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+} from "@stll/api-contract/transcription";
+
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { transcribeAudio } from "@/api/lib/transcription/provider";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+
+import { dictationBodySchema } from "./schema";
+import { executeDictation } from "./transcribe";
+
+type DictationContext = Exclude<
+  Parameters<typeof executeDictation>[0],
+  { orgAIConfigStatus: "unreadable" }
+>;
+type Dependencies = Parameters<typeof executeDictation>[1];
+const TEXT = "K návrhu Žofie Černé a Ľubomíra Kováča.";
+const VOCABULARY = ["Žofia Černá", "Ľubomír Kováč"];
+const MODEL = "mistralai/voxtral-mini-transcribe";
+
+const wav = () => {
+  const bytes = new Uint8Array(46);
+  bytes.set(new TextEncoder().encode("RIFF"));
+  bytes.set(new TextEncoder().encode("WAVE"), 8);
+  return new File([bytes], "hlas.wav", { type: "audio/wav" });
+};
+
+const fixture = () => {
+  const context = createTestHandlerContext<DictationContext>({
+    audit: NO_AUDIT,
+    safeDb: NO_DB,
+    scopedDb: NO_DB,
+    body: {
+      file: wav(),
+      modelId: MODEL,
+      language: "cs",
+      vocabulary: VOCABULARY,
+    },
+    request: new Request("https://stella.test/v1/dictation/transcribe", {
+      method: "POST",
+    }),
+  });
+  context.modelAdmission = admitFixtureModelDispatch({
+    userId: context.user.id,
+    organizationId: context.session.activeOrganizationId,
+    actionKind: "dictation.transcribe",
+    modelTier: MANAGED_MODEL_TIER.standard,
+  });
+  const requests: { url: string; body: unknown; key: string | null }[] = [];
+  const settlements: Parameters<Dependencies["settle"]>[0][] = [];
+  let credentials = 0;
+  let preflights = 0;
+  const dependencies = {
+    transcribe: async (options) =>
+      await transcribeAudio({
+        ...options,
+        fetch: async (url, init) => {
+          requests.push({
+            url: String(url),
+            body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+            key: new Headers(init?.headers).get("authorization"),
+          });
+          return Response.json({
+            text: TEXT,
+            language: "cs",
+            duration: 1.234,
+            segments: [{ start: 0, end: 1.234, text: TEXT }],
+            words: [{ start: 0, end: 0.2, word: "K" }],
+          });
+        },
+      }),
+    credential: async () => {
+      credentials++;
+      return Result.ok({ type: "static" as const, apiKey: "managed-fixture" });
+    },
+    limit: async () => Result.ok(undefined),
+    preflight: async () => {
+      preflights++;
+      return Result.ok(undefined);
+    },
+    settle: async (options) => {
+      settlements.push(options);
+      return Result.ok(undefined);
+    },
+  } satisfies Dependencies;
+  return {
+    context,
+    dependencies,
+    requests,
+    settlements,
+    counts: () => ({ credentials, preflights }),
+  };
+};
+
+describe("dictation operation request matrix", () => {
+  test("uses the regional provider and records only bounded accounting metadata", async () => {
+    const f = fixture();
+    const result = await executeDictation(f.context, f.dependencies);
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      text: TEXT,
+      durationMs: 1234,
+      detectedLanguage: "cs",
+      segments: [{ startMs: 0, endMs: 1234, text: TEXT }],
+    });
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests.at(0)).toMatchObject({
+      url: "https://eu.openrouter.ai/api/v1/audio/transcriptions",
+      key: "Bearer managed-fixture",
+      body: {
+        language: "cs",
+        provider: { zdr: true, data_collection: "deny" },
+      },
+    });
+    expect(f.settlements).toHaveLength(1);
+    const settlement = f.settlements.at(0);
+    expect(settlement?.result).toEqual({ modelId: MODEL, durationMs: 1234 });
+    expect(settlement?.workspaceId).toBeNull();
+    expect(settlement?.isByok).toBe(false);
+    expect(settlement?.caller).not.toHaveProperty("body");
+    expect(JSON.stringify(settlement)).not.toContain(TEXT);
+    expect(JSON.stringify(settlement)).not.toContain(VOCABULARY.at(0));
+  });
+
+  test("organization OpenRouter credential overrides the managed key on the same regional endpoint", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      orgAIConfig: {
+        providers: [{ provider: "openrouter", apiKey: "organization-fixture" }],
+        overrideModels: null,
+        decision: null,
+      },
+    } satisfies DictationContext;
+    expect((await executeDictation(context, f.dependencies)).isOk()).toBe(true);
+    expect(f.counts()).toEqual({ credentials: 0, preflights: 1 });
+    expect(f.requests.at(0)?.key).toBe("Bearer organization-fixture");
+    expect(f.settlements.at(0)?.isByok).toBe(true);
+  });
+
+  test("self-hosted missing credentials refuses before dispatch", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ownKeyRequired,
+    };
+    expect((await executeDictation(context, f.dependencies)).isErr()).toBe(
+      true,
+    );
+    expect(f.requests).toEqual([]);
+    expect(f.settlements).toEqual([]);
+  });
+
+  test("a caller without matter access gets not found before any provider work", async () => {
+    const f = fixture();
+    f.context.body.matterId = createTestHandlerContext({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+    }).workspaceId;
+    const context = { ...f.context, getWorkspaceAccess: async () => null };
+    const result = await executeDictation(context, f.dependencies);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new TypeError("Expected matter refusal");
+    }
+    expect(result.error).toMatchObject({ status: 404 });
+    expect(f.requests).toEqual([]);
+    expect(f.settlements).toEqual([]);
+  });
+
+  test("an authorized matter is attributed in accounting without influencing the provider request", async () => {
+    const f = fixture();
+    const matterId = createTestHandlerContext({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+    }).workspaceId;
+    f.context.body.matterId = matterId;
+    expect((await executeDictation(f.context, f.dependencies)).isOk()).toBe(
+      true,
+    );
+    expect(f.settlements.at(0)?.workspaceId).toBe(matterId);
+    expect(JSON.stringify(f.requests)).not.toContain(matterId);
+  });
+
+  test("unknown US model availability never tries a public or alternate-region endpoint", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      managedAIResidency: "us",
+    } as const satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new TypeError("Expected regional refusal");
+    }
+    expect(result.error).toMatchObject({
+      code: "transcription_model_unavailable",
+    });
+    expect(f.requests).toEqual([]);
+    expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });
+  });
+
+  test.each(["allowance", "rate", "provider"] as const)(
+    "%s refusal leaves no stored transcript or settlement",
+    async (failure) => {
+      const f = fixture();
+      const refusal = new HandlerError({
+        status: 503,
+        code: "service_unavailable",
+        message: "Fixture unavailable",
+      });
+      const cases = {
+        allowance: {
+          ...f.dependencies,
+          preflight: async () => Result.err(refusal),
+        },
+        rate: { ...f.dependencies, limit: async () => Result.err(refusal) },
+        provider: {
+          ...f.dependencies,
+          transcribe: async () => Result.err(refusal),
+        },
+      } satisfies Record<typeof failure, Dependencies>;
+      const result = await executeDictation(f.context, cases[failure]);
+      expect(result.isErr()).toBe(true);
+      expect(f.requests).toEqual([]);
+      expect(f.settlements).toEqual([]);
+      expect(JSON.stringify(result)).not.toContain(TEXT);
+      expect(JSON.stringify(result)).not.toContain(VOCABULARY.at(0));
+    },
+  );
+});
+
+describe("dictation input boundary", () => {
+  test("accepts Czech and Slovak language codes and bounded vocabulary", () => {
+    for (const language of ["cs", "sk"]) {
+      expect(
+        v.safeParse(dictationBodySchema, {
+          file: wav(),
+          modelId: MODEL,
+          language,
+          vocabulary: JSON.stringify(VOCABULARY),
+        }).success,
+      ).toBe(true);
+    }
+  });
+  test("rejects malformed input before provider dispatch", () => {
+    for (const patch of [
+      { file: new File([], "empty.wav", { type: "audio/wav" }) },
+      {
+        file: new File(
+          [new Uint8Array(MAX_TRANSCRIPTION_AUDIO_BYTES + 1)],
+          "large.wav",
+          { type: "audio/wav" },
+        ),
+      },
+      { modelId: "unsupported/model" },
+      { language: "zz" },
+      { language: "cs-CZ" },
+      {
+        vocabulary: JSON.stringify(
+          Array.from(
+            { length: MAX_TRANSCRIPTION_VOCABULARY_TERMS + 1 },
+            () => "Žofia",
+          ),
+        ),
+      },
+      {
+        vocabulary: JSON.stringify([
+          "Ž".repeat(MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH + 1),
+        ]),
+      },
+      { vocabulary: "[" },
+      { matterId: "bad-id" },
+    ]) {
+      expect(
+        v.safeParse(dictationBodySchema, {
+          file: wav(),
+          modelId: MODEL,
+          ...patch,
+        }).success,
+      ).toBe(false);
+    }
+  });
+});

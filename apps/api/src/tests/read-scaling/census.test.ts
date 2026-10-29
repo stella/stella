@@ -16,6 +16,7 @@ import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { dictationScalingScenario } from "./dictation";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
@@ -53,6 +54,7 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  dictationScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

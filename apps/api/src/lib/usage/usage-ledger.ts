@@ -337,7 +337,7 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelTask: ModelTask | "decision";
+  modelTask: ModelTask | "decision" | "transcription";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;

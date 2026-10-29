@@ -197,6 +197,7 @@ export const DOMAIN_ACTION_VERBS = [
   "suggest",
   "summarize",
   "sync",
+  "transcribe",
   "transition",
   "unarchive",
   "unlink",

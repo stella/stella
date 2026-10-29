@@ -26,6 +26,7 @@
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./review-decision": "./src/review-decision.ts",
     "./limits": "./src/limits.ts",
+    "./transcription": "./src/transcription.ts",
     "./http-input": "./src/http-input.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",

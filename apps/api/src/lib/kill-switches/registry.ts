@@ -37,6 +37,12 @@ type KillSwitchDefinition = {
  * removing its switch here.
  */
 export const KILL_SWITCHES = {
+  dictation: {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/dictation",
+    offHint:
+      "Dictation is turned off. Do not retry until it is turned back on.",
+  },
   chat: {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/chat",
@@ -172,6 +178,7 @@ export type KillSwitchId = keyof typeof KILL_SWITCHES;
  * model dispatch carries an admitted action kind.
  */
 export const ACTION_KIND_KILL_SWITCH = {
+  "dictation.transcribe": "dictation",
   "chat.send": "chat",
   "chat.generate-thread-title": "chat",
   "chat.improve-prompt": "chat",
