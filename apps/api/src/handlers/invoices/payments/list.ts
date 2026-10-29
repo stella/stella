@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { invoicePayments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   invoicePaymentAmounts,
@@ -10,6 +11,34 @@ import {
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+
+type InvoicePaymentRow = typeof invoicePayments.$inferSelect;
+type InvoicePaymentItem = ReturnType<typeof invoicePaymentView>;
+
+const UNPROJECTED_PAYMENT_COLUMNS = [
+  // Tenant scope is supplied by the authorized invoice route.
+  "organizationId",
+  // Repair provenance is server-owned bookkeeping, not payment input or output.
+  "origin",
+] as const satisfies readonly (keyof InvoicePaymentRow)[];
+
+type MissingPaymentColumn = UnprojectedColumns<
+  InvoicePaymentRow,
+  InvoicePaymentItem,
+  (typeof UNPROJECTED_PAYMENT_COLUMNS)[number]
+>;
+type UnexpectedPaymentColumn = UnbackedProjectionKeys<
+  InvoicePaymentRow,
+  InvoicePaymentItem,
+  (typeof UNPROJECTED_PAYMENT_COLUMNS)[number]
+>;
+
+true satisfies MissingPaymentColumn extends never ? true : never;
+true satisfies UnexpectedPaymentColumn extends never ? true : never;
 
 const invoiceParamsSchema = workspaceParams({
   invoiceId: resourceIdSchema("invoice"),

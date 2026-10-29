@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseTimeZoneId, Temporal, todayFor } from "@stll/time";
 
+import { setDedicatedStatementTimeout } from "@/api/db/long-running-connection";
 import type { OnlineRepair } from "@/api/db/online-migration-connection";
 import { INVOICE_PAYMENT_ORIGIN } from "@/api/db/schema";
 import { lockInvoiceRepairBatch } from "@/api/lib/db/aggregate-lock";
@@ -31,6 +32,7 @@ import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone"
  */
 
 const BATCH_SIZE = 500;
+const BATCH_STATEMENT_TIMEOUT_MS = 60_000;
 
 export const LEGACY_PAYMENT_NOTE = "Recorded before payment records existed";
 
@@ -72,6 +74,10 @@ const lockedBackfillBatch = async (
   await connection.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
   const outcome = await Result.tryPromise({
     try: async () => {
+      await setDedicatedStatementTimeout(
+        connection.execute,
+        BATCH_STATEMENT_TIMEOUT_MS,
+      );
       const candidates = v.parse(
         v.array(v.object({ id: v.string() })),
         await lockInvoiceRepairBatch({
@@ -99,19 +105,13 @@ const lockedBackfillBatch = async (
 
 /** Repeats bounded, separately committed batches until no candidate remains. */
 const untilEmpty = async (
-  connection: RepairConnection,
   batch: () => ReturnType<typeof lockedBackfillBatch>,
 ) => {
-  await connection.execute("SET statement_timeout = '60s'");
-  try {
-    for (;;) {
-      const rows = await batch();
-      if (rows.length === 0) {
-        return { type: "complete" } as const;
-      }
+  for (;;) {
+    const rows = await batch();
+    if (rows.length === 0) {
+      return { type: "complete" } as const;
     }
-  } finally {
-    await connection.execute("SET statement_timeout = 0");
   }
 };
 
@@ -120,7 +120,6 @@ export const INVOICE_SENT_AT_BACKFILL = {
   ...pending(UNMARKED_SENT_INVOICES, "Sent invoices lack their sent marker"),
   repair: async (connection) =>
     await untilEmpty(
-      connection,
       async () =>
         await lockedBackfillBatch(connection, {
           predicate: UNMARKED_SENT_PREDICATE,
@@ -220,7 +219,6 @@ export const INVOICE_LEGACY_PAYMENT_BACKFILL = {
   ),
   repair: async (connection) =>
     await untilEmpty(
-      connection,
       async () =>
         await lockedBackfillBatch(connection, {
           predicate: UNSETTLED_PAID_PREDICATE,

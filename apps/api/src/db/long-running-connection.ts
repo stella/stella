@@ -49,6 +49,15 @@ const positiveMilliseconds = (value: number, name: string): number => {
   return value;
 };
 
+/** A LOCAL budget on a caller-owned dedicated transaction; never pool-clamped. */
+export const setDedicatedStatementTimeout = async (
+  execute: (statement: string) => Promise<unknown>,
+  requestedMs: number,
+): Promise<void> => {
+  const budget = positiveMilliseconds(requestedMs, "statementTimeout");
+  await execute(`SET LOCAL statement_timeout = '${budget}ms'`);
+};
+
 type ReservableSession = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
   release: () => Promise<void>;
@@ -202,8 +211,9 @@ export const withDedicatedReservedSession = async <
       );
       const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
       await session.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
-      await session.unsafe(
-        `SET LOCAL statement_timeout = '${statementBudget}ms'`,
+      await setDedicatedStatementTimeout(
+        async (statement) => await session.unsafe(statement),
+        statementBudget,
       );
     }))();
   await Promise.allSettled([body]);

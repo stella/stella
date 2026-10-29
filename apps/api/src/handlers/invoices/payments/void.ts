@@ -8,6 +8,7 @@ import {
   voidInvoicePayment,
 } from "@/api/lib/billing/invoice-payments";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const paymentParamsSchema = workspaceParams({
   invoiceId: resourceIdSchema("invoice"),
@@ -60,5 +61,10 @@ const voidInvoicePaymentHandler = createSafeHandler(
     return Result.ok(invoicePaymentView(payment));
   },
 );
+
+declareAggregateMutation(voidInvoicePaymentHandler, {
+  type: "aggregate",
+  aggregates: ["workspace"],
+});
 
 export default voidInvoicePaymentHandler;

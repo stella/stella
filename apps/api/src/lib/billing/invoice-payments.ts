@@ -262,14 +262,6 @@ type InvoicePaymentInput = {
   note: string | null;
 };
 
-const lockInvoice = async (tx: Transaction, scope: InvoicePaymentScope) =>
-  await lockInvoiceInStatus(tx, {
-    invoiceId: scope.invoiceId,
-    workspaceId: scope.workspaceId,
-    status: INVOICE_STATUSES,
-    matterLocks: { type: "acquire" },
-  });
-
 type LockedInvoice = {
   status: InvoiceStatus;
   sentAt: Date | null;
@@ -459,7 +451,12 @@ export const recordInvoicePayment = async (
       }),
     );
   }
-  const invoice = await lockInvoice(tx, scope);
+  const invoice = await lockInvoiceInStatus(tx, {
+    invoiceId: scope.invoiceId,
+    workspaceId: scope.workspaceId,
+    status: INVOICE_STATUSES,
+    matterLocks: { type: "acquire" },
+  });
   if (!invoice) {
     return Result.err(invoiceNotFound());
   }
@@ -546,7 +543,12 @@ export const voidInvoicePayment = async (
   scope: InvoicePaymentScope,
   paymentId: SafeId<"invoicePayment">,
 ): Promise<Result<StoredPayment, HandlerError>> => {
-  const invoice = await lockInvoice(tx, scope);
+  const invoice = await lockInvoiceInStatus(tx, {
+    invoiceId: scope.invoiceId,
+    workspaceId: scope.workspaceId,
+    status: INVOICE_STATUSES,
+    matterLocks: { type: "acquire" },
+  });
   if (!invoice) {
     return Result.err(invoiceNotFound());
   }

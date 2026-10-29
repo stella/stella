@@ -1,13 +1,17 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { operators } from "drizzle-orm";
+import type { BuildQueryResult } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { cents } from "@stll/money";
 
+import type { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import { invoices } from "@/api/db/schema";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import type { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
@@ -141,6 +145,12 @@ describe("follow-up (b): read_document propertyId path", () => {
   });
 });
 
+type InvoiceDetailRow = BuildQueryResult<
+  typeof databaseRelations,
+  (typeof databaseRelations)["invoices"],
+  { with: typeof INVOICE_DETAIL_RELATIONS }
+>;
+
 describe("follow-up (a): detail-mode workspace resolution from the fetched row", () => {
   test("list_time_entries by time_entry_id alone resolves the entry's entity ref", async () => {
     const refRegistry = createChatRefRegistry();
@@ -213,9 +223,10 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 dialect.sqlToQuery(predicate(invoices, operators)),
               );
               return {
-                id: INV_UUID,
+                id: toSafeId<"invoice">(INV_UUID),
+                organizationId: toSafeId<"organization">("org_1"),
                 clientId: null,
-                workspaceId: WS_UUID,
+                workspaceId: toSafeId<"workspace">(WS_UUID),
                 invoiceNumber: "INV-1",
                 documentType: "invoice",
                 originalInvoiceId: null,
@@ -224,7 +235,17 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 invoiceDate: "2026-01-01",
                 dueDate: "2026-02-01",
                 currency: "EUR",
-                totalAmount: 1000,
+                totalAmount: cents(1000),
+                language: "en",
+                billingMode: "hourly",
+                flatFeeAmount: null,
+                finalizedAt: null,
+                sentAt: null,
+                vatExchangeRate: null,
+                vatExchangeRateSource: null,
+                vatExchangeRateDate: null,
+                vatExchangeRateReference: null,
+                vatExchangeRateTaxPoint: null,
                 // Totals written before invoice lines: the read derives them.
                 netAmount: null,
                 vatAmount: null,
@@ -233,6 +254,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 sellerProfileId: null,
                 buyerName: null,
                 buyerRegistrationId: null,
+                buyerTaxId: null,
                 buyerVatId: null,
                 buyerAddressLine1: null,
                 buyerAddressLine2: null,
@@ -243,26 +265,33 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 createdAt: new Date("2026-01-01T00:00:00.000Z"),
                 updatedAt: new Date("2026-01-01T00:00:00.000Z"),
                 lines: [],
+                payments: [],
                 timeEntries: [
                   {
-                    id: TE_UUID,
-                    workspaceId: WS_UUID,
-                    workItemId: ENTITY_UUID,
-                    workItemReference: { type: "available", id: ENTITY_UUID },
+                    id: toSafeId<"timeEntry">(TE_UUID),
+                    workspaceId: toSafeId<"workspace">(WS_UUID),
+                    workItemId: toSafeId<"entity">(ENTITY_UUID),
+                    workItemReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(ENTITY_UUID),
+                    },
                     dateWorked: "2026-01-01",
                     billedMinutes: 60,
-                    rateAtEntry: 100,
+                    rateAtEntry: cents(100),
                     currency: "EUR",
                     narrative: "work",
-                    narrativeLanguage: null,
                     invoiceNarrative: null,
                     noCharge: false,
                     status: "invoiced",
-                    workItem: { id: ENTITY_UUID, name: "Deed" },
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(ENTITY_UUID),
+                      name: "Deed",
+                    },
                   },
                 ],
                 expenses: [],
-              };
+              } satisfies InvoiceDetailRow;
             },
           },
         },
