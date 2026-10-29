@@ -211,7 +211,7 @@ export const declareCaseSearchNavigationCases = (fixture: FixtureRuntime) => {
           panic("The mounted search must offer the notice action");
         }
         const { fireEvent } = await import("@testing-library/react");
-        await fixture.act(async () => { fireEvent.click(target); });
+        fixture.act(() => { fireEvent.click(target); });
         await fixture.waitFor(() => {
           expect(runtime.router.state.location.search).toMatchObject({
             ...expected,
