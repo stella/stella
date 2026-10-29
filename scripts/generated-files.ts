@@ -525,6 +525,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "mcp-app-contracts": [
     "apps/api/package.json",
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
@@ -593,6 +594,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
+    "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
@@ -1856,6 +1858,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/collab/src/env*.ts",
       // Read by the generator: build args and catalog helpers.
       "apps/web/Dockerfile",
+      "apps/api/src/db-components.ts",
       "apps/api/src/db-url.ts",
       "apps/api/src/lib/configuration-placeholders.ts",
       "apps/api/src/lib/rate-limit/budget-config-schema.ts",

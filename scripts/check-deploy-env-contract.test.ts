@@ -60,7 +60,7 @@ describe("deployment setting contract", () => {
     expect(result.exitCode).toBe(1);
     expect(result.lines).toEqual([
       "production api DEPLOY_ENVIRONMENT expected environment",
-      "production api DATABASE_URL expected either",
+      "production api DATABASE_URL expected either, or all of DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME",
     ]);
   });
 
