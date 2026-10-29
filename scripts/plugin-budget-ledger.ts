@@ -182,6 +182,7 @@ type PluginBudgetLedgerOptions = {
   /** What to do instead of budgeting a new site. */
   remediation: string;
   args: readonly string[];
+  normalizeBaseEntries?: (entries: string[], baseCommit: string) => string[];
 };
 
 export const runPluginBudgetLedger = ({
@@ -190,6 +191,7 @@ export const runPluginBudgetLedger = ({
   todoReason,
   remediation,
   args,
+  normalizeBaseEntries,
 }: PluginBudgetLedgerOptions): number => {
   const ledgerRel = `scripts/${plugin}-ledger.json`;
 
@@ -358,5 +360,6 @@ export const runPluginBudgetLedger = ({
     label: plugin,
     args,
     remediation,
+    normalizeBaseEntries,
   });
 };

@@ -8,6 +8,9 @@
 //   bun scripts/test-timing-ledger.ts --base <ref>   CI: the ledger only shrinks
 //   bun scripts/test-timing-ledger.ts --self-test    the checks work
 
+import path from "node:path";
+
+import { relocateLedgerEntries } from "./ledger-membership.ts";
 import { runPluginBudgetLedger } from "./plugin-budget-ledger.ts";
 
 if (import.meta.main) {
@@ -18,6 +21,13 @@ if (import.meta.main) {
       todoReason: "TODO: say why this test waits on the clock",
       remediation:
         "await the work's own completion signal or drive fake timers instead of budgeting a new site",
+      normalizeBaseEntries: (entries, baseCommit) =>
+        relocateLedgerEntries({
+          entries,
+          baseCommit,
+          repoRoot: path.resolve(import.meta.dir, ".."),
+          pathIndex: 1,
+        }),
       args: process.argv.slice(2),
     }),
   );

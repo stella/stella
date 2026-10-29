@@ -9,9 +9,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { relocateContractDomainEntries } from "./check-contract-domain-ledger";
 import { parseContractDomainLedger } from "./contract-domain-ledger";
-import { runLedgerMembershipGuard } from "./ledger-membership";
+import {
+  relocateLedgerEntries,
+  runLedgerMembershipGuard,
+} from "./ledger-membership";
 
 test("moving a source preserves existing sites but cannot add or replace constraints", () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "contract-domain-move-"));
@@ -72,7 +74,7 @@ test("moving a source preserves existing sites but cannot add or replace constra
         parseLedger: (text, label) =>
           parseContractDomainLedger(text, label).map(({ id }) => id),
         normalizeBaseEntries: (baseEntries, resolvedCommit) =>
-          relocateContractDomainEntries({
+          relocateLedgerEntries({
             entries: baseEntries,
             baseCommit: resolvedCommit,
             repoRoot,
@@ -89,6 +91,16 @@ test("moving a source preserves existing sites but cannot add or replace constra
     expect(check([movedEntry, `${moved}::Form::maxLength:64::2`])).toBe(1);
     expect(check([`${moved}::Form::maxLength:128::1`])).toBe(1);
     expect(check([`${moved}::OtherForm::maxLength:64::1`])).toBe(1);
+
+    // A route cutover can leave a wrapper at the old path, which makes Git
+    // report the extracted implementation as a copy rather than a rename.
+    writeFileSync(
+      path.join(repoRoot, original),
+      'export { bound } from "./admin";\n',
+    );
+    git("add", "-A");
+    expect(check([movedEntry])).toBe(0);
+
     const reviewedEntry = `${moved}::Form::maxLength:64::2`;
     writeFileSync(
       path.join(repoRoot, "ledger.json"),
@@ -102,7 +114,7 @@ test("moving a source preserves existing sites but cannot add or replace constra
         parseLedger: (text, label) =>
           parseContractDomainLedger(text, label).map(({ id }) => id),
         normalizeBaseEntries: (baseEntries, resolvedCommit) =>
-          relocateContractDomainEntries({
+          relocateLedgerEntries({
             entries: baseEntries,
             baseCommit: resolvedCommit,
             repoRoot,

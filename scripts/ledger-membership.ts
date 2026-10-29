@@ -12,6 +12,58 @@ export const ledgerGitEnv = (): Record<string, string> =>
     ),
   );
 
+type RelocateLedgerEntriesOptions = {
+  entries: readonly string[];
+  baseCommit: string;
+  repoRoot: string;
+  pathIndex?: number;
+};
+
+export const relocateLedgerEntries = ({
+  entries,
+  baseCommit,
+  repoRoot,
+  pathIndex = 0,
+}: RelocateLedgerEntriesOptions): string[] => {
+  const diff = Bun.spawnSync(
+    [
+      "git",
+      "diff",
+      "--name-status",
+      "-z",
+      "--find-renames",
+      "--find-copies",
+      "--diff-filter=RC",
+      baseCommit,
+      "--",
+    ],
+    { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
+  );
+  if (diff.exitCode !== 0) {
+    return panic(`Cannot read ledger renames: ${diff.stderr.toString()}`);
+  }
+  const diffFields = diff.stdout.toString().split("\0");
+  const renames = new Map<string, string>();
+  for (let index = 0; index < diffFields.length - 1; index += 3) {
+    const status = diffFields.at(index);
+    const from = diffFields.at(index + 1);
+    const to = diffFields.at(index + 2);
+    if (status === undefined || !/^[CR]\d+$/u.test(status) || !from || !to) {
+      return panic("Malformed ledger rename record");
+    }
+    renames.set(from, to);
+  }
+  // A move or copy keeps every other field; it cannot add a site.
+  return entries.map((entry) => {
+    const fields = entry.split("::");
+    const renamed = renames.get(fields[pathIndex] ?? "");
+    if (renamed !== undefined) {
+      fields[pathIndex] = renamed;
+    }
+    return fields.join("::");
+  });
+};
+
 type LedgerMergeBaseOptions = { repoRoot: string; baseRef: string };
 
 export const ledgerMergeBase = ({
