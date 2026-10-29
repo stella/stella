@@ -10,9 +10,9 @@ Immutable publisher evidence that states no usable canonical decision identity.
 
 ```text
 case_law_listing_observations.source_id      safeUuid     fk,not null       case-law-listing-observations.ts:11
-case_law_listing_observations.fingerprint    varchar      not null          case-law-listing-observations.ts:12
-case_law_listing_observations.adapter_key    varchar      not null          case-law-listing-observations.ts:13
-case_law_listing_observations.reason         varchar      not null          case-law-listing-observations.ts:14
-case_law_listing_observations.payload        jsonb        not null          case-law-listing-observations.ts:16  The wrapper preserves a source's JSON null as data rather than SQL NULL.
-case_law_listing_observations.first_seen_at  timestamptz  default,not null  case-law-listing-observations.ts:17
+case_law_listing_observations.fingerprint    varchar      not null          case-law-listing-observations.ts:14
+case_law_listing_observations.adapter_key    varchar      not null          case-law-listing-observations.ts:15
+case_law_listing_observations.reason         varchar      not null          case-law-listing-observations.ts:16
+case_law_listing_observations.payload        jsonb        not null          case-law-listing-observations.ts:20  The wrapper preserves a source's JSON null as data rather than SQL NULL.
+case_law_listing_observations.first_seen_at  timestamptz  default,not null  case-law-listing-observations.ts:21
 ```
