@@ -64,20 +64,10 @@
   border-radius: 0.25rem;
 }
 
-/* Running text is set ragged, aligned to the start edge, so a right-to-left
-   document aligns right. Justification stretched the word spaces of every
-   line that holds a long unbreakable token (a case number, a file
-   reference, a citation), and decision text is full of them.
-   Hyphenation stays: it alters no character of the text and keeps the rag
-   even in a narrow pane. The dictionary comes from the document's own
-   language, which each reader puts on its <article> as `lang`, so Czech,
-   Slovak and Polish break at their own points. The limits keep short words
-   whole and leave at least three letters on each side of a break. */
+/* Start alignment follows the document's direction. Legal word breaks and
+   long-token wrapping belong to LEGAL_TEXT_CLASS_NAME in @stll/ui/prose. */
 .reader-prose {
   text-align: start;
-  -webkit-hyphens: auto;
-  hyphens: auto;
-  hyphenate-limit-chars: 7 3 3;
 }
 
 /* A statute list item (`a)`, `1.`) hangs its designator in a gutter, so its

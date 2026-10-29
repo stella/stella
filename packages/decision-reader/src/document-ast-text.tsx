@@ -25,6 +25,7 @@ import {
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -64,9 +65,18 @@ export const rangesForPiece = <Range extends ReaderMarkRange>(
 export type TextAnchor = {
   end: number;
   key: string;
-  render: (children: ReactNode) => ReactNode;
+  render: (
+    children: ReactNode,
+    segment: { isRangeStart: boolean },
+  ) => ReactNode;
   start: number;
 };
+
+/** A split range keeps one structural owner: the segment at its start. */
+export const textAnchorSegmentOwnsRange = (
+  anchor: Pick<TextAnchor, "start">,
+  segmentStart: number,
+): boolean => segmentStart === anchor.start;
 
 export const anchorsForPiece = (
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined,
@@ -380,7 +390,9 @@ const renderTextSegment = ({
       }
       children.push(
         <Fragment key={`${anchor.key}-${String(anchorStart)}`}>
-          {anchor.render(highlight(anchorStart, anchorEnd))}
+          {anchor.render(highlight(anchorStart, anchorEnd), {
+            isRangeStart: textAnchorSegmentOwnsRange(anchor, anchorStart),
+          })}
         </Fragment>,
       );
       cursor = anchorEnd;
@@ -921,7 +933,7 @@ const PERMALINK_PLACEMENT_CLASS = {
   inline: "ms-1",
 } as const satisfies Record<PermalinkPlacement, string>;
 
-/** Running document text: start-aligned and hyphenated (see `reader.css`). */
+/** Running document text alignment (see `reader.css`). */
 export const READER_PROSE_CLASS = "reader-prose";
 
 /**
@@ -1423,6 +1435,7 @@ const paragraphClassValues = (block: ParagraphBlock) => {
     !isRomanNumeralDivider &&
     (block.role === undefined || !nonProseRoles.has(block.role));
   return [
+    LEGAL_TEXT_CLASS_NAME,
     "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
     isProse && READER_PROSE_CLASS,
     block.role === "holding" && "font-[520]",
@@ -1809,6 +1822,7 @@ export const FulltextFallback = ({
           <Fragment key={pieceId}>
             <p
               className={cn(
+                LEGAL_TEXT_CLASS_NAME,
                 READER_PROSE_CLASS,
                 "mb-[var(--reader-paragraph-gap)] last:mb-0",
               )}

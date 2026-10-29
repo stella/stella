@@ -1,9 +1,14 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.6";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.12";
 
 export const AUTH_SESSION_STARTUP_HEADER = "x-stella-session-startup";
 
-export const AUTH_SOCIAL_PROVIDER_IDS = ["google", "microsoft"] as const;
+export const AUTH_SOCIAL_PROVIDER_IDS = [
+  "google",
+  "microsoft",
+  "apple",
+] as const;
+export type AuthSocialProviderId = (typeof AUTH_SOCIAL_PROVIDER_IDS)[number];
 export const AUTH_ACCESS_RESET_ERROR_CODE = "confirm_access_reset";
 
 export const ORGANIZATION_ROLE_NAMES = [

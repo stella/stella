@@ -16,6 +16,16 @@ export const TEXT_FIELD_TYPE = {
   PRESENT: "present",
 } as const;
 
+// parser-output-unchanged: Text availability labels describe public reads only; ingestion output is unchanged.
+/** Recorded text presence; licences and read-time failures are separate. */
+export const DECISION_TEXT_AVAILABILITY = {
+  AVAILABLE: "available",
+  METADATA_ONLY: "metadata_only",
+} as const;
+
+export type DecisionTextAvailability =
+  (typeof DECISION_TEXT_AVAILABILITY)[keyof typeof DECISION_TEXT_AVAILABILITY];
+
 export const DECISION_TEXT_WITHHELD_REASON = {
   SOURCE_LICENCE: "source_licence",
 } as const;

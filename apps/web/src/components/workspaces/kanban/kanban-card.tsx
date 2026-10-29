@@ -314,7 +314,7 @@ export const KanbanCard = ({
   );
 
   const actionsButton = onRename ? (
-    <div className="absolute end-1.5 top-1.5 opacity-0 transition-opacity group-hover/card:opacity-100">
+    <div className="absolute end-1.5 top-1.5 opacity-0 transition-opacity group-hover/card:opacity-100 pointer-coarse:opacity-100">
       <RowActions
         entity={entity}
         onRename={startEditing}

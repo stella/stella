@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
+  fingerprintSchema,
   movedSources,
   planVariant,
   renderPlan,
@@ -27,6 +29,21 @@ const build = (
   sha: "0123456789abcdef0123456789abcdef01234567",
   url: "https://github.com/stella/stella/actions/runs/1",
   fingerprint: fingerprintAtBuild,
+});
+
+describe("fingerprint schema", () => {
+  test("accepts every source type the fingerprint reports", () => {
+    const parsed = v.safeParse(fingerprintSchema, {
+      hash: "head",
+      sources: [
+        { source: "app.config.ts", type: "file", hash: "f1" },
+        { source: "ios", type: "dir", hash: "d1" },
+        { source: "expoConfig", type: "contents", hash: null },
+        { source: "node_modules/expo-camera", type: "package", hash: "k1" },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
 });
 
 describe("moved sources", () => {

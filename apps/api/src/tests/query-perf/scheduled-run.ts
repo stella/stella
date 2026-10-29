@@ -1,84 +1,29 @@
 import { panic, Result } from "better-result";
-import { type Logger, type SQL, sql } from "drizzle-orm";
 
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
+import { createSafeId } from "@/api/lib/branded-types";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
-import type {
-  GatedTestClientScope,
-  GatedTestDb,
-} from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import {
-  explainOwnerStatement,
-  metricsFromPlan,
-  type QueryPerfMetrics,
-  sumMetrics,
-} from "./measurement";
-import {
-  applyPlannerSettings,
-  assertPlannerSettings,
-  QUERY_PERF_CONNECTION_SETTINGS,
-} from "./settings";
-
-type CapturedStatement = { text: string; params: readonly unknown[] };
-
-/** The statement's leading keyword, after comments and whitespace. */
-const leadingKeyword = (text: string) =>
-  /^(?:\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)*([a-z]+)/iu
-    .exec(text)
-    ?.at(1)
-    ?.toLowerCase() ?? "";
-
-const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
-const READ_KEYWORDS: ReadonlySet<string> = new Set([
-  "select",
-  "with",
-  "values",
-]);
-
-/** A captured statement as a Drizzle query with the same bound parameters. */
-const asQuery = ({ text, params }: CapturedStatement): SQL => {
-  const parts = text.split(/\$(\d+)/u);
-  const chunks = parts.map((part, index) => {
-    if (index % 2 === 0) {
-      return sql.raw(part);
-    }
-    const position = Number(part) - 1;
-    if (position < 0 || position >= params.length) {
-      return panic(`Captured statement names missing parameter $${part}`);
-    }
-    // One bound value each, as captured: an array stays one array parameter.
-    return sql.param(params[position]);
-  });
-  return sql.join(chunks, sql.raw(""));
-};
+import { metricsFromPlan, sumMetrics } from "./measurement";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
+import { analyzePlan } from "./plan-analyzer";
+import { measureJobStatements } from "./statement-measurement";
 
 const noopTask = () => undefined;
 
-/**
- * Pages one run of a declared job reads. The job's registered task runs once
- * against the fixture through a client that records every statement it
- * issues; each recorded read is then analyzed in one transaction under the
- * committed planner settings, and the run costs the sum. Measuring the task
- * rather than a hand-kept list of its statements means a statement added to
- * the job is measured without anyone registering it.
- *
- * Only reading jobs are measured this way: a write would change the fixture
- * the next scenario reads, so a job that writes fails here until its replay
- * runs inside a rolled-back transaction.
- */
+/** Measure the registered task's actual statements without replaying its results. */
 export const measureScheduledJobRun = async ({
   database,
-  openClient,
   jobId,
   task: taskName,
 }: {
   database: GatedTestDb;
-  openClient: GatedTestClientScope["openClient"];
   jobId: string;
   task: string;
 }) => {
@@ -88,6 +33,10 @@ export const measureScheduledJobRun = async ({
   if (job.task !== taskName) {
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
+  const readBudgetId =
+    typeof job.reads === "object"
+      ? job.reads.budget
+      : panic(`${jobId} has no measured read budget`);
   const task =
     createSchedulerTaskRegistry(
       noopTask,
@@ -95,65 +44,51 @@ export const measureScheduledJobRun = async ({
         compute: computeCaseLawCoverageAnswer,
       }),
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
-  const captured: CapturedStatement[] = [];
-  const logger: Logger = {
-    logQuery: (text, params) => {
-      captured.push({ text, params });
-    },
-  };
-  const { db } = openClient({
-    connection: QUERY_PERF_CONNECTION_SETTINGS,
-    logger,
+  const measured = await measureJobStatements({
+    database,
+    run: async (db) =>
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          db,
+          job: { id: job.id, task: job.task },
+          payload: null,
+          dueAt: DueSlot.of({ nextRunAt: new Date("2000-01-01") }),
+          runId: createSafeId<"schedulerJobRun">(),
+          signal: new AbortController().signal,
+          scheduleContinuation: noopTask,
+          logger: {
+            debug: noopTask,
+            error: noopTask,
+            info: noopTask,
+            warn: noopTask,
+          },
+        }),
+      ),
   });
-  const outcome = await task(
-    asTestRaw<SchedulerTaskContext>({
-      db,
-      job: { id: job.id, task: job.task },
-      payload: null,
-      signal: new AbortController().signal,
-      scheduleContinuation: noopTask,
-      logger: {
-        debug: noopTask,
-        error: noopTask,
-        info: noopTask,
-        warn: noopTask,
-      },
-    }),
-  );
+  const outcome = measured.value;
   if (outcome !== undefined && !Result.isOk(outcome)) {
     return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
   }
-  const reads = captured.filter(({ text }) => {
-    const keyword = leadingKeyword(text);
-    if (SESSION_KEYWORDS.has(keyword)) {
-      return false;
-    }
-    if (!READ_KEYWORDS.has(keyword)) {
-      return panic(
-        `${jobId} issued a ${keyword || "blank"} statement; a writing job needs a rolled-back replay before it can be measured`,
-      );
-    }
-    return true;
-  });
-  if (reads.length === 0) {
+  if (measured.statements.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }
-  const statements = await database.transaction(async (tx) => {
-    await applyPlannerSettings(tx);
-    const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
-    for (const statement of reads) {
-      // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
-      const plan = await explainOwnerStatement(tx, asQuery(statement));
-      measured.push({
-        metrics: metricsFromPlan(plan),
-        statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
-      });
-    }
-    await assertPlannerSettings(tx, "owner");
-    return measured;
+  const statements = measured.statements.map(({ query, plan }) => {
+    const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
+    return {
+      metrics: metricsFromPlan(plan),
+      planViolations: analyzePlan({
+        document: plan,
+        owner: jobId,
+        ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+        statement,
+        profileId: "corpus",
+      }),
+      statement,
+    };
   });
   return {
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    planViolations: statements.flatMap(({ planViolations }) => planViolations),
     statements,
   };
 };
