@@ -339,6 +339,7 @@
         "yjs": "catalog:",
       },
       "devDependencies": {
+        "@astrojs/astro2tsx": "0.1.3",
         "@astrojs/check": "^0.9.11",
         "@playwright/test": "^1.63.0",
         "@stll/playwright-tools": "workspace:*",
